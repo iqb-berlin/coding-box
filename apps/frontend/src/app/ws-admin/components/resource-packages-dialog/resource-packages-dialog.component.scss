@@ -1,10 +1,15 @@
 .dialog-container {
-  min-width: 800px;
-  max-width: 1200px;
-  width: 90vw;
-  max-height: 90vh;
+  min-width: 900px;
+  max-width: 1440px;
+  width: 94vw;
+  max-height: 94vh;
   display: flex;
   flex-direction: column;
+
+  @media (max-width: 960px) {
+    min-width: 0;
+    width: 94vw;
+  }
 }
 
 h2 {
@@ -14,8 +19,31 @@ h2 {
 }
 
 .mat-mdc-dialog-content {
-  max-height: 70vh;
+  max-height: 80vh;
   overflow-y: auto;
+}
+
+.operation-progress {
+  border: 1px solid rgba(25, 118, 210, 0.18);
+  background: #f7fbff;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+
+.operation-progress-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 14px;
+  color: #2f4f67;
+  margin-bottom: 8px;
+}
+
+.operation-progress-details {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #5f6f7a;
 }
 
 // Loading container styles
@@ -97,7 +125,7 @@ h2 {
   position: relative;
   overflow-x: auto;
   overflow-y: auto;
-  max-height: 400px;
+  max-height: clamp(440px, 54vh, 640px);
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
@@ -149,13 +177,23 @@ h2 {
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   }
 
+  .mat-column-actions {
+    flex: 0 0 96px;
+    justify-content: center;
+  }
+
+  mat-header-cell.mat-column-actions,
+  mat-cell.mat-column-actions {
+    padding: 8px 12px;
+  }
+
   mat-row {
     transition: all 0.25s ease;
     height: 54px;
 
     &:hover {
       background-color: #e8f4ff;
-      cursor: pointer;
+      cursor: default;
       transform: translateY(-1px);
       box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
     }
@@ -182,6 +220,37 @@ h2 {
   }
 }
 
+.download-action-button {
+  width: 40px;
+  height: 40px;
+  color: #006c75;
+  background: #eef8f9;
+  border-radius: 50%;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+
+  mat-icon {
+    font-size: 22px;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+  }
+
+  &:hover:not([disabled]) {
+    color: #004f57;
+    background: #d9f0f3;
+    transform: translateY(-1px);
+  }
+
+  &[disabled] {
+    color: rgba(0, 0, 0, 0.32);
+    background: #f3f4f5;
+  }
+
+  .button-spinner {
+    display: inline-flex;
+  }
+}
+
 // File info styles
 .file-info {
   display: flex;
@@ -203,6 +272,26 @@ h2 {
   border-radius: 12px;
   font-weight: 500;
   border: 1px solid rgba(25, 118, 210, 0.1);
+}
+
+.scope-badge {
+  display: inline-flex;
+  align-items: center;
+  min-width: 76px;
+  justify-content: center;
+  color: #555;
+  font-size: 13px;
+  background-color: #f4f5f7;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+
+  &.global {
+    color: #705200;
+    background-color: #fff7d6;
+    border-color: #ecd275;
+  }
 }
 
 // Date time styles

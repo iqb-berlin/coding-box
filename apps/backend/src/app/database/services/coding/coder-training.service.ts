@@ -21,6 +21,11 @@ import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingJobService } from './coding-job.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { MissingsProfilesService } from './missings-profiles.service';
+import {
+  applyResolvedExclusionsToQuery,
+  isExcludedByResolvedExclusions,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 import type { CaseSelectionMode, ReferenceMode } from '../../entities/coder-training.entity';
 
 interface CoderTrainingResponse {
@@ -65,9 +70,21 @@ interface CoderTrainingWithJobs {
   case_selection_mode?: string;
   reference_training_ids?: number[];
   reference_mode?: string | null;
+  suppress_general_instructions?: boolean;
 }
 
 export type TrainingResponseIdsMap = Record<string, number[]>;
+
+type DiscussionSource = 'manual' | 'auto_agreement' | null;
+
+type WithinTrainingCoderResult = {
+  jobId: number;
+  coderName: string;
+  code: string | null;
+  score: number | null;
+  notes: string | null;
+  codingIssueOption: number | null;
+};
 
 @Injectable()
 export class CoderTrainingService {
@@ -104,7 +121,8 @@ export class CoderTrainingService {
     private chunkRepository: Repository<ChunkEntity>,
     private codingJobService: CodingJobService,
     private workspaceFilesService: WorkspaceFilesService,
-    private missingsProfilesService: MissingsProfilesService
+    private missingsProfilesService: MissingsProfilesService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   private async buildMissingCodesByJobId(
@@ -160,7 +178,8 @@ export class CoderTrainingService {
 
     this.logger.log(`Getting response IDs for trainings ${trainingIds.join(', ')} in workspace ${workspaceId}`);
 
-    const rows = await this.codingJobUnitRepository
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.codingJobUnitRepository
       .createQueryBuilder('cju')
       .innerJoin('cju.coding_job', 'cj')
       .select('COALESCE(cju.unit_alias, cju.unit_name)', 'unitKey')
@@ -168,8 +187,13 @@ export class CoderTrainingService {
       .addSelect('cju.response_id', 'responseId')
       .where('cj.workspace_id = :workspaceId', { workspaceId })
       .andWhere('cj.training_id IN (:...trainingIds)', { trainingIds })
-      .distinct(true)
-      .getRawMany<{ unitKey: string; variableId: string; responseId: number }>();
+      .distinct(true);
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'trainingResponseIds'
+    });
+    const rows = await query.getRawMany<{ unitKey: string; variableId: string; responseId: number }>();
 
     const result: TrainingResponseIdsMap = {};
     for (const row of rows) {
@@ -216,6 +240,34 @@ export class CoderTrainingService {
     };
   }
 
+  private deriveAutomaticDiscussionResult(
+    coders: WithinTrainingCoderResult[]
+  ): { code: number; score: number | null } | null {
+    if (coders.length === 0 || coders.some(coder => coder.code === null)) {
+      return null;
+    }
+
+    const firstCode = coders[0].code;
+    const firstScore = coders[0].score ?? null;
+    if (firstCode === null || !/^-?\d+$/.test(firstCode)) {
+      return null;
+    }
+
+    const allCodersAgree = coders.every(coder => (
+      coder.code === firstCode &&
+      (coder.score ?? null) === firstScore
+    ));
+
+    if (!allCodersAgree) {
+      return null;
+    }
+
+    return {
+      code: parseInt(firstCode, 10),
+      score: firstScore
+    };
+  }
+
   async saveDiscussionResult(
     workspaceId: number,
     trainingId: number,
@@ -237,7 +289,11 @@ export class CoderTrainingService {
       throw new Error(`Training ${trainingId} not found in workspace ${workspaceId}`);
     }
 
-    const hasResponseInTraining = (training.codingJobs || []).some(job => (job.codingJobUnits || []).some(unit => unit.response_id === responseId)
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const hasResponseInTraining = (training.codingJobs || []).some(job => (job.codingJobUnits || []).some(unit => (
+      unit.response_id === responseId &&
+      !isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)
+    ))
     );
 
     if (!hasResponseInTraining) {
@@ -338,14 +394,20 @@ export class CoderTrainingService {
           if (!byGroup.has(key)) byGroup.set(key, []);
           byGroup.get(key)!.push(r);
         }
-        const groups = Array.from(byGroup.values());
-        const perGroup = Math.ceil(sampleCount / groups.length);
+        const groups = this.shuffle(Array.from(byGroup.values()).map(group => this.shuffle(group)));
         const result: CoderTrainingResponse[] = [];
-        for (const group of groups) {
-          const sampled = this.shuffle(group).slice(0, perGroup);
-          result.push(...sampled);
+
+        while (result.length < sampleCount && groups.some(group => group.length > 0)) {
+          for (const group of groups) {
+            if (result.length >= sampleCount) break;
+            const response = group.shift();
+            if (response) {
+              result.push(response);
+            }
+          }
         }
-        return this.shuffle(result).slice(0, sampleCount);
+
+        return result;
       }
       case 'random_testgroups': {
         const byGroup = new Map<string, CoderTrainingResponse[]>();
@@ -418,6 +480,7 @@ export class CoderTrainingService {
       referenceMode && referenceTrainingIds.length > 0 ?
         await this.getTrainingResponseIds(workspaceId, referenceTrainingIds) :
         null;
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
     // Load aggregation settings once for this workspace
     const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
@@ -444,13 +507,15 @@ export class CoderTrainingService {
       this.logger.log(`Querying incomplete responses for unit ${unitId}, variable ${variableId}`);
 
       // Fetch all eligible responses (no DB-level limit — we need the full set to apply aggregation grouping)
-      const unitResponses = await this.responseRepository
+      const unitResponsesQuery = this.responseRepository
         .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status_v1 IN (:...statuses)', {
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.status_v1 IN (:...statuses)', {
           statuses: [
             statusStringToNumber('CODING_INCOMPLETE'),
             statusStringToNumber('INTENDED_INCOMPLETE')
@@ -458,9 +523,10 @@ export class CoderTrainingService {
         })
         .andWhere('response.variableid = :variableId', { variableId })
         .andWhere('response.status_v2 IS NULL')
-        .andWhere('unit.alias = :unitId', { unitId })
-        .orderBy('response.id', 'ASC')
-        .getMany();
+        .andWhere('(unit.alias = :unitId OR unit.name = :unitId)', { unitId })
+        .orderBy('response.id', 'ASC');
+      applyResolvedExclusionsToQuery(unitResponsesQuery, exclusions, { parameterPrefix: `trainingPackage${configKey.replace(/[^a-zA-Z0-9]/g, '')}` });
+      const unitResponses = await unitResponsesQuery.getMany();
 
       this.logger.log(`Found ${unitResponses.length} incomplete responses for unit ${unitId}, variable ${variableId}`);
 
@@ -647,10 +713,15 @@ export class CoderTrainingService {
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: CaseSelectionMode,
     referenceTrainingIds?: number[],
-    referenceMode?: ReferenceMode
+    referenceMode?: ReferenceMode,
+    suppressGeneralInstructions?: boolean
   ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
     try {
       this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders and label '${trainingLabel}'`);
+      await this.codingJobService.assertCodersCanCodeInWorkspace(
+        selectedCoders.map(coder => coder.id),
+        workspaceId
+      );
 
       const coderTraining = new CoderTraining();
       coderTraining.workspace_id = workspaceId;
@@ -659,6 +730,7 @@ export class CoderTrainingService {
       coderTraining.case_selection_mode = caseSelectionMode ?? 'oldest_first';
       coderTraining.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
       coderTraining.reference_mode = referenceMode ?? null;
+      coderTraining.suppress_general_instructions = suppressGeneralInstructions ?? false;
       coderTraining.created_at = new Date();
       coderTraining.updated_at = new Date();
 
@@ -748,6 +820,7 @@ export class CoderTrainingService {
         codingJob.training_id = trainingId;
         codingJob.missings_profile_id = missingsProfileId;
         codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
+        codingJob.suppressGeneralInstructions = suppressGeneralInstructions ?? false;
         codingJob.created_at = new Date();
         codingJob.updated_at = new Date();
 
@@ -890,6 +963,7 @@ export class CoderTrainingService {
       case_selection_mode: training.case_selection_mode,
       reference_training_ids: training.reference_training_ids ?? undefined,
       reference_mode: training.reference_mode ?? undefined,
+      suppress_general_instructions: training.suppress_general_instructions,
       assigned_variables: training.variables?.map(v => ({
         variableId: v.variable_id,
         unitName: v.unit_name,
@@ -947,6 +1021,7 @@ export class CoderTrainingService {
       return [];
     }
 
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const allTrainingJobs = trainings.flatMap(training => training.codingJobs || []);
     const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, allTrainingJobs);
 
@@ -963,6 +1038,9 @@ export class CoderTrainingService {
     trainings.forEach(training => {
       training.codingJobs?.forEach(job => {
         job.codingJobUnits?.forEach(unit => {
+          if (isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)) {
+            return;
+          }
           if (unit.response_id && !responseMap.has(unit.response_id)) {
             const personGroup = unit.person_group || '';
             const testPerson = `${unit.person_login} (${personGroup}) - ${unit.booklet_name}`;
@@ -1017,7 +1095,10 @@ export class CoderTrainingService {
         if (training.codingJobs) {
           for (const job of training.codingJobs) {
             // Find if this job (coder) has a unit for this response
-            const unit = job.codingJobUnits?.find(u => u.response_id === responseId);
+            const unit = job.codingJobUnits?.find(u => (
+              u.response_id === responseId &&
+              !isExcludedByResolvedExclusions(exclusions, u.booklet_name, u.unit_name)
+            ));
 
             // Determine coder info
             // Assuming one coder per job for now, which is standard in this system
@@ -1095,14 +1176,8 @@ export class CoderTrainingService {
       discussionScore: number | null;
       discussionManagerUserId: number | null;
       discussionManagerName: string | null;
-      coders: Array<{
-        jobId: number;
-        coderName: string;
-        code: string | null;
-        score: number | null;
-        notes: string | null;
-        codingIssueOption: number | null;
-      }>;
+      discussionSource: DiscussionSource;
+      coders: WithinTrainingCoderResult[];
     }>> {
     this.logger.log(`Getting within-training coding comparison for training ${trainingId} in workspace ${workspaceId}`);
 
@@ -1118,6 +1193,7 @@ export class CoderTrainingService {
       return [];
     }
 
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, training.codingJobs);
 
     const unitVariableMap = new Map<string, {
@@ -1135,6 +1211,9 @@ export class CoderTrainingService {
 
     training.codingJobs.forEach(job => {
       job.codingJobUnits?.forEach(unit => {
+        if (isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)) {
+          return;
+        }
         const unitVariableKey = unit.response_id.toString();
         if (!unitVariableMap.has(unitVariableKey)) {
           const givenAnswer = unit.response?.value || '';
@@ -1187,14 +1266,7 @@ export class CoderTrainingService {
     }
 
     for (const [, unitVar] of unitVariableMap.entries()) {
-      const codersData: Array<{
-        jobId: number;
-        coderName: string;
-        code: string | null;
-        score: number | null;
-        notes: string | null;
-        codingIssueOption: number | null;
-      }> = [];
+      const codersData: WithinTrainingCoderResult[] = [];
 
       for (const job of training.codingJobs) {
         let code: number | null = null;
@@ -1207,7 +1279,10 @@ export class CoderTrainingService {
           `Coder ${job.name}`;
 
         job.codingJobUnits?.forEach(unit => {
-          if (unit.response_id === unitVar.responseId) {
+          if (
+            unit.response_id === unitVar.responseId &&
+            !isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)
+          ) {
             code = unit.code;
             if (unit.score !== null) {
               score = unit.score;
@@ -1235,6 +1310,25 @@ export class CoderTrainingService {
       }
 
       const discussionResult = discussionByResponseId.get(unitVar.responseId);
+      const hasManualDiscussionResult = discussionResult?.code !== null && discussionResult?.code !== undefined;
+      const automaticDiscussionResult = hasManualDiscussionResult ?
+        null :
+        this.deriveAutomaticDiscussionResult(codersData);
+      let discussionCode = automaticDiscussionResult?.code ?? null;
+      let discussionScore = automaticDiscussionResult?.score ?? null;
+      let discussionManagerUserId: number | null = null;
+      let discussionManagerName: string | null = null;
+      let discussionSource: DiscussionSource = automaticDiscussionResult ? 'auto_agreement' : null;
+
+      if (hasManualDiscussionResult) {
+        discussionCode = discussionResult!.code;
+        discussionScore = discussionResult!.score;
+        discussionManagerUserId = discussionResult!.manager_user_id ?? null;
+        discussionManagerName = discussionResult!.manager_user_id ?
+          (managerNameById.get(discussionResult!.manager_user_id) ?? discussionResult!.manager_name ?? null) :
+          (discussionResult!.manager_name ?? null);
+        discussionSource = 'manual';
+      }
 
       comparisonData.push({
         responseId: unitVar.responseId,
@@ -1247,10 +1341,11 @@ export class CoderTrainingService {
         givenAnswer: unitVar.givenAnswer,
         replayCode: unitVar.replayCode,
         replayScore: unitVar.replayScore,
-        discussionCode: discussionResult?.code ?? null,
-        discussionScore: discussionResult?.score ?? null,
-        discussionManagerUserId: discussionResult?.manager_user_id ?? null,
-        discussionManagerName: discussionResult?.manager_user_id ? (managerNameById.get(discussionResult.manager_user_id) ?? discussionResult.manager_name ?? null) : (discussionResult?.manager_name ?? null),
+        discussionCode,
+        discussionScore,
+        discussionManagerUserId,
+        discussionManagerName,
+        discussionSource,
         coders: codersData
       });
     }
@@ -1272,10 +1367,15 @@ export class CoderTrainingService {
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: CaseSelectionMode,
     referenceTrainingIds?: number[],
-    referenceMode?: ReferenceMode
+    referenceMode?: ReferenceMode,
+    suppressGeneralInstructions?: boolean
   ): Promise<{ success: boolean; message: string; jobsCreated?: number; jobs?: TrainingJob[] }> {
     try {
       this.logger.log(`Updating coder training ${trainingId} in workspace ${workspaceId}`);
+      await this.codingJobService.assertCodersCanCodeInWorkspace(
+        selectedCoders.map(coder => coder.id),
+        workspaceId
+      );
 
       const training = await this.coderTrainingRepository.findOne({
         where: { id: trainingId, workspace_id: workspaceId },
@@ -1315,11 +1415,16 @@ export class CoderTrainingService {
 
       const bundlesChanged = JSON.stringify(currentBundles) !== JSON.stringify(newBundles);
 
+      const resolvedSuppressGeneralInstructions = suppressGeneralInstructions ??
+        training.suppress_general_instructions ??
+        false;
+
       training.label = trainingLabel;
       training.case_ordering_mode = caseOrderingMode || 'continuous';
       training.case_selection_mode = caseSelectionMode ?? training.case_selection_mode ?? 'oldest_first';
       training.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
       training.reference_mode = referenceMode ?? null;
+      training.suppress_general_instructions = resolvedSuppressGeneralInstructions;
       training.updated_at = new Date();
 
       await this.coderTrainingRepository.save(training);
@@ -1418,6 +1523,7 @@ export class CoderTrainingService {
           codingJob.training_id = trainingId;
           codingJob.missings_profile_id = missingsProfileId;
           codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
+          codingJob.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
           codingJob.created_at = new Date();
           codingJob.updated_at = new Date();
 
@@ -1522,6 +1628,11 @@ export class CoderTrainingService {
         };
       }
 
+      for (const job of training.codingJobs || []) {
+        job.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
+        await this.codingJobRepository.save(job);
+      }
+
       return { success: true, message: 'Training erfolgreich aktualisiert' };
     } catch (error) {
       this.logger.error(`Error updating coder training: ${error.message}`, error.stack);
@@ -1593,6 +1704,7 @@ export class CoderTrainingService {
       return [];
     }
 
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     return training.codingJobs.map(job => ({
       id: job.id,
       name: job.name,
@@ -1606,7 +1718,11 @@ export class CoderTrainingService {
         userId: 0,
         username: 'Unknown'
       },
-      unitsCount: job.codingJobUnits?.length || 0
+      unitsCount: job.codingJobUnits?.filter(unit => !isExcludedByResolvedExclusions(
+        exclusions,
+        unit.booklet_name,
+        unit.unit_name
+      )).length || 0
     }));
   }
 

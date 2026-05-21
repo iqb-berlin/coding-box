@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsArray,
   IsEnum,
+  IsBoolean,
   IsNumber,
   ValidateNested
 } from 'class-validator';
@@ -131,21 +132,13 @@ export class CreateCodingJobDto {
     maxCodingCases?: number;
 
   @ApiProperty({
-    description: 'ID of the job definition this job is created from',
-    example: 1,
-    required: false
-  })
-  @IsNumber()
-  @IsOptional()
-    jobDefinitionId?: number;
-
-  @ApiProperty({
     description: 'Whether to show scores in the coding interface',
     example: false,
     default: false,
     required: false
   })
   @IsOptional()
+  @IsBoolean()
     showScore?: boolean;
 
   @ApiProperty({
@@ -155,6 +148,7 @@ export class CreateCodingJobDto {
     required: false
   })
   @IsOptional()
+  @IsBoolean()
     allowComments?: boolean;
 
   @ApiProperty({
@@ -164,6 +158,7 @@ export class CreateCodingJobDto {
     required: false
   })
   @IsOptional()
+  @IsBoolean()
     suppressGeneralInstructions?: boolean;
 
   @ApiProperty({

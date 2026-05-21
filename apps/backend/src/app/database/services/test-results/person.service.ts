@@ -14,7 +14,10 @@ import {
   TestResultsUploadStatsDto
 } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { PersonQueryService } from './person-query.service';
-import { PersonPersistenceService } from './person-persistence.service';
+import {
+  PersonPersistenceService,
+  TestResultsMutationSummary
+} from './person-persistence.service';
 
 @Injectable()
 export class PersonService {
@@ -69,6 +72,8 @@ export class PersonService {
     totalBooklets: number;
     unitsWithLogs: number;
     totalUnits: number;
+    bookletDetails?: { name: string; hasLog: boolean }[];
+    unitDetails?: { bookletName: string; unitKey: string; hasLog: boolean }[];
   }> {
     return this.personQueryService.getLogCoverageStats(workspaceId);
   }
@@ -112,6 +117,16 @@ export class PersonService {
     return Array.from(personMap.values());
   }
 
+  filterLogRowsForPerson(rows: Log[], person: Pick<Person, 'group' | 'login' | 'code'>): Log[] {
+    if (!Array.isArray(rows)) {
+      return [];
+    }
+
+    return rows.filter(row => row.groupname === person.group &&
+      row.loginname === person.login &&
+      row.code === person.code);
+  }
+
   async assignBookletsToPerson(person: Person, rows: Response[], issues: TestResultsUploadIssueDto[] = []): Promise<Person> {
     const logger = new Logger('assignBookletsToPerson');
     const bookletIds = new Set<string>();
@@ -153,6 +168,10 @@ export class PersonService {
 
     rows.forEach((row, index) => {
       try {
+        if (row.unitname) {
+          return;
+        }
+
         if (
           row.groupname === person.group &&
           row.loginname === person.login &&
@@ -240,26 +259,63 @@ export class PersonService {
     return person;
   }
 
+  ensureBookletsForUnitLogs(person: Person, rows: Log[]): Person {
+    const bookletIds = new Set((person.booklets || []).map(booklet => booklet.id));
+
+    rows.forEach(row => {
+      if (
+        row.unitname &&
+        row.bookletname &&
+        row.groupname === person.group &&
+        row.loginname === person.login &&
+        row.code === person.code &&
+        !bookletIds.has(row.bookletname)
+      ) {
+        person.booklets.push({
+          id: row.bookletname,
+          logs: [],
+          units: [],
+          sessions: []
+        });
+        bookletIds.add(row.bookletname);
+      }
+    });
+
+    return person;
+  }
+
+  private normalizeQuotedLogPart(value: string): string {
+    const trimmed = value.trim();
+    const unwrapped = trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"') ?
+      trimmed.substring(1, trimmed.length - 1) :
+      trimmed;
+
+    return unwrapped
+      .replace(/""/g, '"')
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
+  }
+
   private parseLogEntry(logentry: string): { key: string; value: string } | null {
-    if (!logentry) return null;
+    const normalizedLogEntry = this.normalizeQuotedLogPart(logentry || '');
+    if (!normalizedLogEntry) return null;
 
-    const separatorIndex = logentry.indexOf(':') !== -1 ? logentry.indexOf(':') : logentry.indexOf('=');
-    if (separatorIndex === -1) return null;
+    const separatorIndex = normalizedLogEntry.indexOf(':') !== -1 ?
+      normalizedLogEntry.indexOf(':') :
+      normalizedLogEntry.indexOf('=');
+    if (separatorIndex === -1) {
+      const key = this.normalizeQuotedLogPart(normalizedLogEntry);
+      if (!key) return null;
 
-    let key = logentry.substring(0, separatorIndex).trim();
-    let value = logentry.substring(separatorIndex + 1).trim();
-
-    // Handle quoted keys
-    if (key.startsWith('"') && key.endsWith('"')) {
-      key = key.substring(1, key.length - 1);
+      return {
+        key,
+        value: ''
+      };
     }
 
-    // Handle quoted values
-    if (value.startsWith('"') && value.endsWith('"')) {
-      value = value.substring(1, value.length - 1);
-      // Unescape double backslashes and escaped quotes
-      value = value.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-    }
+    const key = this.normalizeQuotedLogPart(normalizedLogEntry.substring(0, separatorIndex));
+    const value = this.normalizeQuotedLogPart(normalizedLogEntry.substring(separatorIndex + 1));
+    if (!key) return null;
 
     return { key, value };
   }
@@ -274,18 +330,50 @@ export class PersonService {
     loadTime: number
   } | null {
     try {
-      const keyValues = logEntry.slice(1, -1).split(',');
-      const parsedResult: { [key: string]: string | number | undefined } = {};
+      const normalizedLogEntry = this.normalizeQuotedLogPart(logEntry);
+
+      try {
+        const parsedJson = JSON.parse(normalizedLogEntry) as Record<string, string | number | null | undefined>;
+        const stringValue = (
+          key: string,
+          fallback: string
+        ): string => {
+          const value = parsedJson[key];
+          return value === undefined || value === null ? fallback : value.toString();
+        };
+
+        return {
+          browserVersion: stringValue('browserVersion', 'Unknown'),
+          browserName: stringValue('browserName', 'Unknown'),
+          osName: stringValue('osName', 'Unknown'),
+          device: stringValue('device', 'Unknown'),
+          screenSizeWidth: Number(parsedJson.screenSizeWidth) || 0,
+          screenSizeHeight: Number(parsedJson.screenSizeHeight) || 0,
+          loadTime: Number(parsedJson.loadTime) || 0
+        };
+      } catch {
+        // Fall back to legacy Testcenter log payloads with unquoted keys.
+      }
+
+      const keyValues = normalizedLogEntry.slice(1, -1).split(',');
+      const parsedResult: { [key: string]: string | number | null | undefined } = {};
       keyValues.forEach(pair => {
-        const [key, value] = pair.split(':', 2).map(part => part.trim().replace(/\\/g, ''));
-        parsedResult[key] = !Number.isNaN(Number(value)) ? Number(value) : value || undefined;
+        const [key, value] = pair.split(':', 2).map(part => this.normalizeQuotedLogPart(part));
+        parsedResult[key] = value === undefined ? undefined : value;
       });
+      const stringValue = (
+        key: string,
+        fallback: string
+      ): string => {
+        const value = parsedResult[key];
+        return value === undefined || value === null ? fallback : value.toString();
+      };
 
       return {
-        browserVersion: parsedResult.browserVersion?.toString() || 'Unknown',
-        browserName: parsedResult.browserName?.toString() || 'Unknown',
-        osName: parsedResult.osName?.toString() || 'Unknown',
-        device: parsedResult.device?.toString() || 'Unknown',
+        browserVersion: stringValue('browserVersion', 'Unknown'),
+        browserName: stringValue('browserName', 'Unknown'),
+        osName: stringValue('osName', 'Unknown'),
+        device: stringValue('device', 'Unknown'),
         screenSizeWidth: Number(parsedResult.screenSizeWidth) || 0,
         screenSizeHeight: Number(parsedResult.screenSizeHeight) || 0,
         loadTime: Number(parsedResult.loadTime) || 0
@@ -459,7 +547,7 @@ export class PersonService {
 
     return {
       id: row.unitname,
-      alias: row.unitname,
+      alias: row.originalUnitId || row.unitname,
       laststate,
       subforms,
       chunks,
@@ -473,8 +561,7 @@ export class PersonService {
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     scope: 'person' | 'workspace' = 'person',
     issues: TestResultsUploadIssueDto[] = []
-  ): Promise<void> {
-    // We could pass issues to persistence service if we update it
+  ): Promise<TestResultsMutationSummary> {
     return this.personPersistenceService.processPersonBooklets(personList, workspace_id, overwriteMode, scope, issues);
   }
 
@@ -529,7 +616,7 @@ export class PersonService {
         } else {
           const newUnit: TcMergeUnit = {
             id: row.unitname,
-            alias: '',
+            alias: row.originalUnitId || row.unitname,
             laststate: [],
             subforms: [],
             chunks: [],

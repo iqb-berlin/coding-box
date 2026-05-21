@@ -1,5 +1,6 @@
 import {
-  Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges, ViewChild
+  Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SecurityContext, SimpleChanges,
+  ViewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -12,7 +13,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { DomSanitizer } from '@angular/platform-browser';
 import { UnitsReplay, UnitsReplayUnit } from '../../../replay/services/units-replay.service';
 import { ReplayCodingService } from '../../../replay/services/replay-coding.service';
 import {
@@ -45,6 +46,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() isCodingActive: boolean = false;
   @Input() hasCodingJob: boolean = false;
   @Input() isCodingJobCompleted: boolean = false;
+  @Input() isCompletedJobReview: boolean = false;
   @Input() isPausingJob: boolean = false;
   @Input() unitsData: UnitsReplay | null = null;
   @Input() codingService!: ReplayCodingService;
@@ -52,6 +54,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() allowComments: boolean = true;
   @Input() suppressGeneralInstructions: boolean = false;
   @Input() isReadOnly: boolean = false;
+  @Input() hasSaveError: boolean = false;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() notesChanged = new EventEmitter<string>();
@@ -178,8 +181,8 @@ export class CodeSelectorComponent implements OnChanges {
     }
   }
 
-  getSafeHtml(instructions: string): SafeHtml {
-    return this.sanitizer.bypassSecurityTrustHtml(instructions);
+  getSafeHtml(instructions: string): string {
+    return this.sanitizer.sanitize(SecurityContext.HTML, instructions) || '';
   }
 
   private createCodeOrCodingIssueOption(item: SelectableItem): Code | CodingIssueDto {
@@ -244,6 +247,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   deselectAll(): void {
+    if (this.isReadOnly) return;
     this.selectedCode = null;
     this.selectedCodingIssueOption = null;
     this.codeSelected.emit({
@@ -266,6 +270,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   onNotesChanged(): void {
+    if (this.isReadOnly) return;
     this.notesChanged.emit(this.coderNotes);
   }
 
@@ -273,6 +278,7 @@ export class CodeSelectorComponent implements OnChanges {
     const data = this.unitsData;
     if (!data) return;
 
+    if (this.hasSaveError) return;
     if (!this.isReadOnly && !this.hasCurrentSelection()) return;
 
     const currentIndex = data.currentUnitIndex;
@@ -301,7 +307,7 @@ export class CodeSelectorComponent implements OnChanges {
     const nextIndex = currentIndex + 1;
     const hasNext = nextIndex < data.units.length;
     if (this.isReadOnly) return hasNext;
-    return hasNext && this.hasCurrentSelection();
+    return hasNext && this.hasCurrentSelection() && !this.hasSaveError;
   }
 
   hasPreviousUnit(): boolean {

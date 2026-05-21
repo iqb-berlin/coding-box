@@ -9,6 +9,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { BookletUnitDto } from '../../../../../../../api-dto/booklet-info/booklet-unit.dto';
 import { BookletTestletDto } from '../../../../../../../api-dto/booklet-info/booklet-testlet.dto';
+import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-viewer.component';
 
 @Component({
   selector: 'coding-box-booklet-info-dialog',
@@ -22,7 +23,8 @@ import { BookletTestletDto } from '../../../../../../../api-dto/booklet-info/boo
     MatIconModule,
     MatTabsModule,
     MatDividerModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    XmlViewerComponent
   ]
 })
 export class BookletInfoDialogComponent implements OnInit {

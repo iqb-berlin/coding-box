@@ -1,10 +1,21 @@
-  .coder-trainings-container {
-    padding: 24px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
+:host {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.coder-trainings-container {
+  padding: clamp(8px, 2vw, 24px);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
 
   .header-row {
     display: flex;
@@ -17,31 +28,58 @@
 
   .header-actions {
     display: flex;
-    align-items: center;
-    gap: 16px;
+    align-items: stretch;
+    gap: 12px;
     flex-wrap: wrap;
+    min-width: 0;
+    width: 100%;
+
+    button {
+      min-height: 40px;
+      height: auto;
+      line-height: 1.2;
+      white-space: normal;
+      border-radius: 8px;
+    }
   }
 
-  .trainings-table {
+  .filter-field {
+    width: min(260px, 100%);
+    min-width: 0;
+  }
+
+  .trainings-list {
+    --trainings-table-min-width: 1040px;
+
     width: 100%;
+    max-width: 100%;
     max-height: 70vh;
     overflow-y: auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   }
 
-  mat-header-row {
+  .trainings-table {
+    width: max(100%, var(--trainings-table-min-width));
+    min-width: var(--trainings-table-min-width);
+    table-layout: fixed;
+    border-spacing: 0;
+  }
+
+  [mat-header-row] {
     background-color: #f5f5f5;
     min-height: 56px;
   }
 
-  mat-header-cell {
+  [mat-header-cell] {
     font-weight: 500;
     color: #333;
     font-size: 14px;
   }
 
-  mat-row {
+  [mat-row] {
     min-height: 52px;
     border-bottom: 1px solid #e0e0e0;
     transition: background-color 0.2s ease;
@@ -52,9 +90,11 @@
     }
   }
 
-  mat-cell {
+  [mat-cell] {
     font-size: 14px;
     color: #555;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .loading-container {
@@ -99,7 +139,7 @@
 
   .training-label {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
 
     mat-icon {
@@ -109,28 +149,139 @@
       width: 20px;
     }
 
-    span {
-      font-weight: 500;
+    .training-label-text {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .training-title {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    .training-meta {
+      color: #718096;
+      font-size: 12px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
+    .duplicate-label-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #fff7e6;
+      color: #8a5a00;
+      border: 1px solid #f3d38b;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.2;
     }
   }
 
-  .action-buttons {
+  .training-row-actions {
     display: flex;
+    align-items: center;
     gap: 4px;
-  }
-
-  .mat-column-label {
-    flex: 1 1 40%;
-  }
-
-  .mat-column-jobsCount,
-  .mat-column-created_at {
-    flex: 1 0 20%;
+    justify-content: flex-start;
+    min-width: 0;
   }
 
   .mat-column-actions {
-    flex: 0 0 150px;
-    justify-content: center;
+    width: 176px;
+    text-align: left;
+    overflow-wrap: normal;
+  }
+
+  button.primary-row-action[mat-stroked-button] {
+    width: 110px;
+    min-height: 34px;
+    line-height: 1.2;
+    border-radius: 6px;
+    padding: 0 8px;
+    justify-content: flex-start;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: keep-all;
+
+    mat-icon {
+      flex: 0 0 auto;
+      width: 18px;
+      height: 18px;
+      font-size: 18px;
+      margin-right: 4px;
+    }
+
+    span {
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      overflow-wrap: normal;
+      word-break: keep-all;
+    }
+
+    &:hover {
+      transform: none;
+    }
+  }
+
+  .more-actions-button {
+    flex: 0 0 auto;
+  }
+
+  .menu-section-divider {
+    margin: 4px 0;
+  }
+
+  .danger-menu-item {
+    color: #b3261e;
+
+    mat-icon {
+      color: #b3261e;
+    }
+  }
+
+  .mat-column-jobsCount {
+    width: 120px;
+  }
+
+  .mat-column-selectionStrategy {
+    width: 210px;
+  }
+
+  .mat-column-created_at {
+    width: 180px;
+  }
+
+  .mat-column-label {
+    width: auto;
+  }
+
+  .strategy-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .strategy-label {
+    font-weight: 600;
+    color: #2d3748;
+    overflow-wrap: anywhere;
+  }
+
+  .strategy-subline {
+    font-size: 12px;
+    color: #718096;
   }
 
 @media (max-width: 768px) {
@@ -142,8 +293,30 @@
       gap: 12px;
     }
 
-    .trainings-table {
+    .trainings-list {
+      --trainings-table-min-width: 920px;
+
       overflow-x: auto;
     }
+  }
+}
+
+@media (max-width: 576px) {
+  .coder-trainings-container {
+    padding: 8px;
+  }
+
+  .header-actions,
+  .header-actions button,
+  .filter-field {
+    width: 100%;
+  }
+
+  .trainings-list {
+    --trainings-table-min-width: 720px;
+  }
+
+  .mat-column-created_at {
+    display: none;
   }
 }

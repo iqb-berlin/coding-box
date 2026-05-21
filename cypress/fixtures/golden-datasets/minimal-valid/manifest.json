@@ -1,0 +1,52 @@
+{
+  "datasetId": "minimal-valid",
+  "workspaceId": 91,
+  "authToken": "golden-e2e-token",
+  "userId": 7001,
+  "uploadId": "golden-upload-responses-1",
+  "uploadJobId": "golden-upload-job-1",
+  "validationTaskId": 6101,
+  "jobDefinitionId": 8101,
+  "codingJobId": 9101,
+  "exportJobId": "golden-export-detailed-1",
+  "import": {
+    "fileName": "minimal-valid-responses.csv",
+    "mimeType": "text/csv",
+    "resultType": "responses"
+  },
+  "person": {
+    "group": "GOLDEN-GROUP",
+    "login": "golden-login",
+    "code": "golden-code",
+    "booklet": "BOOKLET-GOLDEN",
+    "testPersonKey": "golden-login@golden-code@GOLDEN-GROUP@BOOKLET-GOLDEN"
+  },
+  "unit": {
+    "name": "UNIT-GOLDEN",
+    "alias": "UNIT-GOLDEN.XML"
+  },
+  "variable": {
+    "id": "VAR_SCORE",
+    "anchor": "VAR_SCORE",
+    "page": "1",
+    "responseValue": "Die Antwort ist 42"
+  },
+  "coder": {
+    "id": 7001,
+    "name": "golden-coder",
+    "displayName": "Golden Coder"
+  },
+  "selectedCode": {
+    "id": 1,
+    "code": "1",
+    "label": "Korrekt",
+    "score": 1
+  },
+  "expectedExport": {
+    "fileName": "golden-detailed.csv",
+    "rows": 1,
+    "code": "1",
+    "comment": "Eindeutig korrekt",
+    "replayUrl": "http://localhost:4200/#/replay/golden-login@golden-code@GOLDEN-GROUP@BOOKLET-GOLDEN/UNIT-GOLDEN/1/VAR_SCORE?auth=export-token"
+  }
+}

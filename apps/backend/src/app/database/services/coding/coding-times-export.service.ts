@@ -5,6 +5,10 @@ import * as ExcelJS from 'exceljs';
 import { buildCoderNameMapping } from '../../../utils/coding-utils';
 import { CodingListService } from './coding-list.service';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import {
+  isExcludedByResolvedExclusions,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 
 @Injectable()
 export class CodingTimesExportService {
@@ -13,7 +17,8 @@ export class CodingTimesExportService {
   constructor(
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
-    private codingListService: CodingListService
+    private codingListService: CodingListService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   async exportCodingTimesReport(workspaceId: number, anonymizeCoders = false, usePseudoCoders = false, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
@@ -46,7 +51,9 @@ export class CodingTimesExportService {
         'coding_job.codingJobCoders',
         'coding_job.codingJobCoders.user',
         'response',
-        'response.unit'
+        'response.unit',
+        'response.unit.booklet',
+        'response.unit.booklet.bookletinfo'
       ],
       select: {
         id: true,
@@ -67,7 +74,13 @@ export class CodingTimesExportService {
           id: true,
           unit: {
             id: true,
-            name: true
+            name: true,
+            booklet: {
+              id: true,
+              bookletinfo: {
+                name: true
+              }
+            }
           }
         }
       },
@@ -76,13 +89,20 @@ export class CodingTimesExportService {
       }
     });
 
-    this.logger.log(`Found ${codingJobUnits.length} coded coding job units for workspace ${workspaceId}`);
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const visibleCodingJobUnits = codingJobUnits.filter(unit => !isExcludedByResolvedExclusions(
+      exclusions,
+      unit.response?.unit?.booklet?.bookletinfo?.name,
+      unit.response?.unit?.name
+    ));
+
+    this.logger.log(`Found ${visibleCodingJobUnits.length} coded coding job units for workspace ${workspaceId} after filtering ignored units`);
 
     try {
       let coderNameMapping: Map<string, string> | null = null;
       if (anonymizeCoders) {
         const allCoders = new Set<string>();
-        for (const unit of codingJobUnits) {
+        for (const unit of visibleCodingJobUnits) {
           const coderName = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
           if (coderName) {
             allCoders.add(coderName);
@@ -91,21 +111,21 @@ export class CodingTimesExportService {
         coderNameMapping = buildCoderNameMapping(Array.from(allCoders), usePseudoCoders);
       }
 
-      if (codingJobUnits.length > 0) {
+      if (visibleCodingJobUnits.length > 0) {
         this.logger.log('Sample coded coding job unit:', {
-          id: codingJobUnits[0].id,
-          variable_id: codingJobUnits[0].variable_id,
-          code: codingJobUnits[0].code,
-          updated_at: codingJobUnits[0].updated_at,
-          unit_name: codingJobUnits[0].response?.unit?.name,
-          coders_count: codingJobUnits[0].coding_job?.codingJobCoders?.length,
-          first_coder: codingJobUnits[0].coding_job?.codingJobCoders?.[0]?.user?.username
+          id: visibleCodingJobUnits[0].id,
+          variable_id: visibleCodingJobUnits[0].variable_id,
+          code: visibleCodingJobUnits[0].code,
+          updated_at: visibleCodingJobUnits[0].updated_at,
+          unit_name: visibleCodingJobUnits[0].response?.unit?.name,
+          coders_count: visibleCodingJobUnits[0].coding_job?.codingJobCoders?.length,
+          first_coder: visibleCodingJobUnits[0].coding_job?.codingJobCoders?.[0]?.user?.username
         });
       } else {
         this.logger.warn(`No coded coding job units found for workspace ${workspaceId}`);
       }
 
-      if (codingJobUnits.length === 0) {
+      if (visibleCodingJobUnits.length === 0) {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Kodierzeiten-Bericht');
 
@@ -133,7 +153,7 @@ export class CodingTimesExportService {
       const variableUnitCoders = new Map<string, Set<string>>();
       const variableUnitCoderTimestamps = new Map<string, Map<string, Date[]>>();
 
-      for (const unit of codingJobUnits) {
+      for (const unit of visibleCodingJobUnits) {
         if (!unit.response?.unit?.name || !unit.updated_at) continue;
 
         const variableId = unit.variable_id;

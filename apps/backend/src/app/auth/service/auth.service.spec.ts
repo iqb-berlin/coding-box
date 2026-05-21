@@ -2,11 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsersService } from '../../database/services/users';
 
 describe('AuthService', () => {
   let service: AuthService;
+  let usersService: jest.Mocked<UsersService>;
+  let jwtService: jest.Mocked<JwtService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -28,9 +31,120 @@ describe('AuthService', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
+    usersService = module.get(UsersService);
+    jwtService = module.get(JwtService);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('createToken', () => {
+    beforeEach(() => {
+      usersService.findUserByIdentity.mockResolvedValue({
+        id: 5,
+        username: 'study-manager',
+        isAdmin: false
+      });
+      jwtService.sign.mockReturnValue('signed-token');
+    });
+
+    it('creates a workspace token for the requester identity', async () => {
+      await expect(service.createToken('identity-1', 7, 30, 5)).resolves.toBe('"signed-token"');
+
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        {
+          userId: 5,
+          username: 'study-manager',
+          sub: {
+            id: 5,
+            username: 'study-manager',
+            isAdmin: false
+          },
+          workspace: 7
+        },
+        { expiresIn: '30d' }
+      );
+      expect(usersService.getUserIsAdmin).not.toHaveBeenCalled();
+      expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
+    });
+
+    it('rejects token creation for another identity without workspace admin access', async () => {
+      usersService.getUserIsAdmin.mockResolvedValue(false);
+      usersService.getUserAccessLevel.mockResolvedValue(2);
+
+      await expect(service.createToken('identity-1', 7, 30, 12)).rejects.toThrow(ForbiddenException);
+
+      expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(12, 7);
+      expect(jwtService.sign).not.toHaveBeenCalled();
+    });
+
+    it('allows system admins to create a token for another identity', async () => {
+      usersService.getUserIsAdmin.mockResolvedValue(true);
+      usersService.getUserAccessLevel.mockResolvedValue(null);
+
+      await expect(service.createToken('identity-1', 7, 30, 12)).resolves.toBe('"signed-token"');
+
+      expect(usersService.getUserIsAdmin).toHaveBeenCalledWith(12);
+      expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(12, 7);
+      expect(jwtService.sign).toHaveBeenCalled();
+    });
+
+    it('allows workspace admins to create a token for another identity', async () => {
+      usersService.getUserIsAdmin.mockResolvedValue(false);
+      usersService.getUserAccessLevel.mockResolvedValue(3);
+
+      await expect(service.createToken('identity-1', 7, 30, 12)).resolves.toBe('"signed-token"');
+
+      expect(usersService.getUserIsAdmin).toHaveBeenCalledWith(12);
+      expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(12, 7);
+      expect(jwtService.sign).toHaveBeenCalled();
+    });
+
+    it('rejects token creation for an unknown identity', async () => {
+      usersService.findUserByIdentity.mockResolvedValue(null);
+
+      await expect(service.createToken('unknown', 7, 30, 5)).rejects.toThrow(NotFoundException);
+
+      expect(jwtService.sign).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createTokenForUserId', () => {
+    beforeEach(() => {
+      usersService.findUserById.mockResolvedValue({
+        id: 12,
+        username: 'coder',
+        isAdmin: false
+      });
+      jwtService.sign.mockReturnValue('signed-token');
+    });
+
+    it('creates a workspace token for the authenticated user id', async () => {
+      await expect(service.createTokenForUserId(12, 7, 1)).resolves.toBe('"signed-token"');
+
+      expect(usersService.findUserById).toHaveBeenCalledWith(12);
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        {
+          userId: 12,
+          username: 'coder',
+          sub: {
+            id: 12,
+            username: 'coder',
+            isAdmin: false
+          },
+          workspace: 7
+        },
+        { expiresIn: '1d' }
+      );
+    });
+
+    it('rejects self-service token creation for an unknown user id', async () => {
+      usersService.findUserById.mockResolvedValue(null);
+
+      await expect(service.createTokenForUserId(12, 7, 1)).rejects.toThrow(NotFoundException);
+
+      expect(jwtService.sign).not.toHaveBeenCalled();
+    });
   });
 });

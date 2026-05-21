@@ -53,6 +53,29 @@ describe('CodingExecutionService', () => {
     req.flush(mockRes);
   });
 
+  it('should not request coding job status without a job id', () => {
+    service.getCodingJobStatus(1, '').subscribe(res => {
+      expect(res).toEqual({
+        status: 'failed',
+        progress: 0,
+        error: 'Fehlende Job-ID für Statusabfrage'
+      });
+    });
+
+    httpMock.expectNone(`${mockServerUrl}admin/workspace/1/coding/job/`);
+  });
+
+  it('should get coding statistics job status', () => {
+    const mockRes = { status: 'completed' as const, progress: 100 };
+    service.getCodingStatisticsJobStatus(1, 'job1').subscribe(res => {
+      expect(res.status).toBe('completed');
+    });
+
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/statistics/job/job1`);
+    expect(req.request.method).toBe('GET');
+    req.flush(mockRes);
+  });
+
   it('should create coding statistics job', () => {
     const mockRes = { jobId: 'job1', message: 'started' };
     service.createCodingStatisticsJob(1, 'v1').subscribe(res => {

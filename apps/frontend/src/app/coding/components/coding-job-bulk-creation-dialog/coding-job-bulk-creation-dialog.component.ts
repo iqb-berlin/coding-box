@@ -34,14 +34,19 @@ export interface BulkCreationData {
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
   maxCodingCases?: number;
+  distributionSeed?: string;
   creationResults?: {
     doubleCodingInfo: Record<string, {
       totalCases: number;
+      distinctCases?: number;
+      codingTasksTotal?: number;
       doubleCodedCases: number;
       singleCodedCasesAssigned: number;
       doubleCodedCasesPerCoder: Record<string, number>;
     }>;
+    distributionByCoderId?: Record<string, Record<string, number>>;
     jobs: Array<{
+      itemKey?: string;
       coderId: number;
       coderName: string;
       variable: { unitName: string; variableId: string };
@@ -51,13 +56,29 @@ export interface BulkCreationData {
     }>;
   };
   distribution?: Record<string, Record<string, number>>;
-  doubleCodingInfo?: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+  distributionByCoderId?: Record<string, Record<string, number>>;
+  doubleCodingInfo?: Record<string, {
+    totalCases: number;
+    distinctCases?: number;
+    codingTasksTotal?: number;
+    doubleCodedCases: number;
+    singleCodedCasesAssigned: number;
+    doubleCodedCasesPerCoder: Record<string, number>;
+  }>;
   warnings?: JobCreationWarning[];
+  displayOptions?: {
+    showScore?: boolean;
+    allowComments?: boolean;
+    suppressGeneralInstructions?: boolean;
+  };
+  displayOptionsLocked?: boolean;
 }
 
 interface DoubleCodingPreview {
   doubleCodingInfo: Record<string, {
     totalCases: number;
+    distinctCases?: number;
+    codingTasksTotal?: number;
     doubleCodedCases: number;
     singleCodedCasesAssigned: number;
     doubleCodedCasesPerCoder: Record<string, number>;
@@ -68,6 +89,9 @@ export interface JobPreview {
   name: string;
   variable?: Variable;
   bundle?: VariableBundle;
+  caseCount?: number;
+  coderName?: string;
+  jobId?: number;
 }
 
 export interface BulkCreationResult {
@@ -83,6 +107,7 @@ interface DistributionMatrixRow {
   variableKey: string;
   totalCases: number;
   coderCases: Record<string, number>;
+  coderCasesById?: Record<string, number>;
 }
 
 @Component({
@@ -119,6 +144,9 @@ export class CodingJobBulkCreationDialogComponent {
   showWarningsPanel = false;
   warningsConfirmed = false;
   isLoading = false;
+  private readonly defaultCoderCapacityPercent = 100;
+  private readonly minCoderCapacityPercent = 10;
+  private readonly maxCoderCapacityPercent = 300;
 
   constructor(
     public dialogRef: MatDialogRef<CodingJobBulkCreationDialogComponent>,
@@ -148,14 +176,21 @@ export class CodingJobBulkCreationDialogComponent {
       const result = await firstValueFrom(this.distributedCodingService.calculateDistribution(
         workspaceId,
         this.data.selectedVariables,
-        this.data.selectedCoders.map(coder => ({ ...coder, username: coder.name })),
+        this.data.selectedCoders.map(coder => ({
+          ...coder,
+          username: coder.name,
+          capacityPercent: this.normalizeCoderCapacityPercent(coder.capacityPercent)
+        })),
         this.data.doubleCodingAbsolute,
         this.data.doubleCodingPercentage,
         this.data.selectedVariableBundles,
-        this.data.maxCodingCases
+        this.data.caseOrderingMode,
+        this.data.maxCodingCases,
+        this.data.distributionSeed
       ));
 
       this.data.distribution = result?.distribution || {};
+      this.data.distributionByCoderId = result?.distributionByCoderId || {};
       this.data.doubleCodingInfo = result?.doubleCodingInfo || {};
       this.warnings = result?.warnings || [];
       this.showWarningsPanel = this.warnings.length > 0;
@@ -174,28 +209,44 @@ export class CodingJobBulkCreationDialogComponent {
     }
   }
 
+  private normalizeCoderCapacityPercent(value: unknown): number {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+      return this.defaultCoderCapacityPercent;
+    }
+
+    return Math.min(
+      this.maxCoderCapacityPercent,
+      Math.max(this.minCoderCapacityPercent, numericValue)
+    );
+  }
+
   private initializeFromData(): void {
     if (!this.data.distribution || !this.data.doubleCodingInfo) return;
 
     this.distributionMatrix = [];
     for (const [variableKey, coderCases] of Object.entries(this.data.distribution)) {
-      const totalCases = Object.values(coderCases).reduce((sum, count) => sum + count, 0);
+      const coderCasesById = this.data.distributionByCoderId?.[variableKey];
+      const totalCases = Object.values(coderCasesById || coderCases).reduce((sum, count) => sum + count, 0);
 
-      if (variableKey.includes('::')) {
+      if (this.isVariableItemKey(variableKey)) {
         const [unitName, variableId] = variableKey.split('::');
         this.distributionMatrix.push({
           variable: { unitName, variableId },
           variableKey,
           totalCases,
-          coderCases
+          coderCases,
+          coderCasesById
         });
       } else {
-        const bundle = this.data.selectedVariableBundles?.find(b => b.name === variableKey);
+        const bundle = this.findBundleForItemKey(variableKey);
         this.distributionMatrix.push({
           bundle,
           variableKey,
           totalCases,
-          coderCases
+          coderCases,
+          coderCasesById
         });
       }
     }
@@ -211,29 +262,52 @@ export class CodingJobBulkCreationDialogComponent {
     if (!this.data.creationResults) return;
 
     const distribution: Record<string, Record<string, number>> = {};
-    const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
+    const doubleCodingInfo: NonNullable<BulkCreationData['doubleCodingInfo']> = {};
+    const distributionByCoderId: Record<string, Record<string, number>> = {};
 
     for (const [variableKey, info] of Object.entries(this.data.creationResults.doubleCodingInfo)) {
       doubleCodingInfo[variableKey] = info;
       distribution[variableKey] = {};
+      distributionByCoderId[variableKey] = {};
 
       this.data.selectedCoders.forEach(coder => {
         const job = this.data.creationResults!.jobs.find(j => {
-          if (variableKey.includes('::')) {
+          if (j.itemKey) {
+            return j.itemKey === variableKey && j.coderId === coder.id;
+          }
+          if (this.isVariableItemKey(variableKey)) {
             return `${j.variable.unitName}::${j.variable.variableId}` === variableKey && j.coderId === coder.id;
           }
           return j.variable.unitName === variableKey && j.variable.variableId === '' && j.coderId === coder.id;
         });
         distribution[variableKey][coder.name] = job?.caseCount || 0;
+        distributionByCoderId[variableKey][String(coder.id)] = job?.caseCount || 0;
       });
     }
 
     this.data.distribution = distribution;
+    this.data.distributionByCoderId = this.data.creationResults.distributionByCoderId || distributionByCoderId;
     this.data.doubleCodingInfo = doubleCodingInfo;
     this.initializeFromData();
   }
 
   private createJobPreviews(): JobPreview[] {
+    if (this.data.creationResults?.jobs) {
+      return this.data.creationResults.jobs
+        .filter(job => job.caseCount > 0)
+        .map(job => {
+          const bundle = job.itemKey ? this.findBundleForItemKey(job.itemKey) : undefined;
+          return {
+            name: job.jobName,
+            variable: bundle ? undefined : job.variable,
+            bundle,
+            caseCount: job.caseCount,
+            coderName: job.coderName,
+            jobId: job.jobId
+          };
+        });
+    }
+
     const previews: JobPreview[] = [];
     // Sort coders alphabetically for deterministic job naming
     const sortedCoders = [...this.data.selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
@@ -247,15 +321,23 @@ export class CodingJobBulkCreationDialogComponent {
     for (const item of items) {
       for (const coder of sortedCoders) {
         const caseCount = this.getCaseCountForCoder(item, coder);
+        if (caseCount <= 0) {
+          continue;
+        }
+
         let jobName = '';
         let preview: JobPreview;
 
         if ('variables' in item) { // bundle
-          jobName = this.generateJobName(coder.name, item.name, '', caseCount);
-          preview = { name: jobName, bundle: item };
+          jobName = this.generateJobName(coder.name, this.getBundleDisplayName(item), '');
+          preview = {
+            name: jobName, bundle: item, caseCount, coderName: coder.name
+          };
         } else { // variable
-          jobName = this.generateJobName(coder.name, item.unitName, item.variableId, caseCount);
-          preview = { name: jobName, variable: item };
+          jobName = this.generateJobName(coder.name, item.unitName, item.variableId);
+          preview = {
+            name: jobName, variable: item, caseCount, coderName: coder.name
+          };
         }
 
         previews.push(preview);
@@ -265,13 +347,37 @@ export class CodingJobBulkCreationDialogComponent {
     return previews;
   }
 
-  private generateJobName(coderName: string, unitName: string, variableId: string, caseCount: number): string {
-    // Clean names to avoid issues with special characters
-    const cleanCoderName = coderName.replace(/[^a-zA-Z0-9-_]/g, '_');
-    const cleanUnitName = unitName.replace(/[^a-zA-Z0-9-_]/g, '_');
-    const cleanVariableId = variableId.replace(/[^a-zA-Z0-9-_]/g, '_');
+  private generateJobName(coderName: string, unitName: string, variableId: string): string {
+    if (variableId) {
+      return `Job ${unitName} - ${variableId} (${coderName})`;
+    }
 
-    return `${cleanCoderName}_${cleanUnitName}_${cleanVariableId}_${caseCount}`;
+    return `Job ${unitName} (${coderName})`;
+  }
+
+  private getBundleItemKey(bundle: Pick<VariableBundle, 'id'>): string {
+    return `bundle:${bundle.id}`;
+  }
+
+  private isVariableItemKey(itemKey: string): boolean {
+    return !itemKey.startsWith('bundle:') && itemKey.includes('::');
+  }
+
+  private findBundleForItemKey(itemKey: string): VariableBundle | undefined {
+    if (itemKey.startsWith('bundle:')) {
+      const bundleId = Number(itemKey.slice('bundle:'.length));
+      return this.data.selectedVariableBundles?.find(bundle => bundle.id === bundleId);
+    }
+
+    return this.data.selectedVariableBundles?.find(bundle => bundle.name === itemKey);
+  }
+
+  getBundleDisplayName(bundle: VariableBundle): string {
+    const sameNameCount = (this.data.selectedVariableBundles || [])
+      .filter(selectedBundle => selectedBundle.name === bundle.name)
+      .length;
+
+    return sameNameCount > 1 ? `${bundle.name} (#${bundle.id})` : bundle.name;
   }
 
   private getCaseCountForCoder(item: Variable | VariableBundle, coder: Coder): number {
@@ -279,7 +385,7 @@ export class CodingJobBulkCreationDialogComponent {
     let totalCases;
 
     if ('variables' in item) { // bundle
-      itemKey = item.name;
+      itemKey = this.getBundleItemKey(item);
       totalCases = item.variables.reduce((sum, v) => sum + (v.responseCount || 0), 0);
     } else { // variable
       itemKey = `${item.unitName}::${item.variableId}`;
@@ -287,7 +393,13 @@ export class CodingJobBulkCreationDialogComponent {
     }
 
     if (this.data.distribution && this.data.doubleCodingInfo) {
-      const coderCases = this.data.distribution[itemKey];
+      const coderCasesById = this.data.distributionByCoderId?.[itemKey] ||
+        ('variables' in item ? this.data.distributionByCoderId?.[item.name] : undefined);
+      if (coderCasesById) {
+        return coderCasesById[String(coder.id)] || 0;
+      }
+      const coderCases = this.data.distribution[itemKey] ||
+        ('variables' in item ? this.data.distribution[item.name] : undefined);
       const coderName = this.data.selectedCoders.find(c => c.id === coder.id)?.name;
       if (coderCases && coderName) {
         return coderCases[coderName] || 0;
@@ -318,9 +430,9 @@ export class CodingJobBulkCreationDialogComponent {
 
   private initForm(): void {
     this.displayOptionsForm = this.fb.group({
-      showScore: [true],
-      allowComments: [true],
-      suppressGeneralInstructions: [false]
+      showScore: [this.data.displayOptions?.showScore ?? true],
+      allowComments: [this.data.displayOptions?.allowComments ?? true],
+      suppressGeneralInstructions: [this.data.displayOptions?.suppressGeneralInstructions ?? false]
     });
   }
 
@@ -332,11 +444,53 @@ export class CodingJobBulkCreationDialogComponent {
     return this.distributionMatrix.reduce((total, row) => total + (row.coderCases[coderName] || 0), 0);
   }
 
+  getCaseCountForCoderInRow(row: DistributionMatrixRow, coder: Coder): number {
+    return row.coderCasesById?.[String(coder.id)] ?? row.coderCases[coder.name] ?? 0;
+  }
+
+  getCoderTotalById(coder: Coder): number {
+    return this.distributionMatrix.reduce((total, row) => total + this.getCaseCountForCoderInRow(row, coder), 0);
+  }
+
+  getDoubleCodedCasesForCoder(
+    info: { doubleCodedCasesPerCoder: Record<string, number> },
+    coder: Coder
+  ): number {
+    if (info.doubleCodedCasesPerCoder[coder.name] !== undefined) {
+      return info.doubleCodedCasesPerCoder[coder.name];
+    }
+
+    const duplicateSafeKey = `${coder.name} (#${coder.id})`;
+    return info.doubleCodedCasesPerCoder[duplicateSafeKey] || 0;
+  }
+
   getGrandTotal(): number {
     return this.distributionMatrix.reduce((total, row) => total + row.totalCases, 0);
   }
 
+  private getActiveDoubleCodingInfo(): BulkCreationData['doubleCodingInfo'] | undefined {
+    return this.data.creationResults?.doubleCodingInfo ||
+      this.doubleCodingPreview?.doubleCodingInfo ||
+      this.data.doubleCodingInfo;
+  }
+
+  getUniqueCaseTotal(): number {
+    const doubleCodingInfo = this.getActiveDoubleCodingInfo();
+    if (!doubleCodingInfo || Object.keys(doubleCodingInfo).length === 0) {
+      return this.getGrandTotal();
+    }
+
+    return Object.values(doubleCodingInfo).reduce(
+      (total, info) => total + info.doubleCodedCases + info.singleCodedCasesAssigned,
+      0
+    );
+  }
+
   getJobCaseCount(job: JobPreview): number {
+    if (job.caseCount !== undefined) {
+      return job.caseCount;
+    }
+
     if (this.data.creationResults?.jobs) {
       const resultJob = this.data.creationResults.jobs.find(j => {
         if (job.variable) {
@@ -344,6 +498,10 @@ export class CodingJobBulkCreationDialogComponent {
             j.variable.variableId === job.variable.variableId &&
             j.jobName === job.name;
         } if (job.bundle) {
+          if (j.itemKey) {
+            return j.itemKey === this.getBundleItemKey(job.bundle) &&
+              j.jobName === job.name;
+          }
           return j.variable.unitName === job.bundle.name &&
             j.variable.variableId === '' &&
             j.jobName === job.name;
@@ -368,17 +526,21 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   getDoubleCodingGridTemplate(): string {
-    const coderColumns = '80px '.repeat(this.data.selectedCoders.length);
-    return `200px 80px 80px 80px ${coderColumns}`.trim();
+    const coderColumns = 'minmax(88px, 1fr) '.repeat(this.data.selectedCoders.length);
+    return `minmax(180px, 1.6fr) minmax(88px, 1fr) minmax(88px, 1fr) minmax(88px, 1fr) ${coderColumns}`.trim();
   }
 
   getDistributionGridTemplate(): string {
-    const coderColumns = '80px '.repeat(this.data.selectedCoders.length);
-    return `200px ${coderColumns}60px`.trim();
+    const coderColumns = 'minmax(88px, 1fr) '.repeat(this.data.selectedCoders.length);
+    return `minmax(180px, 1.6fr) ${coderColumns}minmax(70px, .8fr)`.trim();
   }
 
   getVariableDisplayNameFromKey(variableKey: string): string {
-    // Convert "unitName::variableId" format to display format
+    const bundle = this.findBundleForItemKey(variableKey);
+    if (bundle) {
+      return this.getBundleDisplayName(bundle);
+    }
+
     const parts = variableKey.split('::');
     if (parts.length === 2) {
       return `${parts[0]} → ${parts[1]}`;
@@ -392,10 +554,10 @@ export class CodingJobBulkCreationDialogComponent {
 
   onConfirm(): void {
     if (this.data.maxCodingCases !== undefined && this.data.maxCodingCases !== null && this.data.maxCodingCases > 0) {
-      const totalCases = this.getGrandTotal();
-      if (totalCases > this.data.maxCodingCases) {
+      const uniqueCases = this.getUniqueCaseTotal();
+      if (uniqueCases > this.data.maxCodingCases) {
         this.snackBar.open(
-          `Die Gesamtzahl der Kodierfälle (${totalCases}) überschreitet das Maximum von ${this.data.maxCodingCases}.`,
+          `Die Zahl der eindeutigen Kodierfälle (${uniqueCases}) überschreitet das Maximum von ${this.data.maxCodingCases}.`,
           'Schließen',
           { duration: 5000 }
         );

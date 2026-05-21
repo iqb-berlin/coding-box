@@ -1,14 +1,19 @@
-import { ValidationTask } from '../../../database/entities/validation-task.entity';
+import {
+  ValidationTask,
+  ValidationType
+} from '../../../database/entities/validation-task.entity';
 
 export class ValidationTaskDto {
   id: number;
   workspace_id: number;
-  validation_type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses';
+  validation_type: ValidationType;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   progress?: number;
+  progress_message?: string;
   error?: string;
   page?: number;
   limit?: number;
+  cache_key?: string;
   created_at: Date;
   updated_at: Date;
 
@@ -22,9 +27,11 @@ export class ValidationTaskDto {
     dto.validation_type = entity.validation_type;
     dto.status = entity.status as 'pending' | 'processing' | 'completed' | 'failed';
     dto.progress = entity.progress;
+    dto.progress_message = entity.progress_message;
     dto.error = entity.error;
     dto.page = entity.page;
     dto.limit = entity.limit;
+    dto.cache_key = entity.cache_key;
     dto.created_at = entity.created_at;
     dto.updated_at = entity.updated_at;
     return dto;

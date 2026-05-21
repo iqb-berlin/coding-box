@@ -21,11 +21,20 @@
       </div>
     }
   }@else {
-    <div>
+    <div class="login-panel">
+      @if (appService.needsReAuthentication) {
+        <div class="reauthentication-hint" role="status">
+          <mat-icon>lock</mat-icon>
+          <div>
+            <strong>{{ 'error.reauthentication_title' | translate }}</strong>
+            <p>{{ 'error.reauthentication_message' | translate }}</p>
+          </div>
+        </div>
+      }
       <p>
         Bitte melden Sie sich an, um auf Ihre Arbeitsbereiche zuzugreifen.
       </p>
-      <button mat-raised-button color="primary" class="login-button" (click)="this.authService.login()">
+      <button mat-raised-button color="primary" class="login-button" (click)="login()">
         <mat-icon>login</mat-icon>
         <span>Anmelden</span>
       </button>

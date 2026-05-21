@@ -10,6 +10,7 @@ import { Queue, JobOptions, Job } from 'bull';
 import { FileIo } from '../admin/workspace/file-io.interface';
 import { ValidationTask } from '../database/entities/validation-task.entity';
 import { ProcessDto } from '../../../../../api-dto/workspaces/process-dto';
+import { CodebookExportFormat } from '../../../../../api-dto/coding/codebook-content-setting';
 
 export interface TestResultsUploadJobData {
   workspaceId: number;
@@ -25,9 +26,14 @@ export interface TestResultsUploadJobData {
 export interface TestPersonCodingJobData {
   workspaceId: number;
   personIds: string[];
+  unitIds?: number[];
   groupNames?: string;
   isPaused?: boolean;
   autoCoderRun?: number;
+  source?: 'manual-selection' | 'coding-freshness';
+  freshnessVersion?: 'v1' | 'v3';
+  freshnessStates?: ('PENDING' | 'STALE')[];
+  freshnessSourceRevision?: number;
 }
 
 export interface FlatResponseFilterOptionsJobData {
@@ -39,7 +45,7 @@ export interface CodebookGenerationJobData {
   workspaceId: number;
   missingsProfile: number;
   contentOptions: {
-    exportFormat: string;
+    exportFormat: CodebookExportFormat;
     missingsProfile: string;
     hasOnlyManualCoding: boolean;
     hasGeneralInstructions: boolean;
@@ -59,7 +65,7 @@ export interface CodebookJobResult {
   filePath: string;
   fileSize: number;
   workspaceId: number;
-  exportFormat: string;
+  exportFormat: CodebookExportFormat;
   createdAt: number;
 }
 
@@ -91,6 +97,10 @@ export interface ExternalCodingImportJobData {
   workspaceId: number;
   tempFilePath: string;
   fileName: string;
+  sourceFormat?: 'external-coding' | 'coding-list' | 'coding-results';
+  sourceVersion?: 'v1' | 'v2' | 'v3';
+  scoreMode?: 'import' | 'derive';
+  existingCodingMode?: 'skip-conflicts' | 'fill-empty' | 'overwrite';
 }
 
 export interface ExportJobData {
@@ -100,6 +110,7 @@ export interface ExportJobData {
   | 'aggregated'
   | 'by-coder'
   | 'by-variable'
+  | 'by-variable-compact'
   | 'detailed'
   | 'coding-times'
   | 'test-results'
@@ -110,6 +121,7 @@ export interface ExportJobData {
   format?: 'csv' | 'json' | 'excel';
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
+  includeResponseValues?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   doubleCodingMethod?:
@@ -129,6 +141,7 @@ export interface ExportJobData {
     bookletNames?: string[];
     unitNames?: string[];
     personIds?: number[];
+    includeLogAnomalies?: boolean;
   };
   jobDefinitionIds?: number[];
   coderTrainingIds?: number[];
@@ -176,12 +189,23 @@ export class JobQueueService {
     label: string;
   }> = [
       { target: 'test-results-upload', blockedBy: 'validation-task', label: 'validation' },
+      { target: 'test-results-upload', blockedBy: 'test-person-coding', label: 'auto-coding' },
+      { target: 'test-results-upload', blockedBy: 'reset-coding-version', label: 'reset coding version' },
+      { target: 'test-results-upload', blockedBy: 'external-coding-import', label: 'external coding import' },
       { target: 'test-person-coding', blockedBy: 'test-results-upload', label: 'test results upload' },
       { target: 'test-person-coding', blockedBy: 'reset-coding-version', label: 'reset coding version' },
+      { target: 'test-person-coding', blockedBy: 'external-coding-import', label: 'external coding import' },
+      { target: 'validation-task', blockedBy: 'test-person-coding', label: 'auto-coding' },
+      { target: 'validation-task', blockedBy: 'test-results-upload', label: 'test results upload' },
+      { target: 'validation-task', blockedBy: 'reset-coding-version', label: 'reset coding version' },
       { target: 'coding-statistics', blockedBy: 'test-person-coding', label: 'auto-coding' },
       { target: 'coding-statistics', blockedBy: 'external-coding-import', label: 'external coding import' },
       { target: 'data-export', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'reset-coding-version', blockedBy: 'test-person-coding', label: 'auto-coding' }
+      { target: 'reset-coding-version', blockedBy: 'test-person-coding', label: 'auto-coding' },
+      { target: 'reset-coding-version', blockedBy: 'external-coding-import', label: 'external coding import' },
+      { target: 'external-coding-import', blockedBy: 'test-person-coding', label: 'auto-coding' },
+      { target: 'external-coding-import', blockedBy: 'test-results-upload', label: 'test results upload' },
+      { target: 'external-coding-import', blockedBy: 'reset-coding-version', label: 'reset coding version' }
     ];
 
   constructor(
@@ -221,30 +245,75 @@ export class JobQueueService {
     ]);
   }
 
+  private async jobBelongsToWorkspace(
+    queueName: string,
+    job: Job,
+    workspaceId: number
+  ): Promise<boolean> {
+    if (queueName === 'validation-task') {
+      const taskId = Number((job.data as ValidationTaskJobData | undefined)?.taskId);
+      if (!taskId) return false;
+
+      const tasks = await this.validationTaskRepository.find({
+        where: { id: In([taskId]) },
+        select: ['id', 'workspace_id']
+      });
+      return tasks.some(task => Number(task.workspace_id) === Number(workspaceId));
+    }
+
+    const jobWorkspaceId = Number((job.data as { workspaceId?: number } | undefined)?.workspaceId);
+    return Boolean(jobWorkspaceId) && jobWorkspaceId === Number(workspaceId);
+  }
+
+  private async cancelKnownJob(queueName: string, job: Job): Promise<boolean> {
+    try {
+      const state = await job.getState();
+      if (state === 'waiting' || state === 'delayed' || state === 'paused' || state === 'completed' || state === 'failed') {
+        await job.remove();
+        return true;
+      }
+
+      if (state === 'active') {
+        if (queueName === 'data-export') {
+          await job.update({ ...job.data, isCancelled: true });
+          await job.discard();
+          return true;
+        }
+
+        if (queueName === 'test-person-coding') {
+          await job.update({ ...job.data, isPaused: true });
+          await job.discard();
+          return true;
+        }
+
+        return false;
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
   async cancelJob(queueName: string, jobId: string): Promise<boolean> {
     const queue = this.getQueue(queueName);
     if (!queue) return false;
     const job = await queue.getJob(jobId);
     if (!job) return false;
 
-    try {
-      const state = await job.getState();
-      if (state === 'waiting' || state === 'delayed' || state === 'completed' || state === 'failed') {
-        await job.remove();
-        return true;
-      }
-      if (state === 'active') {
-        if (queueName === 'data-export') {
-          await job.update({ ...job.data, isCancelled: true });
-        }
-        await job.discard();
-        await job.remove(); // Also remove active jobs once discarded to clear it from UI
-        return true;
-      }
-      return true;
-    } catch {
-      return false;
-    }
+    return this.cancelKnownJob(queueName, job);
+  }
+
+  async cancelWorkspaceJob(workspaceId: number, queueName: string, jobId: string): Promise<boolean> {
+    const queue = this.getQueue(queueName);
+    if (!queue) return false;
+    const job = await queue.getJob(jobId);
+    if (!job) return false;
+
+    const belongsToWorkspace = await this.jobBelongsToWorkspace(queueName, job, workspaceId);
+    if (!belongsToWorkspace) return false;
+
+    return this.cancelKnownJob(queueName, job);
   }
 
   async deleteJob(queueName: string, jobId: string): Promise<boolean> {
@@ -268,18 +337,19 @@ export class JobQueueService {
     for (const [queueName, queue] of queues.entries()) {
       processPromises.push(
         queue.getJobs(['active', 'waiting', 'delayed', 'completed', 'failed', 'paused']).then(async jobs => {
-          let matchedJobs = jobs;
+          const existingJobs = jobs.filter(Boolean);
+          let matchedJobs = existingJobs;
           if (queueName === 'validation-task') {
-            const taskIds = jobs.map(j => j.data?.taskId as number).filter(Boolean);
+            const taskIds = existingJobs.map(j => j.data?.taskId as number).filter(Boolean);
             if (taskIds.length === 0) return [];
             const tasks = await this.validationTaskRepository.find({
               where: { id: In(taskIds) },
               select: ['id', 'workspace_id']
             });
             const taskWorkspaceMap = new Map(tasks.map(t => [t.id, t.workspace_id]));
-            matchedJobs = jobs.filter(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);
+            matchedJobs = existingJobs.filter(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);
           } else {
-            matchedJobs = jobs.filter(j => j.data && j.data.workspaceId === workspaceId);
+            matchedJobs = existingJobs.filter(j => j.data && j.data.workspaceId === workspaceId);
           }
 
           const mappedPromises = matchedJobs.map(async job => {
@@ -300,7 +370,7 @@ export class JobQueueService {
               queueName: queueName,
               status: state as ProcessDto['status'],
               progress: progress,
-              data: job.data,
+              data: this.sanitizeJobData(job.data),
               failedReason: job.failedReason,
               timestamp: job.timestamp,
               processedOn: job.processedOn,
@@ -316,25 +386,91 @@ export class JobQueueService {
     return results.flat().sort((a, b) => b.timestamp - a.timestamp);
   }
 
+  private sanitizeJobData(data: unknown): Record<string, unknown> | undefined {
+    if (!data || typeof data !== 'object') return undefined;
+
+    const source = data as Record<string, unknown>;
+    const sanitized: Record<string, unknown> = {};
+    const scalarKeys = [
+      'workspaceId',
+      'taskId',
+      'resultType',
+      'overwriteExisting',
+      'personMatchMode',
+      'overwriteMode',
+      'scope',
+      'exportType',
+      'version',
+      'format',
+      'source',
+      'autoCoderRun',
+      'freshnessVersion',
+      'processingDurationThresholdMs',
+      'missingsProfile',
+      'unitId',
+      'variableId',
+      'fileName',
+      'sourceFormat',
+      'sourceVersion',
+      'scoreMode',
+      'existingCodingMode',
+      'isPaused',
+      'isCancelled'
+    ];
+
+    scalarKeys.forEach(key => {
+      const value = source[key];
+      if (
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+      ) {
+        sanitized[key] = value;
+      }
+    });
+
+    const file = source.file as { originalname?: unknown } | undefined;
+    if (file && typeof file.originalname === 'string') {
+      sanitized.fileName = file.originalname;
+    }
+
+    [
+      ['personIds', 'personCount'],
+      ['unitIds', 'unitCount'],
+      ['groupNames', 'groupCount'],
+      ['jobDefinitionIds', 'jobDefinitionCount'],
+      ['coderTrainingIds', 'coderTrainingCount'],
+      ['coderIds', 'coderCount'],
+      ['matchingFlags', 'matchingFlagCount']
+    ].forEach(([sourceKey, targetKey]) => {
+      const value = source[sourceKey];
+      if (Array.isArray(value)) {
+        sanitized[targetKey] = value.length;
+      }
+    });
+
+    return Object.keys(sanitized).length ? sanitized : undefined;
+  }
+
   private async hasActiveJobForWorkspace(
     queueName: string,
     workspaceId: number
   ): Promise<Job | undefined> {
     const queue = this.getQueue(queueName);
-    const jobs = await queue.getJobs(['active', 'waiting', 'delayed']);
+    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(Boolean);
 
     if (queueName === 'validation-task') {
-      const taskIds = jobs.map(j => j.data.taskId as number).filter(Boolean);
+      const taskIds = jobs.map(j => j.data?.taskId as number).filter(Boolean);
       if (taskIds.length === 0) return undefined;
       const tasks = await this.validationTaskRepository.find({
         where: { id: In(taskIds) },
         select: ['id', 'workspace_id']
       });
       const taskWorkspaceMap = new Map(tasks.map(t => [t.id, t.workspace_id]));
-      return jobs.find(j => taskWorkspaceMap.get(j.data.taskId) === workspaceId);
+      return jobs.find(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);
     }
 
-    return jobs.find(j => j.data.workspaceId === workspaceId);
+    return jobs.find(j => j.data?.workspaceId === workspaceId);
   }
 
   async assertNoDependencyConflicts(
@@ -356,7 +492,7 @@ export class JobQueueService {
     queue: Queue,
     matchFn: (data: T) => boolean
   ): Promise<Job<T> | undefined> {
-    const jobs = await queue.getJobs(['active', 'waiting', 'delayed']);
+    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(Boolean);
     return jobs.find(job => matchFn(job.data));
   }
 
@@ -364,6 +500,15 @@ export class JobQueueService {
     data: TestPersonCodingJobData,
     options?: JobOptions
   ): Promise<Job<TestPersonCodingJobData>> {
+    const existing = await this.findActiveJob<TestPersonCodingJobData>(
+      this.testPersonCodingQueue,
+      d => d.workspaceId === data.workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `A test person coding job is already running for workspace ${data.workspaceId} (job ${existing.id})`
+      );
+    }
     this.logger.log(
       `Adding test person coding job for workspace ${data.workspaceId}`
     );
@@ -708,6 +853,15 @@ export class JobQueueService {
     data: ResetCodingVersionJobData,
     options?: JobOptions
   ): Promise<Job<ResetCodingVersionJobData>> {
+    const existing = await this.findActiveJob<ResetCodingVersionJobData>(
+      this.resetCodingVersionQueue,
+      d => d.workspaceId === data.workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `A reset coding version job is already running for workspace ${data.workspaceId} (job ${existing.id})`
+      );
+    }
     this.logger.log(
       `Adding reset coding version job for workspace ${data.workspaceId}, version ${data.version}`
     );

@@ -54,7 +54,7 @@ export class CodingListStreamService {
     (async () => {
       try {
         const totalRows = await this.responseFilterService.countResponses(workspace_id);
-        const batchSize = 5000;
+        const batchSize = 500;
         let lastId = 0;
         let totalWritten = 0;
 
@@ -409,18 +409,23 @@ export class CodingListStreamService {
     authToken: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true
   ) {
     this.logger.log(
-      `Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
+      `Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
     );
     this.fileCacheService.clearCaches();
     const csvStream = fastCsv.format({ headers: true, delimiter: ';' });
 
     (async () => {
       try {
-        const totalRows = await this.responseFilterService.countResponses(workspace_id, { version });
-        const batchSize = 5000;
+        const totalRows = await this.responseFilterService.countResponses(workspace_id, {
+          version,
+          validCodingVariablesOnly: true,
+          givenResponsesOnly: true
+        });
+        const batchSize = 500;
         let lastId = 0;
         let totalWritten = 0;
 
@@ -433,27 +438,28 @@ export class CodingListStreamService {
             workspace_id,
             lastId,
             batchSize,
-            { version, considerOnly: false }
+            {
+              version,
+              validCodingVariablesOnly: true,
+              givenResponsesOnly: true
+            }
           );
 
           if (!responses.length) break;
 
-          // Process responses in parallel batches
-          const processingPromises = responses.map(response => this.itemBuilderService.buildCodingItemWithVersions(
-            response,
-            version,
-            authToken,
-            serverUrl!,
-            workspace_id,
-            includeReplayUrls
-          ));
+          for (const response of responses) {
+            const item = await this.itemBuilderService.buildCodingItemWithVersions(
+              response,
+              version,
+              authToken,
+              serverUrl!,
+              workspace_id,
+              includeReplayUrls,
+              includeResponseValues
+            );
 
-          const results = await Promise.allSettled(processingPromises);
-
-          // Write items directly to CSV stream without accumulating
-          for (const result of results) {
-            if (result.status === 'fulfilled' && result.value !== null) {
-              const ok = csvStream.write(result.value);
+            if (item !== null) {
+              const ok = csvStream.write(item);
               totalWritten += 1;
 
               if (!ok) {
@@ -508,10 +514,11 @@ export class CodingListStreamService {
     authToken?: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true
   ): Promise<Buffer> {
     this.logger.log(
-      `Starting streaming Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
+      `Starting streaming Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
     );
     this.fileCacheService.clearCaches();
 
@@ -535,7 +542,7 @@ export class CodingListStreamService {
     const worksheet = workbook.addWorksheet('Coding Results');
 
     // Define headers based on version (include lower versions)
-    let headers = this.itemBuilderService.getHeadersForVersion(version);
+    let headers = this.itemBuilderService.getHeadersForVersion(version, includeResponseValues);
 
     // Add URL column if replay URLs are included
     if (includeReplayUrls) {
@@ -544,39 +551,44 @@ export class CodingListStreamService {
 
     worksheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
 
-    const batchSize = 1000; // Reduced batch size for streaming
+    const batchSize = 500;
     let lastId = 0;
     let totalWritten = 0;
 
     try {
-      const totalRows = await this.responseFilterService.countResponses(workspace_id, { version });
+      const totalRows = await this.responseFilterService.countResponses(workspace_id, {
+        version,
+        validCodingVariablesOnly: true,
+        givenResponsesOnly: true
+      });
 
       for (; ;) {
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
           lastId,
           batchSize,
-          { version, considerOnly: false }
+          {
+            version,
+            validCodingVariablesOnly: true,
+            givenResponsesOnly: true
+          }
         );
 
         if (!responses.length) break;
 
-        // Process responses in parallel batches
-        const processingPromises = responses.map(response => this.itemBuilderService.buildCodingItemWithVersions(
-          response,
-          version,
-          authToken || '',
-          serverUrl || '',
-          workspace_id,
-          includeReplayUrls
-        )
-        );
+        for (const response of responses) {
+          const item = await this.itemBuilderService.buildCodingItemWithVersions(
+            response,
+            version,
+            authToken || '',
+            serverUrl || '',
+            workspace_id,
+            includeReplayUrls,
+            includeResponseValues
+          );
 
-        const results = await Promise.allSettled(processingPromises);
-
-        for (const result of results) {
-          if (result.status === 'fulfilled' && result.value !== null) {
-            worksheet.addRow(result.value).commit(); // Commit each row immediately
+          if (item !== null) {
+            worksheet.addRow(item).commit(); // Commit each row immediately
             totalWritten += 1;
           }
         }

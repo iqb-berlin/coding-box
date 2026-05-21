@@ -165,6 +165,10 @@ export class WorkspaceCoderTrainingController {
             type: 'string',
             enum: ['continuous', 'alternating'],
             description: 'Global case ordering mode for this training'
+          },
+          suppress_general_instructions: {
+            type: 'boolean',
+            description: 'Whether general variable instructions are hidden in coding jobs created for this training'
           }
         }
       }
@@ -182,6 +186,7 @@ export class WorkspaceCoderTrainingController {
     case_selection_mode?: string;
     reference_training_ids?: number[];
     reference_mode?: string | null;
+    suppress_general_instructions?: boolean;
   }[]
   > {
     return this.coderTrainingService.getCoderTrainings(workspace_id);
@@ -277,6 +282,10 @@ export class WorkspaceCoderTrainingController {
               name: { type: 'string' }
             }
           }
+        },
+        suppressGeneralInstructions: {
+          type: 'boolean',
+          description: 'Whether general variable instructions are hidden in coding jobs created for this training'
         }
       },
       required: ['trainingLabel', 'selectedCoders', 'variableConfigs']
@@ -327,6 +336,7 @@ export class WorkspaceCoderTrainingController {
                      caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups';
                      referenceTrainingIds?: number[];
                      referenceMode?: 'same' | 'different';
+                     suppressGeneralInstructions?: boolean;
                    }
   ): Promise<{
         success: boolean;
@@ -351,7 +361,8 @@ export class WorkspaceCoderTrainingController {
       body.caseOrderingMode,
       body.caseSelectionMode,
       body.referenceTrainingIds,
-      body.referenceMode
+      body.referenceMode,
+      body.suppressGeneralInstructions
     );
   }
 
@@ -467,6 +478,11 @@ export class WorkspaceCoderTrainingController {
           personCode: { type: 'string', description: 'Person code' },
           testPerson: { type: 'string', description: 'Test person details' },
           givenAnswer: { type: 'string', description: 'Given answer' },
+          discussionCode: { type: 'number', nullable: true },
+          discussionScore: { type: 'number', nullable: true },
+          discussionManagerUserId: { type: 'number', nullable: true },
+          discussionManagerName: { type: 'string', nullable: true },
+          discussionSource: { type: 'string', enum: ['manual', 'auto_agreement'], nullable: true },
           coders: {
             type: 'array',
             items: {
@@ -508,6 +524,7 @@ export class WorkspaceCoderTrainingController {
         discussionScore: number | null;
         discussionManagerUserId: number | null;
         discussionManagerName: string | null;
+        discussionSource: 'manual' | 'auto_agreement' | null;
         coders: Array<{
           jobId: number;
           coderName: string;
@@ -634,7 +651,11 @@ export class WorkspaceCoderTrainingController {
         caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] },
         caseSelectionMode: { type: 'string', enum: ['oldest_first', 'newest_first', 'random', 'random_per_testgroup', 'random_testgroups'] },
         referenceTrainingIds: { type: 'array', items: { type: 'number' } },
-        referenceMode: { type: 'string', enum: ['same', 'different'] }
+        referenceMode: { type: 'string', enum: ['same', 'different'] },
+        suppressGeneralInstructions: {
+          type: 'boolean',
+          description: 'Whether general variable instructions are hidden in coding jobs created for this training'
+        }
       },
       required: ['label', 'selectedCoders', 'variableConfigs']
     }
@@ -668,6 +689,7 @@ export class WorkspaceCoderTrainingController {
         caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups';
         referenceTrainingIds?: number[];
         referenceMode?: 'same' | 'different';
+        suppressGeneralInstructions?: boolean;
       }
   ): Promise<{ success: boolean; message: string; jobsCreated?: number }> {
     if (!trainingId || trainingId <= 0) {
@@ -686,7 +708,8 @@ export class WorkspaceCoderTrainingController {
       body.caseOrderingMode,
       body.caseSelectionMode,
       body.referenceTrainingIds,
-      body.referenceMode
+      body.referenceMode,
+      body.suppressGeneralInstructions
     );
   }
 

@@ -2,7 +2,10 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { switchMap, tap, map } from 'rxjs/operators';
 import { BaseValidationService } from './base-validation.service';
-import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import {
+  InvalidVariableDto,
+  VariableValidationSummaryDto
+} from '../../../../../../../api-dto/files/variable-validation.dto';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
 interface VariablesValidationResult {
@@ -10,6 +13,7 @@ interface VariablesValidationResult {
   total: number;
   page: number;
   limit: number;
+  summary?: VariableValidationSummaryDto;
 }
 
 /**

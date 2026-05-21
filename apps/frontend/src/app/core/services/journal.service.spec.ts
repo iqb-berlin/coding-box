@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { JournalService } from './journal.service';
 import { SERVER_URL } from '../../injection-tokens';
+import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../interceptors/http-error-context';
 
 describe('JournalService', () => {
   let service: JournalService;
@@ -40,6 +41,25 @@ describe('JournalService', () => {
     expect(service).toBeTruthy();
   });
 
+  describe('getJournalEntries', () => {
+    it('should support suppressing the global HTTP error display', () => {
+      service.getJournalEntries(mockWorkspaceId, 1, 20, {}, { suppressGlobalError: true })
+        .subscribe(res => {
+          expect(res).toBeDefined();
+        });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/journal?page=1&limit=20`);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+      req.flush({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20
+      });
+    });
+  });
+
   describe('createJournalEntry', () => {
     it('should create entry', () => {
       const entryData = {
@@ -65,7 +85,9 @@ describe('JournalService', () => {
       expect(req.request.body).toEqual({
         action_type: entryData.actionType,
         entity_type: entryData.entityType,
+        entityType: entryData.entityType,
         entity_id: entryData.entityId,
+        entityId: entryData.entityId,
         details: entryData.details
       });
       req.flush({});

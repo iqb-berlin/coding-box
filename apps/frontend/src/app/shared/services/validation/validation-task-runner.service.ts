@@ -12,6 +12,8 @@ export type ValidationTaskType =
   | 'groupResponses'
   | 'duplicateResponses'
   | 'deleteResponses'
+  | 'deleteTestResults'
+  | 'deleteTestLogs'
   | 'deleteAllResponses';
 
 export interface RunValidationTaskResult<T = unknown> {

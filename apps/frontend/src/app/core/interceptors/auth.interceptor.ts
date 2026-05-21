@@ -6,6 +6,7 @@ import {
   HttpInterceptorFn,
   HttpRequest
 } from '@angular/common/http';
+import { Router } from '@angular/router';
 import {
   finalize,
   Observable,
@@ -13,8 +14,8 @@ import {
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppHttpError } from './app-http-error.class';
+import { SUPPRESS_GLOBAL_HTTP_ERROR } from './http-error-context';
 import { AppService } from '../services/app.service';
-import { AuthService } from '../services/auth.service';
 
 /**
  * Functional interceptor for adding authentication headers and handling errors
@@ -25,15 +26,18 @@ export const authInterceptor: HttpInterceptorFn = (
 ): Observable<HttpEvent<unknown>> => {
   const appService: AppService = inject(AppService);
   const snackBar = inject(MatSnackBar);
-  const authService = inject(AuthService);
+  const router = inject(Router);
   let httpErrorInfo: AppHttpError | null = null;
+  let suppressGlobalErrorMessage = false;
 
   let modifiedReq = req;
 
   if (!req.headers.has('Authorization')) {
     const idToken = localStorage.getItem('id_token');
-    const headers = new HttpHeaders({ Authorization: `Bearer ${idToken}` });
-    modifiedReq = req.clone({ headers });
+    if (idToken) {
+      const headers = new HttpHeaders({ Authorization: `Bearer ${idToken}` });
+      modifiedReq = req.clone({ headers });
+    }
   }
 
   return next(modifiedReq)
@@ -41,7 +45,16 @@ export const authInterceptor: HttpInterceptorFn = (
       tap({
         error: error => {
           httpErrorInfo = new AppHttpError(error);
+          const suppressBackendLoginAuthDataError = shouldSuppressBackendLoginAuthDataError(req, error, appService);
+          suppressGlobalErrorMessage = req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR) ||
+            suppressBackendLoginAuthDataError;
+
+          if (suppressBackendLoginAuthDataError) {
+            return;
+          }
+
           if (error.status === 401 || error.status === 403) {
+            suppressGlobalErrorMessage = true;
             const errorMessage = error.error?.message || error.message || '';
 
             if (errorMessage.includes('Access level')) {
@@ -54,17 +67,7 @@ export const authInterceptor: HttpInterceptorFn = (
                 }
               );
             } else if (error.status === 401) {
-              appService.setNeedsReAuthentication(true);
-              snackBar.open(
-                'Sie sind nicht angemeldet oder Ihre Sitzung ist abgelaufen',
-                'Anmelden',
-                {
-                  duration: 0,
-                  panelClass: ['error-snackbar']
-                }
-              ).onAction().subscribe(() => {
-                authService.login();
-              });
+              appService.requireReAuthentication(router.url);
             } else {
               snackBar.open(
                 'Sie haben keine Berechtigung für diese Aktion',
@@ -79,7 +82,7 @@ export const authInterceptor: HttpInterceptorFn = (
         }
       }),
       finalize(() => {
-        if (httpErrorInfo) {
+        if (httpErrorInfo && !suppressGlobalErrorMessage) {
           httpErrorInfo.method = req.method;
           httpErrorInfo.urlWithParams = req.urlWithParams;
           appService.addErrorMessage(httpErrorInfo);
@@ -87,3 +90,13 @@ export const authInterceptor: HttpInterceptorFn = (
       })
     );
 };
+
+function shouldSuppressBackendLoginAuthDataError(
+  req: HttpRequest<unknown>,
+  error: { status?: number },
+  appService: AppService
+): boolean {
+  return error.status === 401 &&
+    req.urlWithParams.includes('/auth-data') &&
+    appService.isBackendLoginRunning();
+}

@@ -25,6 +25,7 @@ import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variab
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
+import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -199,7 +200,7 @@ export class WorkspaceCodingAnalysisController {
     type: Boolean
   })
   @ApiOkResponse({
-    description: 'CODING_INCOMPLETE variables retrieved successfully.',
+    description: 'Manual coding variables retrieved successfully.',
     schema: {
       type: 'array',
       items: {
@@ -266,7 +267,7 @@ export class WorkspaceCodingAnalysisController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
     description:
-      'List of CODING_INCOMPLETE variables to check for applied results',
+      'List of manual coding variables to check for applied results',
     schema: {
       type: 'object',
       properties: {
@@ -279,18 +280,18 @@ export class WorkspaceCodingAnalysisController {
               variableId: { type: 'string', description: 'Variable ID' }
             }
           },
-          description: 'List of variables that are CODING_INCOMPLETE'
+          description: 'List of variables with manual coding cases'
         }
       },
       required: ['incompleteVariables']
     }
   })
   @ApiOkResponse({
-    description: 'Count of applied results for CODING_INCOMPLETE variables.',
+    description: 'Count of applied results for manual coding variables.',
     schema: {
       type: 'number',
       description:
-        'Number of responses that were CODING_INCOMPLETE but have been changed to final statuses in status_v2'
+        'Number of manual coding responses that have been changed to final statuses in status_v2'
     }
   })
   async getAppliedResultsCount(
@@ -402,6 +403,40 @@ export class WorkspaceCodingAnalysisController {
             }
           }
         },
+        aggregationSummary: {
+          type: 'object',
+          properties: {
+            duplicateGroups: {
+              type: 'number',
+              description: 'Number of aggregatable duplicate groups'
+            },
+            duplicateResponses: {
+              type: 'number',
+              description: 'Number of responses in aggregatable duplicate groups'
+            },
+            collapsedCases: {
+              type: 'number',
+              description: 'Number of raw cases collapsed by aggregation'
+            },
+            rawCases: {
+              type: 'number',
+              description: 'Total raw coding cases considered for aggregation'
+            },
+            effectiveCases: {
+              type: 'number',
+              description: 'Total coding cases after aggregation'
+            },
+            threshold: {
+              type: 'number',
+              nullable: true,
+              description: 'Duplicate aggregation threshold'
+            },
+            aggregationActive: {
+              type: 'boolean',
+              description: 'Whether duplicate aggregation is active'
+            }
+          }
+        },
         matchingFlags: {
           type: 'array',
           items: { type: 'string' },
@@ -426,11 +461,11 @@ export class WorkspaceCodingAnalysisController {
     @Query('duplicatePage') duplicatePage?: number,
     @Query('duplicateLimit') duplicateLimit?: number
   ) {
-    const validThreshold = threshold ? Math.max(2, threshold) : 2;
-    const vEmptyPage = emptyPage ? Math.max(1, emptyPage) : 1;
-    const vEmptyLimit = emptyLimit ? Math.max(1, emptyLimit) : 50;
-    const vDuplicatePage = duplicatePage ? Math.max(1, duplicatePage) : 1;
-    const vDuplicateLimit = duplicateLimit ? Math.max(1, duplicateLimit) : 50;
+    const validThreshold = this.normalizeIntegerParam(threshold, 2, 2, 100);
+    const vEmptyPage = this.normalizeIntegerParam(emptyPage, 1, 1);
+    const vEmptyLimit = this.normalizeIntegerParam(emptyLimit, 50, 1);
+    const vDuplicatePage = this.normalizeIntegerParam(duplicatePage, 1, 1);
+    const vDuplicateLimit = this.normalizeIntegerParam(duplicateLimit, 50, 1);
 
     return this.codingAnalysisService.getResponseAnalysis(
       workspace_id,
@@ -439,6 +474,61 @@ export class WorkspaceCodingAnalysisController {
       vEmptyLimit,
       vDuplicatePage,
       vDuplicateLimit
+    );
+  }
+
+  @Get(':workspace_id/coding/aggregation-settings')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Current response aggregation settings.'
+  })
+  async getAggregationSettings(
+  @WorkspaceId() workspace_id: number
+  ) {
+    return this.codingAnalysisService.getAggregationSettings(workspace_id);
+  }
+
+  @Post(':workspace_id/coding/aggregation-settings')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Response aggregation settings',
+    schema: {
+      type: 'object',
+      properties: {
+        threshold: {
+          type: 'number',
+          description: 'Minimum number of duplicate occurrences to trigger aggregation',
+          example: 2,
+          minimum: 2,
+          maximum: 100
+        },
+        flags: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: Object.values(ResponseMatchingFlag)
+          },
+          description: 'Response matching flags'
+        }
+      }
+    }
+  })
+  @ApiOkResponse({
+    description: 'Response aggregation settings saved.'
+  })
+  async saveAggregationSettings(
+  @WorkspaceId() workspace_id: number,
+                 @Body() body: { threshold?: number; flags?: ResponseMatchingFlag[] } = {}
+  ) {
+    const threshold = this.normalizeIntegerParam(body.threshold, 2, 2, 100);
+    return this.codingAnalysisService.saveAggregationSettings(
+      workspace_id,
+      threshold,
+      body.flags
     );
   }
 
@@ -513,8 +603,31 @@ export class WorkspaceCodingAnalysisController {
     description: 'Response analysis triggered successfully.'
   })
   async postTriggerResponseAnalysis(
-    @WorkspaceId() workspace_id: number
+    @WorkspaceId() workspace_id: number,
+                   @Body() body: { threshold?: number } = {}
   ): Promise<void> {
-    await this.codingAnalysisService.startAnalysis(workspace_id);
+    const threshold = body.threshold === undefined ?
+      undefined :
+      this.normalizeIntegerParam(body.threshold, 2, 2, 100);
+
+    await this.codingAnalysisService.startAnalysis(
+      workspace_id,
+      undefined,
+      threshold
+    );
+  }
+
+  private normalizeIntegerParam(
+    value: number | string | undefined,
+    fallback: number,
+    min: number,
+    max?: number
+  ): number {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
+    const rounded = Math.round(parsed);
+    return Math.min(max ?? rounded, Math.max(min, rounded));
   }
 }

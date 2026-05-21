@@ -42,6 +42,7 @@
           <mat-option value="pending">{{ 'coding.my-coding-jobs.filter-pending' | translate }}</mat-option>
           <mat-option value="paused">{{ 'coding.my-coding-jobs.filter-paused' | translate }}</mat-option>
           <mat-option value="open">{{ 'coding.my-coding-jobs.filter-open' | translate }}</mat-option>
+          <mat-option value="results_applied">{{ 'coding.my-coding-jobs.filter-results-applied' | translate }}</mat-option>
           <mat-option value="review">{{ 'coding.my-coding-jobs.filter-review' | translate }}</mat-option>
         </mat-select>
       </mat-form-field>
@@ -87,17 +88,10 @@
             <mat-header-cell *matHeaderCellDef>{{ 'coding.my-coding-jobs.actions' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let element" class="actions-cell">
               <button mat-icon-button (click)="$event.stopPropagation(); startCodingJob(element)"
-                [matTooltip]="'coding.my-coding-jobs.start-coding' | translate"
-                [attr.aria-label]="'coding.my-coding-jobs.start-coding' | translate">
-                <mat-icon>play_arrow</mat-icon>
+                [matTooltip]="getStartCodingJobLabel(element)"
+                [attr.aria-label]="getStartCodingJobLabel(element)">
+                <mat-icon>{{ getStartCodingJobIcon(element) }}</mat-icon>
               </button>
-              @if (element.status === 'completed') {
-              <button mat-icon-button (click)="$event.stopPropagation(); sendToReview(element)"
-                [matTooltip]="'coding.my-coding-jobs.send-to-review' | translate"
-                [attr.aria-label]="'coding.my-coding-jobs.send-to-review' | translate">
-                <mat-icon>check_circle</mat-icon>
-              </button>
-              }
             </mat-cell>
           </ng-container>
 

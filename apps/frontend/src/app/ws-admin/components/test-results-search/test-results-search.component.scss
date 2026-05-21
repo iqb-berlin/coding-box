@@ -1,7 +1,7 @@
 .test-results-search-dialog {
-  min-width: 800px;
-  max-width: 1200px;
-  height: 80vh;
+  min-width: 760px;
+  max-width: 1100px;
+  height: 78vh;
   display: flex;
   flex-direction: column;
 }
@@ -14,156 +14,142 @@
   overflow: hidden;
 }
 
-.search-mode-toggle {
+.quick-search-field {
+  width: 100%;
+}
+
+.type-filter-bar {
   display: flex;
-  margin-bottom: 16px;
-  border-bottom: 1px solid #e0e0e0;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
 
   button {
-    flex: 1;
-    border-radius: 0;
-    padding: 12px;
-    font-weight: normal;
-    color: rgba(0, 0, 0, 0.6);
-    position: relative;
+    height: 38px;
 
     &.active {
-      color: #3f51b5;
-      font-weight: 500;
-
-      &::after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background-color: #3f51b5;
-      }
+      background-color: rgba(63, 81, 181, 0.1);
+      border-color: #3f51b5;
+      color: #283593;
     }
+  }
 
-    &:hover {
-      background-color: rgba(0, 0, 0, 0.04);
-    }
+  mat-icon {
+    margin-right: 6px;
   }
 }
 
-.search-container {
-  margin-bottom: 16px;
-
-  &.response-search {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
-  }
-
-  .search-field {
-    width: 100%;
-  }
+.type-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  margin-left: 4px;
+  border-radius: 10px;
+  background-color: rgba(0, 0, 0, 0.08);
+  font-size: 12px;
+  line-height: 20px;
 }
 
 .results-container {
   flex: 1;
+  min-height: 0;
   overflow: auto;
-  position: relative;
-  margin-bottom: 16px;
+  padding-right: 4px;
 }
 
-.loading-container, .no-results, .search-hint {
+.state-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 200px;
-  color: rgba(0, 0, 0, 0.6);
+  height: 220px;
+  color: rgba(0, 0, 0, 0.62);
   text-align: center;
 
   mat-icon {
-    font-size: 48px;
     width: 48px;
     height: 48px;
-    margin-bottom: 16px;
-    opacity: 0.6;
+    margin-bottom: 12px;
+    font-size: 48px;
+    opacity: 0.58;
   }
 
   p {
+    margin: 0;
     font-size: 16px;
-    max-width: 400px;
   }
 }
 
-.delete-all-container {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-
-.results-table {
-  width: 100%;
+.result-group {
+  margin-bottom: 18px;
   border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
-
-  th {
-    font-weight: 500;
-    color: rgba(0, 0, 0, 0.87);
-    background-color: #f5f5f5;
-  }
-
-  .mat-mdc-row {
-    &:hover {
-      background-color: rgba(0, 0, 0, 0.04);
-    }
-  }
 }
 
-.tags-container {
+.result-group-header {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background-color: #f5f7fb;
+  color: rgba(0, 0, 0, 0.76);
+  font-weight: 500;
 
-  .tag-chip {
-    padding: 2px 8px;
-    border-radius: 16px;
-    font-size: 12px;
-    white-space: nowrap;
-  }
-
-  .no-tags {
-    color: rgba(0, 0, 0, 0.38);
-    font-style: italic;
-  }
-}
-
-.response-value {
-  .response-content {
+  div {
     display: flex;
-    align-items: flex-start;
-    gap: 4px;
+    align-items: center;
+    gap: 8px;
   }
 
-  .response-variable {
-    font-weight: 500;
-    white-space: nowrap;
-  }
-
-  .response-text {
-    word-break: break-word;
-  }
-
-  .more-responses {
-    display: block;
-    margin-top: 4px;
+  span:last-child {
     font-size: 12px;
-    color: rgba(0, 0, 0, 0.6);
+    font-weight: 400;
   }
 }
 
-.no-response {
-  color: rgba(0, 0, 0, 0.38);
-  font-style: italic;
+.result-list {
+  display: flex;
+  flex-direction: column;
 }
 
-.result-row {
-  cursor: pointer;
+.result-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border-top: 1px solid #eeeeee;
+
+  &:first-child {
+    border-top: 0;
+  }
+}
+
+.result-main {
+  min-width: 0;
+}
+
+.result-title {
+  color: rgba(0, 0, 0, 0.88);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.result-subtitle,
+.response-preview {
+  margin-top: 3px;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.response-preview {
+  max-width: 720px;
+}
+
+.result-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
 }

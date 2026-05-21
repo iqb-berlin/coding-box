@@ -114,7 +114,8 @@ export class WorkspaceFilesInfoController {
                 alias: { type: 'string' },
                 type: { type: 'string' },
                 hasCodingScheme: { type: 'boolean' },
-                codingSchemeRef: { type: 'string' }
+                codingSchemeRef: { type: 'string' },
+                isDerived: { type: 'boolean' }
               }
             }
           }

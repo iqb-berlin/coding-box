@@ -1,16 +1,30 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { WorkspaceTestFilesValidationService } from './workspace-test-files-validation.service';
+import * as crypto from 'crypto';
+import {
+  TEST_FILES_VALIDATION_CACHE_VERSION,
+  WorkspaceTestFilesValidationService
+} from './workspace-test-files-validation.service';
 import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
 import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-schema-validation.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { ResourcePackageService } from '../workspace/resource-package.service';
 
 describe('WorkspaceTestFilesValidationService', () => {
   let service: WorkspaceTestFilesValidationService;
   let fileUploadRepository: Partial<Record<keyof Repository<FileUpload>, jest.Mock>>;
+  let personsRepository: Partial<Record<keyof Repository<Persons>, jest.Mock>>;
+  let workspaceExclusionService: {
+    resolveExclusionsForQueries: jest.Mock;
+    getExclusions: jest.Mock;
+    isExcluded: jest.Mock;
+  };
+  let resourcePackageService: {
+    getGeoGebraPackageStatus: jest.Mock;
+  };
 
   beforeEach(async () => {
     fileUploadRepository = {
@@ -25,6 +39,21 @@ describe('WorkspaceTestFilesValidationService', () => {
         getRawMany: jest.fn().mockResolvedValue([])
       })
     };
+    personsRepository = {
+      find: jest.fn().mockResolvedValue([])
+    };
+    workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] }),
+      getExclusions: jest.fn().mockResolvedValue({ ignoredUnits: [], ignoredBooklets: [], ignoredTestlets: [] }),
+      isExcluded: jest.fn().mockReturnValue(false)
+    };
+    resourcePackageService = {
+      getGeoGebraPackageStatus: jest.fn().mockResolvedValue({
+        exists: false,
+        valid: false,
+        errors: ['GeoGebra Math Apps Bundle ist nicht installiert.']
+      })
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -35,9 +64,7 @@ describe('WorkspaceTestFilesValidationService', () => {
         },
         {
           provide: getRepositoryToken(Persons),
-          useValue: {
-            find: jest.fn().mockResolvedValue([])
-          }
+          useValue: personsRepository
         },
         {
           provide: WorkspaceXmlSchemaValidationService,
@@ -53,16 +80,165 @@ describe('WorkspaceTestFilesValidationService', () => {
         },
         {
           provide: WorkspaceExclusionService,
-          useValue: {
-            resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] }),
-            getExclusions: jest.fn().mockResolvedValue({ ignoredUnits: [], ignoredBooklets: [], ignoredTestlets: [] }),
-            isExcluded: jest.fn().mockReturnValue(false)
-          }
+          useValue: workspaceExclusionService
+        },
+        {
+          provide: ResourcePackageService,
+          useValue: resourcePackageService
         }
       ]
     }).compile();
 
     service = module.get<WorkspaceTestFilesValidationService>(WorkspaceTestFilesValidationService);
+  });
+
+  it('should include the validation algorithm version in the fingerprint', async () => {
+    fileUploadRepository.find.mockResolvedValue([]);
+    workspaceExclusionService.getExclusions.mockResolvedValue({
+      ignoredUnits: [],
+      ignoredBooklets: [],
+      ignoredTestlets: []
+    });
+    personsRepository.find?.mockResolvedValue([]);
+
+    const fingerprint = await service.getTestFilesFingerprint(1);
+
+    const expectedHash = crypto.createHash('sha256');
+    expectedHash.update(JSON.stringify({
+      cacheVersion: 3,
+      exclusions: {
+        ignoredUnits: [],
+        ignoredBooklets: [],
+        ignoredTestlets: []
+      },
+      persons: []
+    }));
+    expectedHash.update('\n');
+
+    expect(TEST_FILES_VALIDATION_CACHE_VERSION).toBe(3);
+    expect(fingerprint).toBe(expectedHash.digest('hex'));
+  });
+
+  it('should include ignored test file settings in the validation fingerprint', async () => {
+    const files = [{
+      id: 1,
+      file_id: 'UNIT1',
+      filename: 'UNIT1.XML',
+      file_type: 'Unit',
+      file_size: 42,
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+      data: '<Unit />'
+    }];
+    fileUploadRepository.find.mockResolvedValue(files);
+    workspaceExclusionService.getExclusions
+      .mockResolvedValueOnce({
+        ignoredUnits: [],
+        ignoredBooklets: [],
+        ignoredTestlets: []
+      })
+      .mockResolvedValueOnce({
+        ignoredUnits: ['UNIT1'],
+        ignoredBooklets: [],
+        ignoredTestlets: []
+      });
+
+    const initialFingerprint = await service.getTestFilesFingerprint(1);
+    const ignoredUnitFingerprint = await service.getTestFilesFingerprint(1);
+
+    expect(initialFingerprint).not.toBe(ignoredUnitFingerprint);
+  });
+
+  it('should build the validation fingerprint independent of exclusion order and case', async () => {
+    const files = [{
+      id: 1,
+      file_id: 'UNIT1',
+      filename: 'UNIT1.XML',
+      file_type: 'Unit',
+      file_size: 42,
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+      data: '<Unit />'
+    }];
+    fileUploadRepository.find.mockResolvedValue(files);
+    workspaceExclusionService.getExclusions
+      .mockResolvedValueOnce({
+        ignoredUnits: ['unit2.xml', 'UNIT1'],
+        ignoredBooklets: ['booklet-b', 'BOOKLET-A'],
+        ignoredTestlets: [
+          { bookletId: 'booklet-b', testletId: 't2' },
+          { bookletId: 'BOOKLET-A', testletId: 'T1' }
+        ]
+      })
+      .mockResolvedValueOnce({
+        ignoredUnits: ['unit1', 'UNIT2'],
+        ignoredBooklets: ['booklet-a', 'BOOKLET-B'],
+        ignoredTestlets: [
+          { bookletId: 'booklet-a', testletId: 't1' },
+          { bookletId: 'BOOKLET-B', testletId: 'T2' }
+        ]
+      });
+
+    const firstFingerprint = await service.getTestFilesFingerprint(1);
+    const secondFingerprint = await service.getTestFilesFingerprint(1);
+
+    expect(firstFingerprint).toBe(secondFingerprint);
+  });
+
+  it('should include person consider status in the validation fingerprint', async () => {
+    const files = [{
+      id: 1,
+      file_id: 'TESTTAKER1',
+      filename: 'TESTTAKER1.XML',
+      file_type: 'TestTakers',
+      file_size: 42,
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+      data: '<TestTakers />'
+    }];
+    fileUploadRepository.find.mockResolvedValue(files);
+    workspaceExclusionService.getExclusions.mockResolvedValue({
+      ignoredUnits: [],
+      ignoredBooklets: [],
+      ignoredTestlets: []
+    });
+    personsRepository.find
+      ?.mockResolvedValueOnce([{ login: 'student-a', consider: true }])
+      .mockResolvedValueOnce([{ login: 'student-a', consider: false }]);
+
+    const consideredFingerprint = await service.getTestFilesFingerprint(1);
+    const excludedFingerprint = await service.getTestFilesFingerprint(1);
+
+    expect(consideredFingerprint).not.toBe(excludedFingerprint);
+  });
+
+  it('should build the validation fingerprint independent of person order', async () => {
+    const files = [{
+      id: 1,
+      file_id: 'TESTTAKER1',
+      filename: 'TESTTAKER1.XML',
+      file_type: 'TestTakers',
+      file_size: 42,
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+      data: '<TestTakers />'
+    }];
+    fileUploadRepository.find.mockResolvedValue(files);
+    workspaceExclusionService.getExclusions.mockResolvedValue({
+      ignoredUnits: [],
+      ignoredBooklets: [],
+      ignoredTestlets: []
+    });
+    personsRepository.find
+      ?.mockResolvedValueOnce([
+        { login: 'student-b', consider: false },
+        { login: 'student-a', consider: true }
+      ])
+      .mockResolvedValueOnce([
+        { login: 'student-a', consider: true },
+        { login: 'student-b', consider: false }
+      ]);
+
+    const firstFingerprint = await service.getTestFilesFingerprint(1);
+    const secondFingerprint = await service.getTestFilesFingerprint(1);
+
+    expect(firstFingerprint).toBe(secondFingerprint);
   });
 
   it('should treat missing IQB-SCHEMER-1.1 as present (with warning) if IQB-SCHEMER-2.5 exists', async () => {
@@ -155,5 +331,37 @@ describe('WorkspaceTestFilesValidationService', () => {
     expect(schemerFileEntry?.schemaErrors).toEqual(expect.arrayContaining([
       expect.stringContaining('IQB-SCHEMER-1.1 ist veraltet')
     ]));
+  });
+
+  it('should refresh GeoGebra package status without rerunning test file validation', async () => {
+    const result = await service.refreshGeoGebraPackageStatus(1, {
+      testTakersFound: true,
+      validationResults: [],
+      geogebra: {
+        hasTasks: true,
+        units: ['UNIT1'],
+        packageStatus: {
+          exists: true,
+          valid: true,
+          name: 'Geogebra'
+        }
+      }
+    });
+
+    expect(resourcePackageService.getGeoGebraPackageStatus)
+      .toHaveBeenCalledWith(1);
+    expect(result).toEqual({
+      testTakersFound: true,
+      validationResults: [],
+      geogebra: {
+        hasTasks: true,
+        units: ['UNIT1'],
+        packageStatus: {
+          exists: false,
+          valid: false,
+          errors: ['GeoGebra Math Apps Bundle ist nicht installiert.']
+        }
+      }
+    });
   });
 });

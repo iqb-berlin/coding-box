@@ -39,7 +39,8 @@ describe('CodingManagementService', () => {
     // Create mocks
     executionServiceMock = {
       createCodingStatisticsJob: jest.fn(),
-      getCodingJobStatus: jest.fn()
+      getCodingJobStatus: jest.fn(),
+      getCodingStatisticsJobStatus: jest.fn()
     } as unknown as jest.Mocked<CodingExecutionService>;
 
     statisticsServiceMock = {
@@ -105,14 +106,14 @@ describe('CodingManagementService', () => {
       executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
 
       // First poll: processing
-      executionServiceMock.getCodingJobStatus.mockReturnValueOnce(of({
+      executionServiceMock.getCodingStatisticsJobStatus.mockReturnValueOnce(of({
         status: 'processing',
         progress: 50,
         result: undefined
       } as CodingJobStatus));
 
       // Second poll: completed
-      executionServiceMock.getCodingJobStatus.mockReturnValueOnce(of({
+      executionServiceMock.getCodingStatisticsJobStatus.mockReturnValueOnce(of({
         status: 'completed',
         progress: 100,
         result: mockCodingStatistics
@@ -129,13 +130,14 @@ describe('CodingManagementService', () => {
 
       // Advance time for polling (timer(0, 2000))
       tick(0); // initial
-      expect(executionServiceMock.getCodingJobStatus).toHaveBeenCalledTimes(1);
+      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
+      expect(executionServiceMock.getCodingJobStatus).not.toHaveBeenCalled();
 
       tick(2000); // next poll
-      expect(executionServiceMock.getCodingJobStatus).toHaveBeenCalledTimes(2);
+      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(2);
 
       // Check if statistics were emitted
-      let currentStats: CodingStatistics | undefined;
+      let currentStats: CodingStatistics | null | undefined;
       service.codingStatistics$.subscribe(stats => {
         currentStats = stats;
       });
@@ -192,6 +194,30 @@ describe('CodingManagementService', () => {
       expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(1, 'coding-list', undefined, 'excel', false, undefined);
       expect(exportServiceMock.getExportJobStatus).toHaveBeenCalledWith(1, 'job-1');
       expect(exportServiceMock.downloadExportFile).toHaveBeenCalledWith(1, 'job-1');
+    });
+  });
+
+  describe('downloadCodingResults', () => {
+    it('should pass response value option to background export job', async () => {
+      exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }) as never);
+      const mockBlob = new Blob(['csv data'], { type: 'text/csv' });
+      exportServiceMock.downloadExportFile.mockReturnValue(of(mockBlob));
+
+      global.URL.createObjectURL = jest.fn();
+      global.URL.revokeObjectURL = jest.fn();
+
+      await service.downloadCodingResults('v1', 'csv', true, false);
+
+      expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(
+        1,
+        'results-by-version',
+        'v1',
+        'csv',
+        true,
+        undefined,
+        false
+      );
     });
   });
 });

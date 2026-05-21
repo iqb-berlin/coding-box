@@ -14,6 +14,9 @@ import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { TestFilesUploadConflictsDialogComponent } from './test-files-upload-conflicts-dialog.component';
+import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
+import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
+import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 
 describe('TestFilesComponent', () => {
   let component: TestFilesComponent;
@@ -34,6 +37,12 @@ describe('TestFilesComponent', () => {
       downloadFile: jest.fn(),
       validateFiles: jest.fn(),
       createDummyTestTakerFile: jest.fn()
+    };
+
+    const contentPoolIntegrationServiceMock = {
+      getWorkspaceConfig: jest.fn().mockReturnValue(
+        of({ enabled: false, baseUrl: '' })
+      )
     };
 
     const dialogMock = {
@@ -70,6 +79,10 @@ describe('TestFilesComponent', () => {
         {
           provide: MatSnackBar,
           useValue: snackBarMock
+        },
+        {
+          provide: ContentPoolIntegrationService,
+          useValue: contentPoolIntegrationServiceMock
         }
       ]
     }).compileComponents();
@@ -94,6 +107,62 @@ describe('TestFilesComponent', () => {
   describe('ngOnInit', () => {
     it('should load test files on init', () => {
       expect(fileService.getFilesList).toHaveBeenCalledWith(1, 1, 100, '', '', '');
+    });
+  });
+
+  describe('showFileContent', () => {
+    it('should open XML files with XML formatting enabled', () => {
+      fileService.downloadFile.mockReturnValue(of({
+        filename: 'unit.xml',
+        base64Data: utf8ToBase64('<Unit><Metadata id="u1"/></Unit>'),
+        mimeType: 'application/xml'
+      }));
+
+      component.showFileContent({
+        id: 'unit-file',
+        filename: 'unit.xml',
+        file_type: 'Unit'
+      } as never);
+
+      expect(dialog.open).toHaveBeenCalledWith(ContentDialogComponent, expect.objectContaining({
+        width: '82vw',
+        maxWidth: '1200px',
+        height: '82vh',
+        maxHeight: '90vh',
+        data: expect.objectContaining({
+          title: 'unit.xml',
+          content: '<Unit><Metadata id="u1"/></Unit>',
+          isJson: false,
+          isXml: true
+        })
+      }));
+    });
+
+    it('should open Voud files as formatted JSON instead of XML', () => {
+      fileService.downloadFile.mockReturnValue(of({
+        filename: 'response.voud',
+        base64Data: utf8ToBase64('{"pages":[]}'),
+        mimeType: 'application/json'
+      }));
+
+      component.showFileContent({
+        id: 'voud-file',
+        filename: 'response.voud',
+        file_type: 'Resource'
+      } as never);
+
+      expect(dialog.open).toHaveBeenCalledWith(ContentDialogComponent, expect.objectContaining({
+        width: '800px',
+        maxWidth: '80vw',
+        height: '800px',
+        maxHeight: undefined,
+        data: expect.objectContaining({
+          title: 'response.voud',
+          content: '{"pages":[]}',
+          isJson: true,
+          isXml: false
+        })
+      }));
     });
   });
 

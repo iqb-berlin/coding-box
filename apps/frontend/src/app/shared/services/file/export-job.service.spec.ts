@@ -1,5 +1,5 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { ExportJobService } from './export-job.service';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 
@@ -34,8 +34,12 @@ describe('ExportJobService', () => {
       codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
       codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }));
 
-      service.startJob(1, { exportType: 'aggregated', userId: 1 });
+      let createdJobId = '';
+      service.startJob(1, { exportType: 'aggregated', userId: 1 }).subscribe(job => {
+        createdJobId = job.jobId;
+      });
 
+      expect(createdJobId).toBe('j1');
       expect(service.activeJobs.length).toBe(1);
 
       tick(2000);
@@ -45,5 +49,19 @@ describe('ExportJobService', () => {
 
       service.ngOnDestroy(); // cleanup
     }));
+
+    it('should surface start errors without adding a job', () => {
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(
+        throwError(() => new Error('start failed'))
+      );
+
+      service.startJob(1, { exportType: 'aggregated', userId: 1 }).subscribe({
+        error: error => {
+          expect(error.message).toBe('start failed');
+        }
+      });
+
+      expect(service.activeJobs.length).toBe(0);
+    });
   });
 });

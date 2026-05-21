@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { CodingJob } from '../../../database/entities/coding-job.entity';
 import { MissingsProfile } from '../../../database/entities/missings-profile.entity';
 import { VariableDto } from '../../variable-bundle/dto/variable.dto';
+import { CodingJobFreshnessStatus } from '../../../../../../../api-dto/coding/job-refresh.dto';
 
 /**
  * DTO for a coding job
@@ -45,6 +46,27 @@ export class CodingJobDto {
     required: false
   })
     comment?: string;
+
+  @ApiProperty({
+    description: 'Whether scores are shown in the code selector',
+    example: true,
+    required: false
+  })
+    showScore?: boolean;
+
+  @ApiProperty({
+    description: 'Whether coder comments are allowed in the code selector',
+    example: true,
+    required: false
+  })
+    allowComments?: boolean;
+
+  @ApiProperty({
+    description: 'Whether general variable instructions are hidden in the code selector',
+    example: false,
+    required: false
+  })
+    suppressGeneralInstructions?: boolean;
 
   @ApiProperty({
     description: 'Date and time when the coding job was created',
@@ -137,6 +159,13 @@ export class CodingJobDto {
     missings_profile_id?: number;
 
   @ApiProperty({
+    description: 'ID of the job definition this coding job was created from',
+    example: 1,
+    required: false
+  })
+    job_definition_id?: number;
+
+  @ApiProperty({
     description: 'Missings profile assigned to the coding job',
     example: { id: 1, label: 'Default Profile', missings: '...' },
     required: false
@@ -201,6 +230,81 @@ export class CodingJobDto {
   })
     assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[];
 
+  @ApiProperty({
+    description: 'ID of the job definition this coding job was created from (camelCase alias)',
+    example: 1,
+    required: false
+  })
+    jobDefinitionId?: number;
+
+  @ApiProperty({
+    description: 'Whether response aggregation was enabled when this coding job was created',
+    example: true,
+    required: false
+  })
+    aggregationEnabled?: boolean;
+
+  @ApiProperty({
+    description: 'Duplicate aggregation threshold captured when this coding job was created',
+    example: 2,
+    required: false,
+    nullable: true
+  })
+    aggregationThreshold?: number | null;
+
+  @ApiProperty({
+    description: 'Response matching flags captured when this coding job was created',
+    example: ['IGNORE_CASE'],
+    required: false,
+    type: [String]
+  })
+    responseMatchingFlags?: string[] | null;
+
+  @ApiProperty({
+    description: 'Version of the aggregation settings snapshot captured for this coding job',
+    example: 1,
+    required: false,
+    nullable: true
+  })
+    aggregationSettingsVersion?: number | null;
+
+  @ApiProperty({
+    description: 'Whether this coding job still matches the current test-result source state',
+    example: 'current',
+    enum: ['current', 'stale_source', 'review_required'],
+    required: false
+  })
+    freshnessStatus?: CodingJobFreshnessStatus;
+
+  @ApiProperty({
+    description: 'Reason why this coding job was marked stale or review-required',
+    example: 'RESULT_UPDATED',
+    required: false,
+    nullable: true
+  })
+    freshnessReason?: string | null;
+
+  @ApiProperty({
+    description: 'When freshness status was last updated',
+    required: false,
+    nullable: true
+  })
+    freshnessUpdatedAt?: Date | null;
+
+  @ApiProperty({
+    description: 'Number of affected task results for this coding job',
+    example: 2,
+    required: false
+  })
+    freshnessAffectedUnits?: number;
+
+  @ApiProperty({
+    description: 'Number of affected responses for this coding job',
+    example: 6,
+    required: false
+  })
+    freshnessAffectedResponses?: number;
+
   /**
    * Create a CodingJobDto from a CodingJob entity
    * @param entity The CodingJob entity
@@ -222,9 +326,23 @@ export class CodingJobDto {
     dto.description = entity.description;
     dto.status = entity.status;
     dto.comment = entity.comment;
+    dto.showScore = entity.showScore;
+    dto.allowComments = entity.allowComments;
+    dto.suppressGeneralInstructions = entity.suppressGeneralInstructions;
     dto.created_at = entity.created_at;
     dto.updated_at = entity.updated_at;
     dto.missings_profile_id = entity.missings_profile_id;
+    dto.job_definition_id = entity.job_definition_id;
+    dto.jobDefinitionId = entity.job_definition_id;
+    dto.aggregationEnabled = entity.aggregation_enabled;
+    dto.aggregationThreshold = entity.aggregation_threshold;
+    dto.responseMatchingFlags = entity.response_matching_flags;
+    dto.aggregationSettingsVersion = entity.aggregation_settings_version;
+    dto.freshnessStatus = entity.freshness_status;
+    dto.freshnessReason = entity.freshness_reason;
+    dto.freshnessUpdatedAt = entity.freshness_updated_at;
+    dto.freshnessAffectedUnits = entity.freshness_affected_units;
+    dto.freshnessAffectedResponses = entity.freshness_affected_responses;
 
     // Map progress data if available
     if (entity.progress !== undefined) {

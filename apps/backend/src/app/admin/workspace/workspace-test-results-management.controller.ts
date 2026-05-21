@@ -1,7 +1,9 @@
 import {
   Controller,
+  Body,
   Delete,
   Get,
+  Post,
   Param,
   Query,
   Req,
@@ -24,10 +26,20 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import Persons from '../../database/entities/persons.entity';
 import {
-  RequestWithUser, PersonTestResult, BookletSearchResult, UnitSearchResult
+  RequestWithUser,
+  PersonTestResult,
+  BookletSearchResult,
+  UnitSearchResult,
+  QuickSearchResult
 } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
+import { ValidationTaskService } from '../../database/services/validation';
+import { ValidationTaskDto } from './dto/validation-task.dto';
+import {
+  TestResultsDeletePreviewDto,
+  TestResultsDeleteRequestDto
+} from '../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
@@ -35,7 +47,8 @@ export class WorkspaceTestResultsManagementController {
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private cacheService: CacheService,
-    private jobQueueService: JobQueueService
+    private jobQueueService: JobQueueService,
+    private validationTaskService: ValidationTaskService
   ) { }
 
   private async invalidateFlatResponseFilterOptionsCache(
@@ -120,6 +133,47 @@ export class WorkspaceTestResultsManagementController {
     };
   }
 
+  @Get(':workspace_id/test-results/quick-search')
+  @ApiOperation({
+    summary: 'Quick search test results',
+    description:
+            'Searches across persons, booklets, units and responses for quick navigation in the test results area.'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiQuery({
+    name: 'q',
+    required: true,
+    description: 'Search text',
+    type: String
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Maximum results per category',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Quick search results retrieved successfully.'
+  })
+  @ApiBadRequestResponse({ description: 'Failed to run quick search' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async quickSearchTestResults(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Query('q') query: string,
+                                         @Query('limit', new DefaultValuePipe(8), ParseIntPipe) limit: number = 8
+  ): Promise<QuickSearchResult> {
+    return this.workspaceTestResultsService.quickSearchTestResults(
+      workspaceId,
+      query,
+      limit
+    );
+  }
+
   @Delete(':workspace_id/test-results')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
@@ -139,6 +193,102 @@ export class WorkspaceTestResultsManagementController {
       testPersonIds,
       req.user.id
     );
+  }
+
+  @Post(':workspace_id/test-results/delete-preview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Preview bulk test result deletion',
+    description:
+            'Calculates affected persons, booklets, units and responses before starting a long-running deletion.'
+  })
+  async previewDeleteTestResults(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Body() request: TestResultsDeleteRequestDto
+  ): Promise<TestResultsDeletePreviewDto> {
+    return this.workspaceTestResultsService.previewDeleteTestResults(
+      workspaceId,
+      request
+    );
+  }
+
+  @Post(':workspace_id/test-results/delete-jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Start bulk test result deletion',
+    description:
+            'Starts an asynchronous deletion task for selected test result data.'
+  })
+  async createDeleteTestResultsJob(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Body() request: TestResultsDeleteRequestDto,
+      @Req() req: RequestWithUser
+  ): Promise<ValidationTaskDto> {
+    await this.jobQueueService.assertNoDependencyConflicts(
+      'validation-task',
+      workspaceId
+    );
+    const task = await this.validationTaskService.createValidationTask(
+      workspaceId,
+      'deleteTestResults',
+      undefined,
+      undefined,
+      {
+        ...request,
+        userId: req.user.id
+      }
+    );
+    return ValidationTaskDto.fromEntity(task);
+  }
+
+  @Post(':workspace_id/test-results/logs/delete-preview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Preview test log deletion',
+    description:
+            'Calculates affected booklet logs, unit logs and sessions before starting a long-running log deletion.'
+  })
+  async previewDeleteTestLogs(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Body() request: TestResultsDeleteRequestDto
+  ): Promise<TestResultsDeletePreviewDto> {
+    return this.workspaceTestResultsService.previewDeleteTestLogs(
+      workspaceId,
+      request
+    );
+  }
+
+  @Post(':workspace_id/test-results/logs/delete-jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Start test log deletion',
+    description:
+            'Starts an asynchronous deletion task for selected test log data.'
+  })
+  async createDeleteTestLogsJob(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Body() request: TestResultsDeleteRequestDto,
+      @Req() req: RequestWithUser
+  ): Promise<ValidationTaskDto> {
+    await this.jobQueueService.assertNoDependencyConflicts(
+      'validation-task',
+      workspaceId
+    );
+    const task = await this.validationTaskService.createValidationTask(
+      workspaceId,
+      'deleteTestLogs',
+      undefined,
+      undefined,
+      {
+        ...request,
+        userId: req.user.id
+      }
+    );
+    return ValidationTaskDto.fromEntity(task);
   }
 
   @Delete(':workspace_id/units/:unitId')

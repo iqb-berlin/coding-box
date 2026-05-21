@@ -1,17 +1,23 @@
 .wrapper {
-  margin: 20px auto;
+  margin: clamp(10px, 2vw, 20px) auto;
   max-width: 1200px;
-  padding: 0 20px;
+  padding: 0 clamp(10px, 2vw, 20px);
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: clamp(16px, 2vw, 30px);
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .token-settings-card,
 .access-rights-card,
 .journal-card,
-.missings-profiles-card {
+.database-export-card,
+.missings-profiles-card,
+.processes-card,
+.replay-statistics-card,
+.coding-settings-card {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-radius: 8px;
   overflow: hidden;
@@ -21,7 +27,7 @@
 
 mat-card-header {
   background-color: #f5f5f5;
-  padding: 16px 24px;
+  padding: 16px clamp(12px, 2vw, 24px);
   border-bottom: 1px solid #e0e0e0;
 }
 
@@ -31,6 +37,7 @@ mat-card-title {
   margin: 0;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 
   .help-button {
@@ -44,14 +51,23 @@ mat-card-title {
 }
 
 mat-card-content {
-  padding: 24px;
+  padding: clamp(12px, 2vw, 24px);
+  min-width: 0;
+  overflow-x: auto;
 }
 
-.token-container {
+.token-container,
+.missings-profiles-container,
+.database-export-container,
+.processes-container,
+.replay-statistics-container,
+.coding-settings-container {
   background-color: #f9f9f9;
   border-radius: 6px;
-  padding: 20px;
+  padding: clamp(12px, 2vw, 20px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 h3 {
@@ -80,13 +96,15 @@ h4 {
 
 .token-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-top: 20px;
   margin-bottom: 30px;
 }
 
 .token-result {
   margin-top: 30px;
-  padding: 20px;
+  padding: clamp(12px, 2vw, 20px);
   border: 1px dashed #07465e;
   border-radius: 8px;
   background-color: rgba(7, 70, 94, 0.05);
@@ -103,28 +121,68 @@ h4 {
   font-size: 14px;
   padding: 10px;
   background-color: #f5f5f5;
+  overflow-wrap: anywhere;
 }
 
 .token-copy-action {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.missings-profiles-container {
-  background-color: #f9f9f9;
-  border-radius: 6px;
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.missings-profiles-actions {
+.missings-profiles-actions,
+.processes-actions,
+.replay-statistics-actions {
   display: flex;
   margin-top: 20px;
   justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.database-export-actions {
+  display: flex;
+  margin-top: 20px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.export-progress {
+  margin-top: 16px;
+}
+
+.progress-text {
+  margin: 8px 0 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.export-error {
+  color: #c62828;
+  font-weight: 500;
+  margin: 16px 0 0;
 }
 
 button mat-icon {
   margin-right: 5px;
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.setting-info {
+  min-width: 0;
+}
+
+.setting-control {
+  flex: 0 0 auto;
 }
 
 /* Responsive styles */
@@ -136,7 +194,11 @@ button mat-icon {
   .token-settings-card,
   .access-rights-card,
   .journal-card,
-  .missings-profiles-card {
+  .database-export-card,
+  .missings-profiles-card,
+  .processes-card,
+  .replay-statistics-card,
+  .coding-settings-card {
     margin-bottom: 20px;
   }
 }
@@ -146,19 +208,19 @@ button mat-icon {
     padding: 0 10px;
   }
 
-  mat-card-content {
-    padding: 16px;
-  }
-
-  .token-container {
-    padding: 15px;
+  .setting-item {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
 @media (max-width: 480px) {
   .token-actions,
   .token-copy-action,
-  .missings-profiles-actions {
+  .database-export-actions,
+  .missings-profiles-actions,
+  .processes-actions,
+  .replay-statistics-actions {
     flex-direction: column;
     align-items: stretch;
   }

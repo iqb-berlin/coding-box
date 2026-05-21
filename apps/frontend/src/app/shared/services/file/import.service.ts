@@ -62,26 +62,7 @@ export class ImportService {
       .get<Result>(
       `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`,
       { params }
-    )
-      .pipe(
-        catchError(() => of({
-          success: false,
-          testFiles: 0,
-          responses: 0,
-          logs: 0,
-          booklets: 0,
-          units: 0,
-          persons: 0,
-          importedGroups: [],
-          filesPlayer: 0,
-          filesUnits: 0,
-          filesDefinitions: 0,
-          filesCodings: 0,
-          filesBooklets: 0,
-          filesTestTakers: 0
-        })
-        )
-      );
+    );
   }
 
   getImportWorkspaceFilesProgress(
@@ -114,7 +95,6 @@ export class ImportService {
       .get<TestGroupsInfoDto[]>(
       `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups`,
       { params }
-    )
-      .pipe(catchError(() => of([])));
+    );
   }
 }

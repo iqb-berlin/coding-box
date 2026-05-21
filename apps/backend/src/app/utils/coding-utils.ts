@@ -4,10 +4,14 @@ import { CodingJobUnit } from '../database/entities/coding-job-unit.entity';
 
 export interface ExpectedCombinationDto {
   unit_key: string;
+  unit_alias?: string;
   login_name: string;
   login_code: string;
+  person_group?: string;
   booklet_id: string;
   variable_id: string;
+  variable_page?: string;
+  variable_anchor?: string;
 }
 
 /**
@@ -58,7 +62,17 @@ export function generateExpectedCombinationsHash(
 ): string {
   const sortedData = expectedCombinations
     .map(
-      combo => `${combo.unit_key}|${combo.login_name}|${combo.login_code}|${combo.booklet_id}|${combo.variable_id}`
+      combo => [
+        combo.unit_key,
+        combo.unit_alias,
+        combo.login_name,
+        combo.login_code,
+        combo.person_group,
+        combo.booklet_id,
+        combo.variable_id,
+        combo.variable_page,
+        combo.variable_anchor
+      ].map(value => value ?? '').join('|')
     )
     .sort()
     .join('||');
@@ -95,12 +109,13 @@ export function getLatestCode(response: ResponseEntity): { code: number | null; 
  * -3 -> -98
  * -4 -> -97
  * -1/-2 -> empty (null)
+ * -111 -> empty (legacy duplicate-aggregation marker)
  */
 export function mapCodeForExport(code: number | null | undefined): number | null {
   if (code === null || code === undefined) return null;
   if (code === -3) return -98;
   if (code === -4) return -97;
-  if (code === -1 || code === -2) return null;
+  if (code === -1 || code === -2 || code === -111) return null;
   return code;
 }
 

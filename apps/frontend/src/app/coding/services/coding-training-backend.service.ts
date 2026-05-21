@@ -54,6 +54,7 @@ export interface WithinTrainingCodingResult {
   discussionScore: number | null;
   discussionManagerUserId: number | null;
   discussionManagerName: string | null;
+  discussionSource: 'manual' | 'auto_agreement' | null;
   coders: Array<{
     jobId: number;
     coderName: string;
@@ -99,11 +100,12 @@ export class CodingTrainingBackendService {
     trainingLabel: string,
     missingsProfileId?: number,
     assignedVariables?: { unitName: string; variableId: string; sampleCount: number }[],
-    assignedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating' }[],
+    assignedVariableBundles?: { id: number; name: string; sampleCount?: number; caseOrderingMode?: 'continuous' | 'alternating' }[],
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
-    referenceMode?: 'same' | 'different'
+    referenceMode?: 'same' | 'different',
+    suppressGeneralInstructions?: boolean
   ): Observable<CreateCoderTrainingJobsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-training-jobs`;
     return this.http.post<CreateCoderTrainingJobsResponse>(url, {
@@ -116,7 +118,8 @@ export class CodingTrainingBackendService {
       caseOrderingMode,
       caseSelectionMode,
       referenceTrainingIds,
-      referenceMode
+      referenceMode,
+      suppressGeneralInstructions
     }, { headers: this.authHeader });
   }
 
@@ -133,11 +136,12 @@ export class CodingTrainingBackendService {
     variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
     missingsProfileId?: number,
     assignedVariables?: { unitName: string; variableId: string; sampleCount: number }[],
-    assignedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating' }[],
+    assignedVariableBundles?: { id: number; name: string; sampleCount?: number; caseOrderingMode?: 'continuous' | 'alternating' }[],
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
-    referenceMode?: 'same' | 'different'
+    referenceMode?: 'same' | 'different',
+    suppressGeneralInstructions?: boolean
   ): Observable<{ success: boolean; message: string; jobsCreated?: number }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
     return this.http.put<{ success: boolean; message: string; jobsCreated?: number }>(url, {
@@ -150,7 +154,8 @@ export class CodingTrainingBackendService {
       caseOrderingMode,
       caseSelectionMode,
       referenceTrainingIds,
-      referenceMode
+      referenceMode,
+      suppressGeneralInstructions
     }, { headers: this.authHeader });
   }
 

@@ -57,6 +57,21 @@
         gefunden.</span
       >
     </div>
+    @if (
+      summary.unitFileNotFound > 0 || summary.variableNotDefinedInUnit > 0
+    ) {
+      <div class="validation-summary">
+        @if (summary.unitFileNotFound > 0) {
+          <span>{{ summary.unitFileNotFound }} ohne passende Unit.xml</span>
+        }
+        @if (summary.variableNotDefinedInUnit > 0) {
+          <span
+            >{{ summary.variableNotDefinedInUnit }} nicht in Unit.xml
+            definiert</span
+          >
+        }
+      </div>
+    }
 
     @if (invalidVariables.length > 0) {
       <div class="actions-container">

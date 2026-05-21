@@ -24,10 +24,12 @@ import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
+import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
+import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 
 interface BookletSearchResult {
   bookletId: number;
@@ -82,6 +84,7 @@ export class BookletSearchDialogComponent implements OnInit {
     public dialogRef: MatDialogRef<BookletSearchDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { initialSearch?: string },
     private testResultService: TestResultService,
+    private fileService: FileService,
     private appService: AppService,
     private router: Router,
     private dialog: MatDialog,
@@ -148,12 +151,37 @@ export class BookletSearchDialogComponent implements OnInit {
   }
 
   viewBookletInfo(booklet: BookletSearchResult): void {
-    this.dialog.open(BookletInfoDialogComponent, {
-      width: '1200px',
-      height: '80vh',
-      data: {
-        bookletId: booklet.bookletId,
-        bookletName: booklet.bookletName
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Testheft-Informationen...',
+      '',
+      { duration: 3000 }
+    );
+
+    this.fileService.getBookletInfo(
+      this.appService.selectedWorkspaceId,
+      booklet.bookletName
+    ).subscribe({
+      next: (bookletInfo: BookletInfoDto) => {
+        loadingSnackBar.dismiss();
+
+        this.dialog.open(BookletInfoDialogComponent, {
+          width: 'min(96vw, 1400px)',
+          maxWidth: '96vw',
+          height: '92vh',
+          maxHeight: '92vh',
+          data: {
+            bookletInfo,
+            bookletId: booklet.bookletName
+          }
+        });
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open(
+          'Fehler beim Laden der Testheft-Informationen',
+          'Fehler',
+          { duration: 3000 }
+        );
       }
     });
   }

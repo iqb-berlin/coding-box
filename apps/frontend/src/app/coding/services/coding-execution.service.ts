@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, catchError, of } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 
 @Injectable({
   providedIn: 'root'
@@ -46,6 +47,14 @@ export class CodingExecutionService {
     };
     error?: string;
   }> {
+    if (!jobId?.trim()) {
+      return of({
+        status: 'failed' as const,
+        progress: 0,
+        error: 'Fehlende Job-ID für Statusabfrage'
+      });
+    }
+
     return this.http
       .get<{
       status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
@@ -66,6 +75,41 @@ export class CodingExecutionService {
           status: 'failed' as const,
           progress: 0,
           error: 'Failed to get job status'
+        }))
+      );
+  }
+
+  getCodingStatisticsJobStatus(workspace_id: number, jobId: string): Observable<{
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    progress: number;
+    result?: {
+      totalResponses: number;
+      statusCounts: {
+        [key: string]: number;
+      };
+    };
+    error?: string;
+  }> {
+    return this.http
+      .get<{
+      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+      progress: number;
+      result?: {
+        totalResponses: number;
+        statusCounts: {
+          [key: string]: number;
+        };
+      };
+      error?: string;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics/job/${jobId}`,
+      { context: suppressGlobalHttpErrorContext() }
+    )
+      .pipe(
+        catchError(() => of({
+          status: 'failed' as const,
+          progress: 0,
+          error: 'Failed to get coding statistics job status'
         }))
       );
   }

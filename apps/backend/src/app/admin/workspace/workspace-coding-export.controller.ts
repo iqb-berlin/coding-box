@@ -9,16 +9,19 @@ import {
   Post,
   Param,
   Delete,
-  Logger
+  Logger,
+  BadRequestException
 } from '@nestjs/common';
 import {
   ApiOkResponse,
+  ApiBadRequestResponse,
   ApiParam,
   ApiQuery,
   ApiTags,
   ApiBody
 } from '@nestjs/swagger';
 import { Response, Request } from 'express';
+import { Readable } from 'stream';
 import {
   JobQueueService,
   ExportJobData,
@@ -28,7 +31,32 @@ import { CacheService } from '../../cache/cache.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodingListExportService, CodingResultsExportService, CodingTimesExportService } from '../../database/services/coding';
+import {
+  CodingExportService,
+  CodingExportOrchestratorService,
+  CodingListExportService,
+  CodingResultsExportService,
+  CodingTimesExportService
+} from '../../database/services/coding';
+
+type PublicExportJobResult = Omit<ExportJobResult, 'filePath'>;
+type PublicExportJobStatus =
+  | {
+    status: string;
+    progress: number;
+    result?: PublicExportJobResult;
+    error?: string;
+    errorCode?: string;
+    errorDetails?: Record<string, number | string | boolean>;
+  }
+  | { error: string };
+type RequestUser = { id?: number | string; userId?: number | string };
+type ByVariableExportEstimateResponse = {
+  exportType: 'by-variable' | 'by-variable-compact';
+  unitVariableCount: number;
+  worksheetLimit: number | null;
+  exceedsWorksheetLimit: boolean;
+};
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -38,10 +66,98 @@ export class WorkspaceCodingExportController {
   constructor(
     private codingListExportService: CodingListExportService,
     private codingResultsExportService: CodingResultsExportService,
+    private codingExportService: CodingExportService,
     private codingTimesExportService: CodingTimesExportService,
+    private codingExportOrchestratorService: CodingExportOrchestratorService,
     private jobQueueService: JobQueueService,
     private cacheService: CacheService
   ) { }
+
+  private validateBackgroundExportRequest(
+    body: Omit<ExportJobData, 'workspaceId' | 'userId'>
+  ): void {
+    if (
+      body.exportType === 'results-by-version' &&
+      body.format !== undefined &&
+      body.format !== 'csv' &&
+      body.format !== 'excel'
+    ) {
+      throw new BadRequestException(
+        'results-by-version exports support only "csv" or "excel" format'
+      );
+    }
+  }
+
+  private getRequestUserId(req: Request): number {
+    const user = (req as Request & { user?: RequestUser }).user;
+    const userId = Number(user?.id ?? user?.userId);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new BadRequestException('Authenticated user id is invalid');
+    }
+
+    return userId;
+  }
+
+  private getPublicExportErrorDetails(error?: string): {
+    errorCode?: string;
+    errorDetails?: Record<string, number | string | boolean>;
+  } {
+    const worksheetLimitMatch = error?.match(/enthaelt\s+(\d+)\s+Unit-Variable-Kombinationen[\s\S]*Limit von\s+(\d+)\s+Tabellenblaettern/i);
+    if (!worksheetLimitMatch) {
+      return {};
+    }
+
+    return {
+      errorCode: 'EXPORT_TOO_MANY_WORKSHEETS',
+      errorDetails: {
+        actual: Number(worksheetLimitMatch[1]),
+        max: Number(worksheetLimitMatch[2])
+      }
+    };
+  }
+
+  private pipeExportStream(
+    stream: Readable,
+    res: Response,
+    context: string
+  ): Promise<void> {
+    return new Promise(resolve => {
+      let settled = false;
+
+      const settle = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+
+      stream.once('error', (error: Error) => {
+        this.logger.error(`${context}: ${error.message}`, error.stack);
+
+        if (!res.destroyed && !res.writableEnded) {
+          if (!res.headersSent) {
+            res.removeHeader('Content-Length');
+            res.removeHeader('Content-Disposition');
+            res.status(500).json({ error: 'Export failed' });
+          } else {
+            res.end();
+          }
+        }
+
+        settle();
+      });
+
+      res.once('finish', settle);
+      res.once('close', () => {
+        if (!settled && !res.writableEnded) {
+          stream.destroy();
+        }
+        settle();
+      });
+      stream.pipe(res);
+    });
+  }
 
   @Get(':workspace_id/coding/coding-list')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -238,6 +354,12 @@ export class WorkspaceCodingExportController {
     description: 'Include replay URLs in the export',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'includeResponseValues',
+    required: false,
+    description: 'Include response values in the export',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as CSV',
     content: {
@@ -256,27 +378,47 @@ export class WorkspaceCodingExportController {
       @Query('serverUrl') serverUrl: string,
       @Query('includeReplayUrls', { transform: value => value === 'true' })
                    includeReplayUrls: boolean,
+      @Query('includeResponseValues', { transform: value => value !== 'false' })
+                   includeResponseValues: boolean,
                    @Res() res: Response
   ): Promise<void> {
-    const csvStream = await this.codingResultsExportService.exportCodingResultsByVersionAsCsv(
-      workspace_id,
-      version,
-      authToken,
-      serverUrl,
-      includeReplayUrls
-    );
+    try {
+      const csvStream = await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
+        workspaceId: workspace_id,
+        version,
+        authToken: authToken || '',
+        serverUrl,
+        includeReplayUrl: includeReplayUrls,
+        includeResponseValues
+      });
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-results-${version}-${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv"`
-    );
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="coding-results-${version}-${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv"`
+      );
 
-    // Excel compatibility: UTF-8 BOM
-    res.write('\uFEFF');
-    csvStream.pipe(res);
+      // Excel compatibility: UTF-8 BOM
+      res.write('\uFEFF');
+      await this.pipeExportStream(
+        csvStream,
+        res,
+        `Error streaming coding results export for workspace ${workspace_id}, version ${version}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error preparing coding results export for workspace ${workspace_id}, version ${version}: ${error.message}`,
+        error.stack
+      );
+
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Export failed' });
+      } else if (!res.writableEnded) {
+        res.end();
+      }
+    }
   }
 
   @Get(':workspace_id/coding/results-by-version/excel')
@@ -307,6 +449,12 @@ export class WorkspaceCodingExportController {
     description: 'Include replay URLs in the export',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'includeResponseValues',
+    required: false,
+    description: 'Include response values in the export',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as Excel',
     content: {
@@ -325,15 +473,18 @@ export class WorkspaceCodingExportController {
       @Query('serverUrl') serverUrl: string,
       @Query('includeReplayUrls', { transform: value => value === 'true' })
                    includeReplayUrls: boolean,
+      @Query('includeResponseValues', { transform: value => value !== 'false' })
+                   includeResponseValues: boolean,
                    @Res() res: Response
   ): Promise<void> {
-    const buffer = await this.codingResultsExportService.exportCodingResultsByVersionAsExcel(
-      workspace_id,
+    const buffer = await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
+      workspaceId: workspace_id,
       version,
-      authToken,
+      authToken: authToken || '',
       serverUrl,
-      includeReplayUrls
-    );
+      includeReplayUrl: includeReplayUrls,
+      includeResponseValues
+    });
 
     res.setHeader(
       'Content-Type',
@@ -450,7 +601,7 @@ export class WorkspaceCodingExportController {
       const excludeAutoCodedParam = excludeAutoCoded === 'true'; // Default false
 
       const buffer =
-        await this.codingResultsExportService.exportCodingResultsAggregated(
+        await this.codingExportService.exportCodingResultsAggregated(
           workspace_id,
           outputCommentsParam,
           includeReplayUrlParam,
@@ -774,16 +925,16 @@ export class WorkspaceCodingExportController {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
-      const buffer = await this.codingResultsExportService.exportCodingResultsDetailed(
-        workspace_id,
-        outputCommentsParam,
-        includeReplayUrlParam,
-        anonymizeCodersParam,
-        usePseudoCodersParam,
-        authToken || '',
+      const buffer = await this.codingExportOrchestratorService.exportDetailed({
+        workspaceId: workspace_id,
+        outputCommentsInsteadOfCodes: outputCommentsParam,
+        includeReplayUrl: includeReplayUrlParam,
+        anonymizeCoders: anonymizeCodersParam,
+        usePseudoCoders: usePseudoCodersParam,
+        authToken: authToken || '',
         req,
-        excludeAutoCodedParam
-      );
+        excludeAutoCoded: excludeAutoCodedParam
+      });
 
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader(
@@ -863,6 +1014,31 @@ export class WorkspaceCodingExportController {
     res.send(buffer);
   }
 
+  @Post(':workspace_id/coding/export/estimate')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async estimateExportJob(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: Omit<ExportJobData, 'workspaceId' | 'userId'>
+  ): Promise<ByVariableExportEstimateResponse> {
+    if (body.exportType !== 'by-variable' && body.exportType !== 'by-variable-compact') {
+      throw new BadRequestException(
+        'Export estimates are only supported for by-variable exports'
+      );
+    }
+
+    const exportType = body.exportType;
+    return this.codingExportService.estimateCodingResultsByVariableExport(
+      workspace_id,
+      exportType,
+      body.excludeAutoCoded || false,
+      body.jobDefinitionIds,
+      body.coderTrainingIds,
+      body.coderIds
+    );
+  }
+
   @Post(':workspace_id/coding/export/start')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
@@ -871,7 +1047,7 @@ export class WorkspaceCodingExportController {
     description: 'Start a background export job',
     schema: {
       type: 'object',
-      required: ['exportType', 'userId'],
+      required: ['exportType'],
       properties: {
         exportType: {
           type: 'string',
@@ -879,18 +1055,28 @@ export class WorkspaceCodingExportController {
             'aggregated',
             'by-coder',
             'by-variable',
+            'by-variable-compact',
             'detailed',
             'coding-times',
+            'coding-list',
             'results-by-version'
           ],
           description: 'Type of export to generate'
         },
-        userId: {
-          type: 'number',
-          description: 'ID of the user requesting the export'
+        version: {
+          type: 'string',
+          enum: ['v1', 'v2', 'v3'],
+          description: 'Coding result version for results-by-version exports'
+        },
+        format: {
+          type: 'string',
+          enum: ['csv', 'excel', 'json'],
+          description:
+            'File format for exports that support multiple formats. results-by-version supports csv and excel; coding-list supports csv, excel and json.'
         },
         outputCommentsInsteadOfCodes: { type: 'boolean' },
         includeReplayUrl: { type: 'boolean' },
+        includeResponseValues: { type: 'boolean' },
         anonymizeCoders: { type: 'boolean' },
         usePseudoCoders: { type: 'boolean' },
         doubleCodingMethod: {
@@ -920,16 +1106,22 @@ export class WorkspaceCodingExportController {
       }
     }
   })
+  @ApiBadRequestResponse({
+    description: 'Invalid export format for the selected export type'
+  })
   async startExportJob(
     @WorkspaceId() workspace_id: number,
       @Req() req: Request,
       @Body() body: Omit<ExportJobData, 'workspaceId' | 'userId'>
   ): Promise<{ jobId: string; message: string }> {
+    this.validateBackgroundExportRequest(body);
+
     try {
+      const userId = this.getRequestUserId(req);
       const job = await this.jobQueueService.addExportJob({
         ...body,
         workspaceId: workspace_id,
-        userId: (req.user as { id: number }).id
+        userId
       });
 
       this.logger.log(
@@ -975,7 +1167,7 @@ export class WorkspaceCodingExportController {
         result: {
           type: 'object',
           description:
-            'Export metadata (only available when status is completed)'
+            'Export metadata without internal storage paths (only available when status is completed)'
         },
         error: {
           type: 'string',
@@ -984,28 +1176,17 @@ export class WorkspaceCodingExportController {
       }
     }
   })
-  async getExportJobStatus(@Param('jobId') jobId: string): Promise<
-  | {
-    status: string;
-    progress: number;
-    result?: {
-      fileId: string;
-      fileName: string;
-      filePath: string;
-      fileSize: number;
-      workspaceId: number;
-      userId: number;
-      exportType: string;
-      createdAt: number;
-    };
-    error?: string;
-  }
-  | { error: string }
-  > {
+  async getExportJobStatus(
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: string
+  ): Promise<PublicExportJobStatus> {
     try {
       const job = await this.jobQueueService.getExportJob(jobId);
       if (!job) {
         return { error: `Export job with ID ${jobId} not found` };
+      }
+      if (job.data.workspaceId !== workspace_id) {
+        return { error: 'Access denied to this export' };
       }
 
       const state = await job.getState();
@@ -1038,9 +1219,12 @@ export class WorkspaceCodingExportController {
         status,
         progress: typeof progress === 'number' ? progress : 0,
         ...(status === 'completed' && job.returnvalue ?
-          { result: job.returnvalue } :
+          { result: this.toPublicExportJobResult(job.returnvalue as ExportJobResult) } :
           {}),
-        ...(status === 'failed' && failedReason ? { error: failedReason } : {})
+        ...(status === 'failed' && failedReason ? {
+          error: failedReason,
+          ...this.getPublicExportErrorDetails(failedReason)
+        } : {})
       };
     } catch (error) {
       this.logger.error(
@@ -1049,6 +1233,18 @@ export class WorkspaceCodingExportController {
       );
       return { error: error.message };
     }
+  }
+
+  private toPublicExportJobResult(result: ExportJobResult): PublicExportJobResult {
+    return {
+      fileId: result.fileId,
+      fileName: result.fileName,
+      fileSize: result.fileSize,
+      workspaceId: result.workspaceId,
+      userId: result.userId,
+      exportType: result.exportType,
+      createdAt: result.createdAt
+    };
   }
 
   @Get(':workspace_id/coding/export/job/:jobId/download')
@@ -1099,15 +1295,18 @@ export class WorkspaceCodingExportController {
         return;
       }
 
+      const normalizedFileName = metadata.fileName.toLowerCase();
       const isCsv =
-        metadata.fileName.toLowerCase().endsWith('.csv') ||
+        normalizedFileName.endsWith('.csv') ||
         metadata.exportType === 'detailed';
-      res.setHeader(
-        'Content-Type',
-        isCsv ?
-          'text/csv; charset=utf-8' :
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      );
+      const isJson = normalizedFileName.endsWith('.json');
+      let contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      if (isCsv) {
+        contentType = 'text/csv; charset=utf-8';
+      } else if (isJson) {
+        contentType = 'application/json; charset=utf-8';
+      }
+      res.setHeader('Content-Type', contentType);
       res.setHeader(
         'Content-Disposition',
         `attachment; filename="${metadata.fileName}"`
@@ -1115,7 +1314,11 @@ export class WorkspaceCodingExportController {
       res.setHeader('Content-Length', metadata.fileSize);
 
       const fileStream = fs.createReadStream(filePath);
-      fileStream.pipe(res);
+      await this.pipeExportStream(
+        fileStream,
+        res,
+        `Error streaming downloaded export ${jobId} for workspace ${workspace_id}`
+      );
     } catch (error) {
       this.logger.error(
         `Error downloading export: ${error.message}`,
@@ -1200,9 +1403,24 @@ export class WorkspaceCodingExportController {
     }
   })
   async deleteExportJob(
-    @Param('jobId') jobId: string
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
+      const job = await this.jobQueueService.getExportJob(jobId);
+      if (!job) {
+        return {
+          success: false,
+          message: 'Export job not found'
+        };
+      }
+      if (job.data.workspaceId !== workspace_id) {
+        return {
+          success: false,
+          message: 'Access denied to this export'
+        };
+      }
+
       const success = await this.jobQueueService.deleteExportJob(jobId);
 
       if (success) {
@@ -1259,7 +1477,8 @@ export class WorkspaceCodingExportController {
     }
   })
   async cancelExportJob(
-    @Param('jobId') jobId: string
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
       // First, check the job state
@@ -1268,6 +1487,12 @@ export class WorkspaceCodingExportController {
         return {
           success: false,
           message: 'Export job not found'
+        };
+      }
+      if (job.data.workspaceId !== workspace_id) {
+        return {
+          success: false,
+          message: 'Access denied to this export'
         };
       }
 

@@ -5,6 +5,9 @@ import { WorkspacePlayerService } from './workspace-player.service';
 import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { Unit } from '../../entities/unit.entity';
+import { Booklet } from '../../entities/booklet.entity';
+import { BookletInfo } from '../../entities/bookletInfo.entity';
 
 describe('WorkspacePlayerService', () => {
   let service: WorkspacePlayerService;
@@ -17,7 +20,20 @@ describe('WorkspacePlayerService', () => {
 
   const mockRepository = {
     createQueryBuilder: jest.fn(() => mockQueryBuilder),
+    find: jest.fn(),
+    findOne: jest.fn()
+  };
+
+  const mockUnitRepository = {
     find: jest.fn()
+  };
+
+  const mockBookletRepository = {
+    findOne: jest.fn()
+  };
+
+  const mockBookletInfoRepository = {
+    findOne: jest.fn()
   };
 
   beforeAll(() => {
@@ -45,6 +61,18 @@ describe('WorkspacePlayerService', () => {
         {
           provide: getRepositoryToken(ResponseEntity),
           useValue: mockRepository
+        },
+        {
+          provide: getRepositoryToken(Unit),
+          useValue: mockUnitRepository
+        },
+        {
+          provide: getRepositoryToken(Booklet),
+          useValue: mockBookletRepository
+        },
+        {
+          provide: getRepositoryToken(BookletInfo),
+          useValue: mockBookletInfoRepository
         }
       ]
     }).compile();
@@ -57,6 +85,28 @@ describe('WorkspacePlayerService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('parseReplayTestPerson', () => {
+    const parseReplayTestPerson = (value: string) => (
+      service as unknown as {
+        parseReplayTestPerson: (testPerson: string) => unknown;
+      }
+    ).parseReplayTestPerson(value);
+
+    it('should accept replay connectors with an empty code segment', () => {
+      expect(parseReplayTestPerson('login@@group@BOOKLET_A')).toEqual({
+        login: 'login',
+        code: '',
+        group: 'group',
+        bookletName: 'BOOKLET_A'
+      });
+    });
+
+    it('should reject replay connectors without a booklet segment', () => {
+      expect(parseReplayTestPerson('login@code')).toBeNull();
+      expect(parseReplayTestPerson('login@code@')).toBeNull();
+    });
   });
 
   describe('findPlayer - Exact major.minor match with highest patch', () => {
@@ -552,9 +602,87 @@ describe('WorkspacePlayerService', () => {
       const result = await service.getBookletUnits(5, 'BOOKLET2');
 
       expect(result).toHaveLength(2);
-      // Direct units are processed before testlets
-      expect(result[0].name).toBe('UNIT4');
-      expect(result[1].name).toBe('UNIT3');
+      expect(result[0].name).toBe('UNIT3');
+      expect(result[1].name).toBe('UNIT4');
+    });
+
+    it('should mark replayable units using uploaded assets and result units', async () => {
+      const mockBookletFiles = [
+        {
+          file_id: 'BOOKLET1',
+          workspace_id: 5,
+          data: `
+            <Booklet id="100">
+              <Units>
+                <Unit id="INTRO"/>
+                <Unit id="TASK"/>
+                <Unit id="EMPTY"/>
+              </Units>
+            </Booklet>
+          `
+        }
+      ];
+
+      mockRepository.find
+        .mockResolvedValueOnce(mockBookletFiles)
+        .mockResolvedValueOnce([
+          { file_id: 'INTRO' },
+          { file_id: 'TASK' },
+          { file_id: 'EMPTY' }
+        ])
+        .mockResolvedValueOnce([
+          { file_id: 'TASK.VOUD' },
+          { file_id: 'EMPTY.VOUD' }
+        ]);
+      mockRepository.findOne.mockResolvedValue({ id: 10 });
+      mockBookletInfoRepository.findOne.mockResolvedValue({
+        id: 20,
+        name: 'BOOKLET1'
+      });
+      mockBookletRepository.findOne.mockResolvedValue({ id: 30 });
+      mockUnitRepository.find.mockResolvedValue([
+        { name: 'TASK', alias: null }
+      ]);
+
+      const result = await service.getBookletUnits(5, 'BOOKLET1', {
+        testPerson: 'login@code@group@BOOKLET1'
+      });
+
+      expect(result).toEqual([
+        {
+          id: 1,
+          name: 'INTRO',
+          alias: null,
+          bookletId: 100,
+          isReplayable: false,
+          skipReason: 'NO_VOUD'
+        },
+        {
+          id: 2,
+          name: 'TASK',
+          alias: null,
+          bookletId: 100,
+          isReplayable: true,
+          skipReason: undefined
+        },
+        {
+          id: 3,
+          name: 'EMPTY',
+          alias: null,
+          bookletId: 100,
+          isReplayable: false,
+          skipReason: 'NO_RESULT_UNIT'
+        }
+      ]);
+      expect(mockRepository.findOne).toHaveBeenCalledWith({
+        where: {
+          login: 'login',
+          code: 'code',
+          workspace_id: 5,
+          consider: true,
+          group: 'group'
+        }
+      });
     });
 
     it('should throw NotFoundException when booklet not found', async () => {

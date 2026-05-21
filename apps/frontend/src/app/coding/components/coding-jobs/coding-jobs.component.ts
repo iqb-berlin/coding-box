@@ -23,12 +23,14 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatAnchor, MatIconButton, MatButton } from '@angular/material/button';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
 import { AppService } from '../../../core/services/app.service';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
-import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { ApplyCodingResultsResponse, CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
@@ -40,16 +42,27 @@ import { CodingJobResultDialogComponent } from './coding-job-result-dialog/codin
 import { CoderTraining } from '../../models/coder-training.model';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
+import {
+  TransferCodingCasesDialogComponent,
+  TransferCodingCasesDialogResult
+} from './transfer-coding-cases-dialog/transfer-coding-cases-dialog.component';
+import {
+  ApplyCodingResultsDialogComponent,
+  ApplyCodingResultsDialogResult
+} from './apply-coding-results-dialog.component';
 
 interface BulkApplyResultItem {
   jobId: number;
   jobName: string;
   hasIssues: boolean;
   skipped: boolean;
+  skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
   result?: {
     success: boolean;
     updatedResponsesCount: number;
     skippedReviewCount: number;
+    skippedAlreadyCodedCount: number;
+    overwrittenExistingCount: number;
     message: string;
   };
 }
@@ -63,6 +76,8 @@ interface SavedCode {
   codingIssueOption?: number;
   [key: string]: unknown;
 }
+
+type JobPrimaryAction = 'start' | 'results' | 'apply';
 
 @Component({
   selector: 'coding-box-coding-jobs',
@@ -89,6 +104,8 @@ interface SavedCode {
     MatPaginatorModule,
     MatDialogModule,
     MatTooltipModule,
+    MatMenuModule,
+    MatDividerModule,
     MatIconButton,
     MatButton,
     MatCheckbox,
@@ -523,11 +540,74 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return 'Keine Aufgaben';
     }
 
-    if (openUnits > 0 && codedUnits > 0) {
+    if (openUnits > 0) {
       return `${progress}% (${codedUnits}/${totalUnits}, ${openUnits} offen)`;
     }
 
     return `${progress}% (${codedUnits}/${totalUnits})`;
+  }
+
+  getPrimaryJobAction(job: CodingJob): JobPrimaryAction {
+    if (job.status === 'completed' || job.status === 'results_applied') {
+      return 'results';
+    }
+
+    return 'start';
+  }
+
+  getStartCodingJobLabel(job: CodingJob): string {
+    if (job.status === 'completed' || job.status === 'results_applied') {
+      return 'Review öffnen';
+    }
+
+    return 'Kodierjob starten';
+  }
+
+  getStartCodingJobIcon(job: CodingJob): string {
+    if (job.status === 'completed' || job.status === 'results_applied') {
+      return 'visibility';
+    }
+
+    return 'play_arrow';
+  }
+
+  canApplyCodingResults(job: CodingJob): boolean {
+    return this.canApplyResults &&
+      job.status === 'completed' &&
+      this.isCodingJobFreshnessApplyable(job) &&
+      !job.training?.id &&
+      !job.training_id;
+  }
+
+  private isCodingJobFreshnessApplyable(job: CodingJob): boolean {
+    return job.freshnessStatus !== 'stale_source';
+  }
+
+  canRestartCodingJob(job: CodingJob): boolean {
+    return (job.totalUnits || 0) > 0 &&
+      (job.openUnits || 0) > 0 &&
+      !job.training_id &&
+      !job.training;
+  }
+
+  getJobActionAriaLabel(action: string, job: CodingJob): string {
+    const jobName = this.getDisplayName(job);
+    switch (action) {
+      case 'start':
+        return `${this.getStartCodingJobLabel(job)}: ${jobName}`;
+      case 'results':
+        return `Ergebnisse anzeigen: ${jobName}`;
+      case 'restart':
+        return `Offene Fälle ansehen: ${jobName}`;
+      case 'apply':
+        return `Ergebnisse anwenden: ${jobName}`;
+      case 'delete':
+        return `Kodierjob löschen: ${jobName}`;
+      case 'more':
+        return `Weitere Aktionen: ${jobName}`;
+      default:
+        return `${action}: ${jobName}`;
+    }
   }
 
   startCodingJob(job: CodingJob): void {
@@ -555,7 +635,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         }
 
         this.appService
-          .createToken(workspaceId, this.appService.loggedUser?.sub || '', 1)
+          .createOwnToken(workspaceId, 1)
           .subscribe(token => {
             const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(selectedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}`;
             const replayUrl = `${startResult.firstReplayUrl}?${queryParams}`;
@@ -740,9 +820,9 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                 }
 
                 this.appService
-                  .createToken(workspaceId, this.appService.loggedUser?.sub || '', 1)
+                  .createOwnToken(workspaceId, 1)
                   .subscribe(token => {
-                    const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(restartedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}`;
+                    const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(restartedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}&onlyOpen=true`;
                     const replayUrl = `${restartResult.firstReplayUrl}?${queryParams}`;
 
                     window.open(replayUrl, '_blank');
@@ -770,8 +850,11 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return;
     }
     const dialogRef = this.dialog.open(CodingJobResultDialogComponent, {
-      width: '1400px',
-      height: '80vh',
+      width: 'min(1400px, 96vw)',
+      maxWidth: '96vw',
+      height: '85vh',
+      maxHeight: '90vh',
+      panelClass: 'coding-results-dialog-panel',
       data: {
         codingJob: job,
         workspaceId: workspaceId,
@@ -819,6 +902,55 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       if (result?.resultsApplied) {
         this.jobsChanged.emit();
       }
+    });
+  }
+
+  openTransferCodingCasesDialog(): void {
+    if (!this.allCoders?.length) {
+      this.snackBar.open('Keine Kodierer verfügbar', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    const dialogRef = this.dialog.open(TransferCodingCasesDialogComponent, {
+      width: '560px',
+      maxWidth: '95vw',
+      data: { coders: this.allCoders }
+    });
+
+    dialogRef.afterClosed().subscribe((result?: TransferCodingCasesDialogResult) => {
+      if (!result) {
+        return;
+      }
+
+      this.codingJobBackendService.transferCodingCases(
+        workspaceId,
+        result.sourceCoderId,
+        result.targetCoderId
+      ).subscribe({
+        next: transferResult => {
+          this.snackBar.open(
+            `Übertragung erfolgreich: ${transferResult.transferredCases} Fälle in ${transferResult.affectedJobs} Job(s) angepasst`,
+            'Schließen',
+            { duration: 4000 }
+          );
+          this.loadCodingJobs();
+          this.jobsChanged.emit();
+        },
+        error: error => {
+          const apiMessage = error?.error?.message;
+          this.snackBar.open(
+            apiMessage || 'Fehler beim Übertragen der Kodierfälle',
+            'Schließen',
+            { duration: 5000 }
+          );
+        }
+      });
     });
   }
 
@@ -911,24 +1043,92 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    const loadingSnack = this.snackBar.open(`Wende Ergebnisse für Kodierjob "${job.name}" an...`, '', { duration: 3000 });
-
-    this.codingJobBackendService.applyCodingResults(workspaceId, job.id).subscribe({
-      next: result => {
-        loadingSnack.dismiss();
-        if (result.success) {
-          this.snackBar.open(`Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`, 'Schließen', { duration: 3000 });
-          this.loadCodingJobs(); // Refresh the list to show updated status
-          this.jobsChanged.emit();
-        } else {
-          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(result.messageKey, result.messageParams || {})}`, 'Schließen', { duration: 5000 });
-        }
-      },
-      error: error => {
-        loadingSnack.dismiss();
-        this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${error.message || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+    const dialogRef = this.dialog.open(ApplyCodingResultsDialogComponent, {
+      width: '600px',
+      data: {
+        jobName: job.name,
+        totalResults: job.totalUnits,
+        codedResults: job.codedUnits,
+        hasReviewIssues: job.hasIssues
       }
     });
+
+    dialogRef.afterClosed().subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
+      if (!dialogResult) {
+        return;
+      }
+
+      const loadingSnack = this.snackBar.open(`Wende Ergebnisse für Kodierjob "${job.name}" an...`, '', { duration: 3000 });
+
+      this.codingJobBackendService.applyCodingResults(workspaceId, job.id, {
+        overwriteExisting: dialogResult.overwriteExisting
+      }).subscribe({
+        next: result => {
+          loadingSnack.dismiss();
+          if (result.success) {
+            this.snackBar.open(this.formatApplyCodingResultsMessage(result), 'Schließen', { duration: 6000 });
+            this.loadCodingJobs(); // Refresh the list to show updated status
+            this.jobsChanged.emit();
+          } else {
+            this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(result.messageKey, result.messageParams || {})}`, 'Schließen', { duration: 5000 });
+          }
+        },
+        error: error => {
+          loadingSnack.dismiss();
+          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${error.message || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+        }
+      });
+    });
+  }
+
+  private formatApplyCodingResultsMessage(result: ApplyCodingResultsResponse): string {
+    const parts = [
+      `Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`
+    ];
+
+    if (result.skippedAlreadyCodedCount > 0) {
+      parts.push(`Bereits vorhandene Kodierungen nicht überschrieben: ${result.skippedAlreadyCodedCount} Antworten`);
+    }
+
+    if (result.overwrittenExistingCount > 0) {
+      parts.push(`Vorhandene Kodierungen überschrieben: ${result.overwrittenExistingCount} Antworten`);
+    }
+
+    if (result.skippedReviewCount > 0) {
+      parts.push(`Übersprungen (manuelle Prüfung benötigt): ${result.skippedReviewCount} Antworten`);
+    }
+
+    return parts.join('\n');
+  }
+
+  getAggregationSettingsText(job: CodingJob): string {
+    if (!job.aggregationSettingsVersion) {
+      return 'Aggregation: ältere Jobs nutzen aktuelle Workspace-Einstellungen';
+    }
+
+    if (!job.aggregationEnabled || job.aggregationThreshold === null || job.aggregationThreshold === undefined) {
+      return 'Aggregation beim Erstellen: aus';
+    }
+
+    const flags = job.responseMatchingFlags || [];
+    const matchingText = flags.length > 0 ?
+      flags.map(flag => this.getResponseMatchingFlagLabel(flag)).join(', ') :
+      'exakte Übereinstimmung';
+
+    return `Aggregation beim Erstellen: Schwellenwert ${job.aggregationThreshold}, ${matchingText}`;
+  }
+
+  private getResponseMatchingFlagLabel(flag: string): string {
+    switch (flag) {
+      case 'IGNORE_CASE':
+        return 'Groß-/Kleinschreibung ignoriert';
+      case 'IGNORE_WHITESPACE':
+        return 'Leerzeichen ignoriert';
+      case 'NO_AGGREGATION':
+        return 'nicht aggregiert';
+      default:
+        return flag;
+    }
   }
 
   bulkApplyCodingResults(): void {
@@ -971,8 +1171,15 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         loadingSnack.dismiss();
         if (result.success) {
           const skippedCount = result.results.filter((r: BulkApplyResultItem) => r.skipped).length;
+          const failedCount = result.results.filter((r: BulkApplyResultItem) => r.result && !r.result.success).length;
           const processedCount = result.jobsProcessed;
-          this.snackBar.open(`Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}`, 'Schließen', { duration: 5000 });
+          const alreadyCodedInfo = result.totalSkippedAlreadyCoded > 0 ?
+            `, ${result.totalSkippedAlreadyCoded} vorhandene Kodierungen beibehalten` :
+            '';
+          const failedInfo = failedCount > 0 ?
+            `, ${failedCount} Jobs mit Konflikten/Fehlern nicht angewendet` :
+            '';
+          this.snackBar.open(`Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${alreadyCodedInfo}${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}${failedInfo}`, 'Schließen', { duration: 5000 });
           this.loadCodingJobs(); // Refresh the list
           this.jobsChanged.emit();
         } else {

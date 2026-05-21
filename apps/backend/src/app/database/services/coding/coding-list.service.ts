@@ -15,6 +15,7 @@ export interface CodingItem {
   variable_id: string;
   variable_page: string;
   variable_anchor: string;
+  value?: string;
   url?: string;
 }
 
@@ -51,6 +52,10 @@ export class CodingListService {
     workspaceId: number
   ): Promise<Map<string, string>> {
     return this.fileCacheService.getVariablePageMap(unitName, workspaceId);
+  }
+
+  async getValidVariablePairKeys(workspaceId: number): Promise<string[]> {
+    return this.queryService.getValidVariablePairKeys(workspaceId);
   }
 
   /**
@@ -150,7 +155,8 @@ export class CodingListService {
     authToken: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true
   ) {
     return this.streamService.getCodingResultsByVersionCsvStream(
       workspace_id,
@@ -158,7 +164,8 @@ export class CodingListService {
       authToken,
       serverUrl,
       includeReplayUrls,
-      progressCallback
+      progressCallback,
+      includeResponseValues
     );
   }
 
@@ -172,7 +179,8 @@ export class CodingListService {
     authToken?: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true
   ): Promise<Buffer> {
     return this.streamService.getCodingResultsByVersionAsExcel(
       workspace_id,
@@ -180,7 +188,8 @@ export class CodingListService {
       authToken,
       serverUrl,
       includeReplayUrls,
-      progressCallback
+      progressCallback,
+      includeResponseValues
     );
   }
 }

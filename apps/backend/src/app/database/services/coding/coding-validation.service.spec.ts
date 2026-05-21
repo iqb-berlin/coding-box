@@ -7,6 +7,8 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WorkspacePlayerService } from '../workspace/workspace-player.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
 
 describe('CodingValidationService', () => {
@@ -15,13 +17,18 @@ describe('CodingValidationService', () => {
   let mockCodingJobUnitRepository: jest.Mocked<Repository<CodingJobUnit>>;
   let mockCacheService: jest.Mocked<CacheService>;
   let mockWorkspaceFilesService: jest.Mocked<WorkspaceFilesService>;
+  let mockWorkspacePlayerService: jest.Mocked<WorkspacePlayerService>;
+  let mockCodingJobService: jest.Mocked<CodingJobService>;
 
   const mockQueryBuilder = {
     innerJoin: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
+    orWhere: jest.fn().mockReturnThis(),
     getCount: jest.fn(),
+    getOne: jest.fn(),
     select: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
     groupBy: jest.fn().mockReturnThis(),
@@ -39,6 +46,46 @@ describe('CodingValidationService', () => {
     variable_id: 'var1',
     ...overrides
   });
+
+  const createMockResponse = (
+    overrides: Partial<ResponseEntity> = {}
+  ): ResponseEntity => ({
+    id: 1,
+    value: 'response-value',
+    variableid: 'var1',
+    unit: {
+      name: 'unit1',
+      alias: 'unit-alias',
+      booklet: {
+        person: {
+          login: 'user1',
+          code: 'code1',
+          group: 'group1',
+          workspace_id: 1
+        },
+        bookletinfo: {
+          name: 'booklet1'
+        }
+      }
+    },
+    ...overrides
+  } as unknown as ResponseEntity);
+
+  const createQueryBuilderMock = <T extends Record<string, unknown>>(rawResults: T[] = []) => ({
+    innerJoin: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    orWhere: jest.fn().mockReturnThis(),
+    getCount: jest.fn(),
+    getOne: jest.fn(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
+    addGroupBy: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn().mockResolvedValue(rawResults)
+  }) as unknown as jest.Mocked<SelectQueryBuilder<ResponseEntity>>;
 
   beforeEach(async () => {
     mockResponseRepository = {
@@ -60,8 +107,27 @@ describe('CodingValidationService', () => {
     } as unknown as jest.Mocked<CacheService>;
 
     mockWorkspaceFilesService = {
-      getUnitVariableMap: jest.fn()
+      getUnitVariableMap: jest.fn(),
+      getIntendedIncompleteSchemeVariableMap: jest.fn(),
+      getDerivedVariableMap: jest.fn(),
+      getCoderTrainingRequiredVariableMap: jest.fn()
     } as unknown as jest.Mocked<WorkspaceFilesService>;
+
+    mockWorkspacePlayerService = {
+      findUnitDef: jest.fn().mockResolvedValue([{ file_id: 'UNIT1.VOUD' }]),
+      findUnit: jest.fn().mockResolvedValue([{
+        file_id: 'UNIT1',
+        data: '<Unit><DefinitionRef player="VERONA-1.0.0"/></Unit>'
+      }]),
+      findPlayer: jest.fn().mockResolvedValue([{ file_id: 'VERONA-1.0.0' }])
+    } as unknown as jest.Mocked<WorkspacePlayerService>;
+
+    mockCodingJobService = {
+      getResponseMatchingMode: jest.fn().mockResolvedValue([]),
+      getAggregationThreshold: jest.fn().mockResolvedValue(2),
+      getSlimResponsesForVariables: jest.fn().mockResolvedValue([]),
+      aggregateResponsesByValue: jest.fn().mockReturnValue([])
+    } as unknown as jest.Mocked<CodingJobService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -83,13 +149,22 @@ describe('CodingValidationService', () => {
           useValue: mockWorkspaceFilesService
         },
         {
-          provide: CodingJobService,
+          provide: WorkspacePlayerService,
+          useValue: mockWorkspacePlayerService
+        },
+        {
+          provide: WorkspaceExclusionService,
           useValue: {
-            getResponseMatchingMode: jest.fn().mockResolvedValue([]),
-            getAggregationThreshold: jest.fn().mockResolvedValue(2),
-            getSlimResponsesForVariables: jest.fn().mockResolvedValue([]),
-            aggregateResponsesByValue: jest.fn().mockReturnValue([])
+            resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+              globalIgnoredUnits: [],
+              ignoredBooklets: [],
+              testletIgnoredUnits: []
+            })
           }
+        },
+        {
+          provide: CodingJobService,
+          useValue: mockCodingJobService
         }
       ]
     }).compile();
@@ -143,7 +218,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
       mockCacheService.getPaginatedValidationResults
         .mockResolvedValueOnce(null)
@@ -169,7 +244,7 @@ describe('CodingValidationService', () => {
       );
 
       expect(result.results[0].status).toBe('EXISTS');
-      expect(mockQueryBuilder.getCount).toHaveBeenCalled();
+      expect(mockQueryBuilder.getOne).toHaveBeenCalled();
     });
 
     it('should return MISSING status when response not found', async () => {
@@ -177,7 +252,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(0);
+      mockQueryBuilder.getOne.mockResolvedValue(null);
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       const result = await service.validateCodingCompleteness(
@@ -186,6 +261,27 @@ describe('CodingValidationService', () => {
       );
 
       expect(result.results[0].status).toBe('MISSING');
+      expect(result.results[0].responseFound).toBe(false);
+      expect(result.missing).toBe(1);
+    });
+
+    it('should return MISSING status when replay unit file is missing', async () => {
+      const expectedCombinations = [createMockExpectedCombination()];
+
+      mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
+      mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
+      mockWorkspacePlayerService.findUnit.mockResolvedValueOnce([]);
+      mockCacheService.storeValidationResults.mockResolvedValue(true);
+
+      const result = await service.validateCodingCompleteness(
+        1,
+        expectedCombinations
+      );
+
+      expect(result.results[0].status).toBe('MISSING');
+      expect(result.results[0].responseFound).toBe(true);
+      expect(result.results[0].issues).toContain('Unit-Datei fehlt: UNIT1.');
       expect(result.missing).toBe(1);
     });
 
@@ -213,12 +309,12 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       await service.validateCodingCompleteness(1, expectedCombinations);
 
-      expect(mockQueryBuilder.getCount).toHaveBeenCalledTimes(150);
+      expect(mockQueryBuilder.getOne).toHaveBeenCalledTimes(150);
     });
 
     it('should build correct query with all combination fields', async () => {
@@ -234,7 +330,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       await service.validateCodingCompleteness(1, expectedCombinations);
@@ -242,21 +338,39 @@ describe('CodingValidationService', () => {
       expect(mockResponseRepository.createQueryBuilder).toHaveBeenCalledWith(
         'response'
       );
-      expect(mockQueryBuilder.innerJoin).toHaveBeenCalledWith(
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'response.unit',
         'unit'
       );
-      expect(mockQueryBuilder.innerJoin).toHaveBeenCalledWith(
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'unit.booklet',
         'booklet'
       );
-      expect(mockQueryBuilder.innerJoin).toHaveBeenCalledWith(
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'booklet.person',
         'person'
       );
-      expect(mockQueryBuilder.innerJoin).toHaveBeenCalledWith(
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'booklet.bookletinfo',
         'bookletinfo'
+      );
+    });
+
+    it('should filter by person group when supplied by the coding list', async () => {
+      const expectedCombinations = [
+        createMockExpectedCombination({ person_group: 'group-a' })
+      ];
+
+      mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
+      mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
+      mockCacheService.storeValidationResults.mockResolvedValue(true);
+
+      await service.validateCodingCompleteness(1, expectedCombinations);
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'person.group = :personGroup',
+        { personGroup: 'group-a' }
       );
     });
   });
@@ -268,7 +382,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       const result = await service.validateCodingCompleteness(
@@ -287,7 +401,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       const result = await service.validateCodingCompleteness(
@@ -308,7 +422,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       const firstPage = await service.validateCodingCompleteness(
@@ -334,11 +448,16 @@ describe('CodingValidationService', () => {
 
   describe('validateCodingCompleteness - Cache management', () => {
     it('should store results in cache after processing', async () => {
-      const expectedCombinations = [createMockExpectedCombination()];
+      const expectedCombinations = [
+        {
+          ...createMockExpectedCombination(),
+          url: 'https://example.test/#/replay/person/unit?auth=secret-token'
+        } as ExpectedCombinationDto & { url: string }
+      ];
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       await service.validateCodingCompleteness(1, expectedCombinations);
@@ -352,6 +471,12 @@ describe('CodingValidationService', () => {
           timestamp: expect.any(Number)
         })
       );
+      expect(
+        mockCacheService.storeValidationResults.mock.calls[0][1][0].combination
+      ).not.toHaveProperty('url');
+      expect(
+        mockCacheService.storeValidationResults.mock.calls[0][1][0].responseFound
+      ).toBe(true);
     });
 
     it('should continue without error if cache storage fails', async () => {
@@ -359,7 +484,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(false);
 
       const result = await service.validateCodingCompleteness(
@@ -390,8 +515,230 @@ describe('CodingValidationService', () => {
 
       expect(result).toEqual(cachedVariables);
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v2:1'
+        'coding_incomplete_variables_v4:1'
       );
+    });
+
+    it('should include INTENDED_INCOMPLETE variables even when they are defined in the scheme', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '5' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '3' },
+        { unitName: 'unit1', variableId: 'intended-only', responseCount: '2' }
+      ]);
+      const casesInJobsQb = createQueryBuilderMock([]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1', 'intended-only'])]])
+      );
+      mockWorkspaceFilesService.getIntendedIncompleteSchemeVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1', 'intended-only'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'var1',
+          responseCount: 8,
+          availableCases: 8,
+          uniqueCasesAfterAggregation: 8
+        }),
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'intended-only',
+          responseCount: 2,
+          availableCases: 2,
+          uniqueCasesAfterAggregation: 2
+        })
+      ]);
+      expect(mockCacheService.set).toHaveBeenCalledWith(
+        'coding_incomplete_variables_v4:1',
+        result,
+        300
+      );
+    });
+
+    it('should not collapse empty responses when counting unique cases after aggregation', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '4' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const casesInJobsQb = createQueryBuilderMock([]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(2);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([
+        {
+          id: 1,
+          unitName: 'unit1',
+          variableid: 'var1',
+          value: ''
+        },
+        {
+          id: 2,
+          unitName: 'unit1',
+          variableid: 'var1',
+          value: ''
+        },
+        {
+          id: 3,
+          unitName: 'unit1',
+          variableid: 'var1',
+          value: null
+        },
+        {
+          id: 4,
+          unitName: 'unit1',
+          variableid: 'var1',
+          value: '[]'
+        }
+      ] as never);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'var1',
+          responseCount: 4,
+          availableCases: 4,
+          uniqueCasesAfterAggregation: 4
+        })
+      ]);
+    });
+
+    it('should keep derived variables at their raw case count when aggregation is active', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'derived-var', responseCount: '4' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const casesInJobsQb = createQueryBuilderMock([]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['derived-var'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['derived-var'])]])
+      );
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(2);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([]);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'derived-var',
+          responseCount: 4,
+          availableCases: 4,
+          uniqueCasesAfterAggregation: 4,
+          isDerived: true
+        })
+      ]);
+      expect(mockCodingJobService.getSlimResponsesForVariables).toHaveBeenCalledWith(
+        1,
+        []
+      );
+    });
+
+    it('should calculate availability on aggregation groups instead of raw job response counts', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '6' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const casesInJobsQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', casesInJobs: '4' }
+      ]);
+      const assignedResponsesQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseId: '1' },
+        { unitName: 'unit1', variableId: 'var1', responseId: '2' },
+        { unitName: 'unit1', variableId: 'var1', responseId: '3' },
+        { unitName: 'unit1', variableId: 'var1', responseId: '5' }
+      ]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(casesInJobsQb)
+        .mockReturnValueOnce(assignedResponsesQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(4);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([
+        {
+          id: 1, unitName: 'unit1', variableid: 'var1', value: 'same'
+        },
+        {
+          id: 2, unitName: 'unit1', variableid: 'var1', value: 'same'
+        },
+        {
+          id: 3, unitName: 'unit1', variableid: 'var1', value: 'same'
+        },
+        {
+          id: 4, unitName: 'unit1', variableid: 'var1', value: 'same'
+        },
+        {
+          id: 5, unitName: 'unit1', variableid: 'var1', value: 'single'
+        },
+        {
+          id: 6, unitName: 'unit1', variableid: 'var1', value: 'single'
+        }
+      ] as never);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'var1',
+          responseCount: 6,
+          casesInJobs: 2,
+          availableCases: 1,
+          uniqueCasesAfterAggregation: 3
+        })
+      ]);
     });
 
     it.skip('should fetch from database on cache miss', async () => {
@@ -459,7 +806,7 @@ describe('CodingValidationService', () => {
       mockCacheService.get.mockRejectedValue(new Error('Database error'));
 
       await expect(service.getCodingIncompleteVariables(1)).rejects.toThrow(
-        'Could not get CODING_INCOMPLETE variables'
+        'Could not get manual coding variables'
       );
     });
   });
@@ -492,7 +839,7 @@ describe('CodingValidationService', () => {
     it('should generate correct cache key', () => {
       const cacheKey = service.generateIncompleteVariablesCacheKey(123);
 
-      expect(cacheKey).toBe('coding_incomplete_variables_v2:123');
+      expect(cacheKey).toBe('coding_incomplete_variables_v4:123');
     });
   });
 
@@ -503,7 +850,7 @@ describe('CodingValidationService', () => {
       await service.invalidateIncompleteVariablesCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v2:1'
+        'coding_incomplete_variables_v4:1'
       );
     });
   });
@@ -521,7 +868,7 @@ describe('CodingValidationService', () => {
         { unitName: 'unit2', variableId: 'var2' }
       ];
 
-      mockResponseRepository.query.mockResolvedValue([{ applied_count: '10' }]);
+      mockQueryBuilder.getCount.mockResolvedValueOnce(10);
 
       const result = await service.getAppliedResultsCount(
         1,
@@ -529,7 +876,10 @@ describe('CodingValidationService', () => {
       );
 
       expect(result).toBe(10);
-      expect(mockResponseRepository.query).toHaveBeenCalled();
+      expect(mockResponseRepository.createQueryBuilder).toHaveBeenCalledWith(
+        'response'
+      );
+      expect(mockQueryBuilder.getCount).toHaveBeenCalled();
     });
 
     it('should process variables in batches', async () => {
@@ -538,17 +888,18 @@ describe('CodingValidationService', () => {
         variableId: `var${i}`
       }));
 
-      mockResponseRepository.query.mockResolvedValue([{ applied_count: '1' }]);
+      mockQueryBuilder.getCount.mockResolvedValue(1);
 
       await service.getAppliedResultsCount(1, incompleteVariables);
 
-      expect(mockResponseRepository.query).toHaveBeenCalledTimes(2);
+      expect(mockResponseRepository.createQueryBuilder).toHaveBeenCalledTimes(2);
+      expect(mockQueryBuilder.getCount).toHaveBeenCalledTimes(2);
     });
 
     it('should handle database errors', async () => {
       const incompleteVariables = [{ unitName: 'unit1', variableId: 'var1' }];
 
-      mockResponseRepository.query.mockRejectedValue(new Error('Query failed'));
+      mockQueryBuilder.getCount.mockRejectedValue(new Error('Query failed'));
 
       await expect(
         service.getAppliedResultsCount(1, incompleteVariables)

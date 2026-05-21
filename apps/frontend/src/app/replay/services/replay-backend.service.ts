@@ -1,21 +1,58 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, forkJoin, map } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
+
+export type ReplayUnitResponse = {
+  responses: {
+    id: string;
+    content: string;
+  }[];
+};
+
+export type ReplayTimingMap = Record<string, number | null>;
+export type ReplayClientTimings = {
+  routeToVisibleMs: number | null;
+  loadToVisibleMs: number | null;
+  routeToPayloadRequestMs: number | null;
+  payloadMs: number | null;
+  payloadToVisibleMs: number | null;
+  payloadToPlayerReadyMs: number | null;
+  playerReadyToVisibleMs: number | null;
+};
+export type ReplayServerTimings = ReplayTimingMap;
+
+export type ReplayAssetsPayload = {
+  unitDef: FilesDto[];
+  player: FilesDto[];
+  vocs: FilesDto[];
+};
+
+export type ReplayResponsePayload = {
+  response: ReplayUnitResponse;
+  serverTimings?: ReplayServerTimings;
+};
+
+export type ReplayPayload = ReplayAssetsPayload & ReplayResponsePayload & {
+  serverTimings?: ReplayServerTimings;
+};
 
 export type ReplayStatisticsResponse = {
   id: number;
   timestamp: string;
-  workspaceId: number;
-  unitId: string;
-  bookletId?: string;
-  testPersonLogin?: string;
-  testPersonCode?: string;
-  durationMilliseconds: number;
-  replayUrl?: string;
+  workspace_id: number;
+  unit_id: string;
+  booklet_id?: string;
+  test_person_login?: string;
+  test_person_code?: string;
+  duration_milliseconds: number;
+  replay_url?: string;
   success?: boolean;
-  errorMessage?: string;
+  error_message?: string;
+  client_timings?: ReplayClientTimings;
+  server_timings?: ReplayServerTimings;
 };
 
 @Injectable({
@@ -40,10 +77,15 @@ export class ReplayBackendService {
       replayUrl?: string;
       success?: boolean;
       errorMessage?: string;
+      clientTimings?: ReplayClientTimings;
+      serverTimings?: ReplayServerTimings;
     }
   ): Observable<ReplayStatisticsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics`;
-    return this.http.post<ReplayStatisticsResponse>(url, data, { headers: this.authHeader });
+    return this.http.post<ReplayStatisticsResponse>(url, data, {
+      headers: this.authHeader,
+      context: suppressGlobalHttpErrorContext()
+    });
   }
 
   getReplayPayload(
@@ -51,32 +93,63 @@ export class ReplayBackendService {
     testPerson: string,
     unitId: string,
     authToken?: string
-  ): Observable<{
-      unitDef: FilesDto[];
-      response: {
-        responses: {
-          id: string;
-          content: string;
-        }[];
-      };
-      player: FilesDto[];
-      vocs: FilesDto[];
-    }> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-payload/${encodeURIComponent(testPerson)}/${encodeURIComponent(unitId)}`;
+  ): Observable<ReplayPayload> {
+    return forkJoin({
+      assets: this.getReplayAssets(workspaceId, unitId, authToken),
+      responsePayload: this.getReplayResponse(workspaceId, testPerson, unitId, authToken)
+    }).pipe(
+      map(({ assets, responsePayload }) => ({
+        ...assets,
+        response: responsePayload.response,
+        serverTimings: this.prefixServerTimings(
+          'response',
+          responsePayload.serverTimings
+        )
+      }))
+    );
+  }
+
+  private prefixServerTimings(
+    prefix: 'response',
+    timings?: ReplayServerTimings
+  ): ReplayServerTimings | undefined {
+    if (!timings) {
+      return undefined;
+    }
+    const prefixed = Object.entries(timings).reduce<ReplayServerTimings>((acc, [key, value]) => {
+      if (typeof value === 'number' || value === null) {
+        acc[`${prefix}${key.charAt(0).toUpperCase()}${key.slice(1)}`] = value;
+      }
+      return acc;
+    }, {});
+    return Object.keys(prefixed).length ? prefixed : undefined;
+  }
+
+  getReplayAssets(
+    workspaceId: number,
+    unitId: string,
+    authToken?: string
+  ): Observable<ReplayAssetsPayload> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-assets/${encodeURIComponent(unitId)}`;
     const headers = authToken ?
       { Authorization: `Bearer ${authToken}` } :
       this.authHeader;
-    return this.http.get<{
-      unitDef: FilesDto[];
-      response: {
-        responses: {
-          id: string;
-          content: string;
-        }[];
-      };
-      player: FilesDto[];
-      vocs: FilesDto[];
-    }>(url, { headers });
+    const params = new HttpParams().set('replayPart', 'assets');
+    return this.http.get<ReplayAssetsPayload>(url, { headers, params });
+  }
+
+  getReplayResponse(
+    workspaceId: number,
+    testPerson: string,
+    unitId: string,
+    authToken?: string
+  ): Observable<ReplayResponsePayload> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-response/${encodeURIComponent(testPerson)}/${encodeURIComponent(unitId)}`;
+    const headers = authToken ?
+      { Authorization: `Bearer ${authToken}` } :
+      this.authHeader;
+    const params = new HttpParams().set('replayPart', 'response');
+    return this.http.get<ReplayResponsePayload>(url, { headers, params });
   }
 
   getReplayFrequencyByUnit(

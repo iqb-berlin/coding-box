@@ -13,6 +13,9 @@ export class UserInListDto {
   @ApiProperty()
     accessLevel!: number;
 
+  @ApiProperty({ required: false })
+    canCode?: boolean;
+
   @ApiProperty()
     description?: string;
 

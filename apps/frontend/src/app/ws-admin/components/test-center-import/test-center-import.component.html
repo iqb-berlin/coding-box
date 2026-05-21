@@ -301,6 +301,11 @@
         <mat-icon>error</mat-icon>
         <span>Bitte mindestens eine Import Option auswählen</span>
       </div>
+      } @if(testGroupsLoadError){
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>{{ testGroupsLoadError }}</span>
+      </div>
       } @if (authenticationError){
       <div class="error-message">
         <mat-icon>error</mat-icon>
@@ -350,8 +355,20 @@
       }
     </div>
     } @if (!isUploadingTestResults) {
-    <div class="table-container">
-      <table mat-table [dataSource]="testGroups" class="testgroups-table">
+      @if (uploadError) {
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>{{ uploadError }}</span>
+      </div>
+      }
+      @if (testGroups.length === 0) {
+      <div class="empty-state">
+        <mat-icon>info</mat-icon>
+        <span>Keine Testgruppen gefunden.</span>
+      </div>
+      } @else {
+      <div class="table-container">
+        <table mat-table [dataSource]="testGroups" class="testgroups-table">
         <ng-container matColumnDef="select">
           <th mat-header-cell *matHeaderCellDef>
             <mat-checkbox
@@ -447,8 +464,9 @@
           *matRowDef="let row; columns: displayedColumns"
           class="clickable-row"
         ></tr>
-      </table>
-    </div>
+        </table>
+      </div>
+      }
     } @if (selectedRows.length > 0) {
     <div class="selection-summary">
       <mat-icon>info</mat-icon>

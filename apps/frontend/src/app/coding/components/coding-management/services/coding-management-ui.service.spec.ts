@@ -19,7 +19,7 @@ describe('CodingManagementUiService', () => {
 
   beforeEach(() => {
     mockAppService = {
-      createToken: jest.fn().mockReturnValue(of('test-token')),
+      createOwnToken: jest.fn().mockReturnValue(of('test-token')),
       selectedWorkspaceId: 1,
       loggedUser: { sub: 'test-user' }
     } as unknown as jest.Mocked<Partial<AppService>>;
@@ -68,7 +68,7 @@ describe('CodingManagementUiService', () => {
 
   it('should open replay URL in new window', done => {
     const response = { id: 123 } as Success;
-    (mockAppService.createToken as jest.Mock).mockReturnValue(of('test-token'));
+    (mockAppService.createOwnToken as jest.Mock).mockReturnValue(of('test-token'));
     (mockStatisticsService.getReplayUrl as jest.Mock).mockReturnValue(of({ replayUrl: 'http://test.com' }));
 
     service.openReplayForResponse(response).subscribe(url => {

@@ -11,9 +11,10 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 
-export type TestResultsExportDialogResult = {
-  type: 'results' | 'logs';
-};
+export type TestResultsExportDialogResult =
+  | { type: 'results' }
+  | { type: 'logs' }
+  | { type: 'download'; jobId?: string | null };
 
 export type TestResultsExportDialogData = {
   isExporting?: boolean;
@@ -41,8 +42,8 @@ export type TestResultsExportDialogData = {
       <mat-list>
         <mat-list-item (click)="selectExportType('results')">
           <mat-icon matListItemIcon>download</mat-icon>
-          <div matListItemTitle>Ergebnisse exportieren</div>
-          <div matListItemLine>Testergebnisdaten exportieren</div>
+          <div matListItemTitle>Testergebnisse ohne Kodierung exportieren</div>
+          <div matListItemLine>Rohdaten aus der Testausführung exportieren</div>
         </mat-list-item>
         <mat-divider></mat-divider>
         <mat-list-item (click)="selectExportType('logs')">

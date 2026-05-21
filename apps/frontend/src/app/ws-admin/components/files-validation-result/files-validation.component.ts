@@ -5,7 +5,14 @@ import {
   inject,
   OnInit
 } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, of, timer } from 'rxjs';
+import {
+  filter,
+  finalize,
+  switchMap,
+  take,
+  tap
+} from 'rxjs/operators';
 import { MetadataResolver } from '@iqb/metadata-resolver';
 import {
   MAT_DIALOG_DATA,
@@ -23,8 +30,9 @@ import { FormsModule } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { TranslateModule } from '@ngx-translate/core';
-import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { WorkspaceService } from '../../../workspace/services/workspace.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
@@ -35,6 +43,7 @@ import { UnitDefinitionPlayerDialogComponent } from '../unit-definition-player-d
 import {
   DuplicateTestTaker,
   FileValidationResultDto,
+  GeoGebraValidationResult,
   UnusedTestFile
 } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
@@ -47,6 +56,11 @@ import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { BookletTestletDto } from '../../../../../../../api-dto/booklet-info/booklet-testlet.dto';
 import { BookletUnitDto } from '../../../../../../../api-dto/booklet-info/booklet-unit.dto';
+import { ValidationService } from '../../../shared/services/validation/validation.service';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
+import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
+
+const VALIDATION_REFRESH_POLL_INTERVAL_MS = 300;
 
 type FileStatus = {
   filename: string;
@@ -157,7 +171,8 @@ type FilesValidationView = Omit<FilesValidation, ValidationSectionKey> & {
     FormsModule,
     ScrollingModule,
     MatExpansionModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatProgressBarModule
   ],
   styleUrls: ['./files-validation.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -172,6 +187,7 @@ export class FilesValidationDialogComponent implements OnInit {
     filteredTestTakers?: FilteredTestTaker[];
     duplicateTestTakers?: DuplicateTestTaker[];
     unusedTestFiles?: UnusedTestFile[];
+    geogebra?: GeoGebraValidationResult;
     workspaceId?: number;
   }>(MAT_DIALOG_DATA);
 
@@ -180,6 +196,7 @@ export class FilesValidationDialogComponent implements OnInit {
   filteredTestTakers: FilteredTestTaker[] = [];
   duplicateTestTakers: DuplicateTestTaker[] = [];
   unusedTestFiles: UnusedTestFile[] = [];
+  geogebra?: GeoGebraValidationResult;
   validationResults: FilesValidationView[] = [];
 
   selection = new SelectionModel<FilteredTestTaker>(true, []);
@@ -201,18 +218,23 @@ export class FilesValidationDialogComponent implements OnInit {
   bookletData: Map<string, BookletInfoDto> = new Map();
   expandedBooklets: Set<string> = new Set();
   loadingBooklets: Set<string> = new Set();
+  isApplyingTestletBulk = false;
   selectedTabIndex = 0;
 
   private workspaceService = inject(WorkspaceService);
   private fileService = inject(FileService);
   private testResultService = inject(TestResultService);
   private snackBar = inject(MatSnackBar);
+  private validationService = inject(ValidationService);
 
   isExcluding = false;
   excludingProgress = 0;
 
   isConsidering = false;
   consideringProgress = 0;
+  isRefreshingValidation = false;
+  refreshValidationProgress = 0;
+  refreshValidationProgressMessage = '';
 
   summary: ValidationSummary = {
     totalTestTakers: 0,
@@ -409,6 +431,7 @@ export class FilesValidationDialogComponent implements OnInit {
     this.filteredTestTakers = resultDto.filteredTestTakers || [];
     this.duplicateTestTakers = resultDto.duplicateTestTakers || [];
     this.unusedTestFiles = resultDto.unusedTestFiles || [];
+    this.geogebra = resultDto.geogebra;
 
     this.selection.clear();
     this.allSelected = false;
@@ -428,29 +451,98 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   private refreshValidationData(successMessage?: string): void {
-    if (!this.data.workspaceId) {
+    if (!this.data.workspaceId || this.isRefreshingValidation) {
       return;
     }
 
-    const refreshInProgressRef: MatSnackBarRef<TextOnlySnackBar> = this.snackBar.open(
-      'Validierungsergebnisse werden aktualisiert...'
-    );
+    const workspaceId = this.data.workspaceId;
+    this.isRefreshingValidation = true;
+    this.refreshValidationProgress = 0;
+    this.refreshValidationProgressMessage = 'Testdateien werden auf Änderungen geprüft...';
+    this.cdr.markForCheck();
 
-    this.fileService.validateFiles(this.data.workspaceId).subscribe({
+    this.validationService.createValidationTask(workspaceId, 'testFiles').pipe(
+      switchMap(task => this.waitForValidationTask(workspaceId, task)),
+      switchMap(task => {
+        if (task.status === 'failed') {
+          throw new Error(task.error || 'Validierung fehlgeschlagen');
+        }
+        this.refreshValidationProgress = 100;
+        this.refreshValidationProgressMessage = task.progress_message || 'Validierungsergebnis wird geladen...';
+        this.cdr.markForCheck();
+        return this.validationService.getValidationResults(workspaceId, task.id);
+      }),
+      finalize(() => {
+        this.isRefreshingValidation = false;
+        this.cdr.markForCheck();
+      })
+    ).subscribe({
       next: response => {
-        refreshInProgressRef.dismiss();
         if (typeof response === 'boolean') {
           this.snackBar.open('Validierungsergebnisse konnten nicht aktualisiert werden', 'OK', { duration: 3000 });
           return;
         }
-        this.applyValidationResultData(response);
+
+        this.applyValidationResultData(response as FileValidationResultDto);
         if (successMessage) {
           this.snackBar.open(successMessage, 'OK', { duration: 2500 });
         }
       },
       error: () => {
-        refreshInProgressRef.dismiss();
         this.snackBar.open('Fehler beim Aktualisieren der Validierungsergebnisse', 'OK', { duration: 3000 });
+      }
+    });
+  }
+
+  private waitForValidationTask(
+    workspaceId: number,
+    task: ValidationTaskDto
+  ) {
+    this.updateRefreshValidationProgress(task);
+    if (task.status === 'completed' || task.status === 'failed') {
+      return of(task);
+    }
+
+    return timer(0, VALIDATION_REFRESH_POLL_INTERVAL_MS).pipe(
+      switchMap(() => this.validationService.getValidationTask(workspaceId, task.id)),
+      tap(nextTask => this.updateRefreshValidationProgress(nextTask)),
+      filter(nextTask => nextTask.status !== 'pending' && nextTask.status !== 'processing'),
+      take(1)
+    );
+  }
+
+  private updateRefreshValidationProgress(task: ValidationTaskDto): void {
+    const progress = task.progress ?? 0;
+    this.refreshValidationProgress = Math.max(this.refreshValidationProgress, progress);
+    if (task.progress_message) {
+      this.refreshValidationProgressMessage = `${this.refreshValidationProgress}% - ${task.progress_message}`;
+    } else {
+      this.refreshValidationProgressMessage =
+        this.refreshValidationProgress >= 100 ?
+          'Validierungsergebnis wird geladen...' :
+          `Validierung wird durchgeführt (${this.refreshValidationProgress}%)...`;
+    }
+    this.cdr.markForCheck();
+  }
+
+  openGeoGebraResourcePackagesDialog(): void {
+    if (!this.data.workspaceId) {
+      this.snackBar.open('Fehler: Kein Workspace ausgewählt', 'OK', { duration: 3000 });
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ResourcePackagesDialogComponent, {
+      width: '94vw',
+      maxWidth: '1440px',
+      maxHeight: '94vh',
+      data: {
+        workspaceId: this.data.workspaceId
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result === true) {
+        this.refreshValidationData('GeoGebra-Ressourcenpakete wurden aktualisiert.');
       }
     });
   }
@@ -615,6 +707,10 @@ export class FilesValidationDialogComponent implements OnInit {
       if (this.data.unusedTestFiles) {
         this.unusedTestFiles = this.data.unusedTestFiles;
       }
+
+      if (this.data.geogebra) {
+        this.geogebra = this.data.geogebra;
+      }
     }
   }
 
@@ -675,6 +771,103 @@ export class FilesValidationDialogComponent implements OnInit {
     if (!bookletId) return false;
     const normBooklet = bookletId.toUpperCase();
     return this.ignoredTestlets.some(t => t.bookletId === normBooklet);
+  }
+
+  private getExistingBookletIdsFromValidation(): string[] {
+    const bookletIds = new Set<string>();
+    this.validationResults.forEach(result => {
+      result.booklets.files.forEach(file => {
+        if (file.exists && file.filename) {
+          bookletIds.add(file.filename.toUpperCase());
+        }
+      });
+    });
+    return Array.from(bookletIds);
+  }
+
+  private async ensureBookletData(bookletId: string): Promise<BookletInfoDto | null> {
+    const normalizedBookletId = bookletId.toUpperCase();
+    const cached = this.bookletData.get(normalizedBookletId);
+    if (cached) {
+      return cached;
+    }
+    if (!this.data.workspaceId) {
+      return null;
+    }
+
+    try {
+      this.loadingBooklets.add(normalizedBookletId);
+      const info = await firstValueFrom(
+        this.fileService.getBookletInfo(this.data.workspaceId, normalizedBookletId)
+      );
+      this.bookletData.set(normalizedBookletId, info);
+      return info;
+    } catch {
+      return null;
+    } finally {
+      this.loadingBooklets.delete(normalizedBookletId);
+      this.cdr.markForCheck();
+    }
+  }
+
+  private async findBookletsWithTestlet(testletId: string): Promise<string[]> {
+    const normalizedTestletId = testletId.toUpperCase();
+    const bookletIds = this.getExistingBookletIdsFromValidation();
+    const matchingBooklets: string[] = [];
+
+    for (const bookletId of bookletIds) {
+      const info = await this.ensureBookletData(bookletId);
+      if (!info?.testlets?.length) {
+        continue;
+      }
+
+      const hasTestlet = info.testlets.some(
+        testlet => (testlet.id || '').toUpperCase() === normalizedTestletId
+      );
+      if (hasTestlet) {
+        matchingBooklets.push(bookletId);
+      }
+    }
+
+    return matchingBooklets;
+  }
+
+  private applyTestletIgnoreToBooklets(
+    bookletIds: string[],
+    testletId: string,
+    shouldIgnore: boolean
+  ): { nextIgnoredTestlets: { bookletId: string; testletId: string }[]; changedCount: number } {
+    const normalizedTestletId = testletId.toUpperCase();
+    const existingMap = new Map<string, { bookletId: string; testletId: string }>();
+    this.ignoredTestlets.forEach(entry => {
+      existingMap.set(`${entry.bookletId}|${entry.testletId}`, entry);
+    });
+
+    let changedCount = 0;
+    bookletIds.forEach(bookletId => {
+      const normalizedBookletId = bookletId.toUpperCase();
+      const key = `${normalizedBookletId}|${normalizedTestletId}`;
+      const wasIgnored = existingMap.has(key);
+
+      if (shouldIgnore) {
+        existingMap.set(key, {
+          bookletId: normalizedBookletId,
+          testletId: normalizedTestletId
+        });
+      } else {
+        existingMap.delete(key);
+      }
+
+      const isIgnoredNow = existingMap.has(key);
+      if (wasIgnored !== isIgnoredNow) {
+        changedCount += 1;
+      }
+    });
+
+    return {
+      nextIgnoredTestlets: Array.from(existingMap.values()),
+      changedCount
+    };
   }
 
   toggleBookletExpand(bookletId: string): void {
@@ -781,6 +974,58 @@ export class FilesValidationDialogComponent implements OnInit {
         () => this.snackBar.open('Testlet ignoriert', 'OK', { duration: 3000 }),
         () => this.ignoredTestlets.splice(this.ignoredTestlets.findIndex(t => t.bookletId === normBooklet && t.testletId === normTestlet), 1)
       );
+    }
+  }
+
+  async toggleTestletIgnoreForAllBooklets(bookletId: string, testletId: string): Promise<void> {
+    if (!bookletId || !testletId || !this.data.workspaceId || this.isApplyingTestletBulk) {
+      return;
+    }
+
+    const normalizedBookletId = bookletId.toUpperCase();
+    const normalizedTestletId = testletId.toUpperCase();
+    const shouldIgnore = !this.isTestletIgnored(normalizedBookletId, normalizedTestletId);
+
+    this.isApplyingTestletBulk = true;
+    this.cdr.markForCheck();
+
+    try {
+      const matchingBooklets = await this.findBookletsWithTestlet(normalizedTestletId);
+      if (matchingBooklets.length === 0) {
+        this.snackBar.open('Keine passenden Testhefte mit diesem Testlet gefunden', 'OK', { duration: 3000 });
+        return;
+      }
+
+      const previousIgnoredTestlets = [...this.ignoredTestlets];
+      const { nextIgnoredTestlets, changedCount } = this.applyTestletIgnoreToBooklets(
+        matchingBooklets,
+        normalizedTestletId,
+        shouldIgnore
+      );
+
+      if (changedCount === 0) {
+        const unchangedMessage = shouldIgnore ?
+          'Testlet ist bereits in allen betroffenen Testheften ignoriert' :
+          'Testlet ist bereits in allen betroffenen Testheften wiederhergestellt';
+        this.snackBar.open(unchangedMessage, 'OK', { duration: 3000 });
+        return;
+      }
+
+      this.ignoredTestlets = nextIgnoredTestlets;
+      this.saveCurrentWorkspaceSettings(
+        () => {
+          const bookletLabel = changedCount === 1 ? '1 Testheft' : `${changedCount} Testhefte`;
+          const actionLabel = shouldIgnore ? 'ignoriert' : 'wiederhergestellt';
+          this.snackBar.open(`Testlet in ${bookletLabel} ${actionLabel}`, 'OK', { duration: 3000 });
+        },
+        () => {
+          this.ignoredTestlets = previousIgnoredTestlets;
+          this.cdr.markForCheck();
+        }
+      );
+    } finally {
+      this.isApplyingTestletBulk = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -1231,8 +1476,10 @@ export class FilesValidationDialogComponent implements OnInit {
         loadingSnackBar.dismiss();
 
         this.dialog.open(BookletInfoDialogComponent, {
-          width: '1200px',
-          height: '80vh',
+          width: 'min(96vw, 1400px)',
+          maxWidth: '96vw',
+          height: '92vh',
+          maxHeight: '92vh',
           data: {
             bookletInfo,
             bookletId: normalizedBookletId,
@@ -1271,8 +1518,10 @@ export class FilesValidationDialogComponent implements OnInit {
         loadingSnackBar.dismiss();
 
         this.dialog.open(UnitInfoDialogComponent, {
-          width: '1200px',
-          height: '80vh',
+          width: 'min(96vw, 1400px)',
+          maxWidth: '96vw',
+          height: '92vh',
+          maxHeight: '92vh',
           data: {
             unitInfo,
             unitId

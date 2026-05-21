@@ -1,17 +1,28 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
-import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
+import {
+  statusStringToNumber,
+  STATISTICS_IGNORED_STATUSES
+} from '../../utils/response-status-converter';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
+// eslint-disable-next-line import/no-cycle
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 export interface ResponseFilterOptions {
   status?: string;
   version?: 'v1' | 'v2' | 'v3';
   considerOnly?: boolean;
+  validCodingVariablesOnly?: boolean;
+  givenResponsesOnly?: boolean;
 }
 
 /**
@@ -30,7 +41,9 @@ export class CodingResponseFilterService {
     private readonly responseRepository: Repository<ResponseEntity>,
     private readonly fileCacheService: CodingFileCacheService,
     private readonly workspaceCoreService: WorkspaceCoreService,
-    private readonly workspaceExclusionService: WorkspaceExclusionService
+    private readonly workspaceExclusionService: WorkspaceExclusionService,
+    @Inject(forwardRef(() => WorkspaceFilesService))
+    private readonly workspaceFilesService: WorkspaceFilesService
   ) { }
 
   /**
@@ -62,22 +75,7 @@ export class CodingResponseFilterService {
     queryBuilder.orderBy('response.id', 'ASC');
 
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-
-    if (globalIgnoredUnits.length > 0) {
-      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
-    }
-    if (ignoredBooklets.length > 0) {
-      queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
-    }
-    if (testletIgnoredUnits.length > 0) {
-      const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
-      const params: Record<string, string> = {};
-      testletIgnoredUnits.forEach((t, i) => {
-        params[`bId${i}`] = t.bookletId;
-        params[`uId${i}`] = t.unitId;
-      });
-      queryBuilder.andWhere(`NOT (${condition})`, params);
-    }
+    applyResolvedExclusionsToQuery(queryBuilder, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
     const responses = await queryBuilder.getMany();
 
@@ -120,8 +118,12 @@ export class CodingResponseFilterService {
 
     // Establish base conditions
     if (version) {
-      queryBuilder.where(`response.status_${version} IS NOT NULL`)
-        .andWhere(`response.status_${version} NOT IN (:...excludedStatuses)`, { excludedStatuses: EXCLUDED_STATUSES });
+      const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
+      queryBuilder.where(`${effectiveStatusExpression} IS NOT NULL`)
+        .andWhere(
+          `${effectiveStatusExpression} NOT IN (:...statisticsIgnoredStatuses)`,
+          { statisticsIgnoredStatuses: STATISTICS_IGNORED_STATUSES }
+        );
     } else {
       queryBuilder.where('response.status_v1 = :status', {
         status: statusStringToNumber(status)
@@ -136,24 +138,39 @@ export class CodingResponseFilterService {
       queryBuilder.andWhere('person.consider = :consider', { consider: true });
     }
 
+    if (options.givenResponsesOnly) {
+      const givenStatuses = [
+        statusStringToNumber('NOT_REACHED') || 1,
+        statusStringToNumber('DISPLAYED') || 2,
+        statusStringToNumber('VALUE_CHANGED') || 3
+      ];
+      queryBuilder.andWhere('response.status IN (:...givenStatuses)', { givenStatuses });
+    }
+
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    if (globalIgnoredUnits.length > 0) {
-      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
-    }
-    if (ignoredBooklets.length > 0) {
-      queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
-    }
-    if (testletIgnoredUnits.length > 0) {
-      const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
-      const params: Record<string, string> = {};
-      testletIgnoredUnits.forEach((t, i) => {
-        params[`bId${i}`] = t.bookletId;
-        params[`uId${i}`] = t.unitId;
-      });
-      queryBuilder.andWhere(`NOT (${condition})`, params);
+    applyResolvedExclusionsToQuery(queryBuilder, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
+
+    if (options.validCodingVariablesOnly) {
+      const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+      const validVariablePairKeys = Array.from(unitVariableMap.entries()).flatMap(([unitName, variableIds]) => (
+        Array.from(variableIds).map(variableId => this.toVariablePairKey(unitName, variableId))
+      ));
+
+      if (validVariablePairKeys.length === 0) {
+        queryBuilder.andWhere('1 = 0');
+      } else {
+        queryBuilder.andWhere(
+          'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+          { validVariablePairKeys }
+        );
+      }
     }
 
     return queryBuilder;
+  }
+
+  private toVariablePairKey(unitName: string, variableId: string): string {
+    return `${unitName}\u001F${variableId}`;
   }
 
   /**

@@ -21,6 +21,7 @@ interface ReviewItem {
   isLoading: boolean;
   replayUrl: SafeResourceUrl | null;
   isLoaded: boolean;
+  hasError: boolean;
 }
 
 @Component({
@@ -58,7 +59,8 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
       response,
       isLoading: false,
       replayUrl: null,
-      isLoaded: false
+      isLoaded: false,
+      hasError: false
     }));
 
     this.reviewItems.sort((a, b) => {
@@ -140,7 +142,7 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
       .sort((a, b) => a - b)
       .find(index => {
         const item = this.reviewItems[index];
-        return !item.isLoaded && !item.isLoading;
+        return !item.isLoaded && !item.isLoading && !item.hasError;
       });
 
     if (nextIndex !== undefined) {
@@ -150,7 +152,7 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
 
   loadReplay(index: number): void {
     const item = this.reviewItems[index];
-    if (item.isLoaded || item.isLoading) return;
+    if (item.isLoaded || item.isLoading || item.hasError) return;
 
     item.isLoading = true;
     this.isAnyItemLoading = true;
@@ -161,16 +163,27 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
         if (url) {
           item.replayUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
           item.isLoaded = true;
+        } else {
+          item.hasError = true;
         }
         this.isAnyItemLoading = false;
         this.processQueue(); // Check if next visible item can start loading
       },
       error: () => {
         item.isLoading = false;
+        item.hasError = true;
         this.isAnyItemLoading = false;
         this.processQueue();
       }
     });
+  }
+
+  retryReplay(index: number): void {
+    const item = this.reviewItems[index];
+    item.hasError = false;
+    item.replayUrl = null;
+    item.isLoaded = false;
+    this.loadReplay(index);
   }
 
   close(): void {

@@ -1,0 +1,93 @@
+<div class="refresh-dialog">
+  <div class="dialog-header">
+    <mat-icon [class.blocked]="!preview.canApply">
+      {{ preview.canApply ? 'sync' : 'lock' }}
+    </mat-icon>
+    <div>
+      <h2 mat-dialog-title>
+        {{ (preview.canApply
+          ? 'coding-job-definitions.refresh-dialog.title.apply'
+          : 'coding-job-definitions.refresh-dialog.title.blocked') | translate }}
+      </h2>
+      <p class="definition-label">
+        {{ 'coding-job-definitions.refresh-dialog.definition-label' | translate: { id: data.definitionId } }}
+      </p>
+    </div>
+  </div>
+
+  <mat-dialog-content>
+    <p class="intro">
+      {{ (preview.canApply
+        ? 'coding-job-definitions.refresh-dialog.intro.apply'
+        : 'coding-job-definitions.refresh-dialog.intro.blocked') | translate }}
+    </p>
+
+    @if (!preview.canApply) {
+    <div class="blocking-note" role="status">
+      <mat-icon>info</mat-icon>
+      <span>{{ getBlockingReason() }}</span>
+    </div>
+    }
+
+    <div
+      class="rules-list"
+      [attr.aria-label]="'coding-job-definitions.refresh-dialog.rules-label' | translate">
+      <div class="rule-item">
+        <mat-icon>delete_sweep</mat-icon>
+        <span>{{ 'coding-job-definitions.refresh-dialog.rules.replace-open' | translate }}</span>
+      </div>
+      <div class="rule-item">
+        <mat-icon>verified_user</mat-icon>
+        <span>{{ 'coding-job-definitions.refresh-dialog.rules.keep-work' | translate }}</span>
+      </div>
+      <div class="rule-item">
+        <mat-icon>schema</mat-icon>
+        <span>{{ 'coding-job-definitions.refresh-dialog.rules.use-current-definition' | translate }}</span>
+      </div>
+    </div>
+
+    <mat-divider></mat-divider>
+
+    <h3>{{ 'coding-job-definitions.refresh-dialog.preview-title' | translate }}</h3>
+    <div class="stats-grid">
+      @for (stat of getJobStats(); track stat.labelKey) {
+      <div class="stat-item" [ngClass]="stat.tone">
+        <span>{{ stat.labelKey | translate }}</span>
+        <strong>{{ stat.value }}</strong>
+      </div>
+      }
+    </div>
+
+    <h3>{{ 'coding-job-definitions.refresh-dialog.case-title' | translate }}</h3>
+    <div class="stats-grid">
+      @for (stat of getCaseStats(); track stat.labelKey) {
+      <div class="stat-item" [ngClass]="stat.tone">
+        <span>{{ stat.labelKey | translate }}</span>
+        <strong>{{ stat.value }}</strong>
+      </div>
+      }
+    </div>
+
+    <h3>{{ 'coding-job-definitions.refresh-dialog.task-title' | translate }}</h3>
+    <div class="stats-grid compact">
+      @for (stat of getTaskStats(); track stat.labelKey) {
+      <div class="stat-item" [ngClass]="stat.tone">
+        <span>{{ stat.labelKey | translate }}</span>
+        <strong>{{ stat.value }}</strong>
+      </div>
+      }
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="close()">
+      {{ (preview.canApply ? 'common.cancel' : 'common.close') | translate }}
+    </button>
+    @if (preview.canApply) {
+    <button mat-raised-button color="primary" type="button" (click)="confirm()">
+      <mat-icon>sync</mat-icon>
+      {{ 'coding-job-definitions.refresh-dialog.confirm' | translate }}
+    </button>
+    }
+  </mat-dialog-actions>
+</div>

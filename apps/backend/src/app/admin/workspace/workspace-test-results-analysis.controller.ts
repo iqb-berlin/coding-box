@@ -80,7 +80,11 @@ export class WorkspaceTestResultsAnalysisController {
                                          @Query('sessionBrowsers') sessionBrowsers?: string,
                                          @Query('sessionOs') sessionOs?: string,
                                          @Query('sessionScreens') sessionScreens?: string,
-                                         @Query('sessionIds') sessionIds?: string
+                                         @Query('sessionIds') sessionIds?: string,
+                                         @Query('logAnomalies') logAnomalies?: string,
+                                         @Query('focusLostThresholdMs', new DefaultValuePipe(300000), ParseIntPipe) focusLostThresholdMs?: number,
+                                         @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
+                                         @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
     const [data, total] =
       await this.workspaceTestResultsService.findFlatResponses(workspace_id, {
@@ -111,7 +115,11 @@ export class WorkspaceTestResultsAnalysisController {
         sessionBrowsers,
         sessionOs,
         sessionScreens,
-        sessionIds
+        sessionIds,
+        logAnomalies,
+        focusLostThresholdMs,
+        sessionSpanThresholdMs,
+        repeatedStartThreshold
       });
     return {
       data,
@@ -119,6 +127,68 @@ export class WorkspaceTestResultsAnalysisController {
       page,
       limit
     };
+  }
+
+  @Get(':workspace_id/test-results/log-anomaly-summary')
+  @ApiOperation({
+    summary: 'Get compact log anomaly summary for a workspace'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiOkResponse({
+    description: 'Log anomaly summary retrieved successfully.'
+  })
+  @ApiBadRequestResponse({ description: 'Failed to retrieve log anomaly summary' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async getLogAnomalySummary(
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
+      @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
+      @Query('focusLostThresholdMs', new DefaultValuePipe(300000), ParseIntPipe) focusLostThresholdMs?: number,
+      @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
+      @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number
+  ): Promise<unknown> {
+    return this.workspaceTestResultsService.getLogAnomalySummary(workspace_id, {
+      longLoadingThresholdMs,
+      focusLostThresholdMs,
+      sessionSpanThresholdMs,
+      repeatedStartThreshold
+    });
+  }
+
+  @Get(':workspace_id/test-results/log-anomaly-details')
+  @ApiOperation({
+    summary: 'Get log anomaly details for affected booklets'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiOkResponse({
+    description: 'Log anomaly details retrieved successfully.'
+  })
+  @ApiBadRequestResponse({ description: 'Failed to retrieve log anomaly details' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async getLogAnomalyDetails(
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
+      @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
+      @Query('focusLostThresholdMs', new DefaultValuePipe(300000), ParseIntPipe) focusLostThresholdMs?: number,
+      @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
+      @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number,
+      @Query('limit', new DefaultValuePipe(200), ParseIntPipe) limit?: number
+  ): Promise<unknown> {
+    return this.workspaceTestResultsService.getLogAnomalyDetails(workspace_id, {
+      longLoadingThresholdMs,
+      focusLostThresholdMs,
+      sessionSpanThresholdMs,
+      repeatedStartThreshold,
+      limit
+    });
   }
 
   @Post(':workspace_id/test-results/flat-responses/frequencies')

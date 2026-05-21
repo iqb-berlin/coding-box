@@ -203,7 +203,10 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
       return 'failed';
     }
 
-    // All passed
+    if (!this.validationTaskStateService.hasCompleteValidationResults(workspaceId)) {
+      return 'partial';
+    }
+
     return 'success';
   }
 
@@ -219,6 +222,8 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
         return 'Einige Prüfungen sind fehlgeschlagen';
       case 'success':
         return 'Alle Prüfungen bestanden';
+      case 'partial':
+        return 'Einige Prüfungen bestanden';
       default:
         return 'Bereit zum Prüfen';
     }
@@ -238,6 +243,9 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
     if (status === 'success') {
       return 'Alle Antwortdaten sind gültig.';
     }
+    if (status === 'partial') {
+      return 'Es liegen noch nicht für alle Prüfungen Ergebnisse vor.';
+    }
     return 'Starten Sie die Prüfungen, um Ihre Antwortdaten zu validieren.';
   }
 
@@ -251,6 +259,9 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
     }
     if (status === 'success') {
       return 'Sie können den Dialog schließen.';
+    }
+    if (status === 'partial') {
+      return 'Starten Sie die noch offenen Prüfungen.';
     }
     return '';
   }

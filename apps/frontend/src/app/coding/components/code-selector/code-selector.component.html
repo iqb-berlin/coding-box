@@ -78,7 +78,7 @@
         matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
         <mat-icon>comment</mat-icon>
       </button>
-      @if (hasCodingJob && !isCodingJobCompleted) {
+      @if (hasCodingJob && !isCodingJobCompleted && !isCompletedJobReview) {
       <button mat-icon-button (click)="onPauseClick()" [disabled]="isPausingJob" class="pause-button"
         matTooltip="{{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}">
         <mat-icon>pause</mat-icon>
@@ -106,7 +106,7 @@
                 translate }} {{ item.score }}</span>
             </span>
           </div>
-          <div class="code-instruction" *ngIf="!suppressGeneralInstructions && item.manualInstruction"
+          <div class="code-instruction" *ngIf="item.manualInstruction"
             [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
         </div>
       </div>
@@ -129,13 +129,13 @@
   </div>
 
   <div class="deselect-container fixed-section">
-    <button mat-button class="deselect-button" (click)="deselectAll()">Auswahl entfernen</button>
+    <button mat-button class="deselect-button" [disabled]="isReadOnly" (click)="deselectAll()">Auswahl entfernen</button>
   </div>
 
   @if (allowComments) {
   <mat-form-field appearance="outline" class="notes-field fixed-section">
     <textarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()"
-      placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
+      [disabled]="isReadOnly" placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
   </mat-form-field>
   }
 </div>

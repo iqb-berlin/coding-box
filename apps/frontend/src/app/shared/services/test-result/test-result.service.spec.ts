@@ -111,6 +111,41 @@ describe('TestResultService', () => {
     });
   });
 
+  describe('quickSearch', () => {
+    it('should fetch quick search results', () => {
+      const mockResponse = {
+        query: 'unit',
+        limit: 8,
+        persons: [],
+        booklets: [],
+        units: [{
+          kind: 'unit' as const,
+          id: 4,
+          label: 'Unit 1',
+          unitId: 4
+        }],
+        responses: [],
+        totals: {
+          person: 0,
+          booklet: 0,
+          unit: 1,
+          response: 0
+        }
+      };
+
+      service.quickSearch(mockWorkspaceId, 'unit', 8).subscribe(res => {
+        expect(res).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/quick-search` &&
+        request.params.get('q') === 'unit' &&
+        request.params.get('limit') === '8'
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+    });
+  });
+
   describe('invalidateCache', () => {
     it('should call cache service and emit subject', () => {
       let emittedId: number | undefined;

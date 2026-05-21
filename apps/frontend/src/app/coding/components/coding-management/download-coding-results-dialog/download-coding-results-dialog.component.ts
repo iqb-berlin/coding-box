@@ -11,7 +11,7 @@ import { MatCardModule } from '@angular/material/card';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 
-export type ExportFormat = 'json' | 'csv' | 'excel';
+export type CodingResultsExportFormat = 'csv' | 'excel';
 
 export interface DownloadCodingResultsDialogData {
   currentVersion: 'v1' | 'v2' | 'v3';
@@ -88,13 +88,6 @@ export interface DownloadCodingResultsDialogData {
               </div>
             </mat-radio-button>
 
-            <mat-radio-button value="json" class="radio-option">
-              <div class="radio-content">
-                <mat-icon>description</mat-icon>
-                <span class="option-title">JSON</span>
-              </div>
-            </mat-radio-button>
-
             <mat-radio-button value="excel" class="radio-option">
               <div class="radio-content">
                 <mat-icon>table_chart</mat-icon>
@@ -116,6 +109,14 @@ export interface DownloadCodingResultsDialogData {
             </mat-checkbox>
             <p class="option-description">
               {{ 'coding-management.download-dialog.replay-urls-description' | translate }}
+            </p>
+          </div>
+          <div class="option-item">
+            <mat-checkbox [(ngModel)]="includeResponseValues" class="option-checkbox">
+              {{ 'coding-management.download-dialog.include-response-values' | translate }}
+            </mat-checkbox>
+            <p class="option-description">
+              {{ 'coding-management.download-dialog.response-values-description' | translate }}
             </p>
           </div>
         </mat-card-content>
@@ -208,6 +209,10 @@ export interface DownloadCodingResultsDialogData {
       flex-direction: column;
       gap: 8px;
 
+      & + .option-item {
+        margin-top: 14px;
+      }
+
       .option-checkbox {
         margin: 0;
 
@@ -234,7 +239,7 @@ export interface DownloadCodingResultsDialogData {
 
     .format-group {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
     }
 
@@ -321,8 +326,9 @@ export interface DownloadCodingResultsDialogData {
 })
 export class DownloadCodingResultsDialogComponent {
   selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
-  selectedFormat: ExportFormat = 'csv';
+  selectedFormat: CodingResultsExportFormat = 'csv';
   includeReplayUrls: boolean = false;
+  includeResponseValues: boolean = true;
 
   constructor(
     public dialogRef: MatDialogRef<DownloadCodingResultsDialogComponent>,
@@ -335,7 +341,8 @@ export class DownloadCodingResultsDialogComponent {
     this.dialogRef.close({
       version: this.selectedVersion,
       format: this.selectedFormat,
-      includeReplayUrls: this.includeReplayUrls
+      includeReplayUrls: this.includeReplayUrls,
+      includeResponseValues: this.includeResponseValues
     });
   }
 

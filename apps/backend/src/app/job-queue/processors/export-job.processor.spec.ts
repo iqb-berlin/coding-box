@@ -1,0 +1,260 @@
+import { Job } from 'bull';
+import * as fs from 'fs';
+import { Readable } from 'stream';
+import { CodingExportOrchestratorService, CodingExportService } from '../../database/services/coding';
+import { WorkspaceTestResultsService } from '../../database/services/test-results';
+import { CacheService } from '../../cache/cache.service';
+import { ExportJobData, JobQueueService } from '../job-queue.service';
+import { ExportJobProcessor } from './export-job.processor';
+
+jest.mock('../../database/services/coding', () => ({
+  CodingExportOrchestratorService: jest.fn(),
+  CodingExportService: jest.fn()
+}));
+jest.mock('../../database/services/test-results', () => ({
+  WorkspaceTestResultsService: jest.fn()
+}));
+
+describe('ExportJobProcessor', () => {
+  const createJob = (data: Partial<ExportJobData>): Job<ExportJobData> => ({
+    id: 'job-1',
+    data: {
+      workspaceId: 7,
+      userId: 3,
+      exportType: 'coding-list',
+      ...data
+    } as ExportJobData,
+    progress: jest.fn().mockResolvedValue(undefined)
+  } as unknown as Job<ExportJobData>);
+
+  const createProcessor = () => {
+    const codingExportService = {
+      exportCodingListForJobAsExcel: jest.fn(),
+      exportCodingListForJobAsJson: jest.fn(),
+      exportCodingResultsByVariableCompactAsCsvStream: jest.fn()
+    };
+    const codingExportOrchestratorService = {
+      exportResultsByVersionAsCsv: jest.fn(),
+      exportResultsByVersionAsExcel: jest.fn(),
+      exportDetailed: jest.fn()
+    };
+    const cacheService = {
+      set: jest.fn().mockResolvedValue(undefined)
+    };
+    const jobQueueService = {
+      isExportJobCancelled: jest.fn().mockResolvedValue(false)
+    };
+
+    const processor = new ExportJobProcessor(
+      codingExportService as unknown as CodingExportService,
+      codingExportOrchestratorService as unknown as CodingExportOrchestratorService,
+      {} as WorkspaceTestResultsService,
+      cacheService as unknown as CacheService,
+      jobQueueService as unknown as JobQueueService
+    );
+
+    return {
+      processor,
+      codingExportService,
+      codingExportOrchestratorService,
+      cacheService
+    };
+  };
+
+  const cleanup = (filePath?: string): void => {
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  };
+
+  it('passes trainingRequired to coding-list Excel exports', async () => {
+    const { processor, codingExportService, cacheService } = createProcessor();
+    codingExportService.exportCodingListForJobAsExcel.mockResolvedValue(Buffer.from('xlsx'));
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        format: 'excel',
+        trainingRequired: true,
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example'
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportService.exportCodingListForJobAsExcel).toHaveBeenCalledWith(
+        7,
+        'auth-token',
+        'http://app.example',
+        expect.any(Function),
+        true
+      );
+      expect(result.fileName).toMatch(/\.xlsx$/);
+      expect(cacheService.set).toHaveBeenCalledWith(
+        'export-result:job-1',
+        expect.objectContaining({ exportType: 'coding-list' }),
+        3600
+      );
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('keeps JSON extension for coding-list JSON exports', async () => {
+    const { processor, codingExportService } = createProcessor();
+    codingExportService.exportCodingListForJobAsJson.mockResolvedValue(Readable.from(['[]']));
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        format: 'json',
+        trainingRequired: false
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportService.exportCodingListForJobAsJson).toHaveBeenCalledWith(
+        7,
+        '',
+        '',
+        expect.any(Function),
+        false
+      );
+      expect(result.fileName).toMatch(/\.json$/);
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('defaults final result exports to v2 CSV when no version or format is provided', async () => {
+    const { processor, codingExportOrchestratorService } = createProcessor();
+    codingExportOrchestratorService.exportResultsByVersionAsCsv.mockResolvedValue(Readable.from(['csv']));
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'results-by-version',
+        includeReplayUrl: true,
+        includeResponseValues: true,
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example'
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportOrchestratorService.exportResultsByVersionAsCsv).toHaveBeenCalledWith({
+        workspaceId: 7,
+        version: 'v2',
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example',
+        includeReplayUrl: true,
+        onProgress: expect.any(Function),
+        includeResponseValues: true
+      });
+      expect(result.fileName).toMatch(/\.csv$/);
+      expect(filePath).toBeDefined();
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('\uFEFFcsv');
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('routes detailed export jobs through the orchestrator', async () => {
+    const { processor, codingExportOrchestratorService } = createProcessor();
+    codingExportOrchestratorService.exportDetailed.mockResolvedValue(Buffer.from('csv'));
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'detailed',
+        outputCommentsInsteadOfCodes: true,
+        includeReplayUrl: true,
+        anonymizeCoders: true,
+        usePseudoCoders: false,
+        excludeAutoCoded: true,
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example',
+        jobDefinitionIds: [1],
+        coderTrainingIds: [2],
+        coderIds: [3]
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportOrchestratorService.exportDetailed).toHaveBeenCalledWith({
+        workspaceId: 7,
+        outputCommentsInsteadOfCodes: true,
+        includeReplayUrl: true,
+        anonymizeCoders: true,
+        usePseudoCoders: false,
+        authToken: 'auth-token',
+        excludeAutoCoded: true,
+        checkCancellation: expect.any(Function),
+        jobDefinitionIds: [1],
+        coderTrainingIds: [2],
+        coderIds: [3],
+        serverUrl: 'http://app.example'
+      });
+      expect(result.fileName).toMatch(/\.csv$/);
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('routes compact by-variable export jobs to CSV generation', async () => {
+    const { processor, codingExportService } = createProcessor();
+    codingExportService.exportCodingResultsByVariableCompactAsCsvStream.mockReturnValue(Readable.from(['csv']));
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'by-variable-compact',
+        includeModalValue: true,
+        includeDoubleCoded: true,
+        includeComments: true,
+        outputCommentsInsteadOfCodes: false,
+        includeReplayUrl: true,
+        anonymizeCoders: true,
+        usePseudoCoders: true,
+        excludeAutoCoded: true,
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example',
+        jobDefinitionIds: [1],
+        coderTrainingIds: [2],
+        coderIds: [3]
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportService.exportCodingResultsByVariableCompactAsCsvStream).toHaveBeenCalledWith(
+        7,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        'auth-token',
+        undefined,
+        true,
+        expect.any(Function),
+        [1],
+        [2],
+        [3],
+        'http://app.example'
+      );
+      expect(result.fileName).toMatch(/\.csv$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('\uFEFFcsv');
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it.each(['json', 'xlsx'])('rejects %s format for final result exports', async format => {
+    const { processor, codingExportOrchestratorService } = createProcessor();
+
+    await expect(processor.process(createJob({
+      exportType: 'results-by-version',
+      format: format as never
+    }))).rejects.toThrow('results-by-version exports support only "csv" or "excel" format');
+
+    expect(codingExportOrchestratorService.exportResultsByVersionAsCsv).not.toHaveBeenCalled();
+    expect(codingExportOrchestratorService.exportResultsByVersionAsExcel).not.toHaveBeenCalled();
+  });
+});

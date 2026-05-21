@@ -1,6 +1,9 @@
 // eslint-disable-next-line max-classes-per-file
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber } from 'class-validator';
+import {
+  IsEnum, IsNumber, IsOptional, IsString, Min
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class JobDefinitionVariableDto {
   @ApiProperty({
@@ -24,6 +27,8 @@ export class JobDefinitionVariableBundleDto {
     example: 1
   })
   @IsNumber()
+  @Min(1)
+  @Type(() => Number)
     id: number;
 
   @ApiProperty({
@@ -39,6 +44,7 @@ export class JobDefinitionVariableBundleDto {
     required: false,
     enum: ['continuous', 'alternating']
   })
-  @IsString()
+  @IsEnum(['continuous', 'alternating'])
+  @IsOptional()
     caseOrderingMode?: 'continuous' | 'alternating';
 }

@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, inject
+  Component, OnInit, OnDestroy, effect, inject
 } from '@angular/core';
 import {
   Router, RouterLink, RouterOutlet, NavigationEnd
@@ -11,7 +11,9 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
 import { LocationStrategy } from '@angular/common';
 import { KeycloakProfile } from 'keycloak-js';
-import { Subscription, filter } from 'rxjs';
+import { KEYCLOAK_EVENT_SIGNAL } from 'keycloak-angular';
+import { Subscription, filter, firstValueFrom } from 'rxjs';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
 import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
@@ -21,6 +23,8 @@ import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.co
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 import { ExportToastComponent } from './components/export-toast/export-toast.component';
 import { ErrorMessageDisplayComponent } from './shared/components/error-message-display/error-message-display.component';
+import { handleKeycloakSessionEvent } from './core/services/keycloak-session-events';
+import { hasAdminBypass } from './core/guards/admin-access';
 
 @Component({
   selector: 'app-root',
@@ -35,6 +39,8 @@ export class AppComponent implements OnInit, OnDestroy {
 
   url = inject(LocationStrategy);
   private router = inject(Router);
+  private keycloakEvent = inject(KEYCLOAK_EVENT_SIGNAL);
+  private snackBar = inject(MatSnackBar);
 
   title = 'IQB-Kodierbox';
   loggedInKeycloak: boolean = false;
@@ -44,6 +50,10 @@ export class AppComponent implements OnInit, OnDestroy {
   private routerSubscription: Subscription | null = null;
 
   constructor() {
+    effect(() => {
+      handleKeycloakSessionEvent(this.keycloakEvent(), this.appService, this.router);
+    });
+
     this.appService.authData$.subscribe(authData => {
       this.authData = authData;
       this.updateCurrentWorkspaceName();
@@ -76,28 +86,50 @@ export class AppComponent implements OnInit, OnDestroy {
     this.routerSubscription?.unsubscribe();
   }
 
-  async keycloakLogin(user: CreateUserDto): Promise<void> {
+  async keycloakLogin(user: CreateUserDto): Promise<boolean> {
     this.errorMessage = '';
     this.appService.errorMessagesDisabled = true;
-    this.appService.keycloakLogin(user).subscribe(success => {
+
+    try {
+      const success = await firstValueFrom(this.appService.keycloakLogin(user));
       if (success) {
-        this.appService.setNeedsReAuthentication(false);
+        this.snackBar.dismiss();
+      } else {
+        this.snackBar.open(
+          'Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.',
+          'Schließen',
+          {
+            duration: 8000,
+            panelClass: ['snackbar-error']
+          }
+        );
       }
-    });
+      return success;
+    } finally {
+      this.appService.errorMessagesDisabled = false;
+    }
   }
 
   async ngOnInit(): Promise<void> {
     if (this.authService.isLoggedIn()) {
       this.setAuthState();
 
-      const keycloakUserProfile = await this.authService.loadUserProfile();
-      const isAdmin = this.authService.getRoles().includes('admin');
+      try {
+        const keycloakUserProfile = await this.authService.loadUserProfile();
+        const isAdmin = hasAdminBypass(this.authService.getRoles());
 
-      if (this.isValidUserProfile(keycloakUserProfile)) {
-        const keycloakUser = this.createKeycloakUser(keycloakUserProfile, isAdmin);
-        this.appService.kcUser = keycloakUser;
-        await this.keycloakLogin(keycloakUser);
+        if (this.isValidUserProfile(keycloakUserProfile)) {
+          const keycloakUser = this.createKeycloakUser(keycloakUserProfile, isAdmin);
+          this.appService.kcUser = keycloakUser;
+          await this.keycloakLogin(keycloakUser);
+        } else {
+          this.appService.markAuthDataFailed();
+        }
+      } catch {
+        this.appService.requireReAuthentication(this.router.url);
       }
+    } else {
+      this.appService.setAuthBootstrapStatus('ready');
     }
 
     window.addEventListener('message', event => {
@@ -125,5 +157,9 @@ export class AppComponent implements OnInit, OnDestroy {
       email: userProfile.email || '',
       isAdmin: isAdmin
     };
+  }
+
+  isAdminUser(): boolean {
+    return hasAdminBypass(this.authService.getRoles(), this.authData.isAdmin);
   }
 }

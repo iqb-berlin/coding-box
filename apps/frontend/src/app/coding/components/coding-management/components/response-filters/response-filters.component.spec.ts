@@ -25,11 +25,24 @@ describe('ResponseFiltersComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should emit filterChange after debounce timeout', done => {
+  it('should use all responses as the default response source', () => {
+    expect(component.filterParams.responseSource).toBe('all');
+    expect(component.responseSourceOptions[0].value).toBe('all');
+  });
+
+  it('should render the response source filter before the status filter', () => {
+    const text = fixture.nativeElement.textContent as string;
+
+    expect(text.indexOf('coding-management.filters.response-source')).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('coding-management.filters.response-source'))
+      .toBeLessThan(text.indexOf('coding-management.filters.coded-status'));
+  });
+
+  it('should emit text filter changes after debounce timeout', done => {
     jest.spyOn(component.filterChange, 'emit');
 
-    component.filterParams.codedStatus = '200';
-    component.onFilterChange();
+    component.filterParams.unitName = 'Unit';
+    component.onTextFilterChange();
 
     setTimeout(() => {
       expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
@@ -37,12 +50,33 @@ describe('ResponseFiltersComponent', () => {
     }, 600);
   });
 
-  it('should emit filterChange immediately when codedStatus is empty', () => {
+  it('should emit instant filter changes immediately', () => {
+    jest.spyOn(component.filterChange, 'emit');
+
+    component.filterParams.codedStatus = '200';
+    component.onInstantFilterChange();
+
+    expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
+  });
+
+  it('should emit filterChange when response source changes', () => {
     jest.spyOn(component.filterChange, 'emit');
 
     component.filterParams.codedStatus = '';
-    component.onFilterChange();
+    component.filterParams.responseSource = 'derived';
+    component.onInstantFilterChange();
 
+    expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
+  });
+
+  it('should switch GeoGebra searches from all to base responses', () => {
+    jest.spyOn(component.filterChange, 'emit');
+
+    component.filterParams.responseSource = 'all';
+    component.filterParams.geogebra = true;
+    component.onGeoGebraFilterChange();
+
+    expect(component.filterParams.responseSource).toBe('base');
     expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
   });
 
@@ -53,7 +87,7 @@ describe('ResponseFiltersComponent', () => {
   });
 
   it('should clear timer on destroy', () => {
-    component.onFilterChange();
+    component.onTextFilterChange();
     const componentWithPrivate = component as unknown as { clearFilterTimer: () => void };
     jest.spyOn(componentWithPrivate, 'clearFilterTimer');
     component.ngOnDestroy();

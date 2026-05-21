@@ -1,17 +1,99 @@
-<h2 mat-dialog-title>
-  Upload-Ergebnis ({{ data.resultType === 'logs' ? 'Logs' : 'Antworten' }})
+<h2 mat-dialog-title class="dialog-title">
+  <mat-icon>{{ data.resultType === 'logs' ? 'article' : 'upload_file' }}</mat-icon>
+  <span>Upload-Ergebnis ({{ data.resultType === 'logs' ? 'Logs' : 'Antworten' }})</span>
 </h2>
 
-<div mat-dialog-content>
+<div mat-dialog-content class="upload-result-content">
   <div class="summary-container">
-    @if (result.importedResponses) {
+    @if (result.overviewPending) {
+    <div class="section warning-section">
+      <div class="section-title">Übersicht wird aktualisiert</div>
+      <div class="warning-text">
+        {{ result.overviewMessage || 'Die aktualisierten Datenbankzahlen konnten noch nicht zuverlässig geladen werden.' }}
+      </div>
+    </div>
+    }
+    @if (result.importedLogs) {
+    <div class="section log-import-note-section">
+      <div class="section-title">Hinweis zum Log-Import</div>
+      <div class="note-text">
+        Logs werden bestehenden Testpersonen, Booklets und Units zugeordnet. Fehlende Testergebnisse werden nicht automatisch angelegt.
+      </div>
+    </div>
+    }
+    @if (hasCodingFreshnessWarning) {
+    <div class="section coding-freshness-section">
+      <div class="freshness-header">
+        <mat-icon>warning</mat-icon>
+        <div>
+          <div class="section-title">{{ codingFreshnessDialogTitle }}</div>
+          <div class="warning-text">
+            <div>{{ codingFreshnessSummaryText }}</div>
+            <div class="freshness-explanation">{{ codingFreshnessExplanationText }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="freshness-chip-row">
+        @for (item of codingFreshnessDisplayWarnings; track item.version + item.state) {
+        <span class="freshness-chip">
+          {{ getCodingFreshnessChipLabel(item) }}
+        </span>
+        }
+      </div>
+    </div>
+    }
+    @if (result.importSummary) {
+    <div class="section import-summary-section">
+      <div class="section-title">Import-Zusammenfassung</div>
+      <div class="kv">
+        <div class="k">Zeilen gelesen</div>
+        <div class="v">{{ result.importSummary.totalRows }}</div>
+        @if (result.importSummary.responseRows !== undefined) {
+        <div class="k">Antwort-Zeilen</div>
+        <div class="v">{{ result.importSummary.responseRows }}</div>
+        }
+        @if (result.importSummary.bookletLogRows !== undefined) {
+        <div class="k">Booklet-Log-Zeilen</div>
+        <div class="v">{{ result.importSummary.bookletLogRows }}</div>
+        }
+        @if (result.importSummary.unitLogRows !== undefined) {
+        <div class="k">Unit-Log-Zeilen</div>
+        <div class="v">{{ result.importSummary.unitLogRows }}</div>
+        }
+        @if (result.importSummary.savedLogs !== undefined) {
+        <div class="k">Gespeicherte Logs</div>
+        <div class="v">{{ result.importSummary.savedLogs }}</div>
+        }
+        @if (result.importSummary.skippedRows !== undefined) {
+        <div class="k">Übersprungene Zeilen</div>
+        <div class="v">{{ result.importSummary.skippedRows }}</div>
+        }
+        @if (result.importSummary.skippedLogs !== undefined) {
+        <div class="k">Übersprungene Logs</div>
+        <div class="v">{{ result.importSummary.skippedLogs }}</div>
+        }
+      </div>
+      @if (issueSummaryEntries.length > 0) {
+      <div class="issue-summary">
+        @for (entry of issueSummaryEntries; track entry.category) {
+        <span class="issue-count-chip">{{ entry.label }}: {{ entry.count }}</span>
+        }
+      </div>
+      }
+    </div>
+    }
+    @if (result.importedResponses && !result.overviewPending) {
     <div class="section db-changes-section">
-      <div class="section-title">Datenbank Änderungen</div>
+      <div class="section-title">Import und Arbeitsbereich</div>
+      <div class="db-change-note">
+        Aus Import zeigt, was die Upload-Jobs in der Datei erkannt haben. Vorher und Nachher zeigen den
+        Gesamtbestand im Arbeitsbereich. Delta zeigt die Veränderung im Arbeitsbereich durch diesen Import.
+      </div>
       <table class="db-changes-table">
         <thead>
           <tr>
             <th class="col-metric">Metrik</th>
-            <th class="col-number">Erwartet</th>
+            <th class="col-number">Aus Import</th>
             <th class="col-number">Vorher</th>
             <th class="col-number">Nachher</th>
             <th class="col-number">Delta</th>
@@ -19,7 +101,7 @@
         </thead>
         <tbody>
           <tr>
-            <td class="row-label">Test Personen</td>
+            <td class="row-label">Testpersonen</td>
             <td class="num">{{ result.expected.testPersons }}</td>
             <td class="num">{{ result.before.testPersons }}</td>
             <td class="num">{{ result.after.testPersons }}</td>
@@ -29,7 +111,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Test Gruppen</td>
+            <td class="row-label">Testgruppen</td>
             <td class="num">{{ result.expected.testGroups }}</td>
             <td class="num">{{ result.before.testGroups }}</td>
             <td class="num">{{ result.after.testGroups }}</td>
@@ -39,7 +121,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Testhefte</td>
+            <td class="row-label">Testhefte (einzigartig)</td>
             <td class="num">{{ result.expected.uniqueBooklets }}</td>
             <td class="num">{{ result.before.uniqueBooklets }}</td>
             <td class="num">{{ result.after.uniqueBooklets }}</td>
@@ -49,7 +131,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Aufgaben</td>
+            <td class="row-label">Aufgaben (einzigartig)</td>
             <td class="num">{{ result.expected.uniqueUnits }}</td>
             <td class="num">{{ result.before.uniqueUnits }}</td>
             <td class="num">{{ result.after.uniqueUnits }}</td>
@@ -59,7 +141,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Antworten</td>
+            <td class="row-label">Antwortwerte (einzigartig)</td>
             <td class="num">{{ result.expected.uniqueResponses }}</td>
             <td class="num">{{ result.before.uniqueResponses }}</td>
             <td class="num">{{ result.after.uniqueResponses }}</td>
@@ -70,12 +152,17 @@
           </tr>
         </tbody>
       </table>
+      @if (hasZeroDelta) {
+      <div class="no-change-note">
+        Import abgeschlossen. Die Übersicht wurde geladen; es wurden keine neuen Datenbankeinträge angelegt.
+      </div>
+      }
     </div>
     }
 
     @if (result.importedLogs && result.logMetrics) {
     <div class="section log-coverage-section">
-      <div class="section-title">Log Abdeckung</div>
+      <div class="section-title">Log-Abdeckung im Arbeitsbereich nach Import</div>
       <div class="kv">
         <div class="k">Testhefte mit Logs</div>
         <div class="v">{{ result.logMetrics.bookletsWithLogs }} / {{ result.logMetrics.totalBooklets }}</div>
@@ -92,45 +179,65 @@
     }
   </div>
 
-  <mat-tab-group>
+  <mat-tab-group dynamicHeight (selectedTabChange)="onTabChange()">
     @if (result.importedLogs) {
-    <mat-tab
-      label="Details ({{ detailView === 'booklets' ? filteredBookletDetails.length : filteredUnitDetails.length }})">
+    <mat-tab [label]="detailTabLabel">
       <div class="tab-pad">
-        <div class="filter-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
-          <div class="toggle-group" style="display: flex; gap: 0;">
+        <div class="filter-row">
+          <div class="toggle-group">
             <button mat-stroked-button [class.active]="detailView === 'booklets'" (click)="detailView = 'booklets'"
-              style="border-top-right-radius: 0; border-bottom-right-radius: 0;">Booklets</button>
+              class="left-toggle">Booklets</button>
             <button mat-stroked-button [class.active]="detailView === 'units'" (click)="detailView = 'units'"
-              style="border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none;">Units</button>
+              class="right-toggle">Units</button>
           </div>
-          <mat-form-field appearance="outline" style="flex: 1; font-size: 14px;">
+          <mat-form-field appearance="outline" class="detail-status-filter">
+            <mat-label>Log-Status</mat-label>
+            <mat-select [(ngModel)]="detailStatusFilter" [disabled]="!hasAnyLogDetails">
+              <mat-option value="all">Alle</mat-option>
+              <mat-option value="withLogs">Mit Logs</mat-option>
+              <mat-option value="withoutLogs">Ohne Logs</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="search-field">
             <mat-label>Suche</mat-label>
             <input matInput [(ngModel)]="detailFilterText" placeholder="Name..." />
             <mat-icon matSuffix>search</mat-icon>
           </mat-form-field>
         </div>
 
+        @if (!hasAnyLogDetails) {
+        <div class="empty">
+          <mat-icon>info</mat-icon>
+          <span>{{ emptyDetailMessage }}</span>
+        </div>
+        } @else {
         @if (detailView === 'booklets') {
         @if (filteredBookletDetails.length === 0) {
-        <div class="empty">Keine Booklets gefunden.</div>
+        <div class="empty">
+          <mat-icon>info</mat-icon>
+          <span>{{ emptyDetailMessage }}</span>
+        </div>
         } @else {
-        <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport"
-          style="min-height: 300px; height: 100%;">
+        <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport">
           <div *cdkVirtualFor="let b of filteredBookletDetails; trackBy: trackByBookletDetail" class="detail-row">
             <div class="detail-icon" [class.success]="b.hasLog" [class.missing]="!b.hasLog">
               <mat-icon>{{ b.hasLog ? 'check_circle' : 'cancel' }}</mat-icon>
             </div>
             <div class="detail-text">{{ b.name }}</div>
+            <span class="detail-status" [class.success]="b.hasLog" [class.missing]="!b.hasLog">
+              {{ b.hasLog ? 'mit Logs' : 'ohne Logs' }}
+            </span>
           </div>
         </cdk-virtual-scroll-viewport>
         }
         } @else {
         @if (filteredUnitDetails.length === 0) {
-        <div class="empty">Keine Units gefunden.</div>
+        <div class="empty">
+          <mat-icon>info</mat-icon>
+          <span>{{ emptyDetailMessage }}</span>
+        </div>
         } @else {
-        <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport"
-          style="min-height: 300px; height: 100%;">
+        <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport">
           <div *cdkVirtualFor="let u of filteredUnitDetails; trackBy: trackByUnitDetail" class="detail-row">
             <div class="detail-icon" [class.success]="u.hasLog" [class.missing]="!u.hasLog">
               <mat-icon>{{ u.hasLog ? 'check_circle' : 'cancel' }}</mat-icon>
@@ -140,8 +247,12 @@
               <span class="unit-separator">/</span>
               <span class="unit-key">{{ u.unitKey }}</span>
             </div>
+            <span class="detail-status" [class.success]="u.hasLog" [class.missing]="!u.hasLog">
+              {{ u.hasLog ? 'mit Logs' : 'ohne Logs' }}
+            </span>
           </div>
         </cdk-virtual-scroll-viewport>
+        }
         }
         }
       </div>
@@ -168,31 +279,58 @@
 
     <mat-tab label="Probleme ({{ issues.length }})">
       <div class="tab-pad">
-        <mat-form-field appearance="outline" style="width: 100%; margin-bottom: 8px;">
-          <mat-label>Suche</mat-label>
-          <input matInput [(ngModel)]="filterText" placeholder="error, warning, Datei, Zeile..." />
-          <mat-icon matSuffix>search</mat-icon>
-        </mat-form-field>
+        @if (issues.length > 0) {
+        <div class="issue-filters">
+          <mat-form-field appearance="outline">
+            <mat-label>Suche</mat-label>
+            <input matInput [(ngModel)]="filterText" placeholder="error, warning, Datei, Zeile..." />
+            <mat-icon matSuffix>search</mat-icon>
+          </mat-form-field>
 
-        <mat-form-field appearance="outline" style="width: 100%; margin-bottom: 12px;">
-          <mat-label>Kategorie</mat-label>
-          <mat-select [(ngModel)]="selectedCategory">
-            <mat-option [value]="null">Alle Kategorien</mat-option>
-            <mat-option value="log_format">Log-Format ungültig</mat-option>
-            <mat-option value="unit_not_found">Aufgabe nicht gefunden</mat-option>
-            <mat-option value="invalid_unit">Ungültige Aufgabe</mat-option>
-            <mat-option value="laststate">Letzter Status Fehler</mat-option>
-            <mat-option value="missing_booklet">Testheft fehlt</mat-option>
-            <mat-option value="missing_status">Status fehlt</mat-option>
-            <mat-option value="invalid_status">Status ungültig</mat-option>
-            <mat-option value="other">Sonstiges</mat-option>
-          </mat-select>
-        </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Kategorie</mat-label>
+            <mat-select [(ngModel)]="selectedCategory">
+              <mat-option [value]="null">Alle Kategorien</mat-option>
+              <mat-option value="log_format">Log-Format ungültig</mat-option>
+              <mat-option value="unit_not_found">Aufgabe nicht gefunden</mat-option>
+              <mat-option value="invalid_unit">Ungültige Aufgabe</mat-option>
+              <mat-option value="laststate">Letzter Status Fehler</mat-option>
+              <mat-option value="missing_booklet">Testheft fehlt</mat-option>
+              <mat-option value="missing_status">Status fehlt</mat-option>
+              <mat-option value="invalid_status">Status ungültig</mat-option>
+              <mat-option value="csv_columns">CSV-Spalten fehlen</mat-option>
+              <mat-option value="missing_identity">Zuordnung unvollständig</mat-option>
+              <mat-option value="timestamp">Zeitstempel auffällig</mat-option>
+              <mat-option value="missing_booklet_log">Booklet-Log fehlt</mat-option>
+              <mat-option value="no_logs_saved">Keine Logs gespeichert</mat-option>
+              <mat-option value="other">Sonstiges</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <button
+            mat-stroked-button
+            type="button"
+            class="issue-export-button"
+            [disabled]="filteredIssues.length === 0"
+            (click)="exportIssues()"
+          >
+            <mat-icon>download</mat-icon>
+            {{ issueExportButtonLabel }}
+          </button>
+        </div>
+        }
 
         @if (filteredIssues.length === 0) {
-        <div class="empty">Keine Probleme gefunden.</div>
+        <div class="empty success">
+          <mat-icon>check_circle</mat-icon>
+          <span>{{ emptyIssuesMessage }}</span>
+        </div>
         } @else {
-        <cdk-virtual-scroll-viewport itemSize="60" class="viewport">
+        <cdk-virtual-scroll-viewport
+          #issuesViewport
+          itemSize="60"
+          class="viewport issues-viewport"
+        >
           <div *cdkVirtualFor="let i of filteredIssues; trackBy: trackByIssue" class="issue-row"
             [class.error]="i.level === 'error'" [class.warning]="i.level === 'warning'">
             <div class="issue-main">

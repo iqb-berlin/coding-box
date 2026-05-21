@@ -57,10 +57,16 @@ export class StatisticsCardComponent {
   @Output() downloadResults = new EventEmitter<void>();
   @Output() resetVersion = new EventEmitter<void>();
   @Output() statusClick = new EventEmitter<string>();
+  @Output() derivedClick = new EventEmitter<void>();
 
   private responseStatusMap = new Map(
     responseStatesNumericMap.map(entry => [entry.key, entry.value])
   );
+
+  private readonly ignoredStatuses = [
+    '0', '1', '2', '3', '10',
+    'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
+  ];
 
   readonly codingRunOptions = [
     { value: 'v1' as const, label: 'coding-management.statistics.first-autocode-run' },
@@ -74,42 +80,45 @@ export class StatisticsCardComponent {
 
   get effectiveTotalResponses(): number {
     if (!this.codingStatistics) return 0;
-    const ignoredStatuses = [
-      '0', '1', '2', '3', '10',
-      'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
-    ];
-    let total = this.codingStatistics.totalResponses;
-    for (const status of ignoredStatuses) {
-      if (this.codingStatistics.statusCounts && this.codingStatistics.statusCounts[status]) {
-        total -= this.codingStatistics.statusCounts[status];
-      }
-    }
-    return total;
+    return this.codingStatistics.totalResponses;
+  }
+
+  get effectiveDerivedResponses(): number {
+    return this.codingStatistics?.derivedResponseCount || 0;
+  }
+
+  get derivedAnswerCount(): number {
+    if (!this.codingStatistics) return 0;
+    return this.effectiveDerivedResponses;
+  }
+
+  get derivedVariableCount(): number {
+    return this.codingStatistics?.derivedVariableCount || 0;
+  }
+
+  get hasDerivedStatistics(): boolean {
+    return this.derivedAnswerCount > 0;
+  }
+
+  get showCodingStatisticsEmptyState(): boolean {
+    return this.effectiveTotalResponses === 0 && this.getStatuses().length === 0;
+  }
+
+  get codingStatisticsEmptyTextKey(): string {
+    return this.codingStatistics.totalResponses > 0 ?
+      'coding-management.statistics.only-raw-statuses-text' :
+      'coding-management.statistics.no-coding-results-text';
   }
 
   get effectiveReferenceTotalResponses(): number {
     if (!this.referenceStatistics) return 0;
-    const ignoredStatuses = [
-      '0', '1', '2', '3', '10',
-      'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
-    ];
-    let total = this.referenceStatistics.totalResponses;
-    for (const status of ignoredStatuses) {
-      if (this.referenceStatistics.statusCounts && this.referenceStatistics.statusCounts[status]) {
-        total -= this.referenceStatistics.statusCounts[status];
-      }
-    }
-    return total;
+    return this.referenceStatistics.totalResponses;
   }
 
   getStatuses(): string[] {
-    const ignoredStatuses = [
-      '0', '1', '2', '3', '10',
-      'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
-    ];
-    const currentStatuses = Object.keys(this.codingStatistics.statusCounts).filter(s => !ignoredStatuses.includes(s));
+    const currentStatuses = Object.keys(this.codingStatistics.statusCounts).filter(s => !this.ignoredStatuses.includes(s));
     if (this.referenceStatistics) {
-      const referenceStatuses = Object.keys(this.referenceStatistics.statusCounts).filter(s => !ignoredStatuses.includes(s));
+      const referenceStatuses = Object.keys(this.referenceStatistics.statusCounts).filter(s => !this.ignoredStatuses.includes(s));
       const allStatuses = new Set([...currentStatuses, ...referenceStatuses]);
       return Array.from(allStatuses);
     }
@@ -191,6 +200,10 @@ export class StatisticsCardComponent {
 
   onStatusClick(status: string): void {
     this.statusClick.emit(status);
+  }
+
+  onDerivedClick(): void {
+    this.derivedClick.emit();
   }
 
   get isManualCodingComplete(): boolean {

@@ -1,12 +1,33 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CacheService } from '../../../cache/cache.service';
 import { ResponseEntity } from '../../entities/response.entity';
-import { CodingJobService } from './coding-job.service';
+import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingAnalysisService } from './coding-analysis.service';
+import { buildAggregationGroups } from './aggregation-metrics.util';
+import {
+  formatCodingTestPerson,
+  generateCodingProgressKey
+} from './coding-progress-key.util';
+import { CodingFreshnessService } from './coding-freshness.service';
+import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+
+export interface ApplyCodingResultsOptions {
+  overwriteExisting?: boolean;
+}
+
+export interface ApplyCodingResultsResult {
+  success: boolean;
+  updatedResponsesCount: number;
+  skippedReviewCount: number;
+  skippedAlreadyCodedCount: number;
+  overwrittenExistingCount: number;
+  messageKey: string;
+  messageParams?: Record<string, unknown>;
+}
 
 @Injectable()
 export class CodingResultsService {
@@ -18,25 +39,46 @@ export class CodingResultsService {
     private cacheService: CacheService,
     private codingStatisticsService: CodingStatisticsService,
     private codingJobService: CodingJobService,
-    private codingAnalysisService: CodingAnalysisService
+    private codingAnalysisService: CodingAnalysisService,
+    @Optional()
+    private codingFreshnessService?: CodingFreshnessService
   ) { }
 
-  async applyCodingResults(workspaceId: number, codingJobId: number): Promise<{
-    success: boolean;
-    updatedResponsesCount: number;
-    skippedReviewCount: number;
-    messageKey: string;
-    messageParams?: Record<string, unknown>;
-  }> {
+  async applyCodingResults(
+    workspaceId: number,
+    codingJobId: number,
+    options: ApplyCodingResultsOptions = {}
+  ): Promise<ApplyCodingResultsResult> {
     this.logger.log(`Applying coding results for coding job ${codingJobId} in workspace ${workspaceId}`);
+    const overwriteExisting = options.overwriteExisting === true;
+    const completedStatus = statusStringToNumber('CODING_COMPLETE');
 
     // Check if coding job is completed before allowing application
     const codingJob = await this.codingJobService.getCodingJobById(codingJobId);
+    const initialFreshnessBlocker = this.getFreshnessApplyBlocker(codingJob);
+    if (initialFreshnessBlocker) {
+      return initialFreshnessBlocker;
+    }
+
+    if (codingJob.training_id !== null && codingJob.training_id !== undefined) {
+      return {
+        success: false,
+        updatedResponsesCount: 0,
+        skippedReviewCount: 0,
+        skippedAlreadyCodedCount: 0,
+        overwrittenExistingCount: 0,
+        messageKey: 'coding-results.apply.error.training-job',
+        messageParams: { jobId: codingJobId }
+      };
+    }
+
     if (codingJob.status !== 'completed') {
       return {
         success: false,
         updatedResponsesCount: 0,
         skippedReviewCount: 0,
+        skippedAlreadyCodedCount: 0,
+        overwrittenExistingCount: 0,
         messageKey: 'coding-results.apply.error.not-completed',
         messageParams: { status: codingJob.status }
       };
@@ -52,6 +94,8 @@ export class CodingResultsService {
     try {
       const codingJobUnits = await this.codingJobService.getCodingJobUnits(codingJobId);
       const codingProgress = await this.codingJobService.getCodingProgress(codingJobId);
+      const directResponseIds = Array.from(new Set(codingJobUnits.map(unit => unit.responseId)));
+      const existingV2StatusByResponseId = await this.getExistingV2StatusByResponseId(directResponseIds);
 
       const uncertainIssues = Object.values(codingProgress).filter(p => {
         if (!p || typeof p !== 'object') {
@@ -69,16 +113,55 @@ export class CodingResultsService {
           success: false,
           updatedResponsesCount: 0,
           skippedReviewCount: 0,
+          skippedAlreadyCodedCount: 0,
+          overwrittenExistingCount: 0,
           messageKey: 'coding-results.apply.error.uncertain-issues-present',
           messageParams: { count: uncertainIssues.length }
         };
       }
 
+      const doubleCodingConflicts = await this.getDoubleCodingConflicts(
+        workspaceId,
+        codingJob,
+        directResponseIds
+      );
+      const blockingDoubleCodingConflicts = doubleCodingConflicts.filter(conflict => (
+        conflict.statusV2 !== completedStatus || overwriteExisting
+      ));
+
+      if (blockingDoubleCodingConflicts.length > 0) {
+        return {
+          success: false,
+          updatedResponsesCount: 0,
+          skippedReviewCount: 0,
+          skippedAlreadyCodedCount: 0,
+          overwrittenExistingCount: 0,
+          messageKey: 'coding-results.apply.error.double-coding-conflicts-present',
+          messageParams: { count: blockingDoubleCodingConflicts.length }
+        };
+      }
+
       let skippedReviewCount = 0;
+      let skippedAlreadyCodedCount = 0;
+      let overwrittenExistingCount = 0;
 
       for (const unit of codingJobUnits) {
-        const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
-        const progressKey = `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
+        const existingStatusV2 = existingV2StatusByResponseId.get(unit.responseId);
+        if (existingStatusV2 === completedStatus) {
+          if (!overwriteExisting) {
+            skippedAlreadyCodedCount += 1;
+            continue;
+          }
+          overwrittenExistingCount += 1;
+        }
+
+        const testPerson = formatCodingTestPerson({
+          login: unit.personLogin,
+          code: unit.personCode,
+          group: unit.personGroup || undefined,
+          booklet: unit.bookletName
+        });
+        const progressKey = generateCodingProgressKey(testPerson, unit.unitName, unit.variableId);
         const progress = codingProgress[progressKey];
 
         if (!progress || (progress.id === undefined && progress.score === undefined)) {
@@ -110,7 +193,7 @@ export class CodingResultsService {
           } else if (progress.id === -2) {
             skippedReviewCount += 1;
             continue;
-          } else if (progress.id > 0) {
+          } else if (progress.id >= 0) {
             code = progress.id;
           }
 
@@ -137,89 +220,169 @@ export class CodingResultsService {
       this.logger.log(`Prepared ${responsesToUpdate.length} responses for update, skipped ${skippedReviewCount} requiring review`);
       // If aggregation is active, find all uncoded responses that share the same normalized value
       // as a successfully coded response in this job, and apply the same result to them.
-      const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
-      if (aggregationThreshold !== null) {
-        const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+      const aggregationSettings = await this.codingJobService.getAggregationSettingsForCodingJob(codingJob);
+      const aggregationThreshold = aggregationSettings.aggregationThreshold;
+      if (aggregationSettings.aggregationEnabled && aggregationThreshold !== null) {
+        const matchingFlags = aggregationSettings.responseMatchingFlags;
+        if (matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION)) {
+          this.logger.log('Skipping group sibling propagation because response aggregation is disabled.');
+        } else {
+          const derivedVariableMap = await this.codingJobService.getDerivedVariableMapForAggregation(workspaceId);
+          // Collect the response IDs that are already being updated (avoid double-adding)
+          const alreadyUpdatedIds = new Set(responsesToUpdate.map(r => r.responseId));
 
-        // Collect the response IDs that are already being updated (avoid double-adding)
-        const alreadyUpdatedIds = new Set(responsesToUpdate.map(r => r.responseId));
-
-        // Only propagate results for CODING_COMPLETE responses with a real code
-        const completedUpdates = responsesToUpdate.filter(
-          r => r.status_v2 === statusStringToNumber('CODING_COMPLETE') && r.code_v2 !== null
-        );
-        const codedResponseIds = completedUpdates.map(r => r.responseId);
-        if (codedResponseIds.length > 0) {
-          const codedResponses = await this.responseRepository
-            .createQueryBuilder('response')
-            .leftJoin('response.unit', 'unit')
-            .leftJoin('unit.booklet', 'booklet')
-            .leftJoin('booklet.person', 'person')
-            .select([
-              'response.id',
-              'response.value',
-              'response.variableid',
-              'unit.name'
-            ])
-            .where('response.id IN (:...ids)', { ids: codedResponseIds })
-            .getMany();
-
-          for (const codedResponse of codedResponses) {
-            const update = completedUpdates.find(u => u.responseId === codedResponse.id);
-            if (!update) continue;
-
-            const normalizedValue = this.codingJobService.normalizeValue(codedResponse.value, matchingFlags);
-            const unitName = codedResponse.unit?.name;
-            const variableId = codedResponse.variableid;
-
-            if (!unitName || !variableId) continue;
-
-            // Find all uncoded sibling responses for the same workspace + unit + variable
-            const candidates = await this.responseRepository
+          // Only propagate results for CODING_COMPLETE responses with a real code
+          const completedUpdates = responsesToUpdate.filter(
+            r => r.status_v2 === statusStringToNumber('CODING_COMPLETE') && r.code_v2 !== null
+          );
+          const codedResponseIds = completedUpdates.map(r => r.responseId);
+          if (codedResponseIds.length > 0) {
+            const codedResponses = await this.responseRepository
               .createQueryBuilder('response')
-              .leftJoin('response.unit', 'unit')
+              .leftJoinAndSelect('response.unit', 'unit')
               .leftJoin('unit.booklet', 'booklet')
               .leftJoin('booklet.person', 'person')
-              .select(['response.id', 'response.value'])
-              .where('person.workspace_id = :workspaceId', { workspaceId })
-              .andWhere('person.consider = :consider', { consider: true })
-              .andWhere('response.status_v1 IN (:...statuses)', {
-                statuses: [
-                  statusStringToNumber('CODING_INCOMPLETE'),
-                  statusStringToNumber('INTENDED_INCOMPLETE')
-                ]
-              })
-              .andWhere('unit.name = :unitName', { unitName })
-              .andWhere('response.variableid = :variableId', { variableId })
-              .andWhere('response.status_v2 IS NULL')
-              .andWhere('response.id != :selfId', { selfId: codedResponse.id })
+              .select([
+                'response.id',
+                'response.value',
+                'response.variableid',
+                'response.status_v2',
+                'unit.id',
+                'unit.name'
+              ])
+              .where('response.id IN (:...ids)', { ids: codedResponseIds })
               .getMany();
 
-            // Filter candidates by normalized value in-memory (handles IGNORE_CASE / IGNORE_WHITESPACE)
-            for (const candidate of candidates) {
-              if (alreadyUpdatedIds.has(candidate.id)) continue;
-              const candidateNorm = this.codingJobService.normalizeValue(candidate.value, matchingFlags);
-              if (candidateNorm === normalizedValue) {
-                responsesToUpdate.push({
+            for (const codedResponse of codedResponses) {
+              const update = completedUpdates.find(u => u.responseId === codedResponse.id);
+              if (!update) continue;
+
+              const unitName = codedResponse.unit?.name;
+              const variableId = codedResponse.variableid;
+
+              if (!unitName || !variableId) continue;
+
+              // Find all sibling responses for the same workspace + unit + variable.
+              // Existing v2 codings are either reported as skipped or overwritten only when explicitly requested.
+              const candidates = await this.responseRepository
+                .createQueryBuilder('response')
+                .leftJoinAndSelect('response.unit', 'unit')
+                .leftJoin('unit.booklet', 'booklet')
+                .leftJoin('booklet.person', 'person')
+                .select([
+                  'response.id',
+                  'response.value',
+                  'response.variableid',
+                  'response.status_v2',
+                  'unit.id',
+                  'unit.name'
+                ])
+                .where('person.workspace_id = :workspaceId', { workspaceId })
+                .andWhere('person.consider = :consider', { consider: true })
+                .andWhere('response.status_v1 IN (:...statuses)', {
+                  statuses: [
+                    statusStringToNumber('CODING_INCOMPLETE'),
+                    statusStringToNumber('INTENDED_INCOMPLETE')
+                  ]
+                })
+                .andWhere('unit.name = :unitName', { unitName })
+                .andWhere('response.variableid = :variableId', { variableId })
+                .getMany();
+
+              const groups = buildAggregationGroups(
+                candidates.map(candidate => ({
                   responseId: candidate.id,
+                  unitName: candidate.unit?.name || unitName,
+                  variableId: candidate.variableid,
+                  value: candidate.value,
+                  statusV2: candidate.status_v2
+                })),
+                matchingFlags,
+                aggregationThreshold,
+                derivedVariableMap
+              );
+              const aggregationGroup = groups.find(group => (
+                group.responses.some(candidate => candidate.responseId === codedResponse.id)
+              ));
+
+              if (!aggregationGroup || aggregationGroup.responses.length < aggregationThreshold) {
+                continue;
+              }
+
+              for (const candidate of aggregationGroup.responses) {
+                if (candidate.responseId === codedResponse.id || alreadyUpdatedIds.has(candidate.responseId)) continue;
+
+                if (candidate.statusV2 !== null && candidate.statusV2 !== undefined) {
+                  if (!overwriteExisting) {
+                    skippedAlreadyCodedCount += 1;
+                    alreadyUpdatedIds.add(candidate.responseId);
+                    continue;
+                  }
+                  overwrittenExistingCount += 1;
+                }
+
+                responsesToUpdate.push({
+                  responseId: candidate.responseId,
                   code_v2: update.code_v2,
                   score_v2: update.score_v2,
                   status_v2: update.status_v2
                 });
-                alreadyUpdatedIds.add(candidate.id);
+                alreadyUpdatedIds.add(candidate.responseId);
               }
             }
-          }
 
-          this.logger.log(`Group sibling propagation complete. Total responses to update: ${responsesToUpdate.length}`);
+            this.logger.log(`Group sibling propagation complete. Total responses to update: ${responsesToUpdate.length}`);
+          }
         }
       }
 
       if (responsesToUpdate.length === 0) {
+        if (skippedReviewCount === 0) {
+          const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
+          await queryRunner.connect();
+          await queryRunner.startTransaction('READ COMMITTED');
+
+          try {
+            const freshnessBlocker = await this.getFreshnessApplyBlockerInTransaction(
+              workspaceId,
+              codingJobId,
+              queryRunner.manager
+            );
+            if (freshnessBlocker) {
+              await queryRunner.rollbackTransaction();
+              return freshnessBlocker;
+            }
+
+            await this.markManualFreshnessCurrent(
+              workspaceId,
+              directResponseIds,
+              codingJobId,
+              queryRunner.manager
+            );
+            await this.codingJobService.markCodingJobResultsApplied(
+              codingJobId,
+              workspaceId,
+              queryRunner.manager
+            );
+            await queryRunner.commitTransaction();
+          } catch (error) {
+            await queryRunner.rollbackTransaction();
+            this.logger.error(`Error finalizing coding results: ${error.message}`, error.stack);
+            throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);
+          } finally {
+            await queryRunner.release();
+          }
+
+          await this.invalidateIncompleteVariablesCache(workspaceId);
+          await this.codingStatisticsService.invalidateCache(workspaceId);
+        }
+
         return {
           success: true,
           updatedResponsesCount: 0,
           skippedReviewCount,
+          skippedAlreadyCodedCount,
+          overwrittenExistingCount,
           messageKey: 'coding-results.apply.success.no-responses'
         };
       }
@@ -229,6 +392,16 @@ export class CodingResultsService {
       await queryRunner.startTransaction('READ COMMITTED');
 
       try {
+        const freshnessBlocker = await this.getFreshnessApplyBlockerInTransaction(
+          workspaceId,
+          codingJobId,
+          queryRunner.manager
+        );
+        if (freshnessBlocker) {
+          await queryRunner.rollbackTransaction();
+          return freshnessBlocker;
+        }
+
         const batchSize = 500;
         let totalUpdated = 0;
 
@@ -252,9 +425,23 @@ export class CodingResultsService {
           this.logger.log(`Updated batch of ${batch.length} responses (${totalUpdated}/${responsesToUpdate.length})`);
         }
 
-        await queryRunner.commitTransaction();
+        await this.markManualFreshnessCurrent(
+          workspaceId,
+          Array.from(new Set([
+            ...directResponseIds,
+            ...responsesToUpdate.map(response => response.responseId)
+          ])),
+          codingJobId,
+          queryRunner.manager
+        );
 
-        await this.codingJobService.updateCodingJob(codingJobId, workspaceId, { status: 'results_applied' });
+        await this.codingJobService.markCodingJobResultsApplied(
+          codingJobId,
+          workspaceId,
+          queryRunner.manager
+        );
+
+        await queryRunner.commitTransaction();
 
         await this.invalidateIncompleteVariablesCache(workspaceId);
         await this.codingStatisticsService.invalidateCache(workspaceId);
@@ -263,8 +450,15 @@ export class CodingResultsService {
           success: true,
           updatedResponsesCount: responsesToUpdate.length,
           skippedReviewCount,
+          skippedAlreadyCodedCount,
+          overwrittenExistingCount,
           messageKey: 'coding-results.apply.success.bulk',
-          messageParams: { count: responsesToUpdate.length, skipped: skippedReviewCount }
+          messageParams: {
+            count: responsesToUpdate.length,
+            skipped: skippedReviewCount,
+            skippedAlreadyCoded: skippedAlreadyCodedCount,
+            overwrittenExisting: overwrittenExistingCount
+          }
         };
       } catch (error) {
         await queryRunner.rollbackTransaction();
@@ -279,10 +473,141 @@ export class CodingResultsService {
     }
   }
 
+  private async markManualFreshnessCurrent(
+    workspaceId: number,
+    responseIds: number[],
+    codingJobId: number,
+    manager?: EntityManager
+  ): Promise<void> {
+    if (!this.codingFreshnessService) {
+      return;
+    }
+
+    await this.codingFreshnessService.markManualCodingCurrent(
+      workspaceId,
+      responseIds,
+      { codingJobId, manager }
+    );
+  }
+
+  private async getFreshnessApplyBlockerInTransaction(
+    workspaceId: number,
+    codingJobId: number,
+    manager: EntityManager
+  ): Promise<ApplyCodingResultsResult | null> {
+    await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+    const codingJob = await this.codingJobService.getCodingJobByIdForWorkspace(
+      codingJobId,
+      workspaceId,
+      manager
+    );
+    return this.getFreshnessApplyBlocker(codingJob);
+  }
+
+  private getFreshnessApplyBlocker(codingJob: {
+    freshness_status?: string | null;
+    freshness_affected_units?: number | null;
+    freshness_affected_responses?: number | null;
+  }): ApplyCodingResultsResult | null {
+    if (codingJob.freshness_status !== 'stale_source') {
+      return null;
+    }
+
+    return {
+      success: false,
+      updatedResponsesCount: 0,
+      skippedReviewCount: 0,
+      skippedAlreadyCodedCount: 0,
+      overwrittenExistingCount: 0,
+      messageKey: 'coding-results.apply.error.freshness-review-required',
+      messageParams: {
+        status: codingJob.freshness_status,
+        affectedUnits: codingJob.freshness_affected_units || 0,
+        affectedResponses: codingJob.freshness_affected_responses || 0
+      }
+    };
+  }
+
   private async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
-    const cacheKey = `coding_incomplete_variables:${workspaceId}`;
+    const cacheKey = `coding_incomplete_variables_v3:${workspaceId}`;
     await this.cacheService.delete(cacheKey);
-    this.logger.log(`Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`);
+    this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
+  }
+
+  private async getExistingV2StatusByResponseId(responseIds: number[]): Promise<Map<number, number | null>> {
+    if (responseIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.responseRepository.manager.query(
+      `
+        SELECT id, status_v2 as "statusV2"
+        FROM response
+        WHERE id = ANY($1::int[])
+      `,
+      [responseIds]
+    );
+
+    return new Map(rows.map(row => [
+      Number(row.id),
+      row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2)
+    ]));
+  }
+
+  private async getDoubleCodingConflicts(
+    workspaceId: number,
+    codingJob: {
+      training_id?: number | null;
+      job_definition_id?: number | null;
+    },
+    responseIds: number[]
+  ): Promise<Array<{ responseId: number; statusV2: number | null }>> {
+    if (responseIds.length === 0) {
+      return [];
+    }
+
+    const scopeClauses = ['cj.workspace_id = $1'];
+    const params: unknown[] = [workspaceId, responseIds];
+
+    if (codingJob.training_id !== null && codingJob.training_id !== undefined) {
+      params.push(codingJob.training_id);
+      scopeClauses.push(`cj.training_id = $${params.length}`);
+    } else {
+      scopeClauses.push('cj.training_id IS NULL');
+
+      if (codingJob.job_definition_id !== null && codingJob.job_definition_id !== undefined) {
+        params.push(codingJob.job_definition_id);
+        scopeClauses.push(`cj.job_definition_id = $${params.length}`);
+      } else {
+        scopeClauses.push('cj.job_definition_id IS NULL');
+      }
+    }
+
+    const rows = await this.responseRepository.manager.query(
+      `
+        SELECT
+          cju.response_id as "responseId",
+          MAX(resp.status_v2) as "statusV2"
+        FROM coding_job_unit cju
+        INNER JOIN coding_job cj ON cj.id = cju.coding_job_id
+        INNER JOIN response resp ON resp.id = cju.response_id
+        WHERE cju.response_id = ANY($2::int[])
+          AND cju.code IS NOT NULL
+          AND ${scopeClauses.join(' AND ')}
+        GROUP BY cju.response_id
+        HAVING COUNT(DISTINCT cju.coding_job_id) > 1
+           AND COUNT(cju.code) > 1
+           AND COUNT(DISTINCT (
+             cju.code::text || ':' || COALESCE(cju.score::text, 'NULL')
+           )) > 1
+      `,
+      params
+    );
+
+    return rows.map(row => ({
+      responseId: Number(row.responseId),
+      statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2)
+    }));
   }
 
   /**

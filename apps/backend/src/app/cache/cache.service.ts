@@ -3,6 +3,8 @@ import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { ValidationResultDto } from '../../../../../api-dto/coding/validation-result.dto';
 
+export const VALIDATION_CACHE_KEY_PREFIX = 'validation:v2';
+
 @Injectable()
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
@@ -155,7 +157,7 @@ export class CacheService {
    * @returns The cache key for validation results
    */
   generateValidationCacheKey(workspaceId: number, hash: string): string {
-    return `validation:${workspaceId}:${hash}`;
+    return `${VALIDATION_CACHE_KEY_PREFIX}:${workspaceId}:${hash}`;
   }
 
   /**

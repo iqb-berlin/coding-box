@@ -4,8 +4,12 @@ import {
   Param,
   Post,
   Query,
+  BadRequestException,
+  Req,
+  UnauthorizedException,
   UseGuards
 } from '@nestjs/common';
+import { Request } from 'express';
 import {
   ApiOkResponse,
   ApiParam,
@@ -18,7 +22,11 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import {
-  CodingJobService, CodingProcessService, CodingResponseQueryService, CodingResultsService
+  CodingFreshnessService,
+  CodingJobService,
+  CodingProcessService,
+  CodingResponseQueryService,
+  CodingResultsService
 } from '../../database/services/coding';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { JobQueueService } from '../../job-queue/job-queue.service';
@@ -31,8 +39,46 @@ export class WorkspaceCodingController {
     private codingResponseQueryService: CodingResponseQueryService,
     private codingJobService: CodingJobService,
     private codingResultsService: CodingResultsService,
+    private codingFreshnessService: CodingFreshnessService,
     private jobQueueService: JobQueueService
   ) { }
+
+  private getRequestUserId(req: Request): number {
+    const user = (req as Request & { user?: { id?: number | string; userId?: number | string } }).user;
+    const userId = Number(user?.id ?? user?.userId);
+
+    if (!Number.isFinite(userId) || userId <= 0) {
+      throw new UnauthorizedException('User ID not found in request');
+    }
+
+    return userId;
+  }
+
+  private parseAutoCoderRun(autoCoderRun?: string | string[]): 1 | 2 {
+    if (autoCoderRun === undefined) {
+      return 1;
+    }
+
+    if (Array.isArray(autoCoderRun)) {
+      if (autoCoderRun.length === 1) {
+        return this.parseAutoCoderRun(autoCoderRun[0]);
+      }
+
+      throw new BadRequestException('autoCoderRun must be 1 or 2');
+    }
+
+    const trimmedAutoCoderRun = autoCoderRun.trim();
+    if (trimmedAutoCoderRun === '') {
+      return 1;
+    }
+
+    const parsed = Number(trimmedAutoCoderRun);
+    if (Number.isInteger(parsed) && (parsed === 1 || parsed === 2)) {
+      return parsed;
+    }
+
+    throw new BadRequestException('autoCoderRun must be 1 or 2');
+  }
 
   @Get(':workspace_id/coding')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -54,11 +100,15 @@ export class WorkspaceCodingController {
   async codeTestPersons(
     @Query('testPersons') testPersons: string,
       @WorkspaceId() workspace_id: number,
-      @Query('autoCoderRun') autoCoderRun: string
+      @Query('autoCoderRun') autoCoderRun: string | string[] | undefined
   ): Promise<CodingStatistics> {
+    const autoCoderRunNumber = this.parseAutoCoderRun(autoCoderRun);
     await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
+    await this.codingFreshnessService.assertAutoCodingRunCanStart(
+      workspace_id,
+      autoCoderRunNumber
+    );
 
-    const autoCoderRunNumber = parseInt(autoCoderRun, 10) || 1;
     return this.codingProcessService.codeTestPersons(
       workspace_id,
       testPersons,
@@ -182,9 +232,16 @@ export class WorkspaceCodingController {
   })
   async getCodingJobNotes(
     @WorkspaceId() workspace_id: number,
-      @Param('codingJobId') codingJobId: number
+      @Param('codingJobId') codingJobId: number,
+      @Req() req: Request
   ): Promise<Record<string, string>> {
-    return this.codingJobService.getCodingNotes(codingJobId);
+    const jobId = Number(codingJobId);
+    await this.codingJobService.assertUserCanAccessCodingJob(
+      jobId,
+      workspace_id,
+      this.getRequestUserId(req)
+    );
+    return this.codingJobService.getCodingNotes(jobId);
   }
 
   @Post(':workspace_id/coding/apply-empty-responses')

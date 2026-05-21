@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ResponseEntity } from '../../entities/response.entity';
-import { statusNumberToString } from '../../utils/response-status-converter';
+import {
+  statusNumberToString,
+  statusStringToNumber
+} from '../../utils/response-status-converter';
 import { mapCodeForExport } from '../../../utils/coding-utils';
 import { CodingFileCacheService } from './coding-file-cache.service';
 
@@ -14,6 +17,7 @@ export interface CodingItem {
   variable_id: string;
   variable_page: string;
   variable_anchor: string;
+  value?: string;
   url?: string;
 }
 
@@ -31,6 +35,17 @@ export class CodingItemBuilderService {
   private readonly logger = new Logger(CodingItemBuilderService.name);
 
   constructor(private readonly fileCacheService: CodingFileCacheService) {}
+
+  private formatStatus(status: number | string | null | undefined): string {
+    if (status === null || status === undefined || status === '') {
+      return '';
+    }
+
+    const statusNumber = typeof status === 'number' ?
+      status :
+      statusStringToNumber(String(status));
+    return statusNumber === null ? '' : statusNumberToString(statusNumber) || '';
+  }
 
   /**
    * Build a basic CodingItem from a ResponseEntity.
@@ -101,7 +116,8 @@ export class CodingItemBuilderService {
     authToken: string,
     serverUrl: string,
     workspaceId: number,
-    includeReplayUrls: boolean = false
+    includeReplayUrls: boolean = false,
+    includeResponseValues: boolean = true
   ): Promise<CodingItem | null> {
     try {
       const unit = response.unit;
@@ -144,47 +160,33 @@ export class CodingItemBuilderService {
         variable_anchor: variableAnchor
       };
 
+      if (includeResponseValues) {
+        baseItem.value = response.value ?? '';
+      }
+
       // Add version-specific data (include all lower versions) and convert status numbers to strings
       if (targetVersion === 'v1') {
-        baseItem.status_v1 =
-          response.status_v1 != null ?
-            statusNumberToString(response.status_v1) || '' :
-            '';
+        baseItem.status_v1 = this.formatStatus(response.status_v1);
         baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
-        baseItem.score_v1 = response.score_v1 || '';
+        baseItem.score_v1 = response.score_v1 ?? '';
       } else if (targetVersion === 'v2') {
-        baseItem.status_v1 =
-          response.status_v1 != null ?
-            statusNumberToString(response.status_v1) || '' :
-            '';
+        baseItem.status_v1 = this.formatStatus(response.status_v1);
         baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
-        baseItem.score_v1 = response.score_v1 || '';
-        baseItem.status_v2 =
-          response.status_v2 != null ?
-            statusNumberToString(response.status_v2) || '' :
-            '';
+        baseItem.score_v1 = response.score_v1 ?? '';
+        baseItem.status_v2 = this.formatStatus(response.status_v2);
         baseItem.code_v2 = mapCodeForExport(response.code_v2) ?? '';
-        baseItem.score_v2 = response.score_v2 || '';
+        baseItem.score_v2 = response.score_v2 ?? '';
       } else {
         // v3
-        baseItem.status_v1 =
-          response.status_v1 != null ?
-            statusNumberToString(response.status_v1) || '' :
-            '';
+        baseItem.status_v1 = this.formatStatus(response.status_v1);
         baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
-        baseItem.score_v1 = response.score_v1 || '';
-        baseItem.status_v2 =
-          response.status_v2 != null ?
-            statusNumberToString(response.status_v2) || '' :
-            '';
+        baseItem.score_v1 = response.score_v1 ?? '';
+        baseItem.status_v2 = this.formatStatus(response.status_v2);
         baseItem.code_v2 = mapCodeForExport(response.code_v2) ?? '';
-        baseItem.score_v2 = response.score_v2 || '';
-        baseItem.status_v3 =
-          response.status_v3 != null ?
-            statusNumberToString(response.status_v3) || '' :
-            '';
+        baseItem.score_v2 = response.score_v2 ?? '';
+        baseItem.status_v3 = this.formatStatus(response.status_v3);
         baseItem.code_v3 = mapCodeForExport(response.code_v3) ?? '';
-        baseItem.score_v3 = response.score_v3 || '';
+        baseItem.score_v3 = response.score_v3 ?? '';
       }
 
       // Append replay URL as the last field if requested
@@ -204,7 +206,10 @@ export class CodingItemBuilderService {
   /**
    * Get headers for version-specific exports.
    */
-  getHeadersForVersion(version: 'v1' | 'v2' | 'v3'): string[] {
+  getHeadersForVersion(
+    version: 'v1' | 'v2' | 'v3',
+    includeResponseValues: boolean = true
+  ): string[] {
     const baseHeaders = [
       'unit_key',
       'unit_alias',
@@ -216,14 +221,15 @@ export class CodingItemBuilderService {
       'variable_page',
       'variable_anchor'
     ];
+    const headers = includeResponseValues ? [...baseHeaders, 'value'] : baseHeaders;
 
     // Add version-specific columns for comparison
     if (version === 'v1') {
-      return [...baseHeaders, 'status_v1', 'code_v1', 'score_v1'];
+      return [...headers, 'status_v1', 'code_v1', 'score_v1'];
     }
     if (version === 'v2') {
       return [
-        ...baseHeaders,
+        ...headers,
         'status_v1',
         'code_v1',
         'score_v1',
@@ -234,7 +240,7 @@ export class CodingItemBuilderService {
     }
     // v3
     return [
-      ...baseHeaders,
+      ...headers,
       'status_v1',
       'code_v1',
       'score_v1',

@@ -66,6 +66,7 @@ services:
     environment:
       API_HOST: backend
       JWT_SECRET: ${JWT_SECRET}
+      GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
       <<: [ *env-redis, *env-postgres, *env-keycloak ]
     networks:
       - application-network

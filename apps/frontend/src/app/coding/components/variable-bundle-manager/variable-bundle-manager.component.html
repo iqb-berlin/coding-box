@@ -65,12 +65,40 @@
       <ng-container matColumnDef="actions">
         <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
         <mat-cell *matCellDef="let element">
-          <button mat-icon-button (click)="$event.stopPropagation(); editVariableBundleGroup(element)" matTooltip="Bearbeiten">
-            <mat-icon>edit</mat-icon>
-          </button>
-          <button mat-icon-button (click)="$event.stopPropagation(); deleteVariableBundleGroup(element)" matTooltip="Löschen">
-            <mat-icon>delete</mat-icon>
-          </button>
+          <div class="bundle-row-actions">
+            <button
+              mat-stroked-button
+              type="button"
+              class="primary-row-action"
+              color="primary"
+              (click)="$event.stopPropagation(); editVariableBundleGroup(element)"
+              [attr.aria-label]="getVariableBundleActionAriaLabel('edit', element)">
+              <mat-icon>edit</mat-icon>
+              <span>Bearbeiten</span>
+            </button>
+
+            <button
+              mat-icon-button
+              type="button"
+              class="more-actions-button"
+              [matMenuTriggerFor]="bundleActionsMenu"
+              [attr.aria-label]="getVariableBundleActionAriaLabel('more', element)"
+              (click)="$event.stopPropagation()">
+              <mat-icon>more_vert</mat-icon>
+            </button>
+
+            <mat-menu #bundleActionsMenu="matMenu">
+              <button
+                mat-menu-item
+                type="button"
+                class="danger-menu-item"
+                (click)="deleteVariableBundleGroup(element)"
+                [attr.aria-label]="getVariableBundleActionAriaLabel('delete', element)">
+                <mat-icon>delete</mat-icon>
+                <span>Löschen</span>
+              </button>
+            </mat-menu>
+          </div>
         </mat-cell>
       </ng-container>
     </mat-table>

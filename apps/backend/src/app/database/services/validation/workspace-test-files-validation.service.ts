@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
+import * as crypto from 'crypto';
 import Ajv, { ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 
@@ -10,12 +11,18 @@ import Persons from '../../entities/persons.entity';
 
 import {
   FileValidationResultDto,
-  FilteredTestTaker
+  FilteredTestTaker,
+  GeoGebraValidationResult
 } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-schema-validation.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import {
+  normalizeExclusionBookletId,
+  normalizeExclusionUnitId,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
+import { ResourcePackageService } from '../workspace/resource-package.service';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 import codingSchemeSchema = require('../../../schemas/coding-scheme.schema.json');
 
@@ -30,6 +37,7 @@ type FileStatus = {
 
 type TestletDto = {
   id: string;
+  bookletId?: string;
   label?: string;
   ignored?: boolean;
 };
@@ -51,6 +59,7 @@ type UnitRefs = {
   playerRefs: string[];
   metadataRefs: string[];
   hasPlayer: boolean;
+  hasGeoGebraVariable: boolean;
 };
 
 type ValidationData = {
@@ -65,6 +74,14 @@ type ValidationData = {
   player: DataValidation;
   metadata: DataValidation;
 };
+
+type ValidationProgressReporter = (
+  progress: number,
+  message?: string
+) => void | Promise<void>;
+
+// Bump this whenever test-file validation semantics or result shape changes.
+export const TEST_FILES_VALIDATION_CACHE_VERSION = 3;
 
 @Injectable()
 export class WorkspaceTestFilesValidationService {
@@ -81,42 +98,237 @@ export class WorkspaceTestFilesValidationService {
     private personsRepository: Repository<Persons>,
     private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
     private workspaceCoreService: WorkspaceCoreService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    private resourcePackageService: ResourcePackageService
   ) {}
+
+  private createExclusionFingerprint(
+    exclusions: WorkspaceSettingsDto | null | undefined
+  ): {
+      ignoredUnits: string[];
+      ignoredBooklets: string[];
+      ignoredTestlets: { bookletId: string; testletId: string }[];
+    } {
+    const uniqueSorted = (
+      values: string[] | undefined,
+      normalize: (value: string | null | undefined) => string
+    ): string[] => Array.from(new Set(
+      (values || [])
+        .map(value => normalize(value))
+        .filter(Boolean)
+    )).sort();
+
+    const ignoredTestletsByKey = new Map<
+    string,
+    { bookletId: string; testletId: string }
+    >();
+    (exclusions?.ignoredTestlets || []).forEach(testlet => {
+      const bookletId = normalizeExclusionBookletId(testlet.bookletId);
+      const testletId = normalizeExclusionBookletId(testlet.testletId);
+      if (bookletId && testletId) {
+        ignoredTestletsByKey.set(`${bookletId}|${testletId}`, {
+          bookletId,
+          testletId
+        });
+      }
+    });
+
+    return {
+      ignoredUnits: uniqueSorted(
+        exclusions?.ignoredUnits,
+        normalizeExclusionUnitId
+      ),
+      ignoredBooklets: uniqueSorted(
+        exclusions?.ignoredBooklets,
+        normalizeExclusionBookletId
+      ),
+      ignoredTestlets: Array.from(ignoredTestletsByKey.values())
+        .sort((a, b) => {
+          const bookletCompare = a.bookletId.localeCompare(b.bookletId);
+          if (bookletCompare !== 0) return bookletCompare;
+          return a.testletId.localeCompare(b.testletId);
+        })
+    };
+  }
+
+  private createPersonsFingerprint(
+    persons: Pick<Persons, 'login' | 'consider'>[]
+  ): { login: string; considerValues: boolean[] }[] {
+    const considerValuesByLogin = new Map<string, Set<boolean>>();
+
+    persons.forEach(person => {
+      const login = String(person.login || '').trim();
+      if (!login) {
+        return;
+      }
+      const values = considerValuesByLogin.get(login) || new Set<boolean>();
+      values.add(Boolean(person.consider));
+      considerValuesByLogin.set(login, values);
+    });
+
+    return Array.from(considerValuesByLogin.entries())
+      .map(([login, considerValues]) => ({
+        login,
+        considerValues: Array.from(considerValues).sort((a, b) => {
+          if (a === b) return 0;
+          return a ? 1 : -1;
+        })
+      }))
+      .sort((a, b) => a.login.localeCompare(b.login));
+  }
+
+  async getTestFilesFingerprint(workspaceId: number): Promise<string> {
+    const [files, exclusions, persons] = await Promise.all([
+      this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId },
+        select: [
+          'id',
+          'file_id',
+          'filename',
+          'file_type',
+          'file_size',
+          'created_at',
+          'data'
+        ]
+      }),
+      this.workspaceExclusionService.getExclusions(workspaceId),
+      this.personsRepository.find({
+        where: { workspace_id: workspaceId },
+        select: ['login', 'consider']
+      })
+    ]);
+
+    const hash = crypto.createHash('sha256');
+    hash.update(JSON.stringify({
+      cacheVersion: TEST_FILES_VALIDATION_CACHE_VERSION,
+      exclusions: this.createExclusionFingerprint(exclusions),
+      persons: this.createPersonsFingerprint(persons)
+    }));
+    hash.update('\n');
+
+    files
+      .sort((a, b) => {
+        const typeCompare = (a.file_type || '').localeCompare(b.file_type || '');
+        if (typeCompare !== 0) return typeCompare;
+        return (a.file_id || a.filename || '').localeCompare(
+          b.file_id || b.filename || ''
+        );
+      })
+      .forEach(file => {
+        const dataHash = crypto
+          .createHash('sha256')
+          .update(file.data || '')
+          .digest('hex');
+        hash.update(
+          JSON.stringify({
+            id: file.id,
+            fileId: file.file_id,
+            filename: file.filename,
+            fileType: file.file_type,
+            fileSize: file.file_size,
+            createdAt: file.created_at,
+            dataHash
+          })
+        );
+        hash.update('\n');
+      });
+
+    return hash.digest('hex');
+  }
+
+  async refreshGeoGebraPackageStatus(
+    workspaceId: number,
+    result: unknown
+  ): Promise<unknown> {
+    if (!result || typeof result !== 'object') {
+      return result;
+    }
+
+    const validationResult = result as FileValidationResultDto;
+    if (!validationResult.geogebra) {
+      return result;
+    }
+
+    return {
+      ...validationResult,
+      geogebra: {
+        ...validationResult.geogebra,
+        packageStatus:
+          await this.resourcePackageService.getGeoGebraPackageStatus(
+            workspaceId
+          )
+      }
+    };
+  }
 
   async validateTestFiles(
     workspaceId: number,
-    onProgress?: (progress: number) => void
+    onProgress?: ValidationProgressReporter
   ): Promise<FileValidationResultDto> {
     try {
       this.logger.log(
         `Starting batched test file validation for workspace ${workspaceId}`
       );
 
-      if (onProgress) onProgress(5);
+      await this.reportProgress(
+        onProgress,
+        3,
+        'Testdatei-Validierung wird vorbereitet...'
+      );
 
       const exclusions =
         await this.workspaceExclusionService.getExclusions(workspaceId);
 
-      if (onProgress) onProgress(10);
+      await this.reportProgress(onProgress, 8, 'Ausschlüsse wurden geladen.');
 
-      const [
-        bookletMap,
-        unitMap,
-        resourceIds,
-        xmlSchemaResults,
-        codingSchemeResults
-      ] = await Promise.all([
-        this.preloadBookletToUnits(workspaceId, exclusions),
-        this.preloadUnitRefs(workspaceId),
-        this.getAllResourceIds(workspaceId),
-        this.workspaceXmlSchemaValidationService.validateAllXmlSchemas(
+      await this.reportProgress(
+        onProgress,
+        12,
+        'Booklets und Testlets werden analysiert...'
+      );
+      const bookletMap = await this.preloadBookletToUnits(
+        workspaceId,
+        exclusions
+      );
+
+      await this.reportProgress(
+        onProgress,
+        22,
+        'Aufgabenreferenzen werden analysiert...'
+      );
+      const unitMap = await this.preloadUnitRefs(workspaceId);
+
+      await this.reportProgress(
+        onProgress,
+        30,
+        'Ressourcenreferenzen werden geladen...'
+      );
+      const resourceIds = await this.getAllResourceIds(workspaceId);
+
+      await this.reportProgress(
+        onProgress,
+        38,
+        'XML-Schemata werden validiert...'
+      );
+      const xmlSchemaResults =
+        await this.workspaceXmlSchemaValidationService.validateAllXmlSchemas(
           workspaceId
-        ),
-        this.validateAllCodingSchemes(workspaceId)
-      ]);
+        );
 
-      if (onProgress) onProgress(40);
+      await this.reportProgress(
+        onProgress,
+        48,
+        'Kodierschemata werden validiert...'
+      );
+      const codingSchemeResults = await this.validateAllCodingSchemes(
+        workspaceId
+      );
+
+      await this.reportProgress(
+        onProgress,
+        55,
+        'Validierungsdaten wurden vorbereitet.'
+      );
 
       const summarizeSchemaResults = (
         label: string,
@@ -173,6 +385,7 @@ export class WorkspaceTestFilesValidationService {
 
       const BATCH_SIZE = 20;
       let offset = 0;
+      let processedTestTakers = 0;
       let hasTestTakers = false;
 
       let testTakersBatch = await this.fileUploadRepository.find({
@@ -195,10 +408,12 @@ export class WorkspaceTestFilesValidationService {
         hasTestTakers = true;
 
         for (const testTaker of testTakersBatch) {
-          offset += 1;
-          if (onProgress) {
-            onProgress(40 + Math.floor((offset / totalTestTakers) * 40));
-          }
+          processedTestTakers += 1;
+          await this.reportProgress(
+            onProgress,
+            55 + Math.floor((processedTestTakers / totalTestTakers) * 25),
+            `TestTakers werden verarbeitet (${processedTestTakers}/${totalTestTakers})...`
+          );
           if (testTaker.file_id) {
             usedTestTakerFileIds.add(testTaker.file_id.toUpperCase());
           }
@@ -261,12 +476,26 @@ export class WorkspaceTestFilesValidationService {
         this.logger.warn(
           `No TestTakers found in workspace with ID ${workspaceId}.`
         );
+        await this.reportProgress(
+          onProgress,
+          100,
+          'Keine TestTakers-Dateien gefunden.'
+        );
         return {
           testTakersFound: false,
+          geogebra: await this.createGeoGebraValidationResult(
+            workspaceId,
+            []
+          ),
           validationResults: this.createEmptyValidationData()
         };
       }
 
+      await this.reportProgress(
+        onProgress,
+        84,
+        'Nicht verwendete Dateien werden ermittelt...'
+      );
       const unusedTestFiles = await this.getUnusedTestFilesFromValidationGraph(
         workspaceId,
         validationResults,
@@ -285,9 +514,18 @@ export class WorkspaceTestFilesValidationService {
         `Found ${duplicateTestTakers.length} duplicate test takers across files`
       );
 
-      if (onProgress) onProgress(90);
+      await this.reportProgress(
+        onProgress,
+        88,
+        'Doppelte TestTaker wurden geprüft.'
+      );
 
       if (filteredTestTakers.length > 0) {
+        await this.reportProgress(
+          onProgress,
+          90,
+          'Personenstatus für gefilterte TestTaker wird geladen...'
+        );
         const uniqueLogins = Array.from(
           new Set(filteredTestTakers.map(item => item.login))
         );
@@ -303,6 +541,19 @@ export class WorkspaceTestFilesValidationService {
           }));
       }
 
+      const geogebra = await this.detectGeoGebraUsage(
+        workspaceId,
+        validationResults,
+        unitMap,
+        onProgress
+      );
+
+      await this.reportProgress(
+        onProgress,
+        98,
+        'Validierungsergebnis wird vorbereitet...'
+      );
+
       if (validationResults.length > 0) {
         return {
           testTakersFound: true,
@@ -312,6 +563,7 @@ export class WorkspaceTestFilesValidationService {
             duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
           unusedTestFiles:
             unusedTestFiles.length > 0 ? unusedTestFiles : undefined,
+          geogebra,
           validationResults
         };
       }
@@ -324,6 +576,7 @@ export class WorkspaceTestFilesValidationService {
           duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
         unusedTestFiles:
           unusedTestFiles.length > 0 ? unusedTestFiles : undefined,
+        geogebra,
         validationResults: this.createEmptyValidationData()
       };
     } catch (error) {
@@ -507,6 +760,17 @@ export class WorkspaceTestFilesValidationService {
     return considerByLogin;
   }
 
+  private async reportProgress(
+    onProgress: ValidationProgressReporter | undefined,
+    progress: number,
+    message?: string
+  ): Promise<void> {
+    if (!onProgress) {
+      return;
+    }
+    await onProgress(progress, message);
+  }
+
   private async preloadBookletToUnits(
     workspaceId: number,
     exclusions: WorkspaceSettingsDto
@@ -539,12 +803,13 @@ export class WorkspaceTestFilesValidationService {
           }
 
           const testlets: TestletDto[] = [];
-          $('testlet').each((_, element) => {
+          $('Testlet, testlet').each((_, element) => {
             const id = $(element).attr('id');
             const label = $(element).attr('label');
             if (id) {
               testlets.push({
                 id,
+                bookletId,
                 label,
                 ignored: this.workspaceExclusionService.isExcluded(
                   { bookletId, testletId: id },
@@ -555,12 +820,15 @@ export class WorkspaceTestFilesValidationService {
           });
 
           const unitIds: string[] = [];
-          $('Unit').each((_, element) => {
+          $('Unit, unit').each((_, element) => {
             const unitId = $(element).attr('id');
             if (unitId) {
               let ignoredByTestlet = false;
               let current = $(element).parent();
-              while (current.length && current[0].tagName === 'testlet') {
+              while (
+                current.length &&
+                current[0].tagName?.toLowerCase() === 'testlet'
+              ) {
                 const testletId = current.attr('id');
                 if (
                   testletId &&
@@ -622,7 +890,8 @@ export class WorkspaceTestFilesValidationService {
             definitionRefs: [],
             playerRefs: [],
             metadataRefs: [],
-            hasPlayer: false
+            hasPlayer: false,
+            hasGeoGebraVariable: false
           };
 
           $('Unit').each((_, element) => {
@@ -643,6 +912,21 @@ export class WorkspaceTestFilesValidationService {
             const schemerRef = schemerRefAttr ?
               schemerRefAttr.replace('@', '-') :
               '';
+
+            $(element)
+              .find('BaseVariables Variable, DerivedVariables Variable')
+              .each((__, variableElement) => {
+                const variable = $(variableElement);
+                const format = (variable.attr('format') || '').toLowerCase();
+                const type = (variable.attr('type') || '').toLowerCase();
+                if (format === 'ggb-file' || type === 'geometry') {
+                  refs.hasGeoGebraVariable = true;
+                }
+              });
+
+            if (unit.data.toLowerCase().includes('ggb-file')) {
+              refs.hasGeoGebraVariable = true;
+            }
 
             if (codingSchemeRef) refs.codingSchemeRefs.push(codingSchemeRef.toUpperCase());
             if (schemerRef) refs.schemerRefs.push(schemerRef.toUpperCase());
@@ -716,6 +1000,214 @@ export class WorkspaceTestFilesValidationService {
       `Preloaded ${resourceIds.size} unique resource IDs/filenames for workspace ${workspaceId}`
     );
     return resourceIds;
+  }
+
+  private async detectGeoGebraUsage(
+    workspaceId: number,
+    validationResults: ValidationData[],
+    unitMap: Map<string, UnitRefs>,
+    onProgress?: ValidationProgressReporter
+  ): Promise<GeoGebraValidationResult> {
+    await this.reportProgress(
+      onProgress,
+      92,
+      'GeoGebra-Aufgaben werden erkannt...'
+    );
+
+    const geogebraUnits = new Set<string>();
+    const visibleUnitIds = new Set<string>();
+
+    validationResults.forEach(result => {
+      result.units.files.forEach(file => {
+        if (file.exists && !file.ignored && file.filename) {
+          visibleUnitIds.add(file.filename.toUpperCase());
+        }
+      });
+    });
+
+    visibleUnitIds.forEach(unitId => {
+      const refs = unitMap.get(unitId);
+      if (refs?.hasGeoGebraVariable) {
+        geogebraUnits.add(unitId);
+      }
+    });
+
+    const definitionRefsByUnit = new Map<string, string[]>();
+    visibleUnitIds.forEach(unitId => {
+      const refs = unitMap.get(unitId);
+      if (refs?.definitionRefs.length) {
+        definitionRefsByUnit.set(unitId, refs.definitionRefs);
+      }
+    });
+
+    if (definitionRefsByUnit.size > 0) {
+      const resourceFiles = await this.fileUploadRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          file_type: 'Resource'
+        },
+        select: ['file_id', 'filename', 'data']
+      });
+
+      definitionRefsByUnit.forEach((definitionRefs, unitId) => {
+        const hasGeoGebraDefinition = definitionRefs.some(ref => {
+          const resourceFile = resourceFiles.find(
+            file => this.resourceFileMatchesRef(ref, file)
+          );
+          return resourceFile ?
+            this.containsGeoGebraDefinition(resourceFile.data || '') :
+            false;
+        });
+
+        if (hasGeoGebraDefinition) {
+          geogebraUnits.add(unitId);
+        }
+      });
+    }
+
+    await this.reportProgress(
+      onProgress,
+      94,
+      'GeoGebra-Ressourcenpaket wird geprüft...'
+    );
+
+    return this.createGeoGebraValidationResult(
+      workspaceId,
+      Array.from(geogebraUnits).sort()
+    );
+  }
+
+  private async createGeoGebraValidationResult(
+    workspaceId: number,
+    units: string[]
+  ): Promise<GeoGebraValidationResult> {
+    const packageStatus =
+      await this.resourcePackageService.getGeoGebraPackageStatus(workspaceId);
+
+    return {
+      hasTasks: units.length > 0,
+      units,
+      packageStatus
+    };
+  }
+
+  private resourceFileMatchesRef(
+    ref: string,
+    file: Pick<FileUpload, 'file_id' | 'filename'>
+  ): boolean {
+    const refTokens = WorkspaceTestFilesValidationService.createResourceTokens(
+      ref
+    );
+    const fileTokens = new Set([
+      ...WorkspaceTestFilesValidationService.createResourceTokens(file.file_id),
+      ...WorkspaceTestFilesValidationService.createResourceTokens(file.filename)
+    ]);
+
+    return refTokens.some(token => fileTokens.has(token));
+  }
+
+  private static createResourceTokens(value: string | undefined | null): string[] {
+    if (!value) {
+      return [];
+    }
+
+    let normalized = value.trim().replace(/\\/g, '/');
+    try {
+      normalized = decodeURIComponent(normalized);
+    } catch {
+      // Keep the original value if it is not URI encoded.
+    }
+
+    if (!normalized) {
+      return [];
+    }
+
+    const tokens = new Set<string>();
+    const add = (token: string) => {
+      const upper = token.trim().toUpperCase();
+      if (upper) {
+        tokens.add(upper);
+        tokens.add(upper.replace('@', '-'));
+      }
+    };
+
+    add(normalized);
+    ['.VOCS', '.XML', '.HTML', '.JSON', '.VOUD', '.VOMD'].forEach(ext => {
+      add(`${normalized}${ext}`);
+    });
+
+    const lastDot = normalized.lastIndexOf('.');
+    if (lastDot > 0) {
+      add(normalized.substring(0, lastDot));
+    }
+
+    if (normalized.includes('/')) {
+      const basename = normalized.split('/').pop();
+      if (basename) {
+        add(basename);
+        const basenameLastDot = basename.lastIndexOf('.');
+        if (basenameLastDot > 0) {
+          add(basename.substring(0, basenameLastDot));
+        }
+      }
+    }
+
+    return Array.from(tokens);
+  }
+
+  private containsGeoGebraDefinition(data: string): boolean {
+    if (!data) {
+      return false;
+    }
+
+    const lower = data.toLowerCase();
+    const compact = lower.replace(/\s/g, '');
+    if (
+      lower.includes('geogebra') ||
+      lower.includes('"ggb-file"') ||
+      lower.includes('"appdefinition"') ||
+      compact.includes('"type":"geometry"')
+    ) {
+      return true;
+    }
+
+    try {
+      return this.containsGeoGebraJsonValue(JSON.parse(data));
+    } catch {
+      return false;
+    }
+  }
+
+  private containsGeoGebraJsonValue(value: unknown): boolean {
+    if (!value) {
+      return false;
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.toLowerCase();
+      return normalized.includes('geogebra') || normalized.includes('ggb-file');
+    }
+
+    if (Array.isArray(value)) {
+      return value.some(item => this.containsGeoGebraJsonValue(item));
+    }
+
+    if (typeof value === 'object') {
+      return Object.entries(value as Record<string, unknown>).some(
+        ([key, child]) => {
+          if (
+            key === 'appDefinition' ||
+            (key === 'type' && String(child).toLowerCase() === 'geometry') ||
+            (key === 'format' && String(child).toLowerCase() === 'ggb-file')
+          ) {
+            return true;
+          }
+          return this.containsGeoGebraJsonValue(child);
+        }
+      );
+    }
+
+    return false;
   }
 
   private resourceExists(ref: string, resourceIds: Set<string>): boolean {
@@ -856,7 +1348,11 @@ export class WorkspaceTestFilesValidationService {
         const data = bookletMap.get(bookletId);
         const units = data?.unitIds || [];
         (data?.testlets || []).forEach(t => {
-          if (!allTestlets.some(existing => existing.id === t.id)) {
+          if (
+            !allTestlets.some(
+              existing => existing.bookletId === t.bookletId && existing.id === t.id
+            )
+          ) {
             allTestlets.push(t);
           }
         });

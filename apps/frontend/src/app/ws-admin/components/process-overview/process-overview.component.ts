@@ -8,15 +8,16 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { WorkspaceProcessesService } from '../../services/workspace-processes.service';
 import { ProcessDto } from '../../../../../../../api-dto/workspaces/process-dto';
-import { AppService } from '../../../core/services/app.service';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 
 @Component({
   selector: 'coding-box-process-overview-dialog',
@@ -40,8 +41,8 @@ import { AppService } from '../../../core/services/app.service';
 })
 export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   private processesService = inject(WorkspaceProcessesService);
-  private appService = inject(AppService);
-  private dialogRef = inject(MatDialogRef<ProcessOverviewComponent>);
+  private dialog = inject(MatDialog);
+  private snackBar = inject(MatSnackBar);
   data: { workspaceId: number } = inject(MAT_DIALOG_DATA);
 
   workspaceId: number = this.data.workspaceId;
@@ -54,7 +55,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   typeFilter = '';
   searchFilter = '';
   availableTypes: string[] = [];
-  statusOptions = ['active', 'waiting', 'delayed', 'completed', 'failed', 'paused'];
+  statusOptions = ['active', 'waiting', 'delayed', 'completed', 'failed', 'paused', 'unknown'];
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
@@ -112,24 +113,58 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
         this.applyFilter();
       },
       error: () => {
+        this.snackBar.open('Fehler beim Laden der Prozesse', 'Schließen', { duration: 3000 });
         this.isLoading = false;
       }
     });
   }
 
   deleteProcess(process: ProcessDto): void {
-    if (!window.confirm(`Möchten Sie den Prozess "${process.queueName}" (ID: ${process.id}) wirklich abbrechen/löschen?`)) {
-      return;
-    }
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '440px',
+      data: <ConfirmDialogData>{
+        title: 'Prozess abbrechen oder entfernen',
+        content: `Möchten Sie den Prozess "${process.queueName}" (ID: ${process.id}) wirklich abbrechen oder entfernen?`,
+        confirmButtonLabel: 'Entfernen',
+        showCancel: true
+      }
+    });
+
+    dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+      if (confirmed) {
+        this.confirmDeleteProcess(process);
+      }
+    });
+  }
+
+  confirmDeleteProcess(process: ProcessDto): void {
     this.isLoading = true;
     this.processesService.deleteProcess(this.workspaceId, process.queueName, process.id.toString()).subscribe({
-      next: () => {
-        this.loadProcesses();
+      next: success => {
+        if (success) {
+          this.snackBar.open('Prozess wurde abgebrochen oder entfernt', 'OK', { duration: 3000 });
+          this.loadProcesses();
+        } else {
+          this.snackBar.open('Prozess konnte nicht abgebrochen oder entfernt werden', 'Schließen', { duration: 4000 });
+          this.isLoading = false;
+        }
       },
       error: () => {
+        this.snackBar.open('Fehler beim Abbrechen oder Entfernen des Prozesses', 'Schließen', { duration: 4000 });
         this.isLoading = false;
       }
     });
+  }
+
+  canRemoveProcess(process: ProcessDto): boolean {
+    if (process.status !== 'active') return true;
+    return process.queueName === 'data-export' || process.queueName === 'test-person-coding';
+  }
+
+  getActionTooltip(process: ProcessDto): string {
+    return this.canRemoveProcess(process) ?
+      'Abbrechen / Entfernen' :
+      'Aktive Prozesse dieses Typs können nicht sicher abgebrochen werden';
   }
 
   isNumber(val: unknown): boolean {

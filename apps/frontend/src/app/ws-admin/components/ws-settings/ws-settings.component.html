@@ -10,12 +10,19 @@
 
         <mat-form-field class="full-width">
           <mat-label>{{ 'ws-settings.validity-days' | translate }}</mat-label>
-          <input matInput [(ngModel)]="duration" type="number" min="1" placeholder="Laufzeit in Tagen"/>
+          <input
+            matInput
+            [(ngModel)]="duration"
+            type="number"
+            [min]="minTokenDurationDays"
+            [max]="maxTokenDurationDays"
+            step="1"
+            placeholder="Laufzeit in Tagen"/>
           <mat-hint>{{ 'ws-settings.enter-validity-days' | translate }}</mat-hint>
         </mat-form-field>
 
         <div class="token-actions">
-          <button mat-raised-button color="primary" [disabled]="!duration || duration < 0" (click)="createToken()">
+          <button mat-raised-button color="primary" [disabled]="!isTokenDurationValid()" (click)="createToken()">
             <mat-icon>vpn_key</mat-icon> {{ 'ws-settings.generate-access-token' | translate }}
           </button>
         </div>
@@ -61,7 +68,7 @@
     </mat-card-header>
     <mat-card-content>
       <div class="processes-container">
-        <p>Zentrale Prozess-Übersicht für Hintergrundaufgaben (BullMQ).</p>
+        <p>Zentrale Prozess-Übersicht für Queue-Hintergrundaufgaben.</p>
         <div class="processes-actions">
           <button mat-raised-button color="primary" (click)="openProcessOverview()">
             <mat-icon>list</mat-icon> Prozesse anzeigen
@@ -150,7 +157,7 @@
             color="primary"
             [disabled]="isExporting"
             (click)="exportWorkspaceDatabase()">
-            <mat-icon>download</mat-icon>
+            <mat-icon>{{isExporting ? 'hourglass_empty' : 'download'}}</mat-icon>
             @if (isExporting) {
               {{ 'ws-settings.exporting' | translate }}
             } @else {
@@ -159,7 +166,17 @@
           </button>
         </div>
         @if (isExporting) {
-          <mat-progress-bar mode="indeterminate" class="export-progress"></mat-progress-bar>
+          <div class="export-progress">
+            <mat-progress-bar mode="determinate" [value]="databaseExportProgress"></mat-progress-bar>
+            <p class="progress-text">
+              {{ 'ws-settings.export-status' | translate }}:
+              {{ getDatabaseExportStatusLabel() }} - {{ databaseExportProgress }}%
+            </p>
+            <p class="progress-text">{{ 'ws-settings.export-may-take-minutes' | translate }}</p>
+          </div>
+        }
+        @if (databaseExportError) {
+          <p class="export-error">{{ databaseExportError }}</p>
         }
       </div>
     </mat-card-content>

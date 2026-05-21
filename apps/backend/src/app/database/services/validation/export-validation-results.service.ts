@@ -1,9 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import * as ExcelJS from 'exceljs';
-import { CacheService } from '../../../cache/cache.service';
+import {
+  CacheService,
+  VALIDATION_CACHE_KEY_PREFIX
+} from '../../../cache/cache.service';
 import { ResponseEntity } from '../../entities/response.entity';
+import { ValidationResultDto } from '../../../../../../../api-dto/coding/validation-result.dto';
 
 @Injectable()
 export class ExportValidationResultsService {
@@ -26,6 +30,7 @@ export class ExportValidationResultsService {
       this.logger.error(`${errorMessage}: ${cacheKey}`);
       throw new Error(errorMessage);
     }
+    this.assertValidValidationCacheKey(workspaceId, cacheKey);
 
     try {
       this.logger.log(`Attempting to retrieve cached data with key: ${cacheKey}`);
@@ -33,8 +38,9 @@ export class ExportValidationResultsService {
 
       if (!cachedData) {
         this.logger.error(`No cached validation results found for cache key ${cacheKey}`);
-        this.logger.error('Cache key format: validation:{workspaceId}:{hash}');
-        this.logger.error(`Expected pattern: validation:${workspaceId}:*`);
+        this.logger.error(`Cache key format: ${VALIDATION_CACHE_KEY_PREFIX}:{workspaceId}:{hash}`);
+        this.logger.error(`Expected pattern: ${VALIDATION_CACHE_KEY_PREFIX}:${workspaceId}:*`);
+        throw new Error('No cached validation results found');
       }
 
       const validationResults = cachedData.results;
@@ -59,7 +65,8 @@ export class ExportValidationResultsService {
         { header: 'Person ID', key: 'person_id', width: 12 },
         { header: 'Unit Name', key: 'unit_name', width: 20 },
         { header: 'Booklet Name', key: 'booklet_name', width: 20 },
-        { header: 'Last Modified', key: 'last_modified', width: 20 }
+        { header: 'Last Modified', key: 'last_modified', width: 20 },
+        { header: 'Issues', key: 'issues', width: 50 }
       ];
 
       worksheet.getRow(1).font = { bold: true };
@@ -76,30 +83,28 @@ export class ExportValidationResultsService {
         let unitData = null;
         let bookletData = null;
 
-        if (result.status === 'EXISTS') {
+        if (this.shouldQueryResponseData(result)) {
           const query = this.responseRepository
             .createQueryBuilder('response')
-            .leftJoin('response.unit', 'unit')
-            .leftJoin('unit.booklet', 'booklet')
-            .leftJoin('booklet.person', 'person')
-            .leftJoin('booklet.bookletinfo', 'bookletinfo')
-            .select([
-              'response.value',
-              'response.status',
-              'person.id',
-              'person.login',
-              'person.code',
-              'unit.name',
-              'unit.alias',
-              'bookletinfo.name'
-            ])
-            .where('unit.alias = :unitKey', { unitKey: combination.unit_key })
+            .leftJoinAndSelect('response.unit', 'unit')
+            .leftJoinAndSelect('unit.booklet', 'booklet')
+            .leftJoinAndSelect('booklet.person', 'person')
+            .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.consider = :consider', { consider: true })
             .andWhere('person.login = :loginName', { loginName: combination.login_name })
             .andWhere('person.code = :loginCode', { loginCode: combination.login_code })
             .andWhere('bookletinfo.name = :bookletId', { bookletId: combination.booklet_id })
             .andWhere('response.variableid = :variableId', { variableId: combination.variable_id })
             .andWhere('response.value IS NOT NULL')
             .andWhere('response.value != :empty', { empty: '' });
+
+          this.applyUnitFilters(query, combination.unit_key, combination.unit_alias);
+          if (combination.person_group) {
+            query.andWhere('person.group = :personGroup', {
+              personGroup: combination.person_group
+            });
+          }
 
           const responseEntity = await query.getOne();
           if (responseEntity) {
@@ -122,7 +127,8 @@ export class ExportValidationResultsService {
           person_id: personData?.id || '',
           unit_name: unitData?.name || '',
           booklet_name: bookletData?.name || '',
-          last_modified: ''
+          last_modified: '',
+          issues: this.formatIssues(result)
         });
       }
 
@@ -157,5 +163,56 @@ export class ExportValidationResultsService {
       this.logger.error(`Error exporting validation results as Excel: ${error.message}`, error.stack);
       throw new Error('Could not export validation results as Excel. Please check the database connection or query.');
     }
+  }
+
+  private applyUnitFilters(
+    queryBuilder: SelectQueryBuilder<ResponseEntity>,
+    unitKey?: string,
+    unitAlias?: string
+  ): void {
+    const unitCandidates = Array.from(
+      new Set([unitKey, unitAlias].map(value => value?.trim()).filter(Boolean))
+    ) as string[];
+
+    if (unitCandidates.length === 0) {
+      return;
+    }
+
+    queryBuilder.andWhere(new Brackets(qb => {
+      unitCandidates.forEach((unitCandidate, index) => {
+        const parameterName = `unitCandidate${index}`;
+        const condition = `(unit.name = :${parameterName} OR unit.alias = :${parameterName})`;
+        if (index === 0) {
+          qb.where(condition, { [parameterName]: unitCandidate });
+        } else {
+          qb.orWhere(condition, { [parameterName]: unitCandidate });
+        }
+      });
+    }));
+  }
+
+  private formatIssues(result: ValidationResultDto): string {
+    return result.issues?.join(' | ') || '';
+  }
+
+  private assertValidValidationCacheKey(
+    workspaceId: number,
+    cacheKey: string
+  ): void {
+    const expectedPrefix = `${VALIDATION_CACHE_KEY_PREFIX}:${workspaceId}:`;
+    if (!cacheKey.startsWith(expectedPrefix)) {
+      this.logger.error(
+        `Invalid validation cache key version or workspace: ${cacheKey}. Expected prefix: ${expectedPrefix}`
+      );
+      throw new Error('Invalid validation cache key provided');
+    }
+  }
+
+  private shouldQueryResponseData(result: ValidationResultDto): boolean {
+    if (result.status === 'EXISTS') {
+      return true;
+    }
+
+    return result.responseFound === true;
   }
 }

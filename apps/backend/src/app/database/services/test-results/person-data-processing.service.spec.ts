@@ -361,6 +361,34 @@ describe('PersonDataProcessingService', () => {
       );
       expect(result.units).toHaveLength(1);
       expect(result.units[0].id).toBe('U2');
+      expect(result.units[0].alias).toBe('U2');
+    });
+
+    it('should keep original unit ids as aliases when creating units from logs', () => {
+      const booklet = {
+        id: 'B1',
+        logs: [],
+        units: [],
+        sessions: []
+      };
+      const rows = [
+        {
+          bookletname: 'B1',
+          unitname: 'U2',
+          originalUnitId: 'ORIGINAL-U2',
+          timestamp: 123,
+          logentry: 'KEY="value"'
+        }
+      ];
+      const result = service.assignUnitLogsToBooklet(
+        booklet as TcMergeBooklet,
+        rows as unknown as Log[]
+      );
+      expect(result.units).toHaveLength(1);
+      expect(result.units[0]).toMatchObject({
+        id: 'U2',
+        alias: 'ORIGINAL-U2'
+      });
     });
 
     it('should skip invalid rows', () => {
@@ -559,6 +587,25 @@ describe('PersonDataProcessingService', () => {
             variables: ['var1']
           }
         ]
+      });
+    });
+
+    it('should keep originalUnitId as unit alias', () => {
+      const row = {
+        unitname: 'U1',
+        originalUnitId: 'ORIGINAL-U1',
+        bookletname: 'B1'
+      };
+      const result = service.createUnit(
+        row as unknown as Response,
+        [],
+        [],
+        new Set(),
+        []
+      );
+      expect(result).toMatchObject({
+        id: 'U1',
+        alias: 'ORIGINAL-U1'
       });
     });
   });

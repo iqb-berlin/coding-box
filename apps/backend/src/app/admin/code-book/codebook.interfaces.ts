@@ -10,9 +10,11 @@ export interface ItemMetadata {
 /**
  * Settings for codebook content generation
  */
+export type CodebookExportFormat = 'docx' | 'json';
+
 export interface CodeBookContentSetting {
   /** Export format (docx or json) */
-  exportFormat: string;
+  exportFormat: CodebookExportFormat;
   /** Missings profile name */
   missingsProfile: string;
   /** Include only manual coding */

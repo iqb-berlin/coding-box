@@ -22,7 +22,10 @@ import {
   ValidationDataTableComponent,
   ValidationTableColumn
 } from '../../shared';
-import { InvalidVariableDto } from '../../../../../../../../../api-dto/files/variable-validation.dto';
+import {
+  InvalidVariableDto,
+  VariableValidationSummaryDto
+} from '../../../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableValidationService } from '../../../../services/validation';
 import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
 
@@ -31,6 +34,7 @@ interface VariablesValidationResult {
   total: number;
   page: number;
   limit: number;
+  summary?: VariableValidationSummaryDto;
 }
 
 /**
@@ -79,6 +83,21 @@ interface VariablesValidationResult {
         margin-right: 8px;
       }
 
+      .validation-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 12px;
+      }
+
+      .validation-summary span {
+        padding: 2px 8px;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 999px;
+        font-size: 12px;
+        line-height: 18px;
+      }
+
       .loading-container {
         display: flex;
         align-items: center;
@@ -116,6 +135,11 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
   errorMessage: string | null = null;
   invalidVariables: InvalidVariableDto[] = [];
   totalInvalid = 0;
+  summary: VariableValidationSummaryDto = {
+    unitFileNotFound: 0,
+    variableNotDefinedInUnit: 0
+  };
+
   currentPage = 1;
   pageSize = 10;
   selectedResponses: Set<number> = new Set();
@@ -133,7 +157,8 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
     },
     { key: 'fileName', label: 'Dateiname', type: 'link' },
     { key: 'variableId', label: 'Variablen-ID' },
-    { key: 'value', label: 'Wert' }
+    { key: 'value', label: 'Wert' },
+    { key: 'errorReason', label: 'Fehlergrund' }
   ];
 
   private subscription?: Subscription;
@@ -157,6 +182,10 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
           this.errorMessage = details.error as string;
           this.invalidVariables = [];
           this.totalInvalid = 0;
+          this.summary = {
+            unitFileNotFound: 0,
+            variableNotDefinedInUnit: 0
+          };
         } else if (result.details) {
           const variablesResult = result.details as VariablesValidationResult;
           this.errorMessage = null;
@@ -164,6 +193,10 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
           this.totalInvalid = variablesResult.total || 0;
           this.currentPage = variablesResult.page || 1;
           this.pageSize = variablesResult.limit || 10;
+          this.summary = variablesResult.summary || {
+            unitFileNotFound: 0,
+            variableNotDefinedInUnit: 0
+          };
         }
       }
     });
@@ -205,6 +238,10 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
           this.totalInvalid = result.total;
           this.currentPage = result.page;
           this.pageSize = result.limit;
+          this.summary = result.summary || {
+            unitFileNotFound: 0,
+            variableNotDefinedInUnit: 0
+          };
           this.wasRun = true;
           this.isRunning = false;
         },
@@ -232,6 +269,10 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
           this.totalInvalid = result.total;
           this.currentPage = result.page;
           this.pageSize = result.limit;
+          this.summary = result.summary || {
+            unitFileNotFound: 0,
+            variableNotDefinedInUnit: 0
+          };
           this.isLoadingPage = false;
         },
         error: () => {
@@ -334,7 +375,8 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
             { header: 'Dateiname', value: row => row.fileName },
             { header: 'Variablen-ID', value: row => row.variableId },
             { header: 'Wert', value: row => row.value },
-            { header: 'Response-ID', value: row => row.responseId ?? '' }
+            { header: 'Response-ID', value: row => row.responseId ?? '' },
+            { header: 'Fehlergrund', value: row => row.errorReason ?? '' }
           ]);
 
           downloadCsvFile('validierung-variablen.csv', csvContent);

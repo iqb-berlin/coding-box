@@ -6,11 +6,16 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { ValidationTask } from '../../entities/validation-task.entity';
+import {
+  ValidationTask,
+  ValidationType
+} from '../../entities/validation-task.entity';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
   JobQueueService
 } from '../../../job-queue/job-queue.service';
+import { WorkspaceTestResultsService } from '../test-results';
+import { TestResultsDeleteRequestDto } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 @Injectable()
 export class ValidationTaskService {
@@ -20,17 +25,59 @@ export class ValidationTaskService {
     @InjectRepository(ValidationTask)
     private taskRepository: Repository<ValidationTask>,
     private validationService: WorkspaceFilesService,
+    private testResultsService: WorkspaceTestResultsService,
     @Inject(forwardRef(() => JobQueueService))
     private readonly jobQueueService: JobQueueService
   ) { }
 
   async createValidationTask(
     workspaceId: number,
-    validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses',
+    validationType: ValidationType,
     page?: number,
     limit?: number,
     additionalData?: Record<string, unknown>
   ): Promise<ValidationTask> {
+    let cacheKey: string | undefined;
+
+    if (validationType === 'testFiles') {
+      cacheKey =
+        await this.validationService.getTestFilesValidationCacheKey(
+          workspaceId
+        );
+
+      const runningTask = await this.findRunningTestFilesValidationTask(
+        workspaceId,
+        cacheKey
+      );
+      if (runningTask) {
+        this.logger.log(
+          `Reusing running test files validation task ${runningTask.id} for workspace ${workspaceId}`
+        );
+        return runningTask;
+      }
+
+      const cachedTask = await this.findCachedTestFilesValidationTask(
+        workspaceId,
+        cacheKey
+      );
+      if (cachedTask) {
+        this.logger.log(
+          `Returning cached test files validation task ${cachedTask.id} for workspace ${workspaceId}`
+        );
+        cachedTask.progress = 100;
+        cachedTask.progress_message =
+          'Testdateien unverändert - letztes Validierungsergebnis wird verwendet.';
+        return cachedTask;
+      }
+    }
+
+    let progressMessage: string | undefined;
+    if (validationType === 'testFiles') {
+      progressMessage = 'Testdateien werden auf Änderungen geprüft...';
+    } else if (ValidationTaskService.isDeletionTask(validationType)) {
+      progressMessage = 'Löschung wird vorbereitet...';
+    }
+
     const task = this.taskRepository.create({
       workspace_id: workspaceId,
       validation_type: validationType,
@@ -38,6 +85,8 @@ export class ValidationTaskService {
       limit: limit,
       status: 'pending',
       progress: 0,
+      progress_message: progressMessage,
+      cache_key: cacheKey,
       result: additionalData ? JSON.stringify(additionalData) : undefined
     });
 
@@ -54,6 +103,41 @@ export class ValidationTaskService {
     }
 
     return savedTask;
+  }
+
+  private async findRunningTestFilesValidationTask(
+    workspaceId: number,
+    cacheKey: string
+  ): Promise<ValidationTask | null> {
+    const tasks = await this.taskRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        validation_type: 'testFiles',
+        cache_key: cacheKey,
+        status: In(['pending', 'processing'])
+      },
+      order: { created_at: 'DESC' }
+    });
+
+    return tasks[0] || null;
+  }
+
+  private async findCachedTestFilesValidationTask(
+    workspaceId: number,
+    cacheKey: string,
+    excludeTaskId?: number
+  ): Promise<ValidationTask | null> {
+    const tasks = await this.taskRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        validation_type: 'testFiles',
+        cache_key: cacheKey,
+        status: 'completed'
+      },
+      order: { created_at: 'DESC' }
+    });
+
+    return tasks.find(task => task.id !== excludeTaskId && !!task.result) || null;
   }
 
   async getValidationTask(taskId: number, workspaceId?: number): Promise<ValidationTask> {
@@ -90,6 +174,23 @@ export class ValidationTaskService {
     });
   }
 
+  private static parseResponseIds(value: unknown): number[] {
+    if (Array.isArray(value)) {
+      return value
+        .map(id => Number(id))
+        .filter(id => Number.isInteger(id) && id > 0);
+    }
+
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map(id => Number(id.trim()))
+        .filter(id => Number.isInteger(id) && id > 0);
+    }
+
+    return [];
+  }
+
   async getValidationResults(taskId: number, workspaceId?: number): Promise<unknown> {
     const task = await this.getValidationTask(taskId, workspaceId);
 
@@ -101,12 +202,30 @@ export class ValidationTaskService {
       throw new Error(`Task with ID ${taskId} has no results`);
     }
 
+    let result: unknown;
     try {
-      return JSON.parse(task.result);
+      result = JSON.parse(task.result);
     } catch (error) {
       this.logger.error(`Error parsing results for task ${taskId}: ${error.message}`, error.stack);
       throw new Error(`Error parsing results for task ${taskId}`);
     }
+
+    if (task.validation_type !== 'testFiles') {
+      return result;
+    }
+
+    const refreshedResult =
+      await this.validationService.refreshTestFilesValidationResult(
+        task.workspace_id,
+        result
+      );
+    const serializedRefreshedResult = JSON.stringify(refreshedResult);
+    if (serializedRefreshedResult !== task.result) {
+      task.result = serializedRefreshedResult;
+      await this.taskRepository.save(task);
+    }
+
+    return refreshedResult;
   }
 
   async processValidationTask(taskId: number): Promise<void> {
@@ -115,17 +234,22 @@ export class ValidationTaskService {
 
       task.status = 'processing';
       task.progress = 10;
+      task.progress_message = 'Validierung wird vorbereitet...';
       await this.taskRepository.save(task);
 
-      const onProgress = async (progress: number) => {
+      const onProgress = async (progress: number, message?: string) => {
         // Update progress in database if it changed significantly (at least 5%)
         // or if it's nearing completion.
         if (
           !task.progress ||
           progress - task.progress >= 5 ||
-          (progress > 90 && progress !== task.progress)
+          (progress > 90 && progress !== task.progress) ||
+          (message && message !== task.progress_message)
         ) {
           task.progress = progress;
+          if (message) {
+            task.progress_message = message;
+          }
           await this.taskRepository.save(task);
         }
       };
@@ -183,6 +307,38 @@ export class ValidationTaskService {
             onProgress
           );
           break;
+        case 'testFiles': {
+          const cacheKey =
+            task.cache_key ||
+            await this.validationService.getTestFilesValidationCacheKey(
+              task.workspace_id
+            );
+          task.cache_key = cacheKey;
+
+          const cachedTask = await this.findCachedTestFilesValidationTask(
+            task.workspace_id,
+            cacheKey,
+            task.id
+          );
+          if (cachedTask?.result) {
+            task.result = cachedTask.result;
+            task.status = 'completed';
+            task.progress = 100;
+            task.progress_message =
+              'Letztes Validierungsergebnis wurde wiederverwendet.';
+            await this.taskRepository.save(task);
+            this.logger.log(
+              `Completed validation task ${taskId} from cached task ${cachedTask.id}`
+            );
+            return;
+          }
+
+          result = await this.validationService.validateTestFiles(
+            task.workspace_id,
+            onProgress
+          );
+          break;
+        }
         case 'groupResponses':
           result = await this.validationService.validateGroupResponses(
             task.workspace_id,
@@ -192,8 +348,13 @@ export class ValidationTaskService {
           );
           break;
         case 'deleteResponses':
-          if (taskData && Array.isArray(taskData.responseIds)) {
-            const responseIds = taskData.responseIds as number[];
+          if (taskData) {
+            const responseIds = ValidationTaskService.parseResponseIds(
+              taskData.responseIds
+            );
+            if (responseIds.length === 0) {
+              throw new Error('No response IDs provided for deletion');
+            }
             const deletedCount =
               await this.validationService.deleteInvalidResponses(
                 task.workspace_id,
@@ -221,6 +382,30 @@ export class ValidationTaskService {
             throw new Error('No validation type provided for deletion');
           }
           break;
+        case 'deleteTestResults':
+          if (taskData && typeof taskData.scope === 'string') {
+            result = await this.testResultsService.deleteTestResultsByRequest(
+              task.workspace_id,
+              taskData as unknown as TestResultsDeleteRequestDto,
+              typeof taskData.userId === 'string' ? taskData.userId : '',
+              onProgress
+            );
+          } else {
+            throw new Error('No test result deletion scope provided');
+          }
+          break;
+        case 'deleteTestLogs':
+          if (taskData && typeof taskData.scope === 'string') {
+            result = await this.testResultsService.deleteTestLogsByRequest(
+              task.workspace_id,
+              taskData as unknown as TestResultsDeleteRequestDto,
+              typeof taskData.userId === 'string' ? taskData.userId : '',
+              onProgress
+            );
+          } else {
+            throw new Error('No test log deletion scope provided');
+          }
+          break;
         default:
           throw new Error(`Unknown validation type: ${task.validation_type}`);
       }
@@ -228,6 +413,9 @@ export class ValidationTaskService {
       task.result = JSON.stringify(result);
       task.status = 'completed';
       task.progress = 100;
+      task.progress_message = ValidationTaskService.isDeletionTask(task.validation_type) ?
+        'Löschung abgeschlossen.' :
+        'Validierung abgeschlossen.';
       await this.taskRepository.save(task);
 
       this.logger.log(`Completed validation task with ID ${taskId}`);
@@ -237,11 +425,21 @@ export class ValidationTaskService {
         task.error = error.message;
         task.status = 'failed';
         task.progress = 100;
+        task.progress_message = ValidationTaskService.isDeletionTask(task.validation_type) ?
+          'Löschung fehlgeschlagen.' :
+          'Validierung fehlgeschlagen.';
         await this.taskRepository.save(task);
       } catch (innerError) {
         this.logger.error(`Failed to update task ${taskId} with error: ${innerError.message}`, innerError.stack);
       }
       this.logger.error(`Failed to process task ${taskId}: ${error.message}`, error.stack);
     }
+  }
+
+  private static isDeletionTask(validationType: ValidationType): boolean {
+    return validationType === 'deleteResponses' ||
+      validationType === 'deleteAllResponses' ||
+      validationType === 'deleteTestResults' ||
+      validationType === 'deleteTestLogs';
   }
 }

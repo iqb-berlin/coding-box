@@ -1,0 +1,30 @@
+<div class="xml-viewer">
+  <div class="xml-toolbar">
+    @if (hasParseError) {
+      <span class="parse-warning">
+        <mat-icon>warning</mat-icon>
+        {{ 'xml-viewer.format-error' | translate }}
+      </span>
+    }
+    <span class="toolbar-spacer"></span>
+    <button
+      type="button"
+      mat-icon-button
+      [class.is-active]="lineWrap"
+      [matTooltip]="lineWrap ? ('xml-viewer.disable-line-wrap' | translate) : ('xml-viewer.enable-line-wrap' | translate)"
+      [attr.aria-label]="'xml-viewer.toggle-line-wrap' | translate"
+      (click)="toggleLineWrap()">
+      <mat-icon>wrap_text</mat-icon>
+    </button>
+    <button
+      type="button"
+      mat-icon-button
+      [matTooltip]="copySucceeded ? ('xml-viewer.copied' | translate) : ('xml-viewer.copy-original' | translate)"
+      [attr.aria-label]="'xml-viewer.copy-xml' | translate"
+      (click)="copyToClipboard()">
+      <mat-icon>{{ copySucceeded ? 'done' : 'content_copy' }}</mat-icon>
+    </button>
+  </div>
+
+  <pre class="xml-code" [class.wrap]="lineWrap">{{ formattedXml }}</pre>
+</div>

@@ -148,6 +148,61 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
     expect(result.data).toEqual([]);
   });
 
+  it('matches unit XML by uploaded file id when metadata id differs', async () => {
+    const filesRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          file_id: 'UNIT1',
+          filename: 'UNIT1.xml',
+          data: makeUnitXml('UNIT-FROM-METADATA', [
+            { id: 'V1', alias: 'A1', type: 'string' }
+          ])
+        } as unknown as FileUpload
+      ])
+    } as unknown as Repository<FileUpload>;
+
+    const personsRepository = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, workspace_id: 1, consider: true }])
+    } as unknown as Repository<Persons>;
+
+    const unitRepository = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue(
+          makeQueryBuilder([{ id: 10, name: 'UNIT1' } as unknown as Unit])
+        )
+    } as unknown as Repository<Unit>;
+
+    const responseRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 100,
+          unitid: 10,
+          variableid: 'A1',
+          value: 'x',
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
+        } as unknown as ResponseEntity
+      ])
+    } as unknown as Repository<ResponseEntity>;
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepository,
+      unitRepository,
+      personsRepository,
+      {} as unknown as Repository<Booklet>,
+      filesRepository
+    );
+
+    const result = await service.validateVariables(1, 1, 10);
+    expect(result.total).toBe(0);
+    expect(result.data).toEqual([]);
+  });
+
   it('flags response as invalid when variable is neither alias nor id in unit xml', async () => {
     const filesRepository = {
       find: jest.fn().mockResolvedValue([
@@ -202,8 +257,164 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
       fileName: 'UNIT1',
       variableId: 'UNKNOWN',
       responseId: 100,
-      errorReason: 'Variable not defined in unit'
+      errorReason: 'Variable not defined in unit',
+      errorCode: 'VARIABLE_NOT_DEFINED_IN_UNIT'
     });
+    expect(result.summary).toEqual({
+      unitFileNotFound: 0,
+      variableNotDefinedInUnit: 1
+    });
+  });
+
+  it('ignores undefined variable placeholders when their value is missing', async () => {
+    const filesRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          data: makeUnitXml('UNIT1', [
+            { id: 'V1', alias: 'A1', type: 'string' }
+          ])
+        } as unknown as FileUpload
+      ])
+    } as unknown as Repository<FileUpload>;
+
+    const personsRepository = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, workspace_id: 1, consider: true }])
+    } as unknown as Repository<Persons>;
+
+    const unitRepository = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue(
+          makeQueryBuilder([{ id: 10, name: 'UNIT1' } as unknown as Unit])
+        )
+    } as unknown as Repository<Unit>;
+
+    const responseRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 100,
+          unitid: 10,
+          variableid: 'drop-list_1',
+          value: '',
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
+        } as unknown as ResponseEntity,
+        {
+          id: 101,
+          unitid: 10,
+          variableid: 'drop-list_2',
+          value: '[]',
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
+        } as unknown as ResponseEntity
+      ])
+    } as unknown as Repository<ResponseEntity>;
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepository,
+      unitRepository,
+      personsRepository,
+      {} as unknown as Repository<Booklet>,
+      filesRepository
+    );
+
+    const result = await service.validateVariables(1, 1, 10);
+    expect(result.total).toBe(0);
+    expect(result.summary).toEqual({
+      unitFileNotFound: 0,
+      variableNotDefinedInUnit: 0
+    });
+  });
+
+  it('separates missing unit files from undefined variables in the summary', async () => {
+    const filesRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          file_id: 'UNIT1',
+          filename: 'UNIT1.xml',
+          data: makeUnitXml('UNIT1', [
+            { id: 'V1', alias: 'A1', type: 'string' }
+          ])
+        } as unknown as FileUpload
+      ])
+    } as unknown as Repository<FileUpload>;
+
+    const personsRepository = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, workspace_id: 1, consider: true }])
+    } as unknown as Repository<Persons>;
+
+    const unitRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(
+        makeQueryBuilder([
+          { id: 10, name: 'UNIT1' } as unknown as Unit,
+          { id: 11, name: 'MISSING_UNIT' } as unknown as Unit,
+          { id: 12, name: 'MISSING_EMPTY_UNIT' } as unknown as Unit
+        ])
+      )
+    } as unknown as Repository<Unit>;
+
+    const responseRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 100,
+          unitid: 10,
+          variableid: 'UNKNOWN',
+          value: 'x',
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
+        } as unknown as ResponseEntity,
+        {
+          id: 101,
+          unitid: 11,
+          variableid: 'A1',
+          value: 'y',
+          unit: {
+            id: 11,
+            name: 'MISSING_UNIT'
+          } as unknown as Unit
+        } as unknown as ResponseEntity,
+        {
+          id: 102,
+          unitid: 12,
+          variableid: 'A1',
+          value: '[]',
+          unit: {
+            id: 12,
+            name: 'MISSING_EMPTY_UNIT'
+          } as unknown as Unit
+        } as unknown as ResponseEntity
+      ])
+    } as unknown as Repository<ResponseEntity>;
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepository,
+      unitRepository,
+      personsRepository,
+      {} as unknown as Repository<Booklet>,
+      filesRepository
+    );
+
+    const result = await service.validateVariables(1, 1, 10);
+    expect(result.total).toBe(3);
+    expect(result.summary).toEqual({
+      unitFileNotFound: 2,
+      variableNotDefinedInUnit: 1
+    });
+    expect(result.data.map(item => item.errorCode)).toEqual([
+      'VARIABLE_NOT_DEFINED_IN_UNIT',
+      'UNIT_FILE_NOT_FOUND',
+      'UNIT_FILE_NOT_FOUND'
+    ]);
   });
 
   it('accepts response variableid matching alias for a no-value variable', async () => {

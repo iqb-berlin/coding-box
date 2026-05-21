@@ -1,12 +1,27 @@
 import { DataSource, QueryRunner } from 'typeorm';
 import {
-  forwardRef, Inject, Injectable, Logger
+  forwardRef, Inject, Injectable, Logger, Optional
 } from '@nestjs/common';
 import { ResponseEntity } from '../../entities/response.entity';
 import { JournalService, CodedResponse } from '../shared';
+import type { RecordAuditJournalEventInput } from '../shared/journal.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import {
+  lockWorkspaceTestResultsMutationInTransaction,
+  withWorkspaceTestResultsMutationLock
+} from '../shared/workspace-test-results-lock.util';
+import { CodingFreshnessVersion } from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import { AutocoderSourceRevisionStaleError } from './autocoder-source-revision-stale.error';
+
+type AutocoderCleanup = {
+  unitIds: number[];
+  autoCoderRun: number;
+  markCurrentVersion?: Extract<CodingFreshnessVersion, 'v1' | 'v3'>;
+  expectedSourceRevision?: number;
+};
 
 @Injectable()
 export class ResponseManagementService {
@@ -16,7 +31,9 @@ export class ResponseManagementService {
     private readonly connection: DataSource,
     private readonly journalService: JournalService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
-    private readonly workspaceTestResultsService: WorkspaceTestResultsService
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    @Optional()
+    private readonly codingFreshnessService?: CodingFreshnessService
   ) { }
 
   async updateResponsesInDatabase(
@@ -26,19 +43,68 @@ export class ResponseManagementService {
     jobId?: string,
     isJobCancelled?: (jobId: string) => Promise<boolean>,
     progressCallback?: (progress: number) => void,
-    metrics?: { [key: string]: number }
+    metrics?: { [key: string]: number },
+    autocoderCleanup?: AutocoderCleanup
   ): Promise<boolean> {
-    if (allCodedResponses.length === 0) {
-      await queryRunner.release();
+    const updateStart = Date.now();
+    const updatedAutocoderGeneratedResponseIds = new Set<number>();
+    try {
+      if (allCodedResponses.length === 0 && !autocoderCleanup) {
+        await queryRunner.release();
 
-      if (workspaceId) {
-        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+        if (workspaceId) {
+          await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+        }
+
+        return true;
       }
 
-      return true;
-    }
-    const updateStart = Date.now();
-    try {
+      await lockWorkspaceTestResultsMutationInTransaction(
+        queryRunner.manager,
+        workspaceId
+      );
+
+      if (!(await this.isAutocoderSourceRevisionCurrent(
+        workspaceId,
+        autocoderCleanup,
+        queryRunner
+      ))) {
+        throw new AutocoderSourceRevisionStaleError(
+          workspaceId,
+          autocoderCleanup?.expectedSourceRevision
+        );
+      }
+
+      if (autocoderCleanup) {
+        await this.cleanupStaleAutocoderGeneratedResponses(
+          queryRunner,
+          workspaceId,
+          autocoderCleanup,
+          allCodedResponses
+        );
+      }
+
+      if (allCodedResponses.length === 0) {
+        await this.markAppliedCodingJobsResultsClearedAfterAutocoderRun(
+          workspaceId,
+          allCodedResponses,
+          autocoderCleanup,
+          queryRunner,
+          updatedAutocoderGeneratedResponseIds
+        );
+        await this.markAutocoderVersionCurrent(
+          workspaceId,
+          autocoderCleanup,
+          queryRunner
+        );
+        await queryRunner.commitTransaction();
+        await queryRunner.release();
+        if (workspaceId) {
+          await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+        }
+        return true;
+      }
+
       const updateBatchSize = 500;
       const batches: CodedResponse[][] = [];
       for (let i = 0; i < allCodedResponses.length; i += updateBatchSize) {
@@ -69,20 +135,7 @@ export class ResponseManagementService {
         try {
           if (batch.length > 0) {
             const updatePromises = batch.map(response => {
-              const updateData: Partial<
-              Pick<
-              ResponseEntity,
-              | 'code_v1'
-              | 'status_v1'
-              | 'score_v1'
-              | 'code_v2'
-              | 'status_v2'
-              | 'score_v2'
-              | 'code_v3'
-              | 'status_v3'
-              | 'score_v3'
-              >
-              > = {};
+              const updateData: Partial<ResponseEntity> = {};
 
               if (response.code_v1 !== undefined) {
                 updateData.code_v1 = response.code_v1;
@@ -130,7 +183,8 @@ export class ResponseManagementService {
                   variableid: response.variableid,
                   value: response.value,
                   status: response.status,
-                  subform: response.subform || null
+                  subform: response.subform || null,
+                  is_autocoder_generated: response.isAutocoderGenerated === true
                 };
 
                 if (response.code_v1 !== undefined) newEntity.code_v1 = response.code_v1;
@@ -148,6 +202,19 @@ export class ResponseManagementService {
                   newEntity.status_v3 = response.status_v3 === null ? null : statusStringToNumber(response.status_v3);
                 }
                 if (response.score_v3 !== undefined) newEntity.score_v3 = response.score_v3;
+
+                if (response.isAutocoderGenerated) {
+                  return this.upsertAutocoderGeneratedResponse(
+                    queryRunner,
+                    response,
+                    newEntity,
+                    updateData
+                  ).then(updatedResponseId => {
+                    if (updatedResponseId !== null) {
+                      updatedAutocoderGeneratedResponseIds.add(updatedResponseId);
+                    }
+                  });
+                }
 
                 return queryRunner.manager.insert(ResponseEntity, newEntity);
               }
@@ -186,6 +253,18 @@ export class ResponseManagementService {
         }
       }
 
+      await this.markAppliedCodingJobsResultsClearedAfterAutocoderRun(
+        workspaceId,
+        allCodedResponses,
+        autocoderCleanup,
+        queryRunner,
+        updatedAutocoderGeneratedResponseIds
+      );
+      await this.markAutocoderVersionCurrent(
+        workspaceId,
+        autocoderCleanup,
+        queryRunner
+      );
       await queryRunner.commitTransaction();
       this.logger.log(
         `${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`
@@ -203,6 +282,20 @@ export class ResponseManagementService {
 
       return true;
     } catch (error) {
+      if (error instanceof AutocoderSourceRevisionStaleError) {
+        this.logger.warn(error.message);
+        try {
+          await queryRunner.rollbackTransaction();
+        } catch (rollbackError) {
+          this.logger.error(
+            'Fehler beim Rollback der Transaktion:',
+            rollbackError.message
+          );
+        }
+        await queryRunner.release();
+        throw error;
+      }
+
       this.logger.error(
         'Fehler beim Aktualisieren der Responses:',
         error.message
@@ -218,6 +311,313 @@ export class ResponseManagementService {
       await queryRunner.release();
       return false;
     }
+  }
+
+  private async markAutocoderVersionCurrent(
+    workspaceId: number,
+    autocoderCleanup: AutocoderCleanup | undefined,
+    queryRunner: QueryRunner
+  ): Promise<void> {
+    if (!autocoderCleanup?.markCurrentVersion) {
+      return;
+    }
+
+    if (autocoderCleanup.expectedSourceRevision === undefined) {
+      await this.codingFreshnessService?.markVersionCurrent(
+        workspaceId,
+        autocoderCleanup.unitIds,
+        autocoderCleanup.markCurrentVersion,
+        queryRunner.manager
+      );
+      return;
+    }
+
+    await this.codingFreshnessService?.markVersionCurrent(
+      workspaceId,
+      autocoderCleanup.unitIds,
+      autocoderCleanup.markCurrentVersion,
+      queryRunner.manager,
+      autocoderCleanup.expectedSourceRevision
+    );
+  }
+
+  private async markAppliedCodingJobsResultsClearedAfterAutocoderRun(
+    workspaceId: number,
+    allCodedResponses: CodedResponse[],
+    autocoderCleanup: AutocoderCleanup | undefined,
+    queryRunner: QueryRunner,
+    updatedAutocoderGeneratedResponseIds: Set<number> = new Set<number>()
+  ): Promise<void> {
+    if (autocoderCleanup?.autoCoderRun !== 1 || !this.codingFreshnessService) {
+      return;
+    }
+
+    const responseIds = Array.from(new Set(
+      [
+        ...allCodedResponses
+          .filter(response => !response.isNew)
+          .map(response => Number(response.id)),
+        ...updatedAutocoderGeneratedResponseIds
+      ]
+        .filter(id => Number.isInteger(id) && id > 0)
+    ));
+    if (responseIds.length === 0) {
+      return;
+    }
+
+    await this.codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds(
+      workspaceId,
+      responseIds,
+      'AUTOCODE_RUN',
+      'stale_source',
+      queryRunner.manager
+    );
+  }
+
+  private async isAutocoderSourceRevisionCurrent(
+    workspaceId: number,
+    autocoderCleanup: AutocoderCleanup | undefined,
+    queryRunner: QueryRunner
+  ): Promise<boolean> {
+    if (autocoderCleanup?.expectedSourceRevision === undefined || !this.codingFreshnessService) {
+      return true;
+    }
+
+    const isCurrent = await this.codingFreshnessService.isRevisionCurrent(
+      workspaceId,
+      autocoderCleanup.expectedSourceRevision,
+      queryRunner.manager
+    );
+
+    if (!isCurrent) {
+      this.logger.warn(
+        `Skipping auto-coding update for workspace ${workspaceId}: ` +
+        'test results revision changed after the job was planned.'
+      );
+    }
+
+    return isCurrent;
+  }
+
+  private async upsertAutocoderGeneratedResponse(
+    queryRunner: QueryRunner,
+    response: CodedResponse,
+    newEntity: Partial<ResponseEntity>,
+    updateData: Partial<ResponseEntity>
+  ): Promise<number | null> {
+    const generatedUpdateData: Partial<ResponseEntity> = {
+      ...updateData,
+      value: response.value,
+      status: response.status,
+      is_autocoder_generated: true
+    };
+    if (response.subform) {
+      generatedUpdateData.subform = response.subform;
+    }
+
+    const updateResult = await queryRunner.manager
+      .createQueryBuilder()
+      .update(ResponseEntity)
+      .set(generatedUpdateData)
+      .where('unitid = :unitid', { unitid: response.unitid })
+      .andWhere('variableid = :variableid', { variableid: response.variableid })
+      .andWhere("COALESCE(subform, '') = :subform", {
+        subform: response.subform || ''
+      })
+      .andWhere('is_autocoder_generated = :generated', { generated: true })
+      .returning('id')
+      .execute();
+
+    if ((updateResult.affected || 0) > 0) {
+      return this.getReturnedResponseId(updateResult.raw);
+    }
+
+    if (response.subform) {
+      const legacySubformWhereParams: Record<string, unknown> = {
+        unitid: response.unitid,
+        variableid: response.variableid,
+        generated: true
+      };
+      const legacySubformValueCondition = response.value !== undefined ?
+        'AND value = :value' :
+        '';
+      if (response.value !== undefined) {
+        legacySubformWhereParams.value = response.value;
+      }
+
+      const legacySubformUpdateResult = await queryRunner.manager
+        .createQueryBuilder()
+        .update(ResponseEntity)
+        .set(generatedUpdateData)
+        .where(
+          `id = (
+            SELECT id
+            FROM response
+            WHERE unitid = :unitid
+              AND variableid = :variableid
+              AND COALESCE(subform, '') = ''
+              ${legacySubformValueCondition}
+              AND is_autocoder_generated = :generated
+            ORDER BY id DESC
+            LIMIT 1
+          )`,
+          legacySubformWhereParams
+        )
+        .returning('id')
+        .execute();
+
+      if ((legacySubformUpdateResult.affected || 0) > 0) {
+        return this.getReturnedResponseId(legacySubformUpdateResult.raw);
+      }
+    }
+
+    await queryRunner.manager.insert(ResponseEntity, {
+      ...newEntity,
+      is_autocoder_generated: true
+    });
+    return null;
+  }
+
+  private getReturnedResponseId(raw: unknown): number | null {
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return null;
+    }
+
+    const [row] = raw;
+    if (!row || typeof row !== 'object') {
+      return null;
+    }
+
+    const id = Number((row as { id?: unknown }).id);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  }
+
+  private async cleanupStaleAutocoderGeneratedResponses(
+    queryRunner: QueryRunner,
+    workspaceId: number,
+    cleanup: { unitIds: number[]; autoCoderRun: number },
+    allCodedResponses: CodedResponse[]
+  ): Promise<void> {
+    const unitIds = Array.from(new Set(cleanup.unitIds)).filter(Number.isFinite);
+    if (unitIds.length === 0) {
+      return;
+    }
+
+    const emittedGeneratedKeys = new Set(
+      allCodedResponses
+        .filter(response => response.isAutocoderGenerated)
+        .map(response => this.autocoderGeneratedKey(
+          response.unitid,
+          response.variableid,
+          response.subform
+        ))
+    );
+
+    const existingGenerated = await queryRunner.manager
+      .getRepository(ResponseEntity)
+      .createQueryBuilder('response')
+      .select([
+        'response.id',
+        'response.unitid',
+        'response.variableid',
+        'response.subform'
+      ])
+      .where('response.unitid IN (:...unitIds)', { unitIds })
+      .andWhere('response.is_autocoder_generated = :generated', {
+        generated: true
+      })
+      .getMany();
+
+    const staleIds = existingGenerated
+      .filter(response => !emittedGeneratedKeys.has(
+        this.autocoderGeneratedKey(
+          response.unitid,
+          response.variableid,
+          response.subform
+        )
+      ))
+      .map(response => response.id);
+
+    if (staleIds.length === 0) {
+      return;
+    }
+
+    await this.markAppliedCodingJobsResultsClearedBeforeAutocoderGeneratedCleanup(
+      workspaceId,
+      cleanup,
+      staleIds,
+      queryRunner
+    );
+
+    const clearData: Partial<ResponseEntity> = cleanup.autoCoderRun === 1 ?
+      {
+        code_v1: null,
+        status_v1: null,
+        score_v1: null,
+        code_v2: null,
+        status_v2: null,
+        score_v2: null,
+        code_v3: null,
+        status_v3: null,
+        score_v3: null
+      } :
+      {
+        code_v3: null,
+        status_v3: null,
+        score_v3: null
+      };
+
+    await queryRunner.manager
+      .createQueryBuilder()
+      .update(ResponseEntity)
+      .set(clearData)
+      .where('id IN (:...staleIds)', { staleIds })
+      .execute();
+
+    await queryRunner.manager.query(
+      `
+        DELETE FROM response
+        WHERE id = ANY($1)
+          AND is_autocoder_generated = TRUE
+          AND code_v1 IS NULL
+          AND status_v1 IS NULL
+          AND score_v1 IS NULL
+          AND code_v2 IS NULL
+          AND status_v2 IS NULL
+          AND score_v2 IS NULL
+          AND code_v3 IS NULL
+          AND status_v3 IS NULL
+          AND score_v3 IS NULL
+      `,
+      [staleIds]
+    );
+  }
+
+  private async markAppliedCodingJobsResultsClearedBeforeAutocoderGeneratedCleanup(
+    workspaceId: number,
+    cleanup: { autoCoderRun: number },
+    responseIds: number[],
+    queryRunner: QueryRunner
+  ): Promise<void> {
+    if (cleanup.autoCoderRun !== 1 || !this.codingFreshnessService) {
+      return;
+    }
+
+    await this.codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds(
+      workspaceId,
+      responseIds,
+      'AUTOCODE_RUN',
+      'stale_source',
+      queryRunner.manager
+    );
+  }
+
+  private autocoderGeneratedKey(
+    unitid?: number,
+    variableid?: string,
+    subform?: string | null
+  ): string {
+    return `${unitid ?? ''}|${variableid ?? ''}|${subform || ''}`;
   }
 
   async resolveDuplicateResponses(
@@ -237,103 +637,132 @@ export class ResponseManagementService {
       return { resolvedCount: 0, success: true };
     }
 
-    return this.connection.transaction(async manager => {
-      let resolvedCount = 0;
+    return withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
+      const affectedUnitIds: number[] = [];
+      return this.connection.transaction(async manager => {
+        let resolvedCount = 0;
 
-      for (const [key, selectedResponseId] of Object.entries(resolutionMap)) {
-        if (!selectedResponseId) {
-          continue;
-        }
-
-        const parts = key.split('|');
-        if (parts.length !== 6) {
-          this.logger.warn(`Invalid duplicate resolution key: ${key}`);
-          continue;
-        }
-
-        const unitName = decodeURIComponent(parts[0] || '');
-        const variableId = decodeURIComponent(parts[1] || '');
-        const subform = decodeURIComponent(parts[2] || '');
-        const testTakerLogin = decodeURIComponent(parts[3] || '');
-        const testTakerCode = decodeURIComponent(parts[4] || '');
-        const testTakerGroup = decodeURIComponent(parts[5] || '');
-
-        if (!unitName || !variableId || !testTakerLogin) {
-          this.logger.warn(`Invalid duplicate resolution key parts: ${key}`);
-          continue;
-        }
-
-        const responses = await manager
-          .createQueryBuilder(ResponseEntity, 'response')
-          .innerJoin('response.unit', 'unit')
-          .innerJoin('unit.booklet', 'booklet')
-          .innerJoin('booklet.person', 'person')
-          .where('person.workspace_id = :workspaceId', { workspaceId })
-          .andWhere('person.consider = :consider', { consider: true })
-          .andWhere('person.login = :testTakerLogin', { testTakerLogin })
-          .andWhere('COALESCE(person.code, \'\') = :testTakerCode', {
-            testTakerCode: testTakerCode || ''
-          })
-          .andWhere('COALESCE(person.group, \'\') = :testTakerGroup', {
-            testTakerGroup: testTakerGroup || ''
-          })
-          .andWhere('unit.name = :unitName', { unitName })
-          .andWhere('response.variableid = :variableId', { variableId })
-          .andWhere("COALESCE(response.subform, '') = :subform", {
-            subform: subform || ''
-          })
-          .select(['response.id'])
-          .getMany();
-
-        const ids = (responses || []).map(r => r.id);
-        if (ids.length <= 1) {
-          continue;
-        }
-
-        if (!ids.includes(selectedResponseId)) {
-          this.logger.warn(
-            `Selected responseId ${selectedResponseId} not part of duplicate group ${key}`
-          );
-          continue;
-        }
-
-        const deleteIds = ids.filter(id => id !== selectedResponseId);
-        if (deleteIds.length === 0) {
-          continue;
-        }
-
-        const deleteResult = await manager
-          .createQueryBuilder()
-          .delete()
-          .from(ResponseEntity)
-          .where('id IN (:...deleteIds)', { deleteIds })
-          .execute();
-
-        resolvedCount += deleteResult.affected || 0;
-
-        await this.journalService.createEntry(
-          userId,
-          workspaceId,
-          'delete',
-          'response',
-          selectedResponseId,
-          {
-            duplicateGroupKey: key,
-            keptResponseId: selectedResponseId,
-            deletedResponseIds: deleteIds
+        for (const [key, selectedResponseId] of Object.entries(resolutionMap)) {
+          if (!selectedResponseId) {
+            continue;
           }
-        );
-      }
 
-      return {
-        resolvedCount,
-        success: true
-      };
-    }).then(async result => {
-      if (result.success) {
-        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
-      }
-      return result;
+          const parts = key.split('|');
+          if (parts.length !== 6) {
+            this.logger.warn(`Invalid duplicate resolution key: ${key}`);
+            continue;
+          }
+
+          const unitName = decodeURIComponent(parts[0] || '');
+          const variableId = decodeURIComponent(parts[1] || '');
+          const subform = decodeURIComponent(parts[2] || '');
+          const testTakerLogin = decodeURIComponent(parts[3] || '');
+          const testTakerCode = decodeURIComponent(parts[4] || '');
+          const testTakerGroup = decodeURIComponent(parts[5] || '');
+
+          if (!unitName || !variableId || !testTakerLogin) {
+            this.logger.warn(`Invalid duplicate resolution key parts: ${key}`);
+            continue;
+          }
+
+          const responses = await manager
+            .createQueryBuilder(ResponseEntity, 'response')
+            .innerJoin('response.unit', 'unit')
+            .innerJoin('unit.booklet', 'booklet')
+            .innerJoin('booklet.person', 'person')
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.consider = :consider', { consider: true })
+            .andWhere('person.login = :testTakerLogin', { testTakerLogin })
+            .andWhere('COALESCE(person.code, \'\') = :testTakerCode', {
+              testTakerCode: testTakerCode || ''
+            })
+            .andWhere('COALESCE(person.group, \'\') = :testTakerGroup', {
+              testTakerGroup: testTakerGroup || ''
+            })
+            .andWhere('unit.name = :unitName', { unitName })
+            .andWhere('response.variableid = :variableId', { variableId })
+            .andWhere("COALESCE(response.subform, '') = :subform", {
+              subform: subform || ''
+            })
+            .select(['response.id', 'response.unitid'])
+            .getMany();
+
+          const ids = (responses || []).map(r => r.id);
+          if (ids.length <= 1) {
+            continue;
+          }
+
+          if (!ids.includes(selectedResponseId)) {
+            this.logger.warn(
+              `Selected responseId ${selectedResponseId} not part of duplicate group ${key}`
+            );
+            continue;
+          }
+
+          const deleteIds = ids.filter(id => id !== selectedResponseId);
+          if (deleteIds.length === 0) {
+            continue;
+          }
+
+          const unitId = responses[0]?.unitid;
+          if (unitId) {
+            affectedUnitIds.push(unitId);
+          }
+
+          await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
+            workspaceId,
+            deleteIds,
+            'RESULT_DELETED',
+            'stale_source',
+            manager
+          );
+
+          const deleteResult = await manager
+            .createQueryBuilder()
+            .delete()
+            .from(ResponseEntity)
+            .where('id IN (:...deleteIds)', { deleteIds })
+            .execute();
+
+          resolvedCount += deleteResult.affected || 0;
+
+          await this.journalService.recordEvent(
+            {
+              workspaceId,
+              actorUserId: userId,
+              eventType: 'DUPLICATE_RESPONSES_RESOLVED',
+              legacyActionType: 'delete',
+              entityType: 'response',
+              entityId: selectedResponseId,
+              result: 'success',
+              summary: 'Duplicate responses resolved',
+              details: {
+                keptResponseId: selectedResponseId,
+                deletedResponseIds: deleteIds
+              }
+            },
+            manager
+          );
+        }
+
+        return {
+          resolvedCount,
+          success: true
+        };
+      }).then(async result => {
+        if (result.success) {
+          await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+            workspaceId,
+            affectedUnitIds,
+            'RESULT_DELETED'
+          );
+          await Promise.all([
+            this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
+            this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
+          ]);
+        }
+        return result;
+      });
     });
   }
 
@@ -348,66 +777,101 @@ export class ResponseManagementService {
         warnings: string[];
       };
     }> {
-    return this.connection.transaction(async manager => {
-      const report = {
-        deletedResponse: null,
-        warnings: []
-      };
+    return withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
+      let affectedUnitId: number | null = null;
+      let auditEvent: RecordAuditJournalEventInput | null = null;
+      return this.connection.transaction(async manager => {
+        const report = {
+          deletedResponse: null,
+          warnings: []
+        };
 
-      const response = await manager
-        .createQueryBuilder(ResponseEntity, 'response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .where('response.id = :responseId', { responseId })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-        .getOne();
+        const response = await manager
+          .createQueryBuilder(ResponseEntity, 'response')
+          .leftJoinAndSelect('response.unit', 'unit')
+          .leftJoinAndSelect('unit.booklet', 'booklet')
+          .leftJoinAndSelect('booklet.person', 'person')
+          .where('response.id = :responseId', { responseId })
+          .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+          .getOne();
 
-      if (!response) {
-        const warningMessage = `Keine Antwort mit ID ${responseId} im Workspace ${workspaceId} gefunden`;
-        this.logger.warn(warningMessage);
-        report.warnings.push(warningMessage);
-        return { success: false, report };
-      }
+        if (!response) {
+          const warningMessage = `Keine Antwort mit ID ${responseId} im Workspace ${workspaceId} gefunden`;
+          this.logger.warn(warningMessage);
+          report.warnings.push(warningMessage);
+          return { success: false, report };
+        }
 
-      await manager
-        .createQueryBuilder()
-        .delete()
-        .from(ResponseEntity)
-        .where('id = :responseId', { responseId })
-        .execute();
-
-      report.deletedResponse = responseId;
-
-      try {
-        await this.journalService.createEntry(
-          userId,
+        await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
           workspaceId,
-          'delete',
-          'response',
-          responseId,
-          {
+          [responseId],
+          'RESULT_DELETED',
+          'stale_source',
+          manager
+        );
+
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(ResponseEntity)
+          .where('id = :responseId', { responseId })
+          .execute();
+
+        report.deletedResponse = responseId;
+        affectedUnitId = response.unit.id;
+
+        auditEvent = {
+          workspaceId,
+          actorUserId: userId,
+          eventType: 'RESPONSE_DELETED',
+          entityType: 'response',
+          entityId: responseId,
+          result: 'success',
+          summary: 'Response deleted',
+          details: {
             responseId,
             unitId: response.unit.id,
             unitName: response.unit.name,
             variableId: response.variableid,
-            value: response.value,
             bookletId: response.unit.booklet?.id,
             personId: response.unit.booklet?.person?.id
           }
-        );
-      } catch (e) {
-        this.logger.error(
-          `Failed to create journal entry for response deletion: ${e.message}`
-        );
-      }
+        };
 
-      return { success: true, report };
-    }).then(async result => {
-      if (result.success) {
-        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
-      }
-      return result;
+        return { success: true, report };
+      }).then(async result => {
+        if (result.success) {
+          await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+            workspaceId,
+            affectedUnitId ? [affectedUnitId] : [],
+            'RESULT_DELETED'
+          );
+          await Promise.all([
+            this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
+            this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
+          ]);
+          if (auditEvent) {
+            await this.tryRecordAuditEvent(
+              auditEvent,
+              'Failed to create journal entry for response deletion'
+            );
+          }
+        }
+        return result;
+      });
     });
+  }
+
+  private async tryRecordAuditEvent(
+    event: RecordAuditJournalEventInput,
+    failureMessage: string
+  ): Promise<void> {
+    try {
+      await this.journalService.recordEvent(event);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`${failureMessage}: ${message}`, stack);
+    }
   }
 }

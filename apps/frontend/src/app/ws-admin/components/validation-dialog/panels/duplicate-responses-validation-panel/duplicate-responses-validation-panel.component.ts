@@ -14,7 +14,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { Subscription } from 'rxjs';
+import { forkJoin, Subscription } from 'rxjs';
 import { ValidationTaskDto } from '../../../../../models/validation-task.dto';
 import {
   ValidationPanelHeaderComponent,
@@ -511,44 +511,47 @@ implements OnInit, OnDestroy {
 
     if (duplicatesToResolve.length === 0) return;
 
-    this.isResolvingDuplicates = true;
-    let resolved = 0;
-
-    duplicatesToResolve.forEach((duplicate, index) => {
+    const resolvedKeys: string[] = [];
+    const resolveRequests = duplicatesToResolve.flatMap(duplicate => {
       const selectedId = this.duplicateResponseSelections.get(duplicate.key);
-      if (!selectedId) return;
+      if (!selectedId) return [];
 
       const responseIdsToDelete = (duplicate.duplicates || [])
         .filter(d => d.responseId !== selectedId)
         .map(d => d.responseId);
 
-      if (responseIdsToDelete.length === 0) return;
+      if (responseIdsToDelete.length === 0) return [];
 
-      this.duplicateResponsesValidationService
-        .resolveDuplicateGroup(responseIdsToDelete)
-        .subscribe({
-          next: () => {
-            resolved += 1;
-            this.duplicateResponseSelections.delete(duplicate.key);
-            this.duplicateResponseTouchedKeys.delete(duplicate.key);
+      resolvedKeys.push(duplicate.key);
+      return [
+        this.duplicateResponsesValidationService
+          .resolveDuplicateGroup(responseIdsToDelete)
+      ];
+    });
 
-            if (index === duplicatesToResolve.length - 1) {
-              this.isResolvingDuplicates = false;
-              this.snackBar.open(
-                `${resolved} Duplikatgruppen wurden aufgelöst`,
-                'OK',
-                { duration: 3000 }
-              );
-              this.onValidate();
-            }
-          },
-          error: () => {
-            this.isResolvingDuplicates = false;
-            this.snackBar.open('Fehler beim Auflösen', 'Schließen', {
-              duration: 5000
-            });
-          }
+    if (resolveRequests.length === 0) return;
+
+    this.isResolvingDuplicates = true;
+    forkJoin(resolveRequests).subscribe({
+      next: () => {
+        this.isResolvingDuplicates = false;
+        resolvedKeys.forEach(key => {
+          this.duplicateResponseSelections.delete(key);
+          this.duplicateResponseTouchedKeys.delete(key);
         });
+        this.snackBar.open(
+          `${resolvedKeys.length} Duplikatgruppen wurden aufgelöst`,
+          'OK',
+          { duration: 3000 }
+        );
+        this.onValidate();
+      },
+      error: () => {
+        this.isResolvingDuplicates = false;
+        this.snackBar.open('Fehler beim Auflösen', 'Schließen', {
+          duration: 5000
+        });
+      }
     });
   }
 

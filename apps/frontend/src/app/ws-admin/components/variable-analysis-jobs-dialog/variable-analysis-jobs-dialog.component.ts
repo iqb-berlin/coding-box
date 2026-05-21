@@ -75,7 +75,7 @@ export class VariableAnalysisJobsDialogComponent implements OnInit {
       });
   }
 
-  cancelJob(jobId: number): void {
+  cancelJob(jobId: number | string): void {
     this.isLoading = true;
     this.variableAnalysisService.cancelJob(this.data.workspaceId, jobId)
       .subscribe({
@@ -107,7 +107,7 @@ export class VariableAnalysisJobsDialogComponent implements OnInit {
       });
   }
 
-  viewResults(jobId: number): void {
+  viewResults(jobId: number | string): void {
     this.dialogRef.close({ jobId });
   }
 

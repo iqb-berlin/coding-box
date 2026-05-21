@@ -4,9 +4,9 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
 import { SERVER_URL } from '../../apps/frontend/src/app/injection-tokens';
-import { AppService } from '../../apps/frontend/src/app/services/app.service';
-import { BackendService } from '../../apps/frontend/src/app/services/backend.service';
-import { TestResultService } from '../../apps/frontend/src/app/services/test-result.service';
+import { AppService } from '../../apps/frontend/src/app/core/services/app.service';
+import { BackendService } from '../../apps/frontend/src/app/core/services/backend.service';
+import { TestResultService } from '../../apps/frontend/src/app/shared/services/test-result/test-result.service';
 import { TestResultsFlatTableComponent } from '../../apps/frontend/src/app/ws-admin/components/test-results/test-results-flat-table.component';
 
 class AppServiceMock {
@@ -88,7 +88,7 @@ describe('TestResultsFlatTableComponent', () => {
     cy.contains('mat-label', 'Antwortstatus')
       .parents('mat-form-field')
       .find('input')
-      .type('VALUE_CHANGED');
+      .type('VALUE_CHANGED', { force: true });
     cy.wait('@flatResponses', { timeout: 20000 });
   });
 });

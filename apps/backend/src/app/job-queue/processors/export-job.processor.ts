@@ -10,7 +10,7 @@ import {
   ExportJobResult,
   JobQueueService
 } from '../job-queue.service';
-import { CodingExportService } from '../../database/services/coding';
+import { CodingExportOrchestratorService, CodingExportService } from '../../database/services/coding';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import { CacheService } from '../../cache/cache.service';
 import { ExportJobCancelledException } from '../exceptions/export-job-cancelled.exception';
@@ -23,11 +23,26 @@ export class ExportJobProcessor {
   constructor(
     @Inject(forwardRef(() => CodingExportService))
     private codingExportService: CodingExportService,
+    @Inject(forwardRef(() => CodingExportOrchestratorService))
+    private codingExportOrchestratorService: CodingExportOrchestratorService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService
   ) { }
+
+  private validateExportJobData(job: Job<ExportJobData>): void {
+    if (
+      job.data.exportType === 'results-by-version' &&
+      job.data.format !== undefined &&
+      job.data.format !== 'csv' &&
+      job.data.format !== 'excel'
+    ) {
+      throw new Error(
+        'results-by-version exports support only "csv" or "excel" format'
+      );
+    }
+  }
 
   private async checkCancellation(
     job: Job<ExportJobData>,
@@ -53,6 +68,24 @@ export class ExportJobProcessor {
     }
   }
 
+  private writeStreamToFile(
+    stream: NodeJS.ReadableStream,
+    filePath: string,
+    options: { prependUtf8Bom?: boolean } = {}
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const writeStream = fs.createWriteStream(filePath);
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+      stream.on('error', reject);
+
+      if (options.prependUtf8Bom) {
+        writeStream.write('\uFEFF');
+      }
+      stream.pipe(writeStream);
+    });
+  }
+
   @Process()
   async process(job: Job<ExportJobData>): Promise<ExportJobResult> {
     this.logger.log(
@@ -63,6 +96,7 @@ export class ExportJobProcessor {
       'aggregated',
       'by-coder',
       'by-variable',
+      'by-variable-compact',
       'detailed',
       'coding-times',
       'test-results',
@@ -78,6 +112,8 @@ export class ExportJobProcessor {
       throw new Error(errorMessage);
     }
 
+    this.validateExportJobData(job);
+
     let filePath: string | undefined;
 
     try {
@@ -89,6 +125,7 @@ export class ExportJobProcessor {
       }
       const isCsv =
         job.data.exportType === 'detailed' ||
+        job.data.exportType === 'by-variable-compact' ||
         (job.data.exportType === 'results-by-version' &&
           job.data.format !== 'excel') ||
         (job.data.exportType === 'coding-list' &&
@@ -112,6 +149,7 @@ export class ExportJobProcessor {
       // eslint-disable-next-line default-case
       switch (job.data.exportType) {
         case 'results-by-version': {
+          const version = job.data.version || 'v2';
           const onProgress = async (percentage: number) => {
             // Map 0-100% of sub-task to 20-90% of overall job
             const jobProgress = 20 + Math.round((percentage / 100) * 70);
@@ -120,31 +158,29 @@ export class ExportJobProcessor {
           };
 
           if (job.data.format === 'excel') {
-            buffer = await this.codingExportService.exportCodingResultsByVersionAsExcel(
-              job.data.workspaceId,
-              job.data.version,
-              job.data.authToken || '',
-              job.data.serverUrl || '',
-              job.data.includeReplayUrl || false,
-              onProgress
-            );
+            buffer = await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
+              workspaceId: job.data.workspaceId,
+              version,
+              authToken: job.data.authToken || '',
+              serverUrl: job.data.serverUrl || '',
+              includeReplayUrl: job.data.includeReplayUrl || false,
+              onProgress,
+              includeResponseValues: job.data.includeResponseValues !== false
+            });
           } else {
             // CSV Stream
-            const stream = await this.codingExportService.exportCodingResultsByVersionAsCsv(
-              job.data.workspaceId,
-              job.data.version,
-              job.data.authToken || '',
-              job.data.serverUrl || '',
-              job.data.includeReplayUrl || false,
-              onProgress
-            );
+            const stream = await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
+              workspaceId: job.data.workspaceId,
+              version,
+              authToken: job.data.authToken || '',
+              serverUrl: job.data.serverUrl || '',
+              includeReplayUrl: job.data.includeReplayUrl || false,
+              onProgress,
+              includeResponseValues: job.data.includeResponseValues !== false
+            });
 
-            const writeStream = fs.createWriteStream(filePath);
-            await new Promise((resolve, reject) => {
-              stream.pipe(writeStream);
-              writeStream.on('finish', resolve);
-              writeStream.on('error', reject);
-              stream.on('error', reject);
+            await this.writeStreamToFile(stream, filePath, {
+              prependUtf8Bom: true
             });
           }
           break;
@@ -174,13 +210,7 @@ export class ExportJobProcessor {
               job.data.trainingRequired
             );
 
-            const writeStream = fs.createWriteStream(filePath);
-            await new Promise((resolve, reject) => {
-              stream.pipe(writeStream);
-              writeStream.on('finish', resolve);
-              writeStream.on('error', reject);
-              stream.on('error', reject);
-            });
+            await this.writeStreamToFile(stream, filePath);
           } else {
             // CSV
             const stream = await this.codingExportService.exportCodingListForJobAsCsv(
@@ -191,12 +221,8 @@ export class ExportJobProcessor {
               job.data.trainingRequired
             );
 
-            const writeStream = fs.createWriteStream(filePath);
-            await new Promise((resolve, reject) => {
-              stream.pipe(writeStream);
-              writeStream.on('finish', resolve);
-              writeStream.on('error', reject);
-              stream.on('error', reject);
+            await this.writeStreamToFile(stream, filePath, {
+              prependUtf8Bom: true
             });
           }
           break;
@@ -262,22 +288,46 @@ export class ExportJobProcessor {
           );
           break;
 
-        case 'detailed':
-          buffer = await this.codingExportService.exportCodingResultsDetailed(
-            job.data.workspaceId,
-            job.data.outputCommentsInsteadOfCodes || false,
-            job.data.includeReplayUrl || false,
-            job.data.anonymizeCoders || false,
-            job.data.usePseudoCoders || false,
-            job.data.authToken || '',
-            undefined, // req is not available in background job
-            job.data.excludeAutoCoded || false,
-            checkCancellation,
-            job.data.jobDefinitionIds,
-            job.data.coderTrainingIds,
-            job.data.coderIds,
-            job.data.serverUrl || ''
+        case 'by-variable-compact':
+          await this.writeStreamToFile(
+            this.codingExportService.exportCodingResultsByVariableCompactAsCsvStream(
+              job.data.workspaceId,
+              job.data.includeModalValue || false,
+              job.data.includeDoubleCoded || false,
+              job.data.includeComments || false,
+              job.data.outputCommentsInsteadOfCodes || false,
+              job.data.includeReplayUrl || false,
+              job.data.anonymizeCoders || false,
+              job.data.usePseudoCoders || false,
+              job.data.authToken || '',
+              undefined, // req is not available in background job
+              job.data.excludeAutoCoded || false,
+              checkCancellation,
+              job.data.jobDefinitionIds,
+              job.data.coderTrainingIds,
+              job.data.coderIds,
+              job.data.serverUrl || ''
+            ),
+            filePath,
+            { prependUtf8Bom: true }
           );
+          break;
+
+        case 'detailed':
+          buffer = await this.codingExportOrchestratorService.exportDetailed({
+            workspaceId: job.data.workspaceId,
+            outputCommentsInsteadOfCodes: job.data.outputCommentsInsteadOfCodes || false,
+            includeReplayUrl: job.data.includeReplayUrl || false,
+            anonymizeCoders: job.data.anonymizeCoders || false,
+            usePseudoCoders: job.data.usePseudoCoders || false,
+            authToken: job.data.authToken || '',
+            excludeAutoCoded: job.data.excludeAutoCoded || false,
+            checkCancellation,
+            jobDefinitionIds: job.data.jobDefinitionIds,
+            coderTrainingIds: job.data.coderTrainingIds,
+            coderIds: job.data.coderIds,
+            serverUrl: job.data.serverUrl || ''
+          });
           break;
 
         case 'coding-times':

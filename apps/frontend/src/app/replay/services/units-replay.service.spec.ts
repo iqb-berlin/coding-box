@@ -44,6 +44,55 @@ describe('UnitsReplayService', () => {
         expect(res?.units.length).toBe(1);
         expect(res?.units[0].name).toBe('u1');
       });
+      expect(fileServiceMock.getBookletUnits).toHaveBeenCalledWith(
+        1,
+        'b1',
+        undefined,
+        {
+          testPerson: undefined,
+          includeReplayStatus: false
+        }
+      );
+    });
+
+    it('should filter out units marked as not replayable', () => {
+      const mockBookletFile = [{ file_id: 'b1' }];
+      const mockUnits = [
+        {
+          id: 1,
+          name: 'intro',
+          alias: null,
+          bookletId: 10,
+          isReplayable: false,
+          skipReason: 'NO_VOUD'
+        },
+        {
+          id: 2,
+          name: 'task',
+          alias: 'Task',
+          bookletId: 10,
+          isReplayable: true
+        }
+      ];
+
+      fileServiceMock.getUnit.mockReturnValue(of(mockBookletFile as FilesDto[]));
+      fileServiceMock.getBookletUnits.mockReturnValue(of(mockUnits as BookletUnit[]));
+
+      service.getUnitsFromFileUpload(1, 'b1', 'login@code@group@b1').subscribe(res => {
+        expect(res?.units).toHaveLength(1);
+        expect(res?.units[0].name).toBe('task');
+        expect(res?.skippedUnits).toBe(1);
+        expect(res?.totalBookletUnits).toBe(2);
+      });
+      expect(fileServiceMock.getBookletUnits).toHaveBeenCalledWith(
+        1,
+        'b1',
+        undefined,
+        {
+          testPerson: 'login@code@group@b1',
+          includeReplayStatus: true
+        }
+      );
     });
 
     it('should return null if no booklet found', () => {

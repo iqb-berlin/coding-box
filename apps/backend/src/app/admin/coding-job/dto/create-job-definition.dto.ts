@@ -3,7 +3,10 @@ import {
   IsEnum,
   IsOptional,
   IsArray,
+  IsBoolean,
   IsNumber,
+  Max,
+  Min,
   ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -12,6 +15,7 @@ import {
   JobDefinitionVariableDto,
   JobDefinitionVariableBundleDto
 } from './job-definition-variable.dto';
+import { JobDefinitionCoderConfigDto } from './job-definition-coder-config.dto';
 
 /**
  * DTO for creating a job definition
@@ -56,8 +60,21 @@ export class CreateJobDefinitionDto {
   })
   @IsArray()
   @IsNumber({}, { each: true })
+  @Min(1, { each: true })
+  @Type(() => Number)
   @IsOptional()
     assignedCoders?: number[];
+
+  @ApiProperty({
+    description: 'Assigned coders with optional capacity percentages. If present, this is the source for assigned coder IDs.',
+    type: [JobDefinitionCoderConfigDto],
+    required: false
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => JobDefinitionCoderConfigDto)
+  @IsOptional()
+    assignedCoderConfigs?: JobDefinitionCoderConfigDto[];
 
   @ApiProperty({
     description: 'Duration in seconds for one coding task',
@@ -65,6 +82,8 @@ export class CreateJobDefinitionDto {
     required: false
   })
   @IsNumber()
+  @Min(1)
+  @Type(() => Number)
   @IsOptional()
     durationSeconds?: number;
 
@@ -74,6 +93,8 @@ export class CreateJobDefinitionDto {
     required: false
   })
   @IsNumber()
+  @Min(1)
+  @Type(() => Number)
   @IsOptional()
     maxCodingCases?: number;
 
@@ -83,6 +104,8 @@ export class CreateJobDefinitionDto {
     required: false
   })
   @IsNumber()
+  @Min(0)
+  @Type(() => Number)
   @IsOptional()
     doubleCodingAbsolute?: number;
 
@@ -92,6 +115,9 @@ export class CreateJobDefinitionDto {
     required: false
   })
   @IsNumber()
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
   @IsOptional()
     doubleCodingPercentage?: number;
 
@@ -104,4 +130,34 @@ export class CreateJobDefinitionDto {
   @IsEnum(['continuous', 'alternating'])
   @IsOptional()
     caseOrderingMode?: CaseOrderingMode;
+
+  @ApiProperty({
+    description: 'Whether to show scores in generated coding jobs',
+    example: false,
+    default: false,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    showScore?: boolean;
+
+  @ApiProperty({
+    description: 'Whether to allow comments in generated coding jobs',
+    example: true,
+    default: true,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    allowComments?: boolean;
+
+  @ApiProperty({
+    description: 'Whether to suppress general instructions in generated coding jobs',
+    example: false,
+    default: false,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    suppressGeneralInstructions?: boolean;
 }

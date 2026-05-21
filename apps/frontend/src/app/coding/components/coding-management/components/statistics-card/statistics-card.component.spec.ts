@@ -73,6 +73,93 @@ describe('StatisticsCardComponent', () => {
     expect(component.getTotalResponsesDifference()).toBe(50);
   });
 
+  it('should use backend-provided coding-relevant totals without UI subtraction', () => {
+    component.codingStatistics = {
+      totalResponses: 10,
+      baseResponseCount: 7,
+      derivedResponseCount: 3,
+      derivedVariableCount: 2,
+      statusCounts: { 5: 10 },
+      derivedStatusCounts: { 5: 3 }
+    };
+
+    expect(component.effectiveTotalResponses).toBe(10);
+    expect(component.effectiveDerivedResponses).toBe(3);
+    expect(component.derivedAnswerCount).toBe(3);
+    expect(component.derivedVariableCount).toBe(2);
+    expect(component.hasDerivedStatistics).toBe(true);
+  });
+
+  it('should not infer derived answers from derived variable definitions', () => {
+    component.codingStatistics = {
+      totalResponses: 2926,
+      baseResponseCount: 2926,
+      derivedResponseCount: 0,
+      derivedVariableCount: 2,
+      statusCounts: {
+        5: 1781,
+        6: 273,
+        7: 7,
+        8: 865
+      },
+      derivedStatusCounts: {}
+    };
+
+    expect(component.effectiveTotalResponses).toBe(2926);
+    expect(component.derivedAnswerCount).toBe(0);
+    expect(component.derivedVariableCount).toBe(2);
+    expect(component.hasDerivedStatistics).toBe(false);
+  });
+
+  it('should not show derived answers after the run was reset', () => {
+    component.codingStatistics = {
+      totalResponses: 0,
+      baseResponseCount: 0,
+      derivedResponseCount: 0,
+      derivedVariableCount: 2,
+      statusCounts: {},
+      derivedStatusCounts: {}
+    };
+
+    expect(component.effectiveTotalResponses).toBe(0);
+    expect(component.derivedAnswerCount).toBe(0);
+    expect(component.derivedVariableCount).toBe(2);
+    expect(component.hasDerivedStatistics).toBe(false);
+    expect(component.showCodingStatisticsEmptyState).toBe(true);
+    expect(component.codingStatisticsEmptyTextKey).toBe('coding-management.statistics.no-coding-results-text');
+  });
+
+  it('should not subtract raw statuses in the UI for legacy cached statistics', () => {
+    component.codingStatistics = {
+      totalResponses: 4,
+      statusCounts: { 1: 2, 2: 2 }
+    };
+
+    expect(component.effectiveTotalResponses).toBe(4);
+    expect(component.getStatuses()).toEqual([]);
+    expect(component.showCodingStatisticsEmptyState).toBe(false);
+    expect(component.codingStatisticsEmptyTextKey).toBe('coding-management.statistics.only-raw-statuses-text');
+  });
+
+  it('should render derived answer statistics when available', () => {
+    fixture.componentRef.setInput('statisticsLoaded', true);
+    fixture.componentRef.setInput('isLoading', false);
+    fixture.componentRef.setInput('codingStatistics', {
+      totalResponses: 10,
+      baseResponseCount: 7,
+      derivedResponseCount: 3,
+      derivedVariableCount: 1,
+      statusCounts: { 5: 10 },
+      derivedStatusCounts: { 5: 3 }
+    });
+
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent;
+    expect(text).toContain('coding-management.statistics.derived-answers');
+    expect(text).toContain('3');
+  });
+
   it('should return null for difference when no reference statistics', () => {
     component.selectedVersion = 'v2';
     component.codingStatistics = { totalResponses: 150, statusCounts: {} };
@@ -85,5 +172,11 @@ describe('StatisticsCardComponent', () => {
     jest.spyOn(component.statusClick, 'emit');
     component.onStatusClick('200');
     expect(component.statusClick.emit).toHaveBeenCalledWith('200');
+  });
+
+  it('should emit derivedClick when derived answers are clicked', () => {
+    jest.spyOn(component.derivedClick, 'emit');
+    component.onDerivedClick();
+    expect(component.derivedClick.emit).toHaveBeenCalled();
   });
 });

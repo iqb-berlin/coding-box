@@ -1,0 +1,34 @@
+@if (data.state$ | async; as state) {
+<h2 mat-dialog-title class="dialog-title">
+  <mat-icon>{{ state.icon }}</mat-icon>
+  <span>{{ state.title }}</span>
+</h2>
+
+<div mat-dialog-content class="progress-content">
+  <div class="phase-row">
+    <mat-spinner diameter="32"></mat-spinner>
+    <div class="phase-copy">
+      <div class="phase-label">{{ state.phaseLabel }}</div>
+      <div class="message">{{ state.message }}</div>
+    </div>
+  </div>
+
+  @if (state.currentItem) {
+  <div class="current-item">{{ state.currentItem }}</div>
+  }
+
+  <mat-progress-bar
+    [mode]="state.mode || (state.percent === undefined ? 'indeterminate' : 'determinate')"
+    [value]="state.percent || 0"
+  ></mat-progress-bar>
+
+  <div class="progress-meta">
+    @if (state.completed !== undefined && state.total !== undefined) {
+    <span>{{ state.completed }} / {{ state.total }}</span>
+    }
+    @if (state.percent !== undefined) {
+    <span>{{ state.percent }}%</span>
+    }
+  </div>
+</div>
+}

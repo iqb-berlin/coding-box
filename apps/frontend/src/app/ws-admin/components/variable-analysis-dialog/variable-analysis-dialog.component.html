@@ -13,6 +13,15 @@
         </div>
         } @else {
         <div class="top-actions">
+          <button mat-button (click)="refreshJobs()" [disabled]="isJobsLoading || isInitializing">
+            <mat-icon>refresh</mat-icon>
+            {{ 'variable-analysis.refresh' | translate }}
+          </button>
+          <button mat-raised-button color="primary" (click)="startNewAnalysis()"
+            [disabled]="isJobsLoading || !!activeJob || isStartingJob">
+            <mat-icon>add</mat-icon>
+            {{ 'variable-analysis.start-new-analysis' | translate }}
+          </button>
           <button mat-button (click)="isInfoVisible = !isInfoVisible" class="info-toggle">
             <mat-icon>{{ isInfoVisible ? 'expand_less' : 'help_outline' }}</mat-icon>
             {{ (isInfoVisible ? 'variable-analysis.hide-info' : 'variable-analysis.show-info') | translate }}
@@ -43,25 +52,50 @@
         </div>
         }
 
+        @if (activeJob) {
+        <div class="active-job-container">
+          <h3>{{ 'variable-analysis.analysis-running' | translate }}</h3>
+          <div class="progress-details">
+            <mat-progress-bar mode="determinate" [value]="activeJob.progress || 0"></mat-progress-bar>
+            <span>{{ activeJob.progress || 0 }}%</span>
+          </div>
+          <p class="job-info">
+            {{ 'variable-analysis.id-column' | translate }}: {{ activeJob.id }} |
+            {{ 'variable-analysis.started-at' | translate }}: {{ formatDate(activeJob.created_at) }}
+          </p>
+        </div>
+        }
+
         <!-- Search input -->
-        <div class="search-container">
+        <div class="result-controls">
           <mat-form-field appearance="outline" class="search-field">
             <mat-label>{{ 'variable-analysis.search-variables' | translate }}</mat-label>
             <input matInput type="text" [(ngModel)]="searchText" (input)="onSearchChange($event)"
               placeholder="{{ 'variable-analysis.search-placeholder' | translate }}">
             <mat-icon matSuffix>search</mat-icon>
             @if (searchText) {
-            <button mat-icon-button matSuffix (click)="searchText = ''; onSearchChange($event)" aria-label="Clear">
+            <button mat-icon-button matSuffix (click)="clearSearch()" aria-label="Clear">
               <mat-icon>close</mat-icon>
             </button>
             }
           </mat-form-field>
+          <mat-checkbox [(ngModel)]="onlyWithEmptyValues" (change)="onEmptyValuesFilterChange()">
+            {{ 'variable-analysis.only-empty-values' | translate }}
+          </mat-checkbox>
         </div>
 
         @if (variableCombos.length === 0) {
         <div class="empty-state">
           <mat-icon class="empty-icon">info</mat-icon>
-          <p>{{ 'variable-analysis.no-variables-found' | translate }}</p>
+          <p>
+            {{ (allVariableCombos.length === 0 ? 'variable-analysis.no-results-yet' : 'variable-analysis.no-variables-found') | translate }}
+          </p>
+          @if (allVariableCombos.length === 0 && !activeJob && !isStartingJob) {
+          <button mat-raised-button color="primary" (click)="startNewAnalysis()" [disabled]="isJobsLoading">
+            <mat-icon>add</mat-icon>
+            {{ 'variable-analysis.start-new-analysis' | translate }}
+          </button>
+          }
         </div>
         } @else {
         <div class="variables-container">
@@ -73,6 +107,29 @@
           @for (combo of variableCombos; track combo) {
           <div class="variable-section">
             <h3 class="variable-title">{{ combo.unitName }}: {{ combo.variableId }}</h3>
+            @let summary = getComboSummary(combo);
+            <div class="variable-summary">
+              <span class="summary-chip">
+                <strong>{{ 'variable-analysis.total-cases' | translate }}:</strong>
+                {{ summary.totalCount }}
+              </span>
+              <span class="summary-chip">
+                <strong>{{ 'variable-analysis.empty-values' | translate }}:</strong>
+                {{ summary.emptyCount }} ({{ formatPercentage(summary.emptyPercentage) }})
+              </span>
+              <div class="status-chip-list" [matTooltip]="summary.statusSummary">
+                <strong>{{ 'variable-analysis.status-distribution' | translate }}:</strong>
+                @if (getVisibleStatusCounts(combo).length > 0) {
+                @for (statusItem of getVisibleStatusCounts(combo); track statusItem.status) {
+                <span class="status-chip">
+                  {{ getStatusLabel(statusItem.status) }} {{ formatPercentage(statusItem.percentage) }}
+                </span>
+                }
+                } @else {
+                <span class="muted">{{ 'variable-analysis.no-status-data' | translate }}</span>
+                }
+              </div>
+            </div>
 
             <div class="table-container">
               <table mat-table [dataSource]="variableFrequencies[getComboKey(combo)]" matSort class="frequency-table">
@@ -106,6 +163,12 @@
                 <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
               </table>
             </div>
+            @let hiddenValueCount = getHiddenValueCount(combo);
+            @if (hiddenValueCount > 0) {
+            <div class="values-hidden-note">
+              +{{ hiddenValueCount }} {{ 'variable-analysis.more-values-hidden' | translate }}
+            </div>
+            }
           </div>
           }
 
@@ -130,7 +193,7 @@
       <div class="dialog-content">
         <div class="actions-container">
           <button mat-raised-button color="primary" (click)="startNewAnalysis()"
-            [disabled]="isJobsLoading || activeJob">
+            [disabled]="isJobsLoading || !!activeJob || isStartingJob">
             <mat-icon>add</mat-icon>
             {{ 'variable-analysis.start-new-analysis' | translate }}
           </button>
@@ -218,7 +281,7 @@
                 }
 
                 <!-- Cancel button for pending or processing jobs -->
-                @if (job.status === 'pending' || job.status === 'processing') {
+                @if (job.status === 'pending' || job.status === 'waiting' || job.status === 'processing') {
                 <button mat-icon-button color="warn" (click)="cancelJob(job.id)"
                   matTooltip="{{ 'variable-analysis.cancel-job' | translate }}">
                   <mat-icon>cancel</mat-icon>

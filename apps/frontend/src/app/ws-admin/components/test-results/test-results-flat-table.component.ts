@@ -1,5 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, inject } from '@angular/core';
+import {
+  Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -52,6 +54,7 @@ import {
 } from './test-results-flat-table-settings-dialog.component';
 
 interface FlatResponseRow {
+  bookletId: number;
   responseId: number;
   unitId: number;
   personId: number;
@@ -64,6 +67,25 @@ interface FlatResponseRow {
   responseStatus: string;
   responseValue: string;
   tags: string[];
+}
+
+export interface FlatResponseFilters {
+  code: string;
+  group: string;
+  login: string;
+  booklet: string;
+  unit: string;
+  response: string;
+  responseStatus: string;
+  responseValue: string;
+  tags: string;
+  geogebra: boolean;
+  audioLow: boolean;
+  nonEmptyResponse: boolean;
+  sessionFilter: boolean;
+  shortProcessing: boolean;
+  longLoading: boolean;
+  logAnomalies: string;
 }
 
 interface BookletLog {
@@ -106,6 +128,24 @@ interface BookletFromPersonTestResults {
   units: UnitFromPersonTestResults[];
 }
 
+type FlatTableMediaFilter =
+  | 'geogebra'
+  | 'audioLow'
+  | 'nonEmptyResponse'
+  | 'sessionFilter'
+  | 'shortProcessing'
+  | 'longLoading'
+  | 'processingDuration'
+  | 'unitProgressComplete'
+  | 'logCritical'
+  | 'logTechnical'
+  | 'logIncomplete'
+  | 'logConnectionLost'
+  | 'logTimer'
+  | 'logFocus'
+  | 'logDebug'
+  | 'logReloads';
+
 @Component({
   selector: 'coding-box-test-results-flat-table',
   standalone: true,
@@ -127,7 +167,7 @@ interface BookletFromPersonTestResults {
   templateUrl: './test-results-flat-table.component.html',
   styleUrls: ['./test-results-flat-table.component.scss']
 })
-export class TestResultsFlatTableComponent implements OnDestroy {
+export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
   private fileService = inject(FileService);
   private unitNoteService = inject(UnitNoteService);
   private statisticsService = inject(CodingStatisticsService);
@@ -145,6 +185,15 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
   private readonly LONG_LOADING_THRESHOLD_STORAGE_KEY =
     'coding-box-test-results-long-loading-threshold-ms';
+
+  private readonly FOCUS_LOST_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-focus-lost-threshold-ms';
+
+  private readonly SESSION_SPAN_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-session-span-threshold-ms';
+
+  private readonly REPEATED_START_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-repeated-start-threshold';
 
   private readonly PROCESSING_DURATION_MIN_STORAGE_KEY =
     'coding-box-test-results-processing-duration-min';
@@ -197,50 +246,26 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   flatPageIndex: number = 0;
   isLoadingFlat: boolean = false;
 
-  flatFilters: {
-    code: string;
-    group: string;
-    login: string;
-    booklet: string;
-    unit: string;
-    response: string;
-    responseStatus: string;
-    responseValue: string;
-    tags: string;
-    geogebra: boolean;
-    audioLow: boolean;
-    nonEmptyResponse: boolean;
-    sessionFilter: boolean;
-    shortProcessing: boolean;
-    longLoading: boolean;
-  } = {
-      code: '',
-      group: '',
-      login: '',
-      booklet: '',
-      unit: '',
-      response: '',
-      responseStatus: '',
-      responseValue: '',
-      tags: '',
-      geogebra: false,
-      audioLow: false,
-      nonEmptyResponse: false,
-      sessionFilter: false,
-      shortProcessing: false,
-      longLoading: false
-    };
+  flatFilters: FlatResponseFilters = {
+    code: '',
+    group: '',
+    login: '',
+    booklet: '',
+    unit: '',
+    response: '',
+    responseStatus: '',
+    responseValue: '',
+    tags: '',
+    geogebra: false,
+    audioLow: false,
+    nonEmptyResponse: false,
+    sessionFilter: false,
+    shortProcessing: false,
+    longLoading: false,
+    logAnomalies: ''
+  };
 
-  mediaFilters: Array<
-  | 'geogebra'
-  | 'audioLow'
-  | 'nonEmptyResponse'
-  | 'sessionFilter'
-  | 'shortProcessing'
-  | 'longLoading'
-  | 'processingDuration'
-  | 'unitProgressComplete'
-  > = [];
+  mediaFilters: FlatTableMediaFilter[] = [];
 
   processingDurationEnabled: boolean = false;
 
@@ -252,6 +277,12 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   shortProcessingThresholdMs: number = 60000;
 
   longLoadingThresholdMs: number = 5000;
+
+  focusLostThresholdMs: number = 300000;
+
+  sessionSpanThresholdMs: number = 24 * 60 * 60 * 1000;
+
+  repeatedStartThreshold: number = 2;
 
   processingDurationMin: string = '00:00';
   processingDurationMax: string = '99:59';
@@ -286,6 +317,9 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
   private suppressNextFlatFilterChange = false;
 
+  @Input() initialFilters: Partial<FlatResponseFilters> | null = null;
+  @Output() responseDeleted = new EventEmitter<void>();
+
   constructor() {
     try {
       const raw = localStorage.getItem(this.AUDIO_LOW_THRESHOLD_STORAGE_KEY);
@@ -314,6 +348,36 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       const parsed = raw != null ? Number(raw) : NaN;
       if (Number.isFinite(parsed)) {
         this.longLoadingThresholdMs = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(this.FOCUS_LOST_THRESHOLD_STORAGE_KEY);
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.focusLostThresholdMs = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(this.SESSION_SPAN_THRESHOLD_STORAGE_KEY);
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.sessionSpanThresholdMs = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(this.REPEATED_START_THRESHOLD_STORAGE_KEY);
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.repeatedStartThreshold = Math.max(2, Math.round(parsed));
       }
     } catch {
       // ignore
@@ -398,17 +462,33 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.syncMediaFiltersFromFlatFilters();
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (!changes.initialFilters || !this.initialFilters) {
+      return;
+    }
+
+    const hasFilterValues = Object.values(this.initialFilters).some(value => {
+      if (typeof value === 'boolean') {
+        return value;
+      }
+      return String(value || '').trim() !== '';
+    });
+
+    if (!hasFilterValues) {
+      return;
+    }
+
+    this.flatFilters = {
+      ...this.flatFilters,
+      ...this.initialFilters
+    };
+    this.flatPageIndex = 0;
+    this.syncMediaFiltersFromFlatFilters();
+    this.fetchFlatResponses(0, this.flatPageSize);
+  }
+
   private syncMediaFiltersFromFlatFilters(): void {
-    const next: Array<
-    | 'geogebra'
-    | 'audioLow'
-    | 'nonEmptyResponse'
-    | 'sessionFilter'
-    | 'shortProcessing'
-    | 'longLoading'
-    | 'processingDuration'
-    | 'unitProgressComplete'
-    > = [];
+    const next: FlatTableMediaFilter[] = [];
     if (this.flatFilters.geogebra) {
       next.push('geogebra');
     }
@@ -433,6 +513,39 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     if (this.unitProgressFilters.includes('Vollständig')) {
       next.push('unitProgressComplete');
     }
+    const selectedAnomalyGroups = new Set(
+      String(this.flatFilters.logAnomalies || '')
+        .split(',')
+        .map(v => v.trim())
+        .filter(Boolean)
+    );
+    if (selectedAnomalyGroups.has('critical')) {
+      next.push('logCritical');
+    }
+    if (selectedAnomalyGroups.has('technical')) {
+      next.push('logTechnical');
+    }
+    if (selectedAnomalyGroups.has('incomplete')) {
+      next.push('logIncomplete');
+    }
+    if (
+      selectedAnomalyGroups.has('connection_lost') ||
+      selectedAnomalyGroups.has('connection')
+    ) {
+      next.push('logConnectionLost');
+    }
+    if (selectedAnomalyGroups.has('timer')) {
+      next.push('logTimer');
+    }
+    if (selectedAnomalyGroups.has('focus')) {
+      next.push('logFocus');
+    }
+    if (selectedAnomalyGroups.has('debug')) {
+      next.push('logDebug');
+    }
+    if (selectedAnomalyGroups.has('reloads')) {
+      next.push('logReloads');
+    }
     this.mediaFilters = next;
   }
 
@@ -456,6 +569,33 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         f => f !== 'Vollständig'
       );
     }
+
+    const anomalyGroups: string[] = [];
+    if (selected.has('logCritical')) {
+      anomalyGroups.push('critical');
+    }
+    if (selected.has('logTechnical')) {
+      anomalyGroups.push('technical');
+    }
+    if (selected.has('logIncomplete')) {
+      anomalyGroups.push('incomplete');
+    }
+    if (selected.has('logConnectionLost')) {
+      anomalyGroups.push('connection_lost');
+    }
+    if (selected.has('logTimer')) {
+      anomalyGroups.push('timer');
+    }
+    if (selected.has('logFocus')) {
+      anomalyGroups.push('focus');
+    }
+    if (selected.has('logDebug')) {
+      anomalyGroups.push('debug');
+    }
+    if (selected.has('logReloads')) {
+      anomalyGroups.push('reloads');
+    }
+    this.flatFilters.logAnomalies = anomalyGroups.join(',');
 
     this.onFlatFilterChanged();
   }
@@ -672,8 +812,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
           loadingSnackBar.dismiss();
 
           this.dialog.open(BookletInfoDialogComponent, {
-            width: '1200px',
-            height: '80vh',
+            width: 'min(96vw, 1400px)',
+            maxWidth: '96vw',
+            height: '92vh',
+            maxHeight: '92vh',
             data: {
               bookletInfo,
               bookletId: normalizedBookletId
@@ -729,8 +871,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
               loadingSnackBar.dismiss();
 
               this.dialog.open(UnitInfoDialogComponent, {
-                width: '1200px',
-                height: '80vh',
+                width: 'min(96vw, 1400px)',
+                maxWidth: '96vw',
+                height: '92vh',
+                maxHeight: '92vh',
                 data: {
                   unitInfo,
                   unitId: unitFileId
@@ -948,7 +1092,8 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       nonEmptyResponse: false,
       sessionFilter: false,
       shortProcessing: false,
-      longLoading: false
+      longLoading: false,
+      logAnomalies: ''
     };
     this.syncMediaFiltersFromFlatFilters();
 
@@ -997,6 +1142,42 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.onFlatFilterChanged();
   }
 
+  onFocusLostThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.FOCUS_LOST_THRESHOLD_STORAGE_KEY,
+        String(this.focusLostThresholdMs)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
+  onSessionSpanThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.SESSION_SPAN_THRESHOLD_STORAGE_KEY,
+        String(this.sessionSpanThresholdMs)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
+  onRepeatedStartThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.REPEATED_START_THRESHOLD_STORAGE_KEY,
+        String(this.repeatedStartThreshold)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
   openFlatSettings(): void {
     if (!this.appService.selectedWorkspaceId) {
       return;
@@ -1024,6 +1205,9 @@ export class TestResultsFlatTableComponent implements OnDestroy {
           audioLowThreshold: number;
           shortProcessingThresholdMs: number;
           longLoadingThresholdMs: number;
+          focusLostThresholdMs: number;
+          sessionSpanThresholdMs: number;
+          repeatedStartThreshold: number;
           processingDurationMin: string;
           processingDurationMax: string;
           sessionBrowsersAllowlist: string[];
@@ -1043,6 +1227,9 @@ export class TestResultsFlatTableComponent implements OnDestroy {
             audioLowThreshold: this.audioLowThreshold,
             shortProcessingThresholdMs: this.shortProcessingThresholdMs,
             longLoadingThresholdMs: this.longLoadingThresholdMs,
+            focusLostThresholdMs: this.focusLostThresholdMs,
+            sessionSpanThresholdMs: this.sessionSpanThresholdMs,
+            repeatedStartThreshold: this.repeatedStartThreshold,
             processingDurationMin: this.processingDurationMin,
             processingDurationMax: this.processingDurationMax,
             sessionBrowsersAllowlist:
@@ -1064,6 +1251,9 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
           this.shortProcessingThresholdMs = result.shortProcessingThresholdMs;
           this.longLoadingThresholdMs = result.longLoadingThresholdMs;
+          this.focusLostThresholdMs = result.focusLostThresholdMs;
+          this.sessionSpanThresholdMs = result.sessionSpanThresholdMs;
+          this.repeatedStartThreshold = result.repeatedStartThreshold;
 
           this.processingDurationMin = String(
             result.processingDurationMin ?? ''
@@ -1085,11 +1275,31 @@ export class TestResultsFlatTableComponent implements OnDestroy {
             result.sessionScreensAllowlist.join(',') :
             '';
 
-          this.onAudioLowThresholdChanged();
-          this.onShortProcessingThresholdChanged();
-          this.onLongLoadingThresholdChanged();
-
           try {
+            localStorage.setItem(
+              this.AUDIO_LOW_THRESHOLD_STORAGE_KEY,
+              String(this.audioLowThreshold)
+            );
+            localStorage.setItem(
+              this.SHORT_PROCESSING_THRESHOLD_STORAGE_KEY,
+              String(this.shortProcessingThresholdMs)
+            );
+            localStorage.setItem(
+              this.LONG_LOADING_THRESHOLD_STORAGE_KEY,
+              String(this.longLoadingThresholdMs)
+            );
+            localStorage.setItem(
+              this.FOCUS_LOST_THRESHOLD_STORAGE_KEY,
+              String(this.focusLostThresholdMs)
+            );
+            localStorage.setItem(
+              this.SESSION_SPAN_THRESHOLD_STORAGE_KEY,
+              String(this.sessionSpanThresholdMs)
+            );
+            localStorage.setItem(
+              this.REPEATED_START_THRESHOLD_STORAGE_KEY,
+              String(this.repeatedStartThreshold)
+            );
             localStorage.setItem(
               this.PROCESSING_DURATION_MIN_STORAGE_KEY,
               String(this.processingDurationMin)
@@ -1169,9 +1379,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
           String(this.shortProcessingThresholdMs) :
           '',
         longLoading: this.flatFilters.longLoading ? 'true' : '',
-        longLoadingThresholdMs: this.flatFilters.longLoading ?
-          String(this.longLoadingThresholdMs) :
-          '',
+        longLoadingThresholdMs: String(this.longLoadingThresholdMs),
+        focusLostThresholdMs: String(this.focusLostThresholdMs),
+        sessionSpanThresholdMs: String(this.sessionSpanThresholdMs),
+        repeatedStartThreshold: String(this.repeatedStartThreshold),
         processingDurations: '',
         processingDurationMin: this.processingDurationEnabled ?
           String(this.processingDurationMin) :
@@ -1188,12 +1399,14 @@ export class TestResultsFlatTableComponent implements OnDestroy {
           '',
         sessionScreens: sessionFilterActive ?
           this.parseCsv(this.sessionScreensAllowlist) :
-          ''
+          '',
+        logAnomalies: this.flatFilters.logAnomalies
       })
       .subscribe(resp => {
         this.isLoadingFlat = false;
         this.flatTotalRecords = resp.total;
         this.flatData = (resp.data || []).map(r => ({
+          bookletId: r.bookletId,
           responseId: r.responseId,
           unitId: r.unitId,
           personId: r.personId,
@@ -1258,11 +1471,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     });
 
     this.appService
-      .createToken(
-        this.appService.selectedWorkspaceId,
-        this.appService.loggedUser?.sub || '',
-        1
-      )
+      .createOwnToken(this.appService.selectedWorkspaceId, 1)
       .subscribe({
         next: token => {
           loadingSnackBar.dismiss();
@@ -1337,6 +1546,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
                   { duration: 3000 }
                 );
                 this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+                this.responseDeleted.emit();
               } else {
                 this.snackBar.open(
                   `Fehler beim Löschen der Antwort: ${result.report.warnings.join(

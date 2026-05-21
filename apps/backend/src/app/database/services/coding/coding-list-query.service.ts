@@ -1,15 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Like, Repository } from 'typeorm';
-import FileUpload from '../../entities/file_upload.entity';
+import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
-import { extractVariableLocation } from '../../../utils/voud/extractVariableLocation';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 import { CodingItem } from './coding-item-builder.service';
+import { CodingFileCacheService } from './coding-file-cache.service';
+
+const PAGE_MAP_LOOKUP_BATCH_SIZE = 8;
 
 /**
  * Service responsible for querying coding lists and variables.
@@ -24,14 +28,20 @@ export class CodingListQueryService {
   private readonly logger = new Logger(CodingListQueryService.name);
 
   constructor(
-    @InjectRepository(FileUpload)
-    private readonly fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
+    private readonly fileCacheService: CodingFileCacheService,
     private readonly workspaceFilesService: WorkspaceFilesService,
     private readonly workspaceCoreService: WorkspaceCoreService,
     private readonly workspaceExclusionService: WorkspaceExclusionService
   ) { }
+
+  async getValidVariablePairKeys(workspaceId: number): Promise<string[]> {
+    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    return Array.from(unitVariableMap.entries()).flatMap(([unitName, variableIds]) => (
+      Array.from(variableIds).map(variableId => `${unitName}\u001F${variableId}`)
+    ));
+  }
 
   /**
    * Get the complete coding list for a workspace.
@@ -49,43 +59,7 @@ export class CodingListQueryService {
     try {
       const server = serverUrl;
 
-      // 1) Preload VOUD files and build variable->page mapping
-      const voudFiles = await this.fileUploadRepository.find({
-        where: {
-          workspace_id: workspace_id,
-          file_type: 'Resource',
-          filename: Like('%.voud')
-        }
-      });
-
-      this.logger.log(
-        `Found ${voudFiles.length} VOUD files for workspace ${workspace_id}`
-      );
-
-      const variablePageMap = new Map<string, Map<string, string>>();
-      for (const voudFile of voudFiles) {
-        try {
-          const respDefinition = { definition: voudFile.data };
-          const variableLocation = extractVariableLocation([respDefinition]);
-          const unitVarPages = new Map<string, string>();
-          for (const pageInfo of variableLocation[0].variable_pages) {
-            unitVarPages.set(
-              pageInfo.variable_ref,
-              pageInfo.variable_path?.pages?.toString() || '0'
-            );
-          }
-          variablePageMap.set(
-            voudFile.file_id.replace('.VOUD', ''),
-            unitVarPages
-          );
-        } catch (error) {
-          this.logger.error(
-            `Error parsing VOUD file ${voudFile.filename}: ${error.message}`
-          );
-        }
-      }
-
-      // 2) Query CODING_INCOMPLETE and INTENDED_INCOMPLETE responses
+      // 1) Query CODING_INCOMPLETE and INTENDED_INCOMPLETE responses
       const queryBuilder = this.responseRepository
         .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
@@ -103,25 +77,11 @@ export class CodingListQueryService {
         .orderBy('response.id', 'ASC');
 
       const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
-      if (globalIgnoredUnits.length > 0) {
-        queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
-      }
-      if (ignoredBooklets.length > 0) {
-        queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
-      }
-      if (testletIgnoredUnits.length > 0) {
-        const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
-        const params: Record<string, string> = {};
-        testletIgnoredUnits.forEach((t, i) => {
-          params[`bId${i}`] = t.bookletId;
-          params[`uId${i}`] = t.unitId;
-        });
-        queryBuilder.andWhere(`NOT (${condition})`, params);
-      }
+      applyResolvedExclusionsToQuery(queryBuilder, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
       const [responses, total] = await queryBuilder.getManyAndCount();
 
-      // 3) Load variable maps from WorkspaceFilesService
+      // 2) Load variable maps from WorkspaceFilesService
       //    unitVariableMap: unitName → Set of valid variable aliases (includes derived vars, excludes BASE/BASE_NO_VALUE)
       //    intendedIncompleteSchemeMap: unitName → Set of variable aliases that have INTENDED_INCOMPLETE code type in scheme
       //    trainingRequiredMap: unitName → Set of variable aliases that have CODER_TRAINING_REQUIRED property
@@ -148,7 +108,7 @@ export class CodingListQueryService {
 
       const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
 
-      // 4) Filter responses:
+      // 3) Filter responses:
       //    - Variable must exist in unitVariableMap (valid, non-BASE/BASE_NO_VALUE)
       //    - For INTENDED_INCOMPLETE: exclude if coding scheme already has INTENDED_INCOMPLETE code type
       //    - Also exclude variables matching media substrings and empty values
@@ -183,6 +143,18 @@ export class CodingListQueryService {
         return true;
       });
 
+      const unitKeys = Array.from(
+        new Set(
+          filtered
+            .map(response => response.unit?.name || '')
+            .filter(unitKey => unitKey.length > 0)
+        )
+      );
+      const variablePageMap = await this.loadVariablePageMaps(
+        unitKeys,
+        workspace_id
+      );
+
       const result = filtered.map(response => {
         const unit = response.unit;
         const booklet = unit?.booklet;
@@ -215,7 +187,7 @@ export class CodingListQueryService {
         };
       });
 
-      // 5) Sort
+      // 4) Sort
       const sortedResult = result.sort((a, b) => {
         const unitKeyComparison = a.unit_key.localeCompare(b.unit_key);
         if (unitKeyComparison !== 0) {
@@ -232,6 +204,34 @@ export class CodingListQueryService {
       this.logger.error(`Error fetching coding list: ${error.message}`);
       return { items: [], total: 0 };
     }
+  }
+
+  private async loadVariablePageMaps(
+    unitKeys: string[],
+    workspaceId: number
+  ): Promise<Map<string, Map<string, string>>> {
+    const variablePageMap = new Map<string, Map<string, string>>();
+
+    for (let start = 0; start < unitKeys.length; start += PAGE_MAP_LOOKUP_BATCH_SIZE) {
+      const batch = unitKeys.slice(start, start + PAGE_MAP_LOOKUP_BATCH_SIZE);
+      await Promise.all(
+        batch.map(async unitKey => {
+          try {
+            variablePageMap.set(
+              unitKey,
+              await this.fileCacheService.getVariablePageMap(unitKey, workspaceId)
+            );
+          } catch (error) {
+            this.logger.warn(
+              `Error loading variable page map for unit ${unitKey}: ${error.message}`
+            );
+            variablePageMap.set(unitKey, new Map<string, string>());
+          }
+        })
+      );
+    }
+
+    return variablePageMap;
   }
 
   /**
@@ -272,21 +272,7 @@ export class CodingListQueryService {
     );
 
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    if (globalIgnoredUnits.length > 0) {
-      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
-    }
-    if (ignoredBooklets.length > 0) {
-      queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
-    }
-    if (testletIgnoredUnits.length > 0) {
-      const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
-      const params: Record<string, string> = {};
-      testletIgnoredUnits.forEach((t, i) => {
-        params[`bId${i}`] = t.bookletId;
-        params[`uId${i}`] = t.unitId;
-      });
-      queryBuilder.andWhere(`NOT (${condition})`, params);
-    }
+    applyResolvedExclusionsToQuery(queryBuilder, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
     const rawResults = await queryBuilder.getRawMany();
 

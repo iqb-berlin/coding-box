@@ -97,8 +97,11 @@ describe('PersonService', () => {
       expect(parse('KEY = VALUE')).toEqual({ key: 'KEY', value: 'VALUE' });
     });
 
-    it('should return null for invalid format', () => {
-      expect(parse('INVALID_LOG_WITHOUT_SEPARATOR')).toBeNull();
+    it('should keep separatorless log entries as key-only logs', () => {
+      expect(parse('CURRENT_PAGE_ID')).toEqual({
+        key: 'CURRENT_PAGE_ID',
+        value: ''
+      });
       expect(parse('')).toBeNull();
     });
   });
@@ -307,14 +310,14 @@ describe('PersonService', () => {
       expect(result.booklets).toHaveLength(1);
       expect(result.booklets[0].sessions).toHaveLength(1);
       expect(result.booklets[0].sessions[0]).toMatchObject({
-        browser: '"Firefox" "128.0"',
-        os: '"MacOS"',
+        browser: 'Firefox 128.0',
+        os: 'MacOS',
         screen: '1920 x 1080',
         loadCompleteMS: 500
       });
     });
 
-    it('should skip logs with invalid format', () => {
+    it('should keep separatorless booklet logs with an empty parameter', () => {
       const mockPerson = createMockPerson();
       const rows = [
         {
@@ -336,8 +339,34 @@ describe('PersonService', () => {
         issues
       );
 
+      expect(result.booklets).toHaveLength(1);
+      expect(result.booklets[0].logs).toEqual([
+        expect.objectContaining({
+          key: 'INVALID_LOG',
+          parameter: ''
+        })
+      ]);
+      expect(issues).toHaveLength(0);
+    });
+
+    it('should ignore unit rows while assigning booklet logs', () => {
+      const mockPerson = createMockPerson();
+      const rows = [
+        {
+          groupname: 'group1',
+          loginname: 'user1',
+          code: 'code1',
+          bookletname: 'booklet1',
+          unitname: 'unit1',
+          originalUnitId: 'unit1',
+          timestamp: '123456',
+          logentry: 'PLAYER=RUNNING'
+        }
+      ];
+
+      const result = service.assignBookletLogsToPerson(mockPerson, rows);
+
       expect(result.booklets).toHaveLength(0);
-      expect(issues).toHaveLength(1);
     });
 
     it('should skip rows not matching person', () => {
@@ -389,6 +418,32 @@ describe('PersonService', () => {
 
       expect(result.booklets).toHaveLength(1);
       expect(result.booklets[0].logs).toHaveLength(2);
+    });
+
+    it('should add empty booklet containers for unit-only logs', () => {
+      const mockPerson = createMockPerson();
+
+      const result = service.ensureBookletsForUnitLogs(mockPerson, [
+        {
+          groupname: 'group1',
+          loginname: 'user1',
+          code: 'code1',
+          bookletname: 'booklet1',
+          unitname: 'unit1',
+          originalUnitId: 'unit1',
+          timestamp: '123456',
+          logentry: 'PLAYER=RUNNING'
+        }
+      ]);
+
+      expect(result.booklets).toEqual([
+        {
+          id: 'booklet1',
+          logs: [],
+          units: [],
+          sessions: []
+        }
+      ]);
     });
   });
 

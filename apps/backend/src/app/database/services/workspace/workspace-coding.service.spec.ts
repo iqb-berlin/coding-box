@@ -31,6 +31,14 @@ import {
 import { ExportValidationResultsService } from '../validation';
 import { BullJobManagementService } from '../jobs';
 
+jest.mock('./workspace-files.service', () => ({
+  WorkspaceFilesService: jest.fn()
+}));
+
+jest.mock('./workspace-xml-schema-validation.service', () => ({
+  WorkspaceXmlSchemaValidationService: jest.fn()
+}));
+
 jest.mock('@iqb/responses', () => ({
   CodingFactory: {
     code: jest.fn()
@@ -77,6 +85,7 @@ describe('WorkspaceCodingService', () => {
 
   const mockCodingStatisticsService = {
     getCodingStatistics: jest.fn(),
+    invalidateCache: jest.fn(),
     refreshStatistics: jest.fn()
   };
 
@@ -305,7 +314,8 @@ describe('WorkspaceCodingService', () => {
         personIds,
         autoCoderRun,
         undefined,
-        jobId
+        jobId,
+        undefined
       );
 
       expect(
@@ -315,9 +325,54 @@ describe('WorkspaceCodingService', () => {
         personIds,
         autoCoderRun,
         undefined,
-        jobId
+        jobId,
+        undefined,
+        undefined
       );
       expect(result).toEqual(expectedResult);
+    });
+
+    it('should invalidate all coding statistics before refreshing v1 after first autocoder run', async () => {
+      await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        1,
+        undefined,
+        jobId,
+        undefined
+      );
+
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+      expect(mockCodingStatisticsService.refreshStatistics).toHaveBeenCalledWith(workspaceId, 'v1');
+    });
+
+    it('should await response analysis cache invalidation before refreshing statistics', async () => {
+      await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        1,
+        undefined,
+        jobId,
+        undefined
+      );
+
+      expect(mockCodingAnalysisService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+      expect(mockCodingAnalysisService.invalidateCache.mock.invocationCallOrder[0])
+        .toBeLessThan(mockCodingStatisticsService.invalidateCache.mock.invocationCallOrder[0]);
+    });
+
+    it('should invalidate all coding statistics before refreshing v3 after second autocoder run', async () => {
+      await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2,
+        undefined,
+        jobId,
+        undefined
+      );
+
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+      expect(mockCodingStatisticsService.refreshStatistics).toHaveBeenCalledWith(workspaceId, 'v3');
     });
   });
 
@@ -644,6 +699,8 @@ describe('WorkspaceCodingService', () => {
         success: true,
         updatedResponsesCount: 50,
         skippedReviewCount: 5,
+        skippedAlreadyCodedCount: 0,
+        overwrittenExistingCount: 0,
         messageKey: 'Results applied successfully'
       };
 
@@ -1261,6 +1318,8 @@ describe('WorkspaceCodingService', () => {
           jobsProcessed: 5,
           totalUpdatedResponses: 100,
           totalSkippedReview: 10,
+          totalSkippedAlreadyCoded: 0,
+          totalOverwrittenExisting: 0,
           message: 'Successfully applied coding results',
           results: [
             {
@@ -1272,6 +1331,8 @@ describe('WorkspaceCodingService', () => {
                 success: true,
                 updatedResponsesCount: 20,
                 skippedReviewCount: 2,
+                skippedAlreadyCodedCount: 0,
+                overwrittenExistingCount: 0,
                 message: 'Applied'
               }
             }

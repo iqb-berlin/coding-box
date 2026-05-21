@@ -1,4 +1,5 @@
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
+import { CodingJobFreshnessStatus } from '../../../../../../api-dto/coding/job-refresh.dto';
 import { CoderTraining } from './coder-training.model';
 
 export interface CodingJob {
@@ -11,6 +12,9 @@ export interface CodingJob {
   created_at: Date;
   updated_at: Date;
   assignedCoders: number[];
+  assignedCoderConfigs?: JobDefinitionCoderConfig[];
+  distributionSeed?: string;
+  plannedVariableUsage?: Record<string, number>;
   assignedVariables?: Variable[];
   assignedVariableBundles?: VariableBundle[];
   variables?: Variable[];
@@ -34,6 +38,20 @@ export interface CodingJob {
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
   hasIssues?: boolean;
+  aggregationEnabled?: boolean;
+  aggregationThreshold?: number | null;
+  responseMatchingFlags?: string[] | null;
+  aggregationSettingsVersion?: number | null;
+  freshnessStatus?: CodingJobFreshnessStatus;
+  freshnessReason?: string | null;
+  freshnessUpdatedAt?: Date | string | null;
+  freshnessAffectedUnits?: number;
+  freshnessAffectedResponses?: number;
+}
+
+export interface JobDefinitionCoderConfig {
+  coderId: number;
+  capacityPercent: number;
 }
 
 export interface Variable {

@@ -2,6 +2,7 @@ import { WorkspaceUserChecked } from './workspace-user-checked.class';
 import { UserInListDto } from '../../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../../api-dto/workspaces/user-workspace-access-dto';
 import { WorkspaceUserInListDto } from '../../../../../../api-dto/user/workspace-user-in-list-dto';
+import { getEffectiveCanCode } from '../../shared/utils/workspace-access';
 
 export class WorkspaceUserToCheckCollection {
   entries: WorkspaceUserChecked[];
@@ -11,7 +12,15 @@ export class WorkspaceUserToCheckCollection {
   constructor(users: UserInListDto[]) {
     this.entries = [];
     users.forEach(user => {
-      this.entries.push(new WorkspaceUserChecked(user));
+      const checkedUser = new WorkspaceUserChecked(user);
+      this.entries.push(checkedUser);
+      if (checkedUser.isChecked) {
+        this.workspacesUsersIds.push({
+          id: checkedUser.id,
+          accessLevel: checkedUser.accessLevel,
+          canCode: checkedUser.canCode
+        });
+      }
     });
   }
 
@@ -21,7 +30,8 @@ export class WorkspaceUserToCheckCollection {
       workspaceUsers.forEach(u => this.workspacesUsersIds.push(
         {
           id: u.id,
-          accessLevel: u.accessLevel
+          accessLevel: u.accessLevel,
+          canCode: getEffectiveCanCode(u)
         }));
     }
     this.entries.forEach(user => {
@@ -30,9 +40,11 @@ export class WorkspaceUserToCheckCollection {
       if (workspaceUser) {
         user.isChecked = true;
         user.accessLevel = workspaceUser.accessLevel;
+        user.canCode = getEffectiveCanCode(workspaceUser);
       } else {
         user.isChecked = false;
         user.accessLevel = 0;
+        user.canCode = false;
       }
     });
     this.hasChanged = false;
@@ -41,11 +53,14 @@ export class WorkspaceUserToCheckCollection {
   getChecks(): UserWorkspaceAccessDto[] {
     const checkedUserIds: UserWorkspaceAccessDto[] = [];
     this.entries.forEach(user => {
-      if (user.isChecked) {
+      const workspaceUser = this.workspacesUsersIds
+        .find(workspacesUsersId => user.id === workspacesUsersId.id);
+      if (user.isChecked || workspaceUser) {
         checkedUserIds.push(
           {
             id: user.id,
-            accessLevel: user.accessLevel
+            accessLevel: user.isChecked ? user.accessLevel : 0,
+            canCode: user.isChecked ? user.canCode : false
           });
       }
     });
@@ -63,6 +78,9 @@ export class WorkspaceUserToCheckCollection {
       if (workspaceUser && user.accessLevel !== workspaceUser.accessLevel) {
         this.hasChanged = true;
       }
+      if (workspaceUser && user.canCode !== workspaceUser.canCode) {
+        this.hasChanged = true;
+      }
     });
   }
 
@@ -72,7 +90,8 @@ export class WorkspaceUserToCheckCollection {
       if (user.isChecked) {
         this.workspacesUsersIds.push({
           id: user.id,
-          accessLevel: user.accessLevel
+          accessLevel: user.accessLevel,
+          canCode: user.canCode
         });
       }
     });

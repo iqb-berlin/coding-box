@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { WorkspaceSettings } from '../models/workspace-settings.model';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 
 export enum ResponseMatchingFlag {
   NO_AGGREGATION = 'NO_AGGREGATION',
@@ -28,8 +29,11 @@ export class WorkspaceSettingsService {
     return this.rawServerUrl.endsWith('/') ? this.rawServerUrl.slice(0, -1) : this.rawServerUrl;
   }
 
-  getWorkspaceSetting(workspaceId: number, key: string): Observable<WorkspaceSettings> {
-    return this.http.get<WorkspaceSettings>(`${this.serverUrl}/workspace/${workspaceId}/settings/${key}`);
+  getWorkspaceSetting(workspaceId: number, key: string, suppressGlobalError = false): Observable<WorkspaceSettings> {
+    return this.http.get<WorkspaceSettings>(
+      `${this.serverUrl}/workspace/${workspaceId}/settings/${key}`,
+      suppressGlobalError ? { context: suppressGlobalHttpErrorContext() } : {}
+    );
   }
 
   setWorkspaceSetting(workspaceId: number, key: string, value: string, description?: string): Observable<WorkspaceSettings> {
@@ -52,7 +56,7 @@ export class WorkspaceSettingsService {
 
   getAutoFetchCodingStatistics(workspaceId: number): Observable<boolean> {
     return new Observable(observer => {
-      this.getWorkspaceSetting(workspaceId, 'auto-fetch-coding-statistics')
+      this.getWorkspaceSetting(workspaceId, 'auto-fetch-coding-statistics', true)
         .subscribe({
           next: setting => {
             try {
@@ -112,14 +116,13 @@ export class WorkspaceSettingsService {
     );
   }
 
-  getAggregationThreshold(workspaceId: number): Observable<number> {
+  getAggregationThreshold(workspaceId: number): Observable<number | null> {
     return new Observable(observer => {
       this.getWorkspaceSetting(workspaceId, 'duplicate-aggregation-threshold')
         .subscribe({
           next: setting => {
             try {
-              const value = parseInt(setting.value, 10);
-              observer.next(Number.isNaN(value) ? 2 : value);
+              observer.next(this.normalizeAggregationThreshold(setting.value));
             } catch {
               observer.next(2);
             }
@@ -133,12 +136,24 @@ export class WorkspaceSettingsService {
     });
   }
 
-  setAggregationThreshold(workspaceId: number, threshold: number): Observable<WorkspaceSettings> {
+  setAggregationThreshold(workspaceId: number, threshold: number | null): Observable<WorkspaceSettings> {
+    const normalizedThreshold = this.normalizeAggregationThreshold(threshold);
     return this.setWorkspaceSetting(
       workspaceId,
       'duplicate-aggregation-threshold',
-      threshold.toString(),
+      normalizedThreshold === null ? 'disabled' : normalizedThreshold.toString(),
       'Minimum number of identical responses required for aggregation'
     );
+  }
+
+  private normalizeAggregationThreshold(value: number | string | null | undefined): number | null {
+    if (value === 'disabled' || value === '0' || value === 0 || value === null) {
+      return null;
+    }
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return 2;
+    }
+    return Math.min(100, Math.max(2, Math.round(numericValue)));
   }
 }

@@ -19,18 +19,30 @@ import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatDividerModule } from '@angular/material/divider';
 import {
   MatDialog, MatDialogModule
 } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subject, takeUntil } from 'rxjs';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
-import { CoderTraining } from '../../models/coder-training.model';
+import { CaseSelectionMode, CoderTraining } from '../../models/coder-training.model';
 import { AppService } from '../../../core/services/app.service';
 import { CodingResultsComparisonComponent } from '../coding-results-comparison/coding-results-comparison.component';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog.component';
 import { TrainingJobsDialogComponent } from './training-jobs-dialog.component';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
+import {
+  getTrainingOptionMeta,
+  normalizeTrainingLabel
+} from '../../utils/coder-training-display';
+
+interface TrainingNameFilterOption {
+  label: string;
+  count: number;
+}
 
 @Component({
   selector: 'coding-box-coder-trainings-list',
@@ -49,7 +61,10 @@ import { BackendMessageTranslatorService } from '../../services/backend-message-
     MatDialogModule,
     MatSnackBarModule,
     MatFormFieldModule,
-    MatSelectModule
+    MatSelectModule,
+    MatTooltipModule,
+    MatMenuModule,
+    MatDividerModule
   ],
   templateUrl: './coder-trainings-list.component.html',
   styleUrls: ['./coder-trainings-list.component.scss']
@@ -69,9 +84,11 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
 
   coderTrainings: CoderTraining[] = [];
   originalData: CoderTraining[] = [];
+  trainingNameFilterOptions: TrainingNameFilterOption[] = [];
+  duplicateTrainingLabels = new Set<string>();
   selectedTrainingName: string | null = null;
   isLoading = false;
-  displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'created_at'];
+  displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'selectionStrategy', 'created_at'];
 
   ngOnInit(): void {
     this.loadCoderTrainings();
@@ -95,6 +112,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
         .subscribe({
           next: (trainings: CoderTraining[]) => {
             this.originalData = trainings;
+            this.rebuildTrainingNameFilterOptions();
             this.applyAllFilters();
             this.isLoading = false;
             resolve();
@@ -102,6 +120,8 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
           error: () => {
             this.coderTrainings = [];
             this.originalData = [];
+            this.trainingNameFilterOptions = [];
+            this.duplicateTrainingLabels.clear();
             this.isLoading = false;
             reject();
           }
@@ -135,6 +155,54 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
     this.coderTrainings = this.originalData.filter(training => training.label === this.selectedTrainingName);
   }
 
+  rebuildTrainingNameFilterOptions(): void {
+    const options = new Map<string, TrainingNameFilterOption>();
+    const normalizedCounts = new Map<string, number>();
+    this.originalData.forEach(training => {
+      const current = options.get(training.label);
+      if (current) {
+        current.count += 1;
+      } else {
+        options.set(training.label, { label: training.label, count: 1 });
+      }
+
+      const normalizedLabel = normalizeTrainingLabel(training.label);
+      if (normalizedLabel) {
+        normalizedCounts.set(normalizedLabel, (normalizedCounts.get(normalizedLabel) || 0) + 1);
+      }
+    });
+    this.trainingNameFilterOptions = Array.from(options.values());
+    this.duplicateTrainingLabels = new Set(
+      Array.from(normalizedCounts.entries())
+        .filter(([, count]) => count > 1)
+        .map(([label]) => label)
+    );
+  }
+
+  getTrainingNameFilterOptions(): TrainingNameFilterOption[] {
+    return this.trainingNameFilterOptions;
+  }
+
+  getTrainingNameFilterLabel(option: TrainingNameFilterOption): string {
+    return option.count > 1 ? `${option.label} (${option.count} Schulungen)` : option.label;
+  }
+
+  getTrainingOptionMeta(training: CoderTraining): string {
+    return getTrainingOptionMeta(training, 'Job', 'Jobs');
+  }
+
+  getTrainingTableMeta(training: CoderTraining): string {
+    return `ID ${training.id} · ${this.getTrainingOptionMeta(training)}`;
+  }
+
+  getTrainingActionTarget(training: CoderTraining): string {
+    return `${training.label} (${this.getTrainingTableMeta(training)})`;
+  }
+
+  isDuplicateTrainingLabel(training: CoderTraining): boolean {
+    return this.duplicateTrainingLabels.has(normalizeTrainingLabel(training.label));
+  }
+
   openResultsComparison(training?: CoderTraining): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -151,6 +219,62 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
         selectedTraining: training
       }
     });
+  }
+
+  getTrainingActionAriaLabel(action: 'details' | 'compare' | 'edit' | 'delete' | 'more', training: CoderTraining): string {
+    const target = this.getTrainingActionTarget(training);
+    switch (action) {
+      case 'details':
+        return `Details anzeigen: ${target}`;
+      case 'compare':
+        return `Ergebnisse vergleichen: ${target}`;
+      case 'edit':
+        return `Schulung bearbeiten: ${target}`;
+      case 'delete':
+        return `Schulung löschen: ${target}`;
+      case 'more':
+        return `Weitere Aktionen: ${target}`;
+      default:
+        return target;
+    }
+  }
+
+  getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
+    switch (mode || 'oldest_first') {
+      case 'oldest_first':
+        return 'Älteste zuerst';
+      case 'newest_first':
+        return 'Neueste zuerst';
+      case 'random':
+        return 'Zufällig';
+      case 'random_per_testgroup':
+        return 'Zufällig je Testgruppe';
+      case 'random_testgroups':
+        return 'Zufällige Testgruppen';
+      default:
+        return 'Älteste zuerst';
+    }
+  }
+
+  getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
+    switch (mode || 'oldest_first') {
+      case 'oldest_first':
+        return 'Älteste verfügbare Fälle pro Variable';
+      case 'newest_first':
+        return 'Neueste verfügbare Fälle pro Variable';
+      case 'random':
+        return 'Zufällig aus allen verfügbaren Fällen';
+      case 'random_per_testgroup':
+        return 'Möglichst gleichmäßig über Testgruppen';
+      case 'random_testgroups':
+        return 'Erst Testgruppen, dann Fälle zufällig';
+      default:
+        return 'Älteste verfügbare Fälle pro Variable';
+    }
+  }
+
+  getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
+    return mode === 'alternating' ? 'Abwechselnd' : 'Fortlaufend';
   }
 
   showTrainingJobs(training: CoderTraining): void {

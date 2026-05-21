@@ -15,6 +15,9 @@ export type TestResultsFlatTableSettingsDialogData = {
   audioLowThreshold: number;
   shortProcessingThresholdMs: number;
   longLoadingThresholdMs: number;
+  focusLostThresholdMs: number;
+  sessionSpanThresholdMs: number;
+  repeatedStartThreshold: number;
   processingDurationMin: string;
   processingDurationMax: string;
   sessionBrowsersAllowlist: string[];
@@ -29,6 +32,9 @@ export type TestResultsFlatTableSettingsDialogResult = {
   audioLowThreshold: number;
   shortProcessingThresholdMs: number;
   longLoadingThresholdMs: number;
+  focusLostThresholdMs: number;
+  sessionSpanThresholdMs: number;
+  repeatedStartThreshold: number;
   processingDurationMin: string;
   processingDurationMax: string;
   sessionBrowsersAllowlist: string[];
@@ -54,6 +60,9 @@ export class TestResultsFlatTableSettingsDialogComponent {
   audioLowThreshold: number;
   shortProcessingThresholdMs: number;
   longLoadingThresholdMs: number;
+  focusLostThresholdMs: number;
+  sessionSpanThresholdMs: number;
+  repeatedStartThreshold: number;
   processingDurationMin: string;
   processingDurationMax: string;
   sessionBrowsersAllowlist: string[];
@@ -75,6 +84,11 @@ export class TestResultsFlatTableSettingsDialogComponent {
       data.shortProcessingThresholdMs ?? 60000
     );
     this.longLoadingThresholdMs = Number(data.longLoadingThresholdMs ?? 5000);
+    this.focusLostThresholdMs = Number(data.focusLostThresholdMs ?? 300000);
+    this.sessionSpanThresholdMs = Number(
+      data.sessionSpanThresholdMs ?? 86400000
+    );
+    this.repeatedStartThreshold = Number(data.repeatedStartThreshold ?? 2);
     this.processingDurationMin = String(data.processingDurationMin ?? '00:00');
     this.processingDurationMax = String(data.processingDurationMax ?? '99:59');
     this.sessionBrowsersAllowlist = Array.isArray(data.sessionBrowsersAllowlist) ?
@@ -105,12 +119,24 @@ export class TestResultsFlatTableSettingsDialogComponent {
     const parsed = Number(this.audioLowThreshold);
     const shortParsed = Number(this.shortProcessingThresholdMs);
     const longParsed = Number(this.longLoadingThresholdMs);
+    const focusParsed = Number(this.focusLostThresholdMs);
+    const sessionSpanParsed = Number(this.sessionSpanThresholdMs);
+    const repeatedStartParsed = Number(this.repeatedStartThreshold);
     this.dialogRef.close({
       audioLowThreshold: Number.isFinite(parsed) ? parsed : 0.9,
       shortProcessingThresholdMs: Number.isFinite(shortParsed) ?
         shortParsed :
         60000,
       longLoadingThresholdMs: Number.isFinite(longParsed) ? longParsed : 5000,
+      focusLostThresholdMs: Number.isFinite(focusParsed) ?
+        focusParsed :
+        300000,
+      sessionSpanThresholdMs: Number.isFinite(sessionSpanParsed) ?
+        sessionSpanParsed :
+        86400000,
+      repeatedStartThreshold: Number.isFinite(repeatedStartParsed) ?
+        Math.max(2, Math.round(repeatedStartParsed)) :
+        2,
       processingDurationMin: String(this.processingDurationMin ?? ''),
       processingDurationMax: String(this.processingDurationMax ?? ''),
       sessionBrowsersAllowlist: Array.isArray(this.sessionBrowsersAllowlist) ?
