@@ -13,7 +13,6 @@
           "xml2js",
           "base64-js",
           "js-sha256",
-          "nx/src/utils/logger",
           "exceljs",
           "@iqbspecs/response",
           "@iqbspecs/response/response.interface",

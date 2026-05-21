@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Logger,
   ParseArrayPipe,
   Patch,
   Post,
@@ -21,7 +22,6 @@ import {
   ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
-import { logger } from 'nx/src/utils/logger';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
@@ -36,6 +36,8 @@ import { AccessRightsMatrixDto } from '../../../../../../api-dto/workspaces/acce
 @ApiTags('Admin Workspace')
 @Controller('admin/workspace')
 export class WorkspaceController {
+  private readonly logger = new Logger(WorkspaceController.name);
+
   constructor(
     private workspaceCoreService: WorkspaceCoreService,
     private accessRightsMatrixService: AccessRightsMatrixService
@@ -126,7 +128,7 @@ export class WorkspaceController {
     try {
       const workspace = await this.workspaceCoreService.findOne(id);
       if (!workspace) {
-        logger.error('Admin workspace not found.');
+        this.logger.error('Admin workspace not found.');
       }
       return workspace;
     } catch (error) {

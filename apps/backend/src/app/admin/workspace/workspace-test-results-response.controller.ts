@@ -10,7 +10,8 @@ import {
   Req,
   UseGuards,
   ParseIntPipe,
-  DefaultValuePipe
+  DefaultValuePipe,
+  Logger
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -19,7 +20,6 @@ import {
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
-import { logger } from 'nx/src/utils/logger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -33,6 +33,8 @@ import { JobQueueService } from '../../job-queue/job-queue.service';
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
 export class WorkspaceTestResultsResponseController {
+  private readonly logger = new Logger(WorkspaceTestResultsResponseController.name);
+
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private responseManagementService: ResponseManagementService,
@@ -245,7 +247,7 @@ export class WorkspaceTestResultsResponseController {
         { page, limit }
       );
     } catch (error) {
-      logger.error(`Error searching for responses: ${error}`);
+      this.logger.error(`Error searching for responses: ${error}`);
       throw new BadRequestException(
         `Failed to search for responses. ${error.message}`
       );
