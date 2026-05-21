@@ -211,6 +211,46 @@ describe('CodingJobService', () => {
     });
   });
 
+  it('does not materialize open job assignments as v2 coding results', async () => {
+    await (service as unknown as {
+      saveCodingJobUnitsSubset: (
+        codingJobId: number,
+        workspaceId: number,
+        responses: Array<{
+          id: number;
+          variableid: string;
+          unitName: string;
+          unitAlias: string | null;
+          bookletName: string;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+          variableBundleId?: number;
+        }>
+      ) => Promise<void>;
+    }).saveCodingJobUnitsSubset(44, 7, [{
+      id: 123,
+      variableid: 'VAR',
+      unitName: 'UNIT',
+      unitAlias: 'ALIAS',
+      bookletName: 'BOOKLET',
+      personLogin: 'coder-login',
+      personCode: 'P001',
+      personGroup: 'G1'
+    }]);
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        coding_job_id: 44,
+        workspace_id: 7,
+        response_id: 123,
+        unit_name: 'UNIT',
+        variable_id: 'VAR'
+      })
+    ]);
+    expect(responseRepository.update).not.toHaveBeenCalled();
+  });
+
   it('rejects assigned coder access when coding capability was revoked', async () => {
     codingJobRepository.findOne.mockResolvedValue({ id: 12, workspace_id: 7 });
     usersService.canUserCodeInWorkspace.mockResolvedValueOnce(false);

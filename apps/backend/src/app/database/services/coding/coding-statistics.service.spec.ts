@@ -158,7 +158,7 @@ describe('CodingStatisticsService', () => {
       expect(result.totalResponses).toBe(5);
     });
 
-    it('should use numeric status_v3 before falling back to earlier versions', async () => {
+    it('should use numeric status_v3 before falling back to effective earlier versions', async () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([]);
@@ -168,22 +168,23 @@ describe('CodingStatisticsService', () => {
       const queryCall = mockResponseRepository.query.mock.calls[0];
       expect(queryCall[0]).not.toContain('response.status_v3::smallint');
       expect(queryCall[0]).not.toContain("response.status_v3 ~ '^-?[0-9]+$'");
-      expect(queryCall[0]).toContain('WHEN response.is_autocoder_generated = TRUE THEN');
       expect(queryCall[0]).toContain('COALESCE(response.status_v3');
+      expect(queryCall[0]).toContain('response.status_v2 = 8');
       expect(queryCall[0]).toContain('response.status_v2, response.status_v1');
     });
 
-    it('should not fall back to v1 or v2 statuses for autocoder-generated v3 rows', async () => {
+    it('should ignore open manual-coding placeholders in effective v2/v3 status', async () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([]);
 
-      await service.getCodingStatistics(1, 'v3');
+      await service.getCodingStatistics(1, 'v2');
 
       const queryCall = mockResponseRepository.query.mock.calls[0];
-      expect(queryCall[0]).toContain('WHEN response.is_autocoder_generated = TRUE THEN');
-      expect(queryCall[0]).toContain('THEN response.status_v3');
-      expect(queryCall[0]).toContain('ELSE COALESCE(response.status_v3');
+      expect(queryCall[0]).toContain('FROM coding_job_unit effective_status_cju');
+      expect(queryCall[0]).toContain("effective_status_cj.status <> 'results_applied'");
+      expect(queryCall[0]).toContain("effective_status_applied_cj.status = 'results_applied'");
+      expect(queryCall[0]).toContain('THEN response.status_v1');
     });
 
     it('should default to v1 when no version specified', async () => {
@@ -311,7 +312,7 @@ describe('CodingStatisticsService', () => {
       await service.invalidateCache(1, 'v1');
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:schema-v3:1:v1'
+        'coding-statistics:schema-v4:1:v1'
       );
     });
 
@@ -321,13 +322,13 @@ describe('CodingStatisticsService', () => {
       await service.invalidateCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:schema-v3:1:v1'
+        'coding-statistics:schema-v4:1:v1'
       );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:schema-v3:1:v2'
+        'coding-statistics:schema-v4:1:v2'
       );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:schema-v3:1:v3'
+        'coding-statistics:schema-v4:1:v3'
       );
     });
 
@@ -383,13 +384,12 @@ describe('CodingStatisticsService', () => {
       await service.getCodingStatistics(1, 'v2');
 
       const queryCall = mockResponseRepository.query.mock.calls[0];
-      expect(queryCall[0]).toContain(
-        'COALESCE(response.status_v2, response.status_v1)'
-      );
+      expect(queryCall[0]).toContain('response.status_v2 = 8');
+      expect(queryCall[0]).toContain('COALESCE(response.status_v2, response.status_v1)');
       expect(queryCall[0]).toContain('code_v2');
     });
 
-    it.skip('should use v3 generated-row status expression', async () => {
+    it.skip('should use v3 effective status expression', async () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([]);
@@ -397,9 +397,7 @@ describe('CodingStatisticsService', () => {
       await service.getCodingStatistics(1, 'v3');
 
       const queryCall = mockResponseRepository.query.mock.calls[0];
-      expect(queryCall[0]).toContain(
-        'WHEN response.is_autocoder_generated = TRUE THEN'
-      );
+      expect(queryCall[0]).toContain('COALESCE(response.status_v3');
       expect(queryCall[0]).toContain('code_v2');
     });
   });
@@ -460,7 +458,7 @@ describe('CodingStatisticsService', () => {
 
       expect(result.jobId).toBe('job-123');
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding-statistics:schema-v3:1:v1'
+        'coding-statistics:schema-v4:1:v1'
       );
       expect(mockJobQueueService.addCodingStatisticsJob).toHaveBeenCalledWith(
         1,
@@ -479,7 +477,7 @@ describe('CodingStatisticsService', () => {
       expect(result.jobId).toBe('');
       expect(result.message).toBe('Using cached coding statistics');
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding-statistics:schema-v3:1:v1'
+        'coding-statistics:schema-v4:1:v1'
       );
     });
 

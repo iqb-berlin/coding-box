@@ -85,6 +85,7 @@ describe('WorkspaceCodingService', () => {
 
   const mockCodingStatisticsService = {
     getCodingStatistics: jest.fn(),
+    invalidateCache: jest.fn(),
     refreshStatistics: jest.fn()
   };
 
@@ -329,6 +330,34 @@ describe('WorkspaceCodingService', () => {
         undefined
       );
       expect(result).toEqual(expectedResult);
+    });
+
+    it('should invalidate all coding statistics before refreshing v1 after first autocoder run', async () => {
+      await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        1,
+        undefined,
+        jobId,
+        undefined
+      );
+
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+      expect(mockCodingStatisticsService.refreshStatistics).toHaveBeenCalledWith(workspaceId, 'v1');
+    });
+
+    it('should invalidate all coding statistics before refreshing v3 after second autocoder run', async () => {
+      await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2,
+        undefined,
+        jobId,
+        undefined
+      );
+
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+      expect(mockCodingStatisticsService.refreshStatistics).toHaveBeenCalledWith(workspaceId, 'v3');
     });
   });
 
