@@ -395,6 +395,22 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getUnavailableCasesForNewJobs()).toBe(7);
   });
 
+  it('should not show cached available cases when all effective cases are already assigned', () => {
+    setCompletePlanningState();
+    component.codingIncompleteVariables = [
+      {
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        responseCount: 1215,
+        uniqueCasesAfterAggregation: 1106,
+        availableCases: 511
+      }
+    ];
+
+    expect(component.caseCoverageOverview?.effectiveUnassignedCases).toBe(0);
+    expect(component.getAvailableCasesForNewJobs()).toBe(0);
+  });
+
   it('should guide users from incomplete planning to job definitions with available-case context', () => {
     setCompletePlanningState();
     component.caseCoverageOverview = {

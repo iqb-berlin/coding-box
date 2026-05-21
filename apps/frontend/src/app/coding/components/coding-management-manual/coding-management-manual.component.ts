@@ -956,7 +956,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   getAvailableCasesForNewJobs(): number {
-    return this.codingIncompleteVariables.reduce(
+    const availableCases = this.codingIncompleteVariables.reduce(
       (sum, variable) => sum + (
         variable.availableCases ??
         variable.uniqueCasesAfterAggregation ??
@@ -965,6 +965,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       ),
       0
     );
+
+    if (this.caseCoverageOverview?.effectiveUnassignedCases === 0) {
+      return 0;
+    }
+
+    return availableCases;
   }
 
   getUnavailableCasesForNewJobs(): number {
