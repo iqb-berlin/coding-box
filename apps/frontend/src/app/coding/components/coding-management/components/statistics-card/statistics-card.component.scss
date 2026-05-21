@@ -57,6 +57,25 @@
   font-size: 14px;
 }
 
+.statistics-scope-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 0 0;
+  color: rgba(0, 0, 0, 0.66);
+  font-size: 13px;
+  line-height: 1.35;
+
+  mat-icon {
+    color: #1976d2;
+    flex: 0 0 auto;
+    font-size: 16px;
+    height: 16px;
+    margin-top: 1px;
+    width: 16px;
+  }
+}
+
 .statistics-version-selector {
   display: grid;
   grid-template-columns: minmax(220px, 280px) auto auto;

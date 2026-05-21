@@ -1635,6 +1635,25 @@
       overflow-wrap: anywhere;
     }
   }
+
+  .analysis-stale-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(245, 124, 0, 0.28);
+    border-radius: 8px;
+    background: #fff8e1;
+    color: #5f3b00;
+    font-size: 13px;
+    line-height: 1.35;
+
+    mat-icon {
+      color: #ef6c00;
+      flex: 0 0 auto;
+    }
+  }
 }
 
 // Response Analysis Section Styles

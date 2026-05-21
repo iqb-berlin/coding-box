@@ -105,16 +105,16 @@
 
       <div class="planning-overview-grid" aria-label="Übersicht zur manuellen Kodierungsplanung">
         <div class="overview-metric">
-          <span class="metric-label">Noch offen</span>
+          <span class="metric-label">Offene Arbeitsfälle</span>
           <span class="metric-value">{{ getOpenCodingCases() }}</span>
-          <span class="metric-hint">nicht abgeschlossen</span>
+          <span class="metric-hint">effektive Kodierfälle nach Aggregation</span>
         </div>
         <div class="overview-metric">
           <span class="metric-label">Für neue Jobs verfügbar</span>
           <span class="metric-value">{{ getAvailableCasesForNewJobs() }}</span>
           <span class="metric-hint">
             <ng-container *ngIf="getUnavailableCasesForNewJobs() > 0; else allCasesAvailable">
-              {{ getUnavailableCasesForNewJobs() }} reserviert oder verteilt
+              {{ getUnavailableCasesForNewJobs() }} Arbeitsfälle reserviert oder verteilt
             </ng-container>
             <ng-template #allCasesAvailable>aus aktueller Variablenauswahl</ng-template>
           </span>
@@ -127,12 +127,12 @@
         <div class="overview-metric">
           <span class="metric-label">In Jobs verteilt</span>
           <span class="metric-value">{{ caseCoverageOverview?.effectiveCasesInJobs || 0 }}</span>
-          <span class="metric-hint">{{ caseCoverageOverview?.effectiveUnassignedCases || 0 }} nicht zugewiesen</span>
+          <span class="metric-hint">{{ caseCoverageOverview?.effectiveUnassignedCases || 0 }} Arbeitsfälle nicht zugewiesen</span>
         </div>
         <div class="overview-metric">
           <span class="metric-label">Ergebnisse angewendet</span>
           <span class="metric-value">{{ getAppliedResultsPercentage() | number:'1.0-0' }}%</span>
-          <span class="metric-hint">{{ appliedResultsOverview?.remainingResponses || 0 }} verbleibend</span>
+          <span class="metric-hint">{{ appliedResultsOverview?.remainingResponses || 0 }} Arbeitsfälle verbleibend</span>
         </div>
       </div>
 
@@ -293,12 +293,24 @@
                   {{ aggregation.aggregationActive ? 'Aggregation aktiv' : 'Aggregation nicht aktiv' }}
                 </strong>
                 <span>
-                  {{ aggregation.rawCases }} Antworten ergeben {{ aggregation.effectiveCases }} Kodierfälle.
+                  Antwort-Analyse: {{ aggregation.rawCases }} Rohantworten ergeben {{ aggregation.effectiveCases }}
+                  effektive Kodierfälle.
                   <ng-container *ngIf="aggregation.collapsedCases > 0">
-                    Ersparnis: {{ aggregation.collapsedCases }} Kodierungen.
+                    Einsparung in dieser Analyse: {{ aggregation.collapsedCases }} Kodierungen.
                   </ng-container>
                 </span>
               </div>
+            </div>
+
+            <div class="analysis-stale-note" *ngIf="isResponseAnalysisOutdated()">
+              <ng-container *ngIf="responseAnalysis?.aggregationSummary as aggregation">
+                <mat-icon>warning</mat-icon>
+                <span>
+                  Diese Antwort-Analyse basiert auf {{ aggregation.rawCases }} Rohantworten. Der aktuelle manuelle Bestand
+                  umfasst {{ getCurrentRawManualResponses() }} Rohantworten. Bitte neu berechnen; deshalb kann die hier
+                  gezeigte Einsparung von den Fortschrittswerten abweichen.
+                </span>
+              </ng-container>
             </div>
           </div>
         </div>
@@ -432,7 +444,7 @@
                       ({{ responseAnalysis.duplicateValues.totalResponses }} {{
                       'coding-management-manual.response-analysis.responses' | translate }})
                       <span *ngIf="responseAnalysisAggregationSavings > 0">
-                        - {{ responseAnalysisAggregationSavings }} zusammengefasst
+                        - {{ responseAnalysisAggregationSavings }} Einsparung in dieser Analyse
                       </span>
                     </span>
                     <span *ngIf="hasDuplicateFindingsWithoutAggregation"
@@ -545,7 +557,7 @@
                 [attr.aria-expanded]="showTotalDetails"
                 aria-controls="total-details"
                 matTooltip="Klicken, um die Zusammensetzung anzuzeigen">
-                <span class="stat-label">Gesamt zu kodierende Fälle: <mat-icon class="stat-label-inline-icon">{{ showTotalDetails ? 'expand_less' : 'expand_more' }}</mat-icon></span>
+                <span class="stat-label">Effektive Kodierfälle gesamt: <mat-icon class="stat-label-inline-icon">{{ showTotalDetails ? 'expand_less' : 'expand_more' }}</mat-icon></span>
                 <span class="stat-value stat-value-link">{{codingProgressOverview.totalCasesToCode}}</span>
               </button>
               <div class="stat-item">
@@ -553,7 +565,7 @@
                 <span class="stat-value covered">{{codingProgressOverview.completedCases}}</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">Ausstehende Fälle:</span>
+                <span class="stat-label">Offene Arbeitsfälle:</span>
                 <span class="stat-value missing">{{codingProgressOverview.totalCasesToCode -
                   codingProgressOverview.completedCases}}</span>
               </div>
@@ -592,9 +604,10 @@
             <div *ngIf="codingProgressOverview.aggregationActive" class="aggregation-note">
               <mat-icon>filter_alt</mat-icon>
               <span>
-                Aggregation ist aktiv: {{codingProgressOverview.aggregatedDuplicateCases}} Antworten wurden bei
-                Schwelle {{codingProgressOverview.aggregationThreshold}} zusammengefasst. Der Fortschritt bezieht sich
-                auf {{codingProgressOverview.totalCasesToCode}} Kodierfälle.
+                Aggregation ist aktiv: {{codingProgressOverview.rawTotalCasesToCode}} Rohantworten ergeben
+                {{codingProgressOverview.totalCasesToCode}} effektive Kodierfälle. Dadurch werden bei Schwelle
+                {{codingProgressOverview.aggregationThreshold}} {{codingProgressOverview.aggregatedDuplicateCases}}
+                Kodierungen eingespart.
               </span>
             </div>
 
@@ -800,11 +813,11 @@
             </div>
             <div class="coverage-stats">
               <div class="stat-item">
-                <span class="stat-label">Gesamt zu kodierende Fälle:</span>
+                <span class="stat-label">Effektive Kodierfälle gesamt:</span>
                 <span class="stat-value">{{caseCoverageOverview.effectiveTotalCasesToCode}}</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">Fälle in Jobs:</span>
+                <span class="stat-label">Arbeitsfälle in Jobs:</span>
                 <span class="stat-value covered">{{caseCoverageOverview.effectiveCasesInJobs}}</span>
               </div>
               <div class="stat-item">
@@ -816,7 +829,7 @@
                 <span class="stat-value">{{effectiveSingleCodedCases}}</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">Nicht zugewiesene Fälle:</span>
+                <span class="stat-label">Nicht zugewiesene Arbeitsfälle:</span>
                 <span class="stat-value missing">{{caseCoverageOverview.effectiveUnassignedCases}}</span>
               </div>
               <div class="stat-item">
@@ -828,9 +841,10 @@
             <div *ngIf="caseCoverageOverview.aggregationActive" class="aggregation-note">
               <mat-icon>filter_alt</mat-icon>
               <span>
-                Aggregation ist aktiv: {{caseCoverageOverview.aggregatedDuplicateCases}} Antworten wurden bei
-                Schwelle {{caseCoverageOverview.aggregationThreshold}} zusammengefasst. Die Abdeckungsrate bezieht sich
-                auf die daraus resultierenden {{caseCoverageOverview.effectiveTotalCasesToCode}} Kodierfälle.
+                Aggregation ist aktiv: {{caseCoverageOverview.totalCasesToCode}} Rohantworten ergeben
+                {{caseCoverageOverview.effectiveTotalCasesToCode}} effektive Kodierfälle. Dadurch werden bei Schwelle
+                {{caseCoverageOverview.aggregationThreshold}} {{caseCoverageOverview.aggregatedDuplicateCases}}
+                Kodierungen eingespart.
               </span>
             </div>
             <div class="coverage-bar">
@@ -897,9 +911,10 @@
               <div *ngIf="appliedResultsOverview.aggregationActive" class="aggregation-note">
                 <mat-icon>filter_alt</mat-icon>
                 <span>
-                  Aggregation ist aktiv: {{appliedResultsOverview.aggregatedDuplicateCases}} Antworten wurden bei
-                  Schwelle {{appliedResultsOverview.aggregationThreshold}} zusammengefasst. Der Fortschritt bezieht sich
-                  auf {{appliedResultsOverview.totalIncompleteResponses}} Kodierfälle.
+                  Aggregation ist aktiv: {{appliedResultsOverview.rawTotalIncompleteResponses}} Rohantworten ergeben
+                  {{appliedResultsOverview.totalIncompleteResponses}} effektive Kodierfälle. Dadurch werden bei Schwelle
+                  {{appliedResultsOverview.aggregationThreshold}} {{appliedResultsOverview.aggregatedDuplicateCases}}
+                  Kodierungen eingespart.
                 </span>
               </div>
               <div class="coverage-bar">
