@@ -11,6 +11,13 @@
   </h2>
   <mat-divider></mat-divider>
 
+  @if (isReadOnly && data.mode === 'definition') {
+  <div class="readonly-definition-note">
+    <mat-icon>lock</mat-icon>
+    <span>{{ 'coding-job-definition-dialog.readonly-definition-note' | translate }}</span>
+  </div>
+  }
+
   <div class="dialog-content">
     <form [formGroup]="codingJobForm" (ngSubmit)="onSubmit()">
 

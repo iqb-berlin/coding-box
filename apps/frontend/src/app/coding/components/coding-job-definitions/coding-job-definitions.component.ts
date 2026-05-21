@@ -24,13 +24,15 @@ import { Subject, firstValueFrom, takeUntil } from 'rxjs';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
-import { JobDefinitionRefreshPreviewDto } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import {
   CodingJobDefinitionDialogComponent,
   CodingJobDefinitionDialogData
 } from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
+import {
+  JobDefinitionRefreshDialogComponent
+} from './job-definition-refresh-dialog.component';
 import {
   CodingJobBulkCreationDialogComponent,
   BulkCreationData
@@ -305,6 +307,42 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     return this.getStatusHint(definition.status);
+  }
+
+  getDefinitionWorkflowLabel(definition: JobDefinition): string {
+    const createdJobsCount = this.getCreatedJobsCount(definition);
+
+    if (!definition.id) {
+      return this.translateService.instant(
+        'coding-job-definitions.workflow.definition'
+      );
+    }
+
+    if (createdJobsCount === undefined) {
+      return this.translateService.instant(
+        'coding-job-definitions.workflow.jobs-count-unavailable',
+        { id: definition.id }
+      );
+    }
+
+    if (createdJobsCount === 0) {
+      return this.translateService.instant(
+        'coding-job-definitions.workflow.no-jobs',
+        { id: definition.id }
+      );
+    }
+
+    if (createdJobsCount === 1) {
+      return this.translateService.instant(
+        'coding-job-definitions.workflow.one-job',
+        { id: definition.id }
+      );
+    }
+
+    return this.translateService.instant(
+      'coding-job-definitions.workflow.many-jobs',
+      { id: definition.id, count: createdJobsCount }
+    );
   }
 
   getActionAriaLabel(action: string, definition: JobDefinition): string {
@@ -695,22 +733,26 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           definition.id
         )
       );
-      const message = this.formatRefreshPreview(preview);
-      const action = preview.canApply ? 'Aktualisieren' : this.translateService.instant('common.close');
-      const snackBarRef = this.snackBar.open(message, action, {
-        duration: preview.canApply ? 9000 : 6000
+      const dialogRef = this.dialog.open(JobDefinitionRefreshDialogComponent, {
+        width: '640px',
+        maxWidth: '95vw',
+        data: {
+          definitionId: definition.id,
+          preview
+        },
+        autoFocus: false
       });
+      const confirmed = await firstValueFrom(dialogRef.afterClosed());
 
-      if (preview.canApply) {
-        snackBarRef.onAction()
-          .pipe(takeUntil(this.destroy$))
-          .subscribe(() => {
-            this.applyDefinitionRefresh(workspaceId, definition.id!);
-          });
+      if (confirmed) {
+        await this.applyDefinitionRefresh(workspaceId, definition.id);
       }
     } catch (error) {
       this.showError(
-        `Aktualisierung konnte nicht vorbereitet werden: ${this.getErrorMessage(error)}`
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.refresh-preview-failed',
+          { error: this.getErrorMessage(error) }
+        )
       );
     } finally {
       this.refreshingDefinitionIds.delete(definition.id);
@@ -730,7 +772,10 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         )
       );
       this.snackBar.open(
-        `Job-Definition aktualisiert: ${result.jobsCreated} Kodierjobs erstellt.`,
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.refresh-applied',
+          { count: result.jobsCreated }
+        ),
         this.translateService.instant('common.close'),
         { duration: 4000 }
       );
@@ -740,38 +785,14 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       this.codingJobService.jobsCreatedEvent.emit();
     } catch (error) {
       this.showError(
-        `Aktualisierung fehlgeschlagen: ${this.getErrorMessage(error)}`
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.refresh-apply-failed',
+          { error: this.getErrorMessage(error) }
+        )
       );
     } finally {
       this.refreshingDefinitionIds.delete(jobDefinitionId);
     }
-  }
-
-  private formatRefreshPreview(preview: JobDefinitionRefreshPreviewDto): string {
-    const retainedLabel = preview.addedCodingTasks === 0 && preview.removedCodingTasks === 0 ?
-      'unverändert' :
-      'behaltene Fälle';
-    const summary = `Aktualisierung: ${preview.addedCases} neue Fälle, ${preview.removedCases} entfernte Fälle, ${preview.retainedCases} ${retainedLabel}.`;
-    const taskChanges = [
-      preview.addedCodingTasks > 0 ?
-        this.formatTaskDelta(preview.addedCodingTasks, 'hinzugefügt') :
-        '',
-      preview.removedCodingTasks > 0 ?
-        this.formatTaskDelta(preview.removedCodingTasks, 'entfernt') :
-        ''
-    ].filter(Boolean);
-    const taskSummary = taskChanges.length > 0 ? ` ${taskChanges.join(', ')}.` : '';
-
-    if (preview.canApply) {
-      return `${summary}${taskSummary}`;
-    }
-
-    return `${summary}${taskSummary} ${preview.blockingReason || 'Die Aktualisierung ist aktuell blockiert.'}`;
-  }
-
-  private formatTaskDelta(count: number, action: string): string {
-    const taskLabel = count === 1 ? 'Kodieraufgabe' : 'Kodieraufgaben';
-    return `${count} ${taskLabel} ${action}`;
   }
 
   async createCodingJobFromDefinition(

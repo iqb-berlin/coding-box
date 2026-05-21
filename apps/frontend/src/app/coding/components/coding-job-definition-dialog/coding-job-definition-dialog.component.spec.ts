@@ -178,6 +178,16 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('explains why existing job definitions are read-only', () => {
+    createComponent({
+      isEdit: true,
+      mode: 'definition',
+      readOnly: true
+    });
+
+    expect(fixture.nativeElement.querySelector('.readonly-definition-note')).toBeTruthy();
+  });
+
   it('should initialize form with default values', () => {
     createComponent();
     expect(component.codingJobForm).toBeDefined();
