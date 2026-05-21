@@ -84,7 +84,7 @@ describe('WsAccessRightsComponent', () => {
     expect(user.canCode).toBe(false);
   });
 
-  it('should auto-enable coding only when switching to coder access', () => {
+  it('should keep coding capability independent when changing workspace access', () => {
     const user = component.workspaceUsers.entries[1];
 
     component.changeAccessLevel(true, user, 3);
@@ -99,7 +99,7 @@ describe('WsAccessRightsComponent', () => {
     component.changeCanCode(false, user);
     component.changeAccessLevel(true, user, 1);
     expect(user.accessLevel).toBe(1);
-    expect(user.canCode).toBe(true);
+    expect(user.canCode).toBe(false);
   });
 
   it('should change coding capability independently from access level', () => {
