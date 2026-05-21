@@ -1148,7 +1148,7 @@ export class CodingJobService {
     workspaceId: number,
     createCodingJobDto: CreateCodingJobDto
   ): Promise<CodingJob> {
-    return this.connection.transaction(async manager => {
+    const createdCodingJob = await this.connection.transaction(async manager => {
       const codingJobRepo = manager.getRepository(CodingJob);
       const aggregationSettings = await this.getCurrentAggregationSettingsSnapshot(workspaceId);
       const codingJob = codingJobRepo.create({
@@ -1198,6 +1198,9 @@ export class CodingJobService {
 
       return savedCodingJob;
     });
+
+    await this.invalidateIncompleteVariablesCache(workspaceId);
+    return createdCodingJob;
   }
 
   async updateCodingJob(
@@ -2491,12 +2494,15 @@ export class CodingJobService {
     createCodingJobDto: CreateCodingJobDto,
     unitSubset: SlimResponse[]
   ): Promise<CodingJob> {
-    return this.connection.transaction(manager => this.createCodingJobWithUnitSubsetInManager(
+    const savedCodingJob = await this.connection.transaction(manager => this.createCodingJobWithUnitSubsetInManager(
       workspaceId,
       createCodingJobDto,
       unitSubset,
       manager
     ));
+
+    await this.invalidateIncompleteVariablesCache(workspaceId);
+    return savedCodingJob;
   }
 
   private async createCodingJobWithUnitSubsetInManager(
@@ -4114,6 +4120,7 @@ export class CodingJobService {
       }
 
       this.logger.log(`Successfully created ${createdJobs.length} distributed coding jobs`);
+      await this.invalidateIncompleteVariablesCache(workspaceId);
 
       return this.buildDistributedCodingJobsResult(plan, createdJobs);
     } catch (error) {
