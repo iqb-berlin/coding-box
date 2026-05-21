@@ -63,7 +63,11 @@ describe('WorkspaceCodingReplayController', () => {
 
     const result = await controller.getReplayAssets(12, 'unit-1', res);
 
-    expect(result).toEqual({ unitDef, player, vocs });
+    expect(result).toEqual({
+      unitDef,
+      player,
+      vocs
+    });
     expect(workspacePlayerService.findUnitDef).toHaveBeenCalledWith(12, 'UNIT-1');
     expect(workspacePlayerService.findUnit).toHaveBeenCalledWith(12, 'UNIT-1');
     expect(workspaceFilesService.getVocs).toHaveBeenCalledWith(12, 'UNIT-1');
@@ -83,14 +87,20 @@ describe('WorkspaceCodingReplayController', () => {
       res
     );
 
-    expect(result).toEqual({ response });
+    expect(result).toEqual({
+      response,
+      serverTimings: expect.objectContaining({
+        findUnitResponseMs: expect.any(Number),
+        totalMs: expect.any(Number)
+      })
+    });
     expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledWith(
       12,
       'person@code@booklet',
       'unit-1'
     );
     expect(workspacePlayerService.findUnitDef).not.toHaveBeenCalled();
-    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, max-age=300');
+    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
     expect(res.setHeader).toHaveBeenCalledWith('Vary', 'Authorization');
   });
 
@@ -109,7 +119,16 @@ describe('WorkspaceCodingReplayController', () => {
       unitDef,
       player,
       vocs,
-      response
+      response,
+      serverTimings: expect.objectContaining({
+        payloadFindUnitDefMs: expect.any(Number),
+        payloadFindUnitMs: expect.any(Number),
+        payloadGetVocsMs: expect.any(Number),
+        payloadExtractPlayerIdMs: expect.any(Number),
+        payloadFindPlayerMs: expect.any(Number),
+        payloadFindUnitResponseMs: expect.any(Number),
+        payloadTotalMs: expect.any(Number)
+      })
     });
     expect(workspacePlayerService.findUnitDef).toHaveBeenCalledWith(12, 'UNIT-1');
     expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledWith(
@@ -117,7 +136,7 @@ describe('WorkspaceCodingReplayController', () => {
       'person@code@booklet',
       'unit-1'
     );
-    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, max-age=60');
+    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
     expect(res.setHeader).toHaveBeenCalledWith('Vary', 'Authorization');
   });
 
@@ -125,7 +144,7 @@ describe('WorkspaceCodingReplayController', () => {
     const controller = createController('0');
     const res = createResponse();
 
-    await controller.getReplayResponse(12, 'person@code@booklet', 'unit-1', res);
+    await controller.getReplayAssets(12, 'unit-1', res);
 
     expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
     expect(res.setHeader).toHaveBeenCalledWith('Vary', 'Authorization');

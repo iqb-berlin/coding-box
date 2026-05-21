@@ -43,4 +43,10 @@ export class ReplayStatistics {
 
   @Column({ type: 'varchar', length: 2000, nullable: true })
     error_message: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+    client_timings: Record<string, number | null>;
+
+  @Column({ type: 'jsonb', nullable: true })
+    server_timings: Record<string, number | null>;
 }

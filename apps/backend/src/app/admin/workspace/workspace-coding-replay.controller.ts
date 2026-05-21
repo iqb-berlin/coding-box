@@ -45,6 +45,7 @@ interface ReplayAssetsPayload {
 
 interface ReplayResponsePayload {
   response: ReplayUnitResponsePayload;
+  serverTimings: Record<string, number>;
 }
 
 type ReplayPayload = ReplayAssetsPayload & ReplayResponsePayload;
@@ -145,17 +146,19 @@ export class WorkspaceCodingReplayController {
       ]);
 
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
+      const serverTimings = this.prefixTimings(
+        'payload',
+        this.withTotalTiming(timings, totalMs)
+      );
       this.logger.debug(
-        `Replay payload timings ws=${workspaceId} unit=${unitId.toUpperCase()}: ${JSON.stringify({
-          ...timings,
-          totalMs
-        })}`
+        `Replay payload timings ws=${workspaceId} unit=${unitId.toUpperCase()}: ${JSON.stringify(serverTimings)}`
       );
 
-      this.setReplayCacheHeaders(res);
+      this.setReplayNoStoreHeaders(res);
       return {
         ...assets,
-        response: responsePayload.response
+        response: responsePayload.response,
+        serverTimings
       };
     } catch (error) {
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
@@ -192,11 +195,9 @@ export class WorkspaceCodingReplayController {
     try {
       const assets = await this.getReplayAssetsData(workspaceId, unitId, timings);
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
+      const serverTimings = this.withTotalTiming(timings, totalMs);
       this.logger.debug(
-        `Replay asset timings ws=${workspaceId} unit=${unitId.toUpperCase()}: ${JSON.stringify({
-          ...timings,
-          totalMs
-        })}`
+        `Replay asset timings ws=${workspaceId} unit=${unitId.toUpperCase()}: ${JSON.stringify(serverTimings)}`
       );
       this.setReplayCacheHeaders(res);
       return assets;
@@ -246,14 +247,15 @@ export class WorkspaceCodingReplayController {
         timings
       );
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
+      const serverTimings = this.withTotalTiming(timings, totalMs);
       this.logger.debug(
-        `Replay response timings ws=${workspaceId} unit=${unitId}: ${JSON.stringify({
-          ...timings,
-          totalMs
-        })}`
+        `Replay response timings ws=${workspaceId} unit=${unitId}: ${JSON.stringify(serverTimings)}`
       );
-      this.setReplayCacheHeaders(res);
-      return responsePayload;
+      this.setReplayNoStoreHeaders(res);
+      return {
+        ...responsePayload,
+        serverTimings
+      };
     } catch (error) {
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
       this.logger.warn(
@@ -333,7 +335,7 @@ export class WorkspaceCodingReplayController {
       )
     );
 
-    return { response };
+    return { response, serverTimings: {} };
   }
 
   private async timed<T>(
@@ -345,6 +347,29 @@ export class WorkspaceCodingReplayController {
     const result = await fn();
     timings[key] = Number((performance.now() - started).toFixed(2));
     return result;
+  }
+
+  private withTotalTiming(
+    timings: Record<string, number>,
+    totalMs: number
+  ): Record<string, number> {
+    return {
+      ...timings,
+      totalMs
+    };
+  }
+
+  private prefixTimings(
+    prefix: string,
+    timings: Record<string, number>
+  ): Record<string, number> {
+    return Object.entries(timings).reduce<Record<string, number>>(
+      (acc, [key, value]) => {
+        acc[`${prefix}${key.charAt(0).toUpperCase()}${key.slice(1)}`] = value;
+        return acc;
+      },
+      {}
+    );
   }
 
   private setReplayCacheHeaders(res: Response): void {

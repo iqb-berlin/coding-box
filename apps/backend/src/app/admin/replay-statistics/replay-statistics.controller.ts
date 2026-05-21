@@ -5,9 +5,11 @@ import {
   Param,
   Post,
   Query,
+  ValidationPipe,
   UseGuards
 } from '@nestjs/common';
 import {
+  ApiBody,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -21,6 +23,7 @@ import {
 } from '../workspace/access-level.guard';
 import { ReplayStatisticsService } from '../../database/services/test-results';
 import { ReplayStatistics } from '../../database/entities/replay-statistics.entity';
+import { StoreReplayStatisticsDto } from './dto/store-replay-statistics.dto';
 
 /**
  * Controller for managing replay statistics
@@ -41,20 +44,12 @@ export class ReplayStatisticsController {
     status: 201,
     description: 'Replay statistics stored successfully'
   })
+  @ApiBody({ type: StoreReplayStatisticsDto })
   @Post()
   async storeReplayStatistics(
     @Param('workspace_id') workspaceId: string,
-      @Body()
-                           data: {
-                             unitId: string;
-                             bookletId?: string;
-                             testPersonLogin?: string;
-                             testPersonCode?: string;
-                             durationMilliseconds: number;
-                             replayUrl?: string;
-                             success?: boolean;
-                             errorMessage?: string;
-                           }
+      @Body(new ValidationPipe({ transform: true, whitelist: true }))
+                           data: StoreReplayStatisticsDto
   ): Promise<ReplayStatistics> {
     return this.replayStatisticsService.storeReplayStatistics({
       workspaceId: Number(workspaceId),
