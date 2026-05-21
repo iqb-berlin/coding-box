@@ -69,6 +69,7 @@ describe('CodingJobService distribution from job definitions', () => {
   let workspaceFilesService: { getDerivedVariableMap: jest.Mock };
   let codingJobRepository: ReturnType<typeof createRepo>;
   let jobDefinitionRepository: ReturnType<typeof createRepo>;
+  let cacheService: { delete: jest.Mock };
 
   beforeEach(() => {
     codingJobRepository = createRepo();
@@ -91,7 +92,7 @@ describe('CodingJobService distribution from job definitions', () => {
         }
       }))
     };
-    const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
     workspaceFilesService = {
       getDerivedVariableMap: jest.fn().mockResolvedValue(new Map())
     };
@@ -220,6 +221,7 @@ describe('CodingJobService distribution from job definitions', () => {
     });
 
     expect(result.success).toBe(true);
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v3:5');
     expect(result.distribution).toEqual(preview.distribution);
     expect(result.doubleCodingInfo).toEqual(preview.doubleCodingInfo);
     expect(result.jobsCreated).toBe(createdJobCalls.length);
