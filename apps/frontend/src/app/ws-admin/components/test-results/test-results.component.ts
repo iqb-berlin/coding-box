@@ -22,7 +22,7 @@ import {
 
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   MatPaginator,
   MatPaginatorModule,
@@ -35,6 +35,7 @@ import {
   Subscription,
   debounceTime,
   distinctUntilChanged,
+  finalize,
   firstValueFrom,
   switchMap,
   takeWhile,
@@ -73,7 +74,10 @@ import { UnitNoteService } from '../../../shared/services/unit/unit-note.service
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { UnitService } from '../../../shared/services/unit/unit.service';
 import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
-import { TestPersonCodingService } from '../../../coding/services/test-person-coding.service';
+import {
+  AppliedResultsOverview,
+  TestPersonCodingService
+} from '../../../coding/services/test-person-coding.service';
 import { VariableAnalysisService } from '../../../shared/services/response/variable-analysis.service';
 import { AppService } from '../../../core/services/app.service';
 import {
@@ -141,8 +145,12 @@ import {
   getCodingFreshnessStateLabel,
   getCodingFreshnessSummaryText,
   getCodingFreshnessVersionLabel,
+  formatCodingFreshnessTaskResultCount,
+  getSecondAutocodingFreshnessWarnings,
   hasOnlyManualCodingFreshnessWarnings,
-  isCodingFreshnessOpenWarning
+  isCodingFreshnessOpenWarning,
+  isSecondAutocodingWaitingForManualCoding,
+  SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS
 } from '../../../shared/utils/coding-freshness-text.util';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
@@ -384,6 +392,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private testResultService = inject(TestResultService);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
+  private translateService = inject(TranslateService);
   private validationTaskStateService = inject(ValidationTaskStateService);
   private unitsReplayService = inject(UnitsReplayService);
   private searchSubject = new Subject<string>();
@@ -436,6 +445,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   overview: TestResultsOverviewResponse | null = null;
   isLoadingOverview: boolean = false;
   codingFreshnessSummary: CodingFreshnessSummaryDto | null = null;
+  manualAppliedResultsOverview: AppliedResultsOverview | null = null;
+  manualAppliedResultsOverviewLoadFailed: boolean = false;
+  isLoadingManualAppliedResultsOverview: boolean = false;
 
   exportJobId: string | null = null;
   isExporting: boolean = false;
@@ -478,7 +490,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.uploadStateService.uploadsFinished$.subscribe((wsId: number) => {
       if (wsId === this.appService.selectedWorkspaceId) {
         this.loadWorkspaceOverview();
-        this.loadCodingFreshnessSummary();
+        this.loadCodingFreshnessStatus();
         this.createTestResultsList(
           this.pageIndex,
           this.pageSize,
@@ -502,7 +514,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     this.createTestResultsList(0, this.pageSize);
     this.loadWorkspaceOverview();
-    this.loadCodingFreshnessSummary();
+    this.loadCodingFreshnessStatus();
     this.startValidationStatusCheck();
     this.checkExistingExportJobs();
     this.isInitialized = true;
@@ -1238,6 +1250,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadCodingFreshnessStatus(): void {
+    this.loadCodingFreshnessSummary();
+    this.loadManualAppliedResultsOverview();
+  }
+
   private loadCodingFreshnessSummary(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -1262,6 +1279,33 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadManualAppliedResultsOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.manualAppliedResultsOverview = null;
+      this.manualAppliedResultsOverviewLoadFailed = false;
+      this.isLoadingManualAppliedResultsOverview = false;
+      return;
+    }
+
+    this.isLoadingManualAppliedResultsOverview = true;
+    this.manualAppliedResultsOverviewLoadFailed = false;
+    this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
+      .pipe(finalize(() => {
+        this.isLoadingManualAppliedResultsOverview = false;
+      }))
+      .subscribe({
+        next: overview => {
+          this.manualAppliedResultsOverview = overview;
+          this.manualAppliedResultsOverviewLoadFailed = overview === null;
+        },
+        error: () => {
+          this.manualAppliedResultsOverview = null;
+          this.manualAppliedResultsOverviewLoadFailed = true;
+        }
+      });
+  }
+
   private async fetchCodingFreshnessSummary(
     workspaceId: number
   ): Promise<CodingFreshnessSummaryDto | null> {
@@ -1280,6 +1324,25 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
+  private async fetchManualAppliedResultsOverview(
+    workspaceId: number
+  ): Promise<{ overview: AppliedResultsOverview | null; loadFailed: boolean }> {
+    try {
+      const overview = await firstValueFrom(
+        this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
+      );
+      return {
+        overview,
+        loadFailed: overview === null
+      };
+    } catch {
+      return {
+        overview: null,
+        loadFailed: true
+      };
+    }
+  }
+
   get overviewStatusCounts(): Array<{ status: string; count: number }> {
     const map = (this.overview?.responseStatusCounts || {}) as Record<
     string,
@@ -1290,14 +1353,35 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .sort((a, b) => b.count - a.count);
   }
 
-  get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+  private get allCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
     return (this.codingFreshnessSummary?.items || [])
       .filter(isCodingFreshnessOpenWarning)
       .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state));
   }
 
+  get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return this.allCodingFreshnessWarnings
+      .filter(item => !(item.version === 'v3' && (
+        this.isSecondAutocodingManualStatusPending ||
+        this.isSecondAutocodingWaitingForManualCoding
+      )));
+  }
+
   get hasCodingFreshnessWarning(): boolean {
-    return this.codingFreshnessWarnings.length > 0;
+    return this.codingFreshnessWarnings.length > 0 ||
+      this.shouldShowSecondAutocodingWaitingState;
+  }
+
+  get codingFreshnessDisplayWarnings(): CodingFreshnessSummaryItemDto[] {
+    if (this.codingFreshnessWarnings.length > 0) {
+      return this.codingFreshnessWarnings;
+    }
+
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.secondAutocodingFreshnessWarnings;
+    }
+
+    return [];
   }
 
   get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -1321,10 +1405,21 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   get codingFreshnessSummaryText(): string {
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.getSecondAutocodingWaitingSummaryText();
+    }
+
     return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
   }
 
   get codingFreshnessExplanationText(): string {
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.translateService.instant(
+        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.help,
+        { taskResultHelp: CODING_FRESHNESS_TASK_RESULT_HELP }
+      );
+    }
+
     const guidanceText = getCodingFreshnessManualReviewGuidanceText(
       this.codingFreshnessWarnings
     );
@@ -1336,11 +1431,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   get codingFreshnessBannerTitle(): string {
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.title);
+    }
+
     return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
   }
 
   get codingFreshnessActionLabel(): string {
-    if (this.hasOnlyManualCodingFreshnessWarnings) {
+    if (this.shouldShowSecondAutocodingWaitingState || this.hasOnlyManualCodingFreshnessWarnings) {
       return 'Manuelle Kodierung öffnen';
     }
 
@@ -1350,7 +1449,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   get codingFreshnessActionIcon(): string {
-    return this.hasOnlyManualCodingFreshnessWarnings ? 'keyboard' : 'rule';
+    return (this.shouldShowSecondAutocodingWaitingState || this.hasOnlyManualCodingFreshnessWarnings) ?
+      'keyboard' :
+      'rule';
   }
 
   getCodingFreshnessVersionLabel(version: CodingFreshnessVersion): string {
@@ -1362,7 +1463,63 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   getCodingFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
+    if (item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding) {
+      return this.translateService.instant(
+        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.chip,
+        {
+          version: getCodingFreshnessVersionLabel(item.version),
+          count: formatCodingFreshnessTaskResultCount(item.unitCount)
+        }
+      );
+    }
+
     return getCodingFreshnessChipLabel(item);
+  }
+
+  private get secondAutocodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return getSecondAutocodingFreshnessWarnings(this.allCodingFreshnessWarnings);
+  }
+
+  private get isSecondAutocodingWaitingForManualCoding(): boolean {
+    return isSecondAutocodingWaitingForManualCoding(
+      this.allCodingFreshnessWarnings,
+      this.manualAppliedResultsOverview,
+      this.manualAppliedResultsOverviewLoadFailed
+    );
+  }
+
+  private get isSecondAutocodingManualStatusPending(): boolean {
+    return this.secondAutocodingFreshnessWarnings.length > 0 &&
+      this.isLoadingManualAppliedResultsOverview &&
+      !this.manualAppliedResultsOverviewLoadFailed;
+  }
+
+  private get shouldShowSecondAutocodingWaitingState(): boolean {
+    if (this.isSecondAutocodingManualStatusPending) {
+      return false;
+    }
+
+    return this.isSecondAutocodingWaitingForManualCoding &&
+      this.codingFreshnessWarnings.length === 0;
+  }
+
+  private getSecondAutocodingWaitingSummaryText(): string {
+    if (this.manualAppliedResultsOverviewLoadFailed) {
+      return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.loadFailed);
+    }
+
+    const remaining = this.manualAppliedResultsOverview?.remainingResponses || 0;
+    const remainingText = remaining > 0 ?
+      this.translateService.instant(
+        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.remaining,
+        { count: remaining }
+      ) :
+      '';
+
+    return this.translateService.instant(
+      SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.summary,
+      { remaining: remainingText }
+    );
   }
 
   openCodingFreshnessTarget(): void {
@@ -1371,7 +1528,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const target = this.hasOnlyManualCodingFreshnessWarnings ?
+    const target = (this.shouldShowSecondAutocodingWaitingState || this.hasOnlyManualCodingFreshnessWarnings) ?
       'manual' :
       'management';
     this.router.navigate([`/workspace-admin/${workspaceId}/coding/${target}`]);
@@ -1380,7 +1537,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   onFlatTableResponseDeleted(): void {
     this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
     this.loadWorkspaceOverview();
-    this.loadCodingFreshnessSummary();
+    this.loadCodingFreshnessStatus();
     this.testPersonCodingService.notifyTestResultsChanged();
   }
 
@@ -1735,6 +1892,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           if (codingFreshness) {
             this.codingFreshnessSummary = codingFreshness;
           }
+          const manualOverviewResult = workspaceId ?
+            await this.fetchManualAppliedResultsOverview(workspaceId) :
+            {
+              overview: this.manualAppliedResultsOverview,
+              loadFailed: this.manualAppliedResultsOverviewLoadFailed
+            };
+          this.manualAppliedResultsOverview = manualOverviewResult.overview;
+          this.manualAppliedResultsOverviewLoadFailed = manualOverviewResult.loadFailed;
 
           const dialogResult: TestResultsUploadResultDto = {
             expected: { ...delta },
@@ -1770,7 +1935,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             maxWidth: '95vw',
             data: {
               resultType: payload.resultType || 'responses',
-              result: dialogResult
+              result: dialogResult,
+              manualAppliedResultsOverview: manualOverviewResult.overview,
+              manualAppliedResultsOverviewLoadFailed: manualOverviewResult.loadFailed
             }
           });
         })();
@@ -1781,7 +1948,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.testResultService.invalidateCache(workspaceId);
         }
         this.loadWorkspaceOverview();
-        this.loadCodingFreshnessSummary();
+        this.loadCodingFreshnessStatus();
         this.createTestResultsList(
           this.pageIndex,
           this.pageSize,
@@ -2171,7 +2338,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             this.appService.selectedWorkspaceId
           );
           this.loadWorkspaceOverview();
-          this.loadCodingFreshnessSummary();
+          this.loadCodingFreshnessStatus();
           this.testPersonCodingService.notifyTestResultsChanged();
           this.createTestResultsList(
             this.pageIndex,
@@ -2193,7 +2360,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             { duration: 5000 }
           );
           this.loadWorkspaceOverview();
-          this.loadCodingFreshnessSummary();
+          this.loadCodingFreshnessStatus();
           this.testPersonCodingService.notifyTestResultsChanged();
           this.createTestResultsList(
             this.pageIndex,
@@ -2384,7 +2551,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                   { duration: 3000 }
                 );
                 this.loadWorkspaceOverview();
-                this.loadCodingFreshnessSummary();
+                this.loadCodingFreshnessStatus();
                 this.testPersonCodingService.notifyTestResultsChanged();
               } else {
                 this.snackBar.open(
@@ -2451,7 +2618,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                   { duration: 3000 }
                 );
                 this.loadWorkspaceOverview();
-                this.loadCodingFreshnessSummary();
+                this.loadCodingFreshnessStatus();
                 this.testPersonCodingService.notifyTestResultsChanged();
               } else {
                 this.snackBar.open(

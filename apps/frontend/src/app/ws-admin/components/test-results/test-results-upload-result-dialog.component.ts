@@ -9,6 +9,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatOptionModule } from '@angular/material/core';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import { TestResultsUploadIssueDto, TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { buildCsv, downloadCsvFile } from '../validation-dialog/shared/validation-export.util';
@@ -27,12 +28,19 @@ import {
   getCodingFreshnessStateLabel,
   getCodingFreshnessSummaryText,
   getCodingFreshnessVersionLabel,
-  isCodingFreshnessOpenWarning
+  formatCodingFreshnessTaskResultCount,
+  getSecondAutocodingFreshnessWarnings,
+  isCodingFreshnessOpenWarning,
+  isSecondAutocodingWaitingForManualCoding,
+  ManualCodingCompletionOverview,
+  SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS
 } from '../../../shared/utils/coding-freshness-text.util';
 
 export type TestResultsUploadResultDialogData = {
   resultType: 'logs' | 'responses';
   result: TestResultsUploadResultDto;
+  manualAppliedResultsOverview: ManualCodingCompletionOverview | null;
+  manualAppliedResultsOverviewLoadFailed: boolean;
 };
 
 type LogBookletDetail = { name: string; hasLog: boolean };
@@ -52,6 +60,7 @@ type LogUnitDetail = { bookletName: string; unitKey: string; hasLog: boolean };
     MatInputModule,
     MatSelectModule,
     MatOptionModule,
+    TranslateModule,
     ScrollingModule
   ],
   templateUrl: './test-results-upload-result-dialog.component.html',
@@ -73,6 +82,7 @@ export class TestResultsUploadResultDialogComponent {
 
   constructor(
     private dialogRef: MatDialogRef<TestResultsUploadResultDialogComponent>,
+    private translateService: TranslateService,
     @Inject(MAT_DIALOG_DATA) public data: TestResultsUploadResultDialogData
   ) { }
 
@@ -184,14 +194,32 @@ export class TestResultsUploadResultDialogComponent {
       (delta.uniqueResponses || 0) === 0;
   }
 
-  get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+  private get allCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
     return (this.result.codingFreshness?.items || [])
       .filter(isCodingFreshnessOpenWarning)
       .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state));
   }
 
+  get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return this.allCodingFreshnessWarnings
+      .filter(item => !(item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding));
+  }
+
   get hasCodingFreshnessWarning(): boolean {
-    return this.codingFreshnessWarnings.length > 0;
+    return this.codingFreshnessWarnings.length > 0 ||
+      this.shouldShowSecondAutocodingWaitingState;
+  }
+
+  get codingFreshnessDisplayWarnings(): CodingFreshnessSummaryItemDto[] {
+    if (this.codingFreshnessWarnings.length > 0) {
+      return this.codingFreshnessWarnings;
+    }
+
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.secondAutocodingFreshnessWarnings;
+    }
+
+    return [];
   }
 
   get codingFreshnessAffectedUnitVersions(): number {
@@ -203,14 +231,29 @@ export class TestResultsUploadResultDialogComponent {
   }
 
   get codingFreshnessSummaryText(): string {
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.getSecondAutocodingWaitingSummaryText();
+    }
+
     return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
   }
 
   get codingFreshnessDialogTitle(): string {
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.title);
+    }
+
     return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
   }
 
   get codingFreshnessExplanationText(): string {
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.translateService.instant(
+        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.help,
+        { taskResultHelp: CODING_FRESHNESS_TASK_RESULT_HELP }
+      );
+    }
+
     const guidanceText = getCodingFreshnessManualReviewGuidanceText(
       this.codingFreshnessWarnings
     );
@@ -230,7 +273,53 @@ export class TestResultsUploadResultDialogComponent {
   }
 
   getCodingFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
+    if (item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding) {
+      return this.translateService.instant(
+        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.chip,
+        {
+          version: getCodingFreshnessVersionLabel(item.version),
+          count: formatCodingFreshnessTaskResultCount(item.unitCount)
+        }
+      );
+    }
+
     return getCodingFreshnessChipLabel(item);
+  }
+
+  private get secondAutocodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return getSecondAutocodingFreshnessWarnings(this.allCodingFreshnessWarnings);
+  }
+
+  private get isSecondAutocodingWaitingForManualCoding(): boolean {
+    return isSecondAutocodingWaitingForManualCoding(
+      this.allCodingFreshnessWarnings,
+      this.data.manualAppliedResultsOverview,
+      this.data.manualAppliedResultsOverviewLoadFailed
+    );
+  }
+
+  private get shouldShowSecondAutocodingWaitingState(): boolean {
+    return this.isSecondAutocodingWaitingForManualCoding &&
+      this.codingFreshnessWarnings.length === 0;
+  }
+
+  private getSecondAutocodingWaitingSummaryText(): string {
+    if (this.data.manualAppliedResultsOverviewLoadFailed) {
+      return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.loadFailed);
+    }
+
+    const remaining = this.data.manualAppliedResultsOverview?.remainingResponses || 0;
+    const remainingText = remaining > 0 ?
+      this.translateService.instant(
+        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.remaining,
+        { count: remaining }
+      ) :
+      '';
+
+    return this.translateService.instant(
+      SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.summary,
+      { remaining: remainingText }
+    );
   }
 
   getCategoryLabel(category: string): string {
