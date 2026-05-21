@@ -1922,7 +1922,7 @@
       "task-title": "Kodieraufgaben",
       "stats": {
         "existing-jobs": "Vorhandene Jobs",
-        "replaceable-jobs": "Ersetzbare Jobs",
+        "stale-jobs": "Davon veraltet",
         "existing-cases": "Bisherige Fälle",
         "planned-cases": "Geplante Fälle",
         "retained-cases": "Bleiben erhalten",
