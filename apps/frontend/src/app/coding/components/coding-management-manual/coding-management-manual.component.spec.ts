@@ -120,6 +120,34 @@ describe('CodingManagementManualComponent', () => {
     expect(component.isPreparationReady()).toBe(true);
   });
 
+  it('should flag response analysis as outdated when raw manual counts changed', () => {
+    component.responseAnalysis = {
+      emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+      duplicateValues: {
+        total: 16,
+        totalResponses: 49,
+        groups: [],
+        isAggregationApplied: false
+      },
+      aggregationSummary: {
+        duplicateGroups: 16,
+        duplicateResponses: 49,
+        collapsedCases: 33,
+        rawCases: 628,
+        effectiveCases: 595,
+        threshold: 2,
+        aggregationActive: true
+      },
+      matchingFlags: [],
+      analysisTimestamp: new Date().toISOString()
+    };
+    setAppliedResults(897, 8, 889);
+    component.appliedResultsOverview!.rawTotalIncompleteResponses = 973;
+
+    expect(component.getCurrentRawManualResponses()).toBe(973);
+    expect(component.isResponseAnalysisOutdated()).toBe(true);
+  });
+
   it('should describe completed coding jobs as ready to apply', () => {
     component.completedJobsReadyForApply = [
       {

@@ -1051,6 +1051,7 @@
     },
     "statistics": {
       "total-responses": "Kodierstatistisch berücksichtigte Antworten:",
+      "response-count-scope-note": "Diese Statistik zählt Antwortwerte im Datenbestand. Die manuelle Planung zeigt dagegen effektive Kodierfälle nach Aggregation und bereits angewendeten Ergebnissen.",
       "total-responses-tooltip": "Zählt Kodierergebnisse nach einem Kodierlauf. Importierte Rohantworten in den Testergebnissen können vorhanden sein, bevor sie hier erscheinen.",
       "no-coding-results-title": "Noch keine Kodierergebnisse",
       "no-coding-results-text": "Testergebnisse können bereits vorhanden sein. Die Kodierstatistik füllt sich erst nach einem Auto-Coding- oder manuellen Kodierlauf.",
@@ -2093,7 +2094,7 @@
     "variables-requiring-manual-coding": "Variablen, die manuelle Kodierung erfordern",
     "variables-with-incomplete-status": "Variablen mit CODING_INCOMPLETE Status",
     "response-status-summary": "Zusammenfassung des Antwortstatus",
-    "coding-incomplete": "Gesamt zu kodierende Fälle:",
+    "coding-incomplete": "Effektive Kodierfälle:",
     "aggregation-savings": "Einsparung durch Aggregation:",
     "applied-results": "Angewendete Ergebnisse:",
     "remaining": "Verbleibend:",

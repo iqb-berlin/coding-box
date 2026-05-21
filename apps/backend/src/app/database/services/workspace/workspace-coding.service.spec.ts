@@ -346,6 +346,21 @@ describe('WorkspaceCodingService', () => {
       expect(mockCodingStatisticsService.refreshStatistics).toHaveBeenCalledWith(workspaceId, 'v1');
     });
 
+    it('should await response analysis cache invalidation before refreshing statistics', async () => {
+      await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        1,
+        undefined,
+        jobId,
+        undefined
+      );
+
+      expect(mockCodingAnalysisService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+      expect(mockCodingAnalysisService.invalidateCache.mock.invocationCallOrder[0])
+        .toBeLessThan(mockCodingStatisticsService.invalidateCache.mock.invocationCallOrder[0]);
+    });
+
     it('should invalidate all coding statistics before refreshing v3 after second autocoder run', async () => {
       await service.processTestPersonsBatch(
         workspaceId,

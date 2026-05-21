@@ -984,6 +984,23 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.appliedResultsOverview?.completionPercentage || 0;
   }
 
+  getCurrentRawManualResponses(): number {
+    return this.appliedResultsOverview?.rawTotalIncompleteResponses ??
+      this.codingProgressOverview?.rawTotalCasesToCode ??
+      this.caseCoverageOverview?.totalCasesToCode ??
+      0;
+  }
+
+  isResponseAnalysisOutdated(): boolean {
+    const analysisRawCases = this.responseAnalysis?.aggregationSummary?.rawCases ?? 0;
+    const currentRawManualResponses = this.getCurrentRawManualResponses();
+    return !!this.responseAnalysis &&
+      !this.responseAnalysis.isCalculating &&
+      analysisRawCases > 0 &&
+      currentRawManualResponses > 0 &&
+      analysisRawCases !== currentRawManualResponses;
+  }
+
   scrollToSection(sectionId: string): void {
     this.document.getElementById(sectionId)?.scrollIntoView({
       behavior: 'smooth',
