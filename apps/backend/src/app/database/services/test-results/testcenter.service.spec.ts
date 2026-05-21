@@ -331,6 +331,120 @@ describe('TestCenterService', () => {
   });
 
   describe('Log processing', () => {
+    it('should wait for response import before importing logs', async () => {
+      const order: string[] = [];
+      const mockResponses: Response[] = [
+        {
+          groupname: 'group1',
+          loginname: 'user1',
+          code: 'code1',
+          bookletname: 'booklet1',
+          unitname: 'unit1',
+          originalUnitId: 'unit-1-id',
+          responses: '[]',
+          laststate: '{}'
+        }
+      ];
+      const mockLogs: Log[] = [
+        {
+          groupname: 'group1',
+          loginname: 'user1',
+          code: 'code1',
+          bookletname: 'booklet1',
+          unitname: 'unit1',
+          originalUnitId: 'unit-1-id',
+          timestamp: '2024-01-01T00:01:00Z',
+          logentry: '{}'
+        }
+      ];
+      const responsePerson: Person = {
+        workspace_id: 123,
+        group: 'group1',
+        login: 'user1',
+        code: 'code1',
+        booklets: []
+      };
+      const logPerson: Person = {
+        workspace_id: 123,
+        group: 'group1',
+        login: 'user1',
+        code: 'code1',
+        booklets: [
+          {
+            id: 'booklet1',
+            logs: [],
+            units: [],
+            sessions: []
+          }
+        ]
+      };
+      httpService.axiosRef.get
+        .mockResolvedValueOnce({ data: mockResponses } as AxiosResponse)
+        .mockResolvedValueOnce({ data: mockLogs } as AxiosResponse);
+      personService.createPersonList
+        .mockResolvedValueOnce([responsePerson])
+        .mockResolvedValueOnce([logPerson]);
+      personService.assignBookletsToPerson.mockResolvedValue(responsePerson);
+      personService.assignUnitsToBookletAndPerson.mockResolvedValue(responsePerson);
+      personService.processPersonBooklets.mockImplementation(async () => {
+        order.push('responses-start');
+        await Promise.resolve();
+        order.push('responses-complete');
+        return {
+          addedUnitIds: [10],
+          changedUnitIds: [],
+          addedResponseCount: 1,
+          changedResponseCount: 0
+        };
+      });
+      personService.getImportStatistics.mockResolvedValue({
+        persons: 1,
+        booklets: 1,
+        units: 1
+      });
+      personService.assignBookletLogsToPerson.mockReturnValue(logPerson);
+      personService.assignUnitLogsToBooklet.mockReturnValue(logPerson.booklets[0]);
+      personService.processPersonLogs.mockImplementation(async () => {
+        order.push('logs-start');
+        return {
+          success: true,
+          totalBooklets: 1,
+          totalLogsSaved: 1,
+          totalLogsSkipped: 0,
+          issues: []
+        };
+      });
+      const importOptions: ImportOptionsDto = {
+        responses: 'true',
+        logs: 'true',
+        definitions: 'false',
+        units: 'false',
+        player: 'false',
+        codings: 'false',
+        testTakers: 'false',
+        booklets: 'false',
+        metadata: 'false'
+      };
+
+      const result = await service.importWorkspaceFiles(
+        '123',
+        'ws-456',
+        'demo',
+        '',
+        'token',
+        importOptions,
+        'group1',
+        true
+      );
+
+      expect(result.success).toBe(true);
+      expect(order).toEqual([
+        'responses-start',
+        'responses-complete',
+        'logs-start'
+      ]);
+    });
+
     it('should import logs and separate by type', async () => {
       const mockLogs: Log[] = [
         {
@@ -477,6 +591,16 @@ describe('TestCenterService', () => {
         }
       ];
       personService.createPersonList.mockResolvedValue(mockPersons);
+      personService.assignBookletsToPerson.mockResolvedValue(mockPersons[0]);
+      personService.assignUnitsToBookletAndPerson.mockResolvedValue(
+        mockPersons[0]
+      );
+      personService.processPersonBooklets.mockResolvedValue({
+        addedUnitIds: [],
+        changedUnitIds: [],
+        addedResponseCount: 0,
+        changedResponseCount: 0
+      });
       personService.getImportStatistics.mockResolvedValue({
         persons: 1,
         booklets: 1,

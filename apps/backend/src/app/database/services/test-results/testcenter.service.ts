@@ -818,7 +818,13 @@ export class TestcenterService {
       importedGroups: testGroups.split(',').map(g => g.trim())
     };
 
-    const promises: Promise<{ issues?: TestResultsUploadIssueDto[] } | void>[] = [];
+    const appendIssues = (issues?: TestResultsUploadIssueDto[]): void => {
+      if (!issues || issues.length === 0) {
+        return;
+      }
+      if (!result.issues) result.issues = [];
+      result.issues.push(...issues);
+    };
 
     try {
       if (responses === 'true') {
@@ -830,8 +836,13 @@ export class TestcenterService {
           authToken,
           testGroups
         );
-        promises.push(...responsePromises);
         result.responses = responsePromises.length;
+        const responseResults = await Promise.all(responsePromises);
+        responseResults.forEach(res => {
+          if (res && typeof res === 'object' && 'issues' in res && Array.isArray(res.issues)) {
+            appendIssues(res.issues);
+          }
+        });
 
         try {
           const stats = await this.personService.getImportStatistics(
@@ -856,10 +867,7 @@ export class TestcenterService {
           overwriteExistingLogs
         );
         result.logs = 1; // Mark that log import was triggered
-        if (logsIssues) {
-          if (!result.issues) result.issues = [];
-          result.issues.push(...logsIssues);
-        }
+        appendIssues(logsIssues);
 
         // Calculate log coverage statistics
         try {
@@ -899,15 +907,6 @@ export class TestcenterService {
         result.testFilesUploadResult = filesResult.uploadResult;
       }
 
-      if (promises.length > 0) {
-        const results = await Promise.all(promises);
-        results.forEach(res => {
-          if (res && typeof res === 'object' && 'issues' in res && Array.isArray(res.issues)) {
-            if (!result.issues) result.issues = [];
-            result.issues.push(...res.issues);
-          }
-        });
-      }
       if (responses === 'true') {
         await this.attachCodingFreshnessSummary(Number(workspace_id), result);
       }
