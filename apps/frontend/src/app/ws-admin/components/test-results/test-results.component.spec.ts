@@ -347,6 +347,44 @@ describe('TestResultsComponent', () => {
     windowOpenSpy.mockRestore();
   });
 
+  it('should open booklet replay for test persons without a code', () => {
+    const windowOpenSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    const bookletReplay = {
+      id: 0,
+      name: 'BOOKLET_A',
+      currentUnitIndex: 0,
+      skippedUnits: 0,
+      totalBookletUnits: 1,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_1',
+          alias: 'Unit 1',
+          bookletId: 0
+        }
+      ]
+    };
+
+    unitsReplayService.getUnitsFromFileUpload.mockReturnValue(of(bookletReplay));
+    appService.createOwnToken.mockReturnValue(of('token'));
+    component.testPerson = {
+      login: 'login',
+      code: '',
+      group: 'group'
+    } as never;
+
+    component.replayBooklet({ name: 'BOOKLET_A' } as never);
+
+    expect(unitsReplayService.getUnitsFromFileUpload).toHaveBeenCalledWith(
+      1,
+      'BOOKLET_A',
+      'login@@group@BOOKLET_A'
+    );
+    expect(windowOpenSpy).toHaveBeenCalledWith(expect.any(String), '_blank');
+
+    windowOpenSpy.mockRestore();
+  });
+
   it('should show Testcenter import results when overview loads with zero delta', async () => {
     const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
     const testResultService = TestBed.inject(TestResultService) as unknown as {

@@ -857,6 +857,12 @@
       cursor: pointer;
     }
 
+    &.active-test-person,
+    &.active-test-person:nth-child(even) {
+      background-color: #e3f2fd;
+      box-shadow: inset 3px 0 0 #1976d2;
+    }
+
     &:nth-child(even) {
       background-color: #fafafa;
 

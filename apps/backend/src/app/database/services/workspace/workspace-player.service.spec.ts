@@ -87,6 +87,28 @@ describe('WorkspacePlayerService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('parseReplayTestPerson', () => {
+    const parseReplayTestPerson = (value: string) => (
+      service as unknown as {
+        parseReplayTestPerson: (testPerson: string) => unknown;
+      }
+    ).parseReplayTestPerson(value);
+
+    it('should accept replay connectors with an empty code segment', () => {
+      expect(parseReplayTestPerson('login@@group@BOOKLET_A')).toEqual({
+        login: 'login',
+        code: '',
+        group: 'group',
+        bookletName: 'BOOKLET_A'
+      });
+    });
+
+    it('should reject replay connectors without a booklet segment', () => {
+      expect(parseReplayTestPerson('login@code')).toBeNull();
+      expect(parseReplayTestPerson('login@code@')).toBeNull();
+    });
+  });
+
   describe('findPlayer - Exact major.minor match with highest patch', () => {
     it('should select highest patch version for exact major.minor match', async () => {
       const mockPlayers = [

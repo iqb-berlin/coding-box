@@ -763,19 +763,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (!this.testPerson || !this.testPerson.login || !this.testPerson.code) {
+    const testPerson = this.buildReplayTestPerson(booklet.name);
+    if (!testPerson) {
       this.snackBar.open('Keine gültige Testperson ausgewählt', 'Info', {
         duration: 3000
       });
       return;
     }
-
-    const testPerson = [
-      this.testPerson.login,
-      this.testPerson.code,
-      this.testPerson.group,
-      booklet.name
-    ].join('@');
 
     const loadingSnackBar = this.snackBar.open('Lade Testheft...', '', {
       duration: 3000
@@ -843,6 +837,24 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           });
         }
       });
+  }
+
+  canReplayBooklet(): boolean {
+    return !!this.testPerson?.login?.trim();
+  }
+
+  private buildReplayTestPerson(bookletName: string): string | null {
+    const login = this.testPerson?.login?.trim();
+    if (!login) {
+      return null;
+    }
+
+    return [
+      login,
+      this.testPerson?.code ?? '',
+      this.testPerson?.group ?? '',
+      bookletName
+    ].join('@');
   }
 
   replayUnit() {

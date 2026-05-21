@@ -452,7 +452,7 @@ export class WorkspacePlayerService {
   private parseReplayTestPerson(testPerson: string): ReplayTestPersonRef | null {
     const parts = testPerson.split('@');
 
-    if (parts.length < 2 || !parts[0] || !parts[1]) {
+    if (parts.length < 3 || !parts[0] || !parts[parts.length - 1]) {
       return null;
     }
 

@@ -1090,6 +1090,32 @@ describe('WorkspaceTestResultsService', () => {
       expect(unitRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
     });
 
+    it('should keep an empty replay code segment when looking up a unit', async () => {
+      const unitQb = mockQueryBuilder();
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
+
+      const responseQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      responseQb.getRawMany.mockResolvedValue([]);
+
+      await service.findUnitResponse(
+        1,
+        'login-a@@group-a@booklet-a',
+        'unit-original-id'
+      );
+
+      expect(unitQb.where).toHaveBeenCalledWith('person.login = :login', {
+        login: 'login-a'
+      });
+      expect(unitQb.andWhere).toHaveBeenCalledWith('person.code = :code', {
+        code: ''
+      });
+      expect(unitQb.andWhere).toHaveBeenCalledWith('person.group = :group', {
+        group: 'group-a'
+      });
+    });
+
     it('should fall back to visible unit name when alias lookup misses', async () => {
       const aliasQb = mockQueryBuilder();
       const nameQb = mockQueryBuilder();
