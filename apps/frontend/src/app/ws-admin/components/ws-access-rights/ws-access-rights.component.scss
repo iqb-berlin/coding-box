@@ -14,11 +14,39 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.rights-model-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid #c7ddec;
+  border-radius: 6px;
+  color: #26576b;
+  background-color: #f4f9fc;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.rights-model-hint mat-icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+  color: #2f6f87;
+}
+
 .access-rights-table {
   width: 100%;
-  min-width: 520px;
+  min-width: 760px;
   border-collapse: collapse;
   table-layout: fixed;
+}
+
+.access-rights-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .access-rights-table th,
@@ -33,9 +61,36 @@
   font-weight: 500;
   color: #07465e;
   background-color: #f9f9f9;
-  position: sticky;
-  top: 0;
-  z-index: 1;
+}
+
+.access-rights-table thead tr:first-child th {
+  border-bottom-color: #d9e8ef;
+}
+
+.group-column {
+  font-size: 12px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  color: #47636f;
+  background-color: #eef6fa;
+}
+
+.header-cell {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-direction: column;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.header-cell span {
+  display: block;
+  max-width: 100%;
+  font-size: 12px;
 }
 
 .access-rights-table tbody tr:last-child td {
@@ -47,7 +102,7 @@
 }
 
 .user-column {
-  width: 70%;
+  width: 44%;
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -55,7 +110,7 @@
 }
 
 .access-level-column {
-  width: 10%;
+  width: 14%;
   text-align: center;
 }
 
@@ -104,11 +159,20 @@ mat-checkbox {
   }
 
   .user-column {
-    width: 55%;
+    width: 40%;
   }
 
   .access-level-column {
     width: 15%;
+  }
+
+  .header-cell {
+    min-height: 60px;
+  }
+
+  .header-cell span,
+  .group-column {
+    font-size: 11px;
   }
 }
 
