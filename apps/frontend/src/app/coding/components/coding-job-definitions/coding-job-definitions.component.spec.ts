@@ -16,6 +16,7 @@ import { AppService } from '../../../core/services/app.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 import { JobDefinitionRefreshPreviewDto } from '../../../../../../../api-dto/coding/job-refresh.dto';
+import { JobDefinitionRefreshDialogComponent } from './job-definition-refresh-dialog.component';
 
 describe('CodingJobDefinitionsComponent', () => {
   let component: CodingJobDefinitionsComponent;
@@ -36,7 +37,19 @@ describe('CodingJobDefinitionsComponent', () => {
             approveJobDefinition: jest.fn().mockReturnValue(of({})),
             deleteJobDefinition: jest.fn().mockReturnValue(of({})),
             createCodingJobFromDefinition: jest.fn().mockReturnValue(of({ success: true, jobsCreated: 1, jobs: [] })),
-            previewJobDefinitionRefresh: jest.fn().mockReturnValue(of({})),
+            previewJobDefinitionRefresh: jest.fn().mockReturnValue(of({
+              jobDefinitionId: 42,
+              existingJobsCount: 1,
+              staleJobsCount: 1,
+              existingCases: 5,
+              plannedCases: 5,
+              retainedCases: 5,
+              addedCases: 0,
+              removedCases: 0,
+              addedCodingTasks: 0,
+              removedCodingTasks: 0,
+              canApply: true
+            })),
             applyJobDefinitionRefresh: jest.fn().mockReturnValue(of({ success: true, jobsCreated: 1 })),
             updateCodingJob: jest.fn().mockReturnValue(of({}))
           }
@@ -219,7 +232,7 @@ describe('CodingJobDefinitionsComponent', () => {
     expect(component.getDefinitionsReadyForJobsCount()).toBe(0);
   });
 
-  it('shows retained cases as changed when refresh task counts differ', () => {
+  it('opens a redistribution preview and applies it after confirmation', async () => {
     const preview: JobDefinitionRefreshPreviewDto = {
       jobDefinitionId: 42,
       existingJobsCount: 2,
@@ -233,16 +246,86 @@ describe('CodingJobDefinitionsComponent', () => {
       removedCodingTasks: 2,
       canApply: true
     };
-    const formatter = component as unknown as {
-      formatRefreshPreview(value: JobDefinitionRefreshPreviewDto): string;
+    const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
+      previewJobDefinitionRefresh: jest.Mock;
+      applyJobDefinitionRefresh: jest.Mock;
     };
+    const matDialog = TestBed.inject(MatDialog);
+    const dialogRefMock = { afterClosed: () => of(true) };
 
-    const message = formatter.formatRefreshPreview(preview);
+    codingJobBackendService.previewJobDefinitionRefresh.mockReturnValue(of(preview));
+    codingJobBackendService.applyJobDefinitionRefresh.mockReturnValue(of({
+      success: true,
+      message: 'ok',
+      preview,
+      jobsCreated: 2
+    }));
+    jest.spyOn(matDialog, 'open').mockReturnValue(dialogRefMock as never);
 
-    expect(message).toContain('5 behaltene Fälle');
-    expect(message).toContain('1 Kodieraufgabe hinzugefügt');
-    expect(message).toContain('2 Kodieraufgaben entfernt');
-    expect(message).not.toContain('unverändert');
+    await component.refreshDefinition({
+      id: 42,
+      status: 'approved',
+      assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      assignedCoders: [1],
+      createdJobsCount: 2
+    });
+
+    expect(codingJobBackendService.previewJobDefinitionRefresh).toHaveBeenCalledWith(1, 42);
+    expect(matDialog.open).toHaveBeenCalledWith(
+      JobDefinitionRefreshDialogComponent,
+      expect.objectContaining({
+        data: {
+          definitionId: 42,
+          preview
+        }
+      })
+    );
+    expect(codingJobBackendService.applyJobDefinitionRefresh).toHaveBeenCalledWith(1, 42);
+  });
+
+  it('does not apply redistribution when the preview is blocked', async () => {
+    const preview: JobDefinitionRefreshPreviewDto = {
+      jobDefinitionId: 42,
+      existingJobsCount: 2,
+      staleJobsCount: 0,
+      existingCases: 5,
+      plannedCases: 6,
+      retainedCases: 5,
+      addedCases: 1,
+      removedCases: 0,
+      addedCodingTasks: 1,
+      removedCodingTasks: 0,
+      canApply: false,
+      blockingReason: 'Bereits bearbeitet'
+    };
+    const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
+      previewJobDefinitionRefresh: jest.Mock;
+      applyJobDefinitionRefresh: jest.Mock;
+    };
+    const matDialog = TestBed.inject(MatDialog);
+    const dialogRefMock = { afterClosed: () => of(false) };
+
+    codingJobBackendService.previewJobDefinitionRefresh.mockReturnValue(of(preview));
+    jest.spyOn(matDialog, 'open').mockReturnValue(dialogRefMock as never);
+
+    await component.refreshDefinition({
+      id: 42,
+      status: 'approved',
+      assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      assignedCoders: [1],
+      createdJobsCount: 2
+    });
+
+    expect(matDialog.open).toHaveBeenCalledWith(
+      JobDefinitionRefreshDialogComponent,
+      expect.objectContaining({
+        data: {
+          definitionId: 42,
+          preview
+        }
+      })
+    );
+    expect(codingJobBackendService.applyJobDefinitionRefresh).not.toHaveBeenCalled();
   });
 
   it('creates distributed jobs from an approved definition with all definition settings', async () => {

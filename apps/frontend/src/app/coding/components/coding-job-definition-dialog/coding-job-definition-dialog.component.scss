@@ -20,6 +20,31 @@
   padding: 16px 24px;
 }
 
+.readonly-definition-note {
+  align-items: flex-start;
+  background-color: #eef6ff;
+  border: 1px solid rgba(25, 118, 210, 0.18);
+  border-radius: 6px;
+  color: #17456f;
+  display: flex;
+  gap: 8px;
+  line-height: 1.4;
+  margin: 16px 24px 0;
+  padding: 10px 12px;
+
+  mat-icon {
+    color: #1976d2;
+    flex: 0 0 auto;
+    font-size: 20px;
+    height: 20px;
+    width: 20px;
+  }
+
+  span {
+    font-size: 0.9rem;
+  }
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

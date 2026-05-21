@@ -1677,6 +1677,7 @@
       "create-btn": "Definition erstellen",
       "submit-for-review": "Zur Prüfung einreichen"
     },
+    "readonly-definition-note": "Diese Definition ist schreibgeschützt, weil daraus bereits Kodierjobs erzeugt wurden. Verteilungsänderungen erfolgen über „Kodierjobs neu verteilen“, solange noch keine Kodierarbeit vorliegt.",
     "job": {
       "edit": "Kodierjob bearbeiten",
       "create": "Neuer Kodierjob erstellen",
@@ -1887,8 +1888,50 @@
       "jobs-created-short": "{{count}} erstellt",
       "jobs-count-unavailable": "Der Status erzeugter Kodier-Jobs konnte nicht geladen werden.",
       "jobs-count-unavailable-short": "Status unklar",
+      "refresh": "Kodierjobs neu verteilen",
+      "refresh-tooltip": "Prüfen, welche bestehenden Kodierjobs ersetzt und anhand der aktuellen Definition neu erzeugt werden können.",
       "more": "Weitere Aktionen",
       "delete": "Löschen"
+    },
+    "workflow": {
+      "definition": "Definition",
+      "jobs-count-unavailable": "Definition #{{id}} · Jobstatus nicht geladen",
+      "no-jobs": "Definition #{{id}} · Noch keine Kodierjobs erstellt",
+      "one-job": "Definition #{{id}} · 1 Kodierjob erstellt",
+      "many-jobs": "Definition #{{id}} · {{count}} Kodierjobs erstellt"
+    },
+    "refresh-dialog": {
+      "title": {
+        "apply": "Kodierjobs neu verteilen",
+        "blocked": "Neu verteilen nicht möglich"
+      },
+      "definition-label": "Definition #{{id}}",
+      "intro": {
+        "apply": "Die bestehenden, noch unbearbeiteten Kodierjobs werden gelöscht und anhand der aktuellen Definition neu erzeugt.",
+        "blocked": "Die Definition kann aktuell nicht neu verteilt werden, weil vorhandene Kodierjobs nicht sicher ersetzt werden können."
+      },
+      "blocking-fallback": "In vorhandenen Kodierjobs wurde bereits gearbeitet. Deshalb ist die Neuverteilung gesperrt.",
+      "rules-label": "Wirkung der Neuverteilung",
+      "rules": {
+        "replace-open": "Nur unberührte Kodierjobs aus dieser Definition werden ersetzt.",
+        "keep-work": "Kodierungen, Notizen und bereits geöffnete Fälle werden nicht überschrieben.",
+        "use-current-definition": "Die neue Verteilung nutzt Variablen, Kodierer, Obergrenzen und Doppelkodierung aus der aktuellen Definition."
+      },
+      "preview-title": "Jobstatus",
+      "case-title": "Fälle",
+      "task-title": "Kodieraufgaben",
+      "stats": {
+        "existing-jobs": "Vorhandene Jobs",
+        "replaceable-jobs": "Ersetzbare Jobs",
+        "existing-cases": "Bisherige Fälle",
+        "planned-cases": "Geplante Fälle",
+        "retained-cases": "Bleiben erhalten",
+        "added-cases": "Neue Fälle",
+        "removed-cases": "Entfernte Fälle",
+        "added-tasks": "Aufgaben hinzugefügt",
+        "removed-tasks": "Aufgaben entfernt"
+      },
+      "confirm": "Jobs neu verteilen"
     },
     "summary": {
       "total": "Gesamt",
@@ -1921,6 +1964,9 @@
         "delete-failed": "Fehler beim Löschen: {{error}}",
         "jobs-created": "{{count}} Kodier-Jobs wurden erfolgreich erstellt",
         "jobs-created-partial": "{{successCount}} Jobs erstellt, {{errorCount}} fehlgeschlagen",
+        "refresh-preview-failed": "Neuverteilung konnte nicht vorbereitet werden: {{error}}",
+        "refresh-applied": "Kodierjobs neu verteilt: {{count}} Kodierjobs erstellt.",
+        "refresh-apply-failed": "Neuverteilung fehlgeschlagen: {{error}}",
         "coders-loading-failed": "Fehler beim Laden der Kodierer: {{error}}",
         "no-workspace": "No workspace selected"
       }

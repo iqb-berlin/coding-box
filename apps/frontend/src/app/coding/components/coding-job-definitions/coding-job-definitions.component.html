@@ -147,9 +147,10 @@
                 *ngIf="canRefreshDefinition(definition)"
                 [disabled]="isRefreshingDefinition(definition)"
                 (click)="refreshDefinition(definition)"
+                [matTooltip]="'coding-job-definitions.actions.refresh-tooltip' | translate"
                 [attr.aria-label]="getActionAriaLabel('refresh', definition)">
                 <mat-icon>sync</mat-icon>
-                <span>Job-Definition aktualisieren</span>
+                <span>{{ 'coding-job-definitions.actions.refresh' | translate }}</span>
               </button>
               <mat-divider class="menu-section-divider"></mat-divider>
               <button
@@ -181,6 +182,7 @@
               {{ getStatusLabel(definition.status) }}
             </span>
             <span class="status-hint">{{ getDefinitionStatusHint(definition) }}</span>
+            <span class="definition-workflow-hint">{{ getDefinitionWorkflowLabel(definition) }}</span>
           </div>
         </td>
       </ng-container>
