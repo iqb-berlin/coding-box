@@ -466,3 +466,15 @@ SET "can_code" = FALSE
 WHERE COALESCE("access_level", 0) <= 0;
 
 -- rollback ALTER TABLE "public"."workspace_user" DROP COLUMN IF EXISTS "can_code";
+
+-- changeset codex:19
+-- comment: Store bounded replay client and server timing diagnostics
+
+ALTER TABLE "public"."replay_statistics"
+  ADD COLUMN IF NOT EXISTS "client_timings" JSONB NULL;
+
+ALTER TABLE "public"."replay_statistics"
+  ADD COLUMN IF NOT EXISTS "server_timings" JSONB NULL;
+
+-- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN IF EXISTS "server_timings";
+-- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN IF EXISTS "client_timings";
