@@ -1,9 +1,8 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { DataSource } from 'typeorm';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
-import { logger } from 'nx/src/utils/logger';
 import { Person, Response, Log } from '../shared';
 
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
@@ -56,6 +55,8 @@ type File = {
 
 @Injectable()
 export class TestcenterService {
+  private readonly logger = new Logger(TestcenterService.name);
+
   constructor(
     private readonly personService: PersonService,
     private readonly httpService: HttpService,
@@ -142,7 +143,7 @@ export class TestcenterService {
         hasBookletLogs: groupsWithLogs.get(group.groupName) || false
       }));
     } catch (error) {
-      logger.error(`Error fetching test groups: ${error.message}`);
+      this.logger.error(`Error fetching test groups: ${error.message}`);
       throw new Error(
         `Failed to retrieve test groups from Testcenter: ${
           error?.message || 'Unknown error'
@@ -168,7 +169,7 @@ export class TestcenterService {
     authToken: string,
     testGroups: string
   ): Promise<Promise<{ issues: TestResultsUploadIssueDto[] }>[]> {
-    logger.log('Import response data from TC');
+    this.logger.log('Import response data from TC');
     const headersRequest = this.createHeaders(authToken);
     const chunks = this.createChunks(testGroups.split(','), 1);
 
@@ -195,7 +196,7 @@ export class TestcenterService {
               });
               rawResponses = response.data || [];
             } catch (error) {
-              logger.error(
+              this.logger.error(
                 `Error fetching response chunk from "${endpoint}": ${
                   error?.message || error
                 }`
@@ -273,7 +274,7 @@ export class TestcenterService {
 
           return { issues };
         } catch (error) {
-          logger.error('Error processing consolidated response data:');
+          this.logger.error('Error processing consolidated response data:');
           throw error;
         }
       })
@@ -289,7 +290,7 @@ export class TestcenterService {
     testGroups: string,
     overwriteExistingLogs: boolean = true
   ): Promise<{ issues: TestResultsUploadIssueDto[] }> {
-    logger.log('Import logs data from TC');
+    this.logger.log('Import logs data from TC');
     const headersRequest = this.createHeaders(authToken);
     const logsChunks = this.createChunks(testGroups.split(','), 1);
     const allLogData: Log[] = [];
@@ -314,7 +315,7 @@ export class TestcenterService {
         );
         allLogData.push(...logData);
       } catch (error) {
-        logger.error(`Error fetching log chunk: ${error.message}`);
+        this.logger.error(`Error fetching log chunk: ${error.message}`);
         throw error;
       }
     }
@@ -348,9 +349,9 @@ export class TestcenterService {
         importIssues.push(...result.issues);
       }
 
-      logger.log(`Logs import result: ${JSON.stringify(result)}`);
+      this.logger.log(`Logs import result: ${JSON.stringify(result)}`);
     } catch (error) {
-      logger.error(
+      this.logger.error(
         `Error processing consolidated log data: ${error.message}`
       );
       throw error;
@@ -736,7 +737,7 @@ export class TestcenterService {
         uploadResult
       };
     } catch (error) {
-      logger.error('Error fetching files:');
+      this.logger.error('Error fetching files:');
       const uploadResult: TestFilesUploadResultDto = {
         total: 0,
         uploaded: 0,
@@ -852,7 +853,7 @@ export class TestcenterService {
           result.booklets = stats.booklets || 0;
           result.units = stats.units || 0;
         } catch (statsError) {
-          logger.warn(`Could not get import statistics: ${statsError.message}`);
+          this.logger.warn(`Could not get import statistics: ${statsError.message}`);
         }
       }
 
@@ -879,7 +880,7 @@ export class TestcenterService {
           result.bookletDetails = logStats.bookletDetails;
           result.unitDetails = logStats.unitDetails;
         } catch (statsError) {
-          logger.warn(`Could not get log coverage statistics: ${statsError.message}`);
+          this.logger.warn(`Could not get log coverage statistics: ${statsError.message}`);
         }
       }
 
@@ -916,7 +917,7 @@ export class TestcenterService {
       result.success = true;
       return result;
     } catch (error) {
-      logger.error(
+      this.logger.error(
         `Error during importWorkspaceFiles for workspace ${workspace_id}, tc_workspace ${tc_workspace}: ${
           error?.message || error
         }`
@@ -946,7 +947,7 @@ export class TestcenterService {
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown error';
-      logger.warn(`Could not invalidate workspace overview cache after Testcenter import: ${detail}`);
+      this.logger.warn(`Could not invalidate workspace overview cache after Testcenter import: ${detail}`);
       if (!result.issues) result.issues = [];
       result.issues.push({
         level: 'warning',
@@ -1007,7 +1008,7 @@ export class TestcenterService {
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown error';
-      logger.warn(`Could not update coding freshness after Testcenter import: ${detail}`);
+      this.logger.warn(`Could not update coding freshness after Testcenter import: ${detail}`);
       issues.push({
         level: 'warning',
         category: 'other',
@@ -1029,7 +1030,7 @@ export class TestcenterService {
       result.codingFreshness = await this.codingFreshnessService.getSummary(workspaceId);
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown error';
-      logger.warn(`Could not load coding freshness after Testcenter import: ${detail}`);
+      this.logger.warn(`Could not load coding freshness after Testcenter import: ${detail}`);
       if (!result.issues) result.issues = [];
       result.issues.push({
         level: 'warning',
@@ -1096,7 +1097,7 @@ export class TestcenterService {
         id: file.id
       };
     } catch (error) {
-      logger.error(`Failed to fetch file: ${file.name} ${error}`);
+      this.logger.error(`Failed to fetch file: ${file.name} ${error}`);
       throw new Error('Unable to fetch the file from server.');
     }
   }

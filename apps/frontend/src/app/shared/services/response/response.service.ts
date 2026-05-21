@@ -8,7 +8,6 @@ import {
   forkJoin,
   tap
 } from 'rxjs';
-import { logger } from 'nx/src/utils/logger';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestResultService } from '../test-result/test-result.service';
@@ -83,10 +82,10 @@ export class ResponseService {
       `${this.serverUrl}admin/workspace/${workspaceId}/responses/${responseId}`,
       { headers: this.authHeader }
     ).pipe(
-      catchError(() => {
-        logger.error(`Error deleting response with ID: ${responseId}`);
-        return of({ success: false, report: { deletedResponse: null, warnings: ['Failed to delete response'] } });
-      }),
+      catchError(() => of({
+        success: false,
+        report: { deletedResponse: null, warnings: ['Failed to delete response'] }
+      })),
       tap(result => {
         // Invalidate cache if deletion was successful
         if (result.success) {
@@ -133,16 +132,13 @@ export class ResponseService {
           }
         };
       }),
-      catchError(() => {
-        logger.error('Error deleting multiple responses');
-        return of({
-          success: false,
-          report: {
-            deletedResponses: [],
-            warnings: ['Failed to delete responses']
-          }
-        });
-      }),
+      catchError(() => of({
+        success: false,
+        report: {
+          deletedResponses: [],
+          warnings: ['Failed to delete responses']
+        }
+      })),
       tap(result => {
         // Invalidate cache if any responses were deleted successfully
         if (result.success) {
@@ -266,10 +262,7 @@ export class ResponseService {
       `${this.serverUrl}admin/workspace/${workspaceId}/responses/search`,
       { headers: this.authHeader, params }
     ).pipe(
-      catchError(() => {
-        logger.error(`Error searching for responses with params: ${JSON.stringify(searchParams)}`);
-        return of({ data: [], total: 0 });
-      })
+      catchError(() => of({ data: [], total: 0 }))
     );
   }
 

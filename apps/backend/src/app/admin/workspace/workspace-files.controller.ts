@@ -6,6 +6,7 @@ import {
   Get,
   HttpCode,
   InternalServerErrorException,
+  Logger,
   Param,
   Post,
   Query,
@@ -26,7 +27,6 @@ import {
   ApiBadRequestResponse
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { logger } from 'nx/src/utils/logger';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -41,6 +41,8 @@ import { CodingStatisticsService, CodingValidationService } from '../../database
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
 export class WorkspaceFilesController {
+  private readonly logger = new Logger(WorkspaceFilesController.name);
+
   constructor(
     private readonly workspaceFilesService: WorkspaceFilesService,
     private readonly workspaceCoreService: WorkspaceCoreService,
@@ -293,7 +295,7 @@ export class WorkspaceFilesController {
         overwriteIds.length > 0 ? overwriteIds : undefined
       );
     } catch (error) {
-      logger.error('Error uploading test files:');
+      this.logger.error('Error uploading test files:');
       return {
         total: Array.isArray(files) ? files.length : 0,
         uploaded: 0,
@@ -338,7 +340,7 @@ export class WorkspaceFilesController {
       @Param('fileId') fileId: number
   ): Promise<FileDownloadDto> {
     if (!workspaceId) {
-      logger.error('Workspace ID is required.');
+      this.logger.error('Workspace ID is required.');
       throw new BadRequestException('Workspace ID is required.');
     }
     try {
@@ -347,7 +349,7 @@ export class WorkspaceFilesController {
         fileId
       );
     } catch (error) {
-      logger.error(`'Error downloading test file:' ${error} `);
+      this.logger.error(`'Error downloading test file:' ${error} `);
       throw new InternalServerErrorException(
         'Unable to download the file. Please try again later.'
       );
@@ -394,7 +396,7 @@ export class WorkspaceFilesController {
       Number.isNaN(parsedWorkspaceId) ||
       parsedWorkspaceId <= 0
     ) {
-      logger.warn(`Invalid workspace ID provided: ${workspaceId} `);
+      this.logger.warn(`Invalid workspace ID provided: ${workspaceId} `);
       throw new BadRequestException('Workspace ID must be a positive integer.');
     }
     const workspaceIdNum = parsedWorkspaceId;
@@ -403,12 +405,12 @@ export class WorkspaceFilesController {
     let requestedTypes: string[] = [];
     if (body?.fileTypes) {
       if (!Array.isArray(body.fileTypes)) {
-        logger.warn(`Invalid fileTypes format for workspace ${workspaceId}`);
+        this.logger.warn(`Invalid fileTypes format for workspace ${workspaceId}`);
         throw new BadRequestException('fileTypes must be an array of strings.');
       }
 
       if (body.fileTypes.length > MAX_FILE_TYPES) {
-        logger.warn(
+        this.logger.warn(
           `Too many file types requested for workspace ${workspaceId}: ${body.fileTypes.length} `
         );
         throw new BadRequestException(
@@ -422,7 +424,7 @@ export class WorkspaceFilesController {
       );
 
       if (requestedTypes.length === 0 && body.fileTypes.length > 0) {
-        logger.warn(
+        this.logger.warn(
           `Invalid file types provided for workspace ${workspaceIdNum}`
         );
         throw new BadRequestException(
@@ -433,7 +435,7 @@ export class WorkspaceFilesController {
 
     let zipBuffer: Buffer;
     try {
-      logger.log(
+      this.logger.log(
         `Starting ZIP download for workspace ${workspaceIdNum} with ${requestedTypes.length} file types`
       );
 
@@ -447,7 +449,7 @@ export class WorkspaceFilesController {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
-      logger.error(
+      this.logger.error(
         ` Error creating ZIP file for workspace ${workspaceIdNum} after ${duration} ms: ${errorMessage}${errorStack ? `\n${errorStack}` : ''
         } `
       );
@@ -486,7 +488,7 @@ export class WorkspaceFilesController {
 
     // Validate ZIP buffer outside try/catch
     if (!zipBuffer || zipBuffer.length === 0) {
-      logger.error(
+      this.logger.error(
         `Empty ZIP buffer generated for workspace ${workspaceIdNum}`
       );
       throw new InternalServerErrorException(
@@ -495,7 +497,7 @@ export class WorkspaceFilesController {
     }
 
     if (zipBuffer.length > MAX_ZIP_SIZE) {
-      logger.error(
+      this.logger.error(
         `ZIP file exceeds maximum size for workspace ${workspaceIdNum}: ${zipBuffer.length} bytes`
       );
       throw new InternalServerErrorException(
@@ -504,7 +506,7 @@ export class WorkspaceFilesController {
     }
 
     const duration = Date.now() - startTime;
-    logger.log(
+    this.logger.log(
       `ZIP download completed for workspace ${workspaceIdNum} in ${duration} ms(${zipBuffer.length} bytes)`
     );
 
