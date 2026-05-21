@@ -344,6 +344,7 @@
               (click)="onRowClick(row)"
               *matRowDef="let row; columns: displayedColumns"
               class="clickable-row"
+              [class.active-test-person]="testPerson?.id === row.id"
             ></mat-row>
           </mat-table>
 
@@ -435,6 +436,7 @@
                 mat-stroked-button
                 color="primary"
                 (click)="replayBooklet(booklet)"
+                [disabled]="!canReplayBooklet()"
                 class="action-button"
               >
                 <mat-icon>play_arrow</mat-icon>
