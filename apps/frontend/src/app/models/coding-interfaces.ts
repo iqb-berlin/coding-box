@@ -72,10 +72,13 @@ export interface BulkApplyResultItem {
   jobName: string;
   hasIssues: boolean;
   skipped: boolean;
+  skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
   result?: {
     success: boolean;
     updatedResponsesCount: number;
     skippedReviewCount: number;
+    skippedAlreadyCodedCount: number;
+    overwrittenExistingCount: number;
     message: string;
   };
 }
@@ -85,6 +88,8 @@ export interface BulkApplyCodingResultsResponse {
   jobsProcessed: number;
   totalUpdatedResponses: number;
   totalSkippedReview: number;
+  totalSkippedAlreadyCoded: number;
+  totalOverwrittenExisting: number;
   message: string;
   results: BulkApplyResultItem[];
 }
@@ -95,7 +100,6 @@ export interface ExportJobStatus {
   result?: {
     fileId: string;
     fileName: string;
-    filePath: string;
     fileSize: number;
     workspaceId: number;
     userId: number;
@@ -116,6 +120,8 @@ export interface SearchResponsesParams {
   code?: string;
   version?: 'v1' | 'v2' | 'v3';
   geogebra?: boolean;
+  derivedOnly?: boolean;
+  responseSource?: 'base' | 'derived' | 'all';
   personLogin?: string;
 }
 

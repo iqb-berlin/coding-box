@@ -3,9 +3,14 @@
  */
 export class ExpectedCombinationDto {
   /**
-   * The alias of the unit (unit_key)
+   * The name/key of the unit.
    */
   unit_key!: string;
+
+  /**
+   * Optional unit alias. Coding-list exports include both unit_key and unit_alias.
+   */
+  unit_alias?: string;
 
   /**
    * The login name of the person
@@ -18,6 +23,11 @@ export class ExpectedCombinationDto {
   login_code!: string;
 
   /**
+   * Optional group of the person. Needed to disambiguate replay connectors when present.
+   */
+  person_group?: string;
+
+  /**
    * The name of the booklet (booklet_id)
    */
   booklet_id!: string;
@@ -26,4 +36,14 @@ export class ExpectedCombinationDto {
    * The ID of the variable
    */
   variable_id!: string;
+
+  /**
+   * Optional replay page from the coding list.
+   */
+  variable_page?: string;
+
+  /**
+   * Optional replay anchor from the coding list.
+   */
+  variable_anchor?: string;
 }

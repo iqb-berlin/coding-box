@@ -3,12 +3,32 @@
   overflow-y: auto;
 }
 
-.admin-tab-content{
-  min-width:500px;
+.admin-tab-content {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.users-content,
+.users-list {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.users-list {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
 }
 
 .object-list {
   height: calc(100% - 5px);
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .secondary-cell {
@@ -26,5 +46,11 @@
   background-color: #00606415;
   &:hover {
     background-color: #00606415 !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .object-list {
+    height: auto;
   }
 }

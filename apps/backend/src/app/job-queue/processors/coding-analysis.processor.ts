@@ -4,10 +4,7 @@ import { Job } from 'bull';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets } from 'typeorm';
 import { ResponseEntity } from '../../database/entities/response.entity';
-import {
-  ResponseMatchingFlag,
-  CodingJobService
-} from '../../database/services/coding/coding-job.service';
+import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
 import {
   ResponseAnalysisDto,
   EmptyResponseDto,
@@ -16,6 +13,17 @@ import {
 import { CacheService } from '../../cache/cache.service';
 import { statusStringToNumber } from '../../database/utils/response-status-converter';
 import { CodingAnalysisJobData } from '../job-queue.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../../database/services/workspace/workspace-exclusion.service';
+import { WorkspaceFilesService } from '../../database/services/workspace';
+import {
+  createAggregationSummary,
+  isAggregatableValue,
+  isDerivedAggregationVariable,
+  normalizeAggregationValue
+} from '../../database/services/coding/aggregation-metrics.util';
 
 @Processor('response-analysis')
 export class CodingAnalysisProcessor {
@@ -24,8 +32,9 @@ export class CodingAnalysisProcessor {
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    private codingJobService: CodingJobService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    private workspaceExclusionService: WorkspaceExclusionService,
+    private workspaceFilesService: WorkspaceFilesService
   ) { }
 
   @Process()
@@ -55,25 +64,30 @@ export class CodingAnalysisProcessor {
   ): Promise<ResponseAnalysisDto> {
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const derivedVariableMap = await this.getDerivedVariableMap(workspaceId);
 
     // 1. Identify relevant Unit+Variable combinations
     this.logger.log(`Identifying relevant variables for analysis in workspace ${workspaceId}...`);
-    const relevantVariables = await this.responseRepository
+    const relevantVariablesQuery = this.responseRepository
       .createQueryBuilder('response')
       .select('response.unitid', 'unitId')
       .addSelect('response.variableid', 'variableId')
       .distinct(true)
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] })
+      .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] });
+    applyResolvedExclusionsToQuery(relevantVariablesQuery, exclusions);
+    const relevantVariables = await relevantVariablesQuery
       .getRawMany();
 
     if (relevantVariables.length === 0) {
       this.logger.warn(`No relevant variables found for analysis in workspace ${workspaceId}`);
-      return this.createEmptyAnalysisResult(matchingFlags);
+      return this.createEmptyAnalysisResult(matchingFlags, threshold);
     }
 
     this.logger.log(`Found ${relevantVariables.length} variable groups to analyze. Processing in chunks...`);
@@ -83,13 +97,17 @@ export class CodingAnalysisProcessor {
     let totalProcessed = 0;
 
     // Check if aggregation is already applied (marked by code_v2 = -111)
-    const isAggregationApplied = await this.responseRepository
+    const aggregationAppliedQuery = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('response.code_v2 = :aggregatedCode', { aggregatedCode: -111 })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.code_v2 = :aggregatedCode', { aggregatedCode: -111 });
+    applyResolvedExclusionsToQuery(aggregationAppliedQuery, exclusions);
+    const isAggregationApplied = await aggregationAppliedQuery
       .getCount() > 0;
 
     // 2. Process in chunks
@@ -106,7 +124,11 @@ export class CodingAnalysisProcessor {
         .andWhere('person.consider = :consider', { consider: true })
         .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] })
         // Exclude already-aggregated responses (non-master duplicates) so they don't reappear after aggregation
-        .andWhere('(response.code_v2 != :aggregatedCode OR response.code_v2 IS NULL)', { aggregatedCode: -111 });
+        .andWhere(
+          '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :emptyCode))',
+          { aggregatedCode: -111, emptyCode: -98 }
+        );
+      applyResolvedExclusionsToQuery(qb, exclusions);
 
       qb.andWhere(new Brackets(qbInside => {
         chunk.forEach((item, index) => {
@@ -126,7 +148,8 @@ export class CodingAnalysisProcessor {
         responsesBatch,
         matchingFlags,
         emptyResponses,
-        duplicateValueGroups
+        duplicateValueGroups,
+        derivedVariableMap
       );
 
       // Explicitly free memory if possible (though GC handles function scope)
@@ -172,6 +195,13 @@ export class CodingAnalysisProcessor {
       (sum, group) => sum + group.occurrences.length,
       0
     );
+    const aggregationSummary = createAggregationSummary(
+      mergedGroups.length,
+      totalDuplicateResponses,
+      totalProcessed,
+      threshold,
+      matchingFlags
+    );
 
     this.logger.log(`Analysis complete. Processed ${totalProcessed} responses. Found ${mergedGroups.length} duplicate groups.`);
 
@@ -187,6 +217,7 @@ export class CodingAnalysisProcessor {
         groups: mergedGroups,
         isAggregationApplied
       },
+      aggregationSummary,
       matchingFlags: matchingFlags as unknown as string[],
       analysisTimestamp: new Date().toISOString()
     };
@@ -196,7 +227,8 @@ export class CodingAnalysisProcessor {
     responses: ResponseEntity[],
     matchingFlags: ResponseMatchingFlag[],
     emptyResponses: EmptyResponseDto[],
-    duplicateValueGroups: DuplicateValueGroupDto[]
+    duplicateValueGroups: DuplicateValueGroupDto[],
+    derivedVariableMap: Map<string, Set<string>>
   ) {
     // We group by Unit+Variable within this batch
     // Since our query chunked by Unit+Variable, we can treat this batch as a collection of complete groups
@@ -207,13 +239,8 @@ export class CodingAnalysisProcessor {
     for (const response of responses) {
       // Empty Check - IMPROVED LOGIC
       const value = response.value;
-      const isEmptyValue =
-        value === null ||
-        value === undefined ||
-        (typeof value === 'string' && value.trim() === '') ||
-        value === '[]';
 
-      if (isEmptyValue) {
+      if (!isAggregatableValue(value)) {
         emptyResponses.push({
           unitName: response.unit?.name || '',
           unitAlias: response.unit?.alias || null,
@@ -230,6 +257,14 @@ export class CodingAnalysisProcessor {
         continue; // Skip empty for duplicates
       }
 
+      if (isDerivedAggregationVariable(
+        derivedVariableMap,
+        response.unit?.name || '',
+        response.variableid
+      )) {
+        continue;
+      }
+
       const key = `${response.unit?.name || response.unitid}_${response.variableid}`;
       if (!responsesByUnitVariable.has(key)) {
         responsesByUnitVariable.set(key, []);
@@ -240,7 +275,7 @@ export class CodingAnalysisProcessor {
     for (const [, groupResponses] of responsesByUnitVariable.entries()) {
       const valueGroups = new Map<string, ResponseEntity[]>();
       for (const response of groupResponses) {
-        const normalizedValue = this.codingJobService.normalizeValue(
+        const normalizedValue = normalizeAggregationValue(
           response.value,
           matchingFlags
         );
@@ -271,7 +306,8 @@ export class CodingAnalysisProcessor {
   }
 
   private createEmptyAnalysisResult(
-    matchingFlags: ResponseMatchingFlag[]
+    matchingFlags: ResponseMatchingFlag[],
+    threshold: number | null = null
   ): ResponseAnalysisDto {
     const result: ResponseAnalysisDto = {
       emptyResponses: {
@@ -283,14 +319,31 @@ export class CodingAnalysisProcessor {
         total: 0,
         totalResponses: 0,
         groups: [],
-        isAggregationApplied: !matchingFlags.includes(
-          ResponseMatchingFlag.NO_AGGREGATION
-        )
+        isAggregationApplied: false
       },
+      aggregationSummary: createAggregationSummary(
+        0,
+        0,
+        0,
+        threshold,
+        matchingFlags
+      ),
       matchingFlags: matchingFlags as unknown as string[],
       analysisTimestamp: new Date().toISOString()
     };
 
     return result;
+  }
+
+  private async getDerivedVariableMap(
+    workspaceId: number
+  ): Promise<Map<string, Set<string>>> {
+    try {
+      return await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Could not load derived variable map for workspace ${workspaceId}: ${message}`);
+      return new Map<string, Set<string>>();
+    }
   }
 }

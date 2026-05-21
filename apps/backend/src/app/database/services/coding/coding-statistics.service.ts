@@ -1,21 +1,36 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Inject, Injectable, Logger, OnApplicationBootstrap, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
-import FileUpload from '../../entities/file_upload.entity';
 import { CodingStatistics } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
-import { statusStringToNumber } from '../../utils/response-status-converter';
+import {
+  STATISTICS_IGNORED_STATUSES,
+  statusStringToNumber
+} from '../../utils/response-status-converter';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { BullJobManagementService } from '../jobs/bull-job-management.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import {
+  normalizeExclusionBookletId,
+  normalizeExclusionUnitId,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
+// eslint-disable-next-line import/no-cycle
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import {
+  CODING_STATISTICS_CACHE_VERSIONS,
+  getCodingStatisticsCacheKey,
+  type CodingStatisticsVersion
+} from './coding-statistics-cache-key.util';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 
 @Injectable()
 export class CodingStatisticsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(CodingStatisticsService.name);
-  private readonly CACHE_KEY_PREFIX = 'coding-statistics';
   private readonly CACHE_TTL_SECONDS = 0; // No expiration (TTL=0 means no EX flag in Redis) - persist until explicitly invalidated
 
   constructor(
@@ -25,7 +40,9 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     private jobQueueService: JobQueueService,
     private bullJobManagementService: BullJobManagementService,
     private workspaceCoreService: WorkspaceCoreService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    @Inject(forwardRef(() => WorkspaceFilesService))
+    private workspaceFilesService: WorkspaceFilesService
   ) { }
 
   async onApplicationBootstrap(): Promise<void> {
@@ -61,65 +78,97 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     return result.map(row => parseInt(row.workspace_id, 10)).filter(id => !Number.isNaN(id));
   }
 
-  async getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1', skipCache: boolean = false): Promise<CodingStatistics> {
+  async getCodingStatistics(workspace_id: number, version: CodingStatisticsVersion = 'v1', skipCache: boolean = false): Promise<CodingStatistics> {
     this.logger.log(`Getting coding statistics for workspace ${workspace_id} (version: ${version})${skipCache ? ' (skipping cache)' : ''}`);
 
-    const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}:${version}`;
+    const cacheKey = getCodingStatisticsCacheKey(workspace_id, version);
     if (!skipCache) {
       const cachedResult = await this.cacheService.get<CodingStatistics>(cacheKey);
       if (cachedResult) {
         this.logger.log(`Returning cached statistics for workspace ${workspace_id}`);
-        return cachedResult;
+        return this.normalizeStatistics(cachedResult);
       }
     }
 
     const statistics: CodingStatistics = {
       totalResponses: 0,
+      baseResponseCount: 0,
+      derivedResponseCount: 0,
+      derivedVariableCount: 0,
+      derivedStatusCounts: {},
       statusCounts: {}
     };
 
     try {
-      const unitVariables = await this.getUnitVariables(workspace_id);
+      const [unitVariables, derivedVariables] = await Promise.all([
+        this.getUnitVariables(workspace_id),
+        this.getDerivedVariables(workspace_id)
+      ]);
 
       const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
       const globalIgnoredSet = new Set(globalIgnoredUnits);
 
       const unitsWithVariables = Object.keys(unitVariables).filter(u => !globalIgnoredSet.has(u.toUpperCase()));
+      const validVariablePairKeys = unitsWithVariables.flatMap(unitName => unitVariables[unitName].map(
+        variableId => this.toVariablePairKey(unitName, variableId)
+      ));
+      const validVariablePairKeySet = new Set(validVariablePairKeys);
+      const derivedVariablePairKeys = Object.entries(derivedVariables)
+        .filter(([unitName]) => !globalIgnoredSet.has(unitName.toUpperCase()))
+        .flatMap(([unitName, variableIds]) => variableIds.map(
+          variableId => this.toVariablePairKey(unitName, variableId)
+        ))
+        .filter(pairKey => validVariablePairKeySet.has(pairKey));
+      statistics.derivedVariableCount = derivedVariablePairKeys.length;
 
-      if (unitsWithVariables.length === 0) {
+      if (validVariablePairKeys.length === 0) {
         this.logger.log(`No units with variables found for workspace ${workspace_id}`);
         await this.cacheService.set(cacheKey, statistics, this.CACHE_TTL_SECONDS);
         return statistics;
       }
 
-      this.logger.log(`Filtering coding statistics to ${unitsWithVariables.length} units that have defined variables`);
+      this.logger.log(
+        `Filtering coding statistics to ${validVariablePairKeys.length} unit-variable pairs ` +
+        `from ${unitsWithVariables.length} units (${derivedVariablePairKeys.length} derived pairs)`
+      );
 
       const codedStatuses = [statusStringToNumber('NOT_REACHED') || 1, statusStringToNumber('DISPLAYED') || 2, statusStringToNumber('VALUE_CHANGED') || 3];
 
-      let statusColumn = 'response.status_v1';
-      let whereCondition = 'response.status_v1 IS NOT NULL';
+      const statusColumn = getEffectiveCodingStatusExpression(version);
+      let whereCondition = `(${statusColumn}) IS NOT NULL`;
 
-      if (version === 'v2') {
-        statusColumn = 'COALESCE(response.status_v2, response.status_v1)';
-        whereCondition = '(COALESCE(response.status_v2, response.status_v1)) IS NOT NULL';
-      } else if (version === 'v3') {
-        statusColumn = 'COALESCE(response.status_v3, response.status_v2, response.status_v1)';
-        whereCondition = '(COALESCE(response.status_v3, response.status_v2, response.status_v1)) IS NOT NULL';
-      }
+      const variablePairExpression = "(unit.name || E'\\u001F' || response.variableid)";
+      const derivedExpression = 'CASE WHEN response.is_autocoder_generated = TRUE THEN true ELSE false END';
+      const normalizedUnitExpression = "REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i')";
 
       let paramIndex = 5;
-      const queryParams: (number | string | number[] | string[] | boolean)[] = [codedStatuses, workspace_id, true, unitsWithVariables];
+      const queryParams: (number | string | number[] | string[] | boolean)[] = [
+        codedStatuses,
+        workspace_id,
+        true,
+        validVariablePairKeys
+      ];
+
+      whereCondition += ` AND (${statusColumn}) <> ALL($${paramIndex}::smallint[])`;
+      queryParams.push(STATISTICS_IGNORED_STATUSES);
+      paramIndex += 1;
+
+      if (globalIgnoredUnits.length > 0) {
+        whereCondition += ` AND ${normalizedUnitExpression} != ALL($${paramIndex})`;
+        queryParams.push(globalIgnoredUnits.map(normalizeExclusionUnitId));
+        paramIndex += 1;
+      }
 
       if (ignoredBooklets.length > 0) {
-        whereCondition += ` AND bookletinfo.name != ALL($${paramIndex})`;
-        queryParams.push(ignoredBooklets);
+        whereCondition += ` AND UPPER(bookletinfo.name) != ALL($${paramIndex})`;
+        queryParams.push(ignoredBooklets.map(normalizeExclusionBookletId));
         paramIndex += 1;
       }
 
       if (testletIgnoredUnits.length > 0) {
         const conditions = testletIgnoredUnits.map(t => {
-          const condition = `NOT (bookletinfo.name = $${paramIndex} AND unit.name = $${paramIndex + 1})`;
-          queryParams.push(t.bookletId, t.unitId);
+          const condition = `NOT (UPPER(bookletinfo.name) = $${paramIndex} AND ${normalizedUnitExpression} = $${paramIndex + 1})`;
+          queryParams.push(normalizeExclusionBookletId(t.bookletId), normalizeExclusionUnitId(t.unitId));
           paramIndex += 2;
           return condition;
         }).join(' AND ');
@@ -129,6 +178,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       const statusCountResults = await this.responseRepository.query(`
         SELECT
           ${statusColumn} as "statusValue",
+          ${derivedExpression} as "isDerived",
           COUNT(response.id) as count
         FROM response
         INNER JOIN unit ON response.unitid = unit.id
@@ -139,22 +189,33 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
           AND ${whereCondition}
           AND person.workspace_id = $2
           AND person.consider = $3
-          AND unit.name = ANY($4)
-        GROUP BY ${statusColumn}
+          AND ${variablePairExpression} = ANY($4::text[])
+        GROUP BY ${statusColumn}, ${derivedExpression}
       `, queryParams);
 
       let totalResponses = 0;
       statusCountResults.forEach(result => {
         const count = parseInt(result.count, 10);
         const validCount = Number.isNaN(count) ? 0 : count;
-        statistics.statusCounts[result.statusValue] = validCount;
+        const statusValue = String(result.statusValue);
+        statistics.statusCounts[statusValue] = (statistics.statusCounts[statusValue] || 0) + validCount;
+        if (result.isDerived === true || result.isDerived === 'true') {
+          statistics.derivedResponseCount += validCount;
+          statistics.derivedStatusCounts[statusValue] = (statistics.derivedStatusCounts[statusValue] || 0) + validCount;
+        } else {
+          statistics.baseResponseCount += validCount;
+        }
         totalResponses += validCount;
         this.logger.debug(`Coded status ${result.statusValue}: ${validCount} responses`);
       });
 
       statistics.totalResponses = totalResponses;
 
-      this.logger.log(`Computed coding statistics for workspace ${workspace_id}: ${totalResponses} total coded responses from ${unitsWithVariables.length} units, ${Object.keys(statistics.statusCounts).length} different status types`);
+      this.logger.log(
+        `Computed coding statistics for workspace ${workspace_id}: ${totalResponses} total coded responses ` +
+        `(${statistics.baseResponseCount} base, ${statistics.derivedResponseCount} derived) ` +
+        `from ${unitsWithVariables.length} units, ${Object.keys(statistics.statusCounts).length} different status types`
+      );
 
       await this.cacheService.set(cacheKey, statistics, this.CACHE_TTL_SECONDS);
       this.logger.log(`Computed and cached statistics for workspace ${workspace_id}`);
@@ -167,56 +228,46 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   private async getUnitVariables(workspace_id: number): Promise<Record<string, string[]>> {
-    const fileUploadRepository = this.responseRepository.manager.getRepository(FileUpload);
-    const unitFiles = await fileUploadRepository.find({
-      where: { workspace_id, file_type: 'Unit' }
-    });
-
-    const unitVariables: Record<string, string[]> = {};
-
-    for (const unitFile of unitFiles) {
-      try {
-        const parseStringPromise = (await import('xml2js')).parseStringPromise;
-        const parsedXml = await parseStringPromise(unitFile.data.toString(), { explicitArray: false });
-
-        if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
-          const unitName = parsedXml.Unit.Metadata.Id;
-          const variables: string[] = [];
-
-          if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
-            const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
-              parsedXml.Unit.BaseVariables.Variable :
-              [parsedXml.Unit.BaseVariables.Variable];
-
-            for (const variable of baseVariables) {
-              if (variable.$?.alias && variable.$?.type !== 'no-value') {
-                variables.push(variable.$.alias);
-              }
-            }
-          }
-
-          if (variables.length > 0) {
-            unitVariables[unitName] = variables;
-          }
-        }
-      } catch (error) {
-        this.logger.warn(`Error parsing unit file ${unitFile.file_id}: ${error.message}`);
-      }
-    }
-
-    return unitVariables;
+    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
+    return this.mapToRecord(unitVariableMap);
   }
 
-  async invalidateCache(workspace_id: number, version?: 'v1' | 'v2' | 'v3'): Promise<void> {
+  private async getDerivedVariables(workspace_id: number): Promise<Record<string, string[]>> {
+    const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspace_id);
+    return this.mapToRecord(derivedVariableMap);
+  }
+
+  private mapToRecord(variableMap: Map<string, Set<string>>): Record<string, string[]> {
+    const result: Record<string, string[]> = {};
+    variableMap.forEach((variables, unitName) => {
+      result[unitName] = Array.from(variables);
+    });
+    return result;
+  }
+
+  private toVariablePairKey(unitName: string, variableId: string): string {
+    return `${unitName}\u001F${variableId}`;
+  }
+
+  private normalizeStatistics(statistics: CodingStatistics): CodingStatistics {
+    return {
+      totalResponses: statistics.totalResponses || 0,
+      baseResponseCount: statistics.baseResponseCount || 0,
+      derivedResponseCount: statistics.derivedResponseCount || 0,
+      derivedVariableCount: statistics.derivedVariableCount || 0,
+      derivedStatusCounts: statistics.derivedStatusCounts || {},
+      statusCounts: statistics.statusCounts || {}
+    };
+  }
+
+  async invalidateCache(workspace_id: number, version?: CodingStatisticsVersion): Promise<void> {
     if (version) {
-      const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}:${version}`;
+      const cacheKey = getCodingStatisticsCacheKey(workspace_id, version);
       await this.cacheService.delete(cacheKey);
       this.logger.log(`Invalidated coding statistics cache for workspace ${workspace_id} (version: ${version})`);
     } else {
-      // Invalidate all versions
-      const versions: ('v1' | 'v2' | 'v3')[] = ['v1', 'v2', 'v3'];
-      const deletePromises = versions.map(v => {
-        const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}:${v}`;
+      const deletePromises = CODING_STATISTICS_CACHE_VERSIONS.map(v => {
+        const cacheKey = getCodingStatisticsCacheKey(workspace_id, v);
         return this.cacheService.delete(cacheKey);
       });
       await Promise.all(deletePromises);
@@ -225,12 +276,12 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {
-    const cacheKey = `coding_incomplete_variables_v2:${workspace_id}`;
+    const cacheKey = `coding_incomplete_variables_v3:${workspace_id}`;
     await this.cacheService.delete(cacheKey);
     this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
   }
 
-  async refreshStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Promise<CodingStatistics> {
+  async refreshStatistics(workspace_id: number, version: CodingStatisticsVersion = 'v1'): Promise<CodingStatistics> {
     this.logger.log(`Refreshing coding statistics for workspace ${workspace_id}`);
     return this.getCodingStatistics(workspace_id, version, true); // skipCache = true
   }
@@ -284,12 +335,53 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     }
   }
 
+  async getCodingStatisticsJobStatus(
+    jobId: string
+  ): Promise<{
+      status:
+      | 'pending'
+      | 'processing'
+      | 'completed'
+      | 'failed'
+      | 'cancelled'
+      | 'paused';
+      progress: number;
+      result?: CodingStatistics;
+      error?: string;
+    } | null> {
+    try {
+      const bullJob = await this.jobQueueService.getCodingStatisticsJob(jobId);
+      if (!bullJob) {
+        return null;
+      }
+
+      const state = await bullJob.getState();
+      const progress = (await bullJob.progress()) || 0;
+      const status = this.bullJobManagementService.mapJobStateToStatus(state);
+      const { result, error } =
+        this.bullJobManagementService.extractJobResult(bullJob, state);
+
+      return {
+        status,
+        progress: typeof progress === 'number' ? progress : 0,
+        result: result as CodingStatistics,
+        error
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting coding statistics job status: ${error.message}`,
+        error.stack
+      );
+      return null;
+    }
+  }
+
   async createCodingStatisticsJob(
     workspaceId: number,
-    version: 'v1' | 'v2' | 'v3' = 'v1'
+    version: CodingStatisticsVersion = 'v1'
   ): Promise<{ jobId: string; message: string }> {
     try {
-      const cacheKey = `coding-statistics:${workspaceId}:${version}`;
+      const cacheKey = getCodingStatisticsCacheKey(workspaceId, version);
       const cachedResult = await this.cacheService.get<CodingStatistics>(
         cacheKey
       );

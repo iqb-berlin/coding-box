@@ -21,6 +21,8 @@ import { ResponseEntity } from '../../shared/models/response-entity.model';
 import { ExportFormat } from '../components/export-dialog/export-dialog.component';
 
 export type StatisticsVersion = 'v1' | 'v2' | 'v3';
+export type ResponseSource = 'base' | 'derived' | 'all';
+export type CodingResultsExportFormat = Exclude<ExportFormat, 'json'>;
 
 export interface FilterParams {
   unitName: string;
@@ -31,6 +33,7 @@ export interface FilterParams {
   bookletName: string;
   variableId: string;
   geogebra: boolean;
+  responseSource: ResponseSource;
   personLogin: string;
 }
 
@@ -47,10 +50,7 @@ export class CodingManagementService {
   private translateService = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
 
-  private _codingStatistics = new BehaviorSubject<CodingStatistics>({
-    totalResponses: 0,
-    statusCounts: {}
-  });
+  private _codingStatistics = new BehaviorSubject<CodingStatistics | null>(null);
 
   private readonly emptyStats: CodingStatistics = { totalResponses: 0, statusCounts: {} };
 
@@ -154,7 +154,7 @@ export class CodingManagementService {
 
   private pollStatisticsJob(workspaceId: number, jobId: string, version: StatisticsVersion): void {
     timer(0, 2000).pipe(
-      switchMap(() => this.executionService.getCodingJobStatus(workspaceId, jobId)),
+      switchMap(() => this.executionService.getCodingStatisticsJobStatus(workspaceId, jobId)),
       takeWhile(status => ['pending', 'processing'].includes(status.status), true),
       finalize(() => this._isLoadingStatistics.next(false))
     ).subscribe((status: CodingJobStatus) => {
@@ -241,6 +241,7 @@ export class CodingManagementService {
       bookletName: filterParams.bookletName,
       variableId: filterParams.variableId,
       geogebra: filterParams.geogebra,
+      responseSource: filterParams.responseSource,
       personLogin: filterParams.personLogin
     };
 
@@ -343,11 +344,16 @@ export class CodingManagementService {
     this.performBackgroundCodingListDownload(workspaceId, format, trainingRequired);
   }
 
-  downloadCodingResults(version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
+  downloadCodingResults(
+    version: StatisticsVersion,
+    format: CodingResultsExportFormat,
+    includeReplayUrls: boolean,
+    includeResponseValues: boolean = true
+  ): Promise<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return Promise.resolve();
 
-    return this.performBackgroundDownload(workspaceId, version, format, includeReplayUrls);
+    return this.performBackgroundDownload(workspaceId, version, format, includeReplayUrls, includeResponseValues);
   }
 
   downloadProgress$ = new BehaviorSubject<number | null>(null);
@@ -355,8 +361,9 @@ export class CodingManagementService {
   private async performBackgroundDownload(
     workspaceId: number,
     version: StatisticsVersion,
-    format: ExportFormat,
-    includeReplayUrls: boolean
+    format: CodingResultsExportFormat,
+    includeReplayUrls: boolean,
+    includeResponseValues: boolean
   ): Promise<void> {
     this.downloadProgress$.next(0);
 
@@ -367,7 +374,9 @@ export class CodingManagementService {
         'results-by-version',
         version,
         format,
-        includeReplayUrls
+        includeReplayUrls,
+        undefined,
+        includeResponseValues
       ).toPromise();
 
       if (!jobStartResult) {
@@ -381,13 +390,8 @@ export class CodingManagementService {
       const blob = await this.pollJobAndProgress(workspaceId, jobId, this.downloadProgress$);
 
       // Handle file download
-      if (format === 'json') {
-        const jsonBlob = await this.convertCsvBlobToJsonBlob(blob);
-        this.saveBlob(jsonBlob, `coding-results-${version}-${this.getDateString()}.json`);
-      } else {
-        const ext = format === 'csv' ? 'csv' : 'xlsx';
-        this.saveBlob(blob, `coding-results-${version}-${this.getDateString()}.${ext}`);
-      }
+      const ext = format === 'csv' ? 'csv' : 'xlsx';
+      this.saveBlob(blob, `coding-results-${version}-${this.getDateString()}.${ext}`);
       this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
     } catch (error) {
       this.showErrorSnackbar(
@@ -482,9 +486,19 @@ export class CodingManagementService {
 
   private statisticsDiffer(stats1: CodingStatistics, stats2: CodingStatistics): boolean {
     if (stats1.totalResponses !== stats2.totalResponses) return true;
+    if ((stats1.baseResponseCount || 0) !== (stats2.baseResponseCount || 0)) return true;
+    if ((stats1.derivedResponseCount || 0) !== (stats2.derivedResponseCount || 0)) return true;
+    if ((stats1.derivedVariableCount || 0) !== (stats2.derivedVariableCount || 0)) return true;
     const allStatuses = new Set([...Object.keys(stats1.statusCounts), ...Object.keys(stats2.statusCounts)]);
     for (const status of allStatuses) {
       if ((stats1.statusCounts[status] || 0) !== (stats2.statusCounts[status] || 0)) return true;
+    }
+    const allDerivedStatuses = new Set([
+      ...Object.keys(stats1.derivedStatusCounts || {}),
+      ...Object.keys(stats2.derivedStatusCounts || {})
+    ]);
+    for (const status of allDerivedStatuses) {
+      if ((stats1.derivedStatusCounts?.[status] || 0) !== (stats2.derivedStatusCounts?.[status] || 0)) return true;
     }
     return false;
   }
@@ -526,27 +540,5 @@ export class CodingManagementService {
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
-  }
-
-  private async convertCsvBlobToJsonBlob(blob: Blob): Promise<Blob> {
-    const text = await blob.text();
-    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-    if (lines.length === 0) throw new Error('No entries');
-
-    const headerLine = lines[0].replace(/^\uFEFF/, '');
-    const delimiter = headerLine.includes(';') ? ';' : ',';
-    const splitRegex = delimiter === ';' ? /;(?=(?:[^"]*"[^"]*")*[^"]*$)/ : /,(?=(?:[^"]*"[^"]*")*[^"]*$)/;
-
-    const headers = headerLine.split(splitRegex).map(h => h.replace(/^"|"$/g, ''));
-    const data = lines.slice(1).map(line => {
-      const cleanLine = line.replace(/^\uFEFF/, '');
-      const values = cleanLine.split(splitRegex).map(v => v.replace(/^"|"$/g, ''));
-      const obj: Record<string, unknown> = {};
-      headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
-      return obj;
-    });
-
-    const jsonData = JSON.stringify(data, null, 2);
-    return new Blob([jsonData], { type: 'application/json' });
   }
 }

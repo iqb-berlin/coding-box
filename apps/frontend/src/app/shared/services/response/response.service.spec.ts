@@ -78,7 +78,7 @@ describe('ResponseService', () => {
 
   describe('searchResponses', () => {
     it('should build query params correctly', () => {
-      const searchParams = { version: 'v1' as const, value: 'test' };
+      const searchParams = { version: 'v1' as const, value: 'test', responseSource: 'all' as const };
       const mockResponse = { data: [], total: 0 };
 
       service.searchResponses(mockWorkspaceId, searchParams).subscribe(res => {
@@ -87,7 +87,8 @@ describe('ResponseService', () => {
 
       const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/responses/search` &&
         request.params.get('version') === 'v1' &&
-        request.params.get('value') === 'test'
+        request.params.get('value') === 'test' &&
+        request.params.get('responseSource') === 'all'
       );
       req.flush(mockResponse);
     });

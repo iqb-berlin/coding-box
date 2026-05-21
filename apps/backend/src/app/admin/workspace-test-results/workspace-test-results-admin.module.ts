@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
 import { DatabaseModule } from '../../database/database.module';
 import { WorkspaceModule } from '../../workspace/workspace.module';
 import { AuthModule } from '../../auth/auth.module';
@@ -19,6 +20,9 @@ import { DatabaseExportService } from '../database/database-export.service';
     DatabaseModule,
     WorkspaceModule,
     AuthModule,
+    BullModule.registerQueue({
+      name: 'database-export'
+    }),
     JobQueueModule,
     CacheModule
   ],

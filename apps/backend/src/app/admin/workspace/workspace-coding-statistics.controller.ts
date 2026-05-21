@@ -1,11 +1,13 @@
 import {
   Controller,
   Get,
+  Param,
   Post,
   Query,
   UseGuards,
   Body,
-  Logger
+  Logger,
+  BadRequestException
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -18,10 +20,75 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import {
-  CodingStatisticsService, CodingJobService, CodingProgressService, CodingReviewService
+  CodingStatisticsService,
+  CodingJobService,
+  CodingProgressService,
+  CodingReviewService,
+  CodingFreshnessService,
+  CodingProcessService,
+  CodingReadinessService
 } from '../../database/services/coding';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatistics } from '../../database/services/shared';
+import {
+  CodingFreshnessJobResultDto,
+  CodingFreshnessScopeDto,
+  CodingFreshnessState,
+  CodingFreshnessSummaryDto,
+  CodingFreshnessVersion,
+  StartCodingFreshnessJobDto
+} from '../../../../../../api-dto/coding/coding-freshness.dto';
+import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
+import { JobQueueService } from '../../job-queue/job-queue.service';
+
+type CodingStatisticsJobStatusResponse = {
+  status: string;
+  progress: number;
+  result?: CodingStatistics;
+  error?: string;
+};
+
+type DistributionDoubleCodingInfoResponse = {
+  totalCases: number;
+  distinctCases?: number;
+  codingTasksTotal?: number;
+  doubleCodedCases: number;
+  singleCodedCasesAssigned: number;
+  doubleCodedCasesPerCoder: Record<string, number>;
+};
+
+type DistributionCalculationResponse = {
+  distribution: Record<string, Record<string, number>>;
+  distributionByCoderId: Record<string, Record<string, number>>;
+  doubleCodingInfo: Record<string, DistributionDoubleCodingInfoResponse>;
+  aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+  matchingFlags: string[];
+  warnings: Array<{
+    unitName: string;
+    variableId: string;
+    message: string;
+    casesInJobs: number;
+    availableCases: number;
+  }>;
+  pairDistribution: Record<string, number>;
+  tasksPerCoder: Record<string, number>;
+  coderWeights: Record<string, number>;
+};
+
+type DistributedCodingJobsResponse = DistributionCalculationResponse & {
+  success: boolean;
+  jobsCreated: number;
+  message: string;
+  jobs: Array<{
+    itemKey: string;
+    coderId: number;
+    coderName: string;
+    variable: { unitName: string; variableId: string };
+    jobId: number;
+    jobName: string;
+    caseCount: number;
+  }>;
+};
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -32,7 +99,11 @@ export class WorkspaceCodingStatisticsController {
     private codingJobService: CodingJobService,
     private personService: PersonService,
     private codingProgressService: CodingProgressService,
-    private codingReviewService: CodingReviewService
+    private codingReviewService: CodingReviewService,
+    private codingFreshnessService: CodingFreshnessService,
+    private codingProcessService: CodingProcessService,
+    private codingReadinessService: CodingReadinessService,
+    private jobQueueService: JobQueueService
   ) { }
 
   @Get(':workspace_id/coding/statistics')
@@ -57,6 +128,150 @@ export class WorkspaceCodingStatisticsController {
       workspace_id,
       version
     );
+  }
+
+  @Get(':workspace_id/coding/freshness')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding freshness summary retrieved successfully.'
+  })
+  async getCodingFreshnessSummary(
+    @WorkspaceId() workspace_id: number
+  ): Promise<CodingFreshnessSummaryDto> {
+    return this.codingFreshnessService.getSummary(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/freshness/scope')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'version',
+    required: false,
+    description: 'Coding version(s) to include. Supports comma-separated values.',
+    enum: ['v1', 'v2', 'v3']
+  })
+  @ApiQuery({
+    name: 'state',
+    required: false,
+    description: 'Freshness state(s) to include. Supports comma-separated values.',
+    enum: ['PENDING', 'STALE', 'MANUAL_REVIEW_REQUIRED']
+  })
+  @ApiOkResponse({
+    description: 'Coding freshness scope retrieved successfully.'
+  })
+  async getCodingFreshnessScope(
+    @WorkspaceId() workspace_id: number,
+      @Query('version') version?: string | string[],
+      @Query('state') state?: string | string[]
+  ): Promise<CodingFreshnessScopeDto> {
+    return this.codingFreshnessService.getScope(
+      workspace_id,
+      this.parseVersions(version),
+      this.parseStates(state)
+    );
+  }
+
+  @Get(':workspace_id/coding/readiness')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'autoCoderRun',
+    required: false,
+    description: 'Autocoder run to validate.',
+    enum: [1, 2]
+  })
+  @ApiQuery({
+    name: 'forceRefresh',
+    required: false,
+    description: 'Ignore the short-lived readiness cache and recalculate.'
+  })
+  @ApiOkResponse({
+    description: 'Auto-coding readiness diagnostics retrieved successfully.'
+  })
+  async getAutocodingReadiness(
+    @WorkspaceId() workspace_id: number,
+      @Query('autoCoderRun') autoCoderRun?: string | string[],
+      @Query('forceRefresh') forceRefresh?: string | string[]
+  ): Promise<AutocodingReadinessDto> {
+    return this.codingReadinessService.getReadiness(workspace_id, {
+      autoCoderRun: this.parseAutoCoderRun(autoCoderRun),
+      forceRefresh: this.parseBooleanQuery(forceRefresh)
+    });
+  }
+
+  @Post(':workspace_id/coding/freshness/code')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['version'],
+      properties: {
+        version: { type: 'string', enum: ['v1', 'v3'] },
+        states: {
+          type: 'array',
+          items: { type: 'string', enum: ['PENDING', 'STALE'] }
+        }
+      }
+    }
+  })
+  @ApiOkResponse({
+    description: 'Coding freshness auto-coding job created successfully.'
+  })
+  async codeFreshnessScope(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: StartCodingFreshnessJobDto
+  ): Promise<CodingFreshnessJobResultDto> {
+    await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
+
+    const version = body.version === 'v3' ? 'v3' : 'v1';
+    const states = this.parseCodingStates(body.states);
+    const scope = await this.codingFreshnessService.getScope(
+      workspace_id,
+      [version],
+      states
+    );
+
+    if (scope.unitIds.length === 0 || scope.personIds.length === 0) {
+      return {
+        totalResponses: 0,
+        statusCounts: {},
+        message: 'No coding freshness units need auto-coding.',
+        unitCount: 0,
+        personCount: 0,
+        groupNames: []
+      };
+    }
+
+    await this.codingFreshnessService.assertAutoCodingRunCanStart(
+      workspace_id,
+      version === 'v3' ? 2 : 1
+    );
+
+    const result = await this.codingProcessService.codeUnitIds(
+      workspace_id,
+      scope.unitIds,
+      version === 'v3' ? 2 : 1,
+      {
+        source: 'coding-freshness',
+        freshnessVersion: version,
+        freshnessStates: states,
+        freshnessSourceRevision: scope.currentRevision,
+        groupNames: scope.groupNames.join(',')
+      }
+    );
+
+    return {
+      ...result,
+      unitCount: scope.unitCount,
+      personCount: scope.personCount,
+      groupNames: scope.groupNames
+    };
   }
 
   @Post(':workspace_id/coding/statistics/job')
@@ -85,6 +300,99 @@ export class WorkspaceCodingStatisticsController {
                    @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1'
   ): Promise<{ jobId: string; message: string }> {
     return this.codingStatisticsService.createCodingStatisticsJob(workspace_id, version);
+  }
+
+  @Get(':workspace_id/coding/statistics/job/:jobId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the coding statistics job' })
+  @ApiOkResponse({
+    description: 'Coding statistics job status retrieved successfully.'
+  })
+  async getCodingStatisticsJobStatus(
+    @Param('jobId') jobId: string
+  ): Promise<CodingStatisticsJobStatusResponse | { error: string }> {
+    const status = await this.codingStatisticsService.getCodingStatisticsJobStatus(jobId);
+    if (!status) {
+      return { error: `Coding statistics job with ID ${jobId} not found` };
+    }
+    return status;
+  }
+
+  private parseVersions(value?: string | string[]): CodingFreshnessVersion[] {
+    const allowed = new Set<CodingFreshnessVersion>(['v1', 'v2', 'v3']);
+    const values = this.parseArrayQuery(value);
+    const versions = values.filter((item): item is CodingFreshnessVersion => (
+      allowed.has(item as CodingFreshnessVersion)
+    ));
+    return versions.length > 0 ? versions : ['v1', 'v2', 'v3'];
+  }
+
+  private parseStates(value?: string | string[]): CodingFreshnessState[] {
+    const allowed = new Set<CodingFreshnessState>([
+      'PENDING',
+      'STALE',
+      'MANUAL_REVIEW_REQUIRED'
+    ]);
+    const values = this.parseArrayQuery(value);
+    const states = values.filter((item): item is CodingFreshnessState => (
+      allowed.has(item as CodingFreshnessState)
+    ));
+    return states.length > 0 ? states : ['PENDING', 'STALE', 'MANUAL_REVIEW_REQUIRED'];
+  }
+
+  private parseCodingStates(
+    states?: Extract<CodingFreshnessState, 'PENDING' | 'STALE'>[]
+  ): Extract<CodingFreshnessState, 'PENDING' | 'STALE'>[] {
+    const allowed = new Set<Extract<CodingFreshnessState, 'PENDING' | 'STALE'>>([
+      'PENDING',
+      'STALE'
+    ]);
+    const values = (states || []).filter(state => allowed.has(state));
+    return values.length > 0 ? values : ['PENDING', 'STALE'];
+  }
+
+  private parseAutoCoderRun(value?: string | string[]): 1 | 2 {
+    const values = this.parseArrayQuery(value);
+    if (values.length === 0) {
+      return 1;
+    }
+    if (values.length > 1) {
+      throw new BadRequestException('autoCoderRun must be provided only once');
+    }
+    const numericValue = Number(values[0]);
+    if (numericValue === 1 || numericValue === 2) {
+      return numericValue;
+    }
+    throw new BadRequestException('autoCoderRun must be 1 or 2');
+  }
+
+  private parseBooleanQuery(value?: string | string[]): boolean {
+    const values = this.parseArrayQuery(value);
+    if (values.length === 0) {
+      return false;
+    }
+    if (values.length > 1) {
+      throw new BadRequestException('Boolean query value must be provided only once');
+    }
+
+    const normalized = values[0].toLowerCase();
+    if (['true', '1', 'yes'].includes(normalized)) {
+      return true;
+    }
+    if (['false', '0', 'no', ''].includes(normalized)) {
+      return false;
+    }
+    throw new BadRequestException('Boolean query value must be true or false');
+  }
+
+  private parseArrayQuery(value?: string | string[]): string[] {
+    const rawValues = Array.isArray(value) ? value : [value || ''];
+    return rawValues
+      .flatMap(item => String(item).split(','))
+      .map(item => item.trim())
+      .filter(item => item !== '');
   }
 
   @Get(':workspace_id/coding/groups')
@@ -162,7 +470,32 @@ export class WorkspaceCodingStatisticsController {
         },
         completionPercentage: {
           type: 'number',
-          description: 'Percentage of coding completion'
+          description: 'Percentage of coding completion after duplicate aggregation'
+        },
+        rawTotalCasesToCode: {
+          type: 'number',
+          description: 'Raw total number of cases before duplicate aggregation'
+        },
+        rawCompletedCases: {
+          type: 'number',
+          description: 'Raw number of completed cases before duplicate aggregation'
+        },
+        rawCompletionPercentage: {
+          type: 'number',
+          description: 'Raw percentage of coding completion before duplicate aggregation'
+        },
+        aggregationActive: {
+          type: 'boolean',
+          description: 'Whether duplicate aggregation is active'
+        },
+        aggregationThreshold: {
+          type: 'number',
+          nullable: true,
+          description: 'Current duplicate aggregation threshold'
+        },
+        aggregatedDuplicateCases: {
+          type: 'number',
+          description: 'Number of raw responses collapsed by duplicate aggregation'
         }
       }
     }
@@ -173,8 +506,84 @@ export class WorkspaceCodingStatisticsController {
         totalCasesToCode: number;
         completedCases: number;
         completionPercentage: number;
+        rawTotalCasesToCode: number;
+        rawCompletedCases: number;
+        rawCompletionPercentage: number;
+        aggregationActive: boolean;
+        aggregationThreshold: number | null;
+        aggregatedDuplicateCases: number;
       }> {
     return this.codingProgressService.getCodingProgressOverview(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/applied-results-overview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Applied results overview retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        totalIncompleteResponses: {
+          type: 'number',
+          description: 'Total cases after duplicate aggregation'
+        },
+        appliedResponses: {
+          type: 'number',
+          description: 'Applied result cases after duplicate aggregation'
+        },
+        remainingResponses: {
+          type: 'number',
+          description: 'Remaining result cases after duplicate aggregation'
+        },
+        completionPercentage: {
+          type: 'number',
+          description: 'Applied results completion percentage after duplicate aggregation'
+        },
+        rawTotalIncompleteResponses: {
+          type: 'number',
+          description: 'Raw total responses before duplicate aggregation'
+        },
+        rawAppliedResponses: {
+          type: 'number',
+          description: 'Raw applied responses before duplicate aggregation'
+        },
+        rawCompletionPercentage: {
+          type: 'number',
+          description: 'Raw applied results completion percentage before duplicate aggregation'
+        },
+        aggregationActive: {
+          type: 'boolean',
+          description: 'Whether duplicate aggregation is active'
+        },
+        aggregationThreshold: {
+          type: 'number',
+          nullable: true,
+          description: 'Current duplicate aggregation threshold'
+        },
+        aggregatedDuplicateCases: {
+          type: 'number',
+          description: 'Number of raw responses collapsed by duplicate aggregation'
+        }
+      }
+    }
+  })
+  async getAppliedResultsOverview(
+    @WorkspaceId() workspace_id: number
+  ): Promise<{
+        totalIncompleteResponses: number;
+        appliedResponses: number;
+        remainingResponses: number;
+        completionPercentage: number;
+        rawTotalIncompleteResponses: number;
+        rawAppliedResponses: number;
+        rawCompletionPercentage: number;
+        aggregationActive: boolean;
+        aggregationThreshold: number | null;
+        aggregatedDuplicateCases: number;
+      }> {
+    return this.codingProgressService.getAppliedResultsOverview(workspace_id);
   }
 
   @Get(':workspace_id/coding/case-coverage-overview')
@@ -188,11 +597,19 @@ export class WorkspaceCodingStatisticsController {
       properties: {
         totalCasesToCode: {
           type: 'number',
-          description: 'Total number of cases that need to be coded'
+          description: 'Raw total number of cases that need to be coded'
+        },
+        effectiveTotalCasesToCode: {
+          type: 'number',
+          description: 'Total number of cases after duplicate aggregation is applied'
         },
         casesInJobs: {
           type: 'number',
           description: 'Number of cases assigned to coding jobs'
+        },
+        effectiveCasesInJobs: {
+          type: 'number',
+          description: 'Number of aggregation-adjusted cases covered by coding jobs'
         },
         doubleCodedCases: {
           type: 'number',
@@ -204,22 +621,50 @@ export class WorkspaceCodingStatisticsController {
         },
         unassignedCases: {
           type: 'number',
-          description: 'Number of cases not assigned to any coding job'
+          description: 'Raw number of cases not assigned to any coding job'
+        },
+        effectiveUnassignedCases: {
+          type: 'number',
+          description: 'Number of aggregation-adjusted cases not assigned to any coding job'
         },
         coveragePercentage: {
           type: 'number',
-          description: 'Percentage of cases covered by coding jobs'
+          description: 'Percentage of aggregation-adjusted cases covered by coding jobs'
+        },
+        rawCoveragePercentage: {
+          type: 'number',
+          description: 'Percentage of raw cases covered by coding jobs'
+        },
+        aggregationActive: {
+          type: 'boolean',
+          description: 'Whether duplicate aggregation is active for this workspace'
+        },
+        aggregationThreshold: {
+          type: 'number',
+          nullable: true,
+          description: 'Duplicate aggregation threshold, or null when disabled'
+        },
+        aggregatedDuplicateCases: {
+          type: 'number',
+          description: 'Number of raw cases collapsed by duplicate aggregation'
         }
       }
     }
   })
   async getCaseCoverageOverview(@WorkspaceId() workspace_id: number): Promise<{
     totalCasesToCode: number;
+    effectiveTotalCasesToCode: number;
     casesInJobs: number;
+    effectiveCasesInJobs: number;
     doubleCodedCases: number;
     singleCodedCases: number;
     unassignedCases: number;
+    effectiveUnassignedCases: number;
     coveragePercentage: number;
+    rawCoveragePercentage: number;
+    aggregationActive: boolean;
+    aggregationThreshold: number | null;
+    aggregatedDuplicateCases: number;
   }> {
     return this.codingProgressService.getCaseCoverageOverview(workspace_id);
   }
@@ -841,6 +1286,7 @@ export class WorkspaceCodingStatisticsController {
             properties: {
               id: { type: 'number' },
               name: { type: 'string' },
+              caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] },
               variables: {
                 type: 'array',
                 items: {
@@ -861,12 +1307,15 @@ export class WorkspaceCodingStatisticsController {
             properties: {
               id: { type: 'number' },
               name: { type: 'string' },
-              username: { type: 'string' }
+              username: { type: 'string' },
+              weight: { type: 'number' },
+              capacityPercent: { type: 'number' }
             }
           }
         },
         doubleCodingAbsolute: { type: 'number' },
-        doubleCodingPercentage: { type: 'number' }
+        doubleCodingPercentage: { type: 'number' },
+        distributionSeed: { type: 'string' }
       },
       required: ['selectedVariables', 'selectedCoders']
     }
@@ -884,6 +1333,14 @@ export class WorkspaceCodingStatisticsController {
             additionalProperties: { type: 'number' }
           }
         },
+        distributionByCoderId: {
+          type: 'object',
+          description: 'Case distribution matrix keyed by coder ID',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          }
+        },
         doubleCodingInfo: {
           type: 'object',
           description: 'Double coding information',
@@ -891,6 +1348,8 @@ export class WorkspaceCodingStatisticsController {
             type: 'object',
             properties: {
               totalCases: { type: 'number' },
+              distinctCases: { type: 'number' },
+              codingTasksTotal: { type: 'number' },
               doubleCodedCases: { type: 'number' },
               singleCodedCasesAssigned: { type: 'number' },
               doubleCodedCasesPerCoder: {
@@ -899,6 +1358,36 @@ export class WorkspaceCodingStatisticsController {
               }
             }
           }
+        },
+        aggregationInfo: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            properties: {
+              uniqueCases: { type: 'number' },
+              totalResponses: { type: 'number' }
+            }
+          }
+        },
+        matchingFlags: {
+          type: 'array',
+          items: { type: 'string' }
+        },
+        warnings: {
+          type: 'array',
+          items: { type: 'object' }
+        },
+        pairDistribution: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        tasksPerCoder: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        coderWeights: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
         }
       }
     }
@@ -911,26 +1400,23 @@ export class WorkspaceCodingStatisticsController {
                      selectedVariableBundles?: {
                        id: number;
                        name: string;
+                       caseOrderingMode?: 'continuous' | 'alternating';
                        variables: { unitName: string; variableId: string }[];
                      }[];
-                     selectedCoders: { id: number; name: string; username: string }[];
+                     selectedCoders: {
+                       id: number;
+                       name: string;
+                       username: string;
+                       weight?: number;
+                       capacityPercent?: number;
+                     }[];
                      doubleCodingAbsolute?: number;
                      doubleCodingPercentage?: number;
                      caseOrderingMode?: 'continuous' | 'alternating';
                      maxCodingCases?: number;
+                     distributionSeed?: string | number;
                    }
-  ): Promise<{
-        distribution: Record<string, Record<string, number>>;
-        doubleCodingInfo: Record<
-        string,
-        {
-          totalCases: number;
-          doubleCodedCases: number;
-          singleCodedCasesAssigned: number;
-          doubleCodedCasesPerCoder: Record<string, number>;
-        }
-        >;
-      }> {
+  ): Promise<DistributionCalculationResponse> {
     return this.codingJobService.calculateDistribution(workspace_id, body);
   }
 
@@ -981,13 +1467,18 @@ export class WorkspaceCodingStatisticsController {
             properties: {
               id: { type: 'number' },
               name: { type: 'string' },
-              username: { type: 'string' }
+              username: { type: 'string' },
+              weight: { type: 'number' },
+              capacityPercent: { type: 'number' }
             }
           }
         },
         doubleCodingAbsolute: { type: 'number' },
         doubleCodingPercentage: { type: 'number' },
-        jobDefinitionId: { type: 'number' }
+        distributionSeed: { type: 'string' },
+        showScore: { type: 'boolean' },
+        allowComments: { type: 'boolean' },
+        suppressGeneralInstructions: { type: 'boolean' }
       },
       required: ['selectedVariables', 'selectedCoders']
     }
@@ -1008,6 +1499,14 @@ export class WorkspaceCodingStatisticsController {
             additionalProperties: { type: 'number' }
           }
         },
+        distributionByCoderId: {
+          type: 'object',
+          description: 'Case distribution matrix keyed by coder ID',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          }
+        },
         doubleCodingInfo: {
           type: 'object',
           description: 'Double coding information',
@@ -1015,6 +1514,8 @@ export class WorkspaceCodingStatisticsController {
             type: 'object',
             properties: {
               totalCases: { type: 'number' },
+              distinctCases: { type: 'number' },
+              codingTasksTotal: { type: 'number' },
               doubleCodedCases: { type: 'number' },
               singleCodedCasesAssigned: { type: 'number' },
               doubleCodedCasesPerCoder: {
@@ -1024,11 +1525,42 @@ export class WorkspaceCodingStatisticsController {
             }
           }
         },
+        aggregationInfo: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            properties: {
+              uniqueCases: { type: 'number' },
+              totalResponses: { type: 'number' }
+            }
+          }
+        },
+        matchingFlags: {
+          type: 'array',
+          items: { type: 'string' }
+        },
+        warnings: {
+          type: 'array',
+          items: { type: 'object' }
+        },
+        pairDistribution: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        tasksPerCoder: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        coderWeights: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
         jobs: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
+              itemKey: { type: 'string' },
               coderId: { type: 'number' },
               coderName: { type: 'string' },
               variable: {
@@ -1058,36 +1590,33 @@ export class WorkspaceCodingStatisticsController {
                        caseOrderingMode?: 'continuous' | 'alternating';
                        variables: { unitName: string; variableId: string }[];
                      }[];
-                     selectedCoders: { id: number; name: string; username: string }[];
+                     selectedCoders: {
+                       id: number;
+                       name: string;
+                       username: string;
+                       weight?: number;
+                       capacityPercent?: number;
+                     }[];
                      doubleCodingAbsolute?: number;
                      doubleCodingPercentage?: number;
                      caseOrderingMode?: 'continuous' | 'alternating';
                      maxCodingCases?: number;
-                     jobDefinitionId?: number;
+                     distributionSeed?: string | number;
+                     showScore?: boolean;
+                     allowComments?: boolean;
+                     suppressGeneralInstructions?: boolean;
                    }
-  ): Promise<{
-        success: boolean;
-        jobsCreated: number;
-        message: string;
-        distribution: Record<string, Record<string, number>>;
-        doubleCodingInfo: Record<
-        string,
-        {
-          totalCases: number;
-          doubleCodedCases: number;
-          singleCodedCasesAssigned: number;
-          doubleCodedCasesPerCoder: Record<string, number>;
-        }
-        >;
-        jobs: Array<{
-          coderId: number;
-          coderName: string;
-          variable: { unitName: string; variableId: string };
-          jobId: number;
-          jobName: string;
-          caseCount: number;
-        }>;
-      }> {
+  ): Promise<DistributedCodingJobsResponse> {
+    if (!body) {
+      throw new BadRequestException('Request body is required');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'jobDefinitionId')) {
+      throw new BadRequestException(
+        'Use the job definition endpoint to create coding jobs from a job definition'
+      );
+    }
+
     return this.codingJobService.createDistributedCodingJobs(workspace_id, body);
   }
 }

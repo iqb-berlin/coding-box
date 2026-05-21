@@ -329,7 +329,7 @@ export class UnitSearchDialogComponent implements OnInit {
 
   replayUnit(item: UnitSearchResult | ResponseSearchResult): void {
     this.appService
-      .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
+      .createOwnToken(this.appService.selectedWorkspaceId, 1)
       .subscribe(token => {
         const queryParams = {
           auth: token
@@ -587,8 +587,10 @@ export class UnitSearchDialogComponent implements OnInit {
         loadingSnackBar.dismiss();
 
         this.dialog.open(BookletInfoDialogComponent, {
-          width: '1200px',
-          height: '80vh',
+          width: 'min(96vw, 1400px)',
+          maxWidth: '96vw',
+          height: '92vh',
+          maxHeight: '92vh',
           data: {
             bookletInfo,
             bookletId: booklet.bookletName

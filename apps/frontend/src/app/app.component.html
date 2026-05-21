@@ -29,7 +29,7 @@
           <span class="workspace-name" [matTooltip]="currentWorkspaceName">{{ currentWorkspaceName }}</span>
         }
 
-        @if (authData.isAdmin || authService.getRoles().includes('admin')) {
+        @if (isAdminUser()) {
           <button
             mat-button
             class="icon-button-large admin-button"

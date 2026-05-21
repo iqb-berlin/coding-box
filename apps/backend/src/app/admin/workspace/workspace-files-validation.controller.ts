@@ -20,7 +20,10 @@ import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceFilesService } from '../../database/services/workspace';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
-import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
+import {
+  InvalidVariableDto,
+  VariableValidationSummaryDto
+} from '../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
 import { CacheService } from '../../cache/cache.service';
@@ -232,6 +235,7 @@ export class WorkspaceFilesValidationController {
         total: number;
         page: number;
         limit: number;
+        summary: VariableValidationSummaryDto;
       }> {
     return this.workspaceFilesService.validateVariables(
       workspace_id,

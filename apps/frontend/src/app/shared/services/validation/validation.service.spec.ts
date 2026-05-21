@@ -45,7 +45,14 @@ describe('ValidationService', () => {
   describe('validateVariables', () => {
     it('should fetch variables validation results', () => {
       const mockResponse = {
-        data: [], total: 0, page: 1, limit: 10
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 10,
+        summary: {
+          unitFileNotFound: 0,
+          variableNotDefinedInUnit: 0
+        }
       };
 
       service.validateVariables(mockWorkspaceId, 1, 10).subscribe(res => {
@@ -70,12 +77,21 @@ describe('ValidationService', () => {
       req.flush(mockResponse);
     });
 
-    it('should return default on error', () => {
-      service.validateVariableTypes(mockWorkspaceId, 1, 10).subscribe(res => {
-        expect(res.total).toBe(0);
+    it('should propagate errors', () => {
+      let receivedError: unknown;
+
+      service.validateVariableTypes(mockWorkspaceId, 1, 10).subscribe({
+        next: () => {
+          throw new Error('Expected validation request to fail');
+        },
+        error: error => {
+          receivedError = error;
+        }
       });
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/files/validate-variable-types?page=1&limit=10`);
       req.error(new ErrorEvent('Network error'));
+
+      expect(receivedError).toBeTruthy();
     });
   });
 
@@ -192,11 +208,12 @@ describe('ValidationService', () => {
         });
 
       const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks` &&
-        request.params.get('type') === 'deleteResponses' &&
-        request.params.get('list') === '1,2' &&
-        request.params.get('single') === 'test'
+        request.params.get('type') === 'deleteResponses'
       );
       expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ additionalData });
+      expect(req.request.params.has('list')).toBe(false);
+      expect(req.request.params.has('single')).toBe(false);
       req.flush(mockTask);
     });
   });

@@ -43,6 +43,26 @@ export interface ResetVersionDialogData {
           <p class="version-value">{{ versionLabel | translate }}</p>
         </div>
 
+        <div class="result-impact-info">
+          <p class="info-heading">
+            <mat-icon class="info-icon">rule</mat-icon>
+            {{ 'coding-management.reset-dialog.result-impact-title' | translate }}
+          </p>
+          <p class="info-text">
+            {{ resultImpactKey | translate }}
+          </p>
+          <p class="technical-fields">
+            {{ 'coding-management.reset-dialog.technical-fields' | translate }}
+            @for (version of resetVersions; track version) {
+              <span class="field-group">
+                <code>status_{{ version }}</code>,
+                <code>code_{{ version }}</code>,
+                <code>score_{{ version }}</code>
+              </span>
+            }
+          </p>
+        </div>
+
         @if (cascadeVersions && cascadeVersions.length > 0) {
           <div class="cascade-info">
             <p class="cascade-warning">
@@ -57,6 +77,16 @@ export interface ResetVersionDialogData {
             </p>
           </div>
         }
+
+        <div class="job-preservation-info">
+          <p class="info-heading">
+            <mat-icon class="info-icon">work_history</mat-icon>
+            {{ 'coding-management.reset-dialog.jobs-preserved-title' | translate }}
+          </p>
+          <p class="info-text">
+            {{ 'coding-management.reset-dialog.jobs-preserved-text' | translate }}
+          </p>
+        </div>
 
         <p class="irreversible-warning">
           <mat-icon class="danger-icon">error</mat-icon>
@@ -191,6 +221,65 @@ export interface ResetVersionDialogData {
         }
       }
 
+      .result-impact-info,
+      .job-preservation-info {
+        padding: 12px 16px;
+        border-radius: 4px;
+
+        .info-heading {
+          margin: 0 0 8px 0;
+          font-size: 13px;
+          font-weight: 500;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          .info-icon {
+            font-size: 18px;
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+          }
+        }
+
+        .info-text {
+          margin: 0;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+
+        .technical-fields {
+          margin: 8px 0 0 0;
+          font-size: 12px;
+          line-height: 1.5;
+          color: #455a64;
+
+          code {
+            padding: 1px 4px;
+            border-radius: 3px;
+            background-color: rgba(69, 90, 100, 0.12);
+            font-family: monospace;
+          }
+
+          .field-group {
+            display: inline-block;
+            margin-right: 4px;
+          }
+        }
+      }
+
+      .result-impact-info {
+        background-color: #fff8e1;
+        border-left: 4px solid #ffa000;
+        color: #5d4037;
+      }
+
+      .job-preservation-info {
+        background-color: #e8f5e9;
+        border-left: 4px solid #43a047;
+        color: #1b5e20;
+      }
+
       .irreversible-warning {
         margin: 0;
         padding: 8px 12px;
@@ -254,6 +343,8 @@ export interface ResetVersionDialogData {
 export class ResetVersionDialogComponent {
   versionLabel: string;
   cascadeVersions: string[] = [];
+  resetVersions: string[] = [];
+  resultImpactKey: string;
 
   constructor(
     public dialogRef: MatDialogRef<ResetVersionDialogComponent>,
@@ -261,6 +352,8 @@ export class ResetVersionDialogComponent {
   ) {
     this.versionLabel = data.versionLabel;
     this.cascadeVersions = data.cascadeVersions || [];
+    this.resetVersions = [data.version, ...this.cascadeVersions];
+    this.resultImpactKey = `coding-management.reset-dialog.result-impact.${data.version}`;
   }
 
   onCancel(): void {

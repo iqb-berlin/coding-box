@@ -1,7 +1,7 @@
 import {
   Injectable, Logger, BadRequestException, ForbiddenException
 } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { In, MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import User from '../../entities/user.entity';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
@@ -25,7 +25,7 @@ export class UsersService {
     const validUsers = new Set<number>();
     if (workspaceId) {
       const workspaceUsers = await this.workspaceUserRepository.find({
-        where: { workspaceId },
+        where: { workspaceId, accessLevel: MoreThan(0) },
         select: ['userId']
       });
       workspaceUsers.forEach(wsUser => validUsers.add(wsUser.userId));
@@ -43,36 +43,139 @@ export class UsersService {
   async getUsersWithWorkspaceAccess(workspaceId?: number): Promise<WorkspaceUserInListDto[]> {
     this.logger.log(`Returning users${workspaceId ? ` for workspaceId: ${workspaceId}` : '.'}`);
     const validUsers = workspaceId ?
-      await this.workspaceUserRepository.find({ where: { workspaceId } }) :
+      await this.workspaceUserRepository.find({ where: { workspaceId, accessLevel: MoreThan(0) } }) :
       [];
     const validUserMap = new Map(
-      validUsers.map(wsUser => [wsUser.userId, wsUser.accessLevel])
+      validUsers.map(wsUser => [wsUser.userId, {
+        accessLevel: wsUser.accessLevel,
+        canCode: wsUser.canCode
+      }])
     );
     const users = await this.usersRepository.find();
     return users
       .filter(user => !workspaceId || validUserMap.has(user.id))
-      .map(user => ({
-        id: user.id,
-        name: user.username, // Assuming "name" is the same as "username"
-        username: user.username,
-        accessLevel: validUserMap.get(user.id) || 0, // Default accessLevel is 0 if not found
-        isAdmin: user.isAdmin
-      }));
+      .map(user => {
+        const workspaceAccess = validUserMap.get(user.id);
+        return {
+          id: user.id,
+          name: user.username, // Assuming "name" is the same as "username"
+          username: user.username,
+          accessLevel: workspaceAccess?.accessLevel || 0, // Default accessLevel is 0 if not found
+          canCode: workspaceAccess?.canCode ?? (workspaceAccess?.accessLevel === 1),
+          isAdmin: user.isAdmin
+        };
+      });
   }
 
   async updateUsersAccess(workspaceId: number, users: UserInListDto[]): Promise<boolean> {
     this.logger.log('Patch users access rights');
-    const updatePromises = users
-      .map(user => this.workspaceUserRepository
-        .update({ workspaceId: workspaceId, userId: user.id }, { accessLevel: user.accessLevel })
-      );
-    await Promise.all(updatePromises);
+    const normalizedWorkspaceId = Number(workspaceId);
+    if (!Number.isInteger(normalizedWorkspaceId) || normalizedWorkspaceId < 1) {
+      throw new BadRequestException('Workspace ID must be a positive integer.');
+    }
+
+    if (!Array.isArray(users)) {
+      throw new BadRequestException('Users access payload must be an array.');
+    }
+
+    const seenUserIds = new Set<number>();
+    const userIdsToDelete: number[] = [];
+    const usersToUpsert: WorkspaceUser[] = [];
+
+    users.forEach(user => {
+      const userId = Number(user.id);
+      const accessLevel = Number(user.accessLevel ?? 0);
+
+      if (!Number.isInteger(userId) || userId < 1) {
+        throw new BadRequestException('User IDs must be positive integers.');
+      }
+      if (seenUserIds.has(userId)) {
+        throw new BadRequestException(`Duplicate user ID in access payload: ${userId}.`);
+      }
+      if (!Number.isInteger(accessLevel) || accessLevel < 0 || accessLevel > 3) {
+        throw new BadRequestException('Access level must be an integer between 0 and 3.');
+      }
+
+      seenUserIds.add(userId);
+
+      if (accessLevel <= 0) {
+        userIdsToDelete.push(userId);
+        return;
+      }
+
+      usersToUpsert.push({
+        workspaceId: normalizedWorkspaceId,
+        userId,
+        accessLevel,
+        canCode: user.canCode ?? (accessLevel === 1)
+      });
+    });
+
+    if (userIdsToDelete.length > 0) {
+      await this.workspaceUserRepository.delete({
+        workspaceId: normalizedWorkspaceId,
+        userId: In(userIdsToDelete)
+      });
+    }
+
+    if (usersToUpsert.length > 0) {
+      await this.workspaceUserRepository.upsert(usersToUpsert, ['workspaceId', 'userId']);
+    }
+
     return true;
+  }
+
+  async assertUsersCanCodeInWorkspace(userIds: number[], workspaceId: number): Promise<void> {
+    const uniqueUserIds = Array.from(new Set(userIds));
+    if (uniqueUserIds.length === 0) {
+      return;
+    }
+
+    const invalidUserId = uniqueUserIds.find(userId => !Number.isInteger(userId) || userId < 1);
+    if (invalidUserId !== undefined) {
+      throw new BadRequestException('Selected coders must have positive integer IDs.');
+    }
+
+    const coderRows = await this.workspaceUserRepository.find({
+      where: {
+        workspaceId,
+        userId: In(uniqueUserIds),
+        accessLevel: MoreThan(0),
+        canCode: true
+      },
+      select: ['userId']
+    });
+    const coderUserIds = new Set(coderRows.map(row => row.userId));
+    const missingUserIds = uniqueUserIds.filter(userId => !coderUserIds.has(userId));
+
+    if (missingUserIds.length > 0) {
+      throw new BadRequestException(
+        `User(s) ${missingUserIds.join(', ')} are not enabled as coders in workspace ${workspaceId}.`
+      );
+    }
+  }
+
+  async canUserCodeInWorkspace(userId: number, workspaceId: number): Promise<boolean> {
+    if (!Number.isInteger(userId) || userId < 1) {
+      return false;
+    }
+
+    const workspaceUser = await this.workspaceUserRepository.findOne({
+      where: {
+        workspaceId,
+        userId,
+        accessLevel: MoreThan(0),
+        canCode: true
+      },
+      select: ['userId']
+    });
+
+    return !!workspaceUser;
   }
 
   async canAccessWorkSpace(userId: number, workspaceId: number): Promise<boolean> {
     const wsUser = await this.workspaceUserRepository.findOne({
-      where: { userId: userId, workspaceId: workspaceId }
+      where: { userId: userId, workspaceId: workspaceId, accessLevel: MoreThan(0) }
     });
     if (wsUser) return true;
     const user = await this.usersRepository.findOne({
@@ -92,7 +195,7 @@ export class UsersService {
   async getUserWorkspaces(userId: number): Promise<number[]> {
     this.logger.log(`Retrieving workspace IDs for user with ID: ${userId}`);
     const workspaces = await this.workspaceUserRepository
-      .find({ where: { userId: userId } });
+      .find({ where: { userId: userId, accessLevel: MoreThan(0) } });
     const workspaceIds = workspaces
       .map(workspace => workspace.workspaceId);
     return workspaceIds || [];
@@ -104,6 +207,23 @@ export class UsersService {
 
     if (!user) {
       this.logger.warn(`User with identity ${id} not found.`);
+      return null;
+    }
+    this.logger.log(`Returning user with id: ${user.id}`);
+
+    return {
+      id: user.id,
+      username: user.username,
+      isAdmin: user.isAdmin
+    } as UserFullDto;
+  }
+
+  async findUserById(userId: number): Promise<UserFullDto | null> {
+    this.logger.log(`Searching for user with id: ${userId}`);
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      this.logger.warn(`User with id ${userId} not found.`);
       return null;
     }
     this.logger.log(`Returning user with id: ${user.id}`);
@@ -128,7 +248,12 @@ export class UsersService {
 
   async assignUserWorkspaces(userId: number, workspaceIds: number[]): Promise<boolean> {
     this.logger.log(`Setting workspaces for user with ID: ${userId}`);
-    const entries = workspaceIds.map(workspaceId => ({ userId, workspaceId, accessLevel: 3 }));
+    const entries = workspaceIds.map(workspaceId => ({
+      userId,
+      workspaceId,
+      accessLevel: 3,
+      canCode: false
+    }));
     try {
       const hasRights = await this.workspaceUserRepository.findOne({ where: { userId } });
       if (hasRights) {
@@ -232,9 +357,10 @@ export class UsersService {
 
     if (existingUser) {
       const updatedFields: Partial<User> = {};
+      const nextIsAdmin = existingUser.isAdmin || isAdmin;
       if (identity && existingUser.identity !== identity) updatedFields.identity = identity;
       if (issuer && existingUser.issuer !== issuer) updatedFields.issuer = issuer;
-      if (existingUser.isAdmin !== isAdmin) updatedFields.isAdmin = isAdmin;
+      if (existingUser.isAdmin !== nextIsAdmin) updatedFields.isAdmin = nextIsAdmin;
 
       if (Object.keys(updatedFields).length > 0) {
         await this.usersRepository.update({ id: existingUser.id }, updatedFields);

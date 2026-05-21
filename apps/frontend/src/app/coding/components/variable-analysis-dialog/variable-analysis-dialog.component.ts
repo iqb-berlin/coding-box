@@ -26,7 +26,6 @@ import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
-import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
 export interface VariableAnalysisDialogData {
   workspaceId: number;
@@ -38,13 +37,36 @@ export interface VariableAnalysisDialogData {
   };
 }
 
+function createVariableAnalysisPaginatorIntl(): MatPaginatorIntl {
+  const paginatorIntl = new MatPaginatorIntl();
+
+  paginatorIntl.itemsPerPageLabel = 'Zeilen pro Seite:';
+  paginatorIntl.nextPageLabel = 'Nächste Seite';
+  paginatorIntl.previousPageLabel = 'Vorherige Seite';
+  paginatorIntl.firstPageLabel = 'Erste Seite';
+  paginatorIntl.lastPageLabel = 'Letzte Seite';
+
+  paginatorIntl.getRangeLabel = (page: number, pageSize: number, length: number): string => {
+    if (length === 0 || pageSize === 0) {
+      return '0 - 0 von 0 Verteilungszeilen';
+    }
+
+    const startIndex = page * pageSize + 1;
+    const endIndex = Math.min((page + 1) * pageSize, length);
+
+    return `${startIndex} - ${endIndex} von ${length} Verteilungszeilen`;
+  };
+
+  return paginatorIntl;
+}
+
 @Component({
   selector: 'coding-box-variable-analysis-dialog',
   templateUrl: './variable-analysis-dialog.component.html',
   styleUrls: ['./variable-analysis-dialog.component.scss'],
   standalone: true,
   providers: [
-    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
+    { provide: MatPaginatorIntl, useFactory: createVariableAnalysisPaginatorIntl }
   ],
   imports: [
     CommonModule,
@@ -64,6 +86,18 @@ export interface VariableAnalysisDialogData {
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit {
+  readonly distributionRowsTooltip =
+    'Eine Verteilungszeile entspricht einer Kombination aus Aufgaben-ID, Variablen-ID und Code.';
+
+  readonly occurrenceCountTooltip =
+    'Wie oft dieser konkrete Code bei dieser Aufgabe und Variable vorkommt.';
+
+  readonly totalCountTooltip =
+    'Alle Antworten zu dieser Aufgabe und Variable, unabhängig vom Code.';
+
+  readonly relativeOccurrenceTooltip =
+    'Vorkommen dieses Codes geteilt durch die Antworten gesamt zu dieser Aufgabe und Variable.';
+
   variableAnalysisData: VariableAnalysisItemDto[] = [];
   variableAnalysisDataSource = new MatTableDataSource<VariableAnalysisItemDto>([]);
   variableAnalysisColumns: string[] = [
@@ -75,7 +109,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
   totalVariableAnalysisRecords = 0;
   variableAnalysisPageIndex = 0;
   variableAnalysisPageSize = 200;
-  variableAnalysisPageSizeOptions = [100, 200, 500, 1000];
+  variableAnalysisPageSizeOptions = [100, 200, 500];
   unitIdFilter = '';
   variableIdFilter = '';
   isLoadingVariableAnalysis = false;
@@ -144,7 +178,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
         },
         error: () => {
           this.isLoadingVariableAnalysis = false;
-          this.snackBar.open('Fehler beim Abrufen der Variablenanalyse', 'Schließen', {
+          this.snackBar.open('Fehler beim Abrufen der Code-/Score-Verteilung', 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });

@@ -11,18 +11,25 @@ import { BookletInfo } from '../../entities/bookletInfo.entity';
 import { BookletLog } from '../../entities/bookletLog.entity';
 import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
+import { UnitLastState } from '../../entities/unitLastState.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
+import { UnitTag } from '../../entities/unitTag.entity';
+import { UnitNote } from '../../entities/unitNote.entity';
+import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
+import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 const mockQueryBuilder = () => ({
   select: jest.fn().mockReturnThis(),
   addSelect: jest.fn().mockReturnThis(),
+  from: jest.fn().mockReturnThis(),
   where: jest.fn().mockReturnThis(),
   andWhere: jest.fn().mockReturnThis(),
   groupBy: jest.fn().mockReturnThis(),
@@ -40,12 +47,18 @@ const mockQueryBuilder = () => ({
   stream: jest.fn(),
   getRawOne: jest.fn().mockResolvedValue({}),
   clone: jest.fn().mockReturnThis(),
+  getQueryAndParameters: jest.fn().mockReturnValue([
+    'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response',
+    []
+  ]),
   setParameter: jest.fn().mockReturnThis(),
   addGroupBy: jest.fn().mockReturnThis(),
   addOrderBy: jest.fn().mockReturnThis(),
   offset: jest.fn().mockReturnThis(),
   limit: jest.fn().mockReturnThis(),
-  distinct: jest.fn().mockReturnThis()
+  distinct: jest.fn().mockReturnThis(),
+  delete: jest.fn().mockReturnThis(),
+  execute: jest.fn().mockResolvedValue({ affected: 0 })
 });
 
 describe('WorkspaceTestResultsService', () => {
@@ -62,7 +75,19 @@ describe('WorkspaceTestResultsService', () => {
   let sessionRepository: Repository<Session>;
   let bookletLogRepository: Repository<BookletLog>;
   let chunkRepository: Repository<ChunkEntity>;
+  let codingListService: {
+    getVariablePageMap: jest.Mock;
+    getValidVariablePairKeys: jest.Mock;
+  };
   let codingValidationService: CodingValidationService;
+  let codingStatisticsService: CodingStatisticsService;
+  let cacheService: {
+    generateUnitResponseCacheKey: jest.Mock;
+    get: jest.Mock;
+    set: jest.Mock;
+    delete: jest.Mock;
+    deleteByPattern: jest.Mock;
+  };
   let dataSource: DataSource;
 
   beforeAll(() => {
@@ -98,9 +123,22 @@ describe('WorkspaceTestResultsService', () => {
       invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
     } as unknown as CodingValidationService;
 
+    codingStatisticsService = {
+      invalidateCache: jest.fn().mockResolvedValue(undefined)
+    } as unknown as CodingStatisticsService;
+
     journalService = {
-      createEntry: jest.fn().mockResolvedValue(undefined)
+      createEntry: jest.fn().mockResolvedValue(undefined),
+      recordEvent: jest.fn().mockResolvedValue(undefined)
     } as unknown as JournalService;
+
+    cacheService = {
+      generateUnitResponseCacheKey: jest.fn((workspaceId: number, connector: string, unitId: string) => `${workspaceId}:${connector}:${unitId}`),
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn().mockResolvedValue(undefined),
+      deleteByPattern: jest.fn().mockResolvedValue(undefined)
+    };
 
     personsRepository = {
       count: jest.fn(),
@@ -129,13 +167,26 @@ describe('WorkspaceTestResultsService', () => {
     } as unknown as Repository<BookletLog>;
 
     chunkRepository = {
-      createQueryBuilder: jest.fn(() => mockQueryBuilder())
+      createQueryBuilder: jest.fn(() => mockQueryBuilder()),
+      find: jest.fn().mockResolvedValue([])
     } as unknown as Repository<ChunkEntity>;
 
+    codingListService = {
+      getVariablePageMap: jest.fn().mockResolvedValue(new Map()),
+      getValidVariablePairKeys: jest.fn().mockResolvedValue(['Unit1\u001Fvar1', 'Unit2\u001Fvar2'])
+    };
+
     dataSource = {
+      createQueryRunner: jest.fn().mockReturnValue({
+        connect: jest.fn().mockResolvedValue(undefined),
+        query: jest.fn().mockResolvedValue([]),
+        release: jest.fn().mockResolvedValue(undefined)
+      }),
+      createQueryBuilder: jest.fn(() => mockQueryBuilder()),
       getRepository: jest.fn().mockReturnValue({
         createQueryBuilder: jest.fn(() => mockQueryBuilder())
       }),
+      query: jest.fn().mockResolvedValue([]),
       transaction: jest.fn()
     } as unknown as DataSource;
 
@@ -152,13 +203,341 @@ describe('WorkspaceTestResultsService', () => {
       dataSource,
       unitTagService,
       journalService,
-      { get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue(undefined) } as unknown as CacheService,
-      {} as unknown as CodingListService,
+      cacheService as unknown as CacheService,
+      codingListService as unknown as CodingListService,
       codingValidationService,
       responseManagementService,
       workspaceCoreService,
-      workspaceExclusionService
+      workspaceExclusionService,
+      undefined,
+      codingStatisticsService
     );
+  });
+
+  describe('previewDeleteTestResults', () => {
+    it('uses overview-compatible counts for bulk deletion previews', async () => {
+      const workspaceId = 1;
+      const targetQb = mockQueryBuilder();
+      const personsCountQb = mockQueryBuilder();
+      const bookletsCountQb = mockQueryBuilder();
+      const unitsCountQb = mockQueryBuilder();
+      const responsesCountQb = mockQueryBuilder();
+      const metadataQb = mockQueryBuilder();
+
+      (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(targetQb);
+      targetQb.getMany.mockResolvedValue([{ id: 10 }, { id: 11 }]);
+      (dataSource.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(personsCountQb)
+        .mockReturnValueOnce(bookletsCountQb)
+        .mockReturnValueOnce(unitsCountQb)
+        .mockReturnValueOnce(responsesCountQb)
+        .mockReturnValueOnce(metadataQb);
+      (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
+        globalIgnoredUnits: ['IGNORED_UNIT.XML'],
+        ignoredBooklets: ['IGNORED_BOOKLET'],
+        testletIgnoredUnits: []
+      });
+
+      personsCountQb.getRawOne.mockResolvedValue({ count: '2' });
+      bookletsCountQb.getRawOne.mockResolvedValue({ count: '4' });
+      unitsCountQb.getRawOne.mockResolvedValue({ count: '33' });
+      responsesCountQb.getRawOne.mockResolvedValue({ count: '10725' });
+      metadataQb.getRawOne.mockResolvedValue({
+        groups: ['G1'],
+        bookletNames: ['BOOKLET_1'],
+        unitNames: ['UNIT_1']
+      });
+
+      const result = await service.previewDeleteTestResults(workspaceId, {
+        scope: 'filteredPersons'
+      });
+
+      expect(result).toMatchObject({
+        persons: 2,
+        booklets: 4,
+        units: 33,
+        responses: 10725
+      });
+      expect(bookletsCountQb.select).toHaveBeenCalledWith(
+        'COUNT(DISTINCT bookletinfo.name)',
+        'count'
+      );
+      expect(unitsCountQb.select).toHaveBeenCalledWith(
+        'COUNT(DISTINCT COALESCE(unit.alias, unit.name))',
+        'count'
+      );
+      expect(bookletsCountQb.andWhere).toHaveBeenCalledWith(
+        'UPPER(bookletinfo.name) NOT IN (:...ignoredBookletsOnly)',
+        { ignoredBookletsOnly: ['IGNORED_BOOKLET'] }
+      );
+      expect(unitsCountQb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining("REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') NOT IN"),
+        expect.objectContaining({ workspaceExclusionIgnoredUnits: ['IGNORED_UNIT'] })
+      );
+      expect(responsesCountQb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+    });
+  });
+
+  describe('bulk deletion safety', () => {
+    it('previews log deletion with log-specific counts', async () => {
+      const privateService = service as unknown as {
+        resolveDeleteTargets: jest.Mock;
+        collectLogDeleteSnapshot: jest.Mock;
+        getLogDeleteCounts: jest.Mock;
+      };
+      const resolveSpy = jest
+        .spyOn(privateService, 'resolveDeleteTargets')
+        .mockResolvedValue({
+          kind: 'booklets',
+          ids: [20],
+          preview: {
+            scope: 'booklets',
+            label: 'Testheft(e): BOOKLET_1',
+            persons: 1,
+            booklets: 1,
+            units: 3,
+            responses: 9,
+            groups: ['G1'],
+            bookletNames: ['BOOKLET_1'],
+            unitNames: ['UNIT_1'],
+            warnings: []
+          }
+        });
+      const snapshotSpy = jest
+        .spyOn(privateService, 'collectLogDeleteSnapshot')
+        .mockResolvedValue({
+          bookletIds: [20],
+          unitIds: [30, 31, 32]
+        });
+      const countsSpy = jest
+        .spyOn(privateService, 'getLogDeleteCounts')
+        .mockResolvedValue({
+          bookletLogs: 4,
+          unitLogs: 12,
+          sessions: 1
+        });
+
+      const result = await service.previewDeleteTestLogs(1, {
+        scope: 'booklets',
+        bookletNames: ['BOOKLET_1']
+      });
+
+      expect(result).toMatchObject({
+        targetType: 'logs',
+        bookletLogs: 4,
+        unitLogs: 12,
+        sessions: 1,
+        responses: 9
+      });
+
+      resolveSpy.mockRestore();
+      snapshotSpy.mockRestore();
+      countsSpy.mockRestore();
+    });
+
+    it('deletes only log and session tables for log deletion jobs', async () => {
+      const deletedFrom: unknown[] = [];
+      const manager = {
+        createQueryBuilder: jest.fn(() => {
+          const qb = {} as {
+            delete: jest.Mock;
+            from: jest.Mock;
+            where: jest.Mock;
+            execute: jest.Mock;
+          };
+          qb.delete = jest.fn(() => qb);
+          qb.from = jest.fn((entity: unknown) => {
+            deletedFrom.push(entity);
+            return qb;
+          });
+          qb.where = jest.fn(() => qb);
+          qb.execute = jest.fn().mockResolvedValue({ affected: 1 });
+          return qb;
+        })
+      };
+      const privateService = service as unknown as {
+        resolveDeleteTargets: jest.Mock;
+        buildLogDeletePreview: jest.Mock;
+        collectLogDeleteSnapshot: jest.Mock;
+        assertLogDeleteCompleted: jest.Mock;
+      };
+      const resolveSpy = jest
+        .spyOn(privateService, 'resolveDeleteTargets')
+        .mockResolvedValue({
+          kind: 'persons',
+          ids: [10],
+          preview: {
+            scope: 'persons',
+            label: '1 ausgewählte Testperson(en)',
+            persons: 1,
+            booklets: 1,
+            units: 2,
+            responses: 8,
+            groups: [],
+            bookletNames: [],
+            unitNames: [],
+            warnings: []
+          }
+        });
+      const previewSpy = jest
+        .spyOn(privateService, 'buildLogDeletePreview')
+        .mockResolvedValue({
+          targetType: 'logs',
+          scope: 'persons',
+          label: '1 ausgewählte Testperson(en)',
+          persons: 1,
+          booklets: 1,
+          units: 2,
+          responses: 8,
+          bookletLogs: 2,
+          unitLogs: 3,
+          sessions: 1,
+          groups: [],
+          bookletNames: [],
+          unitNames: [],
+          warnings: []
+        });
+      const snapshotSpy = jest
+        .spyOn(privateService, 'collectLogDeleteSnapshot')
+        .mockResolvedValue({
+          bookletIds: [20],
+          unitIds: [30, 31]
+        });
+      const assertSpy = jest
+        .spyOn(privateService, 'assertLogDeleteCompleted')
+        .mockResolvedValue(undefined);
+
+      (dataSource.transaction as jest.Mock).mockImplementation(cb => cb(manager));
+      (journalService.recordEvent as jest.Mock).mockRejectedValueOnce(new Error('audit down'));
+
+      const result = await service.deleteTestLogsByRequest(
+        1,
+        { scope: 'persons', personIds: [10] },
+        'user-1'
+      );
+
+      expect(deletedFrom).toEqual([UnitLog, BookletLog, Session]);
+      expect(deletedFrom).not.toContain(ResponseEntity);
+      expect(deletedFrom).not.toContain(Booklet);
+      expect(result).toMatchObject({
+        targetType: 'logs',
+        deletedBookletLogs: 1,
+        deletedUnitLogs: 1,
+        deletedSessions: 1,
+        deletedTargetCount: 3
+      });
+      expect(cacheService.delete).toHaveBeenCalledWith(
+        'workspace-overview-stats-1'
+      );
+      expect(journalService.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: 1,
+          actorUserId: 'user-1',
+          eventType: 'TEST_LOGS_DELETED',
+          entityType: 'test-logs',
+          entityId: null,
+          result: 'success',
+          summary: 'Test logs deleted by bulk job',
+          details: expect.objectContaining({
+            deletedTargetCount: 3
+          })
+        })
+      );
+
+      resolveSpy.mockRestore();
+      previewSpy.mockRestore();
+      snapshotSpy.mockRestore();
+      assertSpy.mockRestore();
+    });
+
+    it('explicitly deletes known unit dependents before removing unit targets', async () => {
+      const deletedFrom: unknown[] = [];
+      const manager = {
+        createQueryBuilder: jest.fn(() => {
+          const qb = {} as {
+            delete: jest.Mock;
+            from: jest.Mock;
+            where: jest.Mock;
+            execute: jest.Mock;
+          };
+          qb.delete = jest.fn(() => qb);
+          qb.from = jest.fn((entity: unknown) => {
+            deletedFrom.push(entity);
+            return qb;
+          });
+          qb.where = jest.fn(() => qb);
+          qb.execute = jest.fn().mockResolvedValue({ affected: 1 });
+          return qb;
+        })
+      };
+      const privateService = service as unknown as {
+        deleteKnownDeleteDependents: (
+          managerArg: unknown,
+          kind: 'units',
+          snapshot: {
+            bookletIds: number[];
+            unitIds: number[];
+            responseIds: number[];
+            bookletInfoIds: number[];
+          }
+        ) => Promise<void>;
+      };
+
+      await privateService.deleteKnownDeleteDependents(manager, 'units', {
+        bookletIds: [],
+        unitIds: [100],
+        responseIds: [500],
+        bookletInfoIds: []
+      });
+
+      expect(deletedFrom).toEqual([
+        CodingJobUnit,
+        CoderTrainingDiscussionResult,
+        ResponseEntity,
+        UnitNote,
+        UnitTag,
+        UnitLog,
+        UnitLastState,
+        ChunkEntity
+      ]);
+      expect(deletedFrom).not.toContain(Unit);
+    });
+
+    it('does not complete when a known dependent row remains', async () => {
+      (dataSource.createQueryBuilder as jest.Mock).mockImplementation(() => {
+        const qb = mockQueryBuilder();
+        let selectedEntity: unknown;
+        qb.from.mockImplementation((entity: unknown) => {
+          selectedEntity = entity;
+          return qb;
+        });
+        qb.getRawOne.mockImplementation(() => Promise.resolve({
+          count: selectedEntity === UnitNote ? '1' : '0'
+        }));
+        return qb;
+      });
+      const privateService = service as unknown as {
+        assertDeleteCompleted: (
+          kind: 'units',
+          targetIds: number[],
+          snapshot: {
+            bookletIds: number[];
+            unitIds: number[];
+            responseIds: number[];
+            bookletInfoIds: number[];
+          }
+        ) => Promise<void>;
+      };
+
+      await expect(privateService.assertDeleteCompleted('units', [100], {
+        bookletIds: [],
+        unitIds: [100],
+        responseIds: [],
+        bookletInfoIds: []
+      })).rejects.toThrow('Unit-Notiz');
+    });
   });
 
   describe('resolveDuplicateResponses', () => {
@@ -171,6 +550,287 @@ describe('WorkspaceTestResultsService', () => {
 
       expect(responseManagementService.resolveDuplicateResponses).toHaveBeenCalledWith(workspaceId, resolutionMap, userId);
       expect(result).toEqual({ resolvedCount: 1, success: true });
+    });
+  });
+
+  describe('findFlatResponseFilterOptions', () => {
+    it('keeps scoped option predicates and derives log options from filtered booklets', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getQueryAndParameters
+        .mockReturnValueOnce([
+          'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response WHERE person.workspace_id = $1',
+          [1]
+        ])
+        .mockReturnValueOnce([
+          'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response WHERE person.workspace_id = $1',
+          [1]
+        ]);
+      (dataSource.query as jest.Mock)
+        .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
+        .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
+
+      const result = await service.findFlatResponseFilterOptions(1, {});
+
+      expect(qb.where).toHaveBeenCalledWith(
+        'person.workspace_id = :workspaceId',
+        { workspaceId: 1 }
+      );
+      expect(qb.where).not.toHaveBeenCalledWith('unitTag.tag IS NOT NULL');
+      expect(qb.where).not.toHaveBeenCalledWith('session.browser IS NOT NULL');
+      expect(qb.where).not.toHaveBeenCalledWith('session.os IS NOT NULL');
+      expect(qb.where).not.toHaveBeenCalledWith('session.screen IS NOT NULL');
+      expect(qb.where).not.toHaveBeenCalledWith('session.id IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('unitTag.tag IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('session.browser IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('session.os IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('session.screen IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('session.id IS NOT NULL');
+
+      expect(dataSource.query).toHaveBeenCalledTimes(2);
+      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
+        'LEFT JOIN LATERAL'
+      );
+      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
+        'first_duration.duration_ms < $2'
+      );
+      expect((dataSource.query as jest.Mock).mock.calls[0][1]).toEqual([
+        1,
+        60000
+      ]);
+      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
+        'CROSS JOIN LATERAL'
+      );
+      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
+        'COUNT(DISTINCT progress_unit.id)'
+      );
+      expect((dataSource.query as jest.Mock).mock.calls[1][1]).toEqual([1]);
+      expect(result.processingDurations).toEqual(['Kurz', 'Lang']);
+      expect(result.unitProgresses).toEqual([
+        'Vollständig',
+        'Unvollständig'
+      ]);
+    });
+  });
+
+  describe('searchResponses', () => {
+    it('should filter by autocoder-generated responses when derivedOnly is set', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      const result = await service.searchResponses(
+        1,
+        { derivedOnly: true },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated = :derivedOnly',
+        { derivedOnly: true }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith('response.status_v1 IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 NOT IN (:...ignoredDerivedCodingStatuses)',
+        { ignoredDerivedCodingStatuses: [0, 1, 2, 3, 10] }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+        { validVariablePairKeys: ['Unit1\u001Fvar1', 'Unit2\u001Fvar2'] }
+      );
+      expect(result).toEqual({ data: [], total: 0 });
+    });
+
+    it('should exclude autocoder-generated responses from default response searches', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        {},
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+    });
+
+    it('should filter GeoGebra searches by raw and data-uri ggb response values', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { geogebra: true },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('response.value LIKE :ggRawPrefix OR response.value ILIKE :ggDataUriPrefix'),
+        {
+          ggRawPrefix: 'UEsD%',
+          ggDataUriPrefix: 'data:%;base64,UEsD%'
+        }
+      );
+    });
+
+    it('should treat GeoGebra all-source searches as base responses', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { geogebra: true, responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+      expect(qb.andWhere).not.toHaveBeenCalledWith('response.status_v1 IS NOT NULL');
+    });
+
+    it('should include base and derived responses with kodierstatistical statuses when responseSource is all', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('response.status_v1 IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 NOT IN (:...ignoredDerivedCodingStatuses)',
+        { ignoredDerivedCodingStatuses: [0, 1, 2, 3, 10] }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+        { validVariablePairKeys: ['Unit1\u001Fvar1', 'Unit2\u001Fvar2'] }
+      );
+      expect(qb.andWhere).not.toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+    });
+
+    it('should apply codedStatus through the effective version status expression', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { codedStatus: '5', version: 'v3', responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('COALESCE(response.status_v3'),
+        { codedStatus: '5' }
+      );
+    });
+
+    it('should apply the v3 effective status expression for derived-only searches', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { derivedOnly: true, version: 'v3' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('COALESCE(response.status_v3')
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('NOT IN (:...ignoredDerivedCodingStatuses)'),
+        { ignoredDerivedCodingStatuses: [0, 1, 2, 3, 10] }
+      );
+    });
+
+    it('should return no derived/all coding responses when no valid coding variables exist', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      codingListService.getValidVariablePairKeys.mockResolvedValue([]);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('1 = 0');
+    });
+  });
+
+  describe('getResponsesByStatus', () => {
+    it('should filter details to visible coding status and valid coding variables', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getManyAndCount.mockResolvedValue([[], 2180]);
+
+      const result = await service.getResponsesByStatus(
+        1,
+        '5',
+        'v1',
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.where).toHaveBeenCalledWith(
+        'response.status IN (:...codingResponseStatuses)',
+        { codingResponseStatuses: [1, 2, 3] }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 = :statusParam',
+        { statusParam: 5 }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+        { validVariablePairKeys: ['Unit1\u001Fvar1', 'Unit2\u001Fvar2'] }
+      );
+      expect(result).toEqual([[], 2180]);
+    });
+
+    it('should use the selected coding version for status filtering', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.getResponsesByStatus(
+        1,
+        'CODING_COMPLETE',
+        'v3',
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('COALESCE(response.status_v3'),
+        { statusParam: 5 }
+      );
+    });
+
+    it('should return no details for ignored raw statistics statuses', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+
+      const result = await service.getResponsesByStatus(
+        1,
+        'NOT_REACHED',
+        'v1',
+        { page: 1, limit: 100 }
+      );
+
+      expect(result).toEqual([[], 0]);
+      expect(qb.getManyAndCount).not.toHaveBeenCalled();
     });
   });
 
@@ -227,6 +887,12 @@ describe('WorkspaceTestResultsService', () => {
       expect(result.uniqueResponses).toBe(100);
       expect(result.responseStatusCounts).toEqual({ UNSET: 5, NOT_REACHED: 10 });
       expect(result.sessionBrowserCounts).toEqual({ Chrome: 20 });
+      expect(responseCountQb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+      expect(responseStatusQb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
     });
 
     it('should handle ignored units correctly', async () => {
@@ -262,8 +928,8 @@ describe('WorkspaceTestResultsService', () => {
       await service.getWorkspaceTestResultsOverview(workspaceId);
 
       expect(unitQb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining("UPPER(REPLACE(UPPER(unit.name), '.XML', '')) NOT IN"),
-        expect.objectContaining({ ignoredUnits: ['UNIT1'] }) // .XML stripped and uppercase
+        expect.stringContaining("REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') NOT IN"),
+        expect.objectContaining({ workspaceExclusionIgnoredUnits: ['UNIT1'] }) // .XML stripped and uppercase
       );
     });
   });
@@ -359,7 +1025,134 @@ describe('WorkspaceTestResultsService', () => {
     });
   });
 
+  describe('findWorkspaceResponses', () => {
+    it('scopes response list to the workspace and applies exclusions', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+      (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
+        globalIgnoredUnits: ['UNIT1'],
+        ignoredBooklets: ['BOOKLET1'],
+        testletIgnoredUnits: []
+      });
+
+      await service.findWorkspaceResponses(1, { page: 1, limit: 10 });
+
+      expect(qb.where).toHaveBeenCalledWith('person.workspace_id = :workspace_id', { workspace_id: 1 });
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining("REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') NOT IN"),
+        expect.objectContaining({ workspaceExclusionIgnoredUnits: ['UNIT1'] })
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('UPPER(bookletinfo.name) NOT IN'),
+        expect.objectContaining({ workspaceExclusionIgnoredBooklets: ['BOOKLET1'] })
+      );
+    });
+  });
+
+  describe('findUnitResponse', () => {
+    it('returns no replay responses for an ignored booklet without looking up the unit', async () => {
+      (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: ['BOOKLET-A'],
+        testletIgnoredUnits: []
+      });
+
+      const result = await service.findUnitResponse(
+        1,
+        'login-a@code-a@group-a@BOOKLET-A',
+        'unit-original-id'
+      );
+
+      expect(result).toEqual({ responses: [] });
+      expect(unitRepository.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('should look up replay units by alias first', async () => {
+      const unitQb = mockQueryBuilder();
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
+
+      const responseQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      responseQb.getRawMany.mockResolvedValue([]);
+
+      const result = await service.findUnitResponse(
+        1,
+        'login-a@code-a@group-a@booklet-a',
+        'unit-original-id'
+      );
+
+      expect(result).toEqual({ responses: [] });
+      expect(unitQb.andWhere).toHaveBeenCalledWith('unit.alias = :unitId', {
+        unitId: 'unit-original-id'
+      });
+      expect(unitRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+    });
+
+    it('should keep an empty replay code segment when looking up a unit', async () => {
+      const unitQb = mockQueryBuilder();
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
+
+      const responseQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      responseQb.getRawMany.mockResolvedValue([]);
+
+      await service.findUnitResponse(
+        1,
+        'login-a@@group-a@booklet-a',
+        'unit-original-id'
+      );
+
+      expect(unitQb.where).toHaveBeenCalledWith('person.login = :login', {
+        login: 'login-a'
+      });
+      expect(unitQb.andWhere).toHaveBeenCalledWith('person.code = :code', {
+        code: ''
+      });
+      expect(unitQb.andWhere).toHaveBeenCalledWith('person.group = :group', {
+        group: 'group-a'
+      });
+    });
+
+    it('should fall back to visible unit name when alias lookup misses', async () => {
+      const aliasQb = mockQueryBuilder();
+      const nameQb = mockQueryBuilder();
+      (unitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(aliasQb)
+        .mockReturnValueOnce(nameQb);
+      aliasQb.getRawOne.mockResolvedValue(null);
+      nameQb.getRawOne.mockResolvedValue({ unitId: 77 });
+
+      const responseQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      responseQb.getRawMany.mockResolvedValue([]);
+
+      const result = await service.findUnitResponse(
+        1,
+        'login-a@code-a@group-a@booklet-a',
+        'unit-visible-id'
+      );
+
+      expect(result).toEqual({ responses: [] });
+      expect(aliasQb.andWhere).toHaveBeenCalledWith('unit.alias = :unitId', {
+        unitId: 'unit-visible-id'
+      });
+      expect(nameQb.andWhere).toHaveBeenCalledWith('unit.name = :unitId', {
+        unitId: 'unit-visible-id'
+      });
+    });
+  });
+
   describe('exportTestResultsToStream', () => {
+    const collectStream = (stream: PassThrough): Promise<string> => new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      stream.on('error', reject);
+    });
+
     it('should attempt to fetch data for export', async () => {
       const workspaceId = 1;
       const resStream = new PassThrough();
@@ -391,6 +1184,137 @@ describe('WorkspaceTestResultsService', () => {
       await service.exportTestResultsToStream(workspaceId, resStream, {});
 
       expect(qb.getMany).toHaveBeenCalled();
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+    });
+
+    it('should keep legacy headers when log anomalies are not requested', async () => {
+      const resStream = new PassThrough();
+      const outputPromise = collectStream(resStream);
+      const unitQb = mockQueryBuilder();
+      const responseQb = mockQueryBuilder();
+      const chunkQb = mockQueryBuilder();
+      const lastStateQb = mockQueryBuilder();
+      const unit = {
+        id: 1,
+        name: 'unit-a',
+        alias: 'unit-original-a',
+        booklet: {
+          id: 10,
+          person: { group: 'group-a', login: 'login-a', code: 'code-a' },
+          bookletinfo: { name: 'booklet-a' }
+        }
+      };
+
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getCount.mockResolvedValue(1);
+      unitQb.getMany
+        .mockResolvedValueOnce([unit])
+        .mockResolvedValueOnce([]);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      responseQb.getMany.mockResolvedValue([]);
+      (chunkRepository.createQueryBuilder as jest.Mock).mockReturnValue(chunkQb);
+      chunkQb.getMany.mockResolvedValue([]);
+      (dataSource.getRepository as jest.Mock).mockReturnValue({
+        createQueryBuilder: jest.fn(() => lastStateQb)
+      });
+      lastStateQb.getMany.mockResolvedValue([]);
+
+      await service.exportTestResultsToStream(1, resStream, {});
+
+      const output = await outputPromise;
+      const [header] = output.trim().split('\n');
+
+      expect(header).toBe(
+        'groupname;loginname;code;bookletname;unitname;responses;laststate;originalUnitId'
+      );
+      expect(header).not.toContain('log_anomaly_');
+    });
+
+    it('should add log anomaly columns when requested', async () => {
+      const workspaceId = 1;
+      const resStream = new PassThrough();
+      const outputPromise = collectStream(resStream);
+      const unitQb = mockQueryBuilder();
+      const responseQb = mockQueryBuilder();
+      const chunkQb = mockQueryBuilder();
+      const lastStateQb = mockQueryBuilder();
+      const unit = {
+        id: 1,
+        name: 'unit-a',
+        alias: 'unit-original-a',
+        booklet: {
+          id: 10,
+          person: { group: 'group-a', login: 'login-a', code: 'code-a' },
+          bookletinfo: { name: 'booklet-a' }
+        }
+      };
+      const anomalyService = service as unknown as {
+        findLogAnomaliesForBooklets: (
+          bookletIds: number[],
+          thresholds: unknown
+        ) => Promise<Map<number, Array<{
+          code: string;
+          severity: 'critical' | 'warning' | 'info';
+          label: string;
+          evidence: string;
+          count: number;
+        }>>>;
+      };
+
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getCount.mockResolvedValue(1);
+      unitQb.getMany
+        .mockResolvedValueOnce([unit])
+        .mockResolvedValueOnce([]);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      responseQb.getMany.mockResolvedValue([]);
+      (chunkRepository.createQueryBuilder as jest.Mock).mockReturnValue(chunkQb);
+      chunkQb.getMany.mockResolvedValue([]);
+      (dataSource.getRepository as jest.Mock).mockReturnValue({
+        createQueryBuilder: jest.fn(() => lastStateQb)
+      });
+      lastStateQb.getMany.mockResolvedValue([]);
+      jest
+        .spyOn(anomalyService, 'findLogAnomaliesForBooklets')
+        .mockResolvedValue(new Map([
+          [
+            10,
+            [
+              {
+                code: 'controller_error',
+                severity: 'critical',
+                label: 'Controller error',
+                evidence: '',
+                count: 1
+              },
+              {
+                code: 'connection_lost',
+                severity: 'warning',
+                label: 'Connection lost',
+                evidence: '',
+                count: 2
+              }
+            ]
+          ]
+        ]));
+
+      await service.exportTestResultsToStream(
+        workspaceId,
+        resStream,
+        { includeLogAnomalies: true }
+      );
+
+      const output = await outputPromise;
+      const [header, row] = output.trim().split('\n');
+
+      expect(header).toContain(
+        'log_anomaly_count;log_anomaly_max_severity;log_anomaly_codes;log_anomaly_labels'
+      );
+      expect(row).toContain(
+        '3;critical;"controller_error|connection_lost";"Controller error|Connection lost"'
+      );
     });
   });
 
@@ -418,6 +1342,9 @@ describe('WorkspaceTestResultsService', () => {
       await service.deleteTestPersons(workspaceId, testPersonIds, userId);
 
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+      expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+      expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
     });
 
     it('deleteUnit should invalidate cache', async () => {
@@ -440,6 +1367,9 @@ describe('WorkspaceTestResultsService', () => {
       await service.deleteUnit(workspaceId, unitId, userId);
 
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+      expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+      expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
     });
 
     it('deleteResponse should invalidate cache', async () => {
@@ -452,6 +1382,7 @@ describe('WorkspaceTestResultsService', () => {
       await service.deleteResponse(workspaceId, responseId, userId);
 
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+      expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
     });
 
     it('deleteBooklet should invalidate cache', async () => {
@@ -474,6 +1405,9 @@ describe('WorkspaceTestResultsService', () => {
       await service.deleteBooklet(workspaceId, bookletId, userId);
 
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+      expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+      expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
     });
   });
 

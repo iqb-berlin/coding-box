@@ -16,6 +16,10 @@
     <div class="statistics-title-section">
       <h2 class="section-title">{{ 'coding-management.titles.coding-statistics' | translate }}</h2>
       <p class="section-description">{{ 'coding-management.descriptions.statistics-overview' | translate }}</p>
+      <p class="statistics-scope-note">
+        <mat-icon>info</mat-icon>
+        <span>{{ 'coding-management.statistics.response-count-scope-note' | translate }}</span>
+      </p>
     </div>
     <div class="statistics-version-selector">
       <mat-form-field appearance="outline" class="statistics-version-field">
@@ -67,7 +71,9 @@
   <mat-divider></mat-divider>
   <div class="statistics-content">
     <div class="statistic-item">
-      <span class="statistic-label">{{ 'coding-management.statistics.total-responses' | translate }}</span>
+      <span class="statistic-label" [matTooltip]="'coding-management.statistics.total-responses-tooltip' | translate">
+        {{ 'coding-management.statistics.total-responses' | translate }}
+      </span>
       <span class="statistic-value">
         {{ effectiveTotalResponses }}
         @if (getTotalResponsesDifference() !== null) {
@@ -81,6 +87,23 @@
         }
       </span>
     </div>
+    @if (showCodingStatisticsEmptyState) {
+    <div class="statistics-empty-state">
+      <mat-icon>info</mat-icon>
+      <div>
+        <div class="statistics-empty-title">{{ 'coding-management.statistics.no-coding-results-title' | translate }}</div>
+        <div class="statistics-empty-text">{{ codingStatisticsEmptyTextKey | translate }}</div>
+      </div>
+    </div>
+    }
+    @if (hasDerivedStatistics) {
+    <div class="statistic-item clickable" (click)="onDerivedClick()">
+      <span class="statistic-label">{{ 'coding-management.statistics.derived-answers' | translate }}</span>
+      <span class="statistic-value" [matTooltip]="'coding-management.statistics.derived-answers-tooltip' | translate:{count: derivedVariableCount}">
+        {{ derivedAnswerCount }}
+      </span>
+    </div>
+    }
     @for (status of getStatuses(); track status) {
     <div class="statistic-item clickable" (click)="onStatusClick(status)">
       <span class="statistic-label">

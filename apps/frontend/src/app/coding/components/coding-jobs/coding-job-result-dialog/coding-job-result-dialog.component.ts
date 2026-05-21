@@ -1,16 +1,19 @@
 import {
-  Component, Inject, OnInit, OnDestroy,
+  Component, Inject, OnInit, OnDestroy, AfterViewInit,
   ViewChild,
   inject,
   HostListener
 } from '@angular/core';
-import { Subject, debounceTime } from 'rxjs';
+import {
+  Subject, debounceTime, forkJoin, of, catchError, finalize, takeUntil
+} from 'rxjs';
 import {
   MAT_DIALOG_DATA, MatDialogModule, MatDialogRef, MatDialog
 } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatSort, MatSortModule } from '@angular/material/sort';
+import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
@@ -29,6 +32,10 @@ import { AppService } from '../../../../core/services/app.service';
 import { CodingJob } from '../../../models/coding-job.model';
 import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
 import { base64ToUtf8, utf8ToBase64 } from '../../../../shared/utils/common-utils';
+import {
+  ApplyCodingResultsDialogComponent,
+  ApplyCodingResultsDialogResult
+} from '../apply-coding-results-dialog.component';
 
 import { UnitsReplay, UnitsReplayUnit } from '../../../../replay/services/units-replay.service';
 
@@ -42,9 +49,11 @@ interface CodingResult {
   personCode: string;
   personGroup: string;
   testPerson: string;
+  testPersonSearch: string;
   code?: string | number | null;
   codeLabel?: string;
   score?: number;
+  codingIssueOption?: number;
   codingIssueOptionLabel?: string;
   givenCode?: string | number;
   givenScore?: number;
@@ -60,6 +69,20 @@ interface CodingProgressEntry {
   codingIssueOption?: number;
 }
 
+interface CodingJobUnitResult {
+  responseId: number;
+  unitName: string;
+  unitAlias: string | null;
+  variableId: string;
+  variableAnchor: string;
+  bookletName: string;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  isDoubleCoded: boolean;
+  otherCoders: string[];
+}
+
 @Component({
   selector: 'coding-box-coding-job-result-dialog',
   templateUrl: './coding-job-result-dialog.component.html',
@@ -71,6 +94,7 @@ interface CodingProgressEntry {
     MatDialogModule,
     MatTableModule,
     MatSortModule,
+    MatPaginatorModule,
     MatFormFieldModule,
     MatInputModule,
     FormsModule,
@@ -81,8 +105,9 @@ interface CodingProgressEntry {
     MatTooltip
   ]
 })
-export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
+export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild(MatSort) sort!: MatSort;
+  @ViewChild(MatPaginator) paginator?: MatPaginator;
 
   private codingJobBackendService = inject(CodingJobBackendService);
   private fileService = inject(FileService);
@@ -93,6 +118,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
 
   isLoading = true;
+  isNotesUnavailable = false;
   dataSource = new MatTableDataSource<CodingResult>([]);
   displayedColumns: string[] = [
     'unitName',
@@ -107,7 +133,10 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   ];
 
   private refreshSubject = new Subject<void>();
-  private isDestroyed = false;
+  private destroy$ = new Subject<void>();
+
+  readonly pageSize = 50;
+  readonly pageSizeOptions = [25, 50, 100];
 
   unitNameFilter = '';
   variableFilter = '';
@@ -125,16 +154,16 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.isDestroyed = true;
+    this.destroy$.next();
+    this.destroy$.complete();
     this.refreshSubject.complete();
   }
 
   private setupAutoRefresh(): void {
-    this.refreshSubject.pipe(debounceTime(1000)).subscribe(() => {
-      if (!this.isDestroyed) {
-        this.loadCodingResults();
-      }
-    });
+    this.refreshSubject.pipe(
+      debounceTime(1000),
+      takeUntil(this.destroy$)
+    ).subscribe(() => this.loadCodingResults());
   }
 
   @HostListener('window:focus', ['$event'])
@@ -144,79 +173,133 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.dataSource.sort = this.sort;
+    this.dataSource.paginator = this.paginator || null;
+    this.dataSource.sortingDataAccessor = this.createSortingDataAccessor();
     this.dataSource.filterPredicate = this.createFilterPredicate();
     this.applyFilters();
   }
 
   loadCodingResults(): void {
     this.isLoading = true;
+    this.isNotesUnavailable = false;
 
-    this.codingJobBackendService.getCodingJobUnits(this.data.workspaceId, this.data.codingJob.id).subscribe({
-      next: unitsResult => {
-        if (!unitsResult || unitsResult.length === 0) {
-          this.isLoading = false;
-          this.dataSource.data = [];
-          return;
-        }
-
-        this.codingJobBackendService.getCodingProgress(this.data.workspaceId, this.data.codingJob.id).subscribe({
-          next: progressResult => {
-            this.codingJobBackendService.getCodingNotes(this.data.workspaceId, this.data.codingJob.id).subscribe({
-              next: notesResult => {
-                this.dataSource.data = unitsResult.map(unit => {
-                  const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
-                  const progressKey = `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
-                  const progress = progressResult[progressKey] as CodingProgressEntry | undefined;
-                  const notes = notesResult ? notesResult[progressKey] : undefined;
-                  const mappedCode = this.getMappedResultCode(progress);
-                  const mappedScore = this.getMappedResultScore(progress);
-                  const reviewIssueOption = this.getReviewIssueOption(progress);
-
-                  return {
-                    unitName: unit.unitName,
-                    unitAlias: unit.unitAlias,
-                    variableId: unit.variableId,
-                    variableAnchor: unit.variableAnchor,
-                    bookletName: unit.bookletName,
-                    personLogin: unit.personLogin,
-                    personCode: unit.personCode,
-                    personGroup: unit.personGroup,
-                    testPerson: `${unit.personLogin}@${unit.personCode}@${unit.personGroup}`,
-                    code: mappedCode,
-                    codeLabel: progress?.label,
-                    score: mappedScore,
-                    codingIssueOptionLabel: reviewIssueOption !== null ? this.getCodingIssueOption(reviewIssueOption) : undefined,
-                    givenCode: reviewIssueOption !== null && progress?.id && this.isPositiveCode(progress.id) ? progress.id : undefined,
-                    givenScore: reviewIssueOption !== null && progress?.score !== undefined && progress?.score !== null ? progress.score : undefined,
-                    notes: notes,
-                    isDoubleCoded: unit.isDoubleCoded,
-                    otherCoders: unit.otherCoders
-                  };
-                });
-                this.isLoading = false;
-              },
-              error: () => {
-                this.snackBar.open('Fehler beim Laden der Notizen', 'Schließen', { duration: 3000 });
-                this.isLoading = false;
-              }
-            });
-          },
-          error: () => {
-            this.snackBar.open('Fehler beim Laden der Kodierergebnisse', 'Schließen', { duration: 3000 });
-            this.isLoading = false;
-          }
-        });
+    forkJoin({
+      units: this.codingJobBackendService.getCodingJobUnits(this.data.workspaceId, this.data.codingJob.id),
+      progress: this.codingJobBackendService.getCodingProgress(this.data.workspaceId, this.data.codingJob.id),
+      notes: this.codingJobBackendService.getCodingNotes(this.data.workspaceId, this.data.codingJob.id).pipe(
+        catchError(() => {
+          this.isNotesUnavailable = true;
+          this.snackBar.open('Notizen konnten nicht geladen werden. Ergebnisse werden trotzdem angezeigt.', 'Schließen', { duration: 4000 });
+          return of({});
+        })
+      )
+    }).pipe(
+      takeUntil(this.destroy$),
+      finalize(() => {
+        this.isLoading = false;
+      })
+    ).subscribe({
+      next: ({ units, progress, notes }) => {
+        this.dataSource.data = (units || []).map(unit => this.mapCodingResult(
+          unit as CodingJobUnitResult,
+          progress as Record<string, CodingProgressEntry>,
+          notes as Record<string, string>
+        ));
+        this.applyFilters();
+        this.paginator?.firstPage();
       },
       error: () => {
-        this.snackBar.open('Fehler beim Laden der Kodiereinheiten', 'Schließen', { duration: 3000 });
-        this.isLoading = false;
+        this.dataSource.data = [];
+        this.snackBar.open('Fehler beim Laden der Kodierergebnisse', 'Schließen', { duration: 3000 });
       }
     });
   }
 
+  private mapCodingResult(
+    unit: CodingJobUnitResult,
+    progressResult: Record<string, CodingProgressEntry>,
+    notesResult: Record<string, string>
+  ): CodingResult {
+    const progressKey = this.getCodingProgressKey(unit);
+    const progress = progressResult[progressKey];
+    const notes = notesResult ? notesResult[progressKey] : undefined;
+    const mappedCode = this.getMappedResultCode(progress);
+    const mappedScore = this.getMappedResultScore(progress);
+    const reviewIssueOption = this.getReviewIssueOption(progress);
+    const testPerson = this.getTestPersonLabel(unit);
+    const otherCoders = (unit.otherCoders || []).filter(Boolean);
+
+    return {
+      unitName: unit.unitName,
+      unitAlias: unit.unitAlias,
+      variableId: unit.variableId,
+      variableAnchor: unit.variableAnchor,
+      bookletName: unit.bookletName,
+      personLogin: unit.personLogin,
+      personCode: unit.personCode,
+      personGroup: unit.personGroup,
+      testPerson,
+      testPersonSearch: [
+        testPerson,
+        unit.personLogin,
+        unit.personCode,
+        unit.personGroup,
+        unit.bookletName
+      ].filter(Boolean).join(' '),
+      code: mappedCode,
+      codeLabel: progress?.label,
+      score: mappedScore,
+      codingIssueOption: reviewIssueOption ?? undefined,
+      codingIssueOptionLabel: reviewIssueOption !== null ? this.getCodingIssueOption(reviewIssueOption) : undefined,
+      givenCode: reviewIssueOption !== null && progress?.id && this.isPositiveCode(progress.id) ? progress.id : undefined,
+      givenScore: reviewIssueOption !== null && progress?.score !== undefined && progress?.score !== null ? progress.score : undefined,
+      notes: notes,
+      isDoubleCoded: otherCoders.length > 0,
+      otherCoders
+    };
+  }
+
+  private getCodingProgressKey(unit: CodingJobUnitResult): string {
+    const testPerson = this.getCodingTestPerson(unit);
+    return `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
+  }
+
+  private getCodingTestPerson(unit: {
+    personLogin: string;
+    personCode: string;
+    personGroup?: string | null;
+    bookletName: string;
+  }): string {
+    if (unit.personGroup) {
+      return `${unit.personLogin}@${unit.personCode}@${unit.personGroup}@${unit.bookletName}`;
+    }
+
+    return `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
+  }
+
+  private getTestPersonLabel(unit: CodingJobUnitResult): string {
+    return [
+      unit.personLogin,
+      unit.personCode,
+      unit.personGroup,
+      unit.bookletName
+    ].filter(value => !!value).join(' / ');
+  }
+
   private createFilterPredicate(): (data: CodingResult, filter: string) => boolean {
     return (data: CodingResult, filter: string): boolean => {
-      const filters = JSON.parse(filter);
+      let filters: {
+        unitName?: string;
+        variable?: string;
+        codingIssue?: string;
+        testPerson?: string;
+      };
+
+      try {
+        filters = JSON.parse(filter);
+      } catch {
+        return true;
+      }
 
       // Check unit name filter (includes unitName and unitAlias)
       const unitFilter = filters.unitName?.toLowerCase() || '';
@@ -227,7 +310,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
 
       // Check variable filter
       const variableFilter = filters.variable?.toLowerCase() || '';
-      if (variableFilter && !data.variableId.toLowerCase().includes(variableFilter)) {
+      if (variableFilter &&
+        !data.variableId.toLowerCase().includes(variableFilter) &&
+        !data.variableAnchor.toLowerCase().includes(variableFilter)) {
         return false;
       }
 
@@ -239,7 +324,28 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
 
       // Check test person filter
       const testPersonFilter = filters.testPerson?.toLowerCase() || '';
-      return !(testPersonFilter && !data.testPerson.toLowerCase().includes(testPersonFilter));
+      return !(testPersonFilter && !data.testPersonSearch.toLowerCase().includes(testPersonFilter));
+    };
+  }
+
+  private createSortingDataAccessor(): (data: CodingResult, sortHeaderId: string) => string | number {
+    return (result: CodingResult, sortHeaderId: string): string | number => {
+      switch (sortHeaderId) {
+        case 'testPerson':
+          return result.testPerson;
+        case 'code':
+          return result.code ?? Number.NEGATIVE_INFINITY;
+        case 'score':
+          return result.score ?? result.givenScore ?? Number.NEGATIVE_INFINITY;
+        case 'codingIssueOption':
+          return result.codingIssueOptionLabel || '';
+        case 'doubleCoding':
+          return result.otherCoders?.length || 0;
+        case 'notes':
+          return result.notes || '';
+        default:
+          return (result as unknown as Record<string, string | number | null | undefined>)[sortHeaderId] ?? '';
+      }
     };
   }
 
@@ -251,6 +357,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
       testPerson: this.testPersonFilter
     };
     this.dataSource.filter = JSON.stringify(filterObj);
+    this.paginator?.firstPage();
   }
 
   onUnitNameFilterChange(): void {
@@ -269,36 +376,188 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
     this.applyFilters();
   }
 
+  clearUnitNameFilter(): void {
+    this.unitNameFilter = '';
+    this.applyFilters();
+  }
+
+  clearVariableFilter(): void {
+    this.variableFilter = '';
+    this.applyFilters();
+  }
+
+  clearCodingIssueFilter(): void {
+    this.codingIssueFilter = '';
+    this.applyFilters();
+  }
+
+  clearTestPersonFilter(): void {
+    this.testPersonFilter = '';
+    this.applyFilters();
+  }
+
+  clearAllFilters(): void {
+    this.unitNameFilter = '';
+    this.variableFilter = '';
+    this.codingIssueFilter = '';
+    this.testPersonFilter = '';
+    this.applyFilters();
+  }
+
+  hasActiveFilters(): boolean {
+    return [
+      this.unitNameFilter,
+      this.variableFilter,
+      this.codingIssueFilter,
+      this.testPersonFilter
+    ].some(value => value.trim().length > 0);
+  }
+
+  getFilteredResultCount(): number {
+    return this.dataSource.filteredData.length;
+  }
+
+  getTotalResultCount(): number {
+    return this.dataSource.data.length;
+  }
+
+  getCodedResultCount(): number {
+    return this.dataSource.data.filter(result => this.hasCode(result)).length;
+  }
+
+  getReviewIssueCount(): number {
+    return this.dataSource.data.filter(result => this.isCodingIssueOption(result)).length;
+  }
+
+  canApplyCodingResults(): boolean {
+    return !this.isLoading &&
+      this.data.codingJob.status !== 'results_applied' &&
+      this.isCodingJobFreshnessApplyable() &&
+      !this.data.codingJob.training?.id &&
+      !this.data.codingJob.training_id &&
+      this.getCodedResultCount() > 0;
+  }
+
+  getApplyButtonTooltip(): string {
+    if (this.data.codingJob.status === 'results_applied') {
+      return 'Kodierergebnisse wurden bereits angewendet';
+    }
+    if (!this.isCodingJobFreshnessApplyable()) {
+      return 'Die Antwortdaten haben sich geändert. Aktualisieren Sie zuerst den Kodierungsauftrag.';
+    }
+    if (this.data.codingJob.training?.id || this.data.codingJob.training_id) {
+      return 'Trainingsergebnisse können nicht auf Antwortdaten angewendet werden';
+    }
+    if (this.getCodedResultCount() === 0) {
+      return 'Keine kodierten Ergebnisse zum Anwenden vorhanden';
+    }
+    if (this.getReviewIssueCount() > 0) {
+      return `${this.getReviewIssueCount()} Ergebnis(se) benötigen vorher eine manuelle Prüfung und werden übersprungen`;
+    }
+    return 'Geprüfte Kodierergebnisse auf Datenbank anwenden';
+  }
+
+  private isCodingJobFreshnessApplyable(): boolean {
+    const freshnessStatus = this.data.codingJob.freshnessStatus;
+    return freshnessStatus !== 'stale_source';
+  }
+
+  getOtherCodersTooltip(result: CodingResult): string {
+    const otherCoders = result.otherCoders || [];
+    if (otherCoders.length === 0) {
+      return 'Doppelkodierung erkannt';
+    }
+
+    const label = otherCoders.length === 1 ? 'Anderer Kodierer: ' : 'Andere Kodierer: ';
+    return `${label}${otherCoders.join(', ')}`;
+  }
+
   applyCodingResults(): void {
-    this.isLoading = true;
-    this.codingJobBackendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id).subscribe({
-      next: result => {
-        this.isLoading = false;
-        let message = this.translateService.instant(result.messageKey, result.messageParams || {});
-        if (result.success) {
-          if (result.updatedResponsesCount > 0) {
-            message += `\n\nAktualisiert: ${result.updatedResponsesCount} Antworten`;
-          }
-          if (result.skippedReviewCount > 0) {
-            message += `\nÜbersprungen (manuelle Prüfung benötigt): ${result.skippedReviewCount} Antworten`;
-          }
-          this.snackBar.open(`Ergebnisse erfolgreich angewendet!\n${message}`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['success-snackbar']
-          });
-          this.dialogRef.close({ resultsApplied: true });
-        } else {
-          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${message}`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
-        }
-      },
-      error: error => {
-        this.isLoading = false;
-        this.snackBar.open(`Fehler beim Anwenden der Kodierergebnisse: ${error.message || error}`, 'Schließen', { duration: 5000 });
+    const dialogRef = this.dialog.open(ApplyCodingResultsDialogComponent, {
+      width: '600px',
+      data: {
+        jobName: this.data.codingJob.name,
+        totalResults: this.getTotalResultCount(),
+        codedResults: this.getCodedResultCount(),
+        reviewIssues: this.getReviewIssueCount()
       }
     });
+
+    dialogRef.afterClosed().subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
+      if (!dialogResult) {
+        return;
+      }
+
+      this.isLoading = true;
+      this.codingJobBackendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id, {
+        overwriteExisting: dialogResult.overwriteExisting
+      }).subscribe({
+        next: result => {
+          this.isLoading = false;
+          let message = this.translateService.instant(result.messageKey, result.messageParams || {});
+          if (result.success) {
+            if (result.updatedResponsesCount > 0) {
+              message += `\n\nAktualisiert: ${result.updatedResponsesCount} Antworten`;
+            }
+            if (result.skippedAlreadyCodedCount > 0) {
+              message += `\nBereits vorhandene Kodierungen nicht überschrieben: ${result.skippedAlreadyCodedCount} Antworten`;
+            }
+            if (result.overwrittenExistingCount > 0) {
+              message += `\nVorhandene Kodierungen überschrieben: ${result.overwrittenExistingCount} Antworten`;
+            }
+            if (result.skippedReviewCount > 0) {
+              message += `\nÜbersprungen (manuelle Prüfung benötigt): ${result.skippedReviewCount} Antworten`;
+            }
+            this.snackBar.open(`Ergebnisse erfolgreich angewendet!\n${message}`, 'Schließen', {
+              duration: 5000,
+              panelClass: ['success-snackbar']
+            });
+            this.dialogRef.close({ resultsApplied: true });
+          } else {
+            this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${message}`, 'Schließen', {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            });
+          }
+        },
+        error: error => {
+          this.isLoading = false;
+          this.snackBar.open(`Fehler beim Anwenden der Kodierergebnisse: ${error.message || error}`, 'Schließen', { duration: 5000 });
+        }
+      });
+    });
+  }
+
+  getAggregationSettingsText(): string {
+    const job = this.data.codingJob;
+
+    if (!job.aggregationSettingsVersion) {
+      return 'Aggregation: ältere Jobs nutzen aktuelle Workspace-Einstellungen';
+    }
+
+    if (!job.aggregationEnabled || job.aggregationThreshold === null || job.aggregationThreshold === undefined) {
+      return 'Aggregation beim Erstellen: aus';
+    }
+
+    const flags = job.responseMatchingFlags || [];
+    const matchingText = flags.length > 0 ?
+      flags.map(flag => this.getResponseMatchingFlagLabel(flag)).join(', ') :
+      'exakte Übereinstimmung';
+
+    return `Aggregation beim Erstellen: Schwellenwert ${job.aggregationThreshold}, ${matchingText}`;
+  }
+
+  private getResponseMatchingFlagLabel(flag: string): string {
+    switch (flag) {
+      case 'IGNORE_CASE':
+        return 'Groß-/Kleinschreibung ignoriert';
+      case 'IGNORE_WHITESPACE':
+        return 'Leerzeichen ignoriert';
+      case 'NO_AGGREGATION':
+        return 'nicht aggregiert';
+      default:
+        return flag;
+    }
   }
 
   getCodeDisplay(result: CodingResult): string {
@@ -387,23 +646,11 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   }
 
   isCodingIssueOption(result: CodingResult): boolean {
-    return result.codingIssueOptionLabel !== null && result.codingIssueOptionLabel !== undefined;
+    return result.codingIssueOption === -1 || result.codingIssueOption === -2;
   }
 
   isNewCodeNeeded(result: CodingResult): boolean {
-    if (result.code !== undefined && result.code !== null) {
-      const codeNum = typeof result.code === 'number' ? result.code : parseInt(result.code.toString(), 10);
-      if (codeNum === -2) return true;
-    }
-
-    if (result.codingIssueOptionLabel) {
-      const expectedLabel = this.getCodingIssueOption(-2);
-      // Check for exact match or if label contains the expected text
-      return result.codingIssueOptionLabel === expectedLabel ||
-        result.codingIssueOptionLabel.includes('Neuer Code') ||
-        result.codingIssueOptionLabel.includes('new-code-needed');
-    }
-    return false;
+    return result.codingIssueOption === -2;
   }
 
   getCodingIssueOption(codingIssueOptionId: number): string {
@@ -439,11 +686,11 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
 
     const loadingSnackBar = this.snackBar.open('Öffne Kodierungs-Interface...', '', { duration: 3000 });
 
-    this.appService.createToken(this.data.workspaceId, this.appService.loggedUser?.sub || '', 3600).subscribe({
+    this.appService.createOwnToken(this.data.workspaceId, 1).subscribe({
       next: (token: string) => {
         loadingSnackBar.dismiss();
 
-        const testPerson = `${result.personLogin}@${result.personCode}@${result.personGroup || ''}@${result.bookletName}`;
+        const testPerson = this.getCodingTestPerson(result);
 
         const reviewUnit: UnitsReplayUnit = {
           id: 0, // Not needed for replay
@@ -478,7 +725,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
               { queryParams: queryParams })
           );
 
-        window.open(`#/${url}`, '_blank');
+        window.open(`${window.location.origin}/#${url}`, '_blank');
       },
       error: () => {
         loadingSnackBar.dismiss();

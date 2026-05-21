@@ -7,6 +7,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dto';
+import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-viewer.component';
 
 @Component({
   selector: 'coding-box-unit-info-dialog',
@@ -20,7 +21,8 @@ import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dt
     MatIconModule,
     MatTabsModule,
     MatDividerModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    XmlViewerComponent
   ]
 })
 export class UnitInfoDialogComponent implements OnInit {

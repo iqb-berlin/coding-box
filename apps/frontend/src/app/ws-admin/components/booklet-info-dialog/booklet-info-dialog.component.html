@@ -26,12 +26,9 @@
       <mat-tab-group>
         <!-- XML tab -->
         <mat-tab label="XML">
-          <div class="tab-content">
-            <div class="info-section">
-              <h3>Roh-XML</h3>
-              <div class="xml-content">
-                <pre>{{ data.bookletInfo.rawXml }}</pre>
-              </div>
+          <div class="tab-content xml-tab-content">
+            <div class="info-section xml-section">
+              <coding-box-xml-viewer [xml]="data.bookletInfo.rawXml"></coding-box-xml-viewer>
             </div>
           </div>
         </mat-tab>

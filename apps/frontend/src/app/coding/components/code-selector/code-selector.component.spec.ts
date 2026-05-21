@@ -105,4 +105,15 @@ describe('CodeSelectorComponent', () => {
     expect(focusSpy).toHaveBeenCalled();
     jest.useRealTimers();
   });
+
+  it('hides the pause button for completed job reviews', () => {
+    component.showProgress = true;
+    component.hasCodingJob = true;
+    component.isCodingJobCompleted = false;
+    component.isCompletedJobReview = true;
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.pause-button')).toBeNull();
+  });
 });

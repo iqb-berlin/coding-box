@@ -48,6 +48,16 @@
         color: #f57c00;
       }
     }
+
+    &.coding-note {
+      background-color: #f4f9fc;
+      color: #26576b;
+      border-left: 4px solid #2f6f87;
+
+      mat-icon {
+        color: #2f6f87;
+      }
+    }
   }
 
   .matrix-description {

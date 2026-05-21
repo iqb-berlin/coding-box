@@ -1,5 +1,7 @@
 import {
   Controller,
+  Body,
+  Get,
   Param,
   Post,
   UseGuards
@@ -13,14 +15,39 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-import { CodingJobOperationsService } from '../../database/services/coding';
+import { CodingJobOperationsService, CodingJobService } from '../../database/services/coding';
+import { ApplyCodingResultsResult } from '../../database/services/coding/coding-results.service';
+import { CodingJobFreshnessImpactDto } from '../../../../../../api-dto/coding/job-refresh.dto';
 
 @ApiTags('Admin Workspace Coding Results')
 @Controller('admin/workspace')
 export class WorkspaceCodingResultsController {
   constructor(
-    private codingJobOperationsService: CodingJobOperationsService
+    private codingJobOperationsService: CodingJobOperationsService,
+    private codingJobService: CodingJobService
   ) { }
+
+  @Get(':workspace_id/coding/jobs/:jobId/freshness-impact')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'jobId',
+    type: Number,
+    description: 'Coding job ID to inspect for source freshness impact'
+  })
+  @ApiOkResponse({
+    description: 'Freshness impact retrieved successfully.'
+  })
+  async getCodingJobFreshnessImpact(
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: number
+  ): Promise<CodingJobFreshnessImpactDto> {
+    return this.codingJobService.getCodingJobFreshnessImpact(
+      workspace_id,
+      jobId
+    );
+  }
 
   @Post(':workspace_id/coding/jobs/:jobId/apply-results')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
@@ -49,6 +76,14 @@ export class WorkspaceCodingResultsController {
           type: 'number',
           description: 'Number of responses skipped for manual review'
         },
+        skippedAlreadyCodedCount: {
+          type: 'number',
+          description: 'Number of aggregated sibling responses skipped because a v2 coding already exists'
+        },
+        overwrittenExistingCount: {
+          type: 'number',
+          description: 'Number of existing v2 codings overwritten by explicit request'
+        },
         messageKey: {
           type: 'string',
           description: 'Translation key for the message'
@@ -62,15 +97,12 @@ export class WorkspaceCodingResultsController {
   })
   async applyCodingResults(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: number
-  ): Promise<{
-        success: boolean;
-        updatedResponsesCount: number;
-        skippedReviewCount: number;
-        messageKey: string;
-        messageParams?: Record<string, unknown>;
-      }> {
-    return this.codingJobOperationsService.applyCodingResults(workspace_id, jobId);
+      @Param('jobId') jobId: number,
+      @Body('overwriteExisting') overwriteExisting?: boolean
+  ): Promise<ApplyCodingResultsResult> {
+    return this.codingJobOperationsService.applyCodingResults(workspace_id, jobId, {
+      overwriteExisting: overwriteExisting === true
+    });
   }
 
   @Post(':workspace_id/coding/jobs/bulk-apply-results')
@@ -99,6 +131,14 @@ export class WorkspaceCodingResultsController {
           type: 'number',
           description: 'Total number of responses skipped for manual review'
         },
+        totalSkippedAlreadyCoded: {
+          type: 'number',
+          description: 'Total number of aggregated sibling responses skipped because a v2 coding already exists'
+        },
+        totalOverwrittenExisting: {
+          type: 'number',
+          description: 'Total number of existing v2 codings overwritten'
+        },
         message: {
           type: 'string',
           description: 'Summary message of the bulk operation'
@@ -119,6 +159,11 @@ export class WorkspaceCodingResultsController {
                 type: 'boolean',
                 description: 'Whether the job was skipped'
               },
+              skippedReason: {
+                type: 'string',
+                enum: ['coding-issues', 'training-job', 'not-completed', 'freshness-stale'],
+                description: 'Reason why the job was skipped'
+              },
               result: {
                 type: 'object',
                 description: 'Apply result (only present if not skipped)',
@@ -126,6 +171,8 @@ export class WorkspaceCodingResultsController {
                   success: { type: 'boolean' },
                   updatedResponsesCount: { type: 'number' },
                   skippedReviewCount: { type: 'number' },
+                  skippedAlreadyCodedCount: { type: 'number' },
+                  overwrittenExistingCount: { type: 'number' },
                   message: { type: 'string' }
                 }
               }
@@ -140,16 +187,21 @@ export class WorkspaceCodingResultsController {
     jobsProcessed: number;
     totalUpdatedResponses: number;
     totalSkippedReview: number;
+    totalSkippedAlreadyCoded: number;
+    totalOverwrittenExisting: number;
     message: string;
     results: Array<{
       jobId: number;
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
+      skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
       result?: {
         success: boolean;
         updatedResponsesCount: number;
         skippedReviewCount: number;
+        skippedAlreadyCodedCount: number;
+        overwrittenExistingCount: number;
         message: string;
       };
     }>;

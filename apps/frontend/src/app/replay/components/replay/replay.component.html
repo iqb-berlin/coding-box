@@ -1,4 +1,4 @@
-<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isCodingMode"
+<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isCodingMode || isBookletReplayMode"
   [class.resizing]="isResizing" (window:keydown)="onKeyDown($any($event))">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 
@@ -14,7 +14,8 @@
       @if (!!player && unitDef) {
       @for (key of [reloadKey]; track $index) {
       <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
-        [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (responseVisible)="onResponseVisible()">
+        [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (playerReady)="onPlayerReady()"
+        (responseVisible)="onResponseVisible()">
       </coding-box-unit-player>
       }
       }
@@ -41,10 +42,12 @@
         [completedCount]="getCompletedCount()" [totalUnits]="totalUnits" [progressPercentage]="getProgressPercentage()"
         [openCount]="getOpenCount()" [isCodingActive]="!!codingService.codingJobId && !isBookletReplayMode"
         [hasCodingJob]="!!codingService.codingJobId" [isCodingJobCompleted]="codingService.isCodingJobCompleted"
+        [isCompletedJobReview]="codingService.isCompletedJobReview"
         [isPausingJob]="codingService.isPausingJob" [unitsData]="unitsData" [codingService]="codingService"
         [showScore]="codingService.showScore" [allowComments]="codingService.allowComments"
         [suppressGeneralInstructions]="codingService.suppressGeneralInstructions"
-        [isReadOnly]="codingService.isCodingJobFinalized" (codeSelected)="onCodeSelected($event)"
+        [isReadOnly]="codingService.isCodingJobFinalized" [hasSaveError]="codingService.hasSaveError"
+        (codeSelected)="onCodeSelected($event)"
         (notesChanged)="onNotesChanged($event)" (openNavigateDialog)="openNavigateDialog()"
         (openCommentDialog)="openCommentDialog()" (pauseCodingJob)="pauseCodingJob()"
         (unitChanged)="handleUnitChanged($event)">
@@ -56,7 +59,8 @@
   @if (!!player && unitDef) {
   @for (key of [reloadKey]; track $index) {
   <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
-    [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (responseVisible)="onResponseVisible()">
+    [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (playerReady)="onPlayerReady()"
+    (responseVisible)="onResponseVisible()">
   </coding-box-unit-player>
   }
   }
@@ -66,7 +70,7 @@
 
 
 
-  @if (codingService.isCodingJobCompleted && !isBookletReplayMode && !isReviewMode) {
+  @if (codingService.isCodingJobCompleted && !isBookletReplayMode && !isReviewMode && !codingService.isCompletedJobReview) {
   <div class="completion-overlay">
     <div class="completion-dialog">
       <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>

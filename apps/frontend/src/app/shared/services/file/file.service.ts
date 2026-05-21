@@ -34,6 +34,13 @@ export interface BookletUnit {
   name: string;
   alias: string | null;
   bookletId: number;
+  isReplayable?: boolean;
+  skipReason?: 'NO_UNIT_XML' | 'NO_VOUD' | 'NO_RESULT_UNIT';
+}
+
+export interface GetBookletUnitsOptions {
+  testPerson?: string;
+  includeReplayStatus?: boolean;
 }
 
 export interface GithubReleaseShort {
@@ -425,15 +432,27 @@ export class FileService {
   getBookletUnits(
     workspaceId: number,
     bookletId: string,
-    authToken?: string
+    authToken?: string,
+    options?: GetBookletUnitsOptions
   ): Observable<BookletUnit[]> {
     const headers = authToken ?
       { Authorization: `Bearer ${authToken}` } :
       this.authHeader;
+    let params = new HttpParams();
+
+    if (options?.testPerson) {
+      params = params.set('testPerson', options.testPerson);
+    }
+
+    if (options?.includeReplayStatus) {
+      params = params.set('includeReplayStatus', 'true');
+    }
+
     return this.http
-      .get<
-    BookletUnit[]
-    >(`${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/units`, { headers })
+      .get<BookletUnit[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/units`,
+      { headers, params }
+    )
       .pipe(catchError(() => of([])));
   }
 

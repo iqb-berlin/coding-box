@@ -1,4 +1,5 @@
 .angular
+.nx
 .env.*
 .git
 .gitkeep
@@ -8,6 +9,8 @@
 backup
 cache
 changelogDocs
+coverage
 dist
 node_modules
+release-assets
 secrets

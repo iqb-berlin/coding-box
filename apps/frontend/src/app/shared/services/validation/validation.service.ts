@@ -9,9 +9,13 @@ import {
   map,
   forkJoin,
   filter,
-  take
+  take,
+  throwError
 } from 'rxjs';
-import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import {
+  InvalidVariableDto,
+  VariableValidationSummaryDto
+} from '../../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -28,6 +32,11 @@ interface PaginatedResponse<T> {
   limit: number;
 }
 
+interface VariablesValidationResponse
+  extends PaginatedResponse<InvalidVariableDto> {
+  summary: VariableValidationSummaryDto;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -39,23 +48,17 @@ export class ValidationService {
     workspaceId: number,
     page: number = 1,
     limit: number = 10
-  ): Observable<PaginatedResponse<InvalidVariableDto>> {
+  ): Observable<VariablesValidationResponse> {
     const params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString());
 
     return this.http
       .get<
-    PaginatedResponse<InvalidVariableDto>
+    VariablesValidationResponse
     >(`${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variables`, { params })
       .pipe(
-        catchError(() => of({
-          data: [],
-          total: 0,
-          page,
-          limit
-        })
-        )
+        catchError(error => throwError(() => error))
       );
   }
 
@@ -73,13 +76,7 @@ export class ValidationService {
     PaginatedResponse<InvalidVariableDto>
     >(`${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variable-types`, { params })
       .pipe(
-        catchError(() => of({
-          data: [],
-          total: 0,
-          page,
-          limit
-        })
-        )
+        catchError(error => throwError(() => error))
       );
   }
 
@@ -97,13 +94,7 @@ export class ValidationService {
     PaginatedResponse<InvalidVariableDto>
     >(`${this.serverUrl}admin/workspace/${workspaceId}/files/validate-response-status`, { params })
       .pipe(
-        catchError(() => of({
-          data: [],
-          total: 0,
-          page,
-          limit
-        })
-        )
+        catchError(error => throwError(() => error))
       );
   }
 
@@ -114,14 +105,7 @@ export class ValidationService {
       {}
     )
       .pipe(
-        catchError(() => of({
-          testTakersFound: false,
-          totalGroups: 0,
-          totalLogins: 0,
-          totalBookletCodes: 0,
-          missingPersons: []
-        })
-        )
+        catchError(error => throwError(() => error))
       );
   }
 
@@ -156,16 +140,7 @@ export class ValidationService {
       { params }
     )
       .pipe(
-        catchError(() => of({
-          testTakersFound: false,
-          groupsWithResponses: [],
-          allGroupsHaveResponses: false,
-          total: 0,
-          totalGroupsWithoutResponses: 0,
-          page,
-          limit
-        })
-        )
+        catchError(error => throwError(() => error))
       );
   }
 
@@ -184,13 +159,7 @@ export class ValidationService {
       { params }
     )
       .pipe(
-        catchError(() => of({
-          data: [],
-          total: 0,
-          page,
-          limit
-        })
-        )
+        catchError(error => throwError(() => error))
       );
   }
 
@@ -250,9 +219,12 @@ export class ValidationService {
     | 'variableTypes'
     | 'responseStatus'
     | 'testTakers'
+    | 'testFiles'
     | 'groupResponses'
     | 'deleteResponses'
     | 'deleteAllResponses'
+    | 'deleteTestResults'
+    | 'deleteTestLogs'
     | 'duplicateResponses',
     page?: number,
     limit?: number,
@@ -268,23 +240,10 @@ export class ValidationService {
       params = params.set('limit', limit.toString());
     }
 
-    // Add additional data as query parameters if provided
-    if (additionalData) {
-      Object.entries(additionalData).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          if (Array.isArray(value)) {
-            params = params.set(key, value.join(','));
-          } else {
-            params = params.set(key, String(value));
-          }
-        }
-      });
-    }
-
     return this.http
       .post<ValidationTaskDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks`,
-      null,
+      additionalData ? { additionalData } : null,
       { params }
     )
       .pipe(

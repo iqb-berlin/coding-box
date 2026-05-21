@@ -49,7 +49,7 @@
         (click)="openTestResultsSearchDialog()"
       >
         <mat-icon>search</mat-icon>
-        Suchen
+        Schnellsuche
       </button>
 
       <button
@@ -58,7 +58,7 @@
         (click)="openVariableAnalysisDialog()"
       >
         <mat-icon>analytics</mat-icon>
-        Item/Variablen Analyse
+        Antwortwertanalyse
       </button>
 
       <button mat-raised-button color="primary" (click)="toggleTableView()">
@@ -66,11 +66,37 @@
         @if (!isTableView) {
         <span>Tabellenansicht</span>
         } @else {
-        <span>Detailansicht</span>
+        <span>Ergebnisbrowser</span>
         }
       </button>
     </div>
   </div>
+
+  @if (hasCodingFreshnessWarning) {
+  <div class="coding-freshness-banner">
+    <div class="coding-freshness-icon">
+      <mat-icon>warning</mat-icon>
+    </div>
+    <div class="coding-freshness-copy">
+      <div class="coding-freshness-title">{{ codingFreshnessBannerTitle }}</div>
+      <div class="coding-freshness-text">
+        <div>{{ codingFreshnessSummaryText }}</div>
+        <div class="coding-freshness-help">{{ codingFreshnessExplanationText }}</div>
+      </div>
+      <div class="coding-freshness-chip-row">
+        @for (item of codingFreshnessDisplayWarnings; track item.version + item.state) {
+        <span class="coding-freshness-chip">
+          {{ getCodingFreshnessChipLabel(item) }}
+        </span>
+        }
+      </div>
+    </div>
+    <button mat-stroked-button type="button" (click)="openCodingFreshnessTarget()">
+      <mat-icon>{{ codingFreshnessActionIcon }}</mat-icon>
+      {{ codingFreshnessActionLabel }}
+    </button>
+  </div>
+  }
 
   <div class="overview-card">
     <h2 class="section-title">Übersicht (Arbeitsbereich)</h2>
@@ -103,13 +129,13 @@
         <div class="value">{{ overview.uniqueBooklets }}</div>
       </div>
       <div class="overview-metric">
-        <div class="label">Antworten (einzigartig)</div>
+        <div class="label">Antwortwerte (einzigartig)</div>
         <div class="value">{{ overview.uniqueResponses }}</div>
       </div>
     </div>
 
     <div class="overview-status">
-      <h3 class="sub-title">Antwort-Status Verteilung</h3>
+      <h3 class="sub-title">Antwortwert-Status Verteilung</h3>
       <div class="status-grid">
         @for (sc of overviewStatusCounts; track sc.status) {
         <div
@@ -167,7 +193,10 @@
     <p class="loading-text">{{ uploadingMessage }}</p>
   </div>
   } @if(!isUploadingResults){ @if (dataSource) { @if (isTableView) {
-  <coding-box-test-results-flat-table></coding-box-test-results-flat-table>
+  <coding-box-test-results-flat-table
+    [initialFilters]="quickSearchTableFilters"
+    (responseDeleted)="onFlatTableResponseDeleted()"
+  ></coding-box-test-results-flat-table>
   } @else {
   <div class="content-container">
     <div class="data-card">
@@ -175,25 +204,56 @@
         <div class="section-info">
           <h2 class="section-title">Testpersonen</h2>
           <p class="section-description">
-            Wählen Sie eine Testperson aus, um deren Ergebnisse anzuzeigen
+            Wählen Sie eine Testperson aus. Danach können Sie Testhefte, Aufgaben und Antworten durchsuchen.
           </p>
         </div>
-        <button
-          mat-stroked-button
-          [disabled]="selection.selected.length === 0"
-          (click)="deleteSelectedPersons()"
-          class="delete-button"
-        >
-          <mat-icon>delete</mat-icon>
-          Testperson(en) löschen
-        </button>
+        <div class="section-actions">
+          <button
+            mat-stroked-button
+            [disabled]="selection.selected.length === 0 || isDeleteJobRunning()"
+            (click)="deleteSelectedPersons()"
+            class="delete-button"
+          >
+            <mat-icon>delete</mat-icon>
+            Ausgewählte löschen
+          </button>
+          <button
+            mat-stroked-button
+            [disabled]="selection.selected.length === 0 || isDeleteJobRunning()"
+            (click)="deleteSelectedGroups()"
+            class="delete-button"
+          >
+            <mat-icon>group_remove</mat-icon>
+            Testgruppe(n) löschen
+          </button>
+          <button
+            mat-stroked-button
+            [disabled]="totalRecords === 0 || isDeleteJobRunning()"
+            (click)="deleteFilteredPersons()"
+            class="delete-button"
+          >
+            <mat-icon>filter_alt_off</mat-icon>
+            Gefilterte löschen
+          </button>
+        </div>
       </div>
       <mat-divider></mat-divider>
+
+      @if (isDeleteJobRunning()) {
+      <div class="delete-progress-container">
+        <div class="delete-progress-header">
+          <mat-icon>delete_sweep</mat-icon>
+          <span>{{ deleteProgressMessage || 'Löschung läuft...' }}</span>
+          <span class="delete-progress-value">{{ deleteProgress }}%</span>
+        </div>
+        <mat-progress-bar mode="determinate" [value]="deleteProgress"></mat-progress-bar>
+      </div>
+      }
 
       @if (isDeletingTestPersons) {
       <div class="loading-container">
         <mat-spinner class="mat-spinner"></mat-spinner>
-        <p class="loading-text">Testpersonen werden gelöscht...</p>
+        <p class="loading-text">{{ deleteProgressMessage || 'Löschung wird vorbereitet...' }}</p>
       </div>
       } @if (isLoading && !isSearching && !isDeletingTestPersons) {
       <div class="loading-container">
@@ -284,6 +344,7 @@
               (click)="onRowClick(row)"
               *matRowDef="let row; columns: displayedColumns"
               class="clickable-row"
+              [class.active-test-person]="testPerson?.id === row.id"
             ></mat-row>
           </mat-table>
 
@@ -375,6 +436,7 @@
                 mat-stroked-button
                 color="primary"
                 (click)="replayBooklet(booklet)"
+                [disabled]="!canReplayBooklet()"
                 class="action-button"
               >
                 <mat-icon>play_arrow</mat-icon>
@@ -397,6 +459,16 @@
               >
                 <mat-icon>info</mat-icon>
                 Info
+              </button>
+              <button
+                mat-stroked-button
+                color="warn"
+                [disabled]="isDeleteJobRunning()"
+                (click)="deleteBookletsByName(booklet.name)"
+                class="action-button"
+              >
+                <mat-icon>delete_sweep</mat-icon>
+                Alle gleichen löschen
               </button>
             </div>
             @if (hasShortProcessingTime(booklet) || !isBookletComplete(booklet))
@@ -452,6 +524,16 @@
                   matTooltip="Unit löschen"
                 >
                   <mat-icon>delete</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  color="warn"
+                  [disabled]="isDeleteJobRunning()"
+                  (click)="$event.stopPropagation(); deleteUnitsByName(unit)"
+                  class="delete-unit-button bulk-delete-unit-button"
+                  matTooltip="Alle Aufgaben dieses Namens löschen"
+                >
+                  <mat-icon>delete_sweep</mat-icon>
                 </button>
                 }
               </mat-list-item>
@@ -555,6 +637,16 @@
           >
             <mat-icon>info</mat-icon>
             Info
+          </button>
+          <button
+            mat-stroked-button
+            color="warn"
+            [disabled]="isDeleteJobRunning() || !selectedUnit"
+            (click)="selectedUnit ? deleteUnitsByName(selectedUnit) : null"
+            class="action-button"
+          >
+            <mat-icon>delete_sweep</mat-icon>
+            Alle gleichen Aufgaben löschen
           </button>
           <button
             mat-stroked-button

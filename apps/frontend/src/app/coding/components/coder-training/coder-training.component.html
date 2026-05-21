@@ -1,6 +1,6 @@
 <div class="coder-training-container">
   <div class="header">
-    <h2 class="title">Kodierer-Schulung erstellen</h2>
+    <h2 class="title">{{ getDialogTitle() }}</h2>
     <button mat-icon-button (click)="onClose()" class="close-button">
       <mat-icon>close</mat-icon>
     </button>
@@ -17,6 +17,10 @@
         <input matInput formControlName="trainingLabel" placeholder="z.B. Schulung 2024 - Mathematik">
         <mat-hint>Diese Bezeichnung wird den Kodierern als Projekttitel angezeigt.</mat-hint>
       </mat-form-field>
+      <div class="duplicate-label-warning" *ngIf="hasDuplicateTrainingLabel()">
+        <mat-icon>info</mat-icon>
+        <span>{{ getDuplicateTrainingLabelWarning() }}</span>
+      </div>
     </div>
 
     <mat-divider class="section-divider"></mat-divider>
@@ -56,7 +60,28 @@
           <mat-option value="random_testgroups">{{ 'coding-job-definition-dialog.case-selection-mode.random_testgroups' | translate }}</mat-option>
         </mat-select>
       </mat-form-field>
+      <div class="strategy-info">
+        <mat-icon>info</mat-icon>
+        <div>
+          <strong>{{ getCaseSelectionModeLabel(trainingForm.get('caseSelectionMode')?.value) }}</strong>
+          <span>{{ getCaseSelectionModeDescription(trainingForm.get('caseSelectionMode')?.value) }}</span>
+        </div>
+      </div>
     </div>
+
+    <mat-divider class="section-divider"></mat-divider>
+
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">{{ 'coding-job-definition-dialog.coding-display-options.title' | translate }}</h3>
+      </div>
+      <p class="section-description">{{ 'coding-job-definition-dialog.coding-display-options.description' | translate }}</p>
+      <mat-checkbox formControlName="suppressGeneralInstructions" class="display-option-checkbox">
+        {{ 'coding-job-definition-dialog.coding-display-options.suppress-general-instructions' | translate }}
+      </mat-checkbox>
+    </div>
+
+    <mat-divider class="section-divider"></mat-divider>
 
     <!-- Reference Trainings Section -->
     <div class="section" *ngIf="availableTrainings.length > 0">
@@ -67,13 +92,26 @@
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>{{ 'coding-job-definition-dialog.reference-trainings.select-placeholder' | translate }}</mat-label>
         <mat-select formControlName="referenceTrainingIds" multiple>
-          <mat-option *ngFor="let t of availableTrainings" [value]="t.id">{{ t.label }} ({{ t.jobsCount }} Jobs)</mat-option>
+          <mat-option *ngFor="let t of availableTrainings" [value]="t.id">
+            <div class="training-option">
+              <span class="training-option-title">{{ getTrainingOptionTitle(t) }}</span>
+              <span class="training-option-meta">{{ getTrainingOptionMeta(t) }}</span>
+            </div>
+          </mat-option>
         </mat-select>
       </mat-form-field>
-      <mat-radio-group formControlName="referenceMode" class="reference-mode-controls" *ngIf="(trainingForm.get('referenceTrainingIds')?.value?.length || 0) > 0">
+      <mat-radio-group
+        formControlName="referenceMode"
+        class="reference-mode-controls"
+        [class.has-error]="!hasValidReferenceMode()"
+        *ngIf="(trainingForm.get('referenceTrainingIds')?.value?.length || 0) > 0">
         <mat-radio-button value="same">{{ 'coding-job-definition-dialog.reference-trainings.same' | translate }}</mat-radio-button>
         <mat-radio-button value="different">{{ 'coding-job-definition-dialog.reference-trainings.different' | translate }}</mat-radio-button>
       </mat-radio-group>
+      <div class="reference-mode-error" *ngIf="!hasValidReferenceMode()">
+        <mat-icon>error_outline</mat-icon>
+        <span>Bitte wählen Sie den Vergleichsmodus für die ausgewählten Vergleichsschulungen.</span>
+      </div>
     </div>
 
     <mat-divider class="section-divider"></mat-divider>
@@ -106,6 +144,27 @@
       <div *ngIf="coders.length === 0" class="no-coders-message">
         <mat-icon>group_off</mat-icon>
         <p>Keine Kodierer verfügbar</p>
+      </div>
+    </div>
+
+    <mat-divider class="section-divider"></mat-divider>
+
+    <!-- Variable Basis Section -->
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">Variablenbasis</h3>
+      </div>
+
+      <div class="variable-basis-panel">
+        <mat-checkbox class="derived-toggle" formControlName="includeDerivedVariables" color="primary">
+          Abgeleitete Variablen einbeziehen
+          <span *ngIf="getDerivedVariablesCount() > 0" class="derived-count">
+            ({{getDerivedVariablesCount()}} verfügbar)
+          </span>
+        </mat-checkbox>
+        <span class="basis-meta">
+          Standard: einbezogen
+        </span>
       </div>
     </div>
 
@@ -150,7 +209,15 @@
               <mat-option *ngFor="let bundle of filteredBundles$ | async" [value]="bundle.id"
                 [matTooltip]="bundle.description || ''" matTooltipPosition="above">
                 {{bundle.name}}
-                <span class="bundle-variable-count"> ({{bundle.variables.length}} Variablen)</span>
+                <span class="bundle-variable-count">
+                  ({{getBundleEffectiveVariableCount(bundle)}}{{ includeDerivedVariables ? '' : ' von ' + bundle.variables.length }} Variablen)
+                </span>
+                <span
+                  *ngIf="getBundleDerivedVariablesCount(bundle) > 0"
+                  class="derived-chip compact"
+                  matTooltip="Dieses Variablenbündel enthält abgeleitete Variablen">
+                  {{getBundleDerivedVariablesCount(bundle)}} abgeleitet
+                </span>
               </mat-option>
             </mat-select>
           </mat-form-field>
@@ -163,6 +230,12 @@
                 <mat-icon>inventory_2</mat-icon>
                 Variablenbündel: {{bundleGroup.bundle.name}}
                 <span class="bundle-variable-count-badge">({{bundleGroup.variables.length}} Variablen)</span>
+                <span
+                  *ngIf="getBundleDerivedVariablesCount(bundleGroup.bundle) > 0"
+                  class="derived-chip"
+                  matTooltip="Abgeleitete Variablen im Bündel werden standardmäßig einbezogen.">
+                  abgeleitet enthalten
+                </span>
               </h4>
               <div class="bundle-controls">
                 <!-- Case Count Validation Warning for Bundle -->
@@ -196,6 +269,12 @@
                 </button>
               </div>
             </div>
+            <div class="bundle-ordering-note">
+              <mat-icon>swap_vert</mat-icon>
+              <span>
+                Reihenfolge: {{getCaseOrderingModeLabel(bundleGroup.bundle.caseOrderingMode || trainingForm.get('caseOrderingMode')?.value)}}
+              </span>
+            </div>
             <!-- Individual variable details hidden for bundles as per requirement -->
           </div>
         </div>
@@ -226,22 +305,47 @@
       </div>
 
       <div class="variable-selection-controls">
-        <mat-form-field appearance="outline" class="variable-multiselect-field">
-          <mat-label>Variablen auswählen</mat-label>
-          <mat-select placeholder="Variable(n) auswählen" multiple [formControl]="manualVariablesSelectControl">
-            <div class="select-search-container">
-              <mat-form-field appearance="fill" class="select-search-field">
-                <mat-icon matPrefix>search</mat-icon>
-                <input matInput [formControl]="variableFilterCtrl" placeholder="Suchen..."
-                  (keydown)="$event.stopPropagation()">
-              </mat-form-field>
-            </div>
-            <mat-option *ngFor="let variable of filteredVariables$ | async"
-              [value]="variable.unitName + '::' + variable.variableId">
-              {{variable.unitName}} - {{variable.variableId}} ({{variable.responseCount}} Fälle)
-            </mat-option>
-          </mat-select>
-        </mat-form-field>
+        <div class="variable-selection-row">
+          <mat-form-field appearance="outline" class="variable-multiselect-field">
+            <mat-label>Variablen auswählen</mat-label>
+            <mat-select placeholder="Variable(n) auswählen" multiple [formControl]="manualVariablesSelectControl">
+              <div class="select-search-container">
+                <mat-form-field appearance="fill" class="select-search-field">
+                  <mat-icon matPrefix>search</mat-icon>
+                  <input matInput [formControl]="variableFilterCtrl" placeholder="Suchen..."
+                    (keydown)="$event.stopPropagation()">
+                </mat-form-field>
+              </div>
+              <mat-option *ngFor="let variable of filteredVariables$ | async"
+                [value]="variable.unitName + '::' + variable.variableId">
+                {{variable.unitName}} - {{variable.variableId}} ({{variable.responseCount}} Fälle)
+                <span *ngIf="isVariableDerived(variable)" class="derived-chip compact">abgeleitet</span>
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <div class="variable-selection-actions">
+            <button
+              mat-stroked-button
+              type="button"
+              color="primary"
+              (click)="selectAllManualVariables()"
+              [disabled]="!hasSelectableManualVariables()"
+              matTooltip="Wählt alle aktuell gefilterten, manuell auswählbaren Variablen aus. Variablenbündel bleiben unverändert.">
+              <mat-icon>select_all</mat-icon>
+              Alle auswählen
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="clearManualVariables()"
+              [disabled]="!hasManualVariablesSelected()"
+              matTooltip="Entfernt nur die manuell ausgewählten Variablen. Variablen aus Variablenbündeln bleiben erhalten.">
+              <mat-icon>clear_all</mat-icon>
+              Alle abwählen
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="variable-config">
@@ -252,15 +356,23 @@
             <div class="variable-item" *ngFor="let item of groupedVariables.manual" [formGroup]="item.control"
               [class.has-error]="isManualVariableInsufficient(item)">
 
-              <mat-form-field appearance="outline" class="variable-name-field density-compact">
-                <mat-label>Variable</mat-label>
-                <input matInput
-                  [value]="item.control.get('unitId')?.value + ' - ' + item.control.get('variableId')?.value" readonly>
-              </mat-form-field>
+              <div class="variable-name-cell">
+                <mat-form-field appearance="outline" class="variable-name-field density-compact">
+                  <mat-label>Variable</mat-label>
+                  <input matInput
+                    [value]="item.control.get('unitId')?.value + ' - ' + item.control.get('variableId')?.value" readonly>
+                </mat-form-field>
+                <span
+                  *ngIf="isControlDerived(item.control)"
+                  class="derived-chip"
+                  matTooltip="Abgeleitete Variable">
+                  abgeleitet
+                </span>
+              </div>
 
               <mat-form-field appearance="outline" class="sample-count-field density-compact"
                 [class.insufficient-input]="isManualVariableInsufficient(item)">
-                <mat-label>Anzahl Stichproben</mat-label>
+                <mat-label>Stichproben pro Variable</mat-label>
                 <input matInput type="number" formControlName="sampleCount" min="1" [max]="getAvailableCount(item)">
                 <mat-hint *ngIf="isManualVariableInsufficient(item)" class="warn-text">
                   Max. {{getAvailableCount(item)}} Fälle verfügbar
@@ -299,27 +411,58 @@
       <ul>
         <li>Ausgewählte Kodierer: <strong>{{selectedCoders.size}}</strong></li>
         <li>
-          Ausgewählte Variablen: <strong>{{groupedVariables.manual.length}}</strong>
+          Manuell ausgewählte Variablen: <strong>{{getManualVariablesCount()}}</strong>
         </li>
         <li>
-          Ausgewählte Variablenbündel: <strong>{{groupedVariables.bundles.length}}</strong>
+          Variablen aus Variablenbündeln: <strong>{{getBundleVariablesCount()}}</strong>
         </li>
         <li>
-          Gesamte Stichproben:
-          <strong>{{getTotalSamples()}}</strong>
+          Gesamtvariablen: <strong>{{getSelectedVariablesCount()}}</strong>
         </li>
-
+        <li>
+          Ausgewählte Variablenbündel: <strong>{{getSelectedBundleCount()}}</strong>
+        </li>
+        <li>
+          Gesamtfälle: <strong>{{getTotalSamples()}}</strong>
+        </li>
+        <li>
+          Abgeleitete Variablen:
+          <strong>{{getSelectedDerivedVariablesCount()}}</strong>
+        </li>
+        <li>
+          Fallauswahl:
+          <strong>{{getCaseSelectionModeLabel(trainingForm.get('caseSelectionMode')?.value)}}</strong>
+        </li>
+        <li>
+          Reihenfolge:
+          <strong>{{getCaseOrderingModeLabel(trainingForm.get('caseOrderingMode')?.value)}}</strong>
+        </li>
       </ul>
+      <div class="summary-note" *ngIf="hasBundleOrderingOverrides()">
+        <mat-icon>swap_vert</mat-icon>
+        <span>Abweichende Bündel-Reihenfolge: {{getBundleOrderingDetails()}}</span>
+      </div>
+      <div class="validation-checklist" *ngIf="!canStartTraining()">
+        <div
+          class="validation-item"
+          *ngFor="let item of getValidationItems()"
+          [class.valid]="item.valid"
+          [class.invalid]="!item.valid">
+          <mat-icon>{{item.valid ? 'check_circle' : 'error_outline'}}</mat-icon>
+          <span>{{item.label}}</span>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- Action Buttons -->
   <div class="action-buttons">
     <button mat-raised-button color="primary" (click)="onStartTraining()" [disabled]="!canStartTraining() || isLoading"
-      class="start-training-button">
-      <mat-icon *ngIf="!isLoading">play_arrow</mat-icon>
+      class="start-training-button"
+      [matTooltip]="!canStartTraining() ? getFirstValidationMessage() : ''">
+      <mat-icon *ngIf="!isLoading">{{ isEditMode ? 'save' : 'play_arrow' }}</mat-icon>
       <mat-progress-spinner mode="indeterminate" diameter="20" *ngIf="isLoading"></mat-progress-spinner>
-      {{ isLoading ? 'Kodierungsaufträge werden erstellt...' : 'Kodierungsaufträge erstellen' }}
+      {{ getPrimaryActionLabel() }}
     </button>
 
     <button mat-button (click)="onClose()" [disabled]="isLoading" class="cancel-button">

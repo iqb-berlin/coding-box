@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository, QueryRunner
@@ -22,10 +22,22 @@ import {
   CodingStatisticsWithJob
 } from '../shared';
 import { ResponseManagementService } from '../test-results/response-management.service';
+import { AutocoderSourceRevisionStaleError } from '../test-results/autocoder-source-revision-stale.error';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
+import { CodingReadinessService } from './coding-readiness.service';
+
+type UnitCodingJobMetadata = {
+  source?: 'manual-selection' | 'coding-freshness';
+  freshnessVersion?: 'v1' | 'v3';
+  freshnessStates?: ('PENDING' | 'STALE')[];
+  freshnessSourceRevision?: number;
+  groupNames?: string;
+};
 
 @Injectable()
 export class CodingProcessService {
@@ -44,9 +56,9 @@ export class CodingProcessService {
     private responseRepository: Repository<ResponseEntity>,
     private jobQueueService: JobQueueService,
     private responseManagementService: ResponseManagementService,
-    private workspaceFilesService: WorkspaceFilesService,
     private workspaceCoreService: WorkspaceCoreService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    private codingReadinessService: CodingReadinessService
   ) { }
 
   private codingSchemeCache: Map<
@@ -68,6 +80,8 @@ export class CodingProcessService {
     testPersonIdsOrGroups: string,
     autoCoderRun: number = 1
   ): Promise<CodingStatisticsWithJob> {
+    const resolvedAutoCoderRun = this.normalizeAutoCoderRun(autoCoderRun);
+
     if (
       !workspace_id ||
       !testPersonIdsOrGroups ||
@@ -143,11 +157,19 @@ export class CodingProcessService {
       `Starting job for ${personIds.length} test persons in workspace ${workspace_id}`
     );
 
+    await this.codingReadinessService.assertAutoCodingCanProcess(
+      workspace_id,
+      {
+        personIds,
+        autoCoderRun: resolvedAutoCoderRun
+      }
+    );
+
     const bullJob = await this.jobQueueService.addTestPersonCodingJob({
       workspaceId: workspace_id,
       personIds,
       groupNames: !areAllNumbers ? groupsOrIds.join(',') : undefined,
-      autoCoderRun
+      autoCoderRun: resolvedAutoCoderRun
     });
 
     this.logger.log(`Added job to Redis queue with ID ${bullJob.id}`);
@@ -160,13 +182,90 @@ export class CodingProcessService {
     };
   }
 
+  async codeUnitIds(
+    workspace_id: number,
+    unitIds: number[],
+    autoCoderRun: number = 1,
+    metadata: UnitCodingJobMetadata = {}
+  ): Promise<CodingStatisticsWithJob> {
+    const resolvedAutoCoderRun = this.normalizeAutoCoderRun(autoCoderRun);
+    const ids = this.uniquePositiveIds(unitIds);
+    if (!workspace_id || ids.length === 0) {
+      this.logger.warn('Ungültige Eingabeparameter: workspace_id oder unitIds fehlen.');
+      return { totalResponses: 0, statusCounts: {} };
+    }
+
+    const rows = await this.unitRepository
+      .createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .select('unit.id', 'unitId')
+      .addSelect('person.id', 'personId')
+      .addSelect('person.group', 'groupName')
+      .where('person.workspace_id = :workspaceId', { workspaceId: workspace_id })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('unit.id IN (:...unitIds)', { unitIds: ids })
+      .getRawMany<{ unitId: number | string; personId: number | string; groupName: string | null }>();
+
+    const includedUnitIds = this.uniquePositiveIds(rows.map(row => Number(row.unitId)));
+    const personIds = this.uniquePositiveIds(rows.map(row => Number(row.personId)))
+      .map(id => id.toString());
+    const groupNames = Array.from(new Set(
+      rows
+        .map(row => row.groupName || '')
+        .filter(groupName => groupName.trim() !== '')
+    )).sort((a, b) => a.localeCompare(b));
+
+    if (includedUnitIds.length === 0 || personIds.length === 0) {
+      return {
+        totalResponses: 0,
+        statusCounts: {},
+        message: 'No matching coding units found for the selected freshness scope.'
+      };
+    }
+
+    await this.codingReadinessService.assertAutoCodingCanProcess(
+      workspace_id,
+      {
+        unitIds: includedUnitIds,
+        autoCoderRun: resolvedAutoCoderRun
+      }
+    );
+
+    const bullJob = await this.jobQueueService.addTestPersonCodingJob({
+      workspaceId: workspace_id,
+      personIds,
+      unitIds: includedUnitIds,
+      groupNames: metadata.groupNames || groupNames.join(','),
+      autoCoderRun: resolvedAutoCoderRun,
+      source: metadata.source || 'manual-selection',
+      freshnessVersion: metadata.freshnessVersion,
+      freshnessStates: metadata.freshnessStates,
+      freshnessSourceRevision: metadata.freshnessSourceRevision
+    });
+
+    this.logger.log(
+      `Added unit-scoped coding job ${bullJob.id} for ${includedUnitIds.length} units and ${personIds.length} persons`
+    );
+
+    return {
+      totalResponses: 0,
+      statusCounts: {},
+      jobId: bullJob.id.toString(),
+      message: `Processing ${includedUnitIds.length} affected coding units in the background. Check job status with jobId: ${bullJob.id}`
+    };
+  }
+
   async processTestPersonsBatch(
     workspace_id: number,
     personIds: string[],
     autoCoderRun: number = 1,
     progressCallback?: (progress: number) => void,
-    jobId?: string
+    jobId?: string,
+    targetUnitIds?: number[],
+    freshnessSourceRevision?: number
   ): Promise<CodingStatistics> {
+    const resolvedAutoCoderRun = this.normalizeAutoCoderRun(autoCoderRun);
     this.cleanupCaches();
 
     const startTime = Date.now();
@@ -252,7 +351,7 @@ export class CodingProcessService {
 
       // Step 3: Get units - 30% progress
       const unitQueryStart = Date.now();
-      const units = await this.fetchUnits(workspace_id, bookletIds);
+      const units = await this.fetchUnits(workspace_id, bookletIds, targetUnitIds);
       metrics.unitQuery = Date.now() - unitQueryStart;
 
       if (!units || units.length === 0) {
@@ -283,7 +382,10 @@ export class CodingProcessService {
 
       for (const unit of units) {
         unitIds.add(unit.id);
-        unitAliasesSet.add(unit.alias.toUpperCase());
+        const unitFileId = this.getUnitFileId(unit);
+        if (unitFileId) {
+          unitAliasesSet.add(unitFileId);
+        }
       }
 
       const unitIdsArray = Array.from(unitIds);
@@ -305,7 +407,11 @@ export class CodingProcessService {
 
       // Step 5: Get responses - 50% progress
       const responseQueryStart = Date.now();
-      const allResponses = await this.fetchResponses(unitIdsArray, queryRunner);
+      const allResponses = await this.fetchResponses(
+        unitIdsArray,
+        queryRunner,
+        resolvedAutoCoderRun
+      );
       metrics.responseQuery = Date.now() - responseQueryStart;
 
       if (!allResponses || allResponses.length === 0) {
@@ -328,18 +434,24 @@ export class CodingProcessService {
         return statistics;
       }
 
-      // Step 6: Get unit variables for filtering - 55% progress
-      const filteredResponses = await this.filterResponsesValidVariables(
+      // Step 6: Keep only responses that the same readiness logic considers codeable - 55% progress
+      const filteredResponses = await this.codingReadinessService.filterResponsesCodeable(
         workspace_id,
         allResponses,
         units
       );
 
       this.logger.log(
-        `Filtered responses: ${allResponses.length} -> ${filteredResponses.length
+        `Filtered codeable responses: ${allResponses.length} -> ${filteredResponses.length
         } (removed ${allResponses.length - filteredResponses.length
-        } invalid variable responses)`
+        } non-codeable responses)`
       );
+
+      if (filteredResponses.length === 0) {
+        this.logger.log('Keine kodierbaren Antworten nach Readiness-Filter gefunden.');
+        await queryRunner.release();
+        return statistics;
+      }
 
       if (jobId && (await this.isJobCancelled(jobId))) {
         this.logger.log(
@@ -426,6 +538,7 @@ export class CodingProcessService {
       // Step 10: Get coding scheme files - 85% progress
       const schemeQueryStart = Date.now();
       const fileIdToCodingSchemeMap = await this.getCodingSchemeFiles(
+        workspace_id,
         codingSchemeRefs,
         jobId,
         queryRunner
@@ -463,7 +576,7 @@ export class CodingProcessService {
         fileIdToCodingSchemeMap,
         filteredResponses,
         statistics,
-        autoCoderRun,
+        resolvedAutoCoderRun,
         jobId,
         queryRunner,
         progressCallback
@@ -489,7 +602,13 @@ export class CodingProcessService {
           jobId,
           this.isJobCancelled.bind(this),
           progressCallback,
-          metrics
+          metrics,
+          {
+            unitIds: unitIdsArray,
+            autoCoderRun: resolvedAutoCoderRun,
+            markCurrentVersion: resolvedAutoCoderRun === 2 ? 'v3' : 'v1',
+            expectedSourceRevision: freshnessSourceRevision
+          }
         );
 
       if (!updateSuccess) {
@@ -516,13 +635,20 @@ export class CodingProcessService {
 
       return statistics;
     } catch (error) {
+      if (error instanceof AutocoderSourceRevisionStaleError) {
+        this.logger.warn(error.message);
+        throw error;
+      }
+
       this.logger.error(
         `Error while processing test persons in batch: ${error.message} \n ${error.stack}`
       );
       await queryRunner.rollbackTransaction();
       return statistics;
     } finally {
-      await queryRunner.release();
+      if (!queryRunner.isReleased) {
+        await queryRunner.release();
+      }
     }
   }
 
@@ -543,7 +669,11 @@ export class CodingProcessService {
       .getMany();
   }
 
-  private async fetchUnits(workspace_id: number, bookletIds: number[]): Promise<Unit[]> {
+  private async fetchUnits(
+    workspace_id: number,
+    bookletIds: number[],
+    unitIds?: number[]
+  ): Promise<Unit[]> {
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
     const query = this.unitRepository.createQueryBuilder('unit')
       .leftJoin('unit.booklet', 'booklet')
@@ -551,33 +681,23 @@ export class CodingProcessService {
       .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
       .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias']);
 
-    if (globalIgnoredUnits.length > 0) {
-      query.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
+    const ids = this.uniquePositiveIds(unitIds || []);
+    if (ids.length > 0) {
+      query.andWhere('unit.id IN (:...unitIds)', { unitIds: ids });
     }
 
-    if (ignoredBooklets.length > 0) {
-      query.andWhere('UPPER(bookletinfo.name) NOT IN (:...ignoredBooklets)', { ignoredBooklets });
-    }
-
-    if (testletIgnoredUnits.length > 0) {
-      const condition = testletIgnoredUnits.map((_, i) => `(UPPER(bookletinfo.name) = :bId${i} AND UPPER(unit.name) = :uId${i})`).join(' OR ');
-      const params: Record<string, string> = {};
-      testletIgnoredUnits.forEach((t, i) => {
-        params[`bId${i}`] = t.bookletId.toUpperCase();
-        params[`uId${i}`] = t.unitId.toUpperCase();
-      });
-      query.andWhere(`NOT (${condition})`, params);
-    }
+    applyResolvedExclusionsToQuery(query, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
     return query.getMany();
   }
 
   private async fetchResponses(
     unitIds: number[],
-    queryRunner: QueryRunner
+    queryRunner: QueryRunner,
+    autoCoderRun: number
   ): Promise<ResponseEntity[]> {
     const responseRepo = queryRunner.manager.getRepository(ResponseEntity);
-    return responseRepo
+    const query = responseRepo
       .createQueryBuilder('ResponseEntity')
       .select([
         'ResponseEntity.id',
@@ -585,8 +705,14 @@ export class CodingProcessService {
         'ResponseEntity.variableid',
         'ResponseEntity.value',
         'ResponseEntity.status',
+        'ResponseEntity.subform',
+        'ResponseEntity.is_autocoder_generated',
         'ResponseEntity.status_v1',
-        'ResponseEntity.status_v2'
+        'ResponseEntity.code_v1',
+        'ResponseEntity.score_v1',
+        'ResponseEntity.status_v2',
+        'ResponseEntity.code_v2',
+        'ResponseEntity.score_v2'
       ])
       .where('ResponseEntity.unitid = ANY(:unitIds)', {
         unitIds
@@ -599,33 +725,32 @@ export class CodingProcessService {
             derivePending: statusStringToNumber('DERIVE_PENDING') as number
           });
         })
-      )
-      .getMany();
-  }
+      );
 
-  private async filterResponsesValidVariables(
-    workspaceId: number,
-    responses: ResponseEntity[],
-    units: Unit[]
-  ): Promise<ResponseEntity[]> {
-    const unitVariables = await this.workspaceFilesService.getUnitVariableMap(
-      workspaceId
-    );
-    const validVariableSets = new Map<string, Set<string>>();
-    unitVariables.forEach((vars: Set<string>, unitName: string) => {
-      validVariableSets.set(unitName.toUpperCase(), vars);
-    });
+    if (autoCoderRun === 1) {
+      query.andWhere(
+        '(ResponseEntity.is_autocoder_generated = :isAutocoderGenerated OR ResponseEntity.is_autocoder_generated IS NULL)',
+        { isAutocoderGenerated: false }
+      );
+    } else {
+      query.andWhere(
+        new Brackets(qb => {
+          qb.where(
+            '(ResponseEntity.is_autocoder_generated = :isAutocoderGenerated OR ResponseEntity.is_autocoder_generated IS NULL)',
+            { isAutocoderGenerated: false }
+          ).orWhere(
+            `ResponseEntity.is_autocoder_generated = :generatedWithSourceCoding
+              AND (
+                ResponseEntity.status_v1 IS NOT NULL
+                OR ResponseEntity.status_v2 IS NOT NULL
+              )`,
+            { generatedWithSourceCoding: true }
+          );
+        })
+      );
+    }
 
-    const unitIdToNameMap = new Map<number, string>();
-    units.forEach(unit => {
-      unitIdToNameMap.set(unit.id, unit.name);
-    });
-
-    return responses.filter(response => {
-      const unitName = unitIdToNameMap.get(response.unitid)?.toUpperCase();
-      const validVars = validVariableSets.get(unitName || '');
-      return validVars?.has(response.variableid);
-    });
+    return query.getMany();
   }
 
   private async getTestFilesWithCache(
@@ -680,6 +805,7 @@ export class CodingProcessService {
   }
 
   private async getCodingSchemesWithCache(
+    workspaceId: number,
     codingSchemeRefs: string[]
   ): Promise<Map<string, CodingScheme>> {
     const now = Date.now();
@@ -687,7 +813,9 @@ export class CodingProcessService {
     const emptyScheme = new CodingScheme({});
 
     const missingSchemeRefs = codingSchemeRefs.filter(ref => {
-      const cacheEntry = this.codingSchemeCache.get(ref);
+      const cacheEntry = this.codingSchemeCache.get(
+        this.codingSchemeCacheKey(workspaceId, ref)
+      );
       if (cacheEntry && now - cacheEntry.timestamp < this.SCHEME_CACHE_TTL_MS) {
         result.set(ref, cacheEntry.scheme);
         return false;
@@ -704,7 +832,7 @@ export class CodingProcessService {
       `Fetching ${missingSchemeRefs.length} missing coding schemes`
     );
     const codingSchemeFiles = await this.fileUploadRepository.find({
-      where: { file_id: In(missingSchemeRefs) },
+      where: { workspace_id: workspaceId, file_id: In(missingSchemeRefs) },
       select: ['file_id', 'data', 'filename']
     });
 
@@ -714,7 +842,10 @@ export class CodingProcessService {
           typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
         const scheme = new CodingScheme(data);
         result.set(file.file_id, scheme);
-        this.codingSchemeCache.set(file.file_id, { scheme, timestamp: now });
+        this.codingSchemeCache.set(
+          this.codingSchemeCacheKey(workspaceId, file.file_id),
+          { scheme, timestamp: now }
+        );
       } catch (error) {
         this.logger.error(
           `--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`
@@ -724,6 +855,23 @@ export class CodingProcessService {
     });
 
     return result;
+  }
+
+  private normalizeAutoCoderRun(autoCoderRun: number): 1 | 2 {
+    if (autoCoderRun === 1 || autoCoderRun === 2) {
+      return autoCoderRun;
+    }
+
+    throw new BadRequestException('autoCoderRun must be 1 or 2');
+  }
+
+  private getUnitFileId(unit: Unit): string | null {
+    const candidate = unit.alias?.trim() || unit.name?.trim() || '';
+    return candidate ? candidate.toUpperCase() : null;
+  }
+
+  private codingSchemeCacheKey(workspaceId: number, fileId: string): string {
+    return `${workspaceId}:${fileId}`;
   }
 
   private cleanupCaches(): void {
@@ -810,9 +958,13 @@ export class CodingProcessService {
 
         const inputResponses = responses.map(response => {
           let inputStatus = response.status;
+          let inputCode: number | undefined;
+          let inputScore: number | undefined;
           if (autoCoderRun === 2) {
             inputStatus =
-              response.status_v2 || response.status_v1 || response.status;
+              response.status_v2 ?? response.status_v1 ?? response.status;
+            inputCode = response.code_v2 ?? response.code_v1 ?? undefined;
+            inputScore = response.score_v2 ?? response.score_v1 ?? undefined;
           }
           let responseValue = response.value as import('@iqbspecs/response/response.interface').ResponseValueType;
           const isArrayString = /^\[.*]$/.test(response.value);
@@ -827,7 +979,9 @@ export class CodingProcessService {
             id: String(response.variableid),
             value: responseValue,
             status: statusNumberToString(inputStatus) as import('@iqbspecs/response/response.interface').ResponseStatusType,
-            subform: response.subform
+            subform: response.subform,
+            code: inputCode,
+            score: inputScore
           };
         });
 
@@ -869,7 +1023,12 @@ export class CodingProcessService {
             id: existingResponse ? existingResponse.id : -1
           };
 
-          if (!existingResponse) {
+          if (existingResponse?.is_autocoder_generated) {
+            codedResponse.isAutocoderGenerated = true;
+            codedResponse.unitid = existingResponse.unitid;
+            codedResponse.variableid = existingResponse.variableid;
+            codedResponse.subform = existingResponse.subform;
+          } else if (!existingResponse) {
             codedResponse.isNew = true;
             codedResponse.unitid = unit.id;
             codedResponse.variableid = codedResult.id;
@@ -878,20 +1037,19 @@ export class CodingProcessService {
               String(codedResult.value ?? '');
             codedResponse.status = statusStringToNumber('VALUE_CHANGED');
             codedResponse.subform = codedResult.subform;
+            codedResponse.isAutocoderGenerated = true;
           }
 
           if (autoCoderRun === 1) {
             codedResponse.code_v1 = codedResult.code ?? null;
             codedResponse.status_v1 = codedStatus;
             codedResponse.score_v1 = codedResult.score ?? null;
-            if (!codedResponse.isNew) {
-              codedResponse.code_v2 = null;
-              codedResponse.status_v2 = null;
-              codedResponse.score_v2 = null;
-              codedResponse.code_v3 = null;
-              codedResponse.status_v3 = null;
-              codedResponse.score_v3 = null;
-            }
+            codedResponse.code_v2 = null;
+            codedResponse.status_v2 = null;
+            codedResponse.score_v2 = null;
+            codedResponse.code_v3 = null;
+            codedResponse.status_v3 = null;
+            codedResponse.score_v3 = null;
           } else if (autoCoderRun === 2) {
             codedResponse.code_v3 = codedResult.code ?? null;
             codedResponse.status_v3 = codedStatus;
@@ -924,13 +1082,15 @@ export class CodingProcessService {
   }
 
   private async getCodingSchemeFiles(
+    workspaceId: number,
     codingSchemeRefs: Set<string>,
     jobId?: string,
     queryRunner?: import('typeorm').QueryRunner
   ): Promise<Map<string, CodingScheme>> {
-    const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([
-      ...codingSchemeRefs
-    ]);
+    const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache(
+      workspaceId,
+      [...codingSchemeRefs]
+    );
     if (jobId && (await this.isJobCancelled(jobId))) {
       this.logger.log(
         `Job ${jobId} was cancelled or paused after getting coding scheme files`
@@ -961,7 +1121,15 @@ export class CodingProcessService {
       const unitBatch = units.slice(i, i + batchSize);
 
       for (const unit of unitBatch) {
-        const testFile = fileIdToTestFileMap.get(unit.alias.toUpperCase());
+        const unitFileId = this.getUnitFileId(unit);
+        if (!unitFileId) {
+          this.logger.warn(
+            `Skipping coding scheme lookup for unit ${unit.id}: missing unit alias and name.`
+          );
+          continue;
+        }
+
+        const testFile = fileIdToTestFileMap.get(unitFileId);
         if (!testFile) continue;
 
         try {
@@ -973,7 +1141,7 @@ export class CodingProcessService {
             unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefUpper);
             this.logger.debug(
               `Extracted coding scheme mapping: unitId=${unit.id
-              }, unitAlias=${unit.alias.toUpperCase()}, codingSchemeRef=${codingSchemeRefUpper}`
+              }, unitFileId=${unitFileId}, codingSchemeRef=${codingSchemeRefUpper}`
             );
           }
         } catch (error) {
@@ -1008,5 +1176,15 @@ export class CodingProcessService {
       return 'NO_CODING';
     }
     return status;
+  }
+
+  private uniquePositiveIds(ids: number[]): number[] {
+    return Array.from(
+      new Set(
+        ids
+          .map(id => Number(id))
+          .filter(id => Number.isInteger(id) && id > 0)
+      )
+    );
   }
 }

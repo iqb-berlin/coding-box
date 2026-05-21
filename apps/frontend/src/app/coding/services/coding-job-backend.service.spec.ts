@@ -57,7 +57,8 @@ describe('CodingJobBackendService', () => {
           id: 1,
           name: 'Job1',
           created_at: '2023-01-01',
-          assigned_coders: [1]
+          assigned_coders: [1],
+          job_definition_id: 99
         }],
         total: 1
       };
@@ -66,11 +67,185 @@ describe('CodingJobBackendService', () => {
         expect(res.data.length).toBe(1);
         expect(res.data[0].assignedCoders).toEqual([1]);
         expect(res.data[0].assignedVariables).toEqual([]);
+        expect(res.data[0].jobDefinitionId).toBe(99);
       });
 
       const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/1/coding-job`);
       expect(req.request.method).toBe('GET');
       req.flush(mockApiResponse);
+    });
+
+    it('should pass assignedTo=me when requesting own coding jobs', () => {
+      service.getCodingJobs(1, undefined, undefined, { assignedTo: 'me' }).subscribe(res => {
+        expect(res.data).toEqual([]);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/1/coding-job?assignedTo=me`);
+      expect(req.request.method).toBe('GET');
+      req.flush({ data: [], total: 0, page: 1 });
+    });
+  });
+
+  describe('getJobDefinitions', () => {
+    it('should map created coding job counts from API responses', () => {
+      service.getJobDefinitions(1).subscribe(definitions => {
+        expect(definitions).toEqual([
+          expect.objectContaining({
+            id: 7,
+            createdJobsCount: 3,
+            blockingCreatedJobsCount: 1,
+            showScore: true,
+            allowComments: false,
+            suppressGeneralInstructions: true,
+            assignedCoderConfigs: [{ coderId: 1, capacityPercent: 50 }],
+            distributionSeed: 'seed-7',
+            plannedVariableUsage: { 'Unit 1::Var 1': 2 }
+          }),
+          expect.objectContaining({
+            id: 8,
+            createdJobsCount: 0,
+            blockingCreatedJobsCount: 0,
+            showScore: false,
+            allowComments: true,
+            suppressGeneralInstructions: false
+          })
+        ]);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/job-definitions`);
+      expect(req.request.method).toBe('GET');
+      req.flush([
+        {
+          id: 7,
+          status: 'approved',
+          created_jobs_count: 3,
+          blocking_created_jobs_count: 1,
+          assigned_coder_configs: [{ coderId: 1, capacityPercent: 50 }],
+          distribution_seed: 'seed-7',
+          planned_variable_usage: { 'Unit 1::Var 1': 2 },
+          show_score: true,
+          allow_comments: false,
+          suppress_general_instructions: true
+        },
+        {
+          id: 8,
+          status: 'draft',
+          createdJobsCount: 0,
+          blockingCreatedJobsCount: 0,
+          showScore: false,
+          allowComments: true,
+          suppressGeneralInstructions: false
+        }
+      ]);
+    });
+
+    it('should create coding jobs through the dedicated job definition endpoint', () => {
+      service.createCodingJobFromDefinition(1, 42).subscribe(response => {
+        expect(response.success).toBe(true);
+        expect(response.jobsCreated).toBe(3);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/job-definitions/42/create-job`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({});
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
+      req.flush({
+        success: true,
+        jobsCreated: 3,
+        message: 'created',
+        distribution: {},
+        doubleCodingInfo: {},
+        aggregationInfo: {},
+        matchingFlags: [],
+        jobs: []
+      });
+    });
+
+    it('should preview a job definition refresh', () => {
+      service.previewJobDefinitionRefresh(1, 42).subscribe(response => {
+        expect(response.addedCases).toBe(2);
+        expect(response.canApply).toBe(true);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/job-definitions/42/refresh-preview`);
+      expect(req.request.method).toBe('GET');
+      req.flush({
+        jobDefinitionId: 42,
+        existingJobsCount: 2,
+        staleJobsCount: 1,
+        existingCases: 5,
+        plannedCases: 7,
+        retainedCases: 5,
+        addedCases: 2,
+        removedCases: 0,
+        addedCodingTasks: 2,
+        removedCodingTasks: 0,
+        canApply: true
+      });
+    });
+
+    it('should apply a job definition refresh and invalidate validation state', () => {
+      service.applyJobDefinitionRefresh(1, 42).subscribe(response => {
+        expect(response.success).toBe(true);
+        expect(response.jobsCreated).toBe(2);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/job-definitions/42/refresh-apply`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({});
+      req.flush({
+        success: true,
+        message: 'updated',
+        jobsCreated: 2,
+        preview: {
+          jobDefinitionId: 42,
+          existingJobsCount: 2,
+          staleJobsCount: 1,
+          existingCases: 5,
+          plannedCases: 7,
+          retainedCases: 5,
+          addedCases: 2,
+          removedCases: 0,
+          addedCodingTasks: 2,
+          removedCodingTasks: 0,
+          canApply: true
+        }
+      });
+      expect(validationTaskStateServiceMock.invalidateWorkspace).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('auth token override', () => {
+    it('should use the supplied auth token when loading coding job units', () => {
+      service.getCodingJobUnits(47, 123, 'url-token').subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/47/coding-job/123/units`);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
+      req.flush([]);
+    });
+
+    it('should request only open coding job units when requested', () => {
+      service.getCodingJobUnits(47, 123, 'url-token', true).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/47/coding-job/123/units?onlyOpen=true`);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
+      req.flush([]);
+    });
+
+    it('should use the supplied auth token when saving coding progress', () => {
+      service.saveCodingProgress(47, 123, {
+        testPerson: 'login@code@booklet',
+        unitId: 'UNIT',
+        variableId: 'VAR',
+        selectedCode: { id: 1, code: '1', label: 'Code 1' }
+      }, 'url-token').subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/47/coding-job/123/progress`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
+      req.flush({});
     });
   });
 
@@ -81,6 +256,49 @@ describe('CodingJobBackendService', () => {
       const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/1/coding-job`);
       expect(req.request.method).toBe('POST');
       req.flush({});
+    });
+  });
+
+  describe('transferCodingCases', () => {
+    it('should post transfer request for coder cases', () => {
+      service.transferCodingCases(7, 11, 22).subscribe(response => {
+        expect(response.affectedJobs).toBe(3);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/7/coding-job/transfer-cases`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        sourceCoderId: 11,
+        targetCoderId: 22
+      });
+      req.flush({
+        sourceCoderId: 11,
+        targetCoderId: 22,
+        affectedJobs: 3,
+        updatedAssignments: 3,
+        removedDuplicateAssignments: 0,
+        transferredCases: 42
+      });
+    });
+  });
+
+  describe('triggerResponseAnalysis', () => {
+    it('should post the selected threshold when restarting response analysis', () => {
+      service.triggerResponseAnalysis(5, 17).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/5/coding/response-analysis`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ threshold: 17 });
+      req.flush(null);
+    });
+
+    it('should post an empty body when no threshold is supplied', () => {
+      service.triggerResponseAnalysis(5).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/5/coding/response-analysis`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({});
+      req.flush(null);
     });
   });
 });

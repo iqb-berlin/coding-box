@@ -28,7 +28,10 @@ import {
 } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { FileValidationResultDto } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
-import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import {
+  InvalidVariableDto,
+  VariableValidationSummaryDto
+} from '../../../../../../../api-dto/files/variable-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
 import { Unit } from '../../entities/unit.entity';
 import { UnitVariableDetailsDto } from '../../../models/unit-variable-details.dto';
@@ -45,19 +48,51 @@ import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-vali
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
 import { WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
 import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
+import {
+  isExcludedByResolvedExclusions,
+  normalizeExclusionUnitId,
+  WorkspaceExclusionService
+} from './workspace-exclusion.service';
+
+type WorkspaceUnitVisibility = {
+  globalIgnoredUnits: Set<string>;
+  visibleUnitIds: Set<string> | null;
+};
+
+type UnitVariableType =
+  | 'string'
+  | 'integer'
+  | 'number'
+  | 'boolean'
+  | 'attachment'
+  | 'json'
+  | 'no-value';
 
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
   private readonly resourceTypeLabel = 'Resource';
+  private readonly detailedUnitCacheLogging =
+    process.env.DEBUG_UNIT_CACHE === 'true';
 
   private getCacheKey(workspaceId: number, type: string): string {
     return `workspace_files:${type}:${workspaceId}`;
+  }
+
+  private logUnitCacheDebug(message: string): void {
+    if (this.detailedUnitCacheLogging) {
+      this.logger.debug(message);
+    }
+  }
+
+  private isDerivedSourceType(sourceType: string | undefined): boolean {
+    return !!sourceType && sourceType !== 'BASE' && sourceType !== 'BASE_NO_VALUE';
   }
 
   private toRedisMap(map: Map<string, Set<string>>): Record<string, string[]> {
@@ -90,8 +125,82 @@ export class WorkspaceFilesService implements OnModuleInit {
     private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService,
     private cacheService: CacheService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
-    private readonly workspaceTestResultsService: WorkspaceTestResultsService
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    private readonly workspaceExclusionService?: WorkspaceExclusionService
   ) {}
+
+  private normalizeFileUnitId(value: string | null | undefined): string {
+    return normalizeExclusionUnitId(value).replace(/\.VOCS$/i, '');
+  }
+
+  private async getWorkspaceUnitVisibility(
+    workspaceId: number
+  ): Promise<WorkspaceUnitVisibility> {
+    if (!this.workspaceExclusionService) {
+      return { globalIgnoredUnits: new Set(), visibleUnitIds: null };
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const globalIgnoredUnits = new Set(
+      exclusions.globalIgnoredUnits.map(unitId => this.normalizeFileUnitId(unitId))
+    );
+    const hasContextualExclusions =
+      exclusions.ignoredBooklets.length > 0 ||
+      exclusions.testletIgnoredUnits.length > 0;
+
+    if (!hasContextualExclusions) {
+      return { globalIgnoredUnits, visibleUnitIds: null };
+    }
+
+    const bookletFiles = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Booklet' }
+    });
+
+    if (!bookletFiles || bookletFiles.length === 0) {
+      return { globalIgnoredUnits, visibleUnitIds: null };
+    }
+
+    const visibleUnitIds = new Set<string>();
+    for (const bookletFile of bookletFiles) {
+      try {
+        const bookletId = String(bookletFile.file_id || '');
+        const $ = cheerio.load(bookletFile.data, { xmlMode: true });
+        $('Unit, unit').each((_, element) => {
+          const unitId = $(element).attr('id');
+          const normalizedUnitId = this.normalizeFileUnitId(unitId);
+          if (!normalizedUnitId || globalIgnoredUnits.has(normalizedUnitId)) {
+            return;
+          }
+          if (!isExcludedByResolvedExclusions(exclusions, bookletId, unitId)) {
+            visibleUnitIds.add(normalizedUnitId);
+          }
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Could not parse booklet ${bookletFile.file_id} for unit visibility in workspace ${workspaceId}: ${error.message}`
+        );
+      }
+    }
+
+    return { globalIgnoredUnits, visibleUnitIds };
+  }
+
+  private isUnitVisibleInWorkspace(
+    unitId: string | null | undefined,
+    visibility: WorkspaceUnitVisibility
+  ): boolean {
+    const normalizedUnitId = this.normalizeFileUnitId(unitId);
+    if (!normalizedUnitId) {
+      return false;
+    }
+    if (visibility.globalIgnoredUnits.has(normalizedUnitId)) {
+      return false;
+    }
+    if (visibility.visibleUnitIds !== null) {
+      return visibility.visibleUnitIds.has(normalizedUnitId);
+    }
+    return true;
+  }
 
   private getResourceSubtypeExtension(fileType: string): string | null {
     const match = fileType.match(/^Resource\s*\((\.[^)]+)\)$/i);
@@ -273,10 +382,28 @@ export class WorkspaceFilesService implements OnModuleInit {
   }
 
   async validateTestFiles(
-    workspaceId: number
+    workspaceId: number,
+    onProgress?: (progress: number, message?: string) => void | Promise<void>
   ): Promise<FileValidationResultDto> {
     return this.workspaceTestFilesValidationService.validateTestFiles(
+      workspaceId,
+      onProgress
+    );
+  }
+
+  async getTestFilesValidationCacheKey(workspaceId: number): Promise<string> {
+    return this.workspaceTestFilesValidationService.getTestFilesFingerprint(
       workspaceId
+    );
+  }
+
+  async refreshTestFilesValidationResult(
+    workspaceId: number,
+    result: unknown
+  ): Promise<unknown> {
+    return this.workspaceTestFilesValidationService.refreshGeoGebraPackageStatus(
+      workspaceId,
+      result
     );
   }
 
@@ -416,12 +543,15 @@ ${bookletRefs}
         return [];
       }
 
-      return units.map(unit => ({
-        id: unit.id,
-        unitId: unit.file_id,
-        fileName: unit.filename,
-        data: unit.data
-      }));
+      const visibility = await this.getWorkspaceUnitVisibility(workspaceId);
+      return units
+        .filter(unit => this.isUnitVisibleInWorkspace(unit.file_id, visibility))
+        .map(unit => ({
+          id: unit.id,
+          unitId: unit.file_id,
+          fileName: unit.filename,
+          data: unit.data
+        }));
     } catch (error) {
       this.logger.error(
         `Error getting units with file IDs for workspace ${workspaceId}: ${error.message}`,
@@ -1916,6 +2046,7 @@ ${bookletRefs}
       total: number;
       page: number;
       limit: number;
+      summary: VariableValidationSummaryDto;
     }> {
     return this.workspaceResponseValidationService.validateVariables(
       workspaceId,
@@ -2184,10 +2315,16 @@ ${bookletRefs}
     workspaceId: number,
     responseIds: number[]
   ): Promise<number> {
-    return this.workspaceResponseValidationService.deleteInvalidResponses(
+    const deletedCount = await this.workspaceResponseValidationService.deleteInvalidResponses(
       workspaceId,
       responseIds
     );
+    if (deletedCount > 0) {
+      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+        workspaceId
+      );
+    }
+    return deletedCount;
   }
 
   async deleteAllInvalidResponses(
@@ -2198,10 +2335,16 @@ ${bookletRefs}
     | 'responseStatus'
     | 'duplicateResponses'
   ): Promise<number> {
-    return this.workspaceResponseValidationService.deleteAllInvalidResponses(
+    const deletedCount = await this.workspaceResponseValidationService.deleteAllInvalidResponses(
       workspaceId,
       validationType
     );
+    if (deletedCount > 0) {
+      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+        workspaceId
+      );
+    }
+    return deletedCount;
   }
 
   async onModuleInit(): Promise<void> {
@@ -2210,13 +2353,31 @@ ${bookletRefs}
     );
 
     try {
-      const workspacesWithUnits = await this.fileUploadRepository
-        .createQueryBuilder('file')
-        .select('DISTINCT file.workspace_id', 'workspace_id')
-        .where('file.file_type = :fileType', { fileType: 'Unit' })
-        .getRawMany();
+      const workspacesWithUnits: {
+        workspaceId?: number | string | null;
+        workspace_id?: number | string | null;
+        [key: string]: number | string | null | undefined;
+      }[] =
+        await this.fileUploadRepository
+          .createQueryBuilder('file')
+          .select('DISTINCT file.workspace_id', 'workspaceId')
+          .where('file.file_type = :fileType', { fileType: 'Unit' })
+          .getRawMany();
 
-      for (const { workspaceId } of workspacesWithUnits) {
+      for (const workspace of workspacesWithUnits) {
+        const rawWorkspaceId = workspace.workspaceId ?? workspace.workspace_id;
+        const workspaceId = Number(rawWorkspaceId);
+        if (
+          rawWorkspaceId == null ||
+          !Number.isInteger(workspaceId) ||
+          workspaceId < 1
+        ) {
+          this.logger.error(
+            `Skipping unit variable cache refresh for invalid workspace id: ${rawWorkspaceId}`
+          );
+          continue;
+        }
+
         await this.refreshUnitVariableCache(workspaceId);
       }
       this.logger.log(
@@ -2305,15 +2466,15 @@ ${bookletRefs}
             codingSchemeMap.set(unitId, variableSourceTypes);
             schemeIdToAliasMap.set(unitId, idToAlias);
             if (intendedIncompleteSchemeIds.size > 0) {
-              this.logger.debug(
-                `[DEBUG] Coding scheme for unit "${unitId}" has INTENDED_INCOMPLETE code type for scheme IDs: [${Array.from(intendedIncompleteSchemeIds).join(', ')}]`
+              this.logUnitCacheDebug(
+                `Coding scheme for unit "${unitId}" has INTENDED_INCOMPLETE code type for scheme IDs: [${Array.from(intendedIncompleteSchemeIds).join(', ')}]`
               );
               // Store by unitId so we can resolve to aliases during XML parsing
               intendedIncompleteByUnit.set(unitId, intendedIncompleteSchemeIds);
             }
             if (trainingRequiredSchemeIds.size > 0) {
-              this.logger.debug(
-                `[DEBUG] Coding scheme for unit "${unitId}" has CODER_TRAINING_REQUIRED for scheme IDs: [${Array.from(trainingRequiredSchemeIds).join(', ')}]`
+              this.logUnitCacheDebug(
+                `Coding scheme for unit "${unitId}" has CODER_TRAINING_REQUIRED for scheme IDs: [${Array.from(trainingRequiredSchemeIds).join(', ')}]`
               );
               trainingRequiredByUnit.set(unitId, trainingRequiredSchemeIds);
             }
@@ -2384,8 +2545,8 @@ ${bookletRefs}
                   // Check if this variable's scheme ID has INTENDED_INCOMPLETE code type
                   if (schemeIdsWithIntendedIncomplete?.has(schemeKey)) {
                     aliasesWithIntendedIncomplete.add(variable.$.alias);
-                    this.logger.debug(
-                      `[DEBUG] Base variable "${variable.$.alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
+                    this.logUnitCacheDebug(
+                      `Base variable "${variable.$.alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                     );
                   }
                   // Check CODER_TRAINING_REQUIRED
@@ -2408,8 +2569,8 @@ ${bookletRefs}
                 parsedXml.Unit.DerivedVariables.Variable :
                 [parsedXml.Unit.DerivedVariables.Variable];
 
-              this.logger.debug(
-                `[DEBUG] Unit "${unitName}" has ${derivedVariables.length} DerivedVariables in XML`
+              this.logUnitCacheDebug(
+                `Unit "${unitName}" has ${derivedVariables.length} DerivedVariables in XML`
               );
 
               for (const variable of derivedVariables) {
@@ -2420,38 +2581,38 @@ ${bookletRefs}
                 const unitSourceTypes = codingSchemeMap.get(unitName);
                 const sourceType = unitSourceTypes?.get(schemeKey);
 
-                this.logger.debug(
-                  `[DEBUG] DerivedVariable id="${id}" alias="${alias}" type="${type}" schemeKey="${schemeKey}" sourceType="${sourceType}" in unit "${unitName}"`
+                this.logUnitCacheDebug(
+                  `DerivedVariable id="${id}" alias="${alias}" type="${type}" schemeKey="${schemeKey}" sourceType="${sourceType}" in unit "${unitName}"`
                 );
 
                 if (!alias) {
-                  this.logger.debug('[DEBUG]  → SKIPPED: no alias');
+                  this.logUnitCacheDebug('Skipped derived variable: no alias');
                   continue;
                 }
                 if (type === 'no-value') {
-                  this.logger.debug('[DEBUG]  → SKIPPED: type is no-value');
+                  this.logUnitCacheDebug('Skipped derived variable: type is no-value');
                   continue;
                 }
                 if (sourceType === 'BASE_NO_VALUE') {
-                  this.logger.debug(
-                    '[DEBUG]  → EXCLUDED from cache: sourceType is BASE_NO_VALUE'
+                  this.logUnitCacheDebug(
+                    'Excluded derived variable from cache: sourceType is BASE_NO_VALUE'
                   );
                 } else if (sourceType === 'BASE') {
-                  this.logger.debug(
-                    '[DEBUG]  → EXCLUDED from cache: sourceType is BASE'
+                  this.logUnitCacheDebug(
+                    'Excluded derived variable from cache: sourceType is BASE'
                   );
                 } else {
                   variables.add(alias);
                   derivedAliases.add(alias);
-                  this.logger.debug(
-                    `[DEBUG]  → ADDED to unitVariableMap (sourceType="${sourceType ?? 'undefined/no scheme'}"`
+                  this.logUnitCacheDebug(
+                    `Added derived variable to unitVariableMap (sourceType="${sourceType ?? 'undefined/no scheme'}")`
                   );
                 }
                 // Check if this derived variable's scheme ID has INTENDED_INCOMPLETE code type
                 if (schemeIdsWithIntendedIncomplete?.has(schemeKey)) {
                   aliasesWithIntendedIncomplete.add(alias);
-                  this.logger.debug(
-                    `[DEBUG] Derived variable "${alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
+                  this.logUnitCacheDebug(
+                    `Derived variable "${alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                   );
                 }
                 // Check CODER_TRAINING_REQUIRED
@@ -2460,8 +2621,8 @@ ${bookletRefs}
                 }
               }
             } else {
-              this.logger.debug(
-                `[DEBUG] Unit "${unitName}" has NO DerivedVariables in XML`
+              this.logUnitCacheDebug(
+                `Unit "${unitName}" has NO DerivedVariables in XML`
               );
             }
 
@@ -2477,20 +2638,19 @@ ${bookletRefs}
                 // Resolve to alias — alias is what response.variableid contains
                 const resolvedAlias = idToAlias?.get(schemeId) ?? schemeId;
                 if (
-                  sourceType !== 'BASE_NO_VALUE' &&
-                  sourceType !== 'BASE' &&
+                  this.isDerivedSourceType(sourceType) &&
                   !variables.has(resolvedAlias)
                 ) {
                   variables.add(resolvedAlias);
                   derivedAliases.add(resolvedAlias);
-                  this.logger.debug(
-                    `[DEBUG] Unit "${unitName}": added scheme-only variable alias="${resolvedAlias}" (schemeId="${schemeId}", sourceType="${sourceType}") to unitVariableMap`
+                  this.logUnitCacheDebug(
+                    `Unit "${unitName}": added scheme-only variable alias="${resolvedAlias}" (schemeId="${schemeId}", sourceType="${sourceType}") to unitVariableMap`
                   );
                   // Also check INTENDED_INCOMPLETE for this scheme-only variable
                   if (schemeIdsWithIntendedIncomplete?.has(schemeId)) {
                     aliasesWithIntendedIncomplete.add(resolvedAlias);
-                    this.logger.debug(
-                      `[DEBUG] Scheme-only variable alias="${resolvedAlias}" in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
+                    this.logUnitCacheDebug(
+                      `Scheme-only variable alias="${resolvedAlias}" in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                     );
                   }
                   // Also check CODER_TRAINING_REQUIRED for this scheme-only variable
@@ -2546,8 +2706,14 @@ ${bookletRefs}
       this.logger.log(
         `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId} to Redis`
       );
-      this.logger.debug(
-        `[DEBUG] intendedIncompleteSchemeCache (by alias) for workspace ${workspaceId}: ` +
+      this.logger.log(
+        `Unit variable cache summary for workspace ${workspaceId}: ` +
+        `${intendedIncompleteAliasByUnit.size} units with intended-incomplete variables, ` +
+        `${trainingRequiredAliasByUnit.size} units with training-required variables, ` +
+        `${derivedVariablesByUnit.size} units with derived variables`
+      );
+      this.logUnitCacheDebug(
+        `intendedIncompleteSchemeCache (by alias) for workspace ${workspaceId}: ` +
           `${intendedIncompleteAliasByUnit.size} units with INTENDED_INCOMPLETE codes. ${Array.from(
             intendedIncompleteAliasByUnit.entries()
           )
@@ -2658,6 +2824,12 @@ ${bookletRefs}
 
       const codingSchemeMap = new Map<string, string>();
       const codingSchemeVariablesMap = new Map<string, Map<string, string>>();
+      const codingSchemeAliasToIdMap = new Map<string, Map<string, string>>();
+      const codingSchemeIdToAliasMap = new Map<string, Map<string, string>>();
+      const codingSchemeVariableTypesMap = new Map<
+      string,
+      Map<string, UnitVariableType>
+      >();
       const codingSchemeCodesMap = new Map<
       string,
       Map<
@@ -2686,7 +2858,9 @@ ${bookletRefs}
           const parsedScheme = JSON.parse(scheme.data) as {
             variableCodings?: {
               id: string;
+              alias?: string;
               sourceType?: string;
+              type?: UnitVariableType;
               processing?: string[];
               codes?: Array<{
                 id: number | string;
@@ -2702,6 +2876,9 @@ ${bookletRefs}
             Array.isArray(parsedScheme.variableCodings)
           ) {
             const variableSourceTypes = new Map<string, string>();
+            const variableAliasToId = new Map<string, string>();
+            const variableIdToAlias = new Map<string, string>();
+            const variableTypes = new Map<string, UnitVariableType>();
             const variableCodes = new Map<
             string,
             Array<{ id: string | number; label: string; score?: number }>
@@ -2713,6 +2890,13 @@ ${bookletRefs}
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
                 variableSourceTypes.set(vc.id, vc.sourceType);
+              }
+              if (vc.id && vc.alias) {
+                variableAliasToId.set(vc.alias, vc.id);
+                variableIdToAlias.set(vc.id, vc.alias);
+              }
+              if (vc.id && vc.type) {
+                variableTypes.set(vc.id, vc.type);
               }
               if (vc.id && vc.processing && Array.isArray(vc.processing)) {
                 if (vc.processing.includes('CODER_TRAINING_REQUIRED')) {
@@ -2752,6 +2936,9 @@ ${bookletRefs}
               }
             }
             codingSchemeVariablesMap.set(unitId, variableSourceTypes);
+            codingSchemeAliasToIdMap.set(unitId, variableAliasToId);
+            codingSchemeIdToAliasMap.set(unitId, variableIdToAlias);
+            codingSchemeVariableTypesMap.set(unitId, variableTypes);
             codingSchemeCodesMap.set(unitId, variableCodes);
             codingSchemeManualInstructionsMap.set(
               unitId,
@@ -2772,6 +2959,7 @@ ${bookletRefs}
       }
 
       const unitVariableDetails: UnitVariableDetailsDto[] = [];
+      const visibility = await this.getWorkspaceUnitVisibility(workspaceId);
 
       for (const unitFile of unitFiles) {
         try {
@@ -2786,17 +2974,13 @@ ${bookletRefs}
             parsedXml.Unit.Metadata.Id
           ) {
             const unitName = parsedXml.Unit.Metadata.Id;
+            if (!this.isUnitVisibleInWorkspace(unitName, visibility)) {
+              continue;
+            }
             const variables: Array<{
               id: string;
               alias: string;
-              type:
-              | 'string'
-              | 'integer'
-              | 'number'
-              | 'boolean'
-              | 'attachment'
-              | 'json'
-              | 'no-value';
+              type: UnitVariableType;
               hasCodingScheme: boolean;
               codingSchemeRef?: string;
               codes?: Array<{
@@ -2809,6 +2993,8 @@ ${bookletRefs}
               hasClosedCoding?: boolean;
               coderTrainingRequired?: boolean;
             }> = [];
+            const seenSchemeIds = new Set<string>();
+            const seenAliases = new Set<string>();
 
             // Process BaseVariables
             if (
@@ -2823,7 +3009,12 @@ ${bookletRefs}
 
               for (const variable of baseVariables) {
                 if (variable.$.alias && variable.$.type !== 'no-value') {
-                  const variableId = variable.$.id || variable.$.alias;
+                  const variableAlias = variable.$.alias;
+                  const unitAliasToId =
+                    codingSchemeAliasToIdMap.get(unitName);
+                  const variableId = variable.$.id ||
+                    unitAliasToId?.get(variableAlias) ||
+                    variableAlias;
                   const unitSourceTypes =
                     codingSchemeVariablesMap.get(unitName);
                   const sourceType = unitSourceTypes?.get(variableId);
@@ -2849,28 +3040,24 @@ ${bookletRefs}
                     codingSchemeTrainingRequiredMap.get(unitName);
                   const coderTrainingRequired =
                     unitTrainingRequired?.get(variableId) || false;
+                  const isDerived = this.isDerivedSourceType(sourceType);
 
                   variables.push({
                     id: variableId,
-                    alias: variable.$.alias,
-                    type: variable.$.type as
-                      | 'string'
-                      | 'integer'
-                      | 'number'
-                      | 'boolean'
-                      | 'attachment'
-                      | 'json'
-                      | 'no-value',
+                    alias: variableAlias,
+                    type: variable.$.type as UnitVariableType,
                     hasCodingScheme,
                     codingSchemeRef: hasCodingScheme ?
                       codingSchemeMap.get(unitName) :
                       undefined,
                     codes: variableCodes,
-                    isDerived: false,
+                    isDerived,
                     hasManualInstruction,
                     hasClosedCoding,
                     coderTrainingRequired
                   });
+                  seenSchemeIds.add(variableId);
+                  seenAliases.add(variableAlias);
                 }
               }
             }
@@ -2888,7 +3075,12 @@ ${bookletRefs}
 
               for (const variable of derivedVariables) {
                 if (variable.$.alias && variable.$.type !== 'no-value') {
-                  const variableId = variable.$.id || variable.$.alias;
+                  const variableAlias = variable.$.alias;
+                  const unitAliasToId =
+                    codingSchemeAliasToIdMap.get(unitName);
+                  const variableId = variable.$.id ||
+                    unitAliasToId?.get(variableAlias) ||
+                    variableAlias;
                   const unitSourceTypes =
                     codingSchemeVariablesMap.get(unitName);
                   const sourceType = unitSourceTypes?.get(variableId);
@@ -2917,15 +3109,8 @@ ${bookletRefs}
 
                   variables.push({
                     id: variableId,
-                    alias: variable.$.alias,
-                    type: variable.$.type as
-                      | 'string'
-                      | 'integer'
-                      | 'number'
-                      | 'boolean'
-                      | 'attachment'
-                      | 'json'
-                      | 'no-value',
+                    alias: variableAlias,
+                    type: variable.$.type as UnitVariableType,
                     hasCodingScheme,
                     codingSchemeRef: hasCodingScheme ?
                       codingSchemeMap.get(unitName) :
@@ -2936,7 +3121,57 @@ ${bookletRefs}
                     hasClosedCoding,
                     coderTrainingRequired
                   });
+                  seenSchemeIds.add(variableId);
+                  seenAliases.add(variableAlias);
                 }
+              }
+            }
+
+            const unitSourceTypes = codingSchemeVariablesMap.get(unitName);
+            const unitIdToAlias = codingSchemeIdToAliasMap.get(unitName);
+            const unitVariableTypes = codingSchemeVariableTypesMap.get(unitName);
+            if (unitSourceTypes) {
+              for (const [schemeId, sourceType] of unitSourceTypes.entries()) {
+                if (!this.isDerivedSourceType(sourceType)) {
+                  continue;
+                }
+                const variableAlias = unitIdToAlias?.get(schemeId) || schemeId;
+                if (
+                  seenSchemeIds.has(schemeId) ||
+                  seenAliases.has(variableAlias)
+                ) {
+                  continue;
+                }
+
+                const unitCodes = codingSchemeCodesMap.get(unitName);
+                const variableCodes = unitCodes?.get(schemeId);
+                const unitManualInstructions =
+                  codingSchemeManualInstructionsMap.get(unitName);
+                const hasManualInstruction =
+                  unitManualInstructions?.get(schemeId) || false;
+                const unitClosedCoding =
+                  codingSchemeClosedCodingMap.get(unitName);
+                const hasClosedCoding =
+                  unitClosedCoding?.get(schemeId) || false;
+                const unitTrainingRequired =
+                  codingSchemeTrainingRequiredMap.get(unitName);
+                const coderTrainingRequired =
+                  unitTrainingRequired?.get(schemeId) || false;
+
+                variables.push({
+                  id: schemeId,
+                  alias: variableAlias,
+                  type: unitVariableTypes?.get(schemeId) || 'string',
+                  hasCodingScheme: true,
+                  codingSchemeRef: codingSchemeMap.get(unitName),
+                  codes: variableCodes,
+                  isDerived: true,
+                  hasManualInstruction,
+                  hasClosedCoding,
+                  coderTrainingRequired
+                });
+                seenSchemeIds.add(schemeId);
+                seenAliases.add(variableAlias);
               }
             }
 

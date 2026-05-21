@@ -7,8 +7,8 @@
     <mat-divider></mat-divider>
 
     <div class="table-section">
-      <div class="fx-row-center-center-stretch fx-gap-10" style="margin: 12px 0; flex-wrap: wrap">
-        <mat-form-field appearance="outline" style="width: 180px">
+      <div class="flat-filter-bar">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm">
           <mat-label>Code</mat-label>
           <input matInput [(ngModel)]="flatFilters.code" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="codeAuto" />
@@ -18,7 +18,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 180px">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm">
           <mat-label>Gruppe</mat-label>
           <input matInput [(ngModel)]="flatFilters.group" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="groupAuto" />
@@ -28,7 +28,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 180px">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm">
           <mat-label>Login</mat-label>
           <input matInput [(ngModel)]="flatFilters.login" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="loginAuto" />
@@ -38,7 +38,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 220px">
+        <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>Testheft</mat-label>
           <input matInput [(ngModel)]="flatFilters.booklet" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="bookletAuto" />
@@ -48,7 +48,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 200px">
+        <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>Aufgabe</mat-label>
           <input matInput [(ngModel)]="flatFilters.unit" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="unitAuto" />
@@ -58,7 +58,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 200px">
+        <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>Variable</mat-label>
           <input matInput [(ngModel)]="flatFilters.response" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="responseAuto" />
@@ -68,7 +68,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 220px">
+        <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>Antwortstatus</mat-label>
           <input matInput [(ngModel)]="flatFilters.responseStatus" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="responseStatusAuto" />
@@ -78,11 +78,11 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 240px">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-lg">
           <mat-label>Antwortwert</mat-label>
           <input matInput [(ngModel)]="flatFilters.responseValue" (ngModelChange)="onFlatFilterChanged()" />
         </mat-form-field>
-        <mat-form-field appearance="outline" style="width: 220px">
+        <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>Tags</mat-label>
           <input matInput [(ngModel)]="flatFilters.tags" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="tagsAuto" />
@@ -92,7 +92,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 300px">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-xl">
           <mat-label>Spezialfilter</mat-label>
           <mat-select [(ngModel)]="mediaFilters" (ngModelChange)="onMediaFiltersChanged()" multiple>
             <mat-option value="geogebra">GeoGebra</mat-option>
@@ -115,7 +115,7 @@
             </mat-option>
             <mat-option value="longLoading">
               <span
-                matTooltip="Log-basiert: STARTED → ENDED dauert mindestens den Schwellwert (konfigurierbar über das Zahnrad).">
+                matTooltip="Log-basiert: LOADCOMPLETE oder STARTED → ENDED dauert mindestens den Schwellwert (konfigurierbar über das Zahnrad).">
                 Lange Ladezeit
               </span>
             </mat-option>
@@ -128,6 +128,46 @@
             <mat-option value="unitProgressComplete">
               <span matTooltip="Zeigt nur Testheft-Durchläufe, bei denen alle Units besucht wurden.">
                 Vollständig bearbeitet
+              </span>
+            </mat-option>
+            <mat-option value="logCritical">
+              <span matTooltip="Kritische Log-Auffälligkeiten wie Controller-Fehler, fehlender Abschluss oder Connection Lost.">
+                Log: kritisch
+              </span>
+            </mat-option>
+            <mat-option value="logTechnical">
+              <span matTooltip="Controller-Fehler, Verbindungsabbrüche, Timestamp 0, Player hängt oder lange Ladezeiten.">
+                Log: technische Probleme
+              </span>
+            </mat-option>
+            <mat-option value="logIncomplete">
+              <span matTooltip="Fehlender Abschluss, unvollständiger Unit-/Progress-Status, Timer-Restzeit oder Logs ohne Start.">
+                Log: unvollständige Durchläufe
+              </span>
+            </mat-option>
+            <mat-option value="logConnectionLost">
+              <span matTooltip="Mindestens ein CONNECTION : LOST Eintrag im Testheft-Log.">
+                Log: Connection Lost
+              </span>
+            </mat-option>
+            <mat-option value="logTimer">
+              <span matTooltip="Timer wurde nicht bis 0 geführt oder am Ende blieb Restzeit übrig.">
+                Log: Timer auffällig
+              </span>
+            </mat-option>
+            <mat-option value="logFocus">
+              <span matTooltip="Mindestens ein langer Fokusverlust im Testheft-Log.">
+                Log: Fokusverlust
+              </span>
+            </mat-option>
+            <mat-option value="logDebug">
+              <span matTooltip="Debug-Befehl wurde während des Testlaufs ausgeführt.">
+                Log: Debug-Befehl
+              </span>
+            </mat-option>
+            <mat-option value="logReloads">
+              <span matTooltip="Mehrfacher CONTROLLER : LOADING Start im selben Testheft.">
+                Log: mehrfach gestartet
               </span>
             </mat-option>
           </mat-select>
@@ -228,12 +268,12 @@
               </button>
               <button mat-icon-button (click)="
                   $event.stopPropagation(); openBookletLogsFromFlatRow(row)
-                " matTooltip="Logs (Testheft)">
-                <mat-icon>description</mat-icon>
+                " matTooltip="Logs (Testheft)" aria-label="Logs des Testhefts anzeigen">
+                <mat-icon>article</mat-icon>
               </button>
               <button mat-icon-button (click)="$event.stopPropagation(); openUnitLogsFromFlatRow(row)"
-                matTooltip="Logs (Aufgabe)">
-                <mat-icon>description</mat-icon>
+                matTooltip="Logs (Aufgabe)" aria-label="Logs der Aufgabe anzeigen">
+                <mat-icon>fact_check</mat-icon>
               </button>
               <button mat-icon-button (click)="$event.stopPropagation(); openNotesFromFlatRow(row)" matTooltip="Notizen"
                 style="position: relative">

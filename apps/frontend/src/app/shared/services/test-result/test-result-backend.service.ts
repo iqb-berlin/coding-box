@@ -50,6 +50,7 @@ export class TestResultBackendService {
       bookletNames?: string[];
       unitNames?: string[];
       personIds?: number[];
+      includeLogAnomalies?: boolean;
     }
   ): Observable<{ jobId: string; message: string }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/job`;

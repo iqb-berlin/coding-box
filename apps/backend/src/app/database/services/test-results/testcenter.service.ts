@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { DataSource } from 'typeorm';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
@@ -21,6 +22,10 @@ import {
   ImportWorkspaceOptionKey
 } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
 import { CacheService } from '../../../cache/cache.service';
+import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import { TestResultsMutationSummary } from './person-persistence.service';
+import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 export { Result };
 
@@ -55,7 +60,11 @@ export class TestcenterService {
     private readonly personService: PersonService,
     private readonly httpService: HttpService,
     private workspaceFilesService: WorkspaceFilesService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    private readonly connection: DataSource,
+    @Optional()
+    private readonly codingFreshnessService?: CodingFreshnessService
   ) {}
 
   persons: Person[] = [];
@@ -134,7 +143,11 @@ export class TestcenterService {
       }));
     } catch (error) {
       logger.error(`Error fetching test groups: ${error.message}`);
-      return [];
+      throw new Error(
+        `Failed to retrieve test groups from Testcenter: ${
+          error?.message || 'Unknown error'
+        }`
+      );
     }
   }
 
@@ -206,6 +219,7 @@ export class TestcenterService {
             });
 
             let personList: Person[] = [];
+            const personBatches: Person[][] = [];
             for (const person of this.persons) {
               const personKey = `${person.group || ''}@@${person.login || ''}@@${person.code || ''}`;
               const personRows = responsesByPerson.get(personKey) || [];
@@ -225,26 +239,36 @@ export class TestcenterService {
               personList.push(personWithUnits);
 
               if (personList.length >= PERSON_BATCH_SIZE) {
-                await this.personService.processPersonBooklets(
-                  personList,
-                  Number(workspace_id),
-                  'skip',
-                  'person',
-                  issues
-                );
+                personBatches.push(personList);
                 personList = [];
               }
             }
 
             if (personList.length > 0) {
-              await this.personService.processPersonBooklets(
-                personList,
+              personBatches.push(personList);
+            }
+
+            if (personBatches.length === 0) continue;
+
+            await withWorkspaceTestResultsMutationLock(this.connection, Number(workspace_id), async () => {
+              const mutationSummary = this.createMutationSummary();
+              for (const personBatch of personBatches) {
+                const batchSummary = await this.personService.processPersonBooklets(
+                  personBatch,
+                  Number(workspace_id),
+                  'skip',
+                  'person',
+                  issues
+                );
+                this.mergeMutationSummary(mutationSummary, batchSummary);
+              }
+
+              await this.updateCodingFreshnessAfterResponseImport(
                 Number(workspace_id),
-                'skip',
-                'person',
+                mutationSummary,
                 issues
               );
-            }
+            });
           }
 
           return { issues };
@@ -304,8 +328,10 @@ export class TestcenterService {
           allLogData,
           Number(workspace_id)
         )).map(async p => {
-          const personWithBooklets = this.personService.assignBookletLogsToPerson(p, allLogData, importIssues, filename);
-          personWithBooklets.booklets = personWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, allLogData, importIssues, filename)
+          const personWithBooklets = this.personService.assignBookletLogsToPerson(p, bookletLogs, importIssues, filename);
+          const personUnitLogs = this.personService.filterLogRowsForPerson(unitLogs, p);
+          this.personService.ensureBookletsForUnitLogs(personWithBooklets, personUnitLogs);
+          personWithBooklets.booklets = personWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, personUnitLogs, importIssues, filename)
           );
           return personWithBooklets;
         })
@@ -792,7 +818,13 @@ export class TestcenterService {
       importedGroups: testGroups.split(',').map(g => g.trim())
     };
 
-    const promises: Promise<{ issues?: TestResultsUploadIssueDto[] } | void>[] = [];
+    const appendIssues = (issues?: TestResultsUploadIssueDto[]): void => {
+      if (!issues || issues.length === 0) {
+        return;
+      }
+      if (!result.issues) result.issues = [];
+      result.issues.push(...issues);
+    };
 
     try {
       if (responses === 'true') {
@@ -804,8 +836,13 @@ export class TestcenterService {
           authToken,
           testGroups
         );
-        promises.push(...responsePromises);
         result.responses = responsePromises.length;
+        const responseResults = await Promise.all(responsePromises);
+        responseResults.forEach(res => {
+          if (res && typeof res === 'object' && 'issues' in res && Array.isArray(res.issues)) {
+            appendIssues(res.issues);
+          }
+        });
 
         try {
           const stats = await this.personService.getImportStatistics(
@@ -830,10 +867,7 @@ export class TestcenterService {
           overwriteExistingLogs
         );
         result.logs = 1; // Mark that log import was triggered
-        if (logsIssues) {
-          if (!result.issues) result.issues = [];
-          result.issues.push(...logsIssues);
-        }
+        appendIssues(logsIssues);
 
         // Calculate log coverage statistics
         try {
@@ -842,6 +876,8 @@ export class TestcenterService {
           result.totalBooklets = logStats.totalBooklets;
           result.unitsWithLogs = logStats.unitsWithLogs;
           result.totalUnits = logStats.totalUnits;
+          result.bookletDetails = logStats.bookletDetails;
+          result.unitDetails = logStats.unitDetails;
         } catch (statsError) {
           logger.warn(`Could not get log coverage statistics: ${statsError.message}`);
         }
@@ -871,14 +907,11 @@ export class TestcenterService {
         result.testFilesUploadResult = filesResult.uploadResult;
       }
 
-      if (promises.length > 0) {
-        const results = await Promise.all(promises);
-        results.forEach(res => {
-          if (res && typeof res === 'object' && 'issues' in res && Array.isArray(res.issues)) {
-            if (!result.issues) result.issues = [];
-            result.issues.push(...res.issues);
-          }
-        });
+      if (responses === 'true') {
+        await this.attachCodingFreshnessSummary(Number(workspace_id), result);
+      }
+      if (responses === 'true' || logs === 'true') {
+        await this.invalidateWorkspaceOverviewCache(workspace_id, result);
       }
       result.success = true;
       return result;
@@ -901,6 +934,120 @@ export class TestcenterService {
       result.success = false;
       return result;
     }
+  }
+
+  private async invalidateWorkspaceOverviewCache(
+    workspaceId: string,
+    result: Result
+  ): Promise<void> {
+    try {
+      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+        Number(workspaceId)
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      logger.warn(`Could not invalidate workspace overview cache after Testcenter import: ${detail}`);
+      if (!result.issues) result.issues = [];
+      result.issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Der Testcenter-Import wurde verarbeitet, aber der Übersichtscache konnte nicht zuverlässig aktualisiert werden. Die Übersicht kann sich nach Aktualisierung noch ändern.'
+      });
+    }
+  }
+
+  private createMutationSummary(): TestResultsMutationSummary {
+    return {
+      addedUnitIds: [],
+      changedUnitIds: [],
+      addedResponseCount: 0,
+      changedResponseCount: 0
+    };
+  }
+
+  private mergeMutationSummary(
+    target: TestResultsMutationSummary,
+    source?: Partial<TestResultsMutationSummary> | null
+  ): void {
+    if (!source) {
+      return;
+    }
+    target.addedUnitIds.push(...(source.addedUnitIds || []));
+    target.changedUnitIds.push(...(source.changedUnitIds || []));
+    target.addedResponseCount += source.addedResponseCount || 0;
+    target.changedResponseCount += source.changedResponseCount || 0;
+  }
+
+  private async updateCodingFreshnessAfterResponseImport(
+    workspaceId: number,
+    mutationSummary: TestResultsMutationSummary,
+    issues: TestResultsUploadIssueDto[]
+  ): Promise<void> {
+    if (!this.codingFreshnessService || !Number.isFinite(workspaceId) || workspaceId <= 0) {
+      return;
+    }
+
+    const addedUnitIds = this.uniquePositiveIds(mutationSummary.addedUnitIds);
+    const changedUnitIds = this.uniquePositiveIds(mutationSummary.changedUnitIds);
+    if (addedUnitIds.length === 0 && changedUnitIds.length === 0) {
+      return;
+    }
+
+    try {
+      await this.codingFreshnessService.markUnitsPendingAfterImport(
+        workspaceId,
+        addedUnitIds,
+        mutationSummary.addedResponseCount
+      );
+      await this.codingFreshnessService.markUnitsStaleAfterResultChange(
+        workspaceId,
+        changedUnitIds,
+        'RESULT_UPDATED'
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      logger.warn(`Could not update coding freshness after Testcenter import: ${detail}`);
+      issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Der Testcenter-Import wurde verarbeitet, aber der Kodierungsstatus konnte nicht zuverlässig aktualisiert werden.'
+      });
+    }
+  }
+
+  private async attachCodingFreshnessSummary(
+    workspaceId: number,
+    result: Result
+  ): Promise<void> {
+    if (!this.codingFreshnessService || !Number.isFinite(workspaceId) || workspaceId <= 0) {
+      return;
+    }
+
+    try {
+      result.codingFreshness = await this.codingFreshnessService.getSummary(workspaceId);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      logger.warn(`Could not load coding freshness after Testcenter import: ${detail}`);
+      if (!result.issues) result.issues = [];
+      result.issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Der Testcenter-Import wurde verarbeitet, aber der Kodierungsstatus konnte nicht geladen werden.'
+      });
+    }
+  }
+
+  private uniquePositiveIds(ids: number[]): number[] {
+    return Array.from(
+      new Set(
+        (ids || [])
+          .map(id => Number(id))
+          .filter(id => Number.isInteger(id) && id > 0)
+      )
+    );
   }
 
   private shouldImportFiles(importOptions: ImportOptions): boolean {

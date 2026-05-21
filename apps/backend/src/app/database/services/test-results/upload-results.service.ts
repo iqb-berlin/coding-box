@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger, Inject, forwardRef, Optional
 } from '@nestjs/common';
 import 'multer';
 import * as csv from 'fast-csv';
@@ -7,6 +7,7 @@ import { Readable } from 'stream';
 import * as fs from 'fs';
 import { unlink } from 'fs/promises';
 import { Job } from 'bull';
+import { DataSource } from 'typeorm';
 import {
   statusStringToNumber
 } from '../../utils/response-status-converter';
@@ -16,12 +17,32 @@ import { PersonService } from './person.service';
 import {
   TestResultsUploadIssueDto,
   TestResultsUploadResultDto,
+  TestResultsUploadSummaryDto,
   TestResultsUploadStatsDto
 } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
+import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import { CodingAnalysisService } from '../coding/coding-analysis.service';
+import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 type PersonWithoutBooklets = Omit<Person, 'booklets'>;
+
+type UploadSummaryAccumulator = {
+  totalRows: number;
+  responseRows: number;
+  logRows: number;
+  bookletLogRows: number;
+  unitLogRows: number;
+  savedLogs: number;
+  skippedRows: number;
+  skippedLogs: number;
+};
+
+type LogRowWarningStats = {
+  zeroTimestampRows: number;
+};
 
 @Injectable()
 export class UploadResultsService {
@@ -30,8 +51,299 @@ export class UploadResultsService {
   constructor(
     private readonly personService: PersonService,
     @Inject(forwardRef(() => JobQueueService))
-    private readonly jobQueueService: JobQueueService
+    private readonly jobQueueService: JobQueueService,
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    private readonly connection: DataSource,
+    @Optional()
+    private readonly codingFreshnessService?: CodingFreshnessService,
+    @Optional()
+    private readonly codingAnalysisService?: CodingAnalysisService
   ) {
+  }
+
+  private emptyUploadStats(): TestResultsUploadStatsDto {
+    return {
+      testPersons: 0,
+      testGroups: 0,
+      uniqueBooklets: 0,
+      uniqueUnits: 0,
+      uniqueResponses: 0
+    };
+  }
+
+  private async readWorkspaceUploadStats(
+    workspaceId: number,
+    phase: 'before' | 'after',
+    issues: TestResultsUploadIssueDto[]
+  ): Promise<{ stats: TestResultsUploadStatsDto; failed: boolean }> {
+    try {
+      return {
+        stats: await this.personService.getWorkspaceUploadStats(workspaceId),
+        failed: false
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Could not read upload stats ${phase} import: ${detail}`);
+      issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Die Datenbankstatistik konnte nicht zuverlässig gelesen werden. Die Übersicht kann sich nach Aktualisierung noch ändern.'
+      });
+
+      return {
+        stats: this.emptyUploadStats(),
+        failed: true
+      };
+    }
+  }
+
+  private async invalidateWorkspaceOverviewCache(
+    workspaceId: number,
+    issues: TestResultsUploadIssueDto[]
+  ): Promise<boolean> {
+    try {
+      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      return false;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Could not invalidate workspace overview cache after import: ${detail}`);
+      issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Die Ergebnisdaten wurden verarbeitet, aber der Übersichtscache konnte nicht zuverlässig aktualisiert werden. Die Übersicht kann sich nach Aktualisierung noch ändern.'
+      });
+      return true;
+    }
+  }
+
+  private async invalidateCodingCachesAfterResponsesImport(
+    workspaceId: number,
+    issues: TestResultsUploadIssueDto[]
+  ): Promise<void> {
+    try {
+      await Promise.all([
+        this.codingAnalysisService?.invalidateCache(workspaceId),
+        this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
+      ]);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Could not invalidate coding caches after responses import: ${detail}`);
+      issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Die Ergebnisdaten wurden verarbeitet, aber Kodierstatistiken oder Antwort-Analyse konnten nicht zuverlässig aktualisiert werden. Die Werte können sich nach Aktualisierung noch ändern.'
+      });
+    }
+  }
+
+  private responseImportMutatedTestResults(mutationSummary: {
+    addedUnitIds?: number[];
+    changedUnitIds?: number[];
+    addedResponseCount?: number;
+    changedResponseCount?: number;
+  }): boolean {
+    return (mutationSummary.addedUnitIds?.length || 0) > 0 ||
+      (mutationSummary.changedUnitIds?.length || 0) > 0 ||
+      (mutationSummary.addedResponseCount || 0) > 0 ||
+      (mutationSummary.changedResponseCount || 0) > 0;
+  }
+
+  private createUploadSummaryAccumulator(): UploadSummaryAccumulator {
+    return {
+      totalRows: 0,
+      responseRows: 0,
+      logRows: 0,
+      bookletLogRows: 0,
+      unitLogRows: 0,
+      savedLogs: 0,
+      skippedRows: 0,
+      skippedLogs: 0
+    };
+  }
+
+  private normalizeCsvHeader(header: string): string {
+    return String(header || '').replace(/^\uFEFF/, '').trim();
+  }
+
+  private expectedCsvHeaders(resultType: 'logs' | 'responses'): string[] {
+    return resultType === 'logs' ?
+      ['groupname', 'loginname', 'code', 'bookletname', 'unitname', 'timestamp', 'logentry'] :
+      ['groupname', 'loginname', 'code', 'bookletname', 'unitname', 'responses', 'laststate'];
+  }
+
+  private validateCsvHeaders(
+    headers: string[],
+    resultType: 'logs' | 'responses',
+    fileName: string,
+    issues: TestResultsUploadIssueDto[]
+  ): boolean {
+    const normalizedHeaders = new Set(headers.map(header => this.normalizeCsvHeader(header)));
+    const missingHeaders = this.expectedCsvHeaders(resultType)
+      .filter(header => !normalizedHeaders.has(header));
+
+    if (missingHeaders.length === 0) {
+      return true;
+    }
+
+    issues.push({
+      level: 'error',
+      category: 'csv_columns',
+      fileName,
+      message: `Missing required CSV column(s): ${missingHeaders.join(', ')}`
+    });
+
+    return false;
+  }
+
+  private getLogPersonBookletKey(row: Log): string {
+    return [
+      row.groupname || '',
+      row.loginname || '',
+      row.code || '',
+      row.bookletname || ''
+    ].join('@@');
+  }
+
+  private addLogRowWarnings(
+    row: Log,
+    rowIndex: number,
+    fileName: string,
+    issues: TestResultsUploadIssueDto[],
+    bookletLogKeys: Set<string>,
+    missingBookletLogWarnings: Set<string>,
+    warningStats: LogRowWarningStats
+  ): boolean {
+    let rowCannotBeImported = false;
+    const missingIdentityFields = [
+      !row.groupname ? 'groupname' : '',
+      !row.loginname ? 'loginname' : ''
+    ].filter(Boolean);
+
+    if (missingIdentityFields.length > 0) {
+      issues.push({
+        level: 'warning',
+        category: 'missing_identity',
+        message: `Missing ${missingIdentityFields.join(', ')} in log row; person assignment may be incomplete.`,
+        fileName,
+        rowIndex
+      });
+    }
+
+    if (!row.bookletname) {
+      rowCannotBeImported = true;
+      issues.push({
+        level: 'warning',
+        category: 'missing_booklet',
+        message: 'Missing bookletname in log row; the row cannot be assigned to a booklet.',
+        fileName,
+        rowIndex
+      });
+    }
+
+    if (!row.logentry) {
+      rowCannotBeImported = true;
+      issues.push({
+        level: 'warning',
+        category: 'log_format',
+        message: 'Missing logentry in log row; the row cannot be imported as a log entry.',
+        fileName,
+        rowIndex
+      });
+    }
+
+    const timestamp = String(row.timestamp ?? '').trim();
+    if (!timestamp) {
+      issues.push({
+        level: 'warning',
+        category: 'timestamp',
+        message: 'Missing timestamp in log row.',
+        fileName,
+        rowIndex
+      });
+    } else if (Number(timestamp) === 0) {
+      warningStats.zeroTimestampRows += 1;
+    }
+
+    if (row.unitname && row.bookletname) {
+      const personBookletKey = this.getLogPersonBookletKey(row);
+      if (!bookletLogKeys.has(personBookletKey) && !missingBookletLogWarnings.has(personBookletKey)) {
+        missingBookletLogWarnings.add(personBookletKey);
+        issues.push({
+          level: 'warning',
+          category: 'missing_booklet_log',
+          message: `Unit logs for booklet "${row.bookletname}" have no matching booklet-level log row in this import; they will be imported as unit logs only.`,
+          fileName,
+          rowIndex
+        });
+      }
+    }
+
+    return rowCannotBeImported;
+  }
+
+  private addAggregatedLogRowWarnings(
+    fileName: string,
+    issues: TestResultsUploadIssueDto[],
+    warningStats: LogRowWarningStats
+  ): void {
+    if (warningStats.zeroTimestampRows > 0) {
+      const plural = warningStats.zeroTimestampRows === 1 ? 'entry has' : 'entries have';
+      issues.push({
+        level: 'warning',
+        category: 'timestamp',
+        message: `${warningStats.zeroTimestampRows} log ${plural} timestamp 0; chronological replay views may place these entries at the Unix epoch.`,
+        fileName
+      });
+    }
+  }
+
+  private countIssues(issues: TestResultsUploadIssueDto[]): TestResultsUploadSummaryDto['issueCounts'] | undefined {
+    if (issues.length === 0) {
+      return undefined;
+    }
+
+    return issues.reduce<NonNullable<TestResultsUploadSummaryDto['issueCounts']>>((acc, issue) => {
+      const category = issue.category || 'uncategorized';
+      acc[category] = (acc[category] || 0) + 1;
+      return acc;
+    }, {});
+  }
+
+  private buildImportSummary(
+    resultType: 'logs' | 'responses',
+    summary: UploadSummaryAccumulator,
+    issues: TestResultsUploadIssueDto[]
+  ): TestResultsUploadSummaryDto | undefined {
+    const issueCounts = this.countIssues(issues);
+
+    if (summary.totalRows === 0 && !issueCounts) {
+      return undefined;
+    }
+
+    const baseSummary: TestResultsUploadSummaryDto = {
+      totalRows: summary.totalRows,
+      skippedRows: summary.skippedRows || undefined,
+      issueCounts
+    };
+
+    if (resultType === 'logs') {
+      return {
+        ...baseSummary,
+        logRows: summary.logRows,
+        bookletLogRows: summary.bookletLogRows,
+        unitLogRows: summary.unitLogRows,
+        savedLogs: summary.savedLogs || undefined,
+        skippedLogs: summary.skippedLogs || undefined
+      };
+    }
+
+    return {
+      ...baseSummary,
+      responseRows: summary.responseRows
+    };
   }
 
   private filterImportedPersons(
@@ -137,7 +449,11 @@ export class UploadResultsService {
 
     this.logger.log(`Processing upload job ${job.id} for workspace ${workspaceId}, file: ${file.originalname}`);
 
-    const before = await this.personService.getWorkspaceUploadStats(workspaceId);
+    const issues: TestResultsUploadIssueDto[] = [];
+    const beforeStats = await this.readWorkspaceUploadStats(workspaceId, 'before', issues);
+    const before = beforeStats.stats;
+    let overviewPending = beforeStats.failed;
+    const importSummaryAgg = this.createUploadSummaryAccumulator();
     // Initialize aggregation structures locally for this job
     const expectedAgg = {
       persons: new Set<string>(),
@@ -146,7 +462,6 @@ export class UploadResultsService {
       units: new Set<string>(),
       responses: new Set<string>()
     };
-    const issues: TestResultsUploadIssueDto[] = [];
     const logMetricsAgg = {
       allBooklets: new Set<string>(),
       bookletsWithLogs: new Set<string>(),
@@ -196,13 +511,43 @@ export class UploadResultsService {
         }
 
         if (resultType === 'logs') {
-          await this.handleCsvStream<Log>(fileStream, resultType, async rowData => {
-            // ... (Same logic as uploadFile for logs)
+          await this.handleCsvStream<Log>(fileStream, resultType, issues, file.originalname, async rowData => {
+            const bookletLogKeys = new Set(
+              rowData
+                .filter(row => row.unitname === '' && row.bookletname)
+                .map(row => this.getLogPersonBookletKey(row))
+            );
+            const missingBookletLogWarnings = new Set<string>();
+            const warningStats: LogRowWarningStats = {
+              zeroTimestampRows: 0
+            };
+
             rowData.forEach((row, rowIndex) => {
               const groupname = row.groupname || '';
               const loginname = row.loginname || '';
               const code = row.code || '';
               const personKey = personMatchMode === 'loose' ? `${loginname}@@${code}` : `${groupname}@@${loginname}@@${code}`;
+              const isBookletLog = row.unitname === '';
+              importSummaryAgg.totalRows += 1;
+              importSummaryAgg.logRows += 1;
+              if (isBookletLog) {
+                importSummaryAgg.bookletLogRows += 1;
+              } else {
+                importSummaryAgg.unitLogRows += 1;
+              }
+
+              if (this.addLogRowWarnings(
+                row,
+                rowIndex,
+                file.originalname,
+                issues,
+                bookletLogKeys,
+                missingBookletLogWarnings,
+                warningStats
+              )) {
+                importSummaryAgg.skippedRows += 1;
+              }
+
               expectedAgg.persons.add(personKey);
               expectedAgg.groups.add(groupname);
               if (row.bookletname) {
@@ -221,16 +566,8 @@ export class UploadResultsService {
                 logMetricsAgg.allUnits.add(uKey);
                 logMetricsAgg.unitsWithLogs.add(uKey);
               }
-
-              if (!groupname || !loginname || !code) {
-                issues.push({
-                  level: 'warning',
-                  message: 'Missing group/login/code in row',
-                  fileName: file.originalname,
-                  rowIndex
-                });
-              }
             });
+            this.addAggregatedLogRowWarnings(file.originalname, issues, warningStats);
 
             const { bookletLogs, unitLogs } = rowData.reduce(
               (acc, row) => {
@@ -240,107 +577,141 @@ export class UploadResultsService {
               { bookletLogs: [] as Log[], unitLogs: [] as Log[] }
             );
             const personList = (await this.personService.createPersonList(rowData, workspaceId)).map(p => {
-              const pWithBooklets = this.personService.assignBookletLogsToPerson(p, rowData, issues, file.originalname);
-              pWithBooklets.booklets = pWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, rowData, issues, file.originalname)
+              const pWithBooklets = this.personService.assignBookletLogsToPerson(p, bookletLogs, issues, file.originalname);
+              const personUnitLogs = this.personService.filterLogRowsForPerson(unitLogs, p);
+              this.personService.ensureBookletsForUnitLogs(pWithBooklets, personUnitLogs);
+              pWithBooklets.booklets = pWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, personUnitLogs, issues, file.originalname)
               );
               return pWithBooklets;
             });
             const result = await this.personService.processPersonLogs(personList, unitLogs, bookletLogs, overwriteExisting);
+            importSummaryAgg.savedLogs += result.totalLogsSaved || 0;
+            importSummaryAgg.skippedLogs += result.totalLogsSkipped || 0;
             if (result.issues) {
               issues.push(...result.issues);
             }
           });
         } else if (resultType === 'responses') {
-          await this.handleCsvStream<Response>(fileStream, resultType, async rowData => {
-            // ... (Same logic as uploadFile for responses)
-            rowData.forEach((row, rowIndex) => {
-              const groupname = row.groupname || '';
-              const loginname = row.loginname || '';
-              const code = row.code || '';
-              const bookletname = row.bookletname || '';
-              const unitKey = row.unitname || '';
+          let responsesImportMutatedData = false;
+          try {
+            await this.handleCsvStream<Response>(fileStream, resultType, issues, file.originalname, async rowData => {
+              // ... (Same logic as uploadFile for responses)
+              rowData.forEach((row, rowIndex) => {
+                importSummaryAgg.totalRows += 1;
+                importSummaryAgg.responseRows += 1;
 
-              const personKey = personMatchMode === 'loose' ? `${loginname}@@${code}` : `${groupname}@@${loginname}@@${code}`;
-              expectedAgg.persons.add(personKey);
-              expectedAgg.groups.add(groupname);
-              if (bookletname) {
-                expectedAgg.booklets.add(bookletname);
-              }
-              if (unitKey) {
-                expectedAgg.units.add(unitKey);
-              }
+                const groupname = row.groupname || '';
+                const loginname = row.loginname || '';
+                const code = row.code || '';
+                const bookletname = row.bookletname || '';
+                const unitKey = row.unitname || '';
 
-              try {
-                const chunks = typeof row.responses === 'string' ? JSON.parse(row.responses) : row.responses;
-                if (Array.isArray(chunks)) {
-                  chunks.forEach(chunk => {
-                    if (!chunk || typeof chunk !== 'object') return;
-                    const subForm = (chunk as { subForm?: string }).subForm || '';
-                    const content = (chunk as { content?: string }).content;
-                    if (!content || typeof content !== 'string') return;
-                    try {
-                      const chunkResponses = JSON.parse(content) as Array<{ id?: string; status?: string }>;
-                      if (!Array.isArray(chunkResponses)) return;
-                      chunkResponses.forEach(r => {
-                        const responseId = r?.id || '';
-                        if (!responseId) return;
-                        const uniqueKey = `${personKey}@@${bookletname}@@${unitKey}@@${subForm}@@${responseId}`;
-                        expectedAgg.responses.add(uniqueKey);
+                const personKey = personMatchMode === 'loose' ? `${loginname}@@${code}` : `${groupname}@@${loginname}@@${code}`;
+                expectedAgg.persons.add(personKey);
+                expectedAgg.groups.add(groupname);
+                if (bookletname) {
+                  expectedAgg.booklets.add(bookletname);
+                }
+                if (unitKey) {
+                  expectedAgg.units.add(unitKey);
+                }
 
-                        let status = r?.status;
-                        if (!status) {
-                          status = 'INVALID';
-                          issues.push({
-                            level: 'warning',
-                            message: `Missing status (defaulting to INVALID) in response for ${uniqueKey}`,
-                            fileName: file.originalname,
-                            rowIndex,
-                            category: 'missing_status'
-                          });
-                        } else if (statusStringToNumber(status) === null) {
-                          issues.push({
-                            level: 'warning',
-                            message: `Invalid status '${status}' (defaulting to INVALID) in response for ${uniqueKey}`,
-                            fileName: file.originalname,
-                            rowIndex,
-                            category: 'invalid_status'
-                          });
-                          status = 'INVALID';
-                        }
+                try {
+                  const chunks = typeof row.responses === 'string' ? JSON.parse(row.responses) : row.responses;
+                  if (Array.isArray(chunks)) {
+                    chunks.forEach(chunk => {
+                      if (!chunk || typeof chunk !== 'object') return;
+                      const subForm = (chunk as { subForm?: string }).subForm || '';
+                      const content = (chunk as { content?: string }).content;
+                      if (!content || typeof content !== 'string') return;
+                      try {
+                        const chunkResponses = JSON.parse(content) as Array<{ id?: string; status?: string }>;
+                        if (!Array.isArray(chunkResponses)) return;
+                        chunkResponses.forEach(r => {
+                          const responseId = r?.id || '';
+                          if (!responseId) return;
+                          const uniqueKey = `${personKey}@@${bookletname}@@${unitKey}@@${subForm}@@${responseId}`;
+                          expectedAgg.responses.add(uniqueKey);
 
-                        statusCounts[status] = (statusCounts[status] || 0) + 1;
-                      });
-                    } catch {
-                      issues.push({
-                        level: 'warning',
-                        message: 'Malformed chunk content JSON',
-                        fileName: file.originalname,
-                        rowIndex
-                      });
-                    }
+                          let status = r?.status;
+                          if (!status) {
+                            status = 'INVALID';
+                            issues.push({
+                              level: 'warning',
+                              message: `Missing status (defaulting to INVALID) in response for ${uniqueKey}`,
+                              fileName: file.originalname,
+                              rowIndex,
+                              category: 'missing_status'
+                            });
+                          } else if (statusStringToNumber(status) === null) {
+                            issues.push({
+                              level: 'warning',
+                              message: `Invalid status '${status}' (defaulting to INVALID) in response for ${uniqueKey}`,
+                              fileName: file.originalname,
+                              rowIndex,
+                              category: 'invalid_status'
+                            });
+                            status = 'INVALID';
+                          }
+
+                          statusCounts[status] = (statusCounts[status] || 0) + 1;
+                        });
+                      } catch {
+                        issues.push({
+                          level: 'warning',
+                          message: 'Malformed chunk content JSON',
+                          fileName: file.originalname,
+                          rowIndex
+                        });
+                      }
+                    });
+                  }
+                } catch {
+                  importSummaryAgg.skippedRows += 1;
+                  issues.push({
+                    level: 'warning',
+                    message: 'Malformed responses JSON',
+                    fileName: file.originalname,
+                    rowIndex
                   });
                 }
-              } catch {
-                issues.push({
-                  level: 'warning',
-                  message: 'Malformed responses JSON',
-                  fileName: file.originalname,
-                  rowIndex
-                });
-              }
+              });
+
+              const basePersons = await this.personService.createPersonList(rowData, workspaceId);
+              const personsWithUnits = await Promise.all(
+                basePersons.map(async person => {
+                  const personWithBooklets = await this.personService.assignBookletsToPerson(person, rowData, issues);
+                  return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rowData, issues);
+                })
+              );
+
+              const filteredPersons = this.filterImportedPersons(personsWithUnits, scope, scopeFilters);
+              await withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
+                const mutationSummary = await this.personService.processPersonBooklets(
+                  filteredPersons,
+                  workspaceId,
+                  overwriteMode,
+                  scope === 'workspace' ? 'workspace' : 'person'
+                );
+                responsesImportMutatedData = responsesImportMutatedData ||
+                  this.responseImportMutatedTestResults(mutationSummary);
+                await this.codingFreshnessService?.markUnitsPendingAfterImport(
+                  workspaceId,
+                  mutationSummary.addedUnitIds,
+                  mutationSummary.addedResponseCount
+                );
+                await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+                  workspaceId,
+                  mutationSummary.changedUnitIds,
+                  'RESULT_UPDATED'
+                );
+              });
             });
-
-            const basePersons = await this.personService.createPersonList(rowData, workspaceId);
-            const personsWithUnits = await Promise.all(
-              basePersons.map(async person => {
-                const personWithBooklets = await this.personService.assignBookletsToPerson(person, rowData, issues);
-                return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rowData, issues);
-              })
-            );
-
-            const filteredPersons = this.filterImportedPersons(personsWithUnits, scope, scopeFilters);
-            await this.personService.processPersonBooklets(filteredPersons, workspaceId, overwriteMode, scope === 'workspace' ? 'workspace' : 'person');
-          });
+          } finally {
+            if (responsesImportMutatedData) {
+              await this.invalidateCodingCachesAfterResponsesImport(workspaceId, issues);
+            }
+          }
         }
         // Cleanup temp file
         // Cleanup temp file
@@ -359,7 +730,12 @@ export class UploadResultsService {
       issues.push({ level: 'error', message: `Processing error: ${e.message}`, fileName: file.originalname });
     }
 
-    const after = await this.personService.getWorkspaceUploadStats(workspaceId);
+    overviewPending = overviewPending ||
+      await this.invalidateWorkspaceOverviewCache(workspaceId, issues);
+
+    const afterStats = await this.readWorkspaceUploadStats(workspaceId, 'after', issues);
+    const after = afterStats.stats;
+    overviewPending = overviewPending || afterStats.failed;
     const expected: TestResultsUploadStatsDto = {
       testPersons: expectedAgg.persons.size,
       testGroups: expectedAgg.groups.size,
@@ -395,6 +771,20 @@ export class UploadResultsService {
       })
     } : undefined;
 
+    if (
+      resultType === 'logs' &&
+      importSummaryAgg.logRows > 0 &&
+      importSummaryAgg.savedLogs === 0
+    ) {
+      issues.push({
+        level: 'warning',
+        category: 'no_logs_saved',
+        fileName: file.originalname,
+        message:
+          'Es wurden Log-Zeilen gelesen, aber keine Logs gespeichert. Prüfen Sie, ob die zugehörigen Testergebnisse bereits importiert sind.'
+      });
+    }
+
     return {
       expected,
       before,
@@ -402,9 +792,14 @@ export class UploadResultsService {
       delta,
       responseStatusCounts: Object.keys(statusCounts).length ? statusCounts : undefined,
       issues: issues.length ? issues : undefined,
+      importSummary: this.buildImportSummary(resultType, importSummaryAgg, issues),
       logMetrics,
       importedLogs: resultType === 'logs',
-      importedResponses: resultType === 'responses'
+      importedResponses: resultType === 'responses',
+      overviewPending: overviewPending || undefined,
+      overviewMessage: overviewPending ?
+        'Die Daten wurden verarbeitet, aber die aggregierten Datenbankzahlen konnten noch nicht zuverlässig gelesen werden.' :
+        undefined
     };
   }
 
@@ -459,22 +854,48 @@ export class UploadResultsService {
     return jobDtos;
   }
 
+  private normalizeLogCsvValue(value: string, key?: string): string {
+    const trimmed = value.trim();
+    const normalizedValue = trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"') ?
+      trimmed
+        .substring(1, trimmed.length - 1)
+        .replace(/""/g, '"') :
+      value;
+
+    return key === 'logentry' ? normalizedValue : normalizedValue.trim();
+  }
+
   private handleCsvStream<T>(
     bufferStream: Readable,
     resultType: 'logs' | 'responses',
+    issues: TestResultsUploadIssueDto[],
+    fileName: string,
     onDataProcessed: (rowData: T[]) => Promise<void>
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       let batch: T[] = [];
+      let headersValid = true;
       const BATCH_SIZE = 500;
-      this.logger.log(`Processing CSV stream for ${resultType} with batch size ${BATCH_SIZE}`);
+      const processInBatches = resultType !== 'logs';
+      this.logger.log(
+        processInBatches ?
+          `Processing CSV stream for ${resultType} with batch size ${BATCH_SIZE}` :
+          `Processing CSV stream for ${resultType} in a single file pass`
+      );
 
       const stream = csv.parseStream(bufferStream, { headers: true, delimiter: ';', quote: resultType === 'logs' ? null : '"' })
+        .on('headers', (headers: string[]) => {
+          headersValid = this.validateCsvHeaders(headers, resultType, fileName, issues);
+          if (!headersValid) {
+            this.logger.warn(`Skipping CSV import for ${fileName} because required columns are missing.`);
+          }
+        })
         .transform((row: T) => {
           if (resultType === 'logs') {
-            Object.keys(row).forEach(key => {
-              if (typeof row[key] === 'string') {
-                row[key] = row[key].replace(/"/g, '');
+            const record = row as Record<string, unknown>;
+            Object.keys(record).forEach(key => {
+              if (typeof record[key] === 'string') {
+                record[key] = this.normalizeLogCsvValue(record[key], key);
               }
             });
           }
@@ -485,8 +906,11 @@ export class UploadResultsService {
           reject(error);
         })
         .on('data', async (row: T) => {
+          if (!headersValid) {
+            return;
+          }
           batch.push(row);
-          if (batch.length >= BATCH_SIZE) {
+          if (processInBatches && batch.length >= BATCH_SIZE) {
             stream.pause();
             try {
               await onDataProcessed(batch);
@@ -500,6 +924,10 @@ export class UploadResultsService {
         })
         .on('end', async () => {
           try {
+            if (!headersValid) {
+              resolve();
+              return;
+            }
             if (batch.length > 0) {
               await onDataProcessed(batch);
             }

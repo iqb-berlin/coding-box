@@ -2,12 +2,12 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   TestResultService, PersonTestResult, UnitLogRow, BookletLogsForUnitResponse
-} from '../test-result.service';
-import { TestResultBackendService, TestResultExportJob } from '../test-result-backend.service';
-import { ResponseService } from '../response.service';
-import { FileService } from '../file.service';
+} from '../../shared/services/test-result/test-result.service';
+import { TestResultBackendService, TestResultExportJob } from '../../shared/services/test-result/test-result-backend.service';
+import { ResponseService } from '../../shared/services/response/response.service';
+import { FileService } from '../../shared/services/file/file.service';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
-import { TestResultsUploadResultDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
+import { TestResultsUploadJobDto } from '../../../../../../api-dto/files/test-results-upload-job.dto';
 
 export interface SearchResponsesParams {
   value?: string;
@@ -19,6 +19,8 @@ export interface SearchResponsesParams {
   group?: string;
   code?: string;
   version?: 'v1' | 'v2' | 'v3';
+  derivedOnly?: boolean;
+  responseSource?: 'base' | 'derived' | 'all';
 }
 
 export interface SearchResponseItem {
@@ -143,7 +145,7 @@ export class TestResultFacadeService {
     return this.testResultService.deleteBooklet(workspaceId, bookletId);
   }
 
-  uploadTestResults(workspaceId: number, files: FileList | null, resultType: 'logs' | 'responses', overwriteExisting: boolean = true, overwriteMode: 'skip' | 'merge' | 'replace' = 'skip', scope: string = 'person', filters?: Record<string, unknown>): Observable<TestResultsUploadResultDto> {
+  uploadTestResults(workspaceId: number, files: FileList | null, resultType: 'logs' | 'responses', overwriteExisting: boolean = true, overwriteMode: 'skip' | 'merge' | 'replace' = 'skip', scope: string = 'person', filters?: Record<string, unknown>): Observable<TestResultsUploadJobDto[]> {
     return this.fileService.uploadTestResults(workspaceId, files, resultType, overwriteExisting, overwriteMode, scope, filters);
   }
 

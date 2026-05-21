@@ -9,6 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { provideHttpClient } from '@angular/common/http';
 import { TestResultsComponent } from './test-results.component';
 import { FileService } from '../../../shared/services/file/file.service';
 import { TestResultBackendService } from '../../../shared/services/test-result/test-result-backend.service';
@@ -23,6 +24,7 @@ import { TestResultService } from '../../../shared/services/test-result/test-res
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { UnitsReplayService } from '../../../replay/services/units-replay.service';
 import { TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('TestResultsComponent Polling', () => {
   let fixture: ComponentFixture<TestResultsComponent>;
@@ -49,6 +51,8 @@ describe('TestResultsComponent Polling', () => {
         TestResultsComponent // Import standalone component
       ],
       providers: [
+        provideHttpClient(),
+        { provide: SERVER_URL, useValue: 'http://localhost/api/' },
         { provide: FileService, useValue: { getFilesList: jest.fn().mockReturnValue(of({ data: [] })) } },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
         { provide: MatDialog, useValue: { open: jest.fn(), closeAll: jest.fn() } },
@@ -71,7 +75,8 @@ describe('TestResultsComponent Polling', () => {
           provide: TestResultService,
           useValue: {
             getTestResults: jest.fn().mockReturnValue(of([])),
-            getWorkspaceOverview: jest.fn().mockReturnValue(of({}))
+            getWorkspaceOverview: jest.fn().mockReturnValue(of({})),
+            flatResponseFilterRequests$: of()
           }
         },
         {
@@ -79,6 +84,7 @@ describe('TestResultsComponent Polling', () => {
           useValue: {
             getValidationStatus: jest.fn().mockReturnValue(of({})),
             getAllTaskIds: jest.fn().mockReturnValue({}),
+            getAllValidationResults: jest.fn().mockReturnValue({}),
             observeTaskIds: jest.fn().mockReturnValue(of({})),
             observeValidationResults: jest.fn().mockReturnValue(of({})),
             observeBatchState: jest.fn().mockReturnValue(of({ status: 'idle' }))

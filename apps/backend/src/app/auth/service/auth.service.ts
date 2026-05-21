@@ -1,7 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../../database/services/users';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
+import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 
 @Injectable()
 export class AuthService {
@@ -32,8 +38,42 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
-  async createToken(identity:string, workspaceId:number, duration: number): Promise<string> {
+  async createToken(
+    identity: string,
+    workspaceId: number,
+    duration: number,
+    requesterUserId?: number
+  ): Promise<string> {
     const user = await this.usersService.findUserByIdentity(identity);
+    if (!user) {
+      throw new NotFoundException(`User with identity ${identity} not found`);
+    }
+    if (requesterUserId !== undefined && user.id !== requesterUserId) {
+      const [requesterIsAdmin, requesterAccessLevel] = await Promise.all([
+        this.usersService.getUserIsAdmin(requesterUserId),
+        this.usersService.getUserAccessLevel(requesterUserId, workspaceId)
+      ]);
+      if (!requesterIsAdmin && (requesterAccessLevel || 0) < 3) {
+        throw new ForbiddenException('Users need workspace admin access to create tokens for another identity');
+      }
+    }
+    return this.signWorkspaceToken(user, workspaceId, duration);
+  }
+
+  async createTokenForUserId(
+    userId: number,
+    workspaceId: number,
+    duration: number
+  ): Promise<string> {
+    const user = await this.usersService.findUserById(userId);
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} not found`);
+    }
+
+    return this.signWorkspaceToken(user, workspaceId, duration);
+  }
+
+  private signWorkspaceToken(user: UserFullDto, workspaceId: number, duration: number): string {
     const payload = {
       userId: user.id, username: user.username, sub: user, workspace: workspaceId
     };

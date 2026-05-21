@@ -6,7 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
-import { CoderTraining } from '../../models/coder-training.model';
+import { CaseSelectionMode, CoderTraining } from '../../models/coder-training.model';
 
 interface CodingJob {
   id: number;
@@ -46,6 +46,15 @@ interface DialogData {
         <div class="training-info">
           <p><strong>{{ 'coding.trainings.table.created' | translate }}:</strong> {{ formatDate(data.training.created_at) }}</p>
           <p><strong>{{ 'coding.trainings.table.jobs' | translate }}:</strong> {{ data.jobs.length }}</p>
+          <p>
+            <strong>Fallauswahl:</strong>
+            {{ getCaseSelectionModeLabel(data.training.case_selection_mode) }}
+            <span class="info-subline">{{ getCaseSelectionModeDescription(data.training.case_selection_mode) }}</span>
+          </p>
+          <p>
+            <strong>Reihenfolge:</strong>
+            {{ getCaseOrderingModeLabel(data.training.case_ordering_mode) }}
+          </p>
         </div>
 
         <table mat-table [dataSource]="data.jobs" class="jobs-table" *ngIf="data.jobs.length > 0">
@@ -122,6 +131,13 @@ interface DialogData {
           strong {
             color: #666;
           }
+        }
+
+        .info-subline {
+          display: block;
+          margin-top: 2px;
+          color: #777;
+          font-size: 12px;
         }
       }
 
@@ -228,5 +244,43 @@ export class TrainingJobsDialogComponent {
       default:
         return status;
     }
+  }
+
+  getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
+    switch (mode || 'oldest_first') {
+      case 'oldest_first':
+        return 'Älteste Fälle zuerst';
+      case 'newest_first':
+        return 'Neueste Fälle zuerst';
+      case 'random':
+        return 'Zufällige Fälle';
+      case 'random_per_testgroup':
+        return 'Zufällig je Testgruppe';
+      case 'random_testgroups':
+        return 'Zufällige Testgruppen';
+      default:
+        return 'Älteste Fälle zuerst';
+    }
+  }
+
+  getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
+    switch (mode || 'oldest_first') {
+      case 'oldest_first':
+        return 'Nimmt pro Variable die ältesten verfügbaren Fälle.';
+      case 'newest_first':
+        return 'Nimmt pro Variable die neuesten verfügbaren Fälle.';
+      case 'random':
+        return 'Zieht zufällig aus allen verfügbaren Fällen.';
+      case 'random_per_testgroup':
+        return 'Verteilt die Auswahl möglichst gleichmäßig über Testgruppen.';
+      case 'random_testgroups':
+        return 'Wählt zufällige Testgruppen und zieht Fälle innerhalb dieser Gruppen.';
+      default:
+        return 'Nimmt pro Variable die ältesten verfügbaren Fälle.';
+    }
+  }
+
+  getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
+    return mode === 'alternating' ? 'Abwechselnd' : 'Fortlaufend';
   }
 }

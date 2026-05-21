@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpEvent, HttpParams } from '@angular/common/http';
 import {
   catchError,
   map,
@@ -37,8 +37,8 @@ export class ResourcePackageService {
       `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages`,
       { headers: this.authHeader, params }
     ).pipe(
-      catchError(() => of(false)),
-      map(() => true)
+      map(() => true),
+      catchError(() => of(false))
     );
   }
 
@@ -46,8 +46,18 @@ export class ResourcePackageService {
     return this.http.get(
       `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages/${name}`,
       { headers: this.authHeader, responseType: 'blob' }
-    ).pipe(
-      catchError(() => of(new Blob([])))
+    );
+  }
+
+  downloadResourcePackageWithProgress(workspaceId: number, name: string): Observable<HttpEvent<Blob>> {
+    return this.http.get(
+      `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages/${name}`,
+      {
+        headers: this.authHeader,
+        responseType: 'blob',
+        reportProgress: true,
+        observe: 'events'
+      }
     );
   }
 
@@ -61,6 +71,33 @@ export class ResourcePackageService {
       { headers: this.authHeader }
     ).pipe(
       catchError(() => of(-1))
+    );
+  }
+
+  uploadResourcePackageWithProgress(workspaceId: number, file: File): Observable<HttpEvent<number>> {
+    const formData = new FormData();
+    formData.append('resourcePackage', file);
+
+    return this.http.post<number>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages`,
+      formData,
+      {
+        headers: this.authHeader,
+        reportProgress: true,
+        observe: 'events'
+      }
+    );
+  }
+
+  installGeoGebraPackage(workspaceId: number): Observable<HttpEvent<ResourcePackageDto>> {
+    return this.http.post<ResourcePackageDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages/geogebra/install`,
+      {},
+      {
+        headers: this.authHeader,
+        reportProgress: true,
+        observe: 'events'
+      }
     );
   }
 }

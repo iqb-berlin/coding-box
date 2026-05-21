@@ -35,6 +35,10 @@ export interface ImportComparisonRow {
   updatedCodedStatus: string | null;
   updatedCode: number | null;
   updatedScore: number | null;
+  importAction?: 'update' | 'skip' | 'unchanged';
+  actionReason?: string;
+  hasExistingCoding?: boolean;
+  hasConflict?: boolean;
 }
 
 export interface ImportComparisonData {
@@ -47,6 +51,10 @@ export interface ImportComparisonData {
   workspaceId?: number;
   fileData?: string;
   fileName?: string;
+  sourceFormat?: 'external-coding' | 'coding-list' | 'coding-results';
+  sourceVersion?: 'v1' | 'v2' | 'v3';
+  scoreMode?: 'import' | 'derive';
+  existingCodingMode?: 'skip-conflicts' | 'fill-empty' | 'overwrite';
 }
 
 @Component({
@@ -76,10 +84,10 @@ export interface ImportComparisonData {
           <p>{{data.message}}</p>
           <p>Betroffene Zeilen: {{data.affectedRows.length}}</p>
           <p>Verarbeitete Zeilen: {{data.processedRows}}</p>
-          <p>Aktualisierte Zeilen: {{data.updatedRows}}</p>
+          <p>Zu aktualisierende Zeilen: {{data.updatedRows}}</p>
           <div class="matched-indicator">
             <mat-icon class="matched-icon">{{data.isPreview ? 'preview' : 'check_circle'}}</mat-icon>
-            <span>{{data.affectedRows.length}} Zeilen wurden {{data.isPreview ? 'gefunden (Vorschau)' : 'gefunden und aktualisiert'}}</span>
+            <span>{{data.updatedRows}} Zeilen werden {{data.isPreview ? 'aktualisiert (Vorschau)' : 'aktualisiert'}}</span>
           </div>
           <div *ngIf="data.isPreview" class="preview-notice">
             <mat-icon class="warning-icon">info</mat-icon>
@@ -139,6 +147,22 @@ export interface ImportComparisonData {
               <td mat-cell *matCellDef="let row">{{row.bookletName || '-'}}</td>
             </ng-container>
 
+            <!-- Import Action Column -->
+            <ng-container matColumnDef="importAction">
+              <th mat-header-cell *matHeaderCellDef>Import</th>
+              <td mat-cell *matCellDef="let row">
+                <span class="action-chip"
+                      [class.action-update]="row.importAction === 'update' || !row.importAction"
+                      [class.action-skip]="row.importAction === 'skip'"
+                      [class.action-unchanged]="row.importAction === 'unchanged'">
+                  {{getActionLabel(row)}}
+                </span>
+                <span *ngIf="row.actionReason" class="action-reason">
+                  {{row.actionReason}}
+                </span>
+              </td>
+            </ng-container>
+
             <!-- Original Status Column -->
             <ng-container matColumnDef="originalStatus">
               <th mat-header-cell *matHeaderCellDef>Original Status</th>
@@ -148,13 +172,13 @@ export interface ImportComparisonData {
             <!-- Original Code Column -->
             <ng-container matColumnDef="originalCode">
               <th mat-header-cell *matHeaderCellDef>Original Code</th>
-              <td mat-cell *matCellDef="let row">{{row.originalCode || '-'}}</td>
+              <td mat-cell *matCellDef="let row">{{row.originalCode ?? '-'}}</td>
             </ng-container>
 
             <!-- Original Score Column -->
             <ng-container matColumnDef="originalScore">
               <th mat-header-cell *matHeaderCellDef>Original Score</th>
-              <td mat-cell *matCellDef="let row">{{row.originalScore || '-'}}</td>
+              <td mat-cell *matCellDef="let row">{{row.originalScore ?? '-'}}</td>
             </ng-container>
 
             <!-- Updated Status Column -->
@@ -162,7 +186,7 @@ export interface ImportComparisonData {
               <th mat-header-cell *matHeaderCellDef>Aktualisierter Status</th>
               <td mat-cell *matCellDef="let row"
                   [class.updated-value]="row.updatedCodedStatus !== row.originalCodedStatus"
-                  [class.matched-row]="true">
+                  [class.matched-row]="row.importAction !== 'skip'">
                 {{row.updatedCodedStatus || '-'}}
               </td>
             </ng-container>
@@ -172,8 +196,8 @@ export interface ImportComparisonData {
               <th mat-header-cell *matHeaderCellDef>Aktualisierter Code</th>
               <td mat-cell *matCellDef="let row"
                   [class.updated-value]="row.updatedCode !== row.originalCode"
-                  [class.matched-row]="true">
-                {{row.updatedCode || '-'}}
+                  [class.matched-row]="row.importAction !== 'skip'">
+                {{row.updatedCode ?? '-'}}
               </td>
             </ng-container>
 
@@ -182,14 +206,16 @@ export interface ImportComparisonData {
               <th mat-header-cell *matHeaderCellDef>Aktualisierter Score</th>
               <td mat-cell *matCellDef="let row"
                   [class.updated-value]="row.updatedScore !== row.originalScore"
-                  [class.matched-row]="true">
-                {{row.updatedScore || '-'}}
+                  [class.matched-row]="row.importAction !== 'skip'">
+                {{row.updatedScore ?? '-'}}
               </td>
             </ng-container>
 
             <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
             <tr mat-row *matRowDef="let row; columns: displayedColumns;"
-                [class.matched-row]="true"></tr>
+                [class.matched-row]="row.importAction !== 'skip'"
+                [class.skipped-row]="row.importAction === 'skip'"
+                [class.unchanged-row]="row.importAction === 'unchanged'"></tr>
           </table>
 
           <mat-paginator
@@ -227,7 +253,7 @@ export interface ImportComparisonData {
             Abbrechen
           </button>
           <button mat-raised-button color="primary" (click)="applyImport()"
-                  [disabled]="isLoading || !data.affectedRows.length"
+                  [disabled]="isLoading || data.updatedRows === 0"
                   matTooltip="Änderungen anwenden">
             <mat-icon>check_circle</mat-icon>
             Änderungen anwenden
@@ -358,6 +384,50 @@ export interface ImportComparisonData {
       border-bottom: 1px solid #e8f5e8;
     }
 
+    .skipped-row {
+      background-color: #fff8ed;
+      border-left: 4px solid #ff9800;
+    }
+
+    .unchanged-row {
+      background-color: #f5f5f5;
+      border-left: 4px solid #9e9e9e;
+    }
+
+    .action-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .action-update {
+      color: #2e7d32;
+      background: #e8f5e8;
+    }
+
+    .action-skip {
+      color: #e65100;
+      background: #fff3e0;
+    }
+
+    .action-unchanged {
+      color: #616161;
+      background: #eeeeee;
+    }
+
+    .action-reason {
+      display: block;
+      margin-top: 4px;
+      color: rgba(0, 0, 0, 0.6);
+      font-size: 12px;
+      line-height: 1.35;
+      max-width: 260px;
+    }
+
     .error-section {
       margin-top: 24px;
       padding: 16px;
@@ -403,6 +473,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     'personCode',
     'personGroup',
     'bookletName',
+    'importAction',
     'originalStatus',
     'originalCode',
     'originalScore',
@@ -443,6 +514,22 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     this.updateDataSource();
   }
 
+  getActionLabel(row: ImportComparisonRow): string {
+    if (row.importAction === 'skip') {
+      return row.hasConflict ? 'Konflikt übersprungen' : 'Übersprungen';
+    }
+
+    if (row.importAction === 'unchanged') {
+      return 'Unverändert';
+    }
+
+    if (!row.hasExistingCoding) {
+      return 'Wird importiert';
+    }
+
+    return this.data.existingCodingMode === 'overwrite' ? 'Wird überschrieben' : 'Wird ergänzt';
+  }
+
   private updateDataSource(): void {
     // For simplicity, we'll let MatTableDataSource handle pagination
     // In a real implementation, you might want to slice the data manually
@@ -466,6 +553,8 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         'Person Code',
         'Person Group',
         'Booklet Name',
+        'Import Aktion',
+        'Import Hinweis',
         'Original Status',
         'Original Code',
         'Original Score',
@@ -492,6 +581,8 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
           row.personCode,
           row.personGroup,
           row.bookletName,
+          this.getActionLabel(row),
+          row.actionReason,
           row.originalCodedStatus,
           row.originalCode,
           row.originalScore,
@@ -551,7 +642,14 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
 
     this.testPersonCodingService.startExternalCodingImportJob(
       this.data.workspaceId,
-      { file: this.data.fileData, fileName: this.data.fileName }
+      {
+        file: this.data.fileData,
+        fileName: this.data.fileName,
+        sourceFormat: this.data.sourceFormat,
+        sourceVersion: this.data.sourceVersion,
+        scoreMode: this.data.scoreMode,
+        existingCodingMode: this.data.existingCodingMode
+      }
     ).subscribe({
       next: ({ jobId }) => {
         this.pollImportJob(this.data.workspaceId!, jobId);

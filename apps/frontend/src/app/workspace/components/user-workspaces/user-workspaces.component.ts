@@ -5,6 +5,7 @@ import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 import { AuthService } from '../../../core/services/auth.service';
+import { AppService } from '../../../core/services/app.service';
 
 @Component({
   selector: 'coding-book-user-workspaces',
@@ -15,5 +16,10 @@ import { AuthService } from '../../../core/services/auth.service';
 
 export class UserWorkspacesComponent {
   authService = inject(AuthService);
+  appService = inject(AppService);
   @Input() workspaces!: WorkspaceFullDto[];
+
+  login(): void {
+    this.authService.login(this.appService.reAuthenticationReturnUrl);
+  }
 }

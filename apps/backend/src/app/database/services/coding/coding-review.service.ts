@@ -1,21 +1,29 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
+import {
+  applyResolvedExclusionsToQuery,
+  isExcludedByResolvedExclusions,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 
 @Injectable()
 export class CodingReviewService {
   private readonly logger = new Logger(CodingReviewService.name);
+
+  private readonly codingResultSignatureSql = "cju.code::text || ':' || COALESCE(cju.score::text, 'NULL')";
 
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
-    private codingStatisticsService: CodingStatisticsService
+    private codingStatisticsService: CodingStatisticsService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   async getDoubleCodedVariablesForReview(
@@ -62,6 +70,7 @@ export class CodingReviewService {
       this.logger.log(
         `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts}, agreementFilter=${agreementFilter}, resolvedFilter=${resolvedFilter}, jobDefinitionFilters=${jobDefinitionIds?.length || 0}, trainingFilters=${coderTrainingIds?.length || 0})`
       );
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
       const query = this.codingJobUnitRepository
         .createQueryBuilder('cju')
         .leftJoin('cju.coding_job', 'cj')
@@ -76,18 +85,23 @@ export class CodingReviewService {
         .groupBy('cju.response_id')
         .addGroupBy('resp.status_v2')
         .having('COUNT(DISTINCT cju.coding_job_id) > 1'); // Multiple jobs assigned to this response
+      applyResolvedExclusionsToQuery(query, exclusions, {
+        unitNameExpression: 'cju.unit_name',
+        bookletNameExpression: 'cju.booklet_name',
+        parameterPrefix: 'doubleCodedReview'
+      });
 
       if (agreementFilter === 'differ') {
-        // Conflict: at least two codes available and they differ.
+        // Conflict: at least two coding decisions are available and code or score differs.
         query.andHaving('COUNT(cju.code) > 1');
-        query.andHaving('COUNT(DISTINCT cju.code) > 1');
+        query.andHaving(`COUNT(DISTINCT (${this.codingResultSignatureSql})) > 1`);
       } else if (agreementFilter === 'match') {
-        // Match: no differing non-null codes.
-        query.andHaving('COUNT(DISTINCT cju.code) <= 1');
+        // Match: no differing non-null coding decisions.
+        query.andHaving(`COUNT(DISTINCT (${this.codingResultSignatureSql})) <= 1`);
       } else if (onlyConflicts) {
         // Legacy behavior for older clients that still use onlyConflicts.
         query.andHaving('COUNT(cju.code) > 1');
-        query.andHaving('COUNT(DISTINCT cju.code) > 1');
+        query.andHaving(`COUNT(DISTINCT (${this.codingResultSignatureSql})) > 1`);
       }
 
       // Applied Status Filter Logic
@@ -95,10 +109,10 @@ export class CodingReviewService {
       if (resolvedFilter === 'resolved') {
         query.andWhere('resp.status_v2 = :completeStatus', { completeStatus });
       } else if (resolvedFilter === 'unresolved') {
-        query.andWhere('resp.status_v2 != :completeStatus', { completeStatus });
-      } else if ((agreementFilter === 'differ' || (onlyConflicts && agreementFilter !== 'match')) && !resolvedFilter) {
-        // Legacy behavior: onlyConflicts hides resolved items by default if no status filter is set
-        query.andWhere('resp.status_v2 != :completeStatus', { completeStatus });
+        query.andWhere('(resp.status_v2 IS NULL OR resp.status_v2 != :completeStatus)', { completeStatus });
+      } else if (onlyConflicts && !agreementFilter && !resolvedFilter) {
+        // Legacy behavior: older onlyConflicts clients hide resolved items by default.
+        query.andWhere('(resp.status_v2 IS NULL OR resp.status_v2 != :completeStatus)', { completeStatus });
       }
 
       if (excludeTrainings) {
@@ -136,12 +150,34 @@ export class CodingReviewService {
           const sub = subQuery
             .subQuery()
             .select('cju2.response_id')
-            .from('coding_job_unit', 'cju2')
-            .leftJoin('cju2.coding_job', 'cj2')
+            .from(CodingJobUnit, 'cju2')
+            .innerJoin('cju2.coding_job', 'cj2')
             .leftJoin('cj2.codingJobCoders', 'cjc2')
-            .where('cjc2.user_id = :coderId', { coderId })
-            .getQuery();
-          return `cju.response_id IN ${sub}`;
+            .where('cj2.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('cjc2.user_id = :coderId', { coderId });
+
+          if (excludeTrainings) {
+            sub.andWhere('cj2.training_id IS NULL');
+          }
+
+          if (this.hasScopeFilters(jobDefinitionIds, coderTrainingIds)) {
+            const scopeClauses: string[] = [];
+            const scopeParams: Record<string, number[]> = {};
+
+            if (jobDefinitionIds?.length) {
+              scopeClauses.push('cj2.job_definition_id IN (:...coderFilterJobDefinitionIds)');
+              scopeParams.coderFilterJobDefinitionIds = jobDefinitionIds;
+            }
+
+            if (coderTrainingIds?.length) {
+              scopeClauses.push('cj2.training_id IN (:...coderFilterTrainingIds)');
+              scopeParams.coderFilterTrainingIds = coderTrainingIds;
+            }
+
+            sub.andWhere(`(${scopeClauses.join(' OR ')})`, scopeParams);
+          }
+
+          return `cju.response_id IN ${sub.getQuery()}`;
         });
       }
 
@@ -214,6 +250,10 @@ export class CodingReviewService {
         }
 
         if (!this.isIncludedByScope(unit.coding_job.job_definition_id, unit.coding_job.training_id, jobDefinitionIds, coderTrainingIds)) {
+          return false;
+        }
+
+        if (isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)) {
           return false;
         }
 
@@ -375,6 +415,19 @@ export class CodingReviewService {
               continue;
             }
 
+            const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+            if (isExcludedByResolvedExclusions(
+              exclusions,
+              selectedCodingJobUnit.booklet_name,
+              selectedCodingJobUnit.unit_name
+            )) {
+              this.logger.warn(
+                `Skipped ignored responseId ${decision.responseId} for jobId ${decision.selectedJobId}`
+              );
+              skippedCount += 1;
+              continue;
+            }
+
             const response = selectedCodingJobUnit.response;
             if (!response) {
               this.logger.warn(
@@ -392,10 +445,10 @@ export class CodingReviewService {
               updatedValue = parts[parts.length - 1];
             }
 
-            await transactionalEntityManager.update(
-              CodingJobUnit,
-              { response_id: decision.responseId },
-              { supervisor_comment: null }
+            await this.clearWorkspaceSupervisorComments(
+              transactionalEntityManager,
+              workspaceId,
+              decision.responseId
             );
 
             if (decision.resolutionComment && decision.resolutionComment.trim()) {
@@ -444,6 +497,35 @@ export class CodingReviewService {
         'Could not apply double-coded resolutions. Please check the database connection.'
       );
     }
+  }
+
+  private async clearWorkspaceSupervisorComments(
+    manager: EntityManager,
+    workspaceId: number,
+    responseId: number
+  ): Promise<void> {
+    const rows = await manager
+      .getRepository(CodingJobUnit)
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .select('cju.id', 'id')
+      .where('cju.response_id = :responseId', { responseId })
+      .andWhere('cj.workspace_id = :workspaceId', { workspaceId })
+      .getRawMany<{ id: number | string }>();
+
+    const ids = rows
+      .map(row => Number(row.id))
+      .filter(id => Number.isFinite(id));
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    await manager.update(
+      CodingJobUnit,
+      { id: In(ids) },
+      { supervisor_comment: null }
+    );
   }
 
   async getWorkspaceCohensKappaSummary(

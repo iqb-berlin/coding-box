@@ -2,7 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
-  Get, Param, Post, Query, UseGuards
+  Get, Param, ParseIntPipe, Post, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -14,8 +14,17 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
-import { WorkspaceUsersService } from '../../database/services/workspace';
+import { WorkspaceUsersService } from '../../database/services/workspace/workspace-users.service';
 import { WorkspaceId } from './workspace.decorator';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
+
+const MAX_TOKEN_DURATION_DAYS = 90;
+
+interface RequestWithUser {
+  user: {
+    id: string | number;
+  };
+}
 
 @ApiTags('Admin Workspace Users')
 @Controller('admin/workspace')
@@ -25,27 +34,87 @@ export class WorkspaceUsersController {
     private authService: AuthService
   ) {}
 
-  @Get(':workspace_id/:user_id/token/:duration')
+  @Get(':workspace_id/token/:duration')
+  @ApiBearerAuth()
+  @ApiTags('admin workspace')
+  @ApiOperation({
+    summary: 'Create own authentication token',
+    description: 'Creates a JWT token for the authenticated user in a specific workspace with a specified duration'
+  })
+  @ApiParam({ name: 'workspace_id', required: true, description: 'ID of the workspace' })
+  @ApiParam({
+    name: 'duration',
+    required: true,
+    description: `Duration of the token in days. Must be between 1 and ${MAX_TOKEN_DURATION_DAYS}.`
+  })
+  @ApiOkResponse({ description: 'Token created successfully', type: String })
+  @ApiBadRequestResponse({ description: 'Invalid input parameters' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async createOwnToken(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Param('duration') duration: string,
+      @Req() request: RequestWithUser
+  ): Promise<string> {
+    if (!workspaceId || !duration) {
+      throw new BadRequestException('Invalid input parameters');
+    }
+    const durationDays = this.parseTokenDurationDays(duration);
+    logger.log(`Generating token for user ${request.user.id} in workspace ${workspaceId} with duration ${durationDays}d`);
+
+    return this.authService.createTokenForUserId(
+      Number(request.user.id),
+      workspaceId,
+      durationDays
+    );
+  }
+
+  @Get(':workspace_id/:identity/token/:duration')
   @ApiBearerAuth()
   @ApiTags('admin workspace')
   @ApiOperation({ summary: 'Create authentication token', description: 'Creates a JWT token for a user in a specific workspace with a specified duration' })
   @ApiParam({ name: 'workspace_id', required: true, description: 'ID of the workspace' })
-  @ApiParam({ name: 'user_id', required: true, description: 'ID of the user' })
-  @ApiParam({ name: 'duration', required: true, description: 'Duration of the token in seconds' })
+  @ApiParam({ name: 'identity', required: true, description: 'Identity of the user for whom the token is created' })
+  @ApiParam({
+    name: 'duration',
+    required: true,
+    description: `Duration of the token in days. Must be between 1 and ${MAX_TOKEN_DURATION_DAYS}.`
+  })
   @ApiOkResponse({ description: 'Token created successfully', type: String })
   @ApiBadRequestResponse({ description: 'Invalid input parameters' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async createToken(
-    @Param('user_id') userId: string,
-      @Param('workspace_id') workspaceId: number,
-      @Param('duration') duration: number
+    @Param('identity') identity: string,
+      @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Param('duration') duration: string,
+      @Req() request: RequestWithUser
   ): Promise<string> {
-    if (!userId || !workspaceId || !duration) {
+    if (!identity || !workspaceId || !duration) {
       throw new BadRequestException('Invalid input parameters');
     }
-    logger.log(`Generating token for user ${userId} in workspace ${workspaceId} with duration ${duration}s`);
+    const durationDays = this.parseTokenDurationDays(duration);
+    logger.log(`Generating token for user ${identity} in workspace ${workspaceId} with duration ${durationDays}d`);
 
-    return this.authService.createToken(userId, workspaceId, duration);
+    return this.authService.createToken(
+      identity,
+      workspaceId,
+      durationDays,
+      Number(request.user.id)
+    );
+  }
+
+  private parseTokenDurationDays(duration: string): number {
+    const durationDays = Number(duration);
+    if (
+      !Number.isInteger(durationDays) ||
+      durationDays < 1 ||
+      durationDays > MAX_TOKEN_DURATION_DAYS
+    ) {
+      throw new BadRequestException(
+        `Token duration must be a whole number between 1 and ${MAX_TOKEN_DURATION_DAYS} days`
+      );
+    }
+    return durationDays;
   }
 
   @Get(':workspace_id/users')
@@ -144,7 +213,7 @@ export class WorkspaceUsersController {
     description: 'Unique identifier for the workspace'
   })
   @ApiOkResponse({
-    description: 'List of coders (users with accessLevel 1) retrieved successfully',
+    description: 'List of users enabled for coding retrieved successfully',
     schema: {
       type: 'object',
       properties: {

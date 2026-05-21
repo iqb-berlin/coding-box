@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
-import { extractVariableLocation } from '../../../utils/voud/extractVariableLocation';
+import { resolveVariablePageMap } from '../../../utils/voud/resolveVariablePageMap';
 import { LRUCache } from '../shared';
 
 /**
@@ -49,16 +49,7 @@ export class CodingFileCacheService {
 
     if (voudFile) {
       try {
-        const respDefinition = { definition: voudFile.data as string };
-        const variableLocation = extractVariableLocation([respDefinition]);
-        if (variableLocation[0]?.variable_pages) {
-          for (const pageInfo of variableLocation[0].variable_pages) {
-            variablePageMap.set(
-              pageInfo.variable_ref,
-              pageInfo.variable_path?.pages?.toString() || '0'
-            );
-          }
-        }
+        variablePageMap = resolveVariablePageMap(voudFile.data as string);
       } catch (error) {
         this.logger.debug(
           `Error parsing VOUD file for unit ${unitName}: ${error.message}`
@@ -66,8 +57,95 @@ export class CodingFileCacheService {
       }
     }
 
+    const vocsPageOverrides = await this.loadVocsPageOverrides(
+      unitName,
+      workspaceId
+    );
+    vocsPageOverrides.forEach((page, variableId) => {
+      variablePageMap.set(variableId, page);
+    });
+
     this.voudCache.set(cacheKey, variablePageMap);
     return variablePageMap;
+  }
+
+  private async loadVocsPageOverrides(
+    unitName: string,
+    workspaceId: number
+  ): Promise<Map<string, string>> {
+    const pageOverrides = new Map<string, string>();
+
+    const vocsFile = await this.fileUploadRepository.findOne({
+      where: {
+        workspace_id: workspaceId,
+        file_type: 'Resource',
+        file_id: `${unitName}.VOCS`
+      }
+    });
+
+    if (!vocsFile) {
+      return pageOverrides;
+    }
+
+    try {
+      interface VocsScheme {
+        variableCodings?: {
+          id?: unknown;
+          alias?: unknown;
+          page?: unknown;
+        }[];
+      }
+
+      const scheme = JSON.parse(vocsFile.data) as VocsScheme;
+      const vars = Array.isArray(scheme?.variableCodings) ?
+        scheme.variableCodings :
+        [];
+
+      for (const variableCoding of vars) {
+        const normalizedPage = this.toVeronaPageIndex(variableCoding?.page);
+        if (normalizedPage === null) {
+          continue;
+        }
+
+        this.addPageOverride(pageOverrides, variableCoding?.id, normalizedPage);
+        this.addPageOverride(pageOverrides, variableCoding?.alias, normalizedPage);
+      }
+    } catch (error) {
+      this.logger.debug(
+        `Error parsing VOCS page overrides for unit ${unitName}: ${error.message}`
+      );
+    }
+
+    return pageOverrides;
+  }
+
+  private toVeronaPageIndex(page: unknown): string | null {
+    if (page === null || page === undefined) {
+      return null;
+    }
+
+    const pageText = String(page).trim();
+    if (!pageText) {
+      return null;
+    }
+
+    const pageNumber = Number(pageText);
+    if (!Number.isInteger(pageNumber) || pageNumber < 0) {
+      return null;
+    }
+
+    return String(Math.max(0, pageNumber - 1));
+  }
+
+  private addPageOverride(
+    pageOverrides: Map<string, string>,
+    variableId: unknown,
+    page: string
+  ): void {
+    const normalizedVariableId = String(variableId || '').trim();
+    if (normalizedVariableId) {
+      pageOverrides.set(normalizedVariableId, page);
+    }
   }
 
   /**

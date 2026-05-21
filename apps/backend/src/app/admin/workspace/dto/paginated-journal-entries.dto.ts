@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { JournalEntry } from '../../../database/entities/journal-entry.entity';
+import { AuditJournalEntryDto } from '../../../../../../../api-dto/audit-journal/audit-journal.dto';
+import { AuditJournalEntryResponseDto } from './audit-journal-entry-response.dto';
 
 /**
  * DTO for paginated journal entries response
@@ -7,10 +8,10 @@ import { JournalEntry } from '../../../database/entities/journal-entry.entity';
 export class PaginatedJournalEntriesDto {
   @ApiProperty({
     description: 'Array of journal entries',
-    type: JournalEntry,
+    type: AuditJournalEntryResponseDto,
     isArray: true
   })
-    data: JournalEntry[];
+    data: AuditJournalEntryDto[];
 
   @ApiProperty({
     description: 'Total number of journal entries',

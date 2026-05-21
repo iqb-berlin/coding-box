@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { ValidationService } from '../validation.service';
+import { ValidationService } from '../../shared/services/validation/validation.service';
 import { ValidationTaskDto } from '../../models/validation-task.dto';
 
 @Injectable({
@@ -17,7 +17,7 @@ export class ValidationFacadeService {
     return this.validationService.createDeleteResponsesTask(workspaceId, responseIds);
   }
 
-  createValidationTask(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses', page?: number, limit?: number, additionalData?: Record<string, unknown>): Observable<ValidationTaskDto> {
+  createValidationTask(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'testFiles' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'deleteTestResults' | 'deleteTestLogs' | 'duplicateResponses', page?: number, limit?: number, additionalData?: Record<string, unknown>): Observable<ValidationTaskDto> {
     return this.validationService.createValidationTask(workspaceId, type, page, limit, additionalData);
   }
 

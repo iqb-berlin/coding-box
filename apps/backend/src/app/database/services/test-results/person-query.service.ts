@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -8,6 +8,12 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { BookletLog } from '../../entities/bookletLog.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { TestResultsUploadStatsDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import {
+  applyResolvedExclusionsToQuery,
+  normalizeExclusionBookletId,
+  ResolvedWorkspaceExclusions,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 
 @Injectable()
 export class PersonQueryService {
@@ -23,8 +29,35 @@ export class PersonQueryService {
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(BookletLog)
-    private bookletLogRepository: Repository<BookletLog>
+    private bookletLogRepository: Repository<BookletLog>,
+    private readonly workspaceExclusionService: WorkspaceExclusionService
   ) {}
+
+  private applyIgnoredBookletsToQuery(
+    qb: SelectQueryBuilder<unknown>,
+    ignoredBooklets: string[],
+    bookletInfoAlias = 'bookletinfo'
+  ): void {
+    if (ignoredBooklets.length > 0) {
+      qb.andWhere(`UPPER(${bookletInfoAlias}.name) NOT IN (:...ignoredBookletsOnly)`, {
+        ignoredBookletsOnly: ignoredBooklets.map(normalizeExclusionBookletId)
+      });
+    }
+  }
+
+  private applyExclusionsToQuery(
+    qb: SelectQueryBuilder<unknown>,
+    exclusions: ResolvedWorkspaceExclusions
+  ): void {
+    applyResolvedExclusionsToQuery(qb, exclusions);
+  }
+
+  private excludeAutocoderGeneratedResponses(
+    qb: SelectQueryBuilder<unknown>,
+    responseAlias = 'response'
+  ): void {
+    qb.andWhere(`${responseAlias}.is_autocoder_generated IS NOT TRUE`);
+  }
 
   async getWorkspaceGroups(workspaceId: number): Promise<string[]> {
     try {
@@ -44,46 +77,70 @@ export class PersonQueryService {
 
   async getWorkspaceUploadStats(workspaceId: number): Promise<TestResultsUploadStatsDto> {
     try {
-      const testPersons = await this.personsRepository.count({
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+
+      const testPersonsPromise = this.personsRepository.count({
         where: { workspace_id: workspaceId, consider: true }
       });
 
-      const groupRows = await this.personsRepository
+      const testGroupsPromise = this.personsRepository
         .createQueryBuilder('person')
-        .select('DISTINCT person.group', 'group')
+        .select('COUNT(DISTINCT person.group)', 'count')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
-        .getRawMany();
-      const testGroups = groupRows.length;
+        .getRawOne()
+        .then(res => Number(res?.count || 0));
 
-      const bookletRows = await this.bookletRepository
+      const uniqueBookletsQuery = this.bookletRepository
         .createQueryBuilder('booklet')
         .innerJoin('booklet.person', 'person')
         .innerJoin('booklet.bookletinfo', 'bookletinfo')
-        .select('DISTINCT bookletinfo.name', 'name')
+        .select('COUNT(DISTINCT bookletinfo.name)', 'count')
         .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .getRawMany();
-      const uniqueBooklets = bookletRows.length;
+        .andWhere('person.consider = :consider', { consider: true });
+      this.applyIgnoredBookletsToQuery(uniqueBookletsQuery, exclusions.ignoredBooklets);
+      const uniqueBookletsPromise = uniqueBookletsQuery
+        .getRawOne()
+        .then(res => Number(res?.count || 0));
 
-      const unitRows = await this.unitRepository
+      const uniqueUnitsQuery = this.unitRepository
         .createQueryBuilder('unit')
         .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
-        .select('DISTINCT COALESCE(unit.alias, unit.name)', 'unitKey')
+        .select('COUNT(DISTINCT COALESCE(unit.alias, unit.name))', 'count')
         .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .getRawMany();
-      const uniqueUnits = unitRows.length;
+        .andWhere('person.consider = :consider', { consider: true });
+      this.applyExclusionsToQuery(uniqueUnitsQuery, exclusions);
+      const uniqueUnitsPromise = uniqueUnitsQuery
+        .getRawOne()
+        .then(res => Number(res?.count || 0));
 
-      const uniqueResponses = await this.responseRepository
+      const uniqueResponsesQuery = this.responseRepository
         .createQueryBuilder('response')
         .innerJoin('response.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .getCount();
+        .andWhere('person.consider = :consider', { consider: true });
+      this.applyExclusionsToQuery(uniqueResponsesQuery, exclusions);
+      this.excludeAutocoderGeneratedResponses(uniqueResponsesQuery);
+      const uniqueResponsesPromise = uniqueResponsesQuery.getCount();
+
+      const [
+        testPersons,
+        testGroups,
+        uniqueBooklets,
+        uniqueUnits,
+        uniqueResponses
+      ] = await Promise.all([
+        testPersonsPromise,
+        testGroupsPromise,
+        uniqueBookletsPromise,
+        uniqueUnitsPromise,
+        uniqueResponsesPromise
+      ]);
 
       return {
         testPersons,
@@ -94,13 +151,7 @@ export class PersonQueryService {
       };
     } catch (error) {
       this.logger.error(`Error fetching workspace upload stats: ${error.message}`);
-      return {
-        testPersons: 0,
-        testGroups: 0,
-        uniqueBooklets: 0,
-        uniqueUnits: 0,
-        uniqueResponses: 0
-      };
+      throw error;
     }
   }
 

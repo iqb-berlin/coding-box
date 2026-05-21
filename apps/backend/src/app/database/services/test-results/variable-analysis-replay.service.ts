@@ -6,6 +6,32 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { CodingListService } from '../coding/coding-list.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
+
+interface CodingScheme {
+  variableCodings?: {
+    id: string;
+    sourceType?: string;
+    label?: string;
+  }[];
+  [key: string]: unknown;
+}
+
+interface UnitVariablePair {
+  unitId: string;
+  variableId: string;
+}
+
+interface VariableAnalysisAggregationRow {
+  unitId: string;
+  variableId: string;
+  code_v1: string;
+  occurrenceCount: string;
+  score_V1: string;
+}
 
 @Injectable()
 export class VariableAnalysisReplayService {
@@ -17,7 +43,8 @@ export class VariableAnalysisReplayService {
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     private workspaceFilesService: WorkspaceFilesService,
-    private codingListService: CodingListService
+    private codingListService: CodingListService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) {}
 
   async getVariableAnalysis(
@@ -38,6 +65,7 @@ export class VariableAnalysisReplayService {
     try {
       this.logger.log(`Getting variable analysis for workspace ${workspace_id} (page ${page}, limit ${limit})`);
       const startTime = Date.now();
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
 
       this.logger.log('Getting unit variables mapping...');
       const unitVariablesMap = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
@@ -53,15 +81,6 @@ export class VariableAnalysisReplayService {
         }
       });
 
-      interface CodingScheme {
-        variableCodings?: {
-          id: string;
-          sourceType?: string;
-          label?: string;
-        }[];
-        [key: string]: unknown;
-      }
-
       const codingSchemeMap = new Map<string, CodingScheme>();
       for (const scheme of codingSchemes) {
         try {
@@ -74,12 +93,30 @@ export class VariableAnalysisReplayService {
       }
       this.logger.log(`Pre-fetched ${codingSchemeMap.size} coding schemes in ${Date.now() - startTime}ms`);
 
+      const validVariablePairKeys = this.getValidVariablePairKeys(
+        unitVariablesMap,
+        codingSchemeMap,
+        derivationFilter
+      );
+
+      if (validVariablePairKeys.length === 0) {
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit
+        };
+      }
+
       const countQuery = this.responseRepository.createQueryBuilder('response')
-        .select('COUNT(DISTINCT CONCAT(unit.name, response.variableid, response.code_v1))', 'count')
+        .select('COUNT(DISTINCT CONCAT(unit.name, CHR(31), response.variableid, CHR(31), response.code_v1))', 'count')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspace_id', { workspace_id });
+      applyResolvedExclusionsToQuery(countQuery, exclusions);
+      this.applyVariablePairFilter(countQuery, validVariablePairKeys, 'validVariablePairKeys');
 
       if (unitIdFilter) {
         countQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
@@ -104,6 +141,8 @@ export class VariableAnalysisReplayService {
         .leftJoin('booklet.person', 'person')
         .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .where('person.workspace_id = :workspace_id', { workspace_id });
+      applyResolvedExclusionsToQuery(aggregationQuery, exclusions);
+      this.applyVariablePairFilter(aggregationQuery, validVariablePairKeys, 'aggregationVariablePairKeys');
 
       if (unitIdFilter) {
         aggregationQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
@@ -123,7 +162,7 @@ export class VariableAnalysisReplayService {
         .offset((page - 1) * limit)
         .limit(limit);
 
-      const aggregatedResults = await aggregationQuery.getRawMany();
+      const aggregatedResults = await aggregationQuery.getRawMany<VariableAnalysisAggregationRow>();
       this.logger.log(`Retrieved ${aggregatedResults.length} aggregated combinations for page ${page}`);
 
       if (aggregatedResults.length === 0) {
@@ -135,12 +174,8 @@ export class VariableAnalysisReplayService {
         };
       }
       const unitVariableCounts = new Map<string, Map<string, number>>();
-      const unitVariableCombinations = Array.from(
-        new Set(aggregatedResults.map(item => `${item.unitId}|${item.variableId}`))
-      ).map(combined => {
-        const [unitId, variableId] = combined.split('|');
-        return { unitId, variableId };
-      });
+      const unitVariableCombinations = this.getUniqueUnitVariablePairs(aggregatedResults);
+      const pageVariablePairKeys = unitVariableCombinations.map(combo => this.toVariablePairKey(combo.unitId, combo.variableId));
 
       const totalCountsQuery = this.responseRepository.createQueryBuilder('response')
         .select('unit.name', 'unitId')
@@ -148,8 +183,11 @@ export class VariableAnalysisReplayService {
         .addSelect('COUNT(response.id)', 'totalCount')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspace_id', { workspace_id });
+      applyResolvedExclusionsToQuery(totalCountsQuery, exclusions, { parameterPrefix: 'variableAnalysisTotals' });
+      this.applyVariablePairFilter(totalCountsQuery, pageVariablePairKeys, 'totalCountVariablePairKeys');
 
       if (unitIdFilter) {
         totalCountsQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
@@ -157,18 +195,6 @@ export class VariableAnalysisReplayService {
 
       if (variableIdFilter) {
         totalCountsQuery.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableIdFilter}%` });
-      }
-
-      if (unitVariableCombinations.length > 0) {
-        unitVariableCombinations.forEach((combo, index) => {
-          totalCountsQuery.orWhere(
-            `(unit.name = :unitId${index} AND response.variableid = :variableId${index})`,
-            {
-              [`unitId${index}`]: combo.unitId,
-              [`variableId${index}`]: combo.variableId
-            }
-          );
-        });
       }
 
       totalCountsQuery.groupBy('unit.name')
@@ -195,18 +221,8 @@ export class VariableAnalysisReplayService {
         .leftJoin('booklet.person', 'person')
         .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .where('person.workspace_id = :workspace_id', { workspace_id });
-
-      if (unitVariableCombinations.length > 0) {
-        unitVariableCombinations.forEach((combo, index) => {
-          sampleInfoQuery.orWhere(
-            `(unit.name = :unitId${index} AND response.variableid = :variableId${index})`,
-            {
-              [`unitId${index}`]: combo.unitId,
-              [`variableId${index}`]: combo.variableId
-            }
-          );
-        });
-      }
+      applyResolvedExclusionsToQuery(sampleInfoQuery, exclusions, { parameterPrefix: 'variableAnalysisSample' });
+      this.applyVariablePairFilter(sampleInfoQuery, pageVariablePairKeys, 'sampleVariablePairKeys');
 
       sampleInfoQuery.groupBy('unit.name')
         .addGroupBy('response.variableid')
@@ -219,7 +235,7 @@ export class VariableAnalysisReplayService {
 
       const sampleInfoMap = new Map<string, { loginName: string; loginCode: string; loginGroup: string; bookletId: string }>();
       for (const result of sampleInfoResults) {
-        const key = `${result.unitId}|${result.variableId}`;
+        const key = this.toVariablePairKey(result.unitId, result.variableId);
         sampleInfoMap.set(key, {
           loginName: result.loginName || '',
           loginCode: result.loginCode || '',
@@ -231,7 +247,7 @@ export class VariableAnalysisReplayService {
       const result: VariableAnalysisItemDto[] = [];
 
       // Pre-load variable page maps for all unique units
-      const uniqueUnitIds = new Set(aggregatedResults.map(item => item.unitId));
+      const uniqueUnitIds = new Set(unitVariableCombinations.map(item => item.unitId));
       const variablePageMaps = new Map<string, Map<string, string>>();
       for (const unitId of uniqueUnitIds) {
         const pageMap = await this.codingListService.getVariablePageMap(unitId, workspace_id);
@@ -249,23 +265,11 @@ export class VariableAnalysisReplayService {
 
         const relativeOccurrence = variableTotalCount > 0 ? occurrenceCount / variableTotalCount : 0;
 
-        const unitVariables = unitVariablesMap.get(unitId);
-        if (!unitVariables || !unitVariables.has(variableId)) {
-          continue;
-        }
+        const variableCoding = this.getVariableCoding(codingSchemeMap, unitId, variableId);
+        const derivation = variableCoding?.sourceType || '';
+        const description = variableCoding?.label || '';
 
-        let derivation = '';
-        let description = '';
-        const codingScheme = codingSchemeMap.get(unitId);
-        if (codingScheme && codingScheme.variableCodings && Array.isArray(codingScheme.variableCodings)) {
-          const variableCoding = codingScheme.variableCodings.find(vc => vc.id === variableId);
-          if (variableCoding) {
-            derivation = variableCoding.sourceType || '';
-            description = variableCoding.label || '';
-          }
-        }
-
-        const sampleInfo = sampleInfoMap.get(`${unitId}|${variableId}`);
+        const sampleInfo = sampleInfoMap.get(this.toVariablePairKey(unitId, variableId));
         const loginName = sampleInfo?.loginName || '';
         const loginCode = sampleInfo?.loginCode || '';
         const loginGroup = sampleInfo?.loginGroup || '';
@@ -289,23 +293,6 @@ export class VariableAnalysisReplayService {
         });
       }
 
-      if (derivationFilter && derivationFilter.trim() !== '') {
-        const filteredResult = result.filter(item => item.derivation.toLowerCase().includes(derivationFilter.toLowerCase()));
-
-        const filteredCount = filteredResult.length;
-        this.logger.log(`Applied derivation filter: ${derivationFilter}, filtered from ${result.length} to ${filteredCount} items`);
-
-        const endTime = Date.now();
-        this.logger.log(`Variable analysis completed in ${endTime - startTime}ms`);
-
-        return {
-          data: filteredResult,
-          total: filteredCount,
-          page,
-          limit
-        };
-      }
-
       const endTime = Date.now();
       this.logger.log(`Variable analysis completed in ${endTime - startTime}ms`);
 
@@ -319,5 +306,79 @@ export class VariableAnalysisReplayService {
       this.logger.error(`Error getting variable analysis: ${error.message}`, error.stack);
       throw new Error('Could not retrieve variable analysis data. Please check the database connection or query.');
     }
+  }
+
+  private getValidVariablePairKeys(
+    unitVariablesMap: Map<string, Set<string>>,
+    codingSchemeMap: Map<string, CodingScheme>,
+    derivationFilter?: string
+  ): string[] {
+    const normalizedDerivationFilter = derivationFilter?.trim().toLowerCase();
+    const validVariablePairKeys: string[] = [];
+
+    for (const [unitId, variableIds] of unitVariablesMap.entries()) {
+      for (const variableId of variableIds) {
+        if (normalizedDerivationFilter) {
+          const variableCoding = this.getVariableCoding(codingSchemeMap, unitId, variableId);
+          const derivation = variableCoding?.sourceType || '';
+          if (!derivation.toLowerCase().includes(normalizedDerivationFilter)) {
+            continue;
+          }
+        }
+
+        validVariablePairKeys.push(this.toVariablePairKey(unitId, variableId));
+      }
+    }
+
+    return validVariablePairKeys;
+  }
+
+  private applyVariablePairFilter(
+    queryBuilder: { andWhere: (condition: string, parameters?: Record<string, unknown>) => unknown },
+    variablePairKeys: string[],
+    parameterName: string
+  ): void {
+    if (variablePairKeys.length === 0) {
+      queryBuilder.andWhere('1 = 0');
+      return;
+    }
+
+    queryBuilder.andWhere(
+      `CONCAT(unit.name, CHR(31), response.variableid) IN (:...${parameterName})`,
+      { [parameterName]: variablePairKeys }
+    );
+  }
+
+  private getUniqueUnitVariablePairs(rows: VariableAnalysisAggregationRow[]): UnitVariablePair[] {
+    const pairs = new Map<string, UnitVariablePair>();
+
+    for (const row of rows) {
+      const key = this.toVariablePairKey(row.unitId, row.variableId);
+      if (!pairs.has(key)) {
+        pairs.set(key, {
+          unitId: row.unitId,
+          variableId: row.variableId
+        });
+      }
+    }
+
+    return Array.from(pairs.values());
+  }
+
+  private getVariableCoding(
+    codingSchemeMap: Map<string, CodingScheme>,
+    unitId: string,
+    variableId: string
+  ): { id: string; sourceType?: string; label?: string } | undefined {
+    const codingScheme = codingSchemeMap.get(unitId);
+    if (!codingScheme?.variableCodings || !Array.isArray(codingScheme.variableCodings)) {
+      return undefined;
+    }
+
+    return codingScheme.variableCodings.find(vc => vc.id === variableId);
+  }
+
+  private toVariablePairKey(unitId: string, variableId: string): string {
+    return `${unitId}\u001F${variableId}`;
   }
 }

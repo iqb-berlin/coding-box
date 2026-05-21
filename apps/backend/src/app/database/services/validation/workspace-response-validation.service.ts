@@ -12,12 +12,22 @@ import { Booklet } from '../../entities/booklet.entity';
 import Workspace from '../../entities/workspace.entity';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 
-import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import {
+  InvalidVariableDto,
+  VariableValidationSummaryDto
+} from '../../../../../../../api-dto/files/variable-validation.dto';
 import {
   DuplicateResponseDto,
   DuplicateResponsesResultDto
 } from '../../../../../../../api-dto/files/duplicate-response.dto';
 import { statusNumberToString } from '../../utils/response-status-converter';
+
+interface UnitVariableDefinitions {
+  aliases: Set<string>;
+  ids: Set<string>;
+  noValueAliases: Set<string>;
+  noValueIds: Set<string>;
+}
 
 @Injectable()
 export class WorkspaceResponseValidationService {
@@ -48,6 +58,96 @@ export class WorkspaceResponseValidationService {
     return WorkspaceResponseValidationService
       .normalizeExclusionKey(value)
       .replace(/\.XML$/i, '');
+  }
+
+  private static normalizeVariableKey(value: string | null | undefined): string {
+    return String(value || '').trim();
+  }
+
+  private static createUnitVariableDefinitions(): UnitVariableDefinitions {
+    return {
+      aliases: new Set<string>(),
+      ids: new Set<string>(),
+      noValueAliases: new Set<string>(),
+      noValueIds: new Set<string>()
+    };
+  }
+
+  private static asArray<T>(value: T | T[] | undefined): T[] {
+    if (!value) {
+      return [];
+    }
+    return Array.isArray(value) ? value : [value];
+  }
+
+  private static baseFileName(value: string | null | undefined): string {
+    return String(value || '').trim().replace(/\.[^.]+$/u, '');
+  }
+
+  private static addVariableDefinition(
+    definitions: UnitVariableDefinitions,
+    variable: { $?: Record<string, string | boolean | undefined> } | undefined
+  ): void {
+    const variableAttributes = variable?.$;
+    if (!variableAttributes) {
+      return;
+    }
+
+    const alias = WorkspaceResponseValidationService.normalizeVariableKey(
+      typeof variableAttributes.alias === 'string' ?
+        variableAttributes.alias :
+        undefined
+    );
+    const id = WorkspaceResponseValidationService.normalizeVariableKey(
+      typeof variableAttributes.id === 'string' ?
+        variableAttributes.id :
+        undefined
+    );
+    const type =
+      typeof variableAttributes.type === 'string' ?
+        variableAttributes.type :
+        '';
+    const isNoValue = type === 'no-value';
+
+    if (alias) {
+      definitions.aliases.add(alias);
+      if (isNoValue) {
+        definitions.noValueAliases.add(alias);
+      }
+    }
+    if (id) {
+      definitions.ids.add(id);
+      if (isNoValue) {
+        definitions.noValueIds.add(id);
+      }
+    }
+  }
+
+  private static mergeUnitVariableDefinitions(
+    target: UnitVariableDefinitions,
+    source: UnitVariableDefinitions
+  ): void {
+    source.aliases.forEach(value => target.aliases.add(value));
+    source.ids.forEach(value => target.ids.add(value));
+    source.noValueAliases.forEach(value => target.noValueAliases.add(value));
+    source.noValueIds.forEach(value => target.noValueIds.add(value));
+  }
+
+  private static unitFileKeys(
+    unitFile: FileUpload,
+    metadataId: string | null | undefined
+  ): string[] {
+    return Array.from(
+      new Set(
+        [
+          metadataId,
+          unitFile.file_id,
+          WorkspaceResponseValidationService.baseFileName(unitFile.filename)
+        ]
+          .map(value => WorkspaceResponseValidationService.normalizeUnitKey(value))
+          .filter(Boolean)
+      )
+    );
   }
 
   private static hasValue(value: string | null | undefined): number {
@@ -154,6 +254,85 @@ export class WorkspaceResponseValidationService {
     return { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits };
   }
 
+  private async filterUnitsByExclusions(
+    workspaceId: number,
+    units: Unit[],
+    batchSize: number = 1000
+  ): Promise<Unit[]> {
+    if (units.length === 0) {
+      return units;
+    }
+
+    const exclusions = await this.resolveExclusionsForValidation(workspaceId);
+    const ignoredUnits = new Set(
+      (exclusions.globalIgnoredUnits || []).map(
+        WorkspaceResponseValidationService.normalizeUnitKey
+      )
+    );
+    const ignoredBooklets = new Set(
+      (exclusions.ignoredBooklets || []).map(
+        WorkspaceResponseValidationService.normalizeExclusionKey
+      )
+    );
+    const testletIgnoredUnits = new Set(
+      (exclusions.testletIgnoredUnits || []).map(
+        t => `${WorkspaceResponseValidationService.normalizeExclusionKey(t.bookletId)}|${WorkspaceResponseValidationService.normalizeUnitKey(t.unitId)}`
+      )
+    );
+
+    const hasBookletBasedExclusions =
+      ignoredBooklets.size > 0 || testletIgnoredUnits.size > 0;
+    const bookletNameById = new Map<number, string>();
+
+    if (hasBookletBasedExclusions) {
+      const bookletIds = Array.from(
+        new Set(
+          units
+            .map(unit => unit.bookletid)
+            .filter((id): id is number => typeof id === 'number')
+        )
+      );
+
+      for (let i = 0; i < bookletIds.length; i += batchSize) {
+        const bookletIdsBatch = bookletIds.slice(i, i + batchSize);
+        const bookletsBatch = await this.bookletRepository.find({
+          where: { id: In(bookletIdsBatch) }
+        });
+        bookletsBatch.forEach(booklet => {
+          bookletNameById.set(
+            booklet.id,
+            WorkspaceResponseValidationService.normalizeExclusionKey(
+              booklet.bookletinfo?.name
+            )
+          );
+        });
+      }
+    }
+
+    return units.filter(unit => {
+      const unitKey = WorkspaceResponseValidationService.normalizeUnitKey(
+        unit.name
+      );
+      if (ignoredUnits.has(unitKey)) {
+        return false;
+      }
+      if (!hasBookletBasedExclusions) {
+        return true;
+      }
+      const bookletKey = bookletNameById.get(unit.bookletid) || '';
+      if (bookletKey && ignoredBooklets.has(bookletKey)) {
+        return false;
+      }
+      if (
+        bookletKey &&
+        testletIgnoredUnits.has(`${bookletKey}|${unitKey}`)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }
+
   async validateVariables(
     workspaceId: number,
     page: number = 1,
@@ -164,14 +343,21 @@ export class WorkspaceResponseValidationService {
       total: number;
       page: number;
       limit: number;
+      summary: VariableValidationSummaryDto;
     }> {
+    const emptySummary: VariableValidationSummaryDto = {
+      unitFileNotFound: 0,
+      variableNotDefinedInUnit: 0
+    };
+
     if (!workspaceId) {
       this.logger.error('Workspace ID is required');
       return {
         data: [],
         total: 0,
         page,
-        limit
+        limit,
+        summary: emptySummary
       };
     }
 
@@ -180,15 +366,7 @@ export class WorkspaceResponseValidationService {
     const unitFiles = await this.filesRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' }
     });
-    const unitVariables = new Map<
-    string,
-    {
-      aliases: Set<string>;
-      ids: Set<string>;
-      noValueAliases: Set<string>;
-      noValueIds: Set<string>;
-    }
-    >();
+    const unitVariables = new Map<string, UnitVariableDefinitions>();
     for (const unitFile of unitFiles) {
       try {
         const xmlContent = unitFile.data.toString();
@@ -201,55 +379,53 @@ export class WorkspaceResponseValidationService {
           parsedXml.Unit.Metadata.Id
         ) {
           const unitName = parsedXml.Unit.Metadata.Id;
-          const variables = {
-            aliases: new Set<string>(),
-            ids: new Set<string>(),
-            noValueAliases: new Set<string>(),
-            noValueIds: new Set<string>()
-          };
+          const variables =
+            WorkspaceResponseValidationService
+              .createUnitVariableDefinitions();
           if (
             parsedXml.Unit.BaseVariables &&
             parsedXml.Unit.BaseVariables.Variable
           ) {
-            const baseVariables = Array.isArray(
-              parsedXml.Unit.BaseVariables.Variable
-            ) ?
-              parsedXml.Unit.BaseVariables.Variable :
-              [parsedXml.Unit.BaseVariables.Variable];
+            const baseVariables =
+              WorkspaceResponseValidationService.asArray(
+                parsedXml.Unit.BaseVariables.Variable
+              );
             for (const variable of baseVariables) {
-              const isNoValue = variable.$?.type === 'no-value';
-              if (variable.$?.alias) {
-                variables.aliases.add(variable.$.alias);
-                if (isNoValue) variables.noValueAliases.add(variable.$.alias);
-              }
-              if (variable.$?.id) {
-                variables.ids.add(variable.$.id);
-                if (isNoValue) variables.noValueIds.add(variable.$.id);
-              }
+              WorkspaceResponseValidationService.addVariableDefinition(
+                variables,
+                variable
+              );
             }
           }
           if (
             parsedXml.Unit.DerivedVariables &&
             parsedXml.Unit.DerivedVariables.Variable
           ) {
-            const derivedVariables = Array.isArray(
-              parsedXml.Unit.DerivedVariables.Variable
-            ) ?
-              parsedXml.Unit.DerivedVariables.Variable :
-              [parsedXml.Unit.DerivedVariables.Variable];
+            const derivedVariables =
+              WorkspaceResponseValidationService.asArray(
+                parsedXml.Unit.DerivedVariables.Variable
+              );
             for (const variable of derivedVariables) {
-              const isNoValue = variable.$?.type === 'no-value';
-              if (variable.$?.alias) {
-                variables.aliases.add(variable.$.alias);
-                if (isNoValue) variables.noValueAliases.add(variable.$.alias);
-              }
-              if (variable.$?.id) {
-                variables.ids.add(variable.$.id);
-                if (isNoValue) variables.noValueIds.add(variable.$.id);
-              }
+              WorkspaceResponseValidationService.addVariableDefinition(
+                variables,
+                variable
+              );
             }
           }
-          unitVariables.set(unitName, variables);
+          WorkspaceResponseValidationService
+            .unitFileKeys(unitFile, unitName)
+            .forEach(unitKey => {
+              const existingDefinitions =
+                unitVariables.get(unitKey) ||
+                WorkspaceResponseValidationService
+                  .createUnitVariableDefinitions();
+              WorkspaceResponseValidationService
+                .mergeUnitVariableDefinitions(
+                  existingDefinitions,
+                  variables
+                );
+              unitVariables.set(unitKey, existingDefinitions);
+            });
         }
       } catch (e) {
         /* empty */
@@ -270,7 +446,8 @@ export class WorkspaceResponseValidationService {
         data: [],
         total: 0,
         page,
-        limit
+        limit,
+        summary: emptySummary
       };
     }
 
@@ -284,7 +461,8 @@ export class WorkspaceResponseValidationService {
         data: [],
         total: 0,
         page,
-        limit
+        limit,
+        summary: emptySummary
       };
     }
 
@@ -313,77 +491,16 @@ export class WorkspaceResponseValidationService {
         data: [],
         total: 0,
         page,
-        limit
+        limit,
+        summary: emptySummary
       };
     }
 
-    const exclusions = await this.resolveExclusionsForValidation(workspaceId);
-    const ignoredUnits = new Set(
-      (exclusions.globalIgnoredUnits || []).map(
-        WorkspaceResponseValidationService.normalizeUnitKey
-      )
+    allUnits = await this.filterUnitsByExclusions(
+      workspaceId,
+      allUnits,
+      batchSize
     );
-    const ignoredBooklets = new Set(
-      (exclusions.ignoredBooklets || []).map(
-        WorkspaceResponseValidationService.normalizeExclusionKey
-      )
-    );
-    const testletIgnoredUnits = new Set(
-      (exclusions.testletIgnoredUnits || []).map(
-        t => `${WorkspaceResponseValidationService.normalizeExclusionKey(t.bookletId)}|${WorkspaceResponseValidationService.normalizeUnitKey(t.unitId)}`
-      )
-    );
-
-    const hasBookletBasedExclusions =
-      ignoredBooklets.size > 0 || testletIgnoredUnits.size > 0;
-    const bookletIds = Array.from(
-      new Set(
-        allUnits
-          .map(unit => unit.bookletid)
-          .filter((id): id is number => typeof id === 'number')
-      )
-    );
-    const bookletNameById = new Map<number, string>();
-
-    if (hasBookletBasedExclusions && bookletIds.length > 0) {
-      for (let i = 0; i < bookletIds.length; i += batchSize) {
-        const bookletIdsBatch = bookletIds.slice(i, i + batchSize);
-        const bookletsBatch = await this.bookletRepository.find({
-          where: { id: In(bookletIdsBatch) }
-        });
-        bookletsBatch.forEach(booklet => {
-          bookletNameById.set(
-            booklet.id,
-            WorkspaceResponseValidationService.normalizeExclusionKey(
-              booklet.bookletinfo?.name
-            )
-          );
-        });
-      }
-    }
-
-    allUnits = allUnits.filter(unit => {
-      const unitKey = WorkspaceResponseValidationService.normalizeUnitKey(
-        unit.name
-      );
-      if (ignoredUnits.has(unitKey)) {
-        return false;
-      }
-      if (!hasBookletBasedExclusions) {
-        return true;
-      }
-      const bookletKey = bookletNameById.get(unit.bookletid) || '';
-      if (bookletKey && ignoredBooklets.has(bookletKey)) {
-        return false;
-      }
-      if (
-        bookletKey &&
-        testletIgnoredUnits.has(`${bookletKey}|${unitKey}`)
-      ) {
-        return false;
-      }
-      return true;
-    });
 
     if (allUnits.length === 0) {
       this.logger.warn(
@@ -393,7 +510,8 @@ export class WorkspaceResponseValidationService {
         data: [],
         total: 0,
         page,
-        limit
+        limit,
+        summary: emptySummary
       };
     }
 
@@ -407,7 +525,8 @@ export class WorkspaceResponseValidationService {
         data: [],
         total: 0,
         page,
-        limit
+        limit,
+        summary: emptySummary
       };
     }
 
@@ -434,12 +553,17 @@ export class WorkspaceResponseValidationService {
         data: [],
         total: 0,
         page,
-        limit
+        limit,
+        summary: emptySummary
       };
     }
 
     const totalResponses = allResponses.length;
     let processedResponses = 0;
+    const summary: VariableValidationSummaryDto = {
+      unitFileNotFound: 0,
+      variableNotDefinedInUnit: 0
+    };
 
     for (const response of allResponses) {
       processedResponses += 1;
@@ -453,25 +577,35 @@ export class WorkspaceResponseValidationService {
       }
 
       const unitName = unit.name;
-      const variableId = response.variableid;
+      const unitKey = WorkspaceResponseValidationService.normalizeUnitKey(
+        unitName
+      );
+      const variableId =
+        WorkspaceResponseValidationService.normalizeVariableKey(
+          response.variableid
+        );
 
       if (!variableId) {
         this.logger.warn(`Response ${response.id} has no variable ID`);
         continue;
       }
 
-      if (!unitVariables.has(unitName)) {
+      const value = response.value || '';
+
+      if (!unitVariables.has(unitKey)) {
+        summary.unitFileNotFound += 1;
         invalidVariables.push({
           fileName: `${unitName}`,
           variableId: variableId,
-          value: response.value || '',
+          value,
           responseId: response.id,
-          errorReason: 'Unit not found'
+          errorReason: 'Unit file not found for response unit',
+          errorCode: 'UNIT_FILE_NOT_FOUND'
         });
         continue;
       }
 
-      const unitVars = unitVariables.get(unitName);
+      const unitVars = unitVariables.get(unitKey);
 
       const isNoValueVariable =
         !!unitVars &&
@@ -486,12 +620,19 @@ export class WorkspaceResponseValidationService {
         (unitVars.aliases.has(variableId) ||
           (!unitVars.aliases.has(variableId) && unitVars.ids.has(variableId)));
       if (!isDefinedInUnit) {
+        // Legacy imports may contain stale UI variable placeholders without data.
+        if (this.isMissingVariableValue(value, false)) {
+          continue;
+        }
+
+        summary.variableNotDefinedInUnit += 1;
         invalidVariables.push({
           fileName: `${unitName}`,
           variableId: variableId,
-          value: response.value || '',
+          value,
           responseId: response.id,
-          errorReason: 'Variable not defined in unit'
+          errorReason: 'Variable not defined in unit',
+          errorCode: 'VARIABLE_NOT_DEFINED_IN_UNIT'
         });
       }
     }
@@ -509,7 +650,8 @@ export class WorkspaceResponseValidationService {
       data: paginatedData,
       total: invalidVariables.length,
       page: validPage,
-      limit: validLimit
+      limit: validLimit,
+      summary
     };
   }
 
@@ -652,6 +794,24 @@ export class WorkspaceResponseValidationService {
     if (allUnits.length === 0) {
       this.logger.warn(
         `No units found for persons in workspace ${workspaceId}`
+      );
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    allUnits = await this.filterUnitsByExclusions(
+      workspaceId,
+      allUnits,
+      batchSize
+    );
+
+    if (allUnits.length === 0) {
+      this.logger.warn(
+        `No units found for persons in workspace ${workspaceId} after exclusion filtering`
       );
       return {
         data: [],
@@ -916,6 +1076,24 @@ export class WorkspaceResponseValidationService {
       };
     }
 
+    allUnits = await this.filterUnitsByExclusions(
+      workspaceId,
+      allUnits,
+      batchSize
+    );
+
+    if (allUnits.length === 0) {
+      this.logger.warn(
+        `No units found for booklets in workspace ${workspaceId} after exclusion filtering`
+      );
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
     const unitIds = allUnits.map(unit => unit.id);
     const unitMap = new Map(allUnits.map(unit => [unit.id, unit]));
 
@@ -1113,6 +1291,24 @@ export class WorkspaceResponseValidationService {
     if (allUnits.length === 0) {
       this.logger.warn(
         `No units found for persons in workspace ${workspaceId}`
+      );
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    allUnits = await this.filterUnitsByExclusions(
+      workspaceId,
+      allUnits,
+      batchSize
+    );
+
+    if (allUnits.length === 0) {
+      this.logger.warn(
+        `No units found for persons in workspace ${workspaceId} after exclusion filtering`
       );
       return {
         data: [],

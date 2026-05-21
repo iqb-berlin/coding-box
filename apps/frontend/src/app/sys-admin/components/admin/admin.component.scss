@@ -6,14 +6,45 @@
   height: 100%;
   box-sizing: border-box;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
 }
 .active-link {
   color: black;
 }
-.page-body{
+.page-body {
   height: 100%;
+  min-width: 0;
 }
 
-a{
+a {
   font-size: 18px;
+}
+
+nav[mat-tab-nav-bar] {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+mat-tab-nav-panel {
+  display: block;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .admin-background {
+    padding: 16px;
+    box-shadow: none;
+  }
+
+  a {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-background {
+    padding: 12px;
+  }
 }

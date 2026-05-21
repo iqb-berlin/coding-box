@@ -1,6 +1,6 @@
 {
   "name": "coding-box",
-  "version": "1.14.1",
+  "version": "1.15.0",
   "author": "IQB - Institut zur Qualitätsentwicklung im Bildungswesen",
   "license": "MIT",
   "scripts": {
@@ -24,6 +24,9 @@
     "cypress:run-ct": "cypress run --component"
   },
   "private": true,
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
   "dependencies": {
     "@angular/animations": "20.3.18",
     "@angular/cdk": "20.2.14",
@@ -112,8 +115,10 @@
     "@nx/esbuild": "22.5.4",
     "@nx/eslint": "22.5.4",
     "@nx/jest": "22.5.4",
+    "@nx/js": "22.5.4",
     "@nx/nest": "22.5.4",
     "@nx/node": "22.5.4",
+    "@nx/webpack": "22.5.4",
     "@nx/workspace": "22.5.4",
     "@schematics/angular": "20.3.19",
     "@types/jest": "29.5.14",
@@ -148,6 +153,9 @@
     "hono": "4.12.12",
     "@tootallnate/once": "3.0.1",
     "koa": "3.1.2",
+    "express@4.22.1": {
+      "path-to-regexp": "0.1.12"
+    },
     "serialize-javascript": "7.0.5",
     "picomatch": "4.0.4",
     "vite": "7.3.2",

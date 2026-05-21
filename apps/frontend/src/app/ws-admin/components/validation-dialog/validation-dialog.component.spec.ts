@@ -115,6 +115,7 @@ describe('ValidationDialogComponent', () => {
   let stateServiceMock: {
     getAllTaskIds: jest.Mock;
     getAllValidationResults: jest.Mock;
+    hasCompleteValidationResults: jest.Mock;
     observeValidationResults: jest.Mock;
     observeTaskIds: jest.Mock;
   };
@@ -139,6 +140,7 @@ describe('ValidationDialogComponent', () => {
     stateServiceMock = {
       getAllTaskIds: jest.fn(),
       getAllValidationResults: jest.fn(),
+      hasCompleteValidationResults: jest.fn(),
       observeValidationResults: jest.fn(),
       observeTaskIds: jest.fn()
     };
@@ -154,6 +156,7 @@ describe('ValidationDialogComponent', () => {
     stateServiceMock.observeTaskIds.mockReturnValue(of({}));
     stateServiceMock.getAllTaskIds.mockReturnValue({});
     stateServiceMock.getAllValidationResults.mockReturnValue({});
+    stateServiceMock.hasCompleteValidationResults.mockReturnValue(false);
 
     await TestBed.configureTestingModule({
       imports: [NoopAnimationsModule, ValidationDialogComponent],
@@ -268,9 +271,23 @@ describe('ValidationDialogComponent', () => {
 
     it('should return "success" if all results are success', () => {
       (stateServiceMock.getAllValidationResults as jest.Mock).mockReturnValue({
+        variables: { status: 'success', timestamp: 0 },
+        variableTypes: { status: 'success', timestamp: 0 },
+        responseStatus: { status: 'success', timestamp: 0 },
+        testTakers: { status: 'success', timestamp: 0 },
+        duplicateResponses: { status: 'success', timestamp: 0 },
+        groupResponses: { status: 'success', timestamp: 0 }
+      });
+      stateServiceMock.hasCompleteValidationResults.mockReturnValue(true);
+      expect(component.getOverallStatus()).toBe('success');
+    });
+
+    it('should return "partial" if successful results are incomplete', () => {
+      (stateServiceMock.getAllValidationResults as jest.Mock).mockReturnValue({
         variables: { status: 'success', timestamp: 0 }
       });
-      expect(component.getOverallStatus()).toBe('success');
+      stateServiceMock.hasCompleteValidationResults.mockReturnValue(false);
+      expect(component.getOverallStatus()).toBe('partial');
     });
   });
 });

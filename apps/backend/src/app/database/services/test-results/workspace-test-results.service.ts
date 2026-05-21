@@ -1,8 +1,15 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger, Inject, forwardRef, Optional
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  EntityTarget,
+  ObjectLiteral,
+  Repository,
+  SelectQueryBuilder
+} from 'typeorm';
 import { Response } from 'express';
 import * as csv from 'fast-csv';
 import * as fs from 'fs';
@@ -10,9 +17,11 @@ import { Writable } from 'stream';
 import { ResponseValueType } from '@iqbspecs/response/response.interface';
 import Persons from '../../entities/persons.entity';
 import {
+  STATISTICS_IGNORED_STATUSES,
   statusNumberToString,
   statusStringToNumber
 } from '../../utils/response-status-converter';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -21,19 +30,42 @@ import { BookletLog } from '../../entities/bookletLog.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import { Session } from '../../entities/session.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
+import { UnitTag } from '../../entities/unitTag.entity';
+import { UnitNote } from '../../entities/unitNote.entity';
+import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import { UnitLastState } from '../../entities/unitLastState.entity';
 import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService, Chunk, TcMergeResponse } from '../shared';
+import type { RecordAuditJournalEventInput } from '../shared/journal.service';
 import { CacheService } from '../../../cache/cache.service';
 // eslint-disable-next-line import/no-cycle
 import { CodingListService } from '../coding/coding-list.service';
+// eslint-disable-next-line import/no-cycle
 import { CodingValidationService } from '../coding/coding-validation.service';
+// eslint-disable-next-line import/no-cycle
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
+// eslint-disable-next-line import/no-cycle
+import { CodingStatisticsService } from '../coding/coding-statistics.service';
 // eslint-disable-next-line import/no-cycle
 import { ResponseManagementService } from './response-management.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+// eslint-disable-next-line import/no-cycle
+import {
+  applyResolvedExclusionsToQuery,
+  isExcludedByResolvedExclusions,
+  normalizeExclusionBookletId,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 import { FLAT_FREQUENCIES_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX } from '../workspace/workspace-constants';
+import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
+import {
+  TestResultsDeletePreviewDto,
+  TestResultsDeleteRequestDto,
+  TestResultsDeleteResultDto,
+  TestResultsDeleteScope
+} from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 interface PersonWhere {
   code: string;
@@ -55,6 +87,38 @@ export type WorkspaceOverviewStats = {
   sessionScreenCounts: Record<string, number>;
 };
 
+type QuickSearchResultKind = 'person' | 'booklet' | 'unit' | 'response';
+
+type QuickSearchResultItem = {
+  kind: QuickSearchResultKind;
+  id: number;
+  label: string;
+  secondaryLabel?: string;
+  personId?: number;
+  personLogin?: string;
+  personCode?: string;
+  personGroup?: string;
+  bookletId?: number;
+  bookletName?: string;
+  unitId?: number;
+  unitName?: string;
+  unitAlias?: string | null;
+  responseId?: number;
+  variableId?: string;
+  responseValue?: string;
+  responseStatus?: string;
+};
+
+type QuickSearchResult = {
+  query: string;
+  limit: number;
+  persons: QuickSearchResultItem[];
+  booklets: QuickSearchResultItem[];
+  units: QuickSearchResultItem[];
+  responses: QuickSearchResultItem[];
+  totals: Record<QuickSearchResultKind, number>;
+};
+
 export type FlatFrequenciesResult = Record<
 string,
 {
@@ -63,9 +127,124 @@ string,
 }
 >;
 
+type LogAnomalySeverity = 'critical' | 'warning' | 'info';
+
+type LogAnomalyCode =
+  | 'controller_error'
+  | 'missing_termination'
+  | 'connection_lost'
+  | 'timestamp_zero'
+  | 'player_stuck_loading'
+  | 'repeated_start'
+  | 'long_loading'
+  | 'timer_left_on_exit'
+  | 'timer_never_finished'
+  | 'focus_lost_long'
+  | 'unit_progress_incomplete'
+  | 'progress_incomplete'
+  | 'debug_command'
+  | 'session_span_long'
+  | 'orphan_logs';
+
+interface LogAnomalySummary {
+  code: LogAnomalyCode;
+  severity: LogAnomalySeverity;
+  label: string;
+  evidence: string;
+  count: number;
+}
+
+interface LogAnomalyThresholds {
+  longLoadingThresholdMs: number;
+  focusLostThresholdMs: number;
+  sessionSpanThresholdMs: number;
+  repeatedStartThreshold: number;
+}
+
+interface LogAnomalyDashboardSummary {
+  totalBooklets: number;
+  affectedBooklets: number;
+  criticalBooklets: number;
+  warningBooklets: number;
+  infoBooklets: number;
+  totalAnomalyRules: number;
+  totalAnomalyEvents: number;
+  byCode: Record<string, number>;
+}
+
+interface LogAnomalyDetailRow {
+  bookletId: number;
+  booklet: string;
+  personId: number;
+  code: string;
+  group: string;
+  login: string;
+  maxSeverity: LogAnomalySeverity;
+  anomalies: LogAnomalySummary[];
+}
+
+interface LogAnomalyDetailsResponse {
+  total: number;
+  data: LogAnomalyDetailRow[];
+}
+
+interface TestResultsExportFilters {
+  groupNames?: string[];
+  bookletNames?: string[];
+  unitNames?: string[];
+  personIds?: number[];
+  includeLogAnomalies?: boolean;
+}
+
+type TestResultsDeleteTargetKind = 'persons' | 'booklets' | 'units';
+
+interface TestResultsDeleteTargets {
+  kind: TestResultsDeleteTargetKind;
+  ids: number[];
+  preview: TestResultsDeletePreviewDto;
+}
+
+interface DeleteDependencySnapshot {
+  bookletIds: number[];
+  unitIds: number[];
+  responseIds: number[];
+  bookletInfoIds: number[];
+}
+
+interface LogDeleteSnapshot {
+  bookletIds: number[];
+  unitIds: number[];
+}
+
+interface LogDeleteCounts {
+  bookletLogs: number;
+  unitLogs: number;
+  sessions: number;
+}
+
 @Injectable()
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
+  private static readonly codingResponseStatuses = [
+    statusStringToNumber('NOT_REACHED') || 1,
+    statusStringToNumber('DISPLAYED') || 2,
+    statusStringToNumber('VALUE_CHANGED') || 3
+  ];
+
+  private static readonly ignoredDerivedCodingStatuses = STATISTICS_IGNORED_STATUSES;
+
+  private static readonly geoGebraValueParams = {
+    ggRawPrefix: 'UEsD%',
+    ggDataUriPrefix: 'data:%;base64,UEsD%'
+  };
+
+  private static createGeoGebraValueCondition(responseAlias: string): string {
+    return `(${responseAlias}.value LIKE :ggRawPrefix OR ${responseAlias}.value ILIKE :ggDataUriPrefix)`;
+  }
+
+  private static createGeoGebraUnitExistsCondition(unitAlias: string): string {
+    return `EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = ${unitAlias}.id AND ${WorkspaceTestResultsService.createGeoGebraValueCondition('r2')})`;
+  }
 
   private static parseStoredResponseValue(value: string | null, variableId?: string): unknown {
     const normalizedVariableId = String(variableId || '').trim();
@@ -128,6 +307,21 @@ export class WorkspaceTestResultsService {
     }
   }
 
+  private static nonAutocoderGeneratedResponseCondition(responseAlias = 'response'): string {
+    return `${responseAlias}.is_autocoder_generated IS NOT TRUE`;
+  }
+
+  private excludeAutocoderGeneratedResponses(
+    qb: SelectQueryBuilder<unknown>,
+    responseAlias = 'response'
+  ): void {
+    qb.andWhere(
+      WorkspaceTestResultsService.nonAutocoderGeneratedResponseCondition(
+        responseAlias
+      )
+    );
+  }
+
   constructor(
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
@@ -157,34 +351,993 @@ export class WorkspaceTestResultsService {
     private readonly codingValidationService: CodingValidationService,
     private readonly responseManagementService: ResponseManagementService,
     private readonly workspaceCoreService: WorkspaceCoreService,
-    private readonly workspaceExclusionService: WorkspaceExclusionService
+    private readonly workspaceExclusionService: WorkspaceExclusionService,
+    @Optional()
+    private readonly codingFreshnessService?: CodingFreshnessService,
+    @Optional()
+    @Inject(forwardRef(() => CodingStatisticsService))
+    private readonly codingStatisticsService?: CodingStatisticsService
   ) { }
 
   private applyExclusionsToQuery(qb: SelectQueryBuilder<unknown>, exclusions: { globalIgnoredUnits: string[], ignoredBooklets: string[], testletIgnoredUnits: Array<{ bookletId: string, unitId: string }> }, options: { unitAlias?: string; bookletInfoAlias?: string } = {}) {
-    const u = options.unitAlias || 'unit';
-    const b = options.bookletInfoAlias || 'bookletinfo';
-    if (exclusions.globalIgnoredUnits.length > 0) {
-      const normalizedIgnoredUnits = exclusions.globalIgnoredUnits.map(gu => gu.toUpperCase().replace(/\.XML$/i, ''));
-      qb.andWhere(`UPPER(REPLACE(UPPER(${u}.name), '.XML', '')) NOT IN (:...ignoredUnits)`, { ignoredUnits: normalizedIgnoredUnits });
-    }
-    if (exclusions.ignoredBooklets.length > 0) {
-      qb.andWhere(`UPPER(${b}.name) NOT IN (:...ignoredBooklets)`, { ignoredBooklets: exclusions.ignoredBooklets });
-    }
-    if (exclusions.testletIgnoredUnits.length > 0) {
-      const condition = exclusions.testletIgnoredUnits.map((_, i: number) => `(UPPER(${b}.name) = :bId${i} AND UPPER(REPLACE(UPPER(${u}.name), '.XML', '')) = :uId${i})`).join(' OR ');
-      const params: Record<string, string> = {};
-      exclusions.testletIgnoredUnits.forEach((t, i: number) => {
-        params[`bId${i}`] = t.bookletId.toUpperCase();
-        params[`uId${i}`] = t.unitId.toUpperCase().replace(/\.XML$/i, '');
+    applyResolvedExclusionsToQuery(qb, exclusions, options);
+  }
+
+  private applyIgnoredBookletsToQuery(qb: SelectQueryBuilder<unknown>, ignoredBooklets: string[], bookletInfoAlias = 'bookletinfo'): void {
+    if (ignoredBooklets.length > 0) {
+      qb.andWhere(`UPPER(${bookletInfoAlias}.name) NOT IN (:...ignoredBookletsOnly)`, {
+        ignoredBookletsOnly: ignoredBooklets.map(normalizeExclusionBookletId)
       });
-      qb.andWhere(`NOT (${condition})`, params);
     }
+  }
+
+  private buildLogAnomalyThresholds(options: {
+    longLoadingThresholdMs?: number | string;
+    focusLostThresholdMs?: number | string;
+    sessionSpanThresholdMs?: number | string;
+    repeatedStartThreshold?: number | string;
+  }): LogAnomalyThresholds {
+    const parseNumber = (
+      raw: number | string | undefined,
+      fallback: number
+    ): number => {
+      const parsed = Number(String(raw ?? '').trim() || fallback);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+    };
+
+    return {
+      longLoadingThresholdMs: parseNumber(
+        options.longLoadingThresholdMs,
+        5000
+      ),
+      focusLostThresholdMs: parseNumber(options.focusLostThresholdMs, 300000),
+      sessionSpanThresholdMs: parseNumber(
+        options.sessionSpanThresholdMs,
+        24 * 60 * 60 * 1000
+      ),
+      repeatedStartThreshold: Math.max(
+        2,
+        Math.round(parseNumber(options.repeatedStartThreshold, 2))
+      )
+    };
+  }
+
+  private expandLogAnomalyCodes(rawCodes: string[]): LogAnomalyCode[] {
+    const allCodes: LogAnomalyCode[] = [
+      'controller_error',
+      'missing_termination',
+      'connection_lost',
+      'timestamp_zero',
+      'player_stuck_loading',
+      'repeated_start',
+      'long_loading',
+      'timer_left_on_exit',
+      'timer_never_finished',
+      'focus_lost_long',
+      'unit_progress_incomplete',
+      'progress_incomplete',
+      'debug_command',
+      'session_span_long',
+      'orphan_logs'
+    ];
+    const groups: Record<string, LogAnomalyCode[]> = {
+      any: allCodes,
+      all: allCodes,
+      critical: [
+        'controller_error',
+        'missing_termination',
+        'connection_lost',
+        'player_stuck_loading'
+      ],
+      warning: [
+        'repeated_start',
+        'long_loading',
+        'timer_left_on_exit',
+        'timer_never_finished',
+        'focus_lost_long',
+        'unit_progress_incomplete',
+        'progress_incomplete'
+      ],
+      info: ['timestamp_zero', 'debug_command', 'session_span_long', 'orphan_logs'],
+      technical: [
+        'controller_error',
+        'connection_lost',
+        'timestamp_zero',
+        'player_stuck_loading',
+        'long_loading'
+      ],
+      incomplete: [
+        'missing_termination',
+        'unit_progress_incomplete',
+        'progress_incomplete',
+        'timer_left_on_exit',
+        'timer_never_finished',
+        'orphan_logs'
+      ],
+      connection: ['connection_lost'],
+      connection_lost: ['connection_lost'],
+      timer: ['timer_left_on_exit', 'timer_never_finished'],
+      focus: ['focus_lost_long'],
+      debug: ['debug_command'],
+      reloads: ['repeated_start'],
+      span: ['session_span_long']
+    };
+    const expanded = rawCodes.flatMap(raw => {
+      const key = raw.trim().toLowerCase();
+      if (groups[key]) {
+        return groups[key];
+      }
+      return allCodes.includes(key as LogAnomalyCode) ?
+        [key as LogAnomalyCode] :
+        [];
+    });
+
+    return Array.from(new Set(expanded));
+  }
+
+  private getLogAnomalySql(
+    code: LogAnomalyCode,
+    thresholds: LogAnomalyThresholds
+  ): string {
+    const longLoadingThreshold = Math.round(thresholds.longLoadingThresholdMs);
+    const focusLostThreshold = Math.round(thresholds.focusLostThresholdMs);
+    const sessionSpanThreshold = Math.round(thresholds.sessionSpanThresholdMs);
+    const repeatedStartThreshold = Math.round(
+      thresholds.repeatedStartThreshold
+    );
+
+    switch (code) {
+      case 'controller_error':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'CONTROLLER'
+            AND bl.parameter = 'ERROR'
+        )`;
+      case 'missing_termination':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl_started
+          WHERE bl_started.bookletid = "bookletEntity"."id"
+            AND bl_started.key = 'CONTROLLER'
+            AND bl_started.parameter IN ('LOADING', 'RUNNING')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM bookletlog bl_terminated
+          WHERE bl_terminated.bookletid = "bookletEntity"."id"
+            AND bl_terminated.key = 'CONTROLLER'
+            AND bl_terminated.parameter = 'TERMINATED'
+        )`;
+      case 'connection_lost':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'CONNECTION'
+            AND bl.parameter = 'LOST'
+        )`;
+      case 'timestamp_zero':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND COALESCE(bl.ts, 0) = 0
+        )
+        OR EXISTS (
+          SELECT 1 FROM unit u
+          JOIN unitlog ul ON ul.unitid = u.id
+          WHERE u.bookletid = "bookletEntity"."id"
+            AND COALESCE(ul.ts, 0) = 0
+        )`;
+      case 'player_stuck_loading':
+        return `EXISTS (
+          SELECT 1 FROM unit u
+          JOIN unitlog ul ON ul.unitid = u.id
+          WHERE u.bookletid = "bookletEntity"."id"
+          GROUP BY u.id
+          HAVING COUNT(*) FILTER (
+            WHERE ul.key = 'PLAYER' AND ul.parameter = 'LOADING'
+          ) > COUNT(*) FILTER (
+            WHERE ul.key = 'PLAYER' AND ul.parameter = 'RUNNING'
+          )
+        )`;
+      case 'repeated_start':
+        return `(SELECT COUNT(*)
+          FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'CONTROLLER'
+            AND bl.parameter = 'LOADING'
+        ) >= ${repeatedStartThreshold}`;
+      case 'long_loading':
+        return `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND COALESCE(s.loadcompletems, 0) >= ${longLoadingThreshold}
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM unit u
+          JOIN unitlog ul_started ON ul_started.unitid = u.id
+          JOIN unitlog ul_ended ON ul_ended.unitid = u.id
+          WHERE u.bookletid = "bookletEntity"."id"
+            AND ul_started.key = 'STARTED'
+            AND ul_ended.key = 'ENDED'
+            AND (ul_ended.ts - ul_started.ts) >= ${longLoadingThreshold}
+        )`;
+      case 'timer_left_on_exit':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'TESTLETS_TIMELEFT'
+            AND bl.id = (
+              SELECT bl_last.id
+              FROM bookletlog bl_last
+              WHERE bl_last.bookletid = "bookletEntity"."id"
+                AND bl_last.key = 'TESTLETS_TIMELEFT'
+              ORDER BY bl_last.ts DESC NULLS LAST, bl_last.id DESC
+              LIMIT 1
+            )
+            AND COALESCE(bl.parameter, '') ~ ':[[:space:]]*(0\\.[0-9]*[1-9]|[1-9][0-9]*(\\.[0-9]+)?)'
+        )`;
+      case 'timer_never_finished':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'TESTLETS_TIMELEFT'
+            AND COALESCE(bl.parameter, '') ~ ':[[:space:]]*(0\\.[0-9]*[1-9]|[1-9][0-9]*(\\.[0-9]+)?)'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM bookletlog bl_zero
+          WHERE bl_zero.bookletid = "bookletEntity"."id"
+            AND bl_zero.key = 'TESTLETS_TIMELEFT'
+            AND COALESCE(bl_zero.parameter, '') ~ ':[[:space:]]*0(\\.0+)?([,}])'
+        )`;
+      case 'focus_lost_long':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl_lost
+          WHERE bl_lost.bookletid = "bookletEntity"."id"
+            AND bl_lost.key = 'FOCUS'
+            AND bl_lost.parameter = 'HAS_NOT'
+            AND (
+              COALESCE(
+                (
+                  SELECT bl_has.ts
+                  FROM bookletlog bl_has
+                  WHERE bl_has.bookletid = bl_lost.bookletid
+                    AND bl_has.key = 'FOCUS'
+                    AND bl_has.parameter = 'HAS'
+                    AND (
+                      bl_has.ts > bl_lost.ts
+                      OR (bl_has.ts = bl_lost.ts AND bl_has.id > bl_lost.id)
+                    )
+                  ORDER BY bl_has.ts ASC NULLS LAST, bl_has.id ASC
+                  LIMIT 1
+                ),
+                (
+                  SELECT MAX(bl_any.ts)
+                  FROM bookletlog bl_any
+                  WHERE bl_any.bookletid = bl_lost.bookletid
+                ),
+                bl_lost.ts
+              ) - bl_lost.ts
+            ) >= ${focusLostThreshold}
+        )`;
+      case 'unit_progress_incomplete':
+        return `EXISTS (
+          SELECT 1 FROM unit u2
+          WHERE u2.bookletid = "bookletEntity"."id"
+            AND u2.alias IS NOT NULL
+        )
+        AND EXISTS (
+          SELECT 1 FROM unit u3
+          WHERE u3.bookletid = "bookletEntity"."id"
+            AND u3.alias IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM bookletlog bl
+              WHERE bl.bookletid = "bookletEntity"."id"
+                AND bl.key = 'CURRENT_UNIT_ID'
+                AND bl.parameter = u3.alias
+            )
+        )`;
+      case 'progress_incomplete':
+        return `EXISTS (
+          SELECT 1 FROM unit u
+          JOIN unitlog ul ON ul.unitid = u.id
+          WHERE u.bookletid = "bookletEntity"."id"
+            AND ul.key IN ('PRESENTATION_PROGRESS', 'RESPONSE_PROGRESS')
+            AND ul.id = (
+              SELECT ul_last.id
+              FROM unitlog ul_last
+              WHERE ul_last.unitid = ul.unitid
+                AND ul_last.key = ul.key
+              ORDER BY ul_last.ts DESC NULLS LAST, ul_last.id DESC
+              LIMIT 1
+            )
+            AND COALESCE(ul.parameter, '') <> 'complete'
+        )`;
+      case 'debug_command':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'command executed'
+            AND COALESCE(bl.parameter, '') ILIKE '%debug%'
+        )`;
+      case 'session_span_long':
+        return `(
+          COALESCE("bookletEntity"."lastts", 0) > 0
+          AND COALESCE("bookletEntity"."firstts", 0) > 0
+          AND ("bookletEntity"."lastts" - "bookletEntity"."firstts") >= ${sessionSpanThreshold}
+        )`;
+      case 'orphan_logs':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM bookletlog bl_started
+          WHERE bl_started.bookletid = "bookletEntity"."id"
+            AND bl_started.key = 'CONTROLLER'
+            AND bl_started.parameter IN ('LOADING', 'RUNNING')
+        )`;
+      default:
+        return 'FALSE';
+    }
+  }
+
+  private applyLogAnomalyFilters(
+    qb: SelectQueryBuilder<unknown>,
+    codes: LogAnomalyCode[],
+    thresholds: LogAnomalyThresholds
+  ): void {
+    if (codes.length === 0) {
+      return;
+    }
+    const anomalySql = codes.map(code => `(${this.getLogAnomalySql(code, thresholds)})`);
+    qb.andWhere(`(${anomalySql.join(' OR ')})`);
+  }
+
+  private ensureLogAnomalyList(
+    map: Map<number, LogAnomalySummary[]>,
+    bookletId: number
+  ): LogAnomalySummary[] {
+    const existing = map.get(bookletId);
+    if (existing) {
+      return existing;
+    }
+    const created: LogAnomalySummary[] = [];
+    map.set(bookletId, created);
+    return created;
+  }
+
+  private addLogAnomaly(
+    map: Map<number, LogAnomalySummary[]>,
+    bookletId: number,
+    anomaly: LogAnomalySummary
+  ): void {
+    const list = this.ensureLogAnomalyList(map, bookletId);
+    const existing = list.find(a => a.code === anomaly.code);
+    if (existing) {
+      existing.count += anomaly.count;
+      return;
+    }
+    list.push(anomaly);
+  }
+
+  private getLogAnomalySortValue(severity: LogAnomalySeverity): number {
+    switch (severity) {
+      case 'critical':
+        return 0;
+      case 'warning':
+        return 1;
+      case 'info':
+        return 2;
+      default:
+        return 3;
+    }
+  }
+
+  private toLogTimestamp(value: number | string | null | undefined): number | null {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  private formatDurationForEvidence(ms: number): string {
+    const safeMs = Math.max(0, Math.round(ms));
+    const totalSeconds = Math.round(safeMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')} min`;
+  }
+
+  private async findLogAnomaliesForBooklets(
+    bookletIds: number[],
+    thresholds: LogAnomalyThresholds
+  ): Promise<Map<number, LogAnomalySummary[]>> {
+    type SessionLogRow = {
+      id: number;
+      bookletid: number;
+      browser: string | null;
+      os: string | null;
+      screen: string | null;
+      ts: number | null;
+      loadcompletems: number | null;
+    };
+    const uniqueBookletIds = Array.from(
+      new Set(bookletIds.map(id => Number(id)).filter(id => id > 0))
+    );
+    const result = new Map<number, LogAnomalySummary[]>();
+    if (uniqueBookletIds.length === 0) {
+      return result;
+    }
+
+    const [bookletLogs, sessions, units] = await Promise.all([
+      this.bookletLogRepository
+        .createQueryBuilder('bookletLog')
+        .where('bookletLog.bookletid IN (:...bookletIds)', {
+          bookletIds: uniqueBookletIds
+        })
+        .select([
+          'bookletLog.id',
+          'bookletLog.bookletid',
+          'bookletLog.key',
+          'bookletLog.parameter',
+          'bookletLog.ts'
+        ])
+        .orderBy('bookletLog.bookletid', 'ASC')
+        .addOrderBy('bookletLog.ts', 'ASC', 'NULLS LAST')
+        .addOrderBy('bookletLog.id', 'ASC')
+        .getMany(),
+      this.sessionRepository
+        .createQueryBuilder('session')
+        .where('session.bookletid IN (:...bookletIds)', {
+          bookletIds: uniqueBookletIds
+        })
+        .select('session.id', 'id')
+        .addSelect('session.bookletid', 'bookletid')
+        .addSelect('session.browser', 'browser')
+        .addSelect('session.os', 'os')
+        .addSelect('session.screen', 'screen')
+        .addSelect('session.ts', 'ts')
+        .addSelect('session.loadcompletems', 'loadcompletems')
+        .orderBy('session.bookletid', 'ASC')
+        .addOrderBy('session.id', 'ASC')
+        .getRawMany<SessionLogRow>(),
+      this.unitRepository
+        .createQueryBuilder('unit')
+        .where('unit.bookletid IN (:...bookletIds)', {
+          bookletIds: uniqueBookletIds
+        })
+        .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias'])
+        .orderBy('unit.bookletid', 'ASC')
+        .addOrderBy('unit.id', 'ASC')
+        .getMany()
+    ]);
+
+    const unitIds = (units || []).map(unit => Number(unit.id)).filter(id => id > 0);
+    const unitLogs = unitIds.length > 0 ?
+      await this.unitLogRepository
+        .createQueryBuilder('unitLog')
+        .where('unitLog.unitid IN (:...unitIds)', { unitIds })
+        .select([
+          'unitLog.id',
+          'unitLog.unitid',
+          'unitLog.key',
+          'unitLog.parameter',
+          'unitLog.ts'
+        ])
+        .orderBy('unitLog.unitid', 'ASC')
+        .addOrderBy('unitLog.ts', 'ASC', 'NULLS LAST')
+        .addOrderBy('unitLog.id', 'ASC')
+        .getMany() :
+      [];
+
+    const logsByBooklet = new Map<number, BookletLog[]>();
+    const sessionsByBooklet = new Map<number, SessionLogRow[]>();
+    const unitsByBooklet = new Map<number, Unit[]>();
+    const unitLogsByUnit = new Map<number, UnitLog[]>();
+
+    (bookletLogs || []).forEach(log => {
+      const list = logsByBooklet.get(log.bookletid) || [];
+      list.push(log);
+      logsByBooklet.set(log.bookletid, list);
+    });
+    (sessions || []).forEach(session => {
+      const bookletId = Number(session.bookletid);
+      const list = sessionsByBooklet.get(bookletId) || [];
+      list.push(session);
+      sessionsByBooklet.set(bookletId, list);
+    });
+    (units || []).forEach(unit => {
+      const list = unitsByBooklet.get(unit.bookletid) || [];
+      list.push(unit);
+      unitsByBooklet.set(unit.bookletid, list);
+    });
+    (unitLogs || []).forEach(log => {
+      const list = unitLogsByUnit.get(log.unitid) || [];
+      list.push(log);
+      unitLogsByUnit.set(log.unitid, list);
+    });
+
+    const nonZeroTimerPattern =
+      /:\s*(?:0\.[0-9]*[1-9]|[1-9][0-9]*(?:\.[0-9]+)?)/;
+    const zeroTimerPattern = /:\s*0(?:\.0+)?(?=[,}])/;
+
+    uniqueBookletIds.forEach(bookletId => {
+      const logs = logsByBooklet.get(bookletId) || [];
+      const bookletSessions = sessionsByBooklet.get(bookletId) || [];
+      const bookletUnits = unitsByBooklet.get(bookletId) || [];
+      const controllerLogs = logs.filter(log => log.key === 'CONTROLLER');
+      const startedLogs = controllerLogs.filter(log => ['LOADING', 'RUNNING'].includes(String(log.parameter || '')));
+      const terminatedLogs = controllerLogs.filter(log => log.parameter === 'TERMINATED');
+      const allTimestamps = [
+        ...logs.map(log => this.toLogTimestamp(log.ts)),
+        ...bookletSessions.map(session => this.toLogTimestamp(session.ts))
+      ].filter((ts): ts is number => ts !== null);
+
+      const controllerError = controllerLogs.find(log => log.parameter === 'ERROR');
+      if (controllerError) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'controller_error',
+          severity: 'critical',
+          label: 'Controller-Fehler',
+          evidence: `CONTROLLER : ERROR bei ${controllerError.ts || 'unbekannter Zeit'}`,
+          count: 1
+        });
+      }
+
+      if (startedLogs.length > 0 && terminatedLogs.length === 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'missing_termination',
+          severity: 'critical',
+          label: 'Kein Abschluss',
+          evidence: 'CONTROLLER wurde gestartet, aber TERMINATED fehlt.',
+          count: 1
+        });
+      }
+
+      const connectionLostCount = logs.filter(
+        log => log.key === 'CONNECTION' && log.parameter === 'LOST'
+      ).length;
+      if (connectionLostCount > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'connection_lost',
+          severity: 'critical',
+          label: 'Verbindung verloren',
+          evidence: `${connectionLostCount} CONNECTION : LOST Eintrag/Einträge`,
+          count: connectionLostCount
+        });
+      }
+
+      const unitLogZeroCount = bookletUnits
+        .flatMap(unit => unitLogsByUnit.get(unit.id) || [])
+        .filter(log => Number(log.ts || 0) === 0).length;
+      const timestampZeroCount =
+        logs.filter(log => Number(log.ts || 0) === 0).length + unitLogZeroCount;
+      if (timestampZeroCount > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'timestamp_zero',
+          severity: 'info',
+          label: 'Timestamp 0',
+          evidence: `${timestampZeroCount} Logeintrag/Logeinträge ohne echte Clientzeit`,
+          count: timestampZeroCount
+        });
+      }
+
+      const loadingCount = controllerLogs.filter(log => log.parameter === 'LOADING').length;
+      if (loadingCount >= thresholds.repeatedStartThreshold) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'repeated_start',
+          severity: 'warning',
+          label: 'Mehrfach gestartet',
+          evidence: `${loadingCount} CONTROLLER : LOADING Einträge`,
+          count: loadingCount
+        });
+      }
+
+      const maxLoadTime = Math.max(
+        0,
+        ...bookletSessions.map(session => Number(session.loadcompletems || 0))
+      );
+      if (maxLoadTime >= thresholds.longLoadingThresholdMs) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'long_loading',
+          severity: 'warning',
+          label: 'Lange Ladezeit',
+          evidence: `Maximale LOADCOMPLETE-Ladezeit ${Math.round(maxLoadTime)} ms`,
+          count: bookletSessions.filter(
+            session => Number(session.loadcompletems || 0) >= thresholds.longLoadingThresholdMs
+          ).length
+        });
+      }
+
+      const timerLogs = logs.filter(log => log.key === 'TESTLETS_TIMELEFT');
+      const lastTimer = [...timerLogs].sort((a, b) => {
+        const tsDelta = Number(b.ts || 0) - Number(a.ts || 0);
+        return tsDelta || (Number(b.id || 0) - Number(a.id || 0));
+      })[0];
+      if (
+        lastTimer &&
+        nonZeroTimerPattern.test(String(lastTimer.parameter || ''))
+      ) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'timer_left_on_exit',
+          severity: 'warning',
+          label: 'Restzeit am Ende',
+          evidence: `Letzter Timerstatus: ${lastTimer.parameter}`,
+          count: 1
+        });
+      }
+      if (
+        timerLogs.length > 0 &&
+        timerLogs.some(log => nonZeroTimerPattern.test(String(log.parameter || ''))) &&
+        !timerLogs.some(log => zeroTimerPattern.test(String(log.parameter || '')))
+      ) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'timer_never_finished',
+          severity: 'warning',
+          label: 'Timer nicht beendet',
+          evidence: 'Timer wurde gesetzt, aber kein 0-Status gefunden.',
+          count: 1
+        });
+      }
+
+      const focusLogs = logs.filter(log => log.key === 'FOCUS');
+      let currentFocusLost: BookletLog | null = null;
+      let maxFocusLostMs = 0;
+      focusLogs.forEach(log => {
+        if (log.parameter === 'HAS_NOT' && currentFocusLost === null) {
+          currentFocusLost = log;
+          return;
+        }
+        if (log.parameter === 'HAS' && currentFocusLost !== null) {
+          const startTs = this.toLogTimestamp(currentFocusLost.ts);
+          const endTs = this.toLogTimestamp(log.ts);
+          if (startTs !== null && endTs !== null && endTs >= startTs) {
+            maxFocusLostMs = Math.max(maxFocusLostMs, endTs - startTs);
+          }
+          currentFocusLost = null;
+        }
+      });
+      if (currentFocusLost !== null && allTimestamps.length > 0) {
+        const startTs = this.toLogTimestamp(currentFocusLost.ts);
+        const endTs = Math.max(...allTimestamps);
+        if (startTs !== null && endTs >= startTs) {
+          maxFocusLostMs = Math.max(maxFocusLostMs, endTs - startTs);
+        }
+      }
+      if (maxFocusLostMs >= thresholds.focusLostThresholdMs) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'focus_lost_long',
+          severity: 'warning',
+          label: 'Langer Fokusverlust',
+          evidence: `Längste Fokus-Abwesenheit ${this.formatDurationForEvidence(maxFocusLostMs)}`,
+          count: 1
+        });
+      }
+
+      const visitedUnitAliases = new Set(
+        logs
+          .filter(log => log.key === 'CURRENT_UNIT_ID')
+          .map(log => String(log.parameter || '').trim())
+          .filter(Boolean)
+      );
+      const unitAliases = bookletUnits
+        .map(unit => String(unit.alias || '').trim())
+        .filter(Boolean);
+      const missingUnitAliases = unitAliases.filter(alias => !visitedUnitAliases.has(alias));
+      if (unitAliases.length > 0 && missingUnitAliases.length > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'unit_progress_incomplete',
+          severity: 'warning',
+          label: 'Units fehlen',
+          evidence: `${missingUnitAliases.length} von ${unitAliases.length} Unit-Aliasen ohne CURRENT_UNIT_ID`,
+          count: missingUnitAliases.length
+        });
+      }
+
+      let incompleteUnitProgressCount = 0;
+      let playerStuckCount = 0;
+      bookletUnits.forEach(unit => {
+        const logsForUnit = unitLogsByUnit.get(unit.id) || [];
+        ['PRESENTATION_PROGRESS', 'RESPONSE_PROGRESS'].forEach(key => {
+          const progressLogs = logsForUnit
+            .filter(log => log.key === key)
+            .sort((a, b) => {
+              const tsDelta = Number(b.ts || 0) - Number(a.ts || 0);
+              return tsDelta || (Number(b.id || 0) - Number(a.id || 0));
+            });
+          const lastProgress = progressLogs[0];
+          if (lastProgress && lastProgress.parameter !== 'complete') {
+            incompleteUnitProgressCount += 1;
+          }
+        });
+
+        const playerLoading = logsForUnit.filter(
+          log => log.key === 'PLAYER' && log.parameter === 'LOADING'
+        ).length;
+        const playerRunning = logsForUnit.filter(
+          log => log.key === 'PLAYER' && log.parameter === 'RUNNING'
+        ).length;
+        if (playerLoading > playerRunning) {
+          playerStuckCount += 1;
+        }
+      });
+      if (incompleteUnitProgressCount > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'progress_incomplete',
+          severity: 'warning',
+          label: 'Progress unvollständig',
+          evidence: `${incompleteUnitProgressCount} finale Unit-Progress-Werte nicht complete`,
+          count: incompleteUnitProgressCount
+        });
+      }
+      if (playerStuckCount > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'player_stuck_loading',
+          severity: 'critical',
+          label: 'Player hängt',
+          evidence: `${playerStuckCount} Unit(s) mit mehr PLAYER=LOADING als PLAYER=RUNNING`,
+          count: playerStuckCount
+        });
+      }
+
+      const debugCommands = logs.filter(
+        log => log.key === 'command executed' &&
+          String(log.parameter || '').toLowerCase().includes('debug')
+      );
+      if (debugCommands.length > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'debug_command',
+          severity: 'info',
+          label: 'Debug-Befehl',
+          evidence: `${debugCommands.length} command executed : debug Eintrag/Einträge`,
+          count: debugCommands.length
+        });
+      }
+
+      if (allTimestamps.length > 1) {
+        const span = Math.max(...allTimestamps) - Math.min(...allTimestamps);
+        if (span >= thresholds.sessionSpanThresholdMs) {
+          this.addLogAnomaly(result, bookletId, {
+            code: 'session_span_long',
+            severity: 'info',
+            label: 'Lange Zeitspanne',
+            evidence: `Logs verteilen sich über ${this.formatDurationForEvidence(span)}`,
+            count: 1
+          });
+        }
+      }
+
+      if (logs.length > 0 && startedLogs.length === 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'orphan_logs',
+          severity: 'info',
+          label: 'Logs ohne Start',
+          evidence: 'Booklet-Logs vorhanden, aber kein CONTROLLER-Start gefunden.',
+          count: 1
+        });
+      }
+    });
+
+    result.forEach(list => list.sort((a, b) => {
+      const severityDelta =
+        this.getLogAnomalySortValue(a.severity) -
+        this.getLogAnomalySortValue(b.severity);
+      return severityDelta || a.label.localeCompare(b.label);
+    }));
+
+    return result;
+  }
+
+  async getLogAnomalySummary(
+    workspaceId: number,
+    options: {
+      longLoadingThresholdMs?: number | string;
+      focusLostThresholdMs?: number | string;
+      sessionSpanThresholdMs?: number | string;
+      repeatedStartThreshold?: number | string;
+    } = {}
+  ): Promise<LogAnomalyDashboardSummary> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+
+    const emptySummary: LogAnomalyDashboardSummary = {
+      totalBooklets: 0,
+      affectedBooklets: 0,
+      criticalBooklets: 0,
+      warningBooklets: 0,
+      infoBooklets: 0,
+      totalAnomalyRules: 0,
+      totalAnomalyEvents: 0,
+      byCode: {}
+    };
+
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
+    const qb = this.bookletRepository
+      .createQueryBuilder('bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .select('bookletEntity.id', 'id')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+
+    this.applyIgnoredBookletsToQuery(qb, exclusions.ignoredBooklets, 'bookletinfo');
+
+    const bookletRows = await qb.getRawMany<{ id: number | string }>();
+    const bookletIds = bookletRows
+      .map(row => Number(row.id))
+      .filter(id => Number.isFinite(id) && id > 0);
+
+    if (bookletIds.length === 0) {
+      return emptySummary;
+    }
+
+    const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
+      bookletIds,
+      this.buildLogAnomalyThresholds(options)
+    );
+
+    const summary: LogAnomalyDashboardSummary = {
+      ...emptySummary,
+      totalBooklets: bookletIds.length,
+      byCode: {}
+    };
+
+    anomaliesByBooklet.forEach(anomalies => {
+      if (anomalies.length === 0) {
+        return;
+      }
+      summary.affectedBooklets += 1;
+      summary.totalAnomalyRules += anomalies.length;
+
+      if (anomalies.some(anomaly => anomaly.severity === 'critical')) {
+        summary.criticalBooklets += 1;
+      }
+      if (anomalies.some(anomaly => anomaly.severity === 'warning')) {
+        summary.warningBooklets += 1;
+      }
+      if (anomalies.some(anomaly => anomaly.severity === 'info')) {
+        summary.infoBooklets += 1;
+      }
+
+      anomalies.forEach(anomaly => {
+        summary.totalAnomalyEvents += anomaly.count;
+        summary.byCode[anomaly.code] =
+          (summary.byCode[anomaly.code] || 0) + 1;
+      });
+    });
+
+    return summary;
+  }
+
+  async getLogAnomalyDetails(
+    workspaceId: number,
+    options: {
+      longLoadingThresholdMs?: number | string;
+      focusLostThresholdMs?: number | string;
+      sessionSpanThresholdMs?: number | string;
+      repeatedStartThreshold?: number | string;
+      limit?: number | string;
+    } = {}
+  ): Promise<LogAnomalyDetailsResponse> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+
+    const parsedLimit = Number(String(options.limit ?? '').trim() || 200);
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ?
+      Math.min(Math.round(parsedLimit), 1000) :
+      200;
+
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
+    const rows = await this.bookletRepository
+      .createQueryBuilder('bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .select('bookletEntity.id', 'bookletId')
+      .addSelect('bookletinfo.name', 'booklet')
+      .addSelect('person.id', 'personId')
+      .addSelect('person.code', 'code')
+      .addSelect('person.group', 'group')
+      .addSelect('person.login', 'login')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .orderBy('person.code', 'ASC')
+      .addOrderBy('bookletinfo.name', 'ASC')
+      .getRawMany<{
+      bookletId: number | string;
+      booklet: string | null;
+      personId: number | string;
+      code: string | null;
+      group: string | null;
+      login: string | null;
+    }>();
+
+    const ignoredBooklets = new Set(
+      exclusions.ignoredBooklets.map(normalizeExclusionBookletId)
+    );
+    const filteredRows = rows.filter(row => {
+      if (ignoredBooklets.size === 0) {
+        return true;
+      }
+      const normalizedBooklet = normalizeExclusionBookletId(
+        String(row.booklet || '')
+      );
+      return !ignoredBooklets.has(normalizedBooklet);
+    });
+    const bookletIds = filteredRows
+      .map(row => Number(row.bookletId))
+      .filter(id => Number.isFinite(id) && id > 0);
+
+    const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
+      bookletIds,
+      this.buildLogAnomalyThresholds(options)
+    );
+
+    const details = filteredRows
+      .map((row): LogAnomalyDetailRow | null => {
+        const bookletId = Number(row.bookletId);
+        const anomalies = anomaliesByBooklet.get(bookletId) || [];
+        if (anomalies.length === 0) {
+          return null;
+        }
+        const maxSeverity = anomalies.reduce<LogAnomalySeverity>(
+          (current, anomaly) => {
+            const anomalySort = this.getLogAnomalySortValue(anomaly.severity);
+            const currentSort = this.getLogAnomalySortValue(current);
+            return anomalySort < currentSort ? anomaly.severity : current;
+          },
+          'info'
+        );
+        return {
+          bookletId,
+          booklet: String(row.booklet || ''),
+          personId: Number(row.personId),
+          code: String(row.code || ''),
+          group: String(row.group || ''),
+          login: String(row.login || ''),
+          maxSeverity,
+          anomalies
+        };
+      })
+      .filter((row): row is LogAnomalyDetailRow => row !== null)
+      .sort((a, b) => {
+        const severityDelta =
+          this.getLogAnomalySortValue(a.maxSeverity) -
+          this.getLogAnomalySortValue(b.maxSeverity);
+        return severityDelta ||
+          a.code.localeCompare(b.code) ||
+          a.booklet.localeCompare(b.booklet);
+      });
+
+    return {
+      total: details.length,
+      data: details.slice(0, limit)
+    };
   }
 
   async invalidateWorkspaceStatsCache(workspaceId: number): Promise<void> {
     await Promise.all([
       this.cacheService.delete(`${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}`),
-      this.cacheService.deleteByPattern(`${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-*`)
+      this.cacheService.deleteByPattern(`${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-*`),
+      this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
+      this.cacheService.deleteByPattern(`flat_response_filter_options:${workspaceId}:*`)
+    ]);
+  }
+
+  async invalidateCodingStatisticsCache(workspaceId: number): Promise<void> {
+    await this.codingStatisticsService?.invalidateCache(workspaceId);
+  }
+
+  private async invalidateCachesAfterTestResultDeletion(workspaceId: number): Promise<void> {
+    await Promise.all([
+      this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId),
+      this.invalidateWorkspaceStatsCache(workspaceId),
+      this.invalidateCodingStatisticsCache(workspaceId)
     ]);
   }
 
@@ -213,13 +1366,15 @@ export class WorkspaceTestResultsService {
       .getRawOne()
       .then(res => Number(res?.count || 0));
 
-    const uniqueBookletsPromise = this.bookletRepository
+    const uniqueBookletsQuery = this.bookletRepository
       .createQueryBuilder('booklet')
       .innerJoin('booklet.person', 'person')
       .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .select('COUNT(DISTINCT bookletinfo.name)', 'count')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('person.consider = :consider', { consider: true });
+    this.applyIgnoredBookletsToQuery(uniqueBookletsQuery, exclusions.ignoredBooklets);
+    const uniqueBookletsPromise = uniqueBookletsQuery
       .getRawOne()
       .then(res => Number(res?.count || 0));
 
@@ -248,6 +1403,7 @@ export class WorkspaceTestResultsService {
       .andWhere('person.consider = :consider', { consider: true });
 
     this.applyExclusionsToQuery(uniqueResponsesQuery, exclusions);
+    this.excludeAutocoderGeneratedResponses(uniqueResponsesQuery);
     const uniqueResponsesPromise = uniqueResponsesQuery.getCount();
 
     const statusRowsQuery = this.responseRepository
@@ -263,6 +1419,7 @@ export class WorkspaceTestResultsService {
       .groupBy('response.status');
 
     this.applyExclusionsToQuery(statusRowsQuery, exclusions);
+    this.excludeAutocoderGeneratedResponses(statusRowsQuery);
     const statusRowsPromise = statusRowsQuery.getRawMany<{ status: string | number; count: string | number }>();
 
     const [
@@ -285,9 +1442,13 @@ export class WorkspaceTestResultsService {
       this.sessionRepository
         .createQueryBuilder('session')
         .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
+        .andWhere(exclusions.ignoredBooklets.length > 0 ? 'UPPER(bookletinfo.name) NOT IN (:...overviewIgnoredBookletsBrowser)' : '1=1', {
+          overviewIgnoredBookletsBrowser: exclusions.ignoredBooklets.map(normalizeExclusionBookletId)
+        })
         .select('session.browser', 'value')
         .addSelect('COUNT(session.id)', 'count')
         .groupBy('session.browser')
@@ -295,9 +1456,13 @@ export class WorkspaceTestResultsService {
       this.sessionRepository
         .createQueryBuilder('session')
         .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
+        .andWhere(exclusions.ignoredBooklets.length > 0 ? 'UPPER(bookletinfo.name) NOT IN (:...overviewIgnoredBookletsOs)' : '1=1', {
+          overviewIgnoredBookletsOs: exclusions.ignoredBooklets.map(normalizeExclusionBookletId)
+        })
         .select('session.os', 'value')
         .addSelect('COUNT(session.id)', 'count')
         .groupBy('session.os')
@@ -305,9 +1470,13 @@ export class WorkspaceTestResultsService {
       this.sessionRepository
         .createQueryBuilder('session')
         .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
+        .andWhere(exclusions.ignoredBooklets.length > 0 ? 'UPPER(bookletinfo.name) NOT IN (:...overviewIgnoredBookletsScreen)' : '1=1', {
+          overviewIgnoredBookletsScreen: exclusions.ignoredBooklets.map(normalizeExclusionBookletId)
+        })
         .select('session.screen', 'value')
         .addSelect('COUNT(session.id)', 'count')
         .groupBy('session.screen')
@@ -408,11 +1577,13 @@ export class WorkspaceTestResultsService {
       const globalIgnoredSet = new Set(exclusions.globalIgnoredUnits.map(u => u.toUpperCase().replace(/\.XML$/i, '')));
       const ignoredBookletsSet = new Set(exclusions.ignoredBooklets.map(b => b.toUpperCase()));
 
-      const booklets = await this.bookletRepository
+      const bookletsQuery = this.bookletRepository
         .createQueryBuilder('booklet')
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('booklet.personid = :personId', { personId })
-        .select(['booklet.id', 'bookletinfo.name'])
+        .select(['booklet.id', 'bookletinfo.name']);
+      this.applyIgnoredBookletsToQuery(bookletsQuery, exclusions.ignoredBooklets);
+      const booklets = await bookletsQuery
         .getMany();
 
       if (!booklets || booklets.length === 0) {
@@ -424,7 +1595,13 @@ export class WorkspaceTestResultsService {
 
       const units = await this.unitRepository
         .createQueryBuilder('unit')
-        .leftJoinAndSelect('unit.responses', 'response')
+        .leftJoinAndSelect(
+          'unit.responses',
+          'response',
+          WorkspaceTestResultsService.nonAutocoderGeneratedResponseCondition(
+            'response'
+          )
+        )
         .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
         .select([
           'unit.id',
@@ -631,13 +1808,282 @@ export class WorkspaceTestResultsService {
     }
   }
 
+  async quickSearchTestResults(
+    workspaceId: number,
+    query: string,
+    limit = 8
+  ): Promise<QuickSearchResult> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+
+    const normalizedQuery = String(query || '').trim();
+    const validLimit = Math.min(Math.max(1, Number(limit || 8)), 20);
+    const emptyResult: QuickSearchResult = {
+      query: normalizedQuery,
+      limit: validLimit,
+      persons: [],
+      booklets: [],
+      units: [],
+      responses: [],
+      totals: {
+        person: 0,
+        booklet: 0,
+        unit: 0,
+        response: 0
+      }
+    };
+
+    if (normalizedQuery.length < 2) {
+      return emptyResult;
+    }
+
+    const likeQuery = `%${normalizedQuery}%`;
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
+
+    const personQb = this.personsRepository
+      .createQueryBuilder('person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere(
+        '(person.code ILIKE :query OR person.group ILIKE :query OR person.login ILIKE :query)',
+        { query: likeQuery }
+      );
+
+    const bookletQb = this.bookletRepository
+      .createQueryBuilder('booklet')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('bookletinfo.name ILIKE :query', { query: likeQuery });
+    this.applyIgnoredBookletsToQuery(bookletQb, exclusions.ignoredBooklets);
+
+    const unitQb = this.unitRepository
+      .createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('(unit.name ILIKE :query OR unit.alias ILIKE :query)', {
+        query: likeQuery
+      });
+    this.applyExclusionsToQuery(unitQb, exclusions);
+
+    const responseQb = this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere(
+        '(response.variableid ILIKE :query OR response.value ILIKE :query)',
+        { query: likeQuery }
+      );
+    this.applyExclusionsToQuery(responseQb, exclusions);
+    this.excludeAutocoderGeneratedResponses(responseQb);
+
+    const [
+      personTotal,
+      bookletTotal,
+      unitTotal,
+      responseTotal,
+      personRows,
+      bookletRows,
+      unitRows,
+      responseRows
+    ] = await Promise.all([
+      personQb.clone().getCount(),
+      bookletQb.clone().getCount(),
+      unitQb.clone().getCount(),
+      responseQb.clone().getCount(),
+      personQb
+        .clone()
+        .select([
+          'person.id AS "personId"',
+          'person.code AS "personCode"',
+          'person.group AS "personGroup"',
+          'person.login AS "personLogin"'
+        ])
+        .orderBy('person.code', 'ASC')
+        .addOrderBy('person.login', 'ASC')
+        .limit(validLimit)
+        .getRawMany(),
+      bookletQb
+        .clone()
+        .select([
+          'booklet.id AS "bookletId"',
+          'bookletinfo.name AS "bookletName"',
+          'person.id AS "personId"',
+          'person.code AS "personCode"',
+          'person.group AS "personGroup"',
+          'person.login AS "personLogin"'
+        ])
+        .orderBy('bookletinfo.name', 'ASC')
+        .addOrderBy('person.code', 'ASC')
+        .limit(validLimit)
+        .getRawMany(),
+      unitQb
+        .clone()
+        .select([
+          'unit.id AS "unitId"',
+          'unit.name AS "unitName"',
+          'unit.alias AS "unitAlias"',
+          'booklet.id AS "bookletId"',
+          'bookletinfo.name AS "bookletName"',
+          'person.id AS "personId"',
+          'person.code AS "personCode"',
+          'person.group AS "personGroup"',
+          'person.login AS "personLogin"',
+          '(SELECT r.id FROM response r WHERE r.unitid = unit.id AND r.is_autocoder_generated IS NOT TRUE ORDER BY r.id ASC LIMIT 1) AS "responseId"'
+        ])
+        .orderBy('COALESCE(unit.alias, unit.name)', 'ASC')
+        .addOrderBy('person.code', 'ASC')
+        .limit(validLimit)
+        .getRawMany(),
+      responseQb
+        .clone()
+        .select([
+          'response.id AS "responseId"',
+          'response.variableid AS "variableId"',
+          'SUBSTRING(response.value, 1, 200) AS "responseValue"',
+          'response.status AS "responseStatus"',
+          'unit.id AS "unitId"',
+          'unit.name AS "unitName"',
+          'unit.alias AS "unitAlias"',
+          'booklet.id AS "bookletId"',
+          'bookletinfo.name AS "bookletName"',
+          'person.id AS "personId"',
+          'person.code AS "personCode"',
+          'person.group AS "personGroup"',
+          'person.login AS "personLogin"'
+        ])
+        .orderBy('person.code', 'ASC')
+        .addOrderBy('bookletinfo.name', 'ASC')
+        .addOrderBy('COALESCE(unit.alias, unit.name)', 'ASC')
+        .addOrderBy('response.variableid', 'ASC')
+        .limit(validLimit)
+        .getRawMany()
+    ]);
+
+    return {
+      query: normalizedQuery,
+      limit: validLimit,
+      persons: (personRows || []).map(row => ({
+        kind: 'person',
+        id: Number(row.personId),
+        label: String(row.personCode || row.personLogin || row.personId),
+        secondaryLabel: [row.personGroup, row.personLogin]
+          .filter(Boolean)
+          .join(' · '),
+        personId: Number(row.personId),
+        personCode: String(row.personCode || ''),
+        personGroup: String(row.personGroup || ''),
+        personLogin: String(row.personLogin || '')
+      })),
+      booklets: (bookletRows || []).map(row => ({
+        kind: 'booklet',
+        id: Number(row.bookletId),
+        label: String(row.bookletName || row.bookletId),
+        secondaryLabel: [row.personCode, row.personGroup, row.personLogin]
+          .filter(Boolean)
+          .join(' · '),
+        personId: Number(row.personId),
+        personCode: String(row.personCode || ''),
+        personGroup: String(row.personGroup || ''),
+        personLogin: String(row.personLogin || ''),
+        bookletId: Number(row.bookletId),
+        bookletName: String(row.bookletName || '')
+      })),
+      units: (unitRows || []).map(row => ({
+        kind: 'unit',
+        id: Number(row.unitId),
+        label: String(row.unitAlias || row.unitName || row.unitId),
+        secondaryLabel: [
+          row.bookletName,
+          row.unitAlias && row.unitAlias !== row.unitName ?
+            row.unitName :
+            '',
+          row.personCode
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        personId: Number(row.personId),
+        personCode: String(row.personCode || ''),
+        personGroup: String(row.personGroup || ''),
+        personLogin: String(row.personLogin || ''),
+        bookletId: Number(row.bookletId),
+        bookletName: String(row.bookletName || ''),
+        unitId: Number(row.unitId),
+        unitName: String(row.unitName || ''),
+        unitAlias: row.unitAlias == null ? null : String(row.unitAlias),
+        responseId: row.responseId == null ? undefined : Number(row.responseId)
+      })),
+      responses: (responseRows || []).map(row => {
+        const responseStatus = statusNumberToString(
+          Number(row.responseStatus)
+        ) || String(row.responseStatus ?? '');
+        return {
+          kind: 'response',
+          id: Number(row.responseId),
+          label: String(row.variableId || row.responseId),
+          secondaryLabel: [
+            row.bookletName,
+            row.unitAlias || row.unitName,
+            row.personCode,
+            responseStatus
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          personId: Number(row.personId),
+          personCode: String(row.personCode || ''),
+          personGroup: String(row.personGroup || ''),
+          personLogin: String(row.personLogin || ''),
+          bookletId: Number(row.bookletId),
+          bookletName: String(row.bookletName || ''),
+          unitId: Number(row.unitId),
+          unitName: String(row.unitName || ''),
+          unitAlias: row.unitAlias == null ? null : String(row.unitAlias),
+          responseId: Number(row.responseId),
+          variableId: String(row.variableId || ''),
+          responseValue: String(row.responseValue || ''),
+          responseStatus
+        };
+      }),
+      totals: {
+        person: personTotal,
+        booklet: bookletTotal,
+        unit: unitTotal,
+        response: responseTotal
+      }
+    };
+  }
+
   async findWorkspaceResponses(
     workspace_id: number,
     options?: { page: number; limit: number }
   ): Promise<[ResponseEntity[], number]> {
     this.logger.log('Returning responses for workspace', workspace_id);
 
-    let result: [ResponseEntity[], number];
+    const queryBuilder = this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoinAndSelect('response.unit', 'unit')
+      .innerJoinAndSelect('unit.booklet', 'booklet')
+      .innerJoinAndSelect('booklet.person', 'person')
+      .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspace_id', { workspace_id })
+      .andWhere('person.consider = :consider', { consider: true })
+      .orderBy('response.id', 'ASC');
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
+    this.applyExclusionsToQuery(queryBuilder, exclusions);
+    this.excludeAutocoderGeneratedResponses(queryBuilder);
 
     if (options) {
       const { page, limit } = options;
@@ -645,26 +2091,19 @@ export class WorkspaceTestResultsService {
       const validPage = Math.max(1, page);
       const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
-      const [responses, total] = await this.responseRepository.findAndCount({
-        skip: (validPage - 1) * validLimit,
-        take: validLimit,
-        order: { id: 'ASC' }
-      });
+      queryBuilder.skip((validPage - 1) * validLimit).take(validLimit);
+      const result = await queryBuilder.getManyAndCount();
 
       this.logger.log(
-        `Found ${responses.length} responses (page ${validPage}, limit ${validLimit}, total ${total}) for workspace ${workspace_id}`
+        `Found ${result[0].length} responses (page ${validPage}, limit ${validLimit}, total ${result[1]}) for workspace ${workspace_id}`
       );
-      result = [responses, total];
-    } else {
-      const responses = await this.responseRepository.find({
-        order: { id: 'ASC' }
-      });
-
-      this.logger.log(
-        `Found ${responses.length} responses for workspace ${workspace_id}`
-      );
-      result = [responses, responses.length];
+      return result;
     }
+
+    const result = await queryBuilder.getManyAndCount();
+    this.logger.log(
+      `Found ${result[0].length} responses for workspace ${workspace_id}`
+    );
 
     return result;
   }
@@ -712,10 +2151,15 @@ export class WorkspaceTestResultsService {
       sessionOs?: string;
       sessionScreens?: string;
       sessionIds?: string;
+      logAnomalies?: string;
+      focusLostThresholdMs?: number | string;
+      sessionSpanThresholdMs?: number | string;
+      repeatedStartThreshold?: number | string;
     }
   ): Promise<
     [
       Array<{
+        bookletId: number;
         responseId: number;
         unitId: number;
         personId: number;
@@ -728,6 +2172,7 @@ export class WorkspaceTestResultsService {
         responseStatus: string;
         responseValue: string;
         tags: string[];
+        logAnomalies: LogAnomalySummary[];
       }>,
       number
     ]
@@ -873,6 +2318,15 @@ export class WorkspaceTestResultsService {
     const sessionIds = parseCsv(options.sessionIds)
       .map(v => Number(v))
       .filter(v => Number.isFinite(v) && v > 0);
+    const logAnomalyThresholds = this.buildLogAnomalyThresholds({
+      longLoadingThresholdMs,
+      focusLostThresholdMs: options.focusLostThresholdMs,
+      sessionSpanThresholdMs: options.sessionSpanThresholdMs,
+      repeatedStartThreshold: options.repeatedStartThreshold
+    });
+    const logAnomalyCodes = this.expandLogAnomalyCodes(
+      parseCsv(options.logAnomalies)
+    );
 
     const parseResponseStatus = (s: string): number | null => {
       const v = (s || '').trim();
@@ -898,6 +2352,7 @@ export class WorkspaceTestResultsService {
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     this.applyExclusionsToQuery(qb, exclusions);
+    this.excludeAutocoderGeneratedResponses(qb);
 
     if (code) {
       qb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
@@ -943,8 +2398,8 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       qb.andWhere(
-        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
-        { ggPrefix: 'UEsD%' }
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
+        WorkspaceTestResultsService.geoGebraValueParams
       );
     }
 
@@ -1110,7 +2565,13 @@ export class WorkspaceTestResultsService {
 
     if (longLoadingOnly) {
       qb.andWhere(
-        `EXISTS (
+        `(EXISTS (
+          SELECT 1
+          FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs
+        )
+        OR EXISTS (
           SELECT 1
           FROM unitlog ul_started
           JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
@@ -1118,10 +2579,12 @@ export class WorkspaceTestResultsService {
             AND ul_started.key = 'STARTED'
             AND ul_ended.key = 'ENDED'
             AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
-        )`,
+        ))`,
         { longLoadingThresholdMs }
       );
     }
+
+    this.applyLogAnomalyFilters(qb, logAnomalyCodes, logAnomalyThresholds);
 
     const countQb = this.responseRepository
       .createQueryBuilder('response')
@@ -1131,6 +2594,11 @@ export class WorkspaceTestResultsService {
       .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
+
+    this.applyExclusionsToQuery(countQb, exclusions, {
+      bookletInfoAlias: 'bookletinfo'
+    });
+    this.excludeAutocoderGeneratedResponses(countQb);
 
     if (code) {
       countQb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
@@ -1177,8 +2645,8 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       countQb.andWhere(
-        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
-        { ggPrefix: 'UEsD%' }
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
+        WorkspaceTestResultsService.geoGebraValueParams
       );
     }
 
@@ -1214,7 +2682,13 @@ export class WorkspaceTestResultsService {
 
     if (longLoadingOnly) {
       countQb.andWhere(
-        `EXISTS (
+        `(EXISTS (
+          SELECT 1
+          FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs
+        )
+        OR EXISTS (
           SELECT 1
           FROM unitlog ul_started
           JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
@@ -1222,10 +2696,16 @@ export class WorkspaceTestResultsService {
             AND ul_started.key = 'STARTED'
             AND ul_ended.key = 'ENDED'
             AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
-        )`,
+        ))`,
         { longLoadingThresholdMs }
       );
     }
+
+    this.applyLogAnomalyFilters(
+      countQb,
+      logAnomalyCodes,
+      logAnomalyThresholds
+    );
 
     if (processingDurations.length > 0) {
       countQb.andWhere(
@@ -1330,6 +2810,7 @@ export class WorkspaceTestResultsService {
 
     const raw = await qb
       .select([
+        'bookletEntity.id AS "bookletId"',
         'response.id AS "responseId"',
         'unit.id AS "unitId"',
         'person.id AS "personId"',
@@ -1346,6 +2827,7 @@ export class WorkspaceTestResultsService {
       .setParameter('maxResponseValueLen', MAX_RESPONSE_VALUE_LEN)
       .groupBy('response.id')
       .addGroupBy('unit.id')
+      .addGroupBy('bookletEntity.id')
       .addGroupBy('person.id')
       .addGroupBy('bookletinfo.name')
       .addGroupBy('unit.alias')
@@ -1375,6 +2857,7 @@ export class WorkspaceTestResultsService {
       const statusNum = Number(r.responseStatus);
       const statusLabel = statusNumberToString(statusNum);
       return {
+        bookletId: Number(r.bookletId),
         responseId: Number(r.responseId),
         unitId: Number(r.unitId),
         personId: Number(r.personId),
@@ -1386,11 +2869,23 @@ export class WorkspaceTestResultsService {
         response: String(r.response || ''),
         responseStatus: statusLabel || String(r.responseStatus ?? ''),
         responseValue: String(r.responseValue ?? ''),
-        tags: tagList
+        tags: tagList,
+        logAnomalies: []
       };
     });
 
-    return [mapped, total];
+    const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
+      mapped.map(row => row.bookletId),
+      logAnomalyThresholds
+    );
+
+    return [
+      mapped.map(row => ({
+        ...row,
+        logAnomalies: anomaliesByBooklet.get(row.bookletId) || []
+      })),
+      total
+    ];
   }
 
   async findFlatResponseFrequencies(
@@ -1463,9 +2958,15 @@ export class WorkspaceTestResultsService {
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'bookletEntity')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
       .innerJoin('bookletEntity.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    this.applyExclusionsToQuery(qb, exclusions, {
+      bookletInfoAlias: 'bookletinfo'
+    });
+    this.excludeAutocoderGeneratedResponses(qb);
 
     const params: Record<string, unknown> = {};
     const orParts = uniqueCombos.map((c, idx) => {
@@ -1572,6 +3073,93 @@ export class WorkspaceTestResultsService {
 
     await this.cacheService.set(cacheKey, result, 300); // 5 minutes cache
     return result;
+  }
+
+  private buildFlatResponseFilteredBookletsSubquery(
+    baseQb: SelectQueryBuilder<ResponseEntity>
+  ): [string, unknown[]] {
+    return baseQb
+      .clone()
+      .select('"bookletEntity"."id"', 'bookletId')
+      .distinct(true)
+      .getQueryAndParameters();
+  }
+
+  private async queryFlatResponseProcessingDurationOptions(
+    baseQb: SelectQueryBuilder<ResponseEntity>,
+    maxOptions: number,
+    processingDurationThresholdMs: number
+  ): Promise<Array<{ v: string }>> {
+    const [filteredBookletsSql, filteredBookletsParams] =
+      this.buildFlatResponseFilteredBookletsSubquery(baseQb);
+    const thresholdParam = `$${filteredBookletsParams.length + 1}`;
+    const limit = Math.max(1, Math.floor(maxOptions));
+
+    return this.connection.query(
+      `
+        SELECT DISTINCT
+          CASE
+            WHEN first_duration.duration_ms IS NULL THEN 'Unbekannt'
+            WHEN first_duration.duration_ms < ${thresholdParam} THEN 'Kurz'
+            ELSE 'Lang'
+          END AS v
+        FROM (${filteredBookletsSql}) filtered_booklets
+        LEFT JOIN LATERAL (
+          SELECT (bl_terminated.ts - bl_running.ts) AS duration_ms
+          FROM bookletlog bl_running
+          JOIN bookletlog bl_terminated
+            ON bl_terminated.bookletid = bl_running.bookletid
+          WHERE bl_running.bookletid = filtered_booklets."bookletId"
+            AND bl_running.key = 'CONTROLLER'
+            AND bl_running.parameter = 'RUNNING'
+            AND bl_terminated.key = 'CONTROLLER'
+            AND bl_terminated.parameter = 'TERMINATED'
+          ORDER BY bl_running.id ASC, bl_terminated.id ASC
+          LIMIT 1
+        ) first_duration ON TRUE
+        ORDER BY v ASC
+        LIMIT ${limit}
+      `,
+      [...filteredBookletsParams, processingDurationThresholdMs]
+    );
+  }
+
+  private async queryFlatResponseUnitProgressOptions(
+    baseQb: SelectQueryBuilder<ResponseEntity>,
+    maxOptions: number
+  ): Promise<Array<{ v: string }>> {
+    const [filteredBookletsSql, filteredBookletsParams] =
+      this.buildFlatResponseFilteredBookletsSubquery(baseQb);
+    const limit = Math.max(1, Math.floor(maxOptions));
+
+    return this.connection.query(
+      `
+        SELECT DISTINCT progress.v AS v
+        FROM (${filteredBookletsSql}) filtered_booklets
+        CROSS JOIN LATERAL (
+          SELECT
+            CASE
+              WHEN COUNT(DISTINCT progress_unit.id) > 0
+                AND COUNT(DISTINCT progress_unit.id) =
+                  COUNT(DISTINCT CASE
+                    WHEN progress_log.id IS NOT NULL THEN progress_unit.id
+                  END)
+              THEN 'complete'
+              ELSE 'incomplete'
+            END AS v
+          FROM unit progress_unit
+          LEFT JOIN bookletlog progress_log
+            ON progress_log.bookletid = filtered_booklets."bookletId"
+            AND progress_log.key = 'CURRENT_UNIT_ID'
+            AND progress_log.parameter = progress_unit.alias
+          WHERE progress_unit.bookletid = filtered_booklets."bookletId"
+            AND progress_unit.alias IS NOT NULL
+        ) progress
+        ORDER BY progress.v ASC
+        LIMIT ${limit}
+      `,
+      filteredBookletsParams
+    );
   }
 
   async findFlatResponseFilterOptions(
@@ -1713,6 +3301,11 @@ export class WorkspaceTestResultsService {
       .leftJoin('unit.tags', 'unitTag')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    this.applyExclusionsToQuery(baseQb, exclusions, {
+      bookletInfoAlias: 'bookletinfo'
+    });
+    this.excludeAutocoderGeneratedResponses(baseQb);
 
     if (code) {
       baseQb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
@@ -1758,8 +3351,8 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       baseQb.andWhere(
-        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
-        { ggPrefix: 'UEsD%' }
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
+        WorkspaceTestResultsService.geoGebraValueParams
       );
     }
 
@@ -1938,8 +3531,6 @@ export class WorkspaceTestResultsService {
       responseRows,
       responseStatusRows,
       tagRows,
-      processingDurationRows,
-      unitProgressRows,
       sessionBrowserRows,
       sessionOsRows,
       sessionScreenRows,
@@ -1990,86 +3581,15 @@ export class WorkspaceTestResultsService {
       baseQb
         .clone()
         .select('DISTINCT unitTag.tag', 'v')
-        .where('unitTag.tag IS NOT NULL')
+        .andWhere('unitTag.tag IS NOT NULL')
         .orderBy('unitTag.tag', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select(
-          `DISTINCT (
-            CASE
-              WHEN (
-                SELECT (bl_terminated.ts - bl_running.ts)
-                FROM bookletlog bl_running
-                JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
-                WHERE bl_running.bookletid = "bookletEntity"."id"
-                  AND bl_running.key = 'CONTROLLER'
-                  AND bl_running.parameter = 'RUNNING'
-                  AND bl_terminated.key = 'CONTROLLER'
-                  AND bl_terminated.parameter = 'TERMINATED'
-                ORDER BY bl_running.id ASC, bl_terminated.id ASC
-                LIMIT 1
-              ) IS NULL THEN 'Unbekannt'
-              WHEN (
-                SELECT (bl_terminated.ts - bl_running.ts)
-                FROM bookletlog bl_running
-                JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
-                WHERE bl_running.bookletid = "bookletEntity"."id"
-                  AND bl_running.key = 'CONTROLLER'
-                  AND bl_running.parameter = 'RUNNING'
-                  AND bl_terminated.key = 'CONTROLLER'
-                  AND bl_terminated.parameter = 'TERMINATED'
-                ORDER BY bl_running.id ASC, bl_terminated.id ASC
-                LIMIT 1
-              ) < :processingDurationThresholdMs THEN 'Kurz'
-              ELSE 'Lang'
-            END
-          )`,
-          'v'
-        )
-        .orderBy('v', 'ASC')
-        .limit(MAX_OPTIONS)
-        .setParameter(
-          'processingDurationThresholdMs',
-          processingDurationThresholdMs
-        )
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select(
-          `DISTINCT (
-            CASE
-              WHEN EXISTS (
-                SELECT 1 FROM unit u2
-                WHERE u2.bookletid = "bookletEntity"."id"
-                  AND u2.alias IS NOT NULL
-              )
-              AND NOT EXISTS (
-                SELECT 1 FROM unit u3
-                WHERE u3.bookletid = "bookletEntity"."id"
-                  AND u3.alias IS NOT NULL
-                  AND NOT EXISTS (
-                    SELECT 1 FROM bookletlog bl
-                    WHERE bl.bookletid = "bookletEntity"."id"
-                      AND bl.key = 'CURRENT_UNIT_ID'
-                      AND bl.parameter = u3.alias
-                  )
-              )
-              THEN 'complete'
-              ELSE 'incomplete'
-            END
-          )`,
-          'v'
-        )
-        .orderBy('v', 'ASC')
         .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
       baseQb
         .clone()
         .leftJoin('bookletEntity.sessions', 'session')
         .select('DISTINCT session.browser', 'v')
-        .where('session.browser IS NOT NULL')
+        .andWhere('session.browser IS NOT NULL')
         .orderBy('session.browser', 'ASC')
         .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
@@ -2077,7 +3597,7 @@ export class WorkspaceTestResultsService {
         .clone()
         .leftJoin('bookletEntity.sessions', 'session')
         .select('DISTINCT session.os', 'v')
-        .where('session.os IS NOT NULL')
+        .andWhere('session.os IS NOT NULL')
         .orderBy('session.os', 'ASC')
         .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
@@ -2085,7 +3605,7 @@ export class WorkspaceTestResultsService {
         .clone()
         .leftJoin('bookletEntity.sessions', 'session')
         .select('DISTINCT session.screen', 'v')
-        .where('session.screen IS NOT NULL')
+        .andWhere('session.screen IS NOT NULL')
         .orderBy('session.screen', 'ASC')
         .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
@@ -2093,10 +3613,19 @@ export class WorkspaceTestResultsService {
         .clone()
         .leftJoin('bookletEntity.sessions', 'session')
         .select('DISTINCT session.id', 'v')
-        .where('session.id IS NOT NULL')
+        .andWhere('session.id IS NOT NULL')
         .orderBy('session.id', 'ASC')
         .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>()
+    ]);
+
+    const [processingDurationRows, unitProgressRows] = await Promise.all([
+      this.queryFlatResponseProcessingDurationOptions(
+        baseQb,
+        MAX_OPTIONS,
+        processingDurationThresholdMs
+      ),
+      this.queryFlatResponseUnitProgressOptions(baseQb, MAX_OPTIONS)
     ]);
 
     const mapVals = (rows: Array<{ v: string }>) => (rows || []).map(r => String(r.v || '').trim()).filter(Boolean);
@@ -2151,10 +3680,12 @@ export class WorkspaceTestResultsService {
       throw new Error('Invalid unitId provided');
     }
 
-    const raw = await this.unitLogRepository
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.unitLogRepository
       .createQueryBuilder('unitLog')
       .innerJoin('unitLog.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('unit.id = :unitId', { unitId })
@@ -2165,7 +3696,9 @@ export class WorkspaceTestResultsService {
         'unitLog.key AS "key"',
         'unitLog.parameter AS "parameter"'
       ])
-      .orderBy('unitLog.id', 'ASC')
+      .orderBy('unitLog.id', 'ASC');
+    this.applyExclusionsToQuery(query, exclusions);
+    const raw = await query
       .getRawMany<{
       id: number;
       unitid: number;
@@ -2226,13 +3759,17 @@ export class WorkspaceTestResultsService {
       throw new Error('Invalid unitId provided');
     }
 
-    const unitRow = await this.unitRepository
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const unitQuery = this.unitRepository
       .createQueryBuilder('unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('unit.id = :unitId', { unitId })
-      .select(['unit.id', 'unit.bookletid'])
+      .select(['unit.id', 'unit.bookletid']);
+    this.applyExclusionsToQuery(unitQuery, exclusions);
+    const unitRow = await unitQuery
       .getOne();
 
     if (!unitRow) {
@@ -2240,6 +3777,14 @@ export class WorkspaceTestResultsService {
     }
 
     const bookletId = Number(unitRow.bookletid);
+    const unitsInBookletQuery = this.unitRepository
+      .createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .where('unit.bookletid = :bookletId', { bookletId })
+      .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias'])
+      .orderBy('unit.id', 'ASC');
+    this.applyExclusionsToQuery(unitsInBookletQuery, exclusions);
 
     const [bookletLogs, sessions, units] = await Promise.all([
       this.bookletLogRepository
@@ -2269,12 +3814,7 @@ export class WorkspaceTestResultsService {
         ])
         .orderBy('session.id', 'ASC')
         .getMany(),
-      this.unitRepository
-        .createQueryBuilder('unit')
-        .where('unit.bookletid = :bookletId', { bookletId })
-        .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias'])
-        .orderBy('unit.id', 'ASC')
-        .getMany()
+      unitsInBookletQuery.getMany()
     ]);
 
     return {
@@ -2317,7 +3857,7 @@ export class WorkspaceTestResultsService {
       workspaceId,
       connector,
       unitId
-    )}:v4`;
+    )}:v6`;
     const cachedResponse = await this.cacheService.get<{
       responses: {
         id: string;
@@ -2341,26 +3881,43 @@ export class WorkspaceTestResultsService {
     const code = parts[1];
     const group = parts.length >= 4 ? parts[2] : undefined;
     const bookletId = parts[parts.length - 1];
-    const queryBuilder = this.unitRepository
-      .createQueryBuilder('unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.person', 'person')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .select('unit.id', 'unitId')
-      .where('person.login = :login', { login })
-      .andWhere('person.code = :code', { code });
-
-    if (group) {
-      queryBuilder.andWhere('person.group = :group', { group });
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    if (isExcludedByResolvedExclusions(exclusions, bookletId, unitId)) {
+      return { responses: [] };
     }
 
-    queryBuilder
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('bookletinfo.name = :bookletId', { bookletId })
-      .andWhere('unit.alias = :unitId', { unitId });
+    const createUnitLookupQuery = () => {
+      const queryBuilder = this.unitRepository
+        .createQueryBuilder('unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .select('unit.id', 'unitId')
+        .where('person.login = :login', { login })
+        .andWhere('person.code = :code', { code });
 
-    const unitRow = await queryBuilder.getRawOne<{ unitId: number }>();
+      if (group) {
+        queryBuilder.andWhere('person.group = :group', { group });
+      }
+
+      queryBuilder
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('bookletinfo.name = :bookletId', { bookletId });
+      this.applyExclusionsToQuery(queryBuilder, exclusions);
+      return queryBuilder;
+    };
+
+    let unitRow = await createUnitLookupQuery()
+      .andWhere('unit.alias = :unitId', { unitId })
+      .getRawOne<{ unitId: number }>();
+
+    if (!unitRow) {
+      unitRow = await createUnitLookupQuery()
+        .andWhere('unit.name = :unitId', { unitId })
+        .getRawOne<{ unitId: number }>();
+    }
+
     const unitDbId = unitRow?.unitId;
 
     if (!unitDbId) {
@@ -2435,6 +3992,11 @@ export class WorkspaceTestResultsService {
         'response.subform AS subform'
       ])
       .where('response.unitid = :unitDbId', { unitDbId })
+      .andWhere(
+        WorkspaceTestResultsService.nonAutocoderGeneratedResponseCondition(
+          'response'
+        )
+      )
       .getRawMany<{
       variableid: string;
       value: string | null;
@@ -2507,34 +4069,49 @@ export class WorkspaceTestResultsService {
   async getResponsesByStatus(
     workspace_id: number,
     status: string,
+    version: 'v1' | 'v2' | 'v3' = 'v1',
     options?: { page: number; limit: number }
   ): Promise<[ResponseEntity[], number]> {
     this.logger.log(
-      `Getting responses with status ${status} for workspace ${workspace_id}`
+      `Getting responses with status ${status} for workspace ${workspace_id} (version: ${version})`
     );
 
     try {
+      const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
       const queryBuilder = this.responseRepository
         .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status = :constStatus', {
-          constStatus: statusStringToNumber('VALUE_CHANGED')
+        .where('response.status IN (:...codingResponseStatuses)', {
+          codingResponseStatuses: WorkspaceTestResultsService.codingResponseStatuses
         })
         .andWhere('person.workspace_id = :workspace_id_param', {
           workspace_id_param: workspace_id
         })
+        .andWhere('person.consider = :consider', { consider: true })
         .orderBy('response.id', 'ASC');
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
+      this.applyExclusionsToQuery(queryBuilder, exclusions);
 
       if (status === 'null') {
-        queryBuilder.andWhere('response.status_v1 IS NULL');
-      } else {
-        queryBuilder.andWhere('response.status_v1 = :statusParam', {
-          statusParam: status
-        });
+        return [[], 0];
       }
+
+      const statusNumber = statusStringToNumber(status);
+      if (
+        statusNumber === null ||
+        WorkspaceTestResultsService.ignoredDerivedCodingStatuses.includes(statusNumber)
+      ) {
+        this.logger.warn(`Invalid or ignored coding status filter: ${status}`);
+        return [[], 0];
+      }
+
+      queryBuilder.andWhere(`${effectiveStatusExpression} = :statusParam`, {
+        statusParam: statusNumber
+      });
+      await this.applyValidCodingVariableFilter(queryBuilder, workspace_id);
 
       let result: [ResponseEntity[], number];
 
@@ -2575,73 +4152,1259 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return this.connection.transaction(async manager => {
-      const ids = testPersonIds.split(',').map(id => id.trim());
-      const report = {
-        deletedPersons: [],
-        warnings: []
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => {
+        const auditEvents: RecordAuditJournalEventInput[] = [];
+        const result = await this.connection.transaction(async manager => {
+          const ids = testPersonIds.split(',').map(id => id.trim());
+          const report = {
+            deletedPersons: [],
+            warnings: []
+          };
+
+          const existingPersons = await manager
+            .createQueryBuilder(Persons, 'persons')
+            .select([
+              'persons.id',
+              'persons.login',
+              'persons.code',
+              'persons.group',
+              'persons.workspace_id',
+              'persons.uploaded_at',
+              'persons.source'
+            ])
+            .where('persons.id IN (:...ids)', { ids })
+            .getMany();
+
+          if (!existingPersons.length) {
+            const warningMessage = `Keine Personen gefunden für die angegebenen IDs: ${testPersonIds}`;
+            this.logger.warn(warningMessage);
+            report.warnings.push(warningMessage);
+            return { success: false, report };
+          }
+
+          const existingIds = existingPersons.map(person => person.id);
+
+          await manager
+            .createQueryBuilder()
+            .delete()
+            .from(Persons)
+            .where('id IN (:...ids)', { ids: existingIds })
+            .execute();
+
+          report.deletedPersons = existingIds;
+
+          for (const person of existingPersons) {
+            auditEvents.push({
+              workspaceId,
+              actorUserId: userId,
+              eventType: 'TEST_PERSON_DELETED',
+              entityType: 'test-person',
+              entityId: person.id,
+              result: 'success',
+              summary: 'Test person deleted',
+              details: {
+                personId: person.id,
+                message: 'Test person deleted'
+              }
+            });
+          }
+
+          return { success: true, report };
+        });
+
+        if (result.success) {
+          await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+          await Promise.all(auditEvents.map(event => this.tryRecordAuditEvent(
+            event,
+            `Failed to create journal entry for deleting test person ${event.entityId}`
+          )));
+        }
+        return result;
+      }
+    );
+  }
+
+  async previewDeleteTestResults(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto
+  ): Promise<TestResultsDeletePreviewDto> {
+    return (await this.resolveDeleteTargets(workspaceId, request)).preview;
+  }
+
+  async previewDeleteTestLogs(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto
+  ): Promise<TestResultsDeletePreviewDto> {
+    const targets = await this.resolveDeleteTargets(workspaceId, request);
+    return this.buildLogDeletePreview(targets);
+  }
+
+  async deleteTestResultsByRequest(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => this.deleteTestResultsByRequestLocked(
+        workspaceId,
+        request,
+        userId,
+        onProgress
+      )
+    );
+  }
+
+  private async deleteTestResultsByRequestLocked(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    const targets = await this.resolveDeleteTargets(workspaceId, request);
+    const totalTargets = targets.ids.length;
+
+    if (totalTargets === 0) {
+      return {
+        ...targets.preview,
+        deletedTargetCount: 0
+      };
+    }
+
+    await onProgress?.(
+      5,
+      `Lösche ${totalTargets} Datensätze aus dem Ergebnisbrowser...`
+    );
+
+    const chunks = WorkspaceTestResultsService.chunkArray(targets.ids, 250);
+    const dependencySnapshot: DeleteDependencySnapshot = {
+      bookletIds: [],
+      unitIds: [],
+      responseIds: [],
+      bookletInfoIds: []
+    };
+    let deletedTargetCount = 0;
+
+    for (const [index, ids] of chunks.entries()) {
+      const chunkSnapshot = await this.collectDeleteDependencySnapshot(
+        targets.kind,
+        ids
+      );
+      WorkspaceTestResultsService.mergeDeleteDependencySnapshot(
+        dependencySnapshot,
+        chunkSnapshot
+      );
+
+      const deleteResult = await this.connection.transaction(async manager => {
+        await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
+          workspaceId,
+          chunkSnapshot.responseIds,
+          'RESULT_DELETED',
+          'stale_source',
+          manager
+        );
+
+        await this.deleteKnownDeleteDependents(
+          manager,
+          targets.kind,
+          chunkSnapshot
+        );
+
+        switch (targets.kind) {
+          case 'persons':
+            return manager
+              .createQueryBuilder()
+              .delete()
+              .from(Persons)
+              .where('id IN (:...ids)', { ids })
+              .execute();
+          case 'booklets':
+            return manager
+              .createQueryBuilder()
+              .delete()
+              .from(Booklet)
+              .where('id IN (:...ids)', { ids })
+              .execute();
+          case 'units':
+            return manager
+              .createQueryBuilder()
+              .delete()
+              .from(Unit)
+              .where('id IN (:...ids)', { ids })
+              .execute();
+          default:
+            throw new Error('Unknown test result deletion target');
+        }
+      });
+
+      deletedTargetCount += deleteResult.affected || ids.length;
+
+      const progress = Math.min(
+        90,
+        10 + Math.round((deletedTargetCount / totalTargets) * 80)
+      );
+      await onProgress?.(
+        progress,
+        `Löschung läuft: ${deletedTargetCount}/${totalTargets} Datensätze verarbeitet (${index + 1}/${chunks.length} Stapel).`
+      );
+    }
+
+    const finalSnapshot =
+      WorkspaceTestResultsService.dedupeDeleteDependencySnapshot(
+        dependencySnapshot
+      );
+
+    await onProgress?.(92, 'Verwaiste Testheft-Metadaten werden bereinigt...');
+    await this.deleteOrphanedBookletInfos(finalSnapshot.bookletInfoIds);
+
+    await onProgress?.(95, 'Löschung wird abschließend geprüft...');
+    await this.assertDeleteCompleted(
+      targets.kind,
+      targets.ids,
+      finalSnapshot
+    );
+
+    await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
+    await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+
+    if (userId) {
+      try {
+        await this.journalService.recordEvent(
+          {
+            workspaceId,
+            actorUserId: userId,
+            eventType: 'TEST_RESULTS_DELETED',
+            entityType: 'test-results',
+            entityId: null,
+            result: 'success',
+            summary: 'Test results deleted by bulk job',
+            details: {
+              scope: request.scope,
+              deletedTargetKind: targets.kind,
+              deletedTargetCount,
+              preview: targets.preview
+            }
+          }
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to create journal entry for bulk test result deletion: ${error.message}`,
+          error.stack
+        );
+      }
+    }
+
+    return {
+      ...targets.preview,
+      deletedTargetCount
+    };
+  }
+
+  async deleteTestLogsByRequest(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => this.deleteTestLogsByRequestLocked(
+        workspaceId,
+        request,
+        userId,
+        onProgress
+      )
+    );
+  }
+
+  private async deleteTestLogsByRequestLocked(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    const targets = await this.resolveDeleteTargets(workspaceId, request);
+    const preview = await this.buildLogDeletePreview(targets);
+    const totalLogRows =
+      (preview.bookletLogs || 0) +
+      (preview.unitLogs || 0) +
+      (preview.sessions || 0);
+
+    if (totalLogRows === 0) {
+      return {
+        ...preview,
+        deletedTargetCount: 0,
+        deletedBookletLogs: 0,
+        deletedUnitLogs: 0,
+        deletedSessions: 0
+      };
+    }
+
+    await onProgress?.(
+      5,
+      `Lösche ${totalLogRows} Log- und Sitzungsdatensätze...`
+    );
+
+    const snapshot = await this.collectLogDeleteSnapshot(
+      targets.kind,
+      targets.ids
+    );
+
+    const deletedCounts = await this.connection.transaction(async manager => {
+      const deletedUnitLogs = await this.deleteRowsByIds(
+        manager,
+        UnitLog,
+        'unitid',
+        snapshot.unitIds
+      );
+      const deletedBookletLogs = await this.deleteRowsByIds(
+        manager,
+        BookletLog,
+        'bookletid',
+        snapshot.bookletIds
+      );
+      const deletedSessions = await this.deleteRowsByIds(
+        manager,
+        Session,
+        'bookletid',
+        snapshot.bookletIds
+      );
+
+      const counts = {
+        deletedBookletLogs,
+        deletedUnitLogs,
+        deletedSessions
       };
 
-      const existingPersons = await manager
-        .createQueryBuilder(Persons, 'persons')
-        .select([
-          'persons.id',
-          'persons.login',
-          'persons.code',
-          'persons.group',
-          'persons.workspace_id',
-          'persons.uploaded_at',
-          'persons.source'
-        ])
-        .where('persons.id IN (:...ids)', { ids })
-        .getMany();
+      return counts;
+    });
 
-      if (!existingPersons.length) {
-        const warningMessage = `Keine Personen gefunden für die angegebenen IDs: ${testPersonIds}`;
-        this.logger.warn(warningMessage);
-        report.warnings.push(warningMessage);
-        return { success: false, report };
+    await onProgress?.(90, 'Log-Löschung wird abschließend geprüft...');
+    await this.assertLogDeleteCompleted(snapshot);
+
+    await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
+    await this.invalidateWorkspaceStatsCache(workspaceId);
+
+    const deletedTargetCount =
+      deletedCounts.deletedBookletLogs +
+      deletedCounts.deletedUnitLogs +
+      deletedCounts.deletedSessions;
+
+    if (userId) {
+      await this.tryRecordAuditEvent({
+        workspaceId,
+        actorUserId: userId,
+        eventType: 'TEST_LOGS_DELETED',
+        entityType: 'test-logs',
+        entityId: null,
+        result: 'success',
+        summary: 'Test logs deleted by bulk job',
+        details: {
+          scope: request.scope,
+          deletedTargetKind: targets.kind,
+          deletedTargetCount,
+          ...deletedCounts,
+          preview
+        }
+      }, 'Failed to create journal entry for bulk test log deletion');
+    }
+
+    return {
+      ...preview,
+      deletedTargetCount,
+      ...deletedCounts
+    };
+  }
+
+  private async buildLogDeletePreview(
+    targets: TestResultsDeleteTargets
+  ): Promise<TestResultsDeletePreviewDto> {
+    const snapshot = await this.collectLogDeleteSnapshot(
+      targets.kind,
+      targets.ids
+    );
+    const counts = await this.getLogDeleteCounts(snapshot);
+    const warnings = [...targets.preview.warnings];
+    const totalLogRows = counts.bookletLogs + counts.unitLogs + counts.sessions;
+
+    if (targets.kind === 'units') {
+      warnings.push(
+        'Bei Aufgaben-Auswahl werden nur Aufgaben-Logs entfernt. Booklet-Logs und Sitzungen bleiben erhalten.'
+      );
+    }
+
+    if (targets.ids.length > 0 && totalLogRows === 0) {
+      warnings.push('Für den ausgewählten Bereich wurden keine Logs gefunden.');
+    }
+
+    return {
+      ...targets.preview,
+      targetType: 'logs',
+      bookletLogs: counts.bookletLogs,
+      unitLogs: counts.unitLogs,
+      sessions: counts.sessions,
+      warnings
+    };
+  }
+
+  private async collectLogDeleteSnapshot(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<LogDeleteSnapshot> {
+    if (ids.length === 0) {
+      return {
+        bookletIds: [],
+        unitIds: []
+      };
+    }
+
+    const [bookletIds, unitIds] = await Promise.all([
+      kind === 'units' ? Promise.resolve([]) :
+        this.collectAffectedBookletIds(kind, ids),
+      this.collectAffectedUnitIds(kind, ids)
+    ]);
+
+    return {
+      bookletIds: WorkspaceTestResultsService.uniqueIds(bookletIds),
+      unitIds: WorkspaceTestResultsService.uniqueIds(unitIds)
+    };
+  }
+
+  private async getLogDeleteCounts(
+    snapshot: LogDeleteSnapshot
+  ): Promise<LogDeleteCounts> {
+    const [bookletLogs, unitLogs, sessions] = await Promise.all([
+      this.countRowsByIds(BookletLog, 'bookletid', snapshot.bookletIds),
+      this.countRowsByIds(UnitLog, 'unitid', snapshot.unitIds),
+      this.countRowsByIds(Session, 'bookletid', snapshot.bookletIds)
+    ]);
+
+    return {
+      bookletLogs,
+      unitLogs,
+      sessions
+    };
+  }
+
+  private async assertLogDeleteCompleted(
+    snapshot: LogDeleteSnapshot
+  ): Promise<void> {
+    const failures: string[] = [];
+    const addFailure = async (
+      label: string,
+      countPromise: Promise<number>
+    ): Promise<void> => {
+      const count = await countPromise;
+      if (count > 0) {
+        failures.push(`${count} ${label}`);
       }
+    };
 
-      const existingIds = existingPersons.map(person => person.id);
+    await addFailure(
+      'Booklet-Logeintrag/-einträge',
+      this.countRowsByIds(BookletLog, 'bookletid', snapshot.bookletIds)
+    );
+    await addFailure(
+      'Unit-Logeintrag/-einträge',
+      this.countRowsByIds(UnitLog, 'unitid', snapshot.unitIds)
+    );
+    await addFailure(
+      'Sitzung(en)',
+      this.countRowsByIds(Session, 'bookletid', snapshot.bookletIds)
+    );
 
-      await manager
+    if (failures.length > 0) {
+      throw new Error(
+        `Die Log-Löschung wurde nicht vollständig bestätigt. Verblieben: ${failures.join(', ')}.`
+      );
+    }
+  }
+
+  private async collectDeleteDependencySnapshot(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<DeleteDependencySnapshot> {
+    if (ids.length === 0) {
+      return {
+        bookletIds: [],
+        unitIds: [],
+        responseIds: [],
+        bookletInfoIds: []
+      };
+    }
+
+    const [bookletIds, unitIds, bookletInfoIds] = await Promise.all([
+      this.collectAffectedBookletIds(kind, ids),
+      this.collectAffectedUnitIds(kind, ids),
+      this.collectAffectedBookletInfoIds(kind, ids)
+    ]);
+    const responseIds = await this.collectIdsFromChunks(
+      unitIds,
+      async chunk => {
+        const rows = await this.connection
+          .createQueryBuilder()
+          .select('response.id', 'id')
+          .from(ResponseEntity, 'response')
+          .where('response.unitid IN (:...ids)', { ids: chunk })
+          .getRawMany<{ id: number | string }>();
+
+        return WorkspaceTestResultsService.rawRowsToIds(rows);
+      }
+    );
+
+    return {
+      bookletIds,
+      unitIds,
+      responseIds,
+      bookletInfoIds
+    };
+  }
+
+  private async collectAffectedBookletIds(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<number[]> {
+    if (kind === 'booklets') {
+      return ids;
+    }
+
+    const query = this.connection
+      .createQueryBuilder()
+      .select('DISTINCT booklet.id', 'id')
+      .from(Booklet, 'booklet');
+
+    if (kind === 'persons') {
+      query.where('booklet.personid IN (:...ids)', { ids });
+    } else {
+      query
+        .innerJoin(Unit, 'unit', 'unit.bookletid = booklet.id')
+        .where('unit.id IN (:...ids)', { ids });
+    }
+
+    const rows = await query.getRawMany<{ id: number | string }>();
+    return WorkspaceTestResultsService.rawRowsToIds(rows);
+  }
+
+  private async collectAffectedUnitIds(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<number[]> {
+    if (kind === 'units') {
+      return ids;
+    }
+
+    const query = this.connection
+      .createQueryBuilder()
+      .select('DISTINCT unit.id', 'id')
+      .from(Unit, 'unit');
+
+    if (kind === 'persons') {
+      query
+        .innerJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+        .where('booklet.personid IN (:...ids)', { ids });
+    } else {
+      query.where('unit.bookletid IN (:...ids)', { ids });
+    }
+
+    const rows = await query.getRawMany<{ id: number | string }>();
+    return WorkspaceTestResultsService.rawRowsToIds(rows);
+  }
+
+  private async collectAffectedBookletInfoIds(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<number[]> {
+    const query = this.connection
+      .createQueryBuilder()
+      .select('DISTINCT booklet.infoid', 'id')
+      .from(Booklet, 'booklet');
+
+    if (kind === 'persons') {
+      query.where('booklet.personid IN (:...ids)', { ids });
+    } else if (kind === 'booklets') {
+      query.where('booklet.id IN (:...ids)', { ids });
+    } else {
+      query
+        .innerJoin(Unit, 'unit', 'unit.bookletid = booklet.id')
+        .where('unit.id IN (:...ids)', { ids });
+    }
+
+    const rows = await query.getRawMany<{ id: number | string }>();
+    return WorkspaceTestResultsService.rawRowsToIds(rows);
+  }
+
+  private async deleteKnownDeleteDependents(
+    manager: EntityManager,
+    kind: TestResultsDeleteTargetKind,
+    snapshot: DeleteDependencySnapshot
+  ): Promise<void> {
+    await this.deleteRowsByIds(
+      manager,
+      CodingJobUnit,
+      'response_id',
+      snapshot.responseIds
+    );
+    await this.deleteRowsByIds(
+      manager,
+      CoderTrainingDiscussionResult,
+      'response_id',
+      snapshot.responseIds
+    );
+    await this.deleteRowsByIds(
+      manager,
+      ResponseEntity,
+      'unitid',
+      snapshot.unitIds
+    );
+    await this.deleteRowsByIds(manager, UnitNote, '"unitId"', snapshot.unitIds);
+    await this.deleteRowsByIds(manager, UnitTag, '"unitId"', snapshot.unitIds);
+    await this.deleteRowsByIds(manager, UnitLog, 'unitid', snapshot.unitIds);
+    await this.deleteRowsByIds(
+      manager,
+      UnitLastState,
+      'unitid',
+      snapshot.unitIds
+    );
+    await this.deleteRowsByIds(manager, ChunkEntity, 'unitid', snapshot.unitIds);
+
+    if (kind !== 'units') {
+      await this.deleteRowsByIds(manager, Unit, 'id', snapshot.unitIds);
+      await this.deleteRowsByIds(
+        manager,
+        Session,
+        'bookletid',
+        snapshot.bookletIds
+      );
+      await this.deleteRowsByIds(
+        manager,
+        BookletLog,
+        'bookletid',
+        snapshot.bookletIds
+      );
+
+      if (kind === 'persons') {
+        await this.deleteRowsByIds(manager, Booklet, 'id', snapshot.bookletIds);
+      }
+    }
+  }
+
+  private async deleteRowsByIds(
+    manager: EntityManager,
+    entity: EntityTarget<ObjectLiteral>,
+    columnExpression: string,
+    ids: number[]
+  ): Promise<number> {
+    let affected = 0;
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      WorkspaceTestResultsService.uniqueIds(ids),
+      1000
+    )) {
+      const result = await manager
         .createQueryBuilder()
         .delete()
-        .from(Persons)
-        .where('id IN (:...ids)', { ids: existingIds })
+        .from(entity)
+        .where(`${columnExpression} IN (:...ids)`, { ids: chunk })
         .execute();
+      affected += result.affected || 0;
+    }
+    return affected;
+  }
 
-      report.deletedPersons = existingIds;
+  private async deleteOrphanedBookletInfos(infoIds: number[]): Promise<number> {
+    let affected = 0;
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      WorkspaceTestResultsService.uniqueIds(infoIds),
+      1000
+    )) {
+      const result = await this.connection
+        .createQueryBuilder()
+        .delete()
+        .from(BookletInfo)
+        .where('id IN (:...ids)', { ids: chunk })
+        .andWhere(
+          'NOT EXISTS (SELECT 1 FROM booklet WHERE booklet.infoid = bookletinfo.id)'
+        )
+        .execute();
+      affected += result.affected || 0;
+    }
+    return affected;
+  }
 
-      for (const person of existingPersons) {
-        try {
-          await this.journalService.createEntry(
-            userId,
-            workspaceId,
-            'delete',
-            'test-person',
-            person.id,
-            {
-              personId: person.id,
-              personLogin: person.login,
-              personCode: person.code,
-              personGroup: person.group,
-              personSource: person.source,
-              personUploadedAt: person.uploaded_at,
-              message: 'Test person deleted'
-            }
-          );
-        } catch (error) {
-          this.logger.error(
-            `Failed to create journal entry for deleting test person ${person.id}: ${error.message}`
+  private async assertDeleteCompleted(
+    kind: TestResultsDeleteTargetKind,
+    targetIds: number[],
+    snapshot: DeleteDependencySnapshot
+  ): Promise<void> {
+    const failures: string[] = [];
+    const addFailure = async (
+      label: string,
+      countPromise: Promise<number>
+    ): Promise<void> => {
+      const count = await countPromise;
+      if (count > 0) {
+        failures.push(`${count} ${label}`);
+      }
+    };
+
+    if (kind === 'persons') {
+      await addFailure(
+        'Testperson(en)',
+        this.countRowsByIds(Persons, 'id', targetIds)
+      );
+    }
+
+    if (kind !== 'units') {
+      await addFailure(
+        'Testheft(e)',
+        this.countRowsByIds(Booklet, 'id', snapshot.bookletIds)
+      );
+      await addFailure(
+        'Sitzung(en)',
+        this.countRowsByIds(Session, 'bookletid', snapshot.bookletIds)
+      );
+      await addFailure(
+        'Testheft-Logeintrag/-einträge',
+        this.countRowsByIds(BookletLog, 'bookletid', snapshot.bookletIds)
+      );
+      await addFailure(
+        'verwaiste Testheft-Metadaten',
+        this.countOrphanedBookletInfos(snapshot.bookletInfoIds)
+      );
+    }
+
+    await addFailure(
+      'Aufgabe(n)',
+      this.countRowsByIds(Unit, 'id', snapshot.unitIds)
+    );
+    await addFailure(
+      'Antwort(en)',
+      this.countRowsByIds(ResponseEntity, 'unitid', snapshot.unitIds)
+    );
+    await addFailure(
+      'Unit-Notiz(en)',
+      this.countRowsByIds(UnitNote, '"unitId"', snapshot.unitIds)
+    );
+    await addFailure(
+      'Unit-Tag(s)',
+      this.countRowsByIds(UnitTag, '"unitId"', snapshot.unitIds)
+    );
+    await addFailure(
+      'Unit-Logeintrag/-einträge',
+      this.countRowsByIds(UnitLog, 'unitid', snapshot.unitIds)
+    );
+    await addFailure(
+      'Unit-Zustand/Zustände',
+      this.countRowsByIds(UnitLastState, 'unitid', snapshot.unitIds)
+    );
+    await addFailure(
+      'Chunk(s)',
+      this.countRowsByIds(ChunkEntity, 'unitid', snapshot.unitIds)
+    );
+    await addFailure(
+      'Kodierjob-Antwortreferenz(en)',
+      this.countRowsByIds(CodingJobUnit, 'response_id', snapshot.responseIds)
+    );
+    await addFailure(
+      'Training-Diskussionsergebnis(se)',
+      this.countRowsByIds(
+        CoderTrainingDiscussionResult,
+        'response_id',
+        snapshot.responseIds
+      )
+    );
+
+    if (failures.length > 0) {
+      throw new Error(
+        `Die Löschung wurde nicht vollständig bestätigt. Verblieben: ${failures.join(', ')}.`
+      );
+    }
+  }
+
+  private async countRowsByIds(
+    entity: EntityTarget<ObjectLiteral>,
+    columnExpression: string,
+    ids: number[]
+  ): Promise<number> {
+    let count = 0;
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      WorkspaceTestResultsService.uniqueIds(ids),
+      1000
+    )) {
+      const raw = await this.connection
+        .createQueryBuilder()
+        .select('COUNT(*)', 'count')
+        .from(entity, 'row')
+        .where(`row.${columnExpression} IN (:...ids)`, { ids: chunk })
+        .getRawOne<{ count: string }>();
+      count += Number(raw?.count || 0);
+    }
+    return count;
+  }
+
+  private async countOrphanedBookletInfos(infoIds: number[]): Promise<number> {
+    let count = 0;
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      WorkspaceTestResultsService.uniqueIds(infoIds),
+      1000
+    )) {
+      const raw = await this.connection
+        .createQueryBuilder()
+        .select('COUNT(*)', 'count')
+        .from(BookletInfo, 'bookletinfo')
+        .where('bookletinfo.id IN (:...ids)', { ids: chunk })
+        .andWhere(
+          'NOT EXISTS (SELECT 1 FROM booklet WHERE booklet.infoid = bookletinfo.id)'
+        )
+        .getRawOne<{ count: string }>();
+      count += Number(raw?.count || 0);
+    }
+    return count;
+  }
+
+  private async collectIdsFromChunks(
+    ids: number[],
+    collect: (chunk: number[]) => Promise<number[]>
+  ): Promise<number[]> {
+    const result: number[] = [];
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      WorkspaceTestResultsService.uniqueIds(ids),
+      1000
+    )) {
+      result.push(...await collect(chunk));
+    }
+    return WorkspaceTestResultsService.uniqueIds(result);
+  }
+
+  private static mergeDeleteDependencySnapshot(
+    target: DeleteDependencySnapshot,
+    source: DeleteDependencySnapshot
+  ): void {
+    target.bookletIds.push(...source.bookletIds);
+    target.unitIds.push(...source.unitIds);
+    target.responseIds.push(...source.responseIds);
+    target.bookletInfoIds.push(...source.bookletInfoIds);
+  }
+
+  private static dedupeDeleteDependencySnapshot(
+    snapshot: DeleteDependencySnapshot
+  ): DeleteDependencySnapshot {
+    return {
+      bookletIds: WorkspaceTestResultsService.uniqueIds(snapshot.bookletIds),
+      unitIds: WorkspaceTestResultsService.uniqueIds(snapshot.unitIds),
+      responseIds: WorkspaceTestResultsService.uniqueIds(snapshot.responseIds),
+      bookletInfoIds: WorkspaceTestResultsService.uniqueIds(
+        snapshot.bookletInfoIds
+      )
+    };
+  }
+
+  private static rawRowsToIds(
+    rows: Array<{ id: number | string | null | undefined }>
+  ): number[] {
+    return WorkspaceTestResultsService.uniqueIds(
+      rows
+        .map(row => Number(row.id))
+        .filter(id => Number.isInteger(id) && id > 0)
+    );
+  }
+
+  private static uniqueIds(ids: number[]): number[] {
+    return Array.from(new Set(ids));
+  }
+
+  private async resolveDeleteTargets(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto
+  ): Promise<TestResultsDeleteTargets> {
+    const normalizedRequest =
+      WorkspaceTestResultsService.normalizeDeleteRequest(request);
+    const warnings: string[] = [];
+    let kind: TestResultsDeleteTargetKind = 'persons';
+    let ids: number[] = [];
+
+    switch (normalizedRequest.scope) {
+      case 'persons':
+        kind = 'persons';
+        if (normalizedRequest.personIds.length > 0) {
+          const rows = await this.personsRepository
+            .createQueryBuilder('person')
+            .select(['person.id'])
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.id IN (:...personIds)', {
+              personIds: normalizedRequest.personIds
+            })
+            .getMany();
+          ids = rows.map(row => row.id);
+        }
+        break;
+      case 'filteredPersons': {
+        kind = 'persons';
+        const query = this.personsRepository
+          .createQueryBuilder('person')
+          .select(['person.id'])
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true });
+
+        if (normalizedRequest.searchText) {
+          query.andWhere(
+            '(person.code ILIKE :searchText OR person.group ILIKE :searchText OR person.login ILIKE :searchText)',
+            { searchText: `%${normalizedRequest.searchText}%` }
           );
         }
-      }
 
-      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
-      return { success: true, report };
-    });
+        const rows = await query.getMany();
+        ids = rows.map(row => row.id);
+        break;
+      }
+      case 'groups':
+        kind = 'persons';
+        if (normalizedRequest.groups.length > 0) {
+          const rows = await this.personsRepository
+            .createQueryBuilder('person')
+            .select(['person.id'])
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.consider = :consider', { consider: true })
+            .andWhere('person.group IN (:...groups)', {
+              groups: normalizedRequest.groups
+            })
+            .getMany();
+          ids = rows.map(row => row.id);
+        }
+        break;
+      case 'booklets':
+        kind = 'booklets';
+        if (normalizedRequest.bookletNames.length > 0) {
+          const rows = await this.bookletRepository
+            .createQueryBuilder('booklet')
+            .select(['booklet.id'])
+            .innerJoin('booklet.person', 'person')
+            .innerJoin('booklet.bookletinfo', 'bookletinfo')
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.consider = :consider', { consider: true })
+            .andWhere('UPPER(bookletinfo.name) IN (:...bookletNames)', {
+              bookletNames: normalizedRequest.bookletNames.map(name => name.toUpperCase())
+            })
+            .getMany();
+          ids = rows.map(row => row.id);
+        }
+        break;
+      case 'units':
+        kind = 'units';
+        if (normalizedRequest.unitNames.length > 0) {
+          const unitNames = normalizedRequest.unitNames.map(
+            WorkspaceTestResultsService.normalizeUnitKey
+          );
+          const rows = await this.unitRepository
+            .createQueryBuilder('unit')
+            .select(['unit.id'])
+            .innerJoin('unit.booklet', 'booklet')
+            .innerJoin('booklet.person', 'person')
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.consider = :consider', { consider: true })
+            .andWhere(
+              `(REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') IN (:...unitNames)
+                OR REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') IN (:...unitNames))`,
+              { unitNames }
+            )
+            .getMany();
+          ids = rows.map(row => row.id);
+        }
+        break;
+      default:
+        warnings.push('Unbekannter Löschbereich.');
+    }
+
+    ids = Array.from(new Set(ids));
+    if (ids.length === 0) {
+      warnings.push('Keine passenden Testergebnisdaten gefunden.');
+    }
+
+    const preview = await this.buildDeletePreview(
+      workspaceId,
+      normalizedRequest,
+      kind,
+      ids,
+      warnings
+    );
+
+    return { kind, ids, preview };
+  }
+
+  private async buildDeletePreview(
+    workspaceId: number,
+    request: Required<TestResultsDeleteRequestDto>,
+    kind: TestResultsDeleteTargetKind,
+    ids: number[],
+    warnings: string[]
+  ): Promise<TestResultsDeletePreviewDto> {
+    const counts = await this.getDeleteCounts(workspaceId, kind, ids);
+    const metadata = await this.getDeleteMetadata(kind, ids);
+    const unitIds = await this.collectAffectedUnitIds(kind, ids);
+    const codingImpact =
+      await this.codingFreshnessService?.getDeleteImpactForUnitIds(
+        workspaceId,
+        unitIds
+      ) || {
+        autoCodingV1: 0,
+        manualCodingV2: 0,
+        autoCodingV3: 0,
+        affectedUnits: 0
+      };
+
+    return {
+      scope: request.scope,
+      label: WorkspaceTestResultsService.getDeleteLabel(request),
+      persons: counts.persons,
+      booklets: counts.booklets,
+      units: counts.units,
+      responses: counts.responses,
+      groups: metadata.groups,
+      bookletNames: metadata.bookletNames,
+      unitNames: metadata.unitNames,
+      codingImpact,
+      warnings
+    };
+  }
+
+  private async getDeleteCounts(
+    workspaceId: number,
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<Pick<TestResultsDeletePreviewDto, 'persons' | 'booklets' | 'units' | 'responses'>> {
+    if (ids.length === 0) {
+      return {
+        persons: 0,
+        booklets: 0,
+        units: 0,
+        responses: 0
+      };
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+
+    const personsQuery = this.connection
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT person.id)', 'count')
+      .from(Persons, 'person');
+
+    if (kind === 'booklets') {
+      personsQuery.innerJoin(Booklet, 'booklet', 'booklet.personid = person.id');
+    } else if (kind === 'units') {
+      personsQuery
+        .innerJoin(Booklet, 'booklet', 'booklet.personid = person.id')
+        .innerJoin(Unit, 'unit', 'unit.bookletid = booklet.id');
+    }
+    WorkspaceTestResultsService.applyDeleteTargetFilter(personsQuery, kind, ids);
+
+    const bookletsQuery = this.connection
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT bookletinfo.name)', 'count')
+      .from(Booklet, 'booklet')
+      .innerJoin(Persons, 'person', 'person.id = booklet.personid')
+      .innerJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid');
+    if (kind === 'units') {
+      bookletsQuery.innerJoin(Unit, 'unit', 'unit.bookletid = booklet.id');
+    }
+    WorkspaceTestResultsService.applyDeleteTargetFilter(bookletsQuery, kind, ids);
+    this.applyIgnoredBookletsToQuery(bookletsQuery, exclusions.ignoredBooklets);
+
+    const unitsQuery = this.connection
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT COALESCE(unit.alias, unit.name))', 'count')
+      .from(Unit, 'unit')
+      .innerJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+      .innerJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+      .innerJoin(Persons, 'person', 'person.id = booklet.personid');
+    WorkspaceTestResultsService.applyDeleteTargetFilter(unitsQuery, kind, ids);
+    this.applyExclusionsToQuery(unitsQuery, exclusions);
+
+    const responsesQuery = this.connection
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT response.id)', 'count')
+      .from(ResponseEntity, 'response')
+      .innerJoin(Unit, 'unit', 'unit.id = response.unitid')
+      .innerJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+      .innerJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+      .innerJoin(Persons, 'person', 'person.id = booklet.personid');
+    WorkspaceTestResultsService.applyDeleteTargetFilter(responsesQuery, kind, ids);
+    this.applyExclusionsToQuery(responsesQuery, exclusions);
+    this.excludeAutocoderGeneratedResponses(responsesQuery);
+
+    const [personsRaw, bookletsRaw, unitsRaw, responsesRaw] = await Promise.all([
+      personsQuery.getRawOne<{ count: string }>(),
+      bookletsQuery.getRawOne<{ count: string }>(),
+      unitsQuery.getRawOne<{ count: string }>(),
+      responsesQuery.getRawOne<{ count: string }>()
+    ]);
+
+    return {
+      persons: Number(personsRaw?.count || 0),
+      booklets: Number(bookletsRaw?.count || 0),
+      units: Number(unitsRaw?.count || 0),
+      responses: Number(responsesRaw?.count || 0)
+    };
+  }
+
+  private static applyDeleteTargetFilter(
+    query: SelectQueryBuilder<unknown>,
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): void {
+    switch (kind) {
+      case 'persons':
+        query.where('person.id IN (:...ids)', { ids });
+        break;
+      case 'booklets':
+        query.where('booklet.id IN (:...ids)', { ids });
+        break;
+      case 'units':
+        query.where('unit.id IN (:...ids)', { ids });
+        break;
+      default:
+        query.where('1 = 0');
+    }
+  }
+
+  private async getDeleteMetadata(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<Pick<TestResultsDeletePreviewDto, 'groups' | 'bookletNames' | 'unitNames'>> {
+    if (ids.length === 0) {
+      return {
+        groups: [],
+        bookletNames: [],
+        unitNames: []
+      };
+    }
+
+    const query = this.connection
+      .createQueryBuilder()
+      .select("COALESCE(array_remove(array_agg(DISTINCT person.group), NULL), '{}')", 'groups')
+      .addSelect("COALESCE(array_remove(array_agg(DISTINCT bookletinfo.name), NULL), '{}')", 'bookletNames')
+      .addSelect("COALESCE(array_remove(array_agg(DISTINCT COALESCE(unit.alias, unit.name)), NULL), '{}')", 'unitNames');
+
+    if (kind === 'persons') {
+      query
+        .from(Persons, 'person')
+        .leftJoin(Booklet, 'booklet', 'booklet.personid = person.id')
+        .leftJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+        .leftJoin(Unit, 'unit', 'unit.bookletid = booklet.id')
+        .where('person.id IN (:...ids)', { ids });
+    } else if (kind === 'booklets') {
+      query
+        .from(Booklet, 'booklet')
+        .leftJoin(Persons, 'person', 'person.id = booklet.personid')
+        .leftJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+        .leftJoin(Unit, 'unit', 'unit.bookletid = booklet.id')
+        .where('booklet.id IN (:...ids)', { ids });
+    } else {
+      query
+        .from(Unit, 'unit')
+        .leftJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+        .leftJoin(Persons, 'person', 'person.id = booklet.personid')
+        .leftJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+        .where('unit.id IN (:...ids)', { ids });
+    }
+
+    const raw = await query.getRawOne<{
+      groups: string[] | string | null;
+      bookletNames: string[] | string | null;
+      unitNames: string[] | string | null;
+    }>();
+
+    return {
+      groups: WorkspaceTestResultsService.toPreviewList(raw?.groups),
+      bookletNames: WorkspaceTestResultsService.toPreviewList(raw?.bookletNames),
+      unitNames: WorkspaceTestResultsService.toPreviewList(raw?.unitNames)
+    };
+  }
+
+  private static normalizeDeleteRequest(
+    request: TestResultsDeleteRequestDto
+  ): Required<TestResultsDeleteRequestDto> {
+    return {
+      scope: request.scope,
+      personIds: WorkspaceTestResultsService.normalizeNumberList(request.personIds),
+      searchText: String(request.searchText || '').trim(),
+      groups: WorkspaceTestResultsService.normalizeStringList(request.groups),
+      bookletNames: WorkspaceTestResultsService.normalizeStringList(request.bookletNames),
+      unitNames: WorkspaceTestResultsService.normalizeStringList(request.unitNames)
+    };
+  }
+
+  private static normalizeNumberList(value?: number[] | string): number[] {
+    if (!value) return [];
+    const values = Array.isArray(value) ? value : String(value).split(',');
+    return values
+      .map(v => Number(v))
+      .filter(v => Number.isInteger(v) && v > 0);
+  }
+
+  private static normalizeStringList(value?: string[] | string): string[] {
+    if (!value) return [];
+    const values = Array.isArray(value) ? value : String(value).split(',');
+    return Array.from(
+      new Set(
+        values
+          .map(v => String(v || '').trim())
+          .filter(v => v.length > 0)
+      )
+    );
+  }
+
+  private static normalizeUnitKey(value: string): string {
+    return String(value || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\.XML$/i, '');
+  }
+
+  private static toPreviewList(value?: string[] | string | null): string[] {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+      return value.map(v => String(v)).filter(v => v.length > 0).slice(0, 30);
+    }
+    return String(value)
+      .replace(/^{|}$/g, '')
+      .split(',')
+      .map(v => v.replace(/^"|"$/g, '').trim())
+      .filter(v => v.length > 0)
+      .slice(0, 30);
+  }
+
+  private static getDeleteLabel(
+    request: Required<TestResultsDeleteRequestDto>
+  ): string {
+    switch (request.scope as TestResultsDeleteScope) {
+      case 'persons':
+        return `${request.personIds.length} ausgewählte Testperson(en)`;
+      case 'filteredPersons':
+        return request.searchText ?
+          `alle Testpersonen mit Filter "${request.searchText}"` :
+          'alle sichtbaren Testpersonen';
+      case 'groups':
+        return `Testgruppe(n): ${request.groups.join(', ')}`;
+      case 'booklets':
+        return `Testheft(e): ${request.bookletNames.join(', ')}`;
+      case 'units':
+        return `Aufgabe(n): ${request.unitNames.join(', ')}`;
+      default:
+        return 'Testergebnisdaten';
+    }
+  }
+
+  private static chunkArray<T>(values: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let index = 0; index < values.length; index += size) {
+      chunks.push(values.slice(index, index + size));
+    }
+    return chunks;
   }
 
   async deleteUnit(
@@ -2655,66 +5418,73 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return this.connection.transaction(async manager => {
-      const report = {
-        deletedUnit: null,
-        warnings: []
-      };
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => {
+        let auditEvent: RecordAuditJournalEventInput | null = null;
+        const result = await this.connection.transaction(async manager => {
+          const report = {
+            deletedUnit: null,
+            warnings: []
+          };
 
-      const unit = await manager
-        .createQueryBuilder(Unit, 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .where('unit.id = :unitId', { unitId })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-        .getOne();
+          const unit = await manager
+            .createQueryBuilder(Unit, 'unit')
+            .leftJoinAndSelect('unit.booklet', 'booklet')
+            .leftJoinAndSelect('booklet.person', 'person')
+            .where('unit.id = :unitId', { unitId })
+            .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+            .getOne();
 
-      if (!unit) {
-        const warningMessage = `Keine Unit mit ID ${unitId} im Workspace ${workspaceId} gefunden`;
-        this.logger.warn(warningMessage);
-        report.warnings.push(warningMessage);
-        return { success: false, report };
-      }
-
-      await manager
-        .createQueryBuilder()
-        .delete()
-        .from(Unit)
-        .where('id = :unitId', { unitId })
-        .execute();
-
-      report.deletedUnit = unitId;
-
-      try {
-        await this.journalService.createEntry(
-          userId,
-          workspaceId,
-          'delete',
-          'unit',
-          unitId,
-          {
-            unitId,
-            unitName: unit.name,
-            unitAlias: unit.alias,
-            bookletId: unit.booklet?.id,
-            personId: unit.booklet?.person?.id,
-            personLogin: unit.booklet?.person?.login,
-            personCode: unit.booklet?.person?.code,
-            personGroup: unit.booklet?.person?.group,
-            personSource: unit.booklet?.person?.source,
-            personUploadedAt: unit.booklet?.person?.uploaded_at,
-            message: 'Unit deleted'
+          if (!unit) {
+            const warningMessage = `Keine Unit mit ID ${unitId} im Workspace ${workspaceId} gefunden`;
+            this.logger.warn(warningMessage);
+            report.warnings.push(warningMessage);
+            return { success: false, report };
           }
-        );
-      } catch (error) {
-        this.logger.error(
-          `Failed to create journal entry for deleting unit ${unitId}: ${error.message}`
-        );
-      }
 
-      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
-      return { success: true, report };
-    });
+          await manager
+            .createQueryBuilder()
+            .delete()
+            .from(Unit)
+            .where('id = :unitId', { unitId })
+            .execute();
+
+          report.deletedUnit = unitId;
+
+          auditEvent = {
+            workspaceId,
+            actorUserId: userId,
+            eventType: 'UNIT_DELETED',
+            entityType: 'unit',
+            entityId: unitId,
+            result: 'success',
+            summary: 'Unit deleted',
+            details: {
+              unitId,
+              unitName: unit.name,
+              unitAlias: unit.alias,
+              bookletId: unit.booklet?.id,
+              personId: unit.booklet?.person?.id
+            }
+          };
+
+          return { success: true, report };
+        });
+
+        if (result.success) {
+          await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+          if (auditEvent) {
+            await this.tryRecordAuditEvent(
+              auditEvent,
+              `Failed to create journal entry for deleting unit ${unitId}`
+            );
+          }
+        }
+        return result;
+      }
+    );
   }
 
   async deleteResponse(
@@ -2737,6 +5507,7 @@ export class WorkspaceTestResultsService {
       await this.codingValidationService.invalidateIncompleteVariablesCache(
         workspaceId
       );
+      await this.invalidateCodingStatisticsCache(workspaceId);
     }
     return result;
   }
@@ -2752,64 +5523,84 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return this.connection.transaction(async manager => {
-      const report = {
-        deletedBooklet: null,
-        warnings: []
-      };
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => {
+        let auditEvent: RecordAuditJournalEventInput | null = null;
+        const result = await this.connection.transaction(async manager => {
+          const report = {
+            deletedBooklet: null,
+            warnings: []
+          };
 
-      const booklet = await manager
-        .createQueryBuilder(Booklet, 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('booklet.id = :bookletId', { bookletId })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-        .getOne();
+          const booklet = await manager
+            .createQueryBuilder(Booklet, 'booklet')
+            .leftJoinAndSelect('booklet.person', 'person')
+            .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+            .where('booklet.id = :bookletId', { bookletId })
+            .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+            .getOne();
 
-      if (!booklet) {
-        const warningMessage = `Kein Booklet mit ID ${bookletId} im Workspace ${workspaceId} gefunden`;
-        this.logger.warn(warningMessage);
-        report.warnings.push(warningMessage);
-        return { success: false, report };
-      }
-
-      await manager
-        .createQueryBuilder()
-        .delete()
-        .from(Booklet)
-        .where('id = :bookletId', { bookletId })
-        .execute();
-
-      report.deletedBooklet = bookletId;
-
-      try {
-        await this.journalService.createEntry(
-          userId,
-          workspaceId,
-          'delete',
-          'booklet',
-          bookletId,
-          {
-            bookletId,
-            bookletName: booklet.bookletinfo?.name || 'Unknown',
-            personId: booklet.personid,
-            personLogin: booklet.person?.login || 'Unknown',
-            personCode: booklet.person?.code,
-            personGroup: booklet.person?.group,
-            personSource: booklet.person?.source,
-            personUploadedAt: booklet.person?.uploaded_at,
-            message: 'Booklet deleted'
+          if (!booklet) {
+            const warningMessage = `Kein Booklet mit ID ${bookletId} im Workspace ${workspaceId} gefunden`;
+            this.logger.warn(warningMessage);
+            report.warnings.push(warningMessage);
+            return { success: false, report };
           }
-        );
-      } catch (error) {
-        this.logger.error(
-          `Failed to create journal entry for deleting booklet ${bookletId}: ${error.message}`
-        );
-      }
 
-      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
-      return { success: true, report };
-    });
+          await manager
+            .createQueryBuilder()
+            .delete()
+            .from(Booklet)
+            .where('id = :bookletId', { bookletId })
+            .execute();
+
+          report.deletedBooklet = bookletId;
+
+          auditEvent = {
+            workspaceId,
+            actorUserId: userId,
+            eventType: 'BOOKLET_DELETED',
+            entityType: 'booklet',
+            entityId: bookletId,
+            result: 'success',
+            summary: 'Booklet deleted',
+            details: {
+              bookletId,
+              bookletName: booklet.bookletinfo?.name || 'Unknown',
+              personId: booklet.personid
+            }
+          };
+
+          return { success: true, report };
+        });
+
+        if (result.success) {
+          await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+          if (auditEvent) {
+            await this.tryRecordAuditEvent(
+              auditEvent,
+              `Failed to create journal entry for deleting booklet ${bookletId}`
+            );
+          }
+        }
+        return result;
+      }
+    );
+  }
+
+  private async tryRecordAuditEvent(
+    event: RecordAuditJournalEventInput,
+    failureMessage: string
+  ): Promise<void> {
+    try {
+      await this.journalService.recordEvent(event);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`${failureMessage}: ${message}`, stack);
+    }
   }
 
   async searchResponses(
@@ -2825,6 +5616,8 @@ export class WorkspaceTestResultsService {
       code?: string;
       version?: 'v1' | 'v2' | 'v3';
       geogebra?: boolean;
+      derivedOnly?: boolean;
+      responseSource?: 'base' | 'derived' | 'all';
       personLogin?: string;
     },
     options: { page?: number; limit?: number } = {}
@@ -2876,6 +5669,9 @@ export class WorkspaceTestResultsService {
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
 
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      this.applyExclusionsToQuery(query, exclusions);
+
       if (searchParams.value) {
         query.andWhere('response.value ILIKE :value', {
           value: `%${searchParams.value}%`
@@ -2907,10 +5703,10 @@ export class WorkspaceTestResultsService {
       }
 
       if (searchParams.codedStatus) {
-        const statusColumn = searchParams.version ?
-          `status_${searchParams.version}` :
-          'status_v1';
-        query.andWhere(`response.${statusColumn} = :codedStatus`, {
+        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
+          searchParams.version || 'v1'
+        );
+        query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
           codedStatus: searchParams.codedStatus
         });
       }
@@ -2931,12 +5727,42 @@ export class WorkspaceTestResultsService {
 
       if (searchParams.geogebra) {
         query.andWhere(
-          'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
-          { ggPrefix: 'UEsD%' }
+          WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
+          WorkspaceTestResultsService.geoGebraValueParams
         );
         const version = searchParams.version || 'v1';
         query.addOrderBy(`response.code_${version}`, 'ASC');
         query.addOrderBy('person.code', 'ASC');
+      }
+
+      const requestedResponseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
+      const responseSource = searchParams.geogebra && requestedResponseSource === 'all' ?
+        'base' :
+        requestedResponseSource;
+
+      if (responseSource === 'derived') {
+        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
+          searchParams.version || 'v1'
+        );
+        query.andWhere('response.is_autocoder_generated = :derivedOnly', {
+          derivedOnly: true
+        });
+        query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
+        query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
+          ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
+        });
+        await this.applyValidCodingVariableFilter(query, workspaceId);
+      } else if (responseSource === 'all') {
+        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
+          searchParams.version || 'v1'
+        );
+        query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
+        query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
+          ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
+        });
+        await this.applyValidCodingVariableFilter(query, workspaceId);
+      } else {
+        this.excludeAutocoderGeneratedResponses(query);
       }
 
       const total = await query.getCount();
@@ -3021,6 +5847,22 @@ export class WorkspaceTestResultsService {
     }
   }
 
+  private async applyValidCodingVariableFilter(
+    query: SelectQueryBuilder<ResponseEntity>,
+    workspaceId: number
+  ): Promise<void> {
+    const validVariablePairKeys = await this.codingListService.getValidVariablePairKeys(workspaceId);
+    if (validVariablePairKeys.length === 0) {
+      query.andWhere('1 = 0');
+      return;
+    }
+
+    query.andWhere(
+      'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+      { validVariablePairKeys }
+    );
+  }
+
   async findUnitsByName(
     workspaceId: number,
     unitName: string,
@@ -3080,6 +5922,8 @@ export class WorkspaceTestResultsService {
         .where('unit.name = :unitName', { unitName })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      this.applyExclusionsToQuery(query, exclusions);
 
       const total = await query.getCount();
 
@@ -3208,6 +6052,8 @@ export class WorkspaceTestResultsService {
         })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      this.applyIgnoredBookletsToQuery(query, exclusions.ignoredBooklets);
 
       const total = await query.getCount();
 
@@ -3234,7 +6080,11 @@ export class WorkspaceTestResultsService {
         personCode: booklet.person.code,
         personGroup: booklet.person.group,
         units: booklet.units ?
-          booklet.units.map(unit => ({
+          booklet.units.filter(unit => !isExcludedByResolvedExclusions(
+            exclusions,
+            booklet.bookletinfo.name,
+            unit.name
+          )).map(unit => ({
             unitId: unit.id,
             unitName: unit.name,
             unitAlias: unit.alias
@@ -3257,26 +6107,30 @@ export class WorkspaceTestResultsService {
   async exportTestResults(
     workspaceId: number,
     res: Response,
-    filters?: {
-      groupNames?: string[];
-      bookletNames?: string[];
-      unitNames?: string[];
-      personIds?: number[];
-    }
+    filters?: TestResultsExportFilters
   ): Promise<void> {
     this.logger.log(`Exporting test results for workspace ${workspaceId}`);
     await this.exportTestResultsToStream(workspaceId, res, filters);
   }
 
+  private getLogAnomalyExportColumns(
+    anomalies: LogAnomalySummary[]
+  ): Record<string, string | number> {
+    return {
+      log_anomaly_count: anomalies.reduce(
+        (sum, anomaly) => sum + anomaly.count,
+        0
+      ),
+      log_anomaly_max_severity: anomalies[0]?.severity || '',
+      log_anomaly_codes: anomalies.map(anomaly => anomaly.code).join('|'),
+      log_anomaly_labels: anomalies.map(anomaly => anomaly.label).join('|')
+    };
+  }
+
   async exportTestResultsToFile(
     workspaceId: number,
     filePath: string,
-    filters?: {
-      groupNames?: string[];
-      bookletNames?: string[];
-      unitNames?: string[];
-      personIds?: number[];
-    },
+    filters?: TestResultsExportFilters,
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
     this.logger.log(
@@ -3294,25 +6148,32 @@ export class WorkspaceTestResultsService {
   async exportTestResultsToStream(
     workspaceId: number,
     stream: Writable,
-    filters?: {
-      groupNames?: string[];
-      bookletNames?: string[];
-      unitNames?: string[];
-      personIds?: number[];
-    },
+    filters?: TestResultsExportFilters,
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
+    const includeLogAnomalies = filters?.includeLogAnomalies === true;
+    const headers = [
+      'groupname',
+      'loginname',
+      'code',
+      'bookletname',
+      'unitname',
+      'responses',
+      'laststate',
+      'originalUnitId'
+    ];
+
+    if (includeLogAnomalies) {
+      headers.push(
+        'log_anomaly_count',
+        'log_anomaly_max_severity',
+        'log_anomaly_codes',
+        'log_anomaly_labels'
+      );
+    }
+
     const csvStream = csv.format({
-      headers: [
-        'groupname',
-        'loginname',
-        'code',
-        'bookletname',
-        'unitname',
-        'responses',
-        'laststate',
-        'originalUnitId'
-      ],
+      headers,
       delimiter: ';',
       quote: '"'
     });
@@ -3321,6 +6182,7 @@ export class WorkspaceTestResultsService {
 
     const BATCH_SIZE = 100;
     let processedCount = 0;
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
     const createBaseQuery = () => {
       const qb = this.unitRepository
@@ -3340,6 +6202,7 @@ export class WorkspaceTestResultsService {
         ])
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
+      this.applyExclusionsToQuery(qb, exclusions);
 
       if (filters?.groupNames?.length) {
         qb.andWhere('person.group IN (:...groupNames)', {
@@ -3393,12 +6256,14 @@ export class WorkspaceTestResultsService {
           'response.variableid',
           'response.status',
           'response.value',
-          'response.subform',
-          'response.code_v1',
-          'response.score_v1',
-          'response.status_v1'
+          'response.subform'
         ])
         .where('response.unitid IN (:...unitIds)', { unitIds })
+        .andWhere(
+          WorkspaceTestResultsService.nonAutocoderGeneratedResponseCondition(
+            'response'
+          )
+        )
         .getMany();
 
       const chunks = await this.chunkRepository
@@ -3419,6 +6284,13 @@ export class WorkspaceTestResultsService {
         .select(['laststate.unitid', 'laststate.key', 'laststate.value'])
         .where('laststate.unitid IN (:...unitIds)', { unitIds })
         .getMany();
+
+      const anomaliesByBookletId = includeLogAnomalies ?
+        await this.findLogAnomaliesForBooklets(
+          Array.from(new Set(units.map(unit => unit.booklet.id))),
+          this.buildLogAnomalyThresholds({})
+        ) :
+        new Map<number, LogAnomalySummary[]>();
 
       // Create maps for quick lookup
       const responsesByUnitId = new Map<number, ResponseEntity[]>();
@@ -3493,9 +6365,7 @@ export class WorkspaceTestResultsService {
             id: r.variableid,
             value: value,
             status: statusNumberToString(r.status) || 'UNSET',
-            subform: r.subform,
-            code: r.code_v1,
-            score: r.score_v1
+            subform: r.subform
           });
         });
 
@@ -3520,7 +6390,7 @@ export class WorkspaceTestResultsService {
           lastStateMap[ls.key] = ls.value;
         });
 
-        const canContinue = csvStream.write({
+        const row: Record<string, unknown> = {
           groupname: unit.booklet.person.group,
           loginname: unit.booklet.person.login,
           code: unit.booklet.person.code,
@@ -3529,7 +6399,18 @@ export class WorkspaceTestResultsService {
           responses: JSON.stringify(exportChunks),
           laststate: JSON.stringify(lastStateMap),
           originalUnitId: unit.alias || unit.name
-        });
+        };
+
+        if (includeLogAnomalies) {
+          Object.assign(
+            row,
+            this.getLogAnomalyExportColumns(
+              anomaliesByBookletId.get(unit.booklet.id) || []
+            )
+          );
+        }
+
+        const canContinue = csvStream.write(row);
 
         if (!canContinue) {
           await new Promise(resolve => {
@@ -3551,6 +6432,44 @@ export class WorkspaceTestResultsService {
       stream.on('finish', () => resolve());
       stream.on('error', reject);
     });
+  }
+
+  private sessionScreenToDimensions(screen: string | null): { width: number; height: number } {
+    const match = (screen || '').match(/^\s*(\d+)\s*x\s*(\d+)\s*$/i);
+
+    return {
+      width: match ? Number(match[1]) : 0,
+      height: match ? Number(match[2]) : 0
+    };
+  }
+
+  private splitSessionBrowser(browser: string | null): { browserName: string; browserVersion: string } {
+    const trimmedBrowser = (browser || '').trim();
+    const match = trimmedBrowser.match(/^(.*\S)\s+([0-9][^\s]*)$/);
+
+    if (!match) {
+      return {
+        browserName: trimmedBrowser,
+        browserVersion: ''
+      };
+    }
+
+    return {
+      browserName: match[1],
+      browserVersion: match[2]
+    };
+  }
+
+  private createLoadCompleteLogEntry(session: {
+    browser: string | null;
+    os: string | null;
+    screen: string | null;
+    loadcompletems: string | number | null;
+  }): string {
+    const { width, height } = this.sessionScreenToDimensions(session.screen);
+    const { browserName, browserVersion } = this.splitSessionBrowser(session.browser);
+
+    return `LOADCOMPLETE : {browserVersion:${browserVersion},browserName:${browserName},osName:${session.os || ''},device:,screenSizeWidth:${width},screenSizeHeight:${height},loadTime:${Number(session.loadcompletems) || 0}}`;
   }
 
   async exportTestLogsToFile(
@@ -3606,6 +6525,7 @@ export class WorkspaceTestResultsService {
 
     const BATCH_SIZE = 2000;
     let processedCount = 0;
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
     const hasUnitFilters = Boolean(filters?.unitNames?.length);
 
@@ -3630,6 +6550,7 @@ export class WorkspaceTestResultsService {
           .addSelect('bookletinfo.name', 'bookletname')
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('person.consider = :consider', { consider: true });
+        this.applyIgnoredBookletsToQuery(qb, exclusions.ignoredBooklets);
 
         if (filters?.groupNames?.length) {
           qb.andWhere('person.group IN (:...groupNames)', {
@@ -3703,6 +6624,95 @@ export class WorkspaceTestResultsService {
           }
         }
       }
+
+      let lastSessionId = 0;
+      let hasMoreSessions = true;
+
+      const createSessionsBaseQuery = () => {
+        const qb = this.sessionRepository
+          .createQueryBuilder('session')
+          .innerJoin('session.booklet', 'booklet')
+          .innerJoin('booklet.person', 'person')
+          .innerJoin('booklet.bookletinfo', 'bookletinfo')
+          .select('session.id', 'id')
+          .addSelect('session.ts', 'ts')
+          .addSelect('session.browser', 'browser')
+          .addSelect('session.os', 'os')
+          .addSelect('session.screen', 'screen')
+          .addSelect('session.loadcompletems', 'loadcompletems')
+          .addSelect('person.group', 'groupname')
+          .addSelect('person.login', 'loginname')
+          .addSelect('person.code', 'code')
+          .addSelect('bookletinfo.name', 'bookletname')
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true });
+        this.applyIgnoredBookletsToQuery(qb, exclusions.ignoredBooklets);
+
+        if (filters?.groupNames?.length) {
+          qb.andWhere('person.group IN (:...groupNames)', {
+            groupNames: filters.groupNames
+          });
+        }
+        if (filters?.bookletNames?.length) {
+          qb.andWhere('bookletinfo.name IN (:...bookletNames)', {
+            bookletNames: filters.bookletNames
+          });
+        }
+        if (filters?.personIds?.length) {
+          qb.andWhere('person.id IN (:...personIds)', {
+            personIds: filters.personIds
+          });
+        }
+
+        return qb;
+      };
+
+      while (hasMoreSessions) {
+        const sessions = await createSessionsBaseQuery()
+          .andWhere('session.id > :lastSessionId', { lastSessionId })
+          .orderBy('session.id', 'ASC')
+          .take(BATCH_SIZE)
+          .getRawMany<{
+          id: number;
+          ts: string | number | null;
+          browser: string | null;
+          os: string | null;
+          screen: string | null;
+          loadcompletems: string | number | null;
+          groupname: string;
+          loginname: string;
+          code: string;
+          bookletname: string;
+        }>();
+
+        if (sessions.length === 0) {
+          hasMoreSessions = false;
+          break;
+        }
+
+        lastSessionId = Number(sessions[sessions.length - 1].id);
+
+        for (const session of sessions) {
+          const canContinue = csvStream.write({
+            groupname: session.groupname,
+            loginname: session.loginname,
+            code: session.code,
+            bookletname: session.bookletname,
+            unitname: '',
+            originalUnitId: '',
+            timestamp: (session.ts ?? '').toString(),
+            logentry: this.createLoadCompleteLogEntry(session)
+          });
+
+          if (!canContinue) {
+            await new Promise(resolve => {
+              csvStream.once('drain', resolve);
+            });
+          }
+
+          processedCount += 1;
+        }
+      }
     }
 
     // Export unit logs (unitname must be non-empty for importer)
@@ -3728,6 +6738,7 @@ export class WorkspaceTestResultsService {
         .addSelect('bookletinfo.name', 'bookletname')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
+      this.applyExclusionsToQuery(qb, exclusions);
 
       if (filters?.groupNames?.length) {
         qb.andWhere('person.group IN (:...groupNames)', {
@@ -3829,6 +6840,7 @@ export class WorkspaceTestResultsService {
     booklets: string[];
     units: string[];
   }> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const testPersons = await this.personsRepository
       .createQueryBuilder('person')
       .select(['person.id', 'person.group', 'person.code', 'person.login'])
@@ -3847,21 +6859,28 @@ export class WorkspaceTestResultsService {
       .orderBy('person.group', 'ASC')
       .getRawMany();
 
-    const booklets = await this.bookletRepository
+    const bookletsQuery = this.bookletRepository
       .createQueryBuilder('booklet')
       .innerJoin('booklet.person', 'person')
       .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .select('DISTINCT bookletinfo.name', 'name')
       .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+    this.applyIgnoredBookletsToQuery(bookletsQuery, exclusions.ignoredBooklets);
+    const booklets = await bookletsQuery
       .orderBy('bookletinfo.name', 'ASC')
       .getRawMany();
 
-    const units = await this.unitRepository
+    const unitsQuery = this.unitRepository
       .createQueryBuilder('unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .select('DISTINCT unit.name', 'name')
       .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+    this.applyExclusionsToQuery(unitsQuery, exclusions);
+    const units = await unitsQuery
       .orderBy('unit.name', 'ASC')
       .getRawMany();
 
@@ -3879,14 +6898,21 @@ export class WorkspaceTestResultsService {
   }
 
   async hasGeogebraResponses(workspaceId: number): Promise<boolean> {
-    const count = await this.responseRepository
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.value LIKE :ggPrefix', { ggPrefix: 'UEsD%' })
+      .andWhere(
+        WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
+        WorkspaceTestResultsService.geoGebraValueParams
+      );
+    this.applyExclusionsToQuery(query, exclusions);
+    const count = await query
       .getCount();
 
     return count > 0;

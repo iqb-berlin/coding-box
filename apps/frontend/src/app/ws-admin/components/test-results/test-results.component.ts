@@ -30,11 +30,16 @@ import {
   PageEvent
 } from '@angular/material/paginator';
 import {
+  BehaviorSubject,
   Subject,
   Subscription,
   debounceTime,
   distinctUntilChanged,
-  firstValueFrom
+  finalize,
+  firstValueFrom,
+  switchMap,
+  takeWhile,
+  timer as rxjsTimer
 } from 'rxjs';
 import { SelectionModel } from '@angular/cdk/collections';
 import {
@@ -49,6 +54,7 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -68,19 +74,27 @@ import { UnitNoteService } from '../../../shared/services/unit/unit-note.service
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { UnitService } from '../../../shared/services/unit/unit.service';
 import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
+import {
+  AppliedResultsOverview,
+  TestPersonCodingService
+} from '../../../coding/services/test-person-coding.service';
 import { VariableAnalysisService } from '../../../shared/services/response/variable-analysis.service';
 import { AppService } from '../../../core/services/app.service';
 import {
   TestResultService,
   TestResultsOverviewResponse,
-  PersonTestResult
+  PersonTestResult,
+  QuickSearchResultItem
 } from '../../../shared/services/test-result/test-result.service';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
 import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
-import { TestResultsSearchComponent } from '../test-results-search/test-results-search.component';
+import {
+  QuickSearchDialogResult,
+  TestResultsSearchComponent
+} from '../test-results-search/test-results-search.component';
 import {
   ConfirmDialogComponent,
   ConfirmDialogData
@@ -90,7 +104,10 @@ import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.d
 import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
-import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
+import {
+  ValidationTaskStateService,
+  ValidationType
+} from '../../../shared/services/validation/validation-task-state.service';
 import {
   UnitsReplay,
   UnitsReplayService
@@ -110,19 +127,60 @@ import {
   TestResultsUploadIssueDto,
   TestResultsUploadResultDto
 } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import {
+  CodingFreshnessState,
+  CodingFreshnessSummaryDto,
+  CodingFreshnessSummaryItemDto,
+  CodingFreshnessVersion
+} from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import {
+  CODING_FRESHNESS_TASK_RESULT_HELP,
+  getCodingFreshnessAffectedResponseCount,
+  getCodingFreshnessAffectedTaskResultCount,
+  getCodingFreshnessAttentionTitle,
+  getCodingFreshnessAutoCodingWarnings,
+  getCodingFreshnessChipLabel,
+  getCodingFreshnessManualReviewGuidanceText,
+  getCodingFreshnessManualReviewWarnings,
+  getCodingFreshnessStateLabel,
+  getCodingFreshnessSummaryText,
+  getCodingFreshnessVersionLabel,
+  formatCodingFreshnessTaskResultCount,
+  getSecondAutocodingFreshnessWarnings,
+  hasOnlyManualCodingFreshnessWarnings,
+  isCodingFreshnessOpenWarning,
+  isSecondAutocodingWaitingForManualCoding,
+  SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS
+} from '../../../shared/utils/coding-freshness-text.util';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
+import {
+  TestResultsImportProgressDialogComponent,
+  TestResultsImportProgressHandle,
+  TestResultsImportProgressState
+} from './test-results-import-progress-dialog.component';
+import { TestResultsDeletePreviewDialogComponent } from './test-results-delete-preview-dialog.component';
 import {
   PendingUploadBatch,
   TestResultsUploadStateService
 } from '../../services/test-results-upload-state.service';
-import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
+import {
+  FlatResponseFilters,
+  TestResultsFlatTableComponent
+} from './test-results-flat-table.component';
 import {
   OverwriteMode,
   TestResultsUploadOptionsDialogComponent,
   TestResultsUploadOptionsDialogData,
   TestResultsUploadOptionsDialogResult
 } from './test-results-upload-options-dialog.component';
+import {
+  TestResultsDeletePreviewDto,
+  TestResultsDeleteRequestDto,
+  TestResultsDeleteResultDto
+} from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
+import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 
 interface BookletLog {
   id: number;
@@ -308,6 +366,7 @@ string,
     MatInput,
     MatIcon,
     MatProgressSpinner,
+    MatProgressBar,
     MatCheckbox,
     MatAnchor,
     MatButton,
@@ -327,6 +386,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private unitService = inject(UnitService);
   private uploadStateService = inject(TestResultsUploadStateService);
   private statisticsService = inject(CodingStatisticsService);
+  private testPersonCodingService = inject(TestPersonCodingService);
   private variableAnalysisService = inject(VariableAnalysisService);
   private appService = inject(AppService);
   private testResultService = inject(TestResultService);
@@ -337,6 +397,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private unitsReplayService = inject(UnitsReplayService);
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
+  private deleteTaskSubscription: Subscription | null = null;
+  private flatFilterRequestSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
   selection = new SelectionModel<P>(true, []);
   dataSource!: MatTableDataSource<P>;
@@ -349,6 +411,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   ];
 
   isTableView: boolean = false;
+  quickSearchTableFilters: Partial<FlatResponseFilters> | null = null;
   data: P[] = [];
   booklets!: Booklet[];
   results: { [key: string]: unknown }[] = [];
@@ -366,6 +429,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isSearching: boolean = false;
   isLoadingBooklets: boolean = false;
   isDeletingTestPersons: boolean = false;
+  activeDeleteTask: ValidationTaskDto | null = null;
+  deleteProgress: number = 0;
+  deleteProgressMessage: string = '';
   unitTags: UnitTagDto[] = [];
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
   unitNotes: UnitNoteDto[] = [];
@@ -378,6 +444,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   overview: TestResultsOverviewResponse | null = null;
   isLoadingOverview: boolean = false;
+  codingFreshnessSummary: CodingFreshnessSummaryDto | null = null;
+  manualAppliedResultsOverview: AppliedResultsOverview | null = null;
+  manualAppliedResultsOverviewLoadFailed: boolean = false;
+  isLoadingManualAppliedResultsOverview: boolean = false;
 
   exportJobId: string | null = null;
   isExporting: boolean = false;
@@ -420,6 +490,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.uploadStateService.uploadsFinished$.subscribe((wsId: number) => {
       if (wsId === this.appService.selectedWorkspaceId) {
         this.loadWorkspaceOverview();
+        this.loadCodingFreshnessStatus();
         this.createTestResultsList(
           this.pageIndex,
           this.pageSize,
@@ -430,8 +501,20 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
+    this.flatFilterRequestSubscription =
+      this.testResultService.flatResponseFilterRequests$.subscribe(request => {
+        if (request.workspaceId !== this.appService.selectedWorkspaceId) {
+          return;
+        }
+        this.quickSearchTableFilters = { ...(request.filters || {}) };
+        this.isTableView = true;
+        this.isLoading = false;
+        this.isUploadingResults = false;
+      });
+
     this.createTestResultsList(0, this.pageSize);
     this.loadWorkspaceOverview();
+    this.loadCodingFreshnessStatus();
     this.startValidationStatusCheck();
     this.checkExistingExportJobs();
     this.isInitialized = true;
@@ -441,6 +524,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (this.searchSubscription) {
       this.searchSubscription.unsubscribe();
       this.searchSubscription = null;
+    }
+    if (this.deleteTaskSubscription) {
+      this.deleteTaskSubscription.unsubscribe();
+      this.deleteTaskSubscription = null;
+    }
+    if (this.flatFilterRequestSubscription) {
+      this.flatFilterRequestSubscription.unsubscribe();
+      this.flatFilterRequestSubscription = null;
     }
 
     this.stopValidationStatusCheck();
@@ -483,24 +574,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               if (updatedTask.status === 'completed' || updatedTask.status === 'failed') {
                 this.validationTaskStateService.removeTaskId(
                   this.appService.selectedWorkspaceId,
-                  type as
-                    | 'variables'
-                    | 'variableTypes'
-                    | 'responseStatus'
-                    | 'testTakers'
-                    | 'groupResponses'
+                  type as ValidationType
                 );
               } else {
                 // Update task details in state service to keep progress up to date
                 this.validationTaskStateService.setTaskId(
                   this.appService.selectedWorkspaceId,
-                  type as
-                    | 'variables'
-                    | 'variableTypes'
-                    | 'responseStatus'
-                    | 'testTakers'
-                    | 'groupResponses'
-                    | 'duplicateResponses',
+                  type as ValidationType,
                   updatedTask
                 );
               }
@@ -508,12 +588,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             error: () => {
               this.validationTaskStateService.removeTaskId(
                 this.appService.selectedWorkspaceId,
-                type as
-                  | 'variables'
-                  | 'variableTypes'
-                  | 'responseStatus'
-                  | 'testTakers'
-                  | 'groupResponses'
+                type as ValidationType
               );
             }
           });
@@ -532,7 +607,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return Object.keys(taskIds).length > 0;
   }
 
-  getOverallValidationStatus(): 'running' | 'failed' | 'success' | 'not-run' {
+  getOverallValidationStatus(): 'running' | 'failed' | 'success' | 'partial' | 'not-run' {
     if (this.isAnyValidationRunning()) {
       return 'running';
     }
@@ -555,6 +630,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           'variableTypes',
           'responseStatus',
           'testTakers',
+          'duplicateResponses',
           'groupResponses'
         ];
         const hasAllValidations = validationTypes.every(
@@ -564,7 +640,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           return 'success';
         }
 
-        return 'success';
+        return 'partial';
       }
     }
 
@@ -687,12 +763,24 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const testPerson = this.buildReplayTestPerson(booklet.name);
+    if (!testPerson) {
+      this.snackBar.open('Keine gültige Testperson ausgewählt', 'Info', {
+        duration: 3000
+      });
+      return;
+    }
+
     const loadingSnackBar = this.snackBar.open('Lade Testheft...', '', {
       duration: 3000
     });
 
     this.unitsReplayService
-      .getUnitsFromFileUpload(this.appService.selectedWorkspaceId, booklet.name)
+      .getUnitsFromFileUpload(
+        this.appService.selectedWorkspaceId,
+        booklet.name,
+        testPerson
+      )
       .subscribe({
         next: bookletReplay => {
           loadingSnackBar.dismiss();
@@ -711,28 +799,35 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           const firstUnit = bookletReplay.units[0];
 
           this.appService
-            .createToken(
-              this.appService.selectedWorkspaceId,
-              this.appService.loggedUser?.sub || '',
-              1
-            )
+            .createOwnToken(this.appService.selectedWorkspaceId, 1)
             .subscribe(token => {
               const queryParams = {
                 auth: token,
-                mode: 'booklet',
+                mode: 'booklet-view',
                 unitsData: serializedBooklet
               };
 
               const url = this.router.serializeUrl(
                 this.router.createUrlTree(
                   [
-                    `replay/${this.testPerson.login}@${this.testPerson.code}@${this.testPerson.group}@${booklet.name}/${firstUnit.name}/0/0`
+                    `replay/${testPerson}/${firstUnit.name}/0/0`
                   ],
                   { queryParams: queryParams }
                 )
               );
 
-              window.open(`#/${url}`, '_blank');
+              window.open(`${window.location.origin}/#${url}`, '_blank');
+
+              if (
+                bookletReplay.skippedUnits &&
+                bookletReplay.skippedUnits > 0
+              ) {
+                this.snackBar.open(
+                  `${bookletReplay.skippedUnits} nicht replaybare Booklet-Units wurden übersprungen.`,
+                  'Info',
+                  { duration: 5000 }
+                );
+              }
             });
         },
         error: () => {
@@ -742,6 +837,24 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           });
         }
       });
+  }
+
+  canReplayBooklet(): boolean {
+    return !!this.testPerson?.login?.trim();
+  }
+
+  private buildReplayTestPerson(bookletName: string): string | null {
+    const login = this.testPerson?.login?.trim();
+    if (!login) {
+      return null;
+    }
+
+    return [
+      login,
+      this.testPerson?.code ?? '',
+      this.testPerson?.group ?? '',
+      bookletName
+    ].join('@');
   }
 
   replayUnit() {
@@ -768,11 +881,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const firstResponse = this.responses[0];
 
     this.appService
-      .createToken(
-        this.appService.selectedWorkspaceId,
-        this.appService.loggedUser?.sub || '',
-        1
-      )
+      .createOwnToken(this.appService.selectedWorkspaceId, 1)
       .subscribe({
         next: token => {
           if (!token) {
@@ -1137,19 +1246,113 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private loadWorkspaceOverview(): void {
-    this.overview = null;
     this.isLoadingOverview = true;
     this.testResultService
       .getWorkspaceOverview(this.appService.selectedWorkspaceId)
       .subscribe({
         next: result => {
-          this.overview = result;
+          if (result) {
+            this.overview = result;
+          }
           this.isLoadingOverview = false;
         },
         error: () => {
           this.isLoadingOverview = false;
         }
       });
+  }
+
+  private loadCodingFreshnessStatus(): void {
+    this.loadCodingFreshnessSummary();
+    this.loadManualAppliedResultsOverview();
+  }
+
+  private loadCodingFreshnessSummary(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.codingFreshnessSummary = null;
+      return;
+    }
+
+    const getCodingFreshness =
+      (this.statisticsService as Partial<CodingStatisticsService>).getCodingFreshness;
+    if (!getCodingFreshness) {
+      return;
+    }
+
+    getCodingFreshness.call(this.statisticsService, workspaceId)
+      .subscribe({
+        next: summary => {
+          this.codingFreshnessSummary = summary;
+        },
+        error: () => {
+          this.codingFreshnessSummary = null;
+        }
+      });
+  }
+
+  private loadManualAppliedResultsOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.manualAppliedResultsOverview = null;
+      this.manualAppliedResultsOverviewLoadFailed = false;
+      this.isLoadingManualAppliedResultsOverview = false;
+      return;
+    }
+
+    this.isLoadingManualAppliedResultsOverview = true;
+    this.manualAppliedResultsOverviewLoadFailed = false;
+    this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
+      .pipe(finalize(() => {
+        this.isLoadingManualAppliedResultsOverview = false;
+      }))
+      .subscribe({
+        next: overview => {
+          this.manualAppliedResultsOverview = overview;
+          this.manualAppliedResultsOverviewLoadFailed = overview === null;
+        },
+        error: () => {
+          this.manualAppliedResultsOverview = null;
+          this.manualAppliedResultsOverviewLoadFailed = true;
+        }
+      });
+  }
+
+  private async fetchCodingFreshnessSummary(
+    workspaceId: number
+  ): Promise<CodingFreshnessSummaryDto | null> {
+    const getCodingFreshness =
+      (this.statisticsService as Partial<CodingStatisticsService>).getCodingFreshness;
+    if (!getCodingFreshness) {
+      return null;
+    }
+
+    try {
+      return await firstValueFrom(
+        getCodingFreshness.call(this.statisticsService, workspaceId)
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  private async fetchManualAppliedResultsOverview(
+    workspaceId: number
+  ): Promise<{ overview: AppliedResultsOverview | null; loadFailed: boolean }> {
+    try {
+      const overview = await firstValueFrom(
+        this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
+      );
+      return {
+        overview,
+        loadFailed: overview === null
+      };
+    } catch {
+      return {
+        overview: null,
+        loadFailed: true
+      };
+    }
   }
 
   get overviewStatusCounts(): Array<{ status: string; count: number }> {
@@ -1160,6 +1363,194 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return Object.entries(map)
       .map(([status, count]) => ({ status, count: Number(count) }))
       .sort((a, b) => b.count - a.count);
+  }
+
+  private get allCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return (this.codingFreshnessSummary?.items || [])
+      .filter(isCodingFreshnessOpenWarning)
+      .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state));
+  }
+
+  get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return this.allCodingFreshnessWarnings
+      .filter(item => !(item.version === 'v3' && (
+        this.isSecondAutocodingManualStatusPending ||
+        this.isSecondAutocodingWaitingForManualCoding
+      )));
+  }
+
+  get hasCodingFreshnessWarning(): boolean {
+    return this.codingFreshnessWarnings.length > 0 ||
+      this.shouldShowSecondAutocodingWaitingState;
+  }
+
+  get codingFreshnessDisplayWarnings(): CodingFreshnessSummaryItemDto[] {
+    if (this.codingFreshnessWarnings.length > 0) {
+      return this.codingFreshnessWarnings;
+    }
+
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.secondAutocodingFreshnessWarnings;
+    }
+
+    return [];
+  }
+
+  get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return getCodingFreshnessAutoCodingWarnings(this.codingFreshnessWarnings);
+  }
+
+  get manualCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return getCodingFreshnessManualReviewWarnings(this.codingFreshnessWarnings);
+  }
+
+  get hasOnlyManualCodingFreshnessWarnings(): boolean {
+    return hasOnlyManualCodingFreshnessWarnings(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessAffectedUnitVersions(): number {
+    return getCodingFreshnessAffectedTaskResultCount(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessAffectedResponses(): number {
+    return getCodingFreshnessAffectedResponseCount(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessSummaryText(): string {
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.getSecondAutocodingWaitingSummaryText();
+    }
+
+    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessExplanationText(): string {
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.translateService.instant(
+        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.help,
+        { taskResultHelp: CODING_FRESHNESS_TASK_RESULT_HELP }
+      );
+    }
+
+    const guidanceText = getCodingFreshnessManualReviewGuidanceText(
+      this.codingFreshnessWarnings
+    );
+    if (guidanceText) {
+      return `${guidanceText} ${CODING_FRESHNESS_TASK_RESULT_HELP}`;
+    }
+
+    return CODING_FRESHNESS_TASK_RESULT_HELP;
+  }
+
+  get codingFreshnessBannerTitle(): string {
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.title);
+    }
+
+    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessActionLabel(): string {
+    if (this.shouldShowSecondAutocodingWaitingState || this.hasOnlyManualCodingFreshnessWarnings) {
+      return 'Manuelle Kodierung öffnen';
+    }
+
+    return this.autoCodingFreshnessWarnings.length > 0 ?
+      'Auto-Coding öffnen' :
+      'Kodierung öffnen';
+  }
+
+  get codingFreshnessActionIcon(): string {
+    return (this.shouldShowSecondAutocodingWaitingState || this.hasOnlyManualCodingFreshnessWarnings) ?
+      'keyboard' :
+      'rule';
+  }
+
+  getCodingFreshnessVersionLabel(version: CodingFreshnessVersion): string {
+    return getCodingFreshnessVersionLabel(version);
+  }
+
+  getCodingFreshnessStateLabel(state: CodingFreshnessState): string {
+    return getCodingFreshnessStateLabel(state);
+  }
+
+  getCodingFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
+    if (item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding) {
+      return this.translateService.instant(
+        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.chip,
+        {
+          version: getCodingFreshnessVersionLabel(item.version),
+          count: formatCodingFreshnessTaskResultCount(item.unitCount)
+        }
+      );
+    }
+
+    return getCodingFreshnessChipLabel(item);
+  }
+
+  private get secondAutocodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return getSecondAutocodingFreshnessWarnings(this.allCodingFreshnessWarnings);
+  }
+
+  private get isSecondAutocodingWaitingForManualCoding(): boolean {
+    return isSecondAutocodingWaitingForManualCoding(
+      this.allCodingFreshnessWarnings,
+      this.manualAppliedResultsOverview,
+      this.manualAppliedResultsOverviewLoadFailed
+    );
+  }
+
+  private get isSecondAutocodingManualStatusPending(): boolean {
+    return this.secondAutocodingFreshnessWarnings.length > 0 &&
+      this.isLoadingManualAppliedResultsOverview &&
+      !this.manualAppliedResultsOverviewLoadFailed;
+  }
+
+  private get shouldShowSecondAutocodingWaitingState(): boolean {
+    if (this.isSecondAutocodingManualStatusPending) {
+      return false;
+    }
+
+    return this.isSecondAutocodingWaitingForManualCoding &&
+      this.codingFreshnessWarnings.length === 0;
+  }
+
+  private getSecondAutocodingWaitingSummaryText(): string {
+    if (this.manualAppliedResultsOverviewLoadFailed) {
+      return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.loadFailed);
+    }
+
+    const remaining = this.manualAppliedResultsOverview?.remainingResponses || 0;
+    const remainingText = remaining > 0 ?
+      this.translateService.instant(
+        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.remaining,
+        { count: remaining }
+      ) :
+      '';
+
+    return this.translateService.instant(
+      SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.summary,
+      { remaining: remainingText }
+    );
+  }
+
+  openCodingFreshnessTarget(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    const target = (this.shouldShowSecondAutocodingWaitingState || this.hasOnlyManualCodingFreshnessWarnings) ?
+      'manual' :
+      'management';
+    this.router.navigate([`/workspace-admin/${workspaceId}/coding/${target}`]);
+  }
+
+  onFlatTableResponseDeleted(): void {
+    this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
+    this.loadWorkspaceOverview();
+    this.loadCodingFreshnessStatus();
+    this.testPersonCodingService.notifyTestResultsChanged();
   }
 
   private toSortedCountList(
@@ -1304,11 +1695,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     };
 
     const workspaceId = this.appService.selectedWorkspaceId;
-    const beforeOverview = workspaceId ?
-      (await firstValueFrom(
-        this.testResultService.getWorkspaceOverview(workspaceId)
-      )) || fallbackOverview :
-      this.overview || fallbackOverview;
+    let loadedBeforeOverview: TestResultsOverviewResponse | null = null;
+    if (workspaceId) {
+      try {
+        loadedBeforeOverview = await firstValueFrom(
+          this.testResultService.getWorkspaceOverview(workspaceId)
+        );
+      } catch {
+        loadedBeforeOverview = null;
+      }
+    }
+    const beforeOverview =
+      loadedBeforeOverview || this.overview || fallbackOverview;
 
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
       width: '1200px',
@@ -1324,33 +1722,68 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       window.setTimeout(() => resolve(), ms);
     });
 
+    const hasOverviewChanged = (current: TestResultsOverviewResponse) => (
+      current.testPersons !== beforeOverview.testPersons ||
+      current.testGroups !== beforeOverview.testGroups ||
+      current.uniqueBooklets !== beforeOverview.uniqueBooklets ||
+      current.uniqueUnits !== beforeOverview.uniqueUnits ||
+      current.uniqueResponses !== beforeOverview.uniqueResponses
+    );
+
     const pollOverviewAfterImport =
-      async (): Promise<TestResultsOverviewResponse> => {
+      async (progressState$?: BehaviorSubject<TestResultsImportProgressState>): Promise<{
+        overview: TestResultsOverviewResponse;
+        loaded: boolean;
+        changed: boolean;
+      }> => {
         if (!workspaceId) {
-          return fallbackOverview;
+          return {
+            overview: this.overview || fallbackOverview,
+            loaded: false,
+            changed: false
+          };
         }
-        // Poll a bit because the import may finish before overview aggregates are updated.
-        for (let i = 0; i < 10; i += 1) {
-          const current =
-            (await firstValueFrom(
+
+        // A loaded overview is the reliable result. It may legitimately be unchanged
+        // when an import only confirms already existing data.
+        for (let i = 0; i < 12; i += 1) {
+          progressState$?.next({
+            title: 'Testcenter-Import',
+            icon: 'upload_file',
+            phase: 'refreshingOverview',
+            phaseLabel: 'Übersicht wird aktualisiert',
+            message: 'Der Import ist abgeschlossen. Lade die aktualisierten Ergebniszahlen.',
+            percent: Math.min(95, Math.round(((i + 1) / 12) * 100)),
+            mode: 'determinate'
+          });
+
+          let current: TestResultsOverviewResponse | null = null;
+          try {
+            current = await firstValueFrom(
               this.testResultService.getWorkspaceOverview(workspaceId)
-            )) || fallbackOverview;
-          const changed =
-            current.testPersons !== beforeOverview.testPersons ||
-            current.testGroups !== beforeOverview.testGroups ||
-            current.uniqueBooklets !== beforeOverview.uniqueBooklets ||
-            current.uniqueUnits !== beforeOverview.uniqueUnits ||
-            current.uniqueResponses !== beforeOverview.uniqueResponses;
-          if (changed) {
-            return current;
+            );
+          } catch {
+            current = null;
           }
-          await sleep(300);
+          if (!current) {
+            await sleep(1000);
+            continue;
+          }
+          return { overview: current, loaded: true, changed: hasOverviewChanged(current) };
         }
-        return (
-          (await firstValueFrom(
+        let finalOverview: TestResultsOverviewResponse | null = null;
+        try {
+          finalOverview = await firstValueFrom(
             this.testResultService.getWorkspaceOverview(workspaceId)
-          )) || fallbackOverview
-        );
+          );
+        } catch {
+          finalOverview = null;
+        }
+        return {
+          overview: finalOverview || this.overview || beforeOverview,
+          loaded: !!finalOverview,
+          changed: !!finalOverview && hasOverviewChanged(finalOverview)
+        };
       };
 
     dialogRef.afterClosed().subscribe(result => {
@@ -1370,11 +1803,56 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         (maybePayload as { didImport?: boolean }).didImport
       ) {
         (async () => {
-          if (workspaceId) {
-            this.testResultService.invalidateCache(workspaceId);
+          const progressState$ = new BehaviorSubject<TestResultsImportProgressState>({
+            title: 'Testcenter-Import',
+            icon: 'upload_file',
+            phase: 'refreshingOverview',
+            phaseLabel: 'Übersicht wird aktualisiert',
+            message: 'Der Import ist abgeschlossen. Lade die aktualisierten Ergebniszahlen.',
+            mode: 'indeterminate'
+          });
+          const progressDialogRef = this.dialog.open(
+            TestResultsImportProgressDialogComponent,
+            {
+              width: '560px',
+              maxWidth: '95vw',
+              disableClose: true,
+              data: { state$: progressState$ }
+            }
+          );
+
+          let overviewResult: {
+            overview: TestResultsOverviewResponse;
+            loaded: boolean;
+            changed: boolean;
+          } = {
+            overview: this.overview || beforeOverview,
+            loaded: false,
+            changed: false
+          };
+
+          try {
+            if (workspaceId) {
+              this.testResultService.invalidateCache(workspaceId);
+            }
+
+            overviewResult = await pollOverviewAfterImport(progressState$);
+
+            progressState$.next({
+              title: 'Testcenter-Import',
+              icon: 'upload_file',
+              phase: 'completed',
+              phaseLabel: 'Ergebnis bereit',
+              message: 'Die Ergebnisübersicht wurde geladen.',
+              percent: 100,
+              mode: 'determinate'
+            });
+          } finally {
+            progressDialogRef.close();
+            progressState$.complete();
           }
 
-          const afterOverview = await pollOverviewAfterImport();
+          const afterOverview = overviewResult.overview;
 
           const delta = {
             testPersons: afterOverview.testPersons - beforeOverview.testPersons,
@@ -1398,6 +1876,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               totalBooklets: number;
               unitsWithLogs: number;
               totalUnits: number;
+              bookletDetails?: { name: string; hasLog: boolean }[];
+              unitDetails?: {
+                bookletName: string;
+                unitKey: string;
+                hasLog: boolean;
+              }[];
             };
           };
 
@@ -1406,9 +1890,28 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               bookletsWithLogs: payload.uploadResult.bookletsWithLogs ?? 0,
               totalBooklets: payload.uploadResult.totalBooklets ?? 0,
               unitsWithLogs: payload.uploadResult.unitsWithLogs ?? 0,
-              totalUnits: payload.uploadResult.totalUnits ?? 0
+              totalUnits: payload.uploadResult.totalUnits ?? 0,
+              bookletDetails: payload.uploadResult.bookletDetails || [],
+              unitDetails: payload.uploadResult.unitDetails || []
             } :
             payload.logMetrics;
+
+          const overviewPending = !overviewResult.loaded;
+          let codingFreshness = payload.uploadResult?.codingFreshness || null;
+          if (!codingFreshness && workspaceId) {
+            codingFreshness = await this.fetchCodingFreshnessSummary(workspaceId);
+          }
+          if (codingFreshness) {
+            this.codingFreshnessSummary = codingFreshness;
+          }
+          const manualOverviewResult = workspaceId ?
+            await this.fetchManualAppliedResultsOverview(workspaceId) :
+            {
+              overview: this.manualAppliedResultsOverview,
+              loadFailed: this.manualAppliedResultsOverviewLoadFailed
+            };
+          this.manualAppliedResultsOverview = manualOverviewResult.overview;
+          this.manualAppliedResultsOverviewLoadFailed = manualOverviewResult.loadFailed;
 
           const dialogResult: TestResultsUploadResultDto = {
             expected: { ...delta },
@@ -1431,15 +1934,22 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             issues: payload.uploadResult?.issues || payload.issues || [],
             logMetrics: logMetrics,
             importedLogs: payload.importedLogs,
-            importedResponses: payload.importedResponses
+            importedResponses: payload.importedResponses,
+            overviewPending,
+            overviewMessage: overviewPending ?
+              'Der Import wurde vom Server angenommen, aber die aktualisierte Übersicht konnte noch nicht zuverlässig gelesen werden. Bitte diese Ansicht in Kürze aktualisieren.' :
+              undefined,
+            codingFreshness: codingFreshness || undefined
           };
 
           this.dialog.open(TestResultsUploadResultDialogComponent, {
-            width: '90vw',
+            width: '1040px',
             maxWidth: '95vw',
             data: {
               resultType: payload.resultType || 'responses',
-              result: dialogResult
+              result: dialogResult,
+              manualAppliedResultsOverview: manualOverviewResult.overview,
+              manualAppliedResultsOverviewLoadFailed: manualOverviewResult.loadFailed
             }
           });
         })();
@@ -1450,6 +1960,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.testResultService.invalidateCache(workspaceId);
         }
         this.loadWorkspaceOverview();
+        this.loadCodingFreshnessStatus();
         this.createTestResultsList(
           this.pageIndex,
           this.pageSize,
@@ -1498,6 +2009,35 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               };
 
               const overwriteExisting = overwriteMode !== 'skip';
+              const uploadTitle =
+                resultType === 'logs' ?
+                  'Upload-Ergebnis (Logs)' :
+                  'Upload-Ergebnis (Antworten)';
+              const uploadIcon = resultType === 'logs' ? 'article' : 'upload_file';
+              const progressState$ = new BehaviorSubject<TestResultsImportProgressState>({
+                title: uploadTitle,
+                icon: uploadIcon,
+                phase: 'uploading',
+                phaseLabel: 'Datei wird hochgeladen',
+                message: resultType === 'logs' ?
+                  'Die Log-Datei wird in Teilen übertragen.' :
+                  'Die Antwortdatei wird in Teilen übertragen.',
+                percent: 0,
+                mode: 'determinate'
+              });
+              const progressDialogRef = this.dialog.open(
+                TestResultsImportProgressDialogComponent,
+                {
+                  width: '560px',
+                  maxWidth: '95vw',
+                  disableClose: true,
+                  data: { state$: progressState$ }
+                }
+              );
+              const progressHandle: TestResultsImportProgressHandle = {
+                dialogRef: progressDialogRef,
+                state$: progressState$
+              };
 
               this.isLoading = true;
               this.isUploadingResults = true;
@@ -1530,10 +2070,33 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                     } else {
                       this.uploadingMessage = `Ergebnisse werden hochgeladen... (${percent}%)`;
                     }
+                    progressState$.next({
+                      title: uploadTitle,
+                      icon: uploadIcon,
+                      phase: 'uploading',
+                      phaseLabel: 'Datei wird hochgeladen',
+                      message: resultType === 'logs' ?
+                        'Die Log-Datei wird in Teilen übertragen.' :
+                        'Die Antwortdatei wird in Teilen übertragen.',
+                      percent,
+                      mode: 'determinate'
+                    });
                   }
                 )
                 .subscribe({
                   next: (jobs: TestResultsUploadJobDto[]) => {
+                    progressState$.next({
+                      title: uploadTitle,
+                      icon: uploadIcon,
+                      phase: 'processing',
+                      phaseLabel: 'Verarbeitung läuft',
+                      message: 'Upload abgeschlossen. Der Server verarbeitet die Datei.',
+                      percent: 0,
+                      completed: 0,
+                      total: jobs.length,
+                      mode: 'determinate'
+                    });
+
                     const beforeOverview = this.overview || {
                       testPersons: 0,
                       testGroups: 0,
@@ -1555,9 +2118,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                       progress: 0,
                       completedCount: 0,
                       totalJobs: jobs.length
-                    });
+                    }, progressHandle);
                   },
                   error: err => {
+                    progressDialogRef.close();
+                    progressState$.complete();
                     this.isLoading = false;
                     this.isUploadingResults = false;
                     this.snackBar.open(
@@ -1574,52 +2139,377 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   deleteSelectedPersons(): void {
-    this.booklets = [];
-    this.responses = [];
-    this.logs = [];
-    this.bookletLogs = [];
-    this.selectedUnit = undefined;
-    this.unitTagsMap.clear();
-    this.unitNotesMap.clear();
+    const selectedTestPersons = this.selection.selected;
+    if (selectedTestPersons.length === 0) {
+      return;
+    }
+
+    this.confirmAndStartDelete({
+      scope: 'persons',
+      personIds: selectedTestPersons.map(person => person.id)
+    });
+  }
+
+  deleteFilteredPersons(): void {
+    this.confirmAndStartDelete({
+      scope: 'filteredPersons',
+      searchText: this.getCurrentSearchText()
+    });
+  }
+
+  deleteSelectedGroups(): void {
+    const groups = Array.from(
+      new Set(
+        this.selection.selected
+          .map(person => person.group)
+          .filter(group => group && group.trim().length > 0)
+      )
+    );
+
+    if (groups.length === 0) {
+      this.snackBar.open('Keine Testgruppe ausgewählt.', 'Info', {
+        duration: 3000
+      });
+      return;
+    }
+
+    this.confirmAndStartDelete({
+      scope: 'groups',
+      groups
+    });
+  }
+
+  deleteBookletsByName(bookletName: string): void {
+    if (!bookletName) {
+      return;
+    }
+
+    this.confirmAndStartDelete({
+      scope: 'booklets',
+      bookletNames: [bookletName]
+    });
+  }
+
+  deleteUnitsByName(unit: Unit): void {
+    const unitName = unit.alias || unit.name;
+    if (!unitName) {
+      return;
+    }
+
+    this.confirmAndStartDelete({
+      scope: 'units',
+      unitNames: [unitName]
+    });
+  }
+
+  isDeleteJobRunning(): boolean {
+    return this.activeDeleteTask?.status === 'pending' ||
+      this.activeDeleteTask?.status === 'processing' ||
+      this.isDeletingTestPersons;
+  }
+
+  private confirmAndStartDelete(request: TestResultsDeleteRequestDto): void {
+    if (this.isDeleteJobRunning()) {
+      return;
+    }
 
     this.isDeletingTestPersons = true;
-    const selectedTestPersons = this.selection.selected;
-    this.responseService
-      .deleteTestPersons(
-        this.appService.selectedWorkspaceId,
-        selectedTestPersons.map(person => person.id)
-      )
-      .subscribe((respOk: boolean) => {
-        if (respOk) {
+
+    this.testResultService
+      .previewDeleteTestResults(this.appService.selectedWorkspaceId, request)
+      .subscribe({
+        next: preview => {
+          this.isDeletingTestPersons = false;
+          if (!preview) {
+            this.snackBar.open(
+              'Die Löschvorschau konnte nicht berechnet werden.',
+              'Fehler',
+              { duration: 4000 }
+            );
+            return;
+          }
+
+          this.openDeletePreviewDialog(request, preview);
+        },
+        error: () => {
+          this.isDeletingTestPersons = false;
           this.snackBar.open(
-            this.translateService.instant('ws-admin.test-group-deleted'),
-            '',
-            { duration: 1000 }
+            'Die Löschvorschau konnte nicht berechnet werden.',
+            'Fehler',
+            { duration: 4000 }
+          );
+        }
+      });
+  }
+
+  private openDeletePreviewDialog(
+    request: TestResultsDeleteRequestDto,
+    preview: TestResultsDeletePreviewDto
+  ): void {
+    const dialogRef = this.dialog.open(TestResultsDeletePreviewDialogComponent, {
+      width: '680px',
+      maxWidth: '95vw',
+      data: {
+        preview
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (confirmed) {
+        this.startDeleteJob(request);
+      }
+    });
+  }
+
+  private startDeleteJob(request: TestResultsDeleteRequestDto): void {
+    this.resetSelectedResultDetails();
+    this.isDeletingTestPersons = true;
+    this.deleteProgress = 0;
+    this.deleteProgressMessage = 'Löschung wird gestartet...';
+
+    this.testResultService
+      .createDeleteTestResultsJob(this.appService.selectedWorkspaceId, request)
+      .subscribe({
+        next: task => {
+          this.activeDeleteTask = task;
+          this.pollDeleteTask(task.id);
+        },
+        error: () => {
+          this.isDeletingTestPersons = false;
+          this.activeDeleteTask = null;
+          this.snackBar.open(
+            'Die Löschung konnte nicht gestartet werden.',
+            'Fehler',
+            { duration: 4000 }
+          );
+        }
+      });
+  }
+
+  private pollDeleteTask(taskId: number): void {
+    if (this.deleteTaskSubscription) {
+      this.deleteTaskSubscription.unsubscribe();
+    }
+
+    this.deleteTaskSubscription = rxjsTimer(0, 1000)
+      .pipe(
+        switchMap(() => this.validationService.getValidationTask(
+          this.appService.selectedWorkspaceId,
+          taskId
+        )),
+        takeWhile(
+          task => task.status === 'pending' || task.status === 'processing',
+          true
+        )
+      )
+      .subscribe({
+        next: task => {
+          this.activeDeleteTask = task;
+          this.deleteProgress = task.progress || 0;
+          this.deleteProgressMessage =
+            task.progress_message || 'Löschung läuft...';
+
+          if (task.status === 'completed') {
+            this.finishDeleteTask(task.id);
+          } else if (task.status === 'failed') {
+            this.isDeletingTestPersons = false;
+            this.activeDeleteTask = null;
+            this.snackBar.open(
+              task.error || 'Die Löschung ist fehlgeschlagen.',
+              'Fehler',
+              { duration: 5000 }
+            );
+          }
+        },
+        error: () => {
+          this.isDeletingTestPersons = false;
+          this.activeDeleteTask = null;
+          this.snackBar.open(
+            'Der Fortschritt der Löschung konnte nicht gelesen werden.',
+            'Fehler',
+            { duration: 5000 }
+          );
+        }
+      });
+  }
+
+  private finishDeleteTask(taskId: number): void {
+    this.validationService
+      .getValidationResults(this.appService.selectedWorkspaceId, taskId)
+      .subscribe({
+        next: result => {
+          const deleteResult = result as TestResultsDeleteResultDto;
+          this.isDeletingTestPersons = false;
+          this.activeDeleteTask = null;
+          this.deleteProgress = 100;
+          this.selection.clear();
+          this.testResultService.invalidateCache(
+            this.appService.selectedWorkspaceId
+          );
+          this.validationTaskStateService.invalidateWorkspace(
+            this.appService.selectedWorkspaceId
           );
           this.loadWorkspaceOverview();
+          this.loadCodingFreshnessStatus();
+          this.testPersonCodingService.notifyTestResultsChanged();
           this.createTestResultsList(
             this.pageIndex,
             this.pageSize,
             this.getCurrentSearchText()
           );
-        } else {
           this.snackBar.open(
-            this.translateService.instant('ws-admin.test-group-not-deleted'),
-            this.translateService.instant('error'),
-            { duration: 1000 }
+            `Löschung abgeschlossen: ${deleteResult.deletedTargetCount} Datensätze verarbeitet. Betroffene Kodierungen wurden mit entfernt.`,
+            'OK',
+            { duration: 4000 }
+          );
+        },
+        error: () => {
+          this.isDeletingTestPersons = false;
+          this.activeDeleteTask = null;
+          this.snackBar.open(
+            'Die Löschung wurde abgeschlossen, das Ergebnis konnte aber nicht geladen werden.',
+            'Info',
+            { duration: 5000 }
+          );
+          this.loadWorkspaceOverview();
+          this.loadCodingFreshnessStatus();
+          this.testPersonCodingService.notifyTestResultsChanged();
+          this.createTestResultsList(
+            this.pageIndex,
+            this.pageSize,
+            this.getCurrentSearchText()
           );
         }
-        this.isDeletingTestPersons = false;
-        this.selection.clear();
       });
   }
 
+  private resetSelectedResultDetails(): void {
+    this.booklets = [];
+    this.responses = [];
+    this.logs = [];
+    this.bookletLogs = [];
+    this.selectedUnit = undefined;
+    this.selectedBooklet = '';
+    this.unitTagsMap.clear();
+    this.unitNotesMap.clear();
+  }
+
   openTestResultsSearchDialog(): void {
-    this.dialog.open(TestResultsSearchComponent, {
+    const dialogRef = this.dialog.open(TestResultsSearchComponent, {
       width: '1200px',
       data: {
-        title: 'Testergebnisse suchen'
+        title: 'Testergebnisse schnell finden'
       }
+    });
+
+    dialogRef.afterClosed().subscribe((result?: QuickSearchDialogResult) => {
+      if (!result) {
+        return;
+      }
+
+      if (result.action === 'table') {
+        this.quickSearchTableFilters = result.filters || null;
+        this.isTableView = true;
+        return;
+      }
+
+      this.openQuickSearchBrowserTarget(result.item);
+    });
+  }
+
+  private openQuickSearchBrowserTarget(item: QuickSearchResultItem): void {
+    if (!item.personId || !this.appService.selectedWorkspaceId) {
+      this.snackBar.open(
+        'Dieser Treffer kann nicht im Ergebnisbrowser geöffnet werden.',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    this.isTableView = false;
+    this.testPerson = {
+      id: item.personId,
+      code: item.personCode || '',
+      group: item.personGroup || '',
+      login: item.personLogin || '',
+      uploaded_at: new Date()
+    };
+    this.resetSelectedResultDetails();
+    this.isLoadingBooklets = true;
+
+    this.testResultService
+      .getPersonTestResults(this.appService.selectedWorkspaceId, item.personId)
+      .subscribe({
+        next: (booklets: PersonTestResult[]) => {
+          this.booklets = booklets as unknown as Booklet[];
+          this.sortBooklets();
+          this.sortBookletUnits();
+          this.loadAllUnitTags();
+          this.loadAllUnitNotes();
+          this.isLoadingBooklets = false;
+
+          const targetBooklet = this.findQuickSearchBooklet(item);
+          if (!targetBooklet) {
+            return;
+          }
+          this.setSelectedBooklet(targetBooklet);
+
+          const targetUnit = this.findQuickSearchUnit(targetBooklet, item);
+          if (!targetUnit) {
+            return;
+          }
+          this.onUnitClick(targetUnit, targetBooklet);
+
+          if (item.kind === 'response' && item.variableId) {
+            this.responses = this.responses.map(response => ({
+              ...response,
+              expanded: response.variableid === item.variableId
+            }));
+          }
+        },
+        error: () => {
+          this.isLoadingBooklets = false;
+          this.snackBar.open(
+            'Fehler beim Öffnen des Treffers im Ergebnisbrowser',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
+  }
+
+  private findQuickSearchBooklet(
+    item: QuickSearchResultItem
+  ): Booklet | undefined {
+    if (!this.booklets || (!item.bookletId && !item.bookletName)) {
+      return undefined;
+    }
+
+    return this.booklets.find(booklet => {
+      if (item.bookletId && booklet.id === item.bookletId) {
+        return true;
+      }
+      return item.bookletName ? booklet.name === item.bookletName : false;
+    });
+  }
+
+  private findQuickSearchUnit(
+    booklet: Booklet,
+    item: QuickSearchResultItem
+  ): Unit | undefined {
+    if (!booklet.units || (!item.unitId && !item.unitName && !item.unitAlias)) {
+      return undefined;
+    }
+
+    return booklet.units.find(unit => {
+      if (item.unitId && unit.id === item.unitId) {
+        return true;
+      }
+      return (
+        (!!item.unitName && unit.name === item.unitName) ||
+        (!!item.unitAlias && unit.alias === item.unitAlias)
+      );
     });
   }
 
@@ -1668,10 +2558,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                 this.snackBar.open(
                   `Unit "${
                     unit.alias || 'Unbenannte Einheit'
-                  }" wurde erfolgreich gelöscht.`,
+                  }" wurde erfolgreich gelöscht. Betroffene Kodierungen wurden mit entfernt.`,
                   'Erfolg',
                   { duration: 3000 }
                 );
+                this.loadWorkspaceOverview();
+                this.loadCodingFreshnessStatus();
+                this.testPersonCodingService.notifyTestResultsChanged();
               } else {
                 this.snackBar.open(
                   `Fehler beim Löschen der Unit: ${result.report.warnings.join(
@@ -1732,10 +2625,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                 }
 
                 this.snackBar.open(
-                  `Antwort für Variable "${response.variableid}" wurde erfolgreich gelöscht.`,
+                  `Antwort für Variable "${response.variableid}" wurde gelöscht. Kodierstatus wurde aktualisiert.`,
                   'Erfolg',
                   { duration: 3000 }
                 );
+                this.loadWorkspaceOverview();
+                this.loadCodingFreshnessStatus();
+                this.testPersonCodingService.notifyTestResultsChanged();
               } else {
                 this.snackBar.open(
                   `Fehler beim Löschen der Antwort: ${result.report.warnings.join(
@@ -1789,8 +2685,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private serializeUnitsData(booklet: UnitsReplay): string {
     try {
       const jsonString = JSON.stringify(booklet);
-
-      return btoa(jsonString);
+      return utf8ToBase64(jsonString);
     } catch (error) {
       return '';
     }
@@ -1815,7 +2710,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             width: '900px',
             data: {
               unitId: this.selectedUnit?.id,
-              title: 'Item/Variablen Analyse',
+              title: 'Antwortwertanalyse',
               workspaceId: this.appService.selectedWorkspaceId,
               jobs: variableAnalysisJobs
             }
@@ -1846,8 +2741,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           loadingSnackBar.dismiss();
 
           this.dialog.open(BookletInfoDialogComponent, {
-            width: '1200px',
-            height: '80vh',
+            width: 'min(96vw, 1400px)',
+            maxWidth: '96vw',
+            height: '92vh',
+            maxHeight: '92vh',
             data: {
               bookletInfo,
               bookletId: bookletName
@@ -1892,8 +2789,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           loadingSnackBar.dismiss();
 
           this.dialog.open(UnitInfoDialogComponent, {
-            width: '1200px',
-            height: '80vh',
+            width: 'min(96vw, 1400px)',
+            maxWidth: '96vw',
+            height: '92vh',
+            maxHeight: '92vh',
             data: {
               unitInfo,
               unitId: unitFileId
@@ -1942,7 +2841,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(ExportOptionsDialogComponent, {
       width: '800px',
       data: {
-        workspaceId: this.appService.selectedWorkspaceId
+        workspaceId: this.appService.selectedWorkspaceId,
+        exportType
       }
     });
 
@@ -1964,6 +2864,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           personIds:
             result.personIds && result.personIds.length > 0 ?
               result.personIds :
+              undefined,
+          includeLogAnomalies:
+            exportType === 'results' && result.includeLogAnomalies ?
+              true :
               undefined
         };
 
@@ -2013,7 +2917,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (jobs: TestResultExportJob[]) => {
           const relevantJobs = jobs.filter(
-            (j: TestResultExportJob) => j.exportType === 'test-results' || j.exportType === 'test-logs'
+            (j: TestResultExportJob) => j.exportType === 'test-results' ||
+              j.exportType === 'test-logs'
           );
           // Find the most recent active job only (not completed jobs)
           const activeJob = relevantJobs.find(

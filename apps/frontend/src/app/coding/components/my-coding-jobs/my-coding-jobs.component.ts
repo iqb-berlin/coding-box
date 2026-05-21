@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, ViewChild, AfterViewInit, inject, ChangeDetectorRef
+  Component, OnInit, OnDestroy, ViewChild, AfterViewInit, inject, ChangeDetectorRef, Input, OnChanges
 } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
@@ -23,7 +23,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIconButton } from '@angular/material/button';
 import { DatePipe, NgClass, NgFor } from '@angular/common';
-import { forkJoin } from 'rxjs';
+import { forkJoin, Subscription } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { AppService } from '../../../core/services/app.service';
@@ -66,7 +66,7 @@ import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/worksp
     { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
   ]
 })
-export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
+export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy, OnChanges {
   appService = inject(AppService);
   codingJobBackendService = inject(CodingJobBackendService);
   private snackBar = inject(MatSnackBar);
@@ -92,6 +92,10 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   originalData: CodingJob[] = [];
   availableJobNames: string[] = [];
   currentWorkspaces: WorkspaceFullDto[] = [];
+  private authWorkspaces: WorkspaceFullDto[] = [];
+  private loadJobsSubscription?: Subscription;
+
+  @Input() workspaceId: number | null = null;
 
   @ViewChild(MatSort) set sort(sort: MatSort) {
     this.dataSource.sort = sort;
@@ -105,6 +109,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.isAuthorized) {
       this.appService.authData$.subscribe(authData => {
         if (authData.workspaces && authData.workspaces.length > 0) {
+          this.authWorkspaces = authData.workspaces;
           this.loadMyCodingJobs(authData.workspaces);
         }
       }).unsubscribe();
@@ -139,10 +144,17 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
       this.currentUserId = authData.userId;
       this.isAuthorized = true;
       if (authData.workspaces && authData.workspaces.length > 0) {
+        this.authWorkspaces = authData.workspaces;
         this.loadMyCodingJobs(authData.workspaces);
       }
     });
     window.addEventListener('focus', this.handleWindowFocus);
+  }
+
+  ngOnChanges(): void {
+    if (this.authWorkspaces.length > 0) {
+      this.loadMyCodingJobs(this.authWorkspaces);
+    }
   }
 
   ngAfterViewInit(): void {
@@ -151,25 +163,32 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     window.removeEventListener('focus', this.handleWindowFocus);
+    this.loadJobsSubscription?.unsubscribe();
   }
 
   loadMyCodingJobs(workspaces: [] | WorkspaceFullDto[]): void {
-    this.currentWorkspaces = workspaces || [];
+    const targetWorkspaces = this.getTargetWorkspaces(workspaces || []);
+    this.currentWorkspaces = targetWorkspaces;
     this.isLoading = true;
-    if (workspaces) {
-      const workspaceJobsObservables = workspaces.map(workspace => this.codingJobBackendService.getCodingJobs(workspace.id).pipe(
+    this.loadJobsSubscription?.unsubscribe();
+
+    if (targetWorkspaces.length > 0) {
+      const workspaceJobsObservables = targetWorkspaces.map(workspace => this.codingJobBackendService.getCodingJobs(
+        workspace.id,
+        undefined,
+        undefined,
+        { assignedTo: 'me' }
+      ).pipe(
         map(response => response.data)
       )
       );
 
-      forkJoin(workspaceJobsObservables).subscribe({
+      this.loadJobsSubscription = forkJoin(workspaceJobsObservables).subscribe({
         next: allJobsArrays => {
-          const allJobs = allJobsArrays.flat();
-          const assignedJobs = allJobs.filter(job => job.assignedCoders && job.assignedCoders.includes(this.currentUserId)
-          );
+          const assignedJobs = allJobsArrays.flat();
           this.originalData = [...assignedJobs];
           this.dataSource.data = assignedJobs;
-          if (this.selectedWorkspaceIds.length === 0) {
+          if (this.shouldResetWorkspaceFilter()) {
             this.selectedWorkspaceIds = this.currentWorkspaces.map(ws => ws.id);
           }
           this.updateAvailableJobNames();
@@ -181,13 +200,42 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
         error: () => {
           const errorMessage = this.translateService.instant('coding.my-coding-jobs.error-loading-jobs');
           this.snackBar.open(errorMessage, this.translateService.instant('close'), { duration: 3000 });
+          this.clearLoadedJobs();
           this.isLoading = false;
         }
       });
     } else {
-      this.dataSource.data = [];
+      this.clearLoadedJobs();
       this.isLoading = false;
     }
+  }
+
+  private clearLoadedJobs(): void {
+    this.dataSource.data = [];
+    this.originalData = [];
+    this.selectedWorkspaceIds = [];
+    this.availableJobNames = [];
+    this.totalProgress = 0;
+    this.totalCodedUnits = 0;
+    this.totalUnits = 0;
+    this.incompleteJobs = 0;
+    this.completedJobs = 0;
+  }
+
+  private getTargetWorkspaces(workspaces: WorkspaceFullDto[]): WorkspaceFullDto[] {
+    if (!this.workspaceId) {
+      return workspaces;
+    }
+
+    return workspaces.filter(workspace => workspace.id === this.workspaceId);
+  }
+
+  private shouldResetWorkspaceFilter(): boolean {
+    const currentWorkspaceIds = this.currentWorkspaces.map(workspace => workspace.id);
+    return this.selectedWorkspaceIds.length === 0 ||
+      this.selectedWorkspaceIds
+        .filter(workspaceId => workspaceId !== -1)
+        .some(workspaceId => !currentWorkspaceIds.includes(workspaceId));
   }
 
   onStatusFilterChange(): void {
@@ -267,25 +315,6 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selection.toggle(row);
   }
 
-  sendToReview(job: CodingJob): void {
-    const sendingMessage = this.translateService.instant('coding.my-coding-jobs.sending-to-review', { name: job.name });
-    const loadingSnack = this.snackBar.open(sendingMessage, '', { duration: 3000 });
-
-    this.codingJobBackendService.updateCodingJob(job.workspace_id, job.id, { status: 'review' }).subscribe({
-      next: () => {
-        loadingSnack.dismiss();
-        const sentMessage = this.translateService.instant('coding.my-coding-jobs.sent-to-review', { name: job.name });
-        this.snackBar.open(sentMessage, this.translateService.instant('close'), { duration: 3000 });
-        this.loadMyCodingJobs(this.currentWorkspaces);
-      },
-      error: () => {
-        loadingSnack.dismiss();
-        const errorMessage = this.translateService.instant('coding.my-coding-jobs.error-sending-to-review');
-        this.snackBar.open(errorMessage, this.translateService.instant('close'), { duration: 3000 });
-      }
-    });
-  }
-
   startCodingJob(job: CodingJob): void {
     const startingMessage = this.translateService.instant('coding.my-coding-jobs.starting-job', { name: job.name });
     const loadingSnack = this.snackBar.open(startingMessage, '', { duration: 3000 });
@@ -306,7 +335,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         this.appService
-          .createToken(job.workspace_id, this.appService.loggedUser?.sub || '', 1)
+          .createOwnToken(job.workspace_id, 1)
           .subscribe(token => {
             const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(job.id)}&workspaceId=${encodeURIComponent(job.workspace_id)}`;
             const replayUrl = `${result.firstReplayUrl}?${queryParams}`;
@@ -324,16 +353,36 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  getStartCodingJobLabel(job: CodingJob): string {
+    if (this.isFinishedJob(job)) {
+      return 'Review öffnen';
+    }
+
+    return this.translateService.instant('coding.my-coding-jobs.start-coding');
+  }
+
+  getStartCodingJobIcon(job: CodingJob): string {
+    if (this.isFinishedJob(job)) {
+      return 'visibility';
+    }
+
+    return 'play_arrow';
+  }
+
   getStatusClass(status: string): string {
     switch (status) {
       case 'active':
         return 'status-active';
       case 'completed':
         return 'status-completed';
+      case 'results_applied':
+        return 'status-results-applied';
       case 'pending':
         return 'status-pending';
       case 'paused':
         return 'status-paused';
+      case 'open':
+        return 'status-open';
       case 'review':
         return 'status-review';
       default:
@@ -347,10 +396,14 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
         return this.translateService.instant('coding.my-coding-jobs.job-status-active');
       case 'completed':
         return this.translateService.instant('coding.my-coding-jobs.job-status-completed');
+      case 'results_applied':
+        return this.translateService.instant('coding.my-coding-jobs.job-status-results-applied');
       case 'pending':
         return this.translateService.instant('coding.my-coding-jobs.job-status-pending');
       case 'paused':
         return this.translateService.instant('coding.my-coding-jobs.job-status-paused');
+      case 'open':
+        return this.translateService.instant('coding.my-coding-jobs.job-status-open');
       case 'review':
         return this.translateService.instant('coding.my-coding-jobs.job-status-review');
       default:
@@ -401,8 +454,12 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.totalCodedUnits = activeJobs.reduce((sum, job) => sum + (job.codedUnits || 0), 0);
     this.totalUnits = activeJobs.reduce((sum, job) => sum + (job.totalUnits || 0), 0);
     this.totalProgress = this.totalUnits > 0 ? Math.round((this.totalCodedUnits / this.totalUnits) * 100) : 0;
-    this.incompleteJobs = assignedJobs.filter(job => job.status !== 'completed' && job.status !== 'review').length;
-    this.completedJobs = assignedJobs.filter(job => job.status === 'completed').length;
+    this.incompleteJobs = assignedJobs.filter(job => !this.isFinishedJob(job) && job.status !== 'review').length;
+    this.completedJobs = assignedJobs.filter(job => this.isFinishedJob(job)).length;
+  }
+
+  private isFinishedJob(job: CodingJob): boolean {
+    return job.status === 'completed' || job.status === 'results_applied';
   }
 
   private formatAssignedVariables(assignedVariables: Variable[]): string {

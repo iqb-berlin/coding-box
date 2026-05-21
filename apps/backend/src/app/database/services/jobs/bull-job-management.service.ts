@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bull';
-import { JobQueueService, TestPersonCodingJobData } from '../../../job-queue/job-queue.service';
+import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { CodingStatistics } from '../shared';
 
 @Injectable()
@@ -121,7 +121,7 @@ export class BullJobManagementService {
     }
   }
 
-  extractJobResult(bullJob: Job<TestPersonCodingJobData>, state: string): { result?: CodingStatistics; error?: string } {
+  extractJobResult<T>(bullJob: Job<T>, state: string): { result?: CodingStatistics; error?: string } {
     let result: CodingStatistics | undefined;
     let error: string | undefined;
 
@@ -145,6 +145,10 @@ export class BullJobManagementService {
     durationMs?: number;
     completedAt?: Date;
     autoCoderRun?: number;
+    source?: 'manual-selection' | 'coding-freshness';
+    freshnessVersion?: 'v1' | 'v3';
+    freshnessStates?: ('PENDING' | 'STALE')[];
+    unitCount?: number;
   }[]> {
     const jobs: {
       jobId: string;
@@ -158,6 +162,10 @@ export class BullJobManagementService {
       durationMs?: number;
       completedAt?: Date;
       autoCoderRun?: number;
+      source?: 'manual-selection' | 'coding-freshness';
+      freshnessVersion?: 'v1' | 'v3';
+      freshnessStates?: ('PENDING' | 'STALE')[];
+      unitCount?: number;
     }[] = [];
 
     try {
@@ -182,7 +190,11 @@ export class BullJobManagementService {
           durationMs: state === 'completed' && bullJob.finishedOn && bullJob.timestamp ?
             bullJob.finishedOn - bullJob.timestamp :
             undefined,
-          autoCoderRun: bullJob.data.autoCoderRun || 1
+          autoCoderRun: bullJob.data.autoCoderRun || 1,
+          source: bullJob.data.source,
+          freshnessVersion: bullJob.data.freshnessVersion,
+          freshnessStates: bullJob.data.freshnessStates,
+          unitCount: bullJob.data.unitIds?.length
         });
       }
     } catch (bullError) {

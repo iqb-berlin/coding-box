@@ -10,28 +10,55 @@
     </button>
   </div>
 
+  <div class="rights-model-hint">
+    <mat-icon fontIcon="info"></mat-icon>
+    <span>{{'access-rights.separation-hint' | translate}}</span>
+  </div>
+
   <div class="scroll-area">
     <table class="access-rights-table">
       <thead>
         <tr>
-          <th class="user-column">Benutzer</th>
+          <th class="user-column" rowspan="2">{{'access-rights.user-column' | translate}}</th>
+          <th class="group-column" colspan="3">{{'access-rights.workspace-access' | translate}}</th>
+          <th class="group-column">{{'access-rights.coding-capability' | translate}}</th>
+        </tr>
+        <tr>
           <th class="access-level-column">
-            <mat-icon color="primary"
-                      [matTooltip]="'access-rights.access-level-1' | translate"
-                      fontIcon="person">
-            </mat-icon>
+            <div class="header-cell">
+              <mat-icon color="primary"
+                        [matTooltip]="'access-rights.access-level-1' | translate"
+                        fontIcon="person">
+              </mat-icon>
+              <span>{{'access-rights.access-level-1' | translate}}</span>
+            </div>
           </th>
           <th class="access-level-column">
-            <mat-icon color="primary"
-                      [matTooltip]="'access-rights.access-level-2' | translate"
-                      fontIcon="supervisor_account">
-            </mat-icon>
+            <div class="header-cell">
+              <mat-icon color="primary"
+                        [matTooltip]="'access-rights.access-level-2' | translate"
+                        fontIcon="supervisor_account">
+              </mat-icon>
+              <span>{{'access-rights.access-level-2' | translate}}</span>
+            </div>
           </th>
           <th class="access-level-column">
-            <mat-icon color="primary"
-                      [matTooltip]="'access-rights.access-level-3' | translate"
-                      fontIcon="account_circle">
-            </mat-icon>
+            <div class="header-cell">
+              <mat-icon color="primary"
+                        [matTooltip]="'access-rights.access-level-3' | translate"
+                        fontIcon="account_circle">
+              </mat-icon>
+              <span>{{'access-rights.access-level-3' | translate}}</span>
+            </div>
+          </th>
+          <th class="access-level-column">
+            <div class="header-cell">
+              <mat-icon color="primary"
+                        [matTooltip]="'access-rights.can-code-tooltip' | translate"
+                        fontIcon="edit_note">
+              </mat-icon>
+              <span>{{'access-rights.can-code' | translate}}</span>
+            </div>
           </th>
         </tr>
       </thead>
@@ -48,6 +75,14 @@
                 </mat-checkbox>
               </td>
             }
+            <td class="access-level-column">
+              <mat-checkbox
+                [checked]="u.canCode"
+                [disabled]="!u.isChecked || u.accessLevel === 0"
+                [matTooltip]="'access-rights.can-code-tooltip' | translate"
+                (change)="changeCanCode($event.checked, u)">
+              </mat-checkbox>
+            </td>
           </tr>
         }
       </tbody>

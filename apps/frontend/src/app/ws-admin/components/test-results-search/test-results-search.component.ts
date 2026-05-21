@@ -1,11 +1,10 @@
 import {
-  Component, Inject, OnInit, ViewChild
+  Component, Inject, OnDestroy, OnInit
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import {
-  MatDialog,
   MatDialogModule,
   MatDialogRef,
   MAT_DIALOG_DATA
@@ -13,73 +12,41 @@ import {
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
-  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
-} from '@angular/material/paginator';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Router } from '@angular/router';
-import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
-import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
-import { TestResultService } from '../../../shared/services/test-result/test-result.service';
-import { UnitService } from '../../../shared/services/unit/unit.service';
-import { ResponseService } from '../../../shared/services/response/response.service';
-import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
+  Subject, Subscription, debounceTime, distinctUntilChanged
+} from 'rxjs';
+import {
+  TestResultService,
+  QuickSearchResult,
+  QuickSearchResultItem,
+  QuickSearchResultKind
+} from '../../../shared/services/test-result/test-result.service';
 import { AppService } from '../../../core/services/app.service';
-import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
-import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
-import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
-import { FileService } from '../../../shared/services/file/file.service';
-import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
+import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
 
-interface UnitSearchResult {
-  unitId: number;
-  unitName: string;
-  unitAlias: string | null;
-  bookletId: number;
-  bookletName: string;
-  personId: number;
-  personLogin: string;
-  personCode: string;
-  personGroup: string;
-  tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
-  responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
+export interface QuickSearchTableFilters {
+  code?: string;
+  group?: string;
+  login?: string;
+  booklet?: string;
+  unit?: string;
+  response?: string;
+  responseValue?: string;
 }
 
-interface ResponseSearchResult {
-  responseId: number;
-  variableId: string;
-  value: string;
-  status: string;
-  code?: number;
-  score?: number;
-  codedStatus?: string;
-  unitId: number;
-  unitName: string;
-  unitAlias: string | null;
-  bookletId: number;
-  bookletName: string;
-  personId: number;
-  personLogin: string;
-  personCode: string;
-  personGroup: string;
+export interface QuickSearchDialogResult {
+  action: 'table' | 'browser';
+  item: QuickSearchResultItem;
+  filters?: QuickSearchTableFilters;
 }
 
-interface BookletSearchResult {
-  bookletId: number;
-  bookletName: string;
-  personId: number;
-  personLogin: string;
-  personCode: string;
-  personGroup: string;
-  units: {
-    unitId: number;
-    unitName: string;
-    unitAlias: string | null;
-  }[];
+interface QuickSearchTypeOption {
+  kind: QuickSearchResultKind;
+  label: string;
+  icon: string;
 }
 
 @Component({
@@ -87,9 +54,6 @@ interface BookletSearchResult {
   templateUrl: './test-results-search.component.html',
   styleUrls: ['./test-results-search.component.scss'],
   standalone: true,
-  providers: [
-    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
-  ],
   imports: [
     CommonModule,
     FormsModule,
@@ -98,258 +62,130 @@ interface BookletSearchResult {
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatTableModule,
     MatProgressSpinnerModule,
-    MatTooltipModule,
-    MatPaginatorModule,
-    TranslateModule
+    MatTooltipModule
   ]
 })
-export class TestResultsSearchComponent implements OnInit {
-  searchText: string = '';
-  searchValue: string = '';
-  searchVariableId: string = '';
-  searchUnitName: string = '';
-  searchStatus: string = '';
-  searchCodedStatus: string = '';
-  searchGroup: string = '';
-  searchCode: string = '';
+export class TestResultsSearchComponent implements OnInit, OnDestroy {
+  searchText = '';
+  isLoading = false;
+  hasSearched = false;
+  selectedKinds = new Set<QuickSearchResultKind>([
+    'person',
+    'booklet',
+    'unit',
+    'response'
+  ]);
 
-  searchMode: 'unit' | 'response' | 'booklet' = 'unit';
+  readonly typeOptions: QuickSearchTypeOption[] = [
+    { kind: 'person', label: 'Personen', icon: 'person' },
+    { kind: 'booklet', label: 'Testhefte', icon: 'menu_book' },
+    { kind: 'unit', label: 'Aufgaben', icon: 'extension' },
+    { kind: 'response', label: 'Antworten', icon: 'question_answer' }
+  ];
 
-  unitSearchResults: UnitSearchResult[] = [];
-  responseSearchResults: ResponseSearchResult[] = [];
-  bookletSearchResults: BookletSearchResult[] = [];
-  bookletSearchText: string = '';
+  readonly MIN_SEARCH_LENGTH = 2;
+  readonly SEARCH_DEBOUNCE_TIME = 350;
 
-  isLoading: boolean = false;
-  unitDisplayedColumns: string[] = ['unitName', 'unitAlias', 'bookletName', 'personLogin', 'personCode', 'personGroup', 'tags', 'responseValue', 'actions'];
-  responseDisplayedColumns: string[] = ['variableId', 'value', 'status', 'codedStatus', 'unitName', 'unitAlias', 'bookletName', 'personLogin', 'personCode', 'personGroup', 'actions'];
-  bookletDisplayedColumns: string[] = ['bookletName', 'personCode', 'personLogin', 'personGroup', 'unitCount', 'actions'];
-
-  private stringToNumberMap = new Map(responseStatesNumericMap.map(entry => [entry.value, entry.key]));
-
-  private unitSearchSubject = new Subject<string>();
-  private responseSearchSubject = new Subject<{ value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3' }>();
-  private bookletSearchSubject = new Subject<string>();
-  private readonly SEARCH_DEBOUNCE_TIME = 500;
-
-  totalItems: number = 0;
-  pageSize: number = 200;
-  pageIndex: number = 0;
-  pageSizeOptions: number[] = [100, 200, 500, 1000];
-
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  results: QuickSearchResult = this.createEmptyResult('');
+  private searchSubject = new Subject<string>();
+  private searchSubscription?: Subscription;
 
   constructor(
-    private dialogRef: MatDialogRef<TestResultsSearchComponent>,
+    private dialogRef: MatDialogRef<TestResultsSearchComponent, QuickSearchDialogResult>,
     @Inject(MAT_DIALOG_DATA) public data: { title: string },
     private testResultService: TestResultService,
-    private unitService: UnitService,
-    private responseService: ResponseService,
-    private statisticsService: CodingStatisticsService,
     private appService: AppService,
-    private router: Router,
-    private dialog: MatDialog,
-    private snackBar: MatSnackBar,
-    private translateService: TranslateService,
-    private fileService: FileService
+    private statisticsService: CodingStatisticsService,
+    private snackBar: MatSnackBar
   ) { }
 
   ngOnInit(): void {
-    this.unitSearchSubject.pipe(
-      debounceTime(this.SEARCH_DEBOUNCE_TIME),
-      distinctUntilChanged()
-    ).subscribe(searchText => {
-      this.pageIndex = 0;
-      this.searchUnits(searchText);
-    });
-
-    this.responseSearchSubject.pipe(
-      debounceTime(this.SEARCH_DEBOUNCE_TIME),
-      distinctUntilChanged((prev, curr) => prev.value === curr.value && prev.variableId === curr.variableId && prev.unitName === curr.unitName && prev.status === curr.status && prev.codedStatus === curr.codedStatus && prev.group === curr.group && prev.code === curr.code)
-    ).subscribe(searchParams => {
-      this.pageIndex = 0;
-      this.searchResponses(searchParams);
-    });
-
-    this.bookletSearchSubject.pipe(
-      debounceTime(this.SEARCH_DEBOUNCE_TIME),
-      distinctUntilChanged()
-    ).subscribe(searchText => {
-      this.pageIndex = 0;
-      this.searchBooklets(searchText);
-    });
+    this.searchSubscription = this.searchSubject
+      .pipe(debounceTime(this.SEARCH_DEBOUNCE_TIME), distinctUntilChanged())
+      .subscribe(query => this.runSearch(query));
   }
 
-  onUnitSearchChange(): void {
-    if (this.searchText.trim().length > 2) {
-      this.unitSearchSubject.next(this.searchText);
-    }
+  ngOnDestroy(): void {
+    this.searchSubscription?.unsubscribe();
   }
 
-  onResponseSearchChange(): void {
-    const status = this.searchStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchStatus.trim())?.toString() : undefined;
-    const codedStatus = this.searchCodedStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchCodedStatus.trim())?.toString() : undefined;
-
-    this.responseSearchSubject.next({
-      value: this.searchValue.trim() !== '' ? this.searchValue : undefined,
-      variableId: this.searchVariableId.trim() !== '' ? this.searchVariableId : undefined,
-      unitName: this.searchUnitName.trim() !== '' ? this.searchUnitName : undefined,
-      status: status,
-      codedStatus: codedStatus,
-      group: this.searchGroup.trim() !== '' ? this.searchGroup : undefined,
-      code: this.searchCode.trim() !== '' ? this.searchCode : undefined
-    });
+  onSearchChange(): void {
+    this.searchSubject.next(this.searchText);
   }
 
-  onBookletSearchChange(): void {
-    if (this.bookletSearchText.trim().length > 2) {
-      this.bookletSearchSubject.next(this.bookletSearchText);
-    }
-  }
-
-  onPageChange(event: PageEvent): void {
-    this.pageSize = event.pageSize;
-    this.pageIndex = event.pageIndex;
-
-    if (this.searchMode === 'unit') {
-      this.searchUnits(this.searchText);
-    } else if (this.searchMode === 'response') {
-      const status = this.searchStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchStatus.trim())?.toString() : undefined;
-      const codedStatus = this.searchCodedStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchCodedStatus.trim())?.toString() : undefined;
-
-      this.searchResponses({
-        value: this.searchValue.trim() !== '' ? this.searchValue : undefined,
-        variableId: this.searchVariableId.trim() !== '' ? this.searchVariableId : undefined,
-        unitName: this.searchUnitName.trim() !== '' ? this.searchUnitName : undefined,
-        status: status,
-        codedStatus: codedStatus,
-        group: this.searchGroup.trim() !== '' ? this.searchGroup : undefined,
-        code: this.searchCode.trim() !== '' ? this.searchCode : undefined
-      });
-    } else if (this.searchMode === 'booklet') {
-      this.searchBooklets(this.bookletSearchText);
-    }
-  }
-
-  setSearchMode(mode: 'unit' | 'response' | 'booklet'): void {
-    if (this.searchMode === mode) {
-      return; // Don't do anything if the mode hasn't changed
-    }
-
-    this.searchMode = mode;
-    this.pageIndex = 0;
-    this.totalItems = 0;
-    this.unitSearchResults = [];
-    this.responseSearchResults = [];
-    this.bookletSearchResults = [];
-  }
-
-  searchUnits(unitName: string): void {
-    if (!unitName || unitName.trim().length < 3) {
-      this.unitSearchResults = [];
-      this.totalItems = 0;
-      this.isLoading = false;
-      return;
-    }
-
-    this.isLoading = true;
-    this.testResultService.searchUnitsByName(
-      this.appService.selectedWorkspaceId,
-      unitName,
-      this.pageIndex + 1,
-      this.pageSize
-    ).subscribe({
-      next: (response: { data: UnitSearchResult[]; total: number }) => {
-        this.unitSearchResults = response.data;
-        this.totalItems = response.total;
-        this.isLoading = false;
-      },
-      error: () => {
-        this.unitSearchResults = [];
-        this.totalItems = 0;
-        this.isLoading = false;
+  toggleKind(kind: QuickSearchResultKind): void {
+    if (this.selectedKinds.has(kind)) {
+      if (this.selectedKinds.size === 1) {
+        return;
       }
-    });
+      this.selectedKinds.delete(kind);
+    } else {
+      this.selectedKinds.add(kind);
+    }
   }
 
-  searchResponses(searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3' }): void {
-    this.isLoading = true;
-    this.responseService.searchResponses(
-      this.appService.selectedWorkspaceId,
-      searchParams,
-      this.pageIndex + 1,
-      this.pageSize
-    ).subscribe({
-      next: (response: { data: ResponseSearchResult[]; total: number }) => {
-        this.responseSearchResults = response.data;
-        this.totalItems = response.total;
-        this.isLoading = false;
-      },
-      error: () => {
-        this.responseSearchResults = [];
-        this.totalItems = 0;
-        this.isLoading = false;
-      }
-    });
+  isKindSelected(kind: QuickSearchResultKind): boolean {
+    return this.selectedKinds.has(kind);
   }
 
-  searchBooklets(bookletName: string): void {
-    if (!bookletName || bookletName.trim().length < 3) {
-      this.bookletSearchResults = [];
-      this.totalItems = 0;
-      this.isLoading = false;
-      return;
+  getVisibleResults(kind: QuickSearchResultKind): QuickSearchResultItem[] {
+    if (!this.selectedKinds.has(kind)) {
+      return [];
     }
 
-    this.isLoading = true;
-    this.testResultService.searchBookletsByName(
-      this.appService.selectedWorkspaceId,
-      bookletName,
-      this.pageIndex + 1,
-      this.pageSize
-    ).subscribe({
-      next: (response: { data: BookletSearchResult[]; total: number }) => {
-        this.bookletSearchResults = response.data;
-        this.totalItems = response.total;
-        this.isLoading = false;
-      },
-      error: () => {
-        this.bookletSearchResults = [];
-        this.totalItems = 0;
-        this.isLoading = false;
-      }
+    switch (kind) {
+      case 'person':
+        return this.results.persons;
+      case 'booklet':
+        return this.results.booklets;
+      case 'unit':
+        return this.results.units;
+      case 'response':
+        return this.results.responses;
+      default:
+        return [];
+    }
+  }
+
+  getTotal(kind: QuickSearchResultKind): number {
+    return this.results.totals[kind] || 0;
+  }
+
+  getVisibleCount(): number {
+    return this.typeOptions
+      .map(option => this.getVisibleResults(option.kind).length)
+      .reduce((sum, count) => sum + count, 0);
+  }
+
+  openInTable(item: QuickSearchResultItem): void {
+    this.dialogRef.close({
+      action: 'table',
+      item,
+      filters: this.createTableFilters(item)
     });
   }
 
-  close(): void {
-    this.dialogRef.close();
+  openInBrowser(item: QuickSearchResultItem): void {
+    this.dialogRef.close({
+      action: 'browser',
+      item
+    });
   }
 
-  replayUnit(item: UnitSearchResult | ResponseSearchResult): void {
-    if (!this.appService.selectedWorkspaceId) {
+  replay(item: QuickSearchResultItem): void {
+    const responseId = item.responseId;
+    if (!responseId || !this.appService.selectedWorkspaceId) {
       this.snackBar.open(
-        'Kein Workspace ausgewählt',
+        'Für diesen Treffer ist kein Replay verfügbar.',
         'Info',
         { duration: 3000 }
       );
       return;
     }
-
-    if (!item) {
-      this.snackBar.open(
-        'Ungültiger Eintrag für Replay',
-        'Info',
-        { duration: 3000 }
-      );
-      return;
-    }
-
-    const workspaceId = this.appService.selectedWorkspaceId;
 
     this.appService
-      .createToken(workspaceId, this.appService.loggedUser?.sub || '', 1)
+      .createOwnToken(this.appService.selectedWorkspaceId, 1)
       .subscribe({
         next: token => {
           if (!token) {
@@ -361,14 +197,11 @@ export class TestResultsSearchComponent implements OnInit {
             return;
           }
 
-          if ('responseId' in item && item.responseId) {
-            this.statisticsService.getReplayUrl(
-              workspaceId,
-              item.responseId,
-              token
-            ).subscribe({
+          this.statisticsService
+            .getReplayUrl(this.appService.selectedWorkspaceId, responseId, token)
+            .subscribe({
               next: result => {
-                if (result && result.replayUrl) {
+                if (result?.replayUrl) {
                   window.open(result.replayUrl, '_blank');
                 } else {
                   this.snackBar.open(
@@ -386,18 +219,6 @@ export class TestResultsSearchComponent implements OnInit {
                 );
               }
             });
-          } else {
-            const queryParams = {
-              auth: token
-            };
-            const url = this.router
-              .serializeUrl(
-                this.router.createUrlTree(
-                  [`replay/${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}/${item.unitAlias}/0/0`],
-                  { queryParams: queryParams })
-              );
-            window.open(`#/${url}`, '_blank');
-          }
         },
         error: () => {
           this.snackBar.open(
@@ -409,388 +230,89 @@ export class TestResultsSearchComponent implements OnInit {
       });
   }
 
-  deleteUnit(unit: UnitSearchResult): void {
-    const dialogTitle = this.translateService.instant('test-results-search.confirm-dialogs.delete-unit.title');
-    const dialogContent = unit.unitAlias ?
-      this.translateService.instant('test-results-search.confirm-dialogs.delete-unit.content', { unitName: unit.unitName, unitAlias: unit.unitAlias }) :
-      this.translateService.instant('test-results-search.confirm-dialogs.delete-unit.content-no-alias', { unitName: unit.unitName });
-    const confirmButtonLabel = this.translateService.instant('test-results-search.confirm-dialogs.delete-unit.confirm');
-
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: dialogTitle,
-        content: dialogContent,
-        confirmButtonLabel: confirmButtonLabel,
-        showCancel: true
-      } as ConfirmDialogData
-    });
-
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.isLoading = true;
-        this.unitService.deleteUnit(
-          this.appService.selectedWorkspaceId,
-          unit.unitId
-        ).subscribe({
-          next: (response: { success: boolean; report: { deletedUnit: number | null; warnings: string[] } }) => {
-            this.isLoading = false;
-            if (response.success) {
-              this.unitSearchResults = this.unitSearchResults.filter(u => u.unitId !== unit.unitId);
-              this.totalItems -= 1;
-              this.snackBar.open(
-                `Unit erfolgreich gelöscht. Unit ID: ${response.report.deletedUnit}`,
-                'Schließen',
-                { duration: 3000 }
-              );
-            } else {
-              this.snackBar.open(
-                `Fehler beim Löschen der Unit: ${response.report.warnings.join(', ')}`,
-                'Fehler',
-                { duration: 5000 }
-              );
-            }
-          },
-          error: () => {
-            this.isLoading = false;
-            this.snackBar.open(
-              'Fehler beim Löschen der Unit. Bitte versuchen Sie es später erneut.',
-              'Fehler',
-              { duration: 5000 }
-            );
-          }
-        });
-      }
-    });
+  close(): void {
+    this.dialogRef.close();
   }
 
-  deleteResponse(response: ResponseSearchResult): void {
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: 'Antwort löschen',
-        content: `Sind Sie sicher, dass Sie die Antwort für Variable "${response.variableId}" löschen möchten?`,
-        confirmButtonLabel: 'Löschen',
-        showCancel: true
-      } as ConfirmDialogData
-    });
-
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.isLoading = true;
-        this.responseService.deleteResponse(
-          this.appService.selectedWorkspaceId,
-          response.responseId
-        ).subscribe({
-          next: (apiResponse: { success: boolean; report: { deletedResponse: number | null; warnings: string[] } }) => {
-            this.isLoading = false;
-            if (apiResponse.success) {
-              this.responseSearchResults = this.responseSearchResults.filter(r => r.responseId !== response.responseId);
-              this.totalItems -= 1;
-              this.snackBar.open(
-                `Antwort erfolgreich gelöscht. Antwort ID: ${apiResponse.report.deletedResponse}`,
-                'Schließen',
-                { duration: 3000 }
-              );
-            } else {
-              // Show error message
-              this.snackBar.open(
-                `Fehler beim Löschen der Antwort: ${apiResponse.report.warnings.join(', ')}`,
-                'Fehler',
-                { duration: 5000 }
-              );
-            }
-          },
-          error: () => {
-            this.isLoading = false;
-            this.snackBar.open(
-              'Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.',
-              'Fehler',
-              { duration: 5000 }
-            );
-          }
-        });
-      }
-    });
-  }
-
-  deleteAllUnits(): void {
-    if (this.unitSearchResults.length === 0) {
-      this.snackBar.open(
-        'Keine Aufgaben zum Löschen gefunden.',
-        'Info',
-        { duration: 3000 }
-      );
+  private runSearch(query: string): void {
+    const trimmedQuery = String(query || '').trim();
+    if (trimmedQuery.length < this.MIN_SEARCH_LENGTH) {
+      this.results = this.createEmptyResult(trimmedQuery);
+      this.hasSearched = false;
+      this.isLoading = false;
       return;
     }
 
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: 'Alle gefilterten Aufgaben löschen',
-        content: `Sind Sie sicher, dass Sie alle ${this.unitSearchResults.length} gefilterten Aufgaben löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Alle löschen',
-        showCancel: true
-      } as ConfirmDialogData
-    });
-
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.isLoading = true;
-        const unitIds = this.unitSearchResults.map(unit => unit.unitId);
-
-        this.unitService.deleteMultipleUnits(
-          this.appService.selectedWorkspaceId,
-          unitIds
-        ).subscribe({
-          next: (response: { success: boolean; report: { deletedUnits: number[]; warnings: string[] } }) => {
-            this.isLoading = false;
-            if (response.success) {
-              const deletedCount = response.report.deletedUnits.length;
-              this.unitSearchResults = [];
-              this.totalItems = 0;
-              this.snackBar.open(
-                `${deletedCount} Aufgaben erfolgreich gelöscht.`,
-                'Schließen',
-                { duration: 3000 }
-              );
-            } else {
-              this.snackBar.open(
-                `Fehler beim Löschen der Aufgaben: ${response.report.warnings.join(', ')}`,
-                'Fehler',
-                { duration: 5000 }
-              );
-            }
-          },
-          error: () => {
-            this.isLoading = false;
-            this.snackBar.open(
-              'Fehler beim Löschen der Aufgaben. Bitte versuchen Sie es später erneut.',
-              'Fehler',
-              { duration: 5000 }
-            );
-          }
-        });
-      }
-    });
+    this.isLoading = true;
+    this.hasSearched = true;
+    this.testResultService
+      .quickSearch(this.appService.selectedWorkspaceId, trimmedQuery, 8)
+      .subscribe({
+        next: results => {
+          this.results = results || this.createEmptyResult(trimmedQuery);
+          this.isLoading = false;
+        },
+        error: () => {
+          this.results = this.createEmptyResult(trimmedQuery);
+          this.isLoading = false;
+        }
+      });
   }
 
-  deleteAllResponses(): void {
-    if (this.responseSearchResults.length === 0) {
-      this.snackBar.open(
-        'Keine Antworten zum Löschen gefunden.',
-        'Info',
-        { duration: 3000 }
-      );
-      return;
-    }
-
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: 'Alle gefilterten Antworten löschen',
-        content: `Sind Sie sicher, dass Sie alle ${this.responseSearchResults.length} gefilterten Antworten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Alle löschen',
-        showCancel: true
-      } as ConfirmDialogData
-    });
-
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        const responseIds = this.responseSearchResults.map(response => response.responseId);
-        let successCount = 0;
-        let failCount = 0;
-        this.isLoading = true;
-        const processNextResponse = (index: number) => {
-          if (index >= responseIds.length) {
-            this.isLoading = false;
-            this.snackBar.open(
-              `${successCount} Antworten gelöscht, ${failCount} fehlgeschlagen.`,
-              'OK',
-              { duration: 5000 }
-            );
-            const status = this.searchStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchStatus.trim())?.toString() : undefined;
-            const codedStatus = this.searchCodedStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchCodedStatus.trim())?.toString() : undefined;
-
-            this.searchResponses({
-              value: this.searchValue.trim() !== '' ? this.searchValue : undefined,
-              variableId: this.searchVariableId.trim() !== '' ? this.searchVariableId : undefined,
-              unitName: this.searchUnitName.trim() !== '' ? this.searchUnitName : undefined,
-              status: status,
-              codedStatus: codedStatus,
-              group: this.searchGroup.trim() !== '' ? this.searchGroup : undefined,
-              code: this.searchCode.trim() !== '' ? this.searchCode : undefined
-            });
-            return;
-          }
-
-          this.responseService.deleteResponse(
-            this.appService.selectedWorkspaceId,
-            responseIds[index]
-          ).subscribe({
-            next: (response: { success: boolean }) => {
-              if (response.success) {
-                successCount += 1;
-              } else {
-                failCount += 1;
-              }
-              processNextResponse(index + 1);
-            },
-            error: () => {
-              failCount += 1;
-              processNextResponse(index + 1);
-            }
-          });
+  private createTableFilters(
+    item: QuickSearchResultItem
+  ): QuickSearchTableFilters {
+    switch (item.kind) {
+      case 'person':
+        return {
+          code: item.personCode || '',
+          group: item.personGroup || '',
+          login: item.personLogin || ''
         };
-        processNextResponse(0);
-      }
-    });
-  }
-
-  viewBookletInfo(booklet: BookletSearchResult): void {
-    const loadingSnackBar = this.snackBar.open(
-      'Lade Testheft-Informationen...',
-      '',
-      { duration: 3000 }
-    );
-
-    this.fileService.getBookletInfo(
-      this.appService.selectedWorkspaceId,
-      booklet.bookletName
-    ).subscribe({
-      next: (bookletInfo: BookletInfoDto) => {
-        loadingSnackBar.dismiss();
-
-        this.dialog.open(BookletInfoDialogComponent, {
-          width: '1200px',
-          height: '80vh',
-          data: {
-            bookletInfo,
-            bookletId: booklet.bookletName
-          }
-        });
-      },
-      error: () => {
-        loadingSnackBar.dismiss();
-        this.snackBar.open(
-          'Fehler beim Laden der Testheft-Informationen',
-          'Fehler',
-          { duration: 3000 }
-        );
-      }
-    });
-  }
-
-  deleteBooklet(booklet: BookletSearchResult): void {
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: 'Booklet löschen',
-        content: `Sind Sie sicher, dass Sie das Booklet "${booklet.bookletName}" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Löschen',
-        showCancel: true
-      } as ConfirmDialogData
-    });
-
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.isLoading = true;
-        this.testResultService.deleteBooklet(
-          this.appService.selectedWorkspaceId,
-          booklet.bookletId
-        ).subscribe({
-          next: (response: { success: boolean; report: { warnings: string[] } }) => {
-            if (response.success) {
-              this.bookletSearchResults = this.bookletSearchResults.filter(
-                b => b.bookletId !== booklet.bookletId
-              );
-              this.totalItems -= 1;
-
-              this.snackBar.open(
-                `Booklet "${booklet.bookletName}" wurde erfolgreich gelöscht.`,
-                'OK',
-                { duration: 3000 }
-              );
-            } else {
-              this.snackBar.open(
-                `Fehler beim Löschen des Booklets: ${response.report.warnings.join(', ')}`,
-                'OK',
-                { duration: 5000 }
-              );
-            }
-            this.isLoading = false;
-          },
-          error: () => {
-            this.snackBar.open(
-              'Fehler beim Löschen des Booklets. Bitte versuchen Sie es erneut.',
-              'OK',
-              { duration: 5000 }
-            );
-            this.isLoading = false;
-          }
-        });
-      }
-    });
-  }
-
-  deleteAllBooklets(): void {
-    if (this.bookletSearchResults.length === 0) {
-      this.snackBar.open(
-        'Keine Booklets zum Löschen gefunden.',
-        'Info',
-        { duration: 3000 }
-      );
-      return;
-    }
-
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: 'Alle gefilterten Booklets löschen',
-        content: `Sind Sie sicher, dass Sie alle ${this.bookletSearchResults.length} gefilterten Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Alle löschen',
-        showCancel: true
-      } as ConfirmDialogData
-    });
-
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        const bookletIds = this.bookletSearchResults.map(booklet => booklet.bookletId);
-        let successCount = 0;
-        let failCount = 0;
-        this.isLoading = true;
-        const processNextBooklet = (index: number) => {
-          if (index >= bookletIds.length) {
-            this.isLoading = false;
-            this.snackBar.open(
-              `${successCount} Booklets gelöscht, ${failCount} fehlgeschlagen.`,
-              'OK',
-              { duration: 5000 }
-            );
-            this.searchBooklets(this.bookletSearchText);
-            return;
-          }
-
-          this.testResultService.deleteBooklet(
-            this.appService.selectedWorkspaceId,
-            bookletIds[index]
-          ).subscribe({
-            next: (response: { success: boolean }) => {
-              if (response.success) {
-                successCount += 1;
-              } else {
-                failCount += 1;
-              }
-              processNextBooklet(index + 1);
-            },
-            error: () => {
-              failCount += 1;
-              processNextBooklet(index + 1);
-            }
-          });
+      case 'booklet':
+        return {
+          code: item.personCode || '',
+          group: item.personGroup || '',
+          login: item.personLogin || '',
+          booklet: item.bookletName || ''
         };
-        processNextBooklet(0);
+      case 'unit':
+        return {
+          code: item.personCode || '',
+          group: item.personGroup || '',
+          login: item.personLogin || '',
+          booklet: item.bookletName || '',
+          unit: item.unitAlias || item.unitName || ''
+        };
+      case 'response':
+        return {
+          code: item.personCode || '',
+          group: item.personGroup || '',
+          login: item.personLogin || '',
+          booklet: item.bookletName || '',
+          unit: item.unitAlias || item.unitName || '',
+          response: item.variableId || '',
+          responseValue: item.responseValue || ''
+        };
+      default:
+        return {};
+    }
+  }
+
+  private createEmptyResult(query: string): QuickSearchResult {
+    return {
+      query,
+      limit: 8,
+      persons: [],
+      booklets: [],
+      units: [],
+      responses: [],
+      totals: {
+        person: 0,
+        booklet: 0,
+        unit: 0,
+        response: 0
       }
-    });
+    };
   }
 }

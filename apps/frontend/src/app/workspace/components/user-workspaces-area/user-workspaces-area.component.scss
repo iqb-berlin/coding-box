@@ -1,12 +1,12 @@
 .workspaces {
-  overflow-y: auto;
-  border-radius: 10px;
+  box-sizing: border-box;
+  border-radius: 8px;
   background: lightgray;
-  width:100%;
-  height: 100%;
-  padding:50px;
+  width: 100%;
+  min-height: 100%;
+  padding: clamp(20px, 4vw, 50px);
 }
 
-.mat-raised-button{
+.mat-raised-button {
   width: 100%;
 }

@@ -1,7 +1,7 @@
 import {
   Controller,
   Delete,
-  Get, Header, NotFoundException,
+  Get, Header,
   Param,
   ParseArrayPipe,
   ParseIntPipe,
@@ -36,7 +36,6 @@ export class ResourcePackageController {
   @Get(':workspace_id/resource-packages')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
-  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get all resource packages for a workspace',
@@ -49,23 +48,14 @@ export class ResourcePackageController {
     required: true
   })
   @ApiOkResponse({
-    description: 'Resource Packages retrieved successfully.',
+    description: 'Resource packages retrieved successfully. Returns an empty list if no resource packages exist.',
     type: [ResourcePackageDto]
-  })
-  @ApiNotFoundResponse({
-    description: 'No resource packages found.'
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve resource packages' })
   async findResourcePackages(
     @Param('workspace_id', ParseIntPipe) workspaceId: number
   ): Promise<ResourcePackageDto[]> {
-    const resourcePackages = await this.resourcePackageService.findResourcePackages(workspaceId);
-
-    if (!resourcePackages || resourcePackages.length === 0) {
-      throw new NotFoundException(`No resource packages found for workspace ${workspaceId}.`);
-    }
-
-    return resourcePackages;
+    return this.resourcePackageService.findResourcePackages(workspaceId);
   }
 
   @Delete(':workspace_id/resource-packages/:id')
@@ -170,5 +160,22 @@ export class ResourcePackageController {
       @UploadedFile(ParseFile) zippedResourcePackage: Express.Multer.File
   ): Promise<number> {
     return this.resourcePackageService.create(workspaceId, zippedResourcePackage);
+  }
+
+  @Post(':workspace_id/resource-packages/geogebra/install')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Install GeoGebra Math Apps Bundle',
+    description: 'Downloads the GeoGebra Math Apps Bundle, validates it and registers it as a global resource package.'
+  })
+  @ApiCreatedResponse({
+    description: 'GeoGebra resource package installed or already present.',
+    type: ResourcePackageDto
+  })
+  @ApiTags('admin resource-packages')
+  async installGeoGebra(): Promise<ResourcePackageDto> {
+    return this.resourcePackageService.installGeoGebraBundle();
   }
 }

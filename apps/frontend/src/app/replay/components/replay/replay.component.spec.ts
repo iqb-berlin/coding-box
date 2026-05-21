@@ -16,6 +16,8 @@ import { AppService } from '../../../core/services/app.service';
 import * as tokenUtils from '../../utils/token-utils';
 import * as domUtils from '../../utils/dom-utils';
 import { CodingJob } from '../../../coding/models/coding-job.model';
+import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
+import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 
 // Beispielhafte Mocks für Services, die im Component per inject() genutzt werden
 class FileServiceMock {
@@ -39,7 +41,10 @@ class ReplayBackendServiceMock {
     unitDef: [{ data: 'unitDef data', file_id: 'UNIT-123.VOUD' }],
     response: { responses: [{ id: '1', content: 'response data' }] },
     vocs: [],
-    player: [{ data: 'player data', file_id: 'PLAYER-1.0' }]
+    player: [{ data: 'player data', file_id: 'PLAYER-1.0' }],
+    serverTimings: {
+      responseTotalMs: 5
+    }
   }));
 
   storeReplayStatistics = jest.fn().mockReturnValue(of({ success: true }));
@@ -57,27 +62,64 @@ class MatSnackBarMock {
   dismiss = jest.fn();
 }
 
+let routeParams: {
+  page: string;
+  testPerson: string;
+  unitId: string;
+  anchor: string | undefined;
+} = {
+  page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
+};
+let routeQueryParams: Record<string, string> = { auth: 'valid-token' };
+
 // Konfiguration der Aktivierten Route, inklusive Parameter und Query Params
 const fakeActivatedRoute = {
   snapshot: { data: {}, url: [{ path: '' }] },
-  params: of({
-    page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
-  }),
-  queryParams: of({ auth: 'valid-token' })
+  get params() {
+    return of(routeParams);
+  },
+  get queryParams() {
+    return of(routeQueryParams);
+  }
 } as unknown as ActivatedRoute;
 
 describe('ReplayComponent', () => {
   let component: ReplayComponent;
   let fixture: ComponentFixture<ReplayComponent>;
   let snackBar: MatSnackBarMock;
+  let replayBackendService: ReplayBackendServiceMock;
+  let codingJobBackendServiceMock: {
+    getCodingJobUnits: jest.Mock;
+    updateCodingJob: jest.Mock;
+    getCodingProgress: jest.Mock;
+    getCodingNotes: jest.Mock;
+    getCodingJob: jest.Mock;
+    saveCodingProgress: jest.Mock;
+    updateCodingJobKeepalive: jest.Mock;
+  };
 
   beforeEach(async () => {
+    routeParams = {
+      page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
+    };
+    routeQueryParams = { auth: 'valid-token' };
+
     // Spy on token validation
     jest.spyOn(tokenUtils, 'validateToken').mockReturnValue({ isValid: true });
     jest.spyOn(tokenUtils, 'isTestperson').mockImplementation(testperson => testperson === 'valid@test@person');
 
     // Spy on DOM utils
     jest.spyOn(domUtils, 'scrollToElementByAlias').mockReturnValue(true);
+
+    codingJobBackendServiceMock = {
+      getCodingJobUnits: jest.fn().mockReturnValue(of([])),
+      updateCodingJob: jest.fn().mockReturnValue(of({})),
+      getCodingProgress: jest.fn().mockReturnValue(of({})),
+      getCodingNotes: jest.fn().mockReturnValue(of({})),
+      getCodingJob: jest.fn().mockReturnValue(of({})),
+      saveCodingProgress: jest.fn().mockReturnValue(of({})),
+      updateCodingJobKeepalive: jest.fn()
+    };
 
     await TestBed.configureTestingModule({
       providers: [
@@ -88,6 +130,7 @@ describe('ReplayComponent', () => {
         { provide: ResponseService, useClass: ResponseServiceMock },
         { provide: FileBackendService, useClass: FileBackendServiceMock },
         { provide: ReplayBackendService, useClass: ReplayBackendServiceMock },
+        { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
         { provide: AppService, useClass: AppServiceMock },
         { provide: MatSnackBar, useClass: MatSnackBarMock }
       ],
@@ -97,12 +140,15 @@ describe('ReplayComponent', () => {
     fixture = TestBed.createComponent(ReplayComponent);
     component = fixture.componentInstance;
     snackBar = TestBed.inject(MatSnackBar) as unknown as MatSnackBarMock;
+    replayBackendService = TestBed.inject(ReplayBackendService) as unknown as ReplayBackendServiceMock;
     fixture.detectChanges();
     await fixture.whenStable();
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
+    window.history.pushState({}, '', '/');
   });
 
   it('should create', () => {
@@ -114,6 +160,124 @@ describe('ReplayComponent', () => {
     expect(component.player).toBe('player data');
     expect(component.unitDef).toBe('unitDef data');
     expect(component.responses).toBeDefined();
+  });
+
+  it('should keep server timings from replay payload', () => {
+    expect((component as unknown as { serverTimings: Record<string, number> | null }).serverTimings)
+      .toEqual({
+        responseTotalMs: 5
+      });
+  });
+
+  it('should calculate route and player timing segments', () => {
+    const privateComponent = component as unknown as {
+      routeStartTime: number;
+      loadStartTime: number;
+      payloadRequestStartTime: number;
+      payloadResponseTime: number;
+      playerReadyTime: number;
+      getClientTimings: (visibleTime: number) => Record<string, number | null>;
+    };
+
+    privateComponent.routeStartTime = 100;
+    privateComponent.loadStartTime = 300;
+    privateComponent.payloadRequestStartTime = 300;
+    privateComponent.payloadResponseTime = 500;
+    privateComponent.playerReadyTime = 650;
+
+    expect(privateComponent.getClientTimings(900)).toEqual({
+      routeToVisibleMs: 800,
+      loadToVisibleMs: 600,
+      routeToPayloadRequestMs: 200,
+      payloadMs: 200,
+      payloadToVisibleMs: 400,
+      payloadToPlayerReadyMs: 150,
+      playerReadyToVisibleMs: 250
+    });
+  });
+
+  it('should store client and server timings with replay statistics', () => {
+    const privateComponent = component as unknown as {
+      routeStartTime: number;
+      loadStartTime: number;
+      payloadRequestStartTime: number;
+      payloadResponseTime: number;
+      playerReadyTime: number;
+      serverTimings: Record<string, number> | null;
+      storeReplayStatistics: (
+        success: boolean,
+        duration: number,
+        errorMessage?: string,
+        visibleTime?: number
+      ) => void;
+    };
+
+    replayBackendService.storeReplayStatistics.mockClear();
+    component.workspaceId = 42;
+    privateComponent.routeStartTime = 100;
+    privateComponent.loadStartTime = 300;
+    privateComponent.payloadRequestStartTime = 300;
+    privateComponent.payloadResponseTime = 500;
+    privateComponent.playerReadyTime = 650;
+    privateComponent.serverTimings = {
+      responseTotalMs: 5
+    };
+
+    privateComponent.storeReplayStatistics(true, 800, undefined, 900);
+
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({
+        durationMilliseconds: 800,
+        success: true,
+        clientTimings: {
+          routeToVisibleMs: 800,
+          loadToVisibleMs: 600,
+          routeToPayloadRequestMs: 200,
+          payloadMs: 200,
+          payloadToVisibleMs: 400,
+          payloadToPlayerReadyMs: 150,
+          playerReadyToVisibleMs: 250
+        },
+        serverTimings: {
+          responseTotalMs: 5
+        }
+      })
+    );
+  });
+
+  it('should omit auth and booklet units data from replay statistics URL', () => {
+    const privateComponent = component as unknown as {
+      storeReplayStatistics: (
+        success: boolean,
+        duration: number,
+        errorMessage?: string,
+        visibleTime?: number
+      ) => void;
+    };
+    const unitsData = encodeURIComponent('x'.repeat(5000));
+
+    window.history.pushState(
+      {},
+      '',
+      `/#/replay/login@@group@BOOKLET_A/UNIT_1/0/0?auth=secret&mode=booklet-view&unitsData=${unitsData}`
+    );
+
+    replayBackendService.storeReplayStatistics.mockClear();
+    component.workspaceId = 42;
+
+    privateComponent.storeReplayStatistics(true, 800, undefined, 900);
+
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({
+        replayUrl: expect.stringContaining('mode=booklet-view')
+      })
+    );
+    const replayUrl = replayBackendService.storeReplayStatistics.mock.calls[0][1].replayUrl as string;
+    expect(replayUrl).not.toContain('auth=');
+    expect(replayUrl).not.toContain('unitsData=');
+    expect(replayUrl.length).toBeLessThan(2000);
   });
 
   it('should handle invalid testPerson in setTestPerson', () => {
@@ -134,6 +298,63 @@ describe('ReplayComponent', () => {
       'Keine valide Seite mit der ID "page-1" gefunden',
       'Schließen',
       { panelClass: ['snackbar-error'] }
+    );
+  });
+
+  it('should send selected replay code and score back to the comparison opener', async () => {
+    const postMessage = jest.fn();
+    Object.defineProperty(window, 'opener', {
+      value: { postMessage },
+      configurable: true
+    });
+    component.originResponseId = 99;
+    component.testPerson = 'valid@test@person';
+    component.unitId = 'unit-123';
+    component.workspaceId = 5;
+    jest.spyOn(component.codingService, 'handleCodeSelected').mockResolvedValue({
+      id: 7,
+      code: '7',
+      label: 'Code 7',
+      score: 2
+    });
+
+    await component.onCodeSelected({
+      variableId: 'VAR1',
+      code: {
+        id: 7,
+        label: 'Code 7',
+        score: 2
+      }
+    });
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'replayCodeSelected',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      variableId: 'VAR1',
+      code: '7',
+      score: 2,
+      responseId: 99
+    }, '*');
+  });
+
+  it('should handle rejected note saves in the component boundary', async () => {
+    const saveNotesSpy = jest.spyOn(component.codingService, 'saveNotes')
+      .mockRejectedValue(new Error('save failed'));
+    component.workspaceId = 5;
+    component.testPerson = 'valid@test@person';
+    component.unitId = 'unit-123';
+    component.codingService.currentVariableId = 'VAR1';
+
+    component.onNotesChanged('note');
+    await Promise.resolve();
+
+    expect(saveNotesSpy).toHaveBeenCalledWith(
+      5,
+      'valid@test@person',
+      'unit-123',
+      'VAR1',
+      'note'
     );
   });
 
@@ -162,6 +383,135 @@ describe('ReplayComponent', () => {
     expect(component.anchor).toBe('test-anchor');
     expect(component.unitId).toBe('test-unit');
     expect(component.testPerson).toBe('valid@test@person');
+  });
+
+  it('should retry anchor highlighting after the player reports visible content', () => {
+    jest.useFakeTimers();
+    const iframe = document.createElement('iframe');
+    const highlightedSection = document.createElement('aspect-section') as HTMLElement;
+    const highlightSpy = jest.spyOn(domUtils, 'highlightAspectSectionWithAnchor')
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([highlightedSection]);
+    const scrollSpy = jest.spyOn(domUtils, 'scrollToElementByAlias').mockReturnValue(true);
+    component.anchor = 'VAR1';
+    component.unitPlayerComponent = {
+      hostingIframe: {
+        nativeElement: iframe
+      }
+    } as unknown as typeof component.unitPlayerComponent;
+
+    component.onResponseVisible();
+
+    expect(highlightSpy).toHaveBeenCalledTimes(1);
+    expect(highlightSpy).toHaveBeenCalledWith(iframe, 'VAR1');
+    expect(scrollSpy).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(100);
+
+    expect(highlightSpy).toHaveBeenCalledTimes(2);
+    expect(scrollSpy).toHaveBeenCalledWith(iframe, 'VAR1');
+    jest.useRealTimers();
+  });
+
+  it('should cancel stale anchor highlight retries when unit data resets', () => {
+    jest.useFakeTimers();
+    const iframe = document.createElement('iframe');
+    const highlightSpy = jest.spyOn(domUtils, 'highlightAspectSectionWithAnchor')
+      .mockReturnValue([]);
+    component.anchor = 'VAR1';
+    component.unitPlayerComponent = {
+      hostingIframe: {
+        nativeElement: iframe
+      }
+    } as unknown as typeof component.unitPlayerComponent;
+
+    component.onResponseVisible();
+    (component as unknown as { resetUnitData: () => void }).resetUnitData();
+    jest.advanceTimersByTime(1000);
+
+    expect(highlightSpy).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  it('should load units data for booklet-view mode without coding job side effects', async () => {
+    const unitsData = {
+      id: 0,
+      name: 'BOOKLET',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'unit-123',
+          alias: 'Unit 123',
+          bookletId: 0
+        },
+        {
+          id: 2,
+          name: 'unit-456',
+          alias: 'Unit 456',
+          bookletId: 0
+        }
+      ]
+    };
+    const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus');
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'booklet-view',
+      unitsData: utf8ToBase64(JSON.stringify(unitsData))
+    };
+
+    component.subscribeRouter();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    const replayComponent = component as unknown as { unitsData: typeof unitsData | null };
+    expect(component.isBookletReplayMode).toBe(true);
+    expect(component.isCodingMode).toBe(false);
+    expect(replayComponent.unitsData?.units).toHaveLength(2);
+    expect(component.totalUnits).toBe(2);
+    expect(updateStatusSpy).not.toHaveBeenCalled();
+  });
+
+  it('should use replay auth token when loading coding job units from query params', async () => {
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47',
+      onlyOpen: 'true'
+    };
+    codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'unit-123',
+      unitAlias: 'Unit 123',
+      variableId: 'VAR1',
+      variableAnchor: 'VAR1',
+      bookletName: 'Booklet 1',
+      personLogin: 'valid',
+      personCode: 'test',
+      personGroup: '',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', true);
   });
 
   it('should normalize player ID correctly', () => {
@@ -353,7 +703,7 @@ describe('ReplayComponent', () => {
     });
 
     it('should NOT pause job on unload if in review mode', () => {
-      const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
+      const pauseOnUnloadSpy = jest.spyOn(component.codingService, 'pauseCodingJobOnUnload');
 
       component.workspaceId = 42;
       component.codingService.codingJobId = 123;
@@ -362,11 +712,25 @@ describe('ReplayComponent', () => {
 
       component.onBeforeUnload();
 
-      expect(updateStatusSpy).not.toHaveBeenCalled();
+      expect(pauseOnUnloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('should NOT pause completed review jobs on unload', () => {
+      const pauseOnUnloadSpy = jest.spyOn(component.codingService, 'pauseCodingJobOnUnload');
+
+      component.workspaceId = 42;
+      component.codingService.codingJobId = 123;
+      component.codingService.isCodingJobCompleted = false;
+      component.codingService.isCompletedJobReview = true;
+      component.isReviewMode = false;
+
+      component.onBeforeUnload();
+
+      expect(pauseOnUnloadSpy).not.toHaveBeenCalled();
     });
 
     it('should pause job on unload if NOT in review mode', () => {
-      const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
+      const pauseOnUnloadSpy = jest.spyOn(component.codingService, 'pauseCodingJobOnUnload');
 
       component.workspaceId = 42;
       component.codingService.codingJobId = 123;
@@ -375,7 +739,23 @@ describe('ReplayComponent', () => {
 
       component.onBeforeUnload();
 
-      expect(updateStatusSpy).toHaveBeenCalledWith(42, 123, 'paused');
+      expect(pauseOnUnloadSpy).toHaveBeenCalledWith(42, 123);
+    });
+  });
+
+  describe('Submit Coding Job', () => {
+    it('does not save all progress again while a save error is active', async () => {
+      const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const submitSpy = jest.spyOn(component.codingService, 'submitCodingJob').mockResolvedValue();
+
+      component.workspaceId = 42;
+      component.codingService.codingJobId = 123;
+      component.codingService.hasSaveError = true;
+
+      await component.submitCodingJob();
+
+      expect(saveAllSpy).not.toHaveBeenCalled();
+      expect(submitSpy).toHaveBeenCalledWith(42, 123);
     });
   });
 });

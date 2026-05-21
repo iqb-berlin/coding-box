@@ -39,35 +39,37 @@ export function highlightAspectSectionWithAnchor(iframe: HTMLIFrameElement, anch
       if (anchor) {
         const anchorElement = elementsByAlias[anchor];
 
-        if (anchorElement) {
-          // If the element is part of a cloze with multiple fields, only highlight the field itself.
-          const clozeElement = anchorElement.closest('aspect-cloze');
-          if (clozeElement) {
-            const aliasedInside = clozeElement.querySelectorAll('[data-element-alias]');
-            // Exclude the cloze itself if it has an alias
-            const variablesInside = Array.from(aliasedInside).filter(el => el !== clozeElement);
-            if (variablesInside.length > 1) {
-              anchorElement.style.border = '3px solid #4285f4';
-              // Find containing aspect-section to include it in the return value
-              const parentSection = anchorElement.closest('aspect-section');
-              if (parentSection) {
-                result.push(parentSection as HTMLElement);
-              }
-              return result;
-            }
-          }
-
-          // Filter aspect-section tags that contain the anchor element
-          filteredElements = Array.from(allAspectSections).filter(aspectSection => aspectSection.contains(anchorElement));
-
-          // Visually highlight the direct child div elements of filtered aspect-section tags
-          filteredElements.forEach(element => {
-            const directChildDivs = element.querySelectorAll(':scope > div');
-            directChildDivs.forEach(div => {
-              (div as HTMLElement).style.border = '3px solid #4285f4'; // Google blue color
-            });
-          });
+        if (!anchorElement) {
+          return result;
         }
+
+        // If the element is part of a cloze with multiple fields, only highlight the field itself.
+        const clozeElement = anchorElement.closest('aspect-cloze');
+        if (clozeElement) {
+          const aliasedInside = clozeElement.querySelectorAll('[data-element-alias]');
+          // Exclude the cloze itself if it has an alias
+          const variablesInside = Array.from(aliasedInside).filter(el => el !== clozeElement);
+          if (variablesInside.length > 1) {
+            anchorElement.style.border = '3px solid #4285f4';
+            // Find containing aspect-section to include it in the return value
+            const parentSection = anchorElement.closest('aspect-section');
+            if (parentSection) {
+              result.push(parentSection as HTMLElement);
+            }
+            return result;
+          }
+        }
+
+        // Filter aspect-section tags that contain the anchor element
+        filteredElements = Array.from(allAspectSections).filter(aspectSection => aspectSection.contains(anchorElement));
+
+        // Visually highlight the direct child div elements of filtered aspect-section tags
+        filteredElements.forEach(element => {
+          const directChildDivs = element.querySelectorAll(':scope > div');
+          directChildDivs.forEach(div => {
+            (div as HTMLElement).style.border = '3px solid #4285f4'; // Google blue color
+          });
+        });
       }
 
       filteredElements.forEach((element: Element) => {

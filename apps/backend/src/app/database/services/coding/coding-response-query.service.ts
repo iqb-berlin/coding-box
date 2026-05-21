@@ -1,25 +1,36 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Inject, Injectable, Logger, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
-import { statusStringToNumber } from '../../utils/response-status-converter';
+import { Repository } from 'typeorm';
+import {
+  STATISTICS_IGNORED_STATUSES,
+  statusStringToNumber
+} from '../../utils/response-status-converter';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 import { ResponseEntity } from '../../entities/response.entity';
-import { Unit } from '../../entities/unit.entity';
-import { Booklet } from '../../entities/booklet.entity';
-import Persons from '../../entities/persons.entity';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
+// eslint-disable-next-line import/no-cycle
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 @Injectable()
 export class CodingResponseQueryService {
   private readonly logger = new Logger(CodingResponseQueryService.name);
+  private readonly codingResponseStatuses = [
+    statusStringToNumber('NOT_REACHED') || 1,
+    statusStringToNumber('DISPLAYED') || 2,
+    statusStringToNumber('VALUE_CHANGED') || 3
+  ];
 
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    @InjectRepository(Unit)
-    private unitRepository: Repository<Unit>,
-    @InjectRepository(Booklet)
-    private bookletRepository: Repository<Booklet>,
-    @InjectRepository(Persons)
-    private personsRepository: Repository<Persons>
+    private workspaceExclusionService: WorkspaceExclusionService,
+    @Inject(forwardRef(() => WorkspaceFilesService))
+    private readonly workspaceFilesService: WorkspaceFilesService
   ) { }
 
   async getResponsesByStatus(
@@ -45,26 +56,26 @@ export class CodingResponseQueryService {
           limit
         };
       }
+      if (STATISTICS_IGNORED_STATUSES.includes(statusNumber)) {
+        this.logger.warn(`Ignored statistics status requested: ${status}`);
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit
+        };
+      }
 
       const offset = (page - 1) * limit;
-
-      const selectFields = [
-        'response.id',
-        'response.unitId',
-        'response.variableid',
-        'response.value',
-        'response.status',
-        'response.codedstatus'
-      ];
-
-      selectFields.push('response.code_v1', 'response.score_v1');
-      selectFields.push('response.code_v2', 'response.score_v2');
-      selectFields.push('response.code_v3', 'response.score_v3');
-      selectFields.push(
-        'response.status_v1',
-        'response.status_v2',
-        'response.status_v3'
-      );
+      const validVariablePairKeys = await this.getValidVariablePairKeys(workspaceId);
+      if (validVariablePairKeys.length === 0) {
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit
+        };
+      }
 
       const queryBuilder = this.responseRepository
         .createQueryBuilder('response')
@@ -72,32 +83,22 @@ export class CodingResponseQueryService {
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .select(selectFields)
-        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .where('response.status IN (:...codingResponseStatuses)', {
+          codingResponseStatuses: this.codingResponseStatuses
+        })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
-      switch (version) {
-        case 'v1':
-          queryBuilder.andWhere('response.status_v1 = :status', {
-            status: statusNumber
-          });
-          break;
-        case 'v2':
-          queryBuilder.andWhere('response.status_v2 = :status', {
-            status: statusNumber
-          });
-          break;
-        case 'v3':
-          queryBuilder.andWhere('response.status_v3 = :status', {
-            status: statusNumber
-          });
-          break;
-        default:
-          queryBuilder.andWhere('response.status_v1 = :status', {
-            status: statusNumber
-          });
-          break;
-      }
+      queryBuilder.andWhere(
+        `${getEffectiveCodingStatusExpression(version)} = :status`,
+        { status: statusNumber }
+      );
+      queryBuilder.andWhere(
+        'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+        { validVariablePairKeys }
+      );
 
       const total = await queryBuilder.getCount();
       const data = await queryBuilder
@@ -127,6 +128,17 @@ export class CodingResponseQueryService {
     }
   }
 
+  private async getValidVariablePairKeys(workspaceId: number): Promise<string[]> {
+    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    return Array.from(unitVariableMap.entries()).flatMap(([unitName, variableIds]) => (
+      Array.from(variableIds).map(variableId => this.toVariablePairKey(unitName, variableId))
+    ));
+  }
+
+  private toVariablePairKey(unitName: string, variableId: string): string {
+    return `${unitName}\u001F${variableId}`;
+  }
+
   async getManualTestPersons(
     workspaceId: number,
     personIds?: string
@@ -137,79 +149,39 @@ export class CodingResponseQueryService {
     );
 
     try {
-      const persons = await this.personsRepository.find({
-        where: { workspace_id: workspaceId, consider: true }
-      });
-
-      if (!persons.length) {
-        this.logger.log(`No persons found for workspace_id = ${workspaceId}.`);
-        return [];
-      }
-
-      const filteredPersons = personIds ?
-        persons.filter(person => personIds.split(',').includes(String(person.id))
-        ) :
-        persons;
-
-      if (!filteredPersons.length) {
-        this.logger.log(
-          `No persons match the personIds in workspace_id = ${workspaceId}.`
-        );
-        return [];
-      }
-
-      const personIdsArray = filteredPersons.map(person => person.id);
-
-      const booklets = await this.bookletRepository.find({
-        where: { personid: In(personIdsArray) },
-        select: ['id']
-      });
-
-      const bookletIds = booklets.map(booklet => booklet.id);
-
-      if (!bookletIds.length) {
-        this.logger.log(
-          `No booklets found for persons = [${personIdsArray.join(
-            ', '
-          )}] in workspace_id = ${workspaceId}.`
-        );
-        return [];
-      }
-
-      const units = await this.unitRepository.find({
-        where: { bookletid: In(bookletIds) },
-        select: ['id', 'name']
-      });
-
-      const unitIdToNameMap = new Map(
-        units.map(unit => [unit.id, unit.name])
-      );
-      const unitIds = Array.from(unitIdToNameMap.keys());
-
-      if (!unitIds.length) {
-        this.logger.log(
-          `No units found for booklets = [${bookletIds.join(
-            ', '
-          )}] in workspace_id = ${workspaceId}.`
-        );
-        return [];
-      }
-
-      const responses = await this.responseRepository.find({
-        where: {
-          unitid: In(unitIds),
-          status_v1: In([
+      const queryBuilder = this.responseRepository
+        .createQueryBuilder('response')
+        .leftJoinAndSelect('response.unit', 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.status_v1 IN (:...statuses)', {
+          statuses: [
             statusStringToNumber('CODING_INCOMPLETE'),
             statusStringToNumber('INTENDED_INCOMPLETE'),
             statusStringToNumber('CODE_SELECTION_PENDING'),
             statusStringToNumber('CODING_ERROR')
-          ])
+          ]
+        });
+
+      if (personIds) {
+        const personIdsArray = personIds.split(',').map(id => id.trim()).filter(Boolean);
+        if (!personIdsArray.length) {
+          return [];
         }
-      });
+        queryBuilder.andWhere('person.id IN (:...personIdsArray)', { personIdsArray });
+      }
+
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      applyResolvedExclusionsToQuery(queryBuilder, exclusions);
+
+      const responses = await queryBuilder.getMany();
 
       const enrichedResponses = responses.map(response => ({
         ...response,
-        unitname: unitIdToNameMap.get(response.unitid) || 'Unknown Unit'
+        unitname: response.unit?.name || 'Unknown Unit'
       }));
 
       this.logger.log(

@@ -108,6 +108,12 @@ export type TcMergeLastState = {
 
 export interface CodingStatistics {
   totalResponses: number;
+  baseResponseCount?: number;
+  derivedResponseCount?: number;
+  derivedVariableCount?: number;
+  derivedStatusCounts?: {
+    [key: string]: number;
+  };
   statusCounts: {
     [key: string]: number;
   };
@@ -126,6 +132,7 @@ export interface CodedResponse {
   value?: string;
   status?: number;
   subform?: string | null;
+  isAutocoderGenerated?: boolean;
 
   code_v1?: number | null;
   status_v1?: string | null;

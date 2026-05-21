@@ -20,6 +20,10 @@ export class WorkspaceProcessesService {
   }
 
   deleteProcess(workspaceId: number, queueName: string, id: string): Observable<boolean> {
-    return this.http.delete<boolean>(`${this.serverUrl}/admin/workspace/${workspaceId}/processes/${queueName}/${id}`);
+    const encodedQueueName = encodeURIComponent(queueName);
+    const encodedId = encodeURIComponent(id);
+    return this.http.delete<boolean>(
+      `${this.serverUrl}/admin/workspace/${workspaceId}/processes/${encodedQueueName}/${encodedId}`
+    );
   }
 }

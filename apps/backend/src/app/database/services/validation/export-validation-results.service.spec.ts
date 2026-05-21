@@ -1,4 +1,5 @@
 import { Repository } from 'typeorm';
+import * as ExcelJS from 'exceljs';
 import { ExportValidationResultsService } from './export-validation-results.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CacheService } from '../../../cache/cache.service';
@@ -10,6 +11,7 @@ describe('ExportValidationResultsService', () => {
 
   const makeQueryBuilder = (returnValue: ResponseEntity | null) => ({
     leftJoin: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
@@ -48,11 +50,18 @@ describe('ExportValidationResultsService', () => {
       cacheService.getCompleteValidationResults.mockResolvedValue(null);
 
       await expect(
-        service.exportValidationResultsAsExcel(1, 'validation:1:abc123')
+        service.exportValidationResultsAsExcel(1, 'validation:v2:1:abc123')
       ).rejects.toThrow('Could not export validation results as Excel');
       expect(cacheService.getCompleteValidationResults).toHaveBeenCalledWith(
-        'validation:1:abc123'
+        'validation:v2:1:abc123'
       );
+    });
+
+    it('should reject legacy validation cache keys', async () => {
+      await expect(
+        service.exportValidationResultsAsExcel(1, 'validation:1:abc123')
+      ).rejects.toThrow('Invalid validation cache key provided');
+      expect(cacheService.getCompleteValidationResults).not.toHaveBeenCalled();
     });
 
     it('should handle empty validation results', async () => {
@@ -63,7 +72,7 @@ describe('ExportValidationResultsService', () => {
 
       const result = await service.exportValidationResultsAsExcel(
         1,
-        'validation:1:abc123'
+        'validation:v2:1:abc123'
       );
       expect(result).toBeInstanceOf(Buffer);
     });
@@ -76,7 +85,7 @@ describe('ExportValidationResultsService', () => {
 
       const result = await service.exportValidationResultsAsExcel(
         1,
-        'validation:1:abc123'
+        'validation:v2:1:abc123'
       );
       expect(result).toBeInstanceOf(Buffer);
     });
@@ -129,7 +138,7 @@ describe('ExportValidationResultsService', () => {
 
       const result = await service.exportValidationResultsAsExcel(
         1,
-        'validation:1:abc123'
+        'validation:v2:1:abc123'
       );
       expect(result).toBeInstanceOf(Buffer);
       expect(responseRepository.createQueryBuilder).toHaveBeenCalled();
@@ -154,8 +163,97 @@ describe('ExportValidationResultsService', () => {
 
       const result = await service.exportValidationResultsAsExcel(
         1,
-        'validation:1:abc123'
+        'validation:v2:1:abc123'
       );
+      expect(result).toBeInstanceOf(Buffer);
+      expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('should include response data for MISSING results with responseFound marker', async () => {
+      const mockResponse: ResponseEntity = {
+        id: 1,
+        value: 'response-value',
+        status: 'completed',
+        unit: {
+          id: 10,
+          name: 'Unit Name',
+          alias: 'UNIT1',
+          booklet: {
+            id: 5,
+            person: {
+              id: 100,
+              login: 'user1',
+              code: 'code1'
+            },
+            bookletinfo: {
+              id: 1,
+              name: 'Booklet Name'
+            }
+          }
+        }
+      } as unknown as ResponseEntity;
+
+      cacheService.getCompleteValidationResults.mockResolvedValue({
+        results: [
+          {
+            status: 'MISSING',
+            responseFound: true,
+            issues: ['Replay asset unavailable'],
+            combination: {
+              unit_key: 'UNIT1',
+              login_name: 'user1',
+              login_code: 'code1',
+              booklet_id: 'BOOK1',
+              variable_id: 'VAR1'
+            }
+          }
+        ],
+        metadata: { total: 1, missing: 1, timestamp: Date.now() }
+      });
+
+      responseRepository.createQueryBuilder.mockReturnValue(
+        makeQueryBuilder(mockResponse) as unknown as ReturnType<
+        Repository<ResponseEntity>['createQueryBuilder']
+        >
+      );
+
+      const result = await service.exportValidationResultsAsExcel(
+        1,
+        'validation:v2:1:abc123'
+      );
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(result);
+      const worksheet = workbook.getWorksheet('Validation Results');
+
+      expect(responseRepository.createQueryBuilder).toHaveBeenCalled();
+      expect(worksheet?.getRow(2).getCell(7).value).toBe('response-value');
+      expect(worksheet?.getRow(2).getCell(8).value).toBe('completed');
+    });
+
+    it('should not query response data for MISSING results when responseFound is false', async () => {
+      cacheService.getCompleteValidationResults.mockResolvedValue({
+        results: [
+          {
+            status: 'MISSING',
+            responseFound: false,
+            issues: ['Replay asset unavailable'],
+            combination: {
+              unit_key: 'UNIT1',
+              login_name: 'user1',
+              login_code: 'code1',
+              booklet_id: 'BOOK1',
+              variable_id: 'VAR1'
+            }
+          }
+        ],
+        metadata: { total: 1, missing: 1, timestamp: Date.now() }
+      });
+
+      const result = await service.exportValidationResultsAsExcel(
+        1,
+        'validation:v2:1:abc123'
+      );
+
       expect(result).toBeInstanceOf(Buffer);
       expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
     });
@@ -218,7 +316,7 @@ describe('ExportValidationResultsService', () => {
 
       const result = await service.exportValidationResultsAsExcel(
         1,
-        'validation:1:abc123'
+        'validation:v2:1:abc123'
       );
       expect(result).toBeInstanceOf(Buffer);
       expect(responseRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
@@ -259,7 +357,7 @@ describe('ExportValidationResultsService', () => {
 
       const result = await service.exportValidationResultsAsExcel(
         1,
-        'validation:1:abc123'
+        'validation:v2:1:abc123'
       );
       expect(result).toBeInstanceOf(Buffer);
     });
@@ -289,7 +387,7 @@ describe('ExportValidationResultsService', () => {
 
       const result = await service.exportValidationResultsAsExcel(
         1,
-        'validation:1:abc123'
+        'validation:v2:1:abc123'
       );
       expect(result).toBeInstanceOf(Buffer);
     });
@@ -316,7 +414,7 @@ describe('ExportValidationResultsService', () => {
       });
 
       await expect(
-        service.exportValidationResultsAsExcel(1, 'validation:1:abc123')
+        service.exportValidationResultsAsExcel(1, 'validation:v2:1:abc123')
       ).rejects.toThrow('Could not export validation results as Excel');
     });
 
@@ -345,7 +443,7 @@ describe('ExportValidationResultsService', () => {
 
       const result = await service.exportValidationResultsAsExcel(
         1,
-        'validation:1:abc123'
+        'validation:v2:1:abc123'
       );
       expect(result).toBeInstanceOf(Buffer);
     });
@@ -398,13 +496,13 @@ describe('ExportValidationResultsService', () => {
 
       const result = await service.exportValidationResultsAsExcel(
         1,
-        'validation:1:abc123'
+        'validation:v2:1:abc123'
       );
       expect(result).toBeInstanceOf(Buffer);
     });
 
     it('should retrieve validation results from cache using provided key', async () => {
-      const cacheKey = 'validation:1:hash123';
+      const cacheKey = 'validation:v2:1:hash123';
       cacheService.getCompleteValidationResults.mockResolvedValue({
         results: [],
         metadata: { total: 0, missing: 0, timestamp: Date.now() }
@@ -456,11 +554,15 @@ describe('ExportValidationResultsService', () => {
         >
       );
 
-      await service.exportValidationResultsAsExcel(1, 'validation:1:abc123');
+      await service.exportValidationResultsAsExcel(1, 'validation:v2:1:abc123');
 
       expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-        'unit.alias = :unitKey',
-        { unitKey: 'UNIT1' }
+        'person.workspace_id = :workspaceId',
+        { workspaceId: 1 }
+      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'person.consider = :consider',
+        { consider: true }
       );
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
         'person.login = :loginName',

@@ -1,5 +1,7 @@
-import { Component, inject } from '@angular/core';
-
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import {
+  Component, OnDestroy, OnInit, inject
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -8,9 +10,34 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { Subscription, timer } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 import { AppService, standardLogo } from '../../../core/services/app.service';
 import { LogoService } from '../../../core/services/logo.service';
+import { SystemSettingsService } from '../../../core/services/system-settings.service';
+import { ContentPoolSettings } from '../../../ws-admin/models/content-pool.model';
 import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
+import { SERVER_URL } from '../../../injection-tokens';
+
+type DatabaseExportStatus =
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+interface DatabaseExportJobState {
+  status: DatabaseExportStatus;
+  progress: number;
+  result?: {
+    fileName: string;
+    fileSize: number;
+    createdAt: number;
+    requestedByUserId: number;
+  };
+  error?: string;
+}
 
 @Component({
   selector: 'coding-box-sys-admin-settings',
@@ -24,13 +51,18 @@ import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatProgressBarModule
+    MatProgressBarModule,
+    MatSlideToggleModule
   ]
 })
-export class SysAdminSettingsComponent {
+export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   appService = inject(AppService);
+  private http = inject(HttpClient);
   private logoService = inject(LogoService);
+  private systemSettingsService = inject(SystemSettingsService);
   private snackBar = inject(MatSnackBar);
+  private rawServerUrl = inject(SERVER_URL);
+  private exportPollingSubscription: Subscription | null = null;
 
   selectedFile: File | null = null;
   previewUrl: string | null = null;
@@ -38,12 +70,25 @@ export class SysAdminSettingsComponent {
   logoAltText = '';
   backgroundColorValue = '';
   isExporting = false;
-  private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
+  databaseExportProgress = 0;
+  databaseExportStatus: DatabaseExportStatus | null = null;
+  databaseExportError: string | null = null;
+  isLoadingContentPoolSettings = false;
+  isSavingContentPoolSettings = false;
+  contentPoolSettings: ContentPoolSettings = {
+    enabled: false,
+    baseUrl: ''
+  };
 
+  private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
   constructor() {
     this.isDefaultLogo = this.appService.appLogo.data === standardLogo.data;
     this.logoAltText = this.appService.appLogo.alt;
     this.backgroundColorValue = this.appService.appLogo.bodyBackground || '';
+  }
+
+  ngOnInit(): void {
+    this.loadContentPoolSettings();
   }
 
   onFileSelected(event: Event): void {
@@ -205,55 +250,256 @@ export class SysAdminSettingsComponent {
     });
   }
 
+  ngOnDestroy(): void {
+    this.stopExportPolling();
+  }
+
+  getDatabaseExportStatusLabel(): string {
+    switch (this.databaseExportStatus) {
+      case 'queued':
+        return 'In Warteschlange';
+      case 'running':
+        return 'Läuft';
+      case 'completed':
+        return 'Abgeschlossen';
+      case 'failed':
+        return 'Fehlgeschlagen';
+      case 'cancelled':
+        return 'Abgebrochen';
+      default:
+        return 'Unbekannt';
+    }
+  }
+
+  loadContentPoolSettings(): void {
+    this.isLoadingContentPoolSettings = true;
+    this.systemSettingsService.getContentPoolSettings().subscribe({
+      next: settings => {
+        this.contentPoolSettings = {
+          enabled: !!settings.enabled,
+          baseUrl: (settings.baseUrl || '').trim()
+        };
+        this.isLoadingContentPoolSettings = false;
+      },
+      error: () => {
+        this.isLoadingContentPoolSettings = false;
+        this.snackBar.open(
+          'Content-Pool-Einstellungen konnten nicht geladen werden.',
+          'Schließen',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  saveContentPoolSettings(): void {
+    const normalizedBaseUrl = (this.contentPoolSettings.baseUrl || '').trim();
+    if (this.contentPoolSettings.enabled && !normalizedBaseUrl) {
+      this.snackBar.open(
+        'Bitte eine Content-Pool URL hinterlegen, bevor das Feature aktiviert wird.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    this.isSavingContentPoolSettings = true;
+    this.systemSettingsService
+      .updateContentPoolSettings({
+        enabled: this.contentPoolSettings.enabled,
+        baseUrl: normalizedBaseUrl
+      })
+      .subscribe({
+        next: settings => {
+          this.contentPoolSettings = {
+            enabled: !!settings.enabled,
+            baseUrl: (settings.baseUrl || '').trim()
+          };
+          this.isSavingContentPoolSettings = false;
+          this.snackBar.open(
+            'Content-Pool-Einstellungen wurden gespeichert.',
+            'Schließen',
+            { duration: 3000 }
+          );
+        },
+        error: error => {
+          this.isSavingContentPoolSettings = false;
+          const message = this.extractErrorMessage(
+            error,
+            'Content-Pool-Einstellungen konnten nicht gespeichert werden.'
+          );
+          this.snackBar.open(message, 'Schließen', { duration: 4000 });
+        }
+      });
+  }
+
   exportDatabase(): void {
     if (this.isExporting) {
       return;
     }
 
-    this.isExporting = true;
-    const anchor = document.createElement('a');
-    anchor.style.display = 'none';
-    document.body.appendChild(anchor);
-    const apiUrl = `${window.location.origin}/api/admin/database/export/sqlite`;
-    const token = localStorage.getItem('id_token');
-
-    if (!token) {
+    const authHeaders = this.getAuthHeaders();
+    if (!authHeaders) {
       this.snackBar.open('Nicht authentifiziert. Bitte melden Sie sich erneut an.', 'Schließen', { duration: 5000 });
-      this.isExporting = false;
       return;
     }
 
-    fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/x-sqlite3'
-      }
-    })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.blob();
-      })
-      .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        anchor.href = url;
-        anchor.download = `database-export-${new Date().toISOString().split('T')[0]}.sqlite`;
-        anchor.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(anchor);
+    this.isExporting = true;
+    this.databaseExportProgress = 0;
+    this.databaseExportStatus = 'queued';
+    this.databaseExportError = null;
 
-        this.snackBar.open('Datenbank erfolgreich exportiert', 'Schließen', { duration: 3000 });
-      })
-      .catch(() => {
-        this.snackBar.open('Fehler beim Exportieren der Datenbank. Bitte versuchen Sie es erneut.', 'Schließen', { duration: 5000 });
-        if (document.body.contains(anchor)) {
-          document.body.removeChild(anchor);
+    this.http
+      .post<{ jobId: string; message: string }>(`${this.exportBaseUrl}/job`, {}, { headers: authHeaders })
+      .subscribe({
+        next: ({ jobId }) => {
+          this.startExportPolling(jobId, authHeaders);
+        },
+        error: error => {
+          this.isExporting = false;
+          const message = this.extractErrorMessage(
+            error,
+            'Fehler beim Starten des Datenbank-Exports.'
+          );
+          this.databaseExportError = message;
+          this.databaseExportStatus = 'failed';
+          this.snackBar.open(message, 'Schließen', { duration: 5000 });
         }
-      })
-      .finally(() => {
-        this.isExporting = false;
       });
+  }
+
+  private startExportPolling(jobId: string, headers: HttpHeaders): void {
+    this.stopExportPolling();
+
+    this.exportPollingSubscription = timer(0, 2000)
+      .pipe(
+        switchMap(() => this.http.get<DatabaseExportJobState>(
+          `${this.exportBaseUrl}/job/${jobId}`,
+          { headers }
+        ))
+      )
+      .subscribe({
+        next: state => {
+          this.databaseExportStatus = state.status;
+          this.databaseExportProgress = Math.max(0, Math.min(100, Math.round(state.progress || 0)));
+
+          if (state.status === 'completed') {
+            this.databaseExportProgress = 100;
+            this.stopExportPolling();
+            this.downloadExportFile(jobId, headers);
+            return;
+          }
+
+          if (state.status === 'failed' || state.status === 'cancelled') {
+            this.stopExportPolling();
+            this.isExporting = false;
+            this.databaseExportError = state.error || 'Der Datenbank-Export ist fehlgeschlagen.';
+            this.snackBar.open(this.databaseExportError, 'Schließen', { duration: 5000 });
+          }
+        },
+        error: error => {
+          this.stopExportPolling();
+          this.isExporting = false;
+          const message = this.extractErrorMessage(
+            error,
+            'Fehler beim Abrufen des Export-Status.'
+          );
+          this.databaseExportStatus = 'failed';
+          this.databaseExportError = message;
+          this.snackBar.open(message, 'Schließen', { duration: 5000 });
+        }
+      });
+  }
+
+  private downloadExportFile(jobId: string, headers: HttpHeaders): void {
+    this.http
+      .get(`${this.exportBaseUrl}/job/${jobId}/download`, {
+        headers,
+        responseType: 'blob'
+      })
+      .subscribe({
+        next: blob => {
+          this.saveBlob(
+            blob,
+            `database-export-${new Date().toISOString().split('T')[0]}.sqlite`
+          );
+          this.isExporting = false;
+          this.databaseExportStatus = 'completed';
+          this.databaseExportError = null;
+          this.snackBar.open('Datenbank erfolgreich exportiert', 'Schließen', { duration: 3000 });
+        },
+        error: error => {
+          this.isExporting = false;
+          this.databaseExportStatus = 'failed';
+          this.databaseExportError = this.extractErrorMessage(
+            error,
+            'Fehler beim Herunterladen der Exportdatei.'
+          );
+          this.snackBar.open(this.databaseExportError, 'Schließen', { duration: 5000 });
+        }
+      });
+  }
+
+  private stopExportPolling(): void {
+    if (this.exportPollingSubscription) {
+      this.exportPollingSubscription.unsubscribe();
+      this.exportPollingSubscription = null;
+    }
+  }
+
+  private getAuthHeaders(): HttpHeaders | null {
+    const token = localStorage.getItem('id_token');
+    if (!token) {
+      return null;
+    }
+
+    return new HttpHeaders({
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json'
+    });
+  }
+
+  private get exportBaseUrl(): string {
+    return `${this.serverUrl}/admin/database/export/sqlite`;
+  }
+
+  private get serverUrl(): string {
+    return this.rawServerUrl.endsWith('/') ?
+      this.rawServerUrl.slice(0, -1) :
+      this.rawServerUrl;
+  }
+
+  private saveBlob(blob: Blob, filename: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.style.display = 'none';
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(anchor);
+  }
+
+  private extractErrorMessage(error: unknown, fallback: string): string {
+    const payload = error as {
+      error?: {
+        message?: string | string[];
+      };
+      message?: string;
+    };
+
+    if (Array.isArray(payload?.error?.message)) {
+      return payload.error.message.join(', ');
+    }
+    if (typeof payload?.error?.message === 'string') {
+      return payload.error.message;
+    }
+
+    if (typeof payload?.message === 'string') {
+      return payload.message;
+    }
+
+    return fallback;
   }
 }

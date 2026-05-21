@@ -31,7 +31,12 @@ import { MatTooltip } from '@angular/material/tooltip';
 import {
   forkJoin, Subject, takeUntil, firstValueFrom
 } from 'rxjs';
-import { CodingJob, VariableBundle, Variable } from '../../models/coding-job.model';
+import {
+  CodingJob,
+  JobDefinitionCoderConfig,
+  VariableBundle,
+  Variable
+} from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { DistributedCodingService } from '../../services/distributed-coding.service';
@@ -47,6 +52,7 @@ export interface CodingJobDefinitionDialogData {
   mode: 'definition' | 'job';
   jobDefinitionId?: number;
   preloadedVariables?: Variable[];
+  readOnly?: boolean;
 }
 
 export interface JobDefinition {
@@ -55,11 +61,18 @@ export interface JobDefinition {
   assignedVariables?: Variable[];
   assignedVariableBundles?: VariableBundle[];
   assignedCoders?: number[];
+  assignedCoderConfigs?: JobDefinitionCoderConfig[];
+  distributionSeed?: string;
+  plannedVariableUsage?: Record<string, number>;
   durationSeconds?: number;
   maxCodingCases?: number;
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
+  showScore?: boolean;
+  allowComments?: boolean;
+  suppressGeneralInstructions?: boolean;
+  createdJobsCount?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -67,11 +80,15 @@ export interface JobDefinition {
 interface CreationResults {
   doubleCodingInfo: Record<string, {
     totalCases: number;
+    distinctCases?: number;
+    codingTasksTotal?: number;
     doubleCodedCases: number;
     singleCodedCasesAssigned: number;
     doubleCodedCasesPerCoder: Record<string, number>;
   }>;
+  distributionByCoderId?: Record<string, Record<string, number>>;
   jobs: {
+    itemKey?: string;
     coderId: number;
     coderName: string;
     variable: { unitName: string; variableId: string };
@@ -128,6 +145,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   isLoading = false;
   isSaving = false;
 
+  get isReadOnly(): boolean {
+    return this.data.readOnly === true;
+  }
+
   // Double coding configuration
   doubleCodingMode: 'absolute' | 'percentage' = 'absolute';
 
@@ -143,6 +164,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   availableCoders: Coder[] = [];
   selectedCoders = new SelectionModel<Coder>(true, []);
   isLoadingAvailableCoders = false;
+  private readonly defaultCoderCapacityPercent = 100;
+  private readonly minCoderCapacityPercent = 10;
+  private readonly maxCoderCapacityPercent = 300;
 
   // Variable bundles
   variableBundles: VariableBundle[] = [];
@@ -162,6 +186,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   trainingRequiredFilter: 'all' | 'true' | 'false' = 'all';
 
   private disabledVariableKeys = new Set<string>();
+  private baseAvailableCasesByVariable = new Map<string, number>();
   existingJobDefinitions: JobDefinition[] = [];
 
   constructor(
@@ -226,7 +251,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     this.coderService.getCoders().subscribe({
       next: coders => {
-        this.availableCoders = coders;
+        this.availableCoders = coders.map(coder => ({
+          ...coder,
+          capacityPercent: this.getInitialCoderCapacityPercent(coder.id)
+        }));
         this.isLoadingAvailableCoders = false;
         let assignedIds: number[] = [];
         if (this.data.isEdit && this.data.codingJob?.assignedCoders) {
@@ -246,6 +274,67 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.isLoadingAvailableCoders = false;
       }
     });
+  }
+
+  private getInitialCoderCapacityPercent(coderId: number): number {
+    const configuredCapacity = this.data.codingJob?.assignedCoderConfigs
+      ?.find(config => config.coderId === coderId)
+      ?.capacityPercent;
+
+    return this.normalizeCoderCapacityPercent(configuredCapacity);
+  }
+
+  private normalizeCoderCapacityPercent(value: unknown): number {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+      return this.defaultCoderCapacityPercent;
+    }
+
+    return Math.min(
+      this.maxCoderCapacityPercent,
+      Math.max(this.minCoderCapacityPercent, numericValue)
+    );
+  }
+
+  getCoderCapacityPercent(coder: Coder): number {
+    return this.normalizeCoderCapacityPercent(coder.capacityPercent);
+  }
+
+  updateCoderCapacityPercent(coder: Coder, value: unknown): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
+    coder.capacityPercent = this.normalizeCoderCapacityPercent(value);
+  }
+
+  getSelectedCoderConfigs(): JobDefinitionCoderConfig[] {
+    return this.selectedCoders.selected.map(coder => ({
+      coderId: coder.id,
+      capacityPercent: this.getCoderCapacityPercent(coder)
+    }));
+  }
+
+  private getSelectedCodersForDistribution(): Coder[] {
+    return this.selectedCoders.selected.map(coder => ({
+      ...coder,
+      capacityPercent: this.getCoderCapacityPercent(coder)
+    }));
+  }
+
+  private mapCodersForDistribution(coders: Coder[]): {
+    id: number;
+    name: string;
+    username: string;
+    capacityPercent: number;
+  }[] {
+    return coders.map(coder => ({
+      id: coder.id,
+      name: coder.name,
+      username: coder.name,
+      capacityPercent: this.normalizeCoderCapacityPercent(coder.capacityPercent)
+    }));
   }
 
   loadExistingJobDefinitions(): void {
@@ -298,14 +387,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const formFields: Record<string, [string | number | boolean | null | undefined, ValidatorFn[]]> = {
       durationSeconds: [this.data.codingJob?.durationSeconds || 1, [Validators.min(1)]],
       maxCodingCases: [this.data.codingJob?.maxCodingCases || null, [Validators.min(1)]],
-      doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, []],
-      doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, []],
-      caseOrderingMode: [this.data.codingJob?.caseOrderingMode || 'continuous', []]
+      doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, [Validators.min(0)]],
+      doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, [Validators.min(0), Validators.max(100)]],
+      caseOrderingMode: [this.data.codingJob?.caseOrderingMode || 'continuous', [Validators.required]],
+      showScore: [this.data.codingJob?.showScore ?? this.data.mode !== 'definition', []],
+      allowComments: [this.data.codingJob?.allowComments ?? true, []],
+      suppressGeneralInstructions: [this.data.codingJob?.suppressGeneralInstructions ?? false, []]
     };
 
     if (this.data.mode === 'job') {
-      formFields.showScore = [this.data.codingJob?.showScore ?? true, []];
-      formFields.allowComments = [this.data.codingJob?.allowComments ?? true, []];
       formFields.suppressGeneralInstructions = [this.data.codingJob?.suppressGeneralInstructions ?? false, []];
     }
 
@@ -315,6 +405,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     this.codingJobForm = this.fb.group(formFields);
+
+    if (this.isReadOnly) {
+      this.codingJobForm.disable({ emitEvent: false });
+    }
 
     const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
 
@@ -329,6 +423,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     if (this.data.preloadedVariables && !forceReload && !unitNameFilter && trainingRequired === undefined) {
       this.variables = this.data.preloadedVariables;
+      this.snapshotBaseAvailability(this.variables);
       this.applyJobDefinitionUsage();
       this.applyAvailabilityFilter();
       this.processVariableSelection();
@@ -350,6 +445,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     ).subscribe({
       next: variables => {
         this.variables = variables;
+        this.snapshotBaseAvailability(this.variables);
         this.applyJobDefinitionUsage();
         this.applyAvailabilityFilter();
         this.processVariableSelection();
@@ -433,16 +529,29 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
   }
 
+  private getVariableUsageKey(unitName?: string | null, variableId?: string | null): string {
+    return `${(unitName || '').trim().toLowerCase()}::${(variableId || '').trim().toLowerCase()}`;
+  }
+
+  private snapshotBaseAvailability(variables: Variable[]): void {
+    this.baseAvailableCasesByVariable = new Map(
+      variables.map(variable => [
+        this.getVariableUsageKey(variable.unitName, variable.variableId),
+        variable.availableCases ?? variable.uniqueCasesAfterAggregation ?? variable.responseCount ?? 0
+      ])
+    );
+  }
+
   applyJobDefinitionUsage(): void {
     if (!this.variables || this.variables.length === 0) return;
 
     const casesUsedInDefinitions = new Map<string, number>();
-    const makeKey = (u?: string | null, v?: string | null) => `${(u || '').trim().toLowerCase()}::${(v || '').trim().toLowerCase()}`;
-
-    const getTotalCases = (unitName?: string, variableId?: string) => {
-      const key = makeKey(unitName, variableId);
-      const loadedVar = this.variables.find(v => makeKey(v.unitName, v.variableId) === key);
-      return loadedVar?.uniqueCasesAfterAggregation ?? loadedVar?.responseCount ?? 0;
+    const makeKey = (u?: string | null, v?: string | null) => this.getVariableUsageKey(u, v);
+    const makeKeyFromUsageKey = (variableKey: string): string => {
+      const [unitName, variableId] = variableKey.split('::');
+      return variableId === undefined ?
+        variableKey.trim().toLowerCase() :
+        makeKey(unitName, variableId);
     };
 
     // Count cases used in each job definition (excluding the current one being edited)
@@ -453,58 +562,34 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
           return;
         }
 
-        const itemsCount = (def.assignedVariables?.length || 0) + (def.assignedVariableBundles?.length || 0);
-        const maxCodingCases = def.maxCodingCases;
-        let currentItemIndex = 0;
+        if ((def.createdJobsCount ?? 0) > 0) {
+          return;
+        }
 
-        // 1. Process Variable Bundles (Backend processes bundles first)
-        def.assignedVariableBundles?.forEach(bundle => {
-          let bundleUsage: number;
-          if (typeof maxCodingCases === 'number' && maxCodingCases > 0) {
-            const baseQuota = Math.floor(maxCodingCases / itemsCount);
-            const remainder = maxCodingCases % itemsCount;
-            bundleUsage = baseQuota + (currentItemIndex < remainder ? 1 : 0);
-          } else {
-            // Unlimited: sum of all variables in bundle
-            bundleUsage = bundle.variables?.reduce((sum, v) => sum + getTotalCases(v.unitName, v.variableId), 0) || 0;
+        Object.entries(def.plannedVariableUsage || {}).forEach(([variableKey, usage]) => {
+          if (!Number.isFinite(usage) || usage <= 0) {
+            return;
           }
 
-          const varsInBundle = bundle.variables?.length || 0;
-          if (varsInBundle > 0) {
-            const usagePerVar = Math.ceil(bundleUsage / varsInBundle);
-            bundle.variables?.forEach(v => {
-              const key = makeKey(v.unitName, v.variableId);
-              casesUsedInDefinitions.set(key, (casesUsedInDefinitions.get(key) || 0) + usagePerVar);
-            });
-          }
-          currentItemIndex += 1;
-        });
-
-        // 2. Process Variables
-        def.assignedVariables?.forEach(v => {
-          let usage: number;
-          if (typeof maxCodingCases === 'number' && maxCodingCases > 0) {
-            const baseQuota = Math.floor(maxCodingCases / itemsCount);
-            const remainder = maxCodingCases % itemsCount;
-            // Note: index continues incrementing from bundles
-            usage = baseQuota + (currentItemIndex < remainder ? 1 : 0);
-          } else {
-            usage = getTotalCases(v.unitName, v.variableId);
-          }
-
-          const key = makeKey(v.unitName, v.variableId);
-          casesUsedInDefinitions.set(key, (casesUsedInDefinitions.get(key) || 0) + usage);
-          currentItemIndex += 1;
+          const normalizedKey = makeKeyFromUsageKey(variableKey);
+          casesUsedInDefinitions.set(
+            normalizedKey,
+            (casesUsedInDefinitions.get(normalizedKey) || 0) + usage
+          );
         });
       });
     }
 
-    // Adjust available cases based on cases used in definitions
-    // Use uniqueCasesAfterAggregation as the effective total (respects aggregation grouping)
+    // Adjust available cases based on cases used in definitions.
+    // Start with backend availability so already created coding jobs remain reserved.
     this.variables.forEach(v => {
       const key = makeKey(v.unitName, v.variableId);
       const casesUsed = casesUsedInDefinitions.get(key) || 0;
-      const originalAvailable = v.uniqueCasesAfterAggregation ?? v.responseCount ?? 0;
+      const originalAvailable = this.baseAvailableCasesByVariable.get(key) ??
+        v.availableCases ??
+        v.uniqueCasesAfterAggregation ??
+        v.responseCount ??
+        0;
       v.availableCases = Math.max(0, originalAvailable - casesUsed);
     });
 
@@ -682,25 +767,76 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getCodingJobCount(): number {
-    return this.selectedVariables.selected.length;
+    const itemCount = this.selectedVariables.selected.length + this.selectedVariableBundles.selected.length;
+    const coderCount = this.selectedCoders.selected.length;
+
+    if (itemCount === 0 || coderCount === 0) {
+      return 0;
+    }
+
+    return itemCount * coderCount;
+  }
+
+  private getVariableEffectiveCases(variable: Variable): number {
+    return variable.uniqueCasesAfterAggregation ?? variable.responseCount ?? variable.availableCases ?? 0;
+  }
+
+  private getVariableAvailableCases(variable: Variable): number {
+    return variable.availableCases ?? this.getVariableEffectiveCases(variable);
+  }
+
+  getSelectedEffectiveCodingCases(): number {
+    let total = this.selectedVariables.selected
+      .reduce((sum, variable) => sum + this.getVariableEffectiveCases(variable), 0);
+
+    this.selectedVariableBundles.selected.forEach(bundle => {
+      bundle.variables.forEach(variable => {
+        total += this.getVariableEffectiveCases(variable as unknown as Variable);
+      });
+    });
+
+    return total;
+  }
+
+  getDistributableCodingCasesBeforeLimit(): number {
+    let total = this.selectedVariables.selected
+      .reduce((sum, variable) => sum + this.getVariableAvailableCases(variable), 0);
+
+    this.selectedVariableBundles.selected.forEach(bundle => {
+      bundle.variables.forEach(variable => {
+        total += this.getVariableAvailableCases(variable as unknown as Variable);
+      });
+    });
+
+    return total;
+  }
+
+  getUnavailableSelectedCodingCases(): number {
+    return Math.max(
+      0,
+      this.getSelectedEffectiveCodingCases() - this.getDistributableCodingCasesBeforeLimit()
+    );
+  }
+
+  getMaxCasesLimitReduction(): number {
+    const maxCases = this.codingJobForm.getRawValue().maxCodingCases;
+    const total = this.getDistributableCodingCasesBeforeLimit();
+
+    if (
+      this.data.mode === 'definition' &&
+      typeof maxCases === 'number' &&
+      maxCases > 0
+    ) {
+      return Math.max(0, total - Math.min(total, maxCases));
+    }
+
+    return 0;
   }
 
   getTotalCodingCases(): number {
-    const maxCases = this.codingJobForm.value.maxCodingCases;
+    const maxCases = this.codingJobForm.getRawValue().maxCodingCases;
     const isDefinitionMode = this.data.mode === 'definition';
-
-    const getAvailableCases = (v: Variable): number => (
-      v.availableCases ?? v.uniqueCasesAfterAggregation ?? v.responseCount ?? 0
-    );
-
-    let total = this.selectedVariables.selected
-      .reduce((sum, v) => sum + getAvailableCases(v), 0);
-
-    this.selectedVariableBundles.selected.forEach(bundle => {
-      bundle.variables.forEach(v => {
-        total += getAvailableCases(v as unknown as Variable);
-      });
-    });
+    let total = this.getDistributableCodingCasesBeforeLimit();
 
     // Apply global cap per job definition (only in definition mode)
     if (
@@ -718,7 +854,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const totalCases = this.getTotalCodingCases();
     if (totalCases === 0) return 0;
 
-    const { doubleCodingAbsolute, doubleCodingPercentage } = this.codingJobForm.value;
+    const { doubleCodingAbsolute, doubleCodingPercentage } = this.codingJobForm.getRawValue();
 
     if (this.doubleCodingMode === 'absolute') {
       return Math.min(doubleCodingAbsolute || 0, totalCases);
@@ -732,15 +868,23 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getTotalTimeInSeconds(): number {
-    const durationPerCase = this.codingJobForm.value.durationSeconds || 1;
+    const durationPerCase = this.codingJobForm.getRawValue().durationSeconds || 1;
     return this.getTotalCodingTasks() * durationPerCase;
   }
 
   getTimePerCoderInSeconds(): number {
     const totalTime = this.getTotalTimeInSeconds();
-    const numCoders = this.selectedCoders.selected.length;
-    if (numCoders === 0) return totalTime;
-    return Math.ceil(totalTime / numCoders);
+    const capacityWeights = this.selectedCoders.selected.map(
+      coder => this.getCoderCapacityPercent(coder) / 100
+    );
+    if (capacityWeights.length === 0) return totalTime;
+
+    const totalCapacityWeight = capacityWeights.reduce((sum, weight) => sum + weight, 0);
+    if (totalCapacityWeight <= 0) return totalTime;
+
+    const normalizedLoadSeconds = totalTime / totalCapacityWeight;
+    const highestCapacityWeight = Math.max(...capacityWeights);
+    return Math.ceil(normalizedLoadSeconds * highestCapacityWeight);
   }
 
   getFormattedTotalTime(): string {
@@ -795,6 +939,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   masterToggle(): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
     const selectableRows = this.dataSource.data.filter(v => !this.isVariableDisabled(v));
     if (this.isAllSelected()) {
       selectableRows.forEach(row => this.selectedVariables.deselect(row));
@@ -810,6 +958,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   masterCoderToggle(): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
     if (this.isAllCodersSelected()) {
       this.selectedCoders.clear();
     } else {
@@ -818,7 +970,17 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   async onSubmit(): Promise<void> {
+    if (this.isReadOnly) {
+      this.dialogRef.close();
+      return;
+    }
+
+    if (this.isSaving) {
+      return;
+    }
+
     if (this.codingJobForm.invalid) {
+      this.codingJobForm.markAllAsTouched();
       return;
     }
 
@@ -853,7 +1015,25 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         return;
       }
 
-      if (this.selectedVariables.selected.length > 1) {
+      if (this.selectedCoders.selected.length === 0) {
+        this.snackBar.open(
+          this.translateService.instant('coding-job-definition-dialog.validation.coder-required'),
+          this.translateService.instant('common.close'),
+          { duration: 5000 }
+        );
+        return;
+      }
+
+      if (this.selectedVariables.selected.length === 0 && this.selectedVariableBundles.selected.length === 0) {
+        this.snackBar.open(
+          this.translateService.instant('coding-job-definition-dialog.validation.variable-or-bundle-required'),
+          this.translateService.instant('common.close'),
+          { duration: 5000 }
+        );
+        return;
+      }
+
+      if (this.getCodingJobCount() > 1) {
         await this.openBulkCreationDialog();
         return;
       }
@@ -974,9 +1154,17 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const baseData: BulkCreationData = {
       selectedVariables: this.selectedVariables.selected,
       selectedVariableBundles: this.selectedVariableBundles.selected,
-      selectedCoders: this.selectedCoders.selected,
+      selectedCoders: this.getSelectedCodersForDistribution(),
       doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
-      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage
+      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
+      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      maxCodingCases: this.codingJobForm.value.maxCodingCases,
+      distributionSeed: this.data.codingJob?.distributionSeed,
+      displayOptions: {
+        showScore: this.codingJobForm.value.showScore ?? true,
+        allowComments: this.codingJobForm.value.allowComments ?? true,
+        suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions ?? false
+      }
     };
 
     if (creationResults) {
@@ -1015,8 +1203,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     await firstValueFrom(dialogRef.afterClosed());
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private async createBulkJobs(data: BulkCreationData, _displayOptions: BulkCreationResult): Promise<void> {
+  private async createBulkJobs(data: BulkCreationData, displayOptions: BulkCreationResult): Promise<void> {
     this.isSaving = true;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -1026,11 +1213,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     try {
-      const mappedCoders = data.selectedCoders.map(coder => ({
-        id: coder.id,
-        name: coder.name,
-        username: coder.name
-      }));
+      const mappedCoders = this.mapCodersForDistribution(data.selectedCoders);
       const result = await firstValueFrom(this.distributedCodingService.createDistributedCodingJobs(
         workspaceId,
         data.selectedVariables,
@@ -1040,7 +1223,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         data.selectedVariableBundles,
         this.codingJobForm.value.caseOrderingMode,
         this.codingJobForm.value.maxCodingCases,
-        this.data.jobDefinitionId
+        {
+          showScore: displayOptions.showScore,
+          allowComments: displayOptions.allowComments,
+          suppressGeneralInstructions: displayOptions.suppressGeneralInstructions
+        },
+        data.distributionSeed
       ));
 
       if (result && result.success) {
@@ -1048,6 +1236,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
         await this.openBulkCreationResultsDialog({
           doubleCodingInfo: result.doubleCodingInfo,
+          distributionByCoderId: result.distributionByCoderId,
           jobs: result.jobs
         });
 
@@ -1065,6 +1254,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   toggleBundleSelection(bundle: VariableBundle): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
     const wasSelected = this.selectedVariableBundles.isSelected(bundle);
     this.selectedVariableBundles.toggle(bundle);
     const isNowSelected = this.selectedVariableBundles.isSelected(bundle);
@@ -1078,6 +1271,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   setBundleOrderingMode(bundle: VariableBundle, mode: 'continuous' | 'alternating'): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
     bundle.caseOrderingMode = mode;
     const selectedBundle = this.selectedVariableBundles.selected.find(b => b.id === bundle.id);
     if (selectedBundle && selectedBundle !== bundle) {
@@ -1095,14 +1292,29 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  toggleDoubleCodingMode(): void {
-    if (this.doubleCodingMode === 'absolute') {
-      this.doubleCodingMode = 'percentage';
+  setDoubleCodingMode(mode: 'absolute' | 'percentage'): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
+    if (this.doubleCodingMode === mode) {
+      return;
+    }
+
+    this.doubleCodingMode = mode;
+
+    if (mode === 'percentage') {
       this.codingJobForm.get('doubleCodingAbsolute')?.setValue(0);
     } else {
-      this.doubleCodingMode = 'absolute';
       this.codingJobForm.get('doubleCodingPercentage')?.setValue(0);
     }
+
+    this.codingJobForm.get('doubleCodingAbsolute')?.updateValueAndValidity();
+    this.codingJobForm.get('doubleCodingPercentage')?.updateValueAndValidity();
+  }
+
+  toggleDoubleCodingMode(): void {
+    this.setDoubleCodingMode(this.doubleCodingMode === 'absolute' ? 'percentage' : 'absolute');
   }
 
   get currentDoubleCodingControl(): FormControl {
@@ -1135,17 +1347,22 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
+    const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: JobDefinition = {
       status: 'draft',
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
       assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
+      assignedCoderConfigs: selectedCoderConfigs,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
-      caseOrderingMode: this.codingJobForm.value.caseOrderingMode
+      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      showScore: this.codingJobForm.value.showScore,
+      allowComments: this.codingJobForm.value.allowComments,
+      suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
     };
 
     this.codingJobBackendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
@@ -1173,16 +1390,21 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
+    const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: Partial<JobDefinition> = {
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
       assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
+      assignedCoderConfigs: selectedCoderConfigs,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
-      caseOrderingMode: this.codingJobForm.value.caseOrderingMode
+      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      showScore: this.codingJobForm.value.showScore,
+      allowComments: this.codingJobForm.value.allowComments,
+      suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
     };
 
     if (this.codingJobForm.get('status')) {
@@ -1204,7 +1426,17 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   onSubmitForReview(): void {
+    if (this.isReadOnly) {
+      this.dialogRef.close();
+      return;
+    }
+
+    if (this.isSaving) {
+      return;
+    }
+
     if (this.codingJobForm.invalid) {
+      this.codingJobForm.markAllAsTouched();
       return;
     }
 
@@ -1238,17 +1470,22 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
+    const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: JobDefinition = {
       status: 'pending_review', // Submit for review
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
       assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
+      assignedCoderConfigs: selectedCoderConfigs,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
-      caseOrderingMode: this.codingJobForm.value.caseOrderingMode
+      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      showScore: this.codingJobForm.value.showScore,
+      allowComments: this.codingJobForm.value.allowComments,
+      suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
     };
 
     this.codingJobBackendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
@@ -1266,6 +1503,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   onCancel(): void {
+    if (this.isSaving) {
+      return;
+    }
+
     this.dialogRef.close();
   }
 

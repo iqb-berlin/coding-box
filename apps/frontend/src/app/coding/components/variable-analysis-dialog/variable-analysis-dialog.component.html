@@ -1,5 +1,5 @@
 <div class="dialog-container">
-  <h2 class="dialog-title">Item/Variablenanalyse</h2>
+  <h2 class="dialog-title">Code-/Score-Verteilung</h2>
   <mat-divider></mat-divider>
 
   <div class="dialog-content">
@@ -38,11 +38,22 @@
     @if (isLoadingVariableAnalysis) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
-        <p class="loading-text">Lade Variablenanalyse...</p>
+        <p class="loading-text">Lade Code-/Score-Verteilung...</p>
       </div>
     }
 
     @if (!isLoadingVariableAnalysis && variableAnalysisData.length > 0) {
+      <div class="result-context" role="note">
+        <div class="result-context-main">
+          <span class="result-context-number">{{ totalVariableAnalysisRecords }}</span>
+          <span>Verteilungszeilen gefunden</span>
+          <mat-icon class="context-help" [matTooltip]="distributionRowsTooltip">info</mat-icon>
+        </div>
+        <div class="result-context-detail">
+          Eine Zeile = Aufgaben-ID + Variablen-ID + Code. Die Spalte "Antworten gesamt" bezieht sich auf Aufgabe + Variable.
+        </div>
+      </div>
+
       <div class="table-container">
         <table mat-table [dataSource]="variableAnalysisDataSource" matSort class="coding-table">
 
@@ -85,19 +96,34 @@
 
           <!-- Occurrence Count Column -->
           <ng-container matColumnDef="occurrenceCount">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Anzahl Vorkommen</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>
+              <span class="header-with-help" [matTooltip]="occurrenceCountTooltip">
+                Vorkommen
+                <mat-icon>help_outline</mat-icon>
+              </span>
+            </th>
             <td mat-cell *matCellDef="let element">{{ element.occurrenceCount }}</td>
           </ng-container>
 
           <!-- Total Count Column -->
           <ng-container matColumnDef="totalCount">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Gesamtanzahl</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>
+              <span class="header-with-help" [matTooltip]="totalCountTooltip">
+                Antworten gesamt
+                <mat-icon>help_outline</mat-icon>
+              </span>
+            </th>
             <td mat-cell *matCellDef="let element">{{ element.totalCount }}</td>
           </ng-container>
 
           <!-- Relative Occurrence Column with Bar Chart -->
           <ng-container matColumnDef="relativeOccurrence">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Relatives Vorkommen</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>
+              <span class="header-with-help" [matTooltip]="relativeOccurrenceTooltip">
+                Anteil
+                <mat-icon>help_outline</mat-icon>
+              </span>
+            </th>
             <td mat-cell *matCellDef="let element">
               <div class="bar-chart-container">
                 <div class="bar-chart-value">{{ (element.relativeOccurrence * 100).toFixed(1) }}%</div>
@@ -128,8 +154,8 @@
     @if (!isLoadingVariableAnalysis && variableAnalysisData.length === 0) {
       <div class="empty-state">
         <mat-icon class="empty-icon">analytics</mat-icon>
-        <h3>Keine Variablenanalyse-Daten verfügbar</h3>
-        <p class="empty-text">Es wurden keine Daten für die Variablenanalyse gefunden.</p>
+        <h3>Keine Code-/Score-Daten verfügbar</h3>
+        <p class="empty-text">Es wurden keine Daten für die Code-/Score-Verteilung gefunden.</p>
       </div>
     }
   </div>

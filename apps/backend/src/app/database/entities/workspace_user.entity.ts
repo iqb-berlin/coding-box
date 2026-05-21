@@ -16,6 +16,13 @@ class WorkspaceUser {
     name: 'access_level'
   })
     accessLevel!: number;
+
+  @Column({
+    name: 'can_code',
+    type: 'boolean',
+    default: false
+  })
+    canCode!: boolean;
 }
 
 export default WorkspaceUser;

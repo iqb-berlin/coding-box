@@ -128,6 +128,77 @@ describe('WorkspaceFilesService.handleFile', () => {
   });
 });
 
+describe('WorkspaceFilesService.onModuleInit', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const mockQueryBuilder = {
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn()
+  };
+
+  const mockFileUploadRepository = {
+    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder)
+  };
+
+  function makeService(): WorkspaceFilesService {
+    return new WorkspaceFilesService(
+      mockFileUploadRepository as unknown as CtorParams[0],
+      {} as unknown as CtorParams[1],
+      {} as unknown as CtorParams[2],
+      {} as unknown as CtorParams[3],
+      {} as unknown as CtorParams[4],
+      {} as unknown as CtorParams[5],
+      {} as unknown as CtorParams[6],
+      {} as unknown as CtorParams[7],
+      {} as unknown as CtorParams[8],
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('should refresh the startup unit variable cache for raw workspace_id values', async () => {
+    mockQueryBuilder.getRawMany.mockResolvedValue([{ workspace_id: '1' }]);
+    const service = makeService();
+    const refreshSpy = jest
+      .spyOn(service, 'refreshUnitVariableCache')
+      .mockResolvedValue(undefined);
+
+    await service.onModuleInit();
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    expect(refreshSpy).toHaveBeenCalledWith(1);
+    expect(refreshSpy).not.toHaveBeenCalledWith(undefined);
+  });
+
+  it('should skip invalid startup workspace ids', async () => {
+    mockQueryBuilder.getRawMany.mockResolvedValue([{ workspace_id: null }]);
+    const service = makeService();
+    const refreshSpy = jest
+      .spyOn(service, 'refreshUnitVariableCache')
+      .mockResolvedValue(undefined);
+    const errorSpy = jest.spyOn(Logger.prototype, 'error');
+
+    await service.onModuleInit();
+
+    expect(refreshSpy).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Skipping unit variable cache refresh for invalid workspace id: null'
+    );
+  });
+});
+
 describe('WorkspaceFilesService.deleteTestFiles', () => {
   type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
 
@@ -210,6 +281,70 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
     await service.deleteTestFiles(workspaceId, fileIds);
 
     expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+  });
+});
+
+describe('WorkspaceFilesService response deletion cache invalidation', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const mockWorkspaceResponseValidationService = {
+    deleteInvalidResponses: jest.fn(),
+    deleteAllInvalidResponses: jest.fn()
+  };
+
+  const mockWorkspaceTestResultsService = {
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+  };
+
+  function makeService(): WorkspaceFilesService {
+    return new WorkspaceFilesService(
+      {} as unknown as CtorParams[0],
+      {} as unknown as CtorParams[1],
+      {} as unknown as CtorParams[2],
+      {} as unknown as CtorParams[3],
+      {} as unknown as CtorParams[4],
+      {} as unknown as CtorParams[5],
+      {} as unknown as CtorParams[6],
+      {} as unknown as CtorParams[7],
+      mockWorkspaceResponseValidationService as unknown as CtorParams[8],
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      mockWorkspaceTestResultsService as unknown as CtorParams[11]
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should invalidate workspace stats after deleting invalid responses', async () => {
+    const service = makeService();
+    mockWorkspaceResponseValidationService.deleteInvalidResponses.mockResolvedValue(2);
+
+    const deletedCount = await service.deleteInvalidResponses(1, [10, 11]);
+
+    expect(deletedCount).toBe(2);
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+  });
+
+  it('should not invalidate workspace stats when no invalid responses were deleted', async () => {
+    const service = makeService();
+    mockWorkspaceResponseValidationService.deleteInvalidResponses.mockResolvedValue(0);
+
+    const deletedCount = await service.deleteInvalidResponses(1, [10]);
+
+    expect(deletedCount).toBe(0);
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).not.toHaveBeenCalled();
+  });
+
+  it('should invalidate workspace stats after deleting all invalid responses', async () => {
+    const service = makeService();
+    mockWorkspaceResponseValidationService.deleteAllInvalidResponses.mockResolvedValue(3);
+
+    const deletedCount = await service.deleteAllInvalidResponses(1, 'variables');
+
+    expect(deletedCount).toBe(3);
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
   });
 });
 
@@ -393,5 +528,157 @@ describe('WorkspaceFilesService.downloadWorkspaceFilesAsZip', () => {
       { file_type: 'Resource', filename: 'a.vocs' },
       { file_type: 'Unit', filename: 'unit.xml' }
     ]);
+  });
+});
+
+describe('WorkspaceFilesService.getUnitVariableDetails', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const unitXml = `
+    <Unit>
+      <Metadata><Id>UnitA</Id></Metadata>
+      <BaseVariables>
+        <Variable id="B1" alias="base_alias" type="string" />
+        <Variable alias="derived_alias" type="integer" />
+      </BaseVariables>
+      <DerivedVariables>
+        <Variable id="DX" alias="xml_derived_alias" type="boolean" />
+      </DerivedVariables>
+    </Unit>
+  `;
+
+  const codingScheme = {
+    version: '3.2',
+    variableCodings: [
+      {
+        id: 'B1',
+        alias: 'base_alias',
+        sourceType: 'BASE',
+        type: 'string',
+        codes: []
+      },
+      {
+        id: 'D1',
+        alias: 'derived_alias',
+        sourceType: 'MANUAL',
+        type: 'integer',
+        codes: [{ id: 1, label: 'Code 1', score: 1 }]
+      },
+      {
+        id: 'S1',
+        alias: 'scheme_only_alias',
+        sourceType: 'SUM_SCORE',
+        type: 'number',
+        codes: [{ id: 2, label: 'Code 2', score: 2 }]
+      },
+      {
+        id: 'N1',
+        alias: 'excluded_alias',
+        sourceType: 'BASE_NO_VALUE',
+        type: 'string',
+        codes: []
+      }
+    ]
+  };
+
+  const unitFiles = [
+    {
+      workspace_id: 1,
+      file_type: 'Unit',
+      file_id: 'UnitA',
+      data: Buffer.from(unitXml)
+    }
+  ];
+
+  const codingSchemes = [
+    {
+      workspace_id: 1,
+      file_type: 'Resource',
+      file_id: 'UnitA.VOCS',
+      data: JSON.stringify(codingScheme)
+    }
+  ];
+
+  const mockFileUploadRepository = {
+    find: jest.fn()
+  };
+
+  function makeService(): WorkspaceFilesService {
+    return new WorkspaceFilesService(
+      mockFileUploadRepository as unknown as CtorParams[0],
+      {} as unknown as CtorParams[1],
+      {} as unknown as CtorParams[2],
+      {} as unknown as CtorParams[3],
+      {} as unknown as CtorParams[4],
+      {} as unknown as CtorParams[5],
+      {} as unknown as CtorParams[6],
+      {} as unknown as CtorParams[7],
+      {} as unknown as CtorParams[8],
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    mockFileUploadRepository.find.mockImplementation(({ where }) => {
+      if (where.file_type === 'Unit') {
+        return Promise.resolve(unitFiles);
+      }
+      if (where.file_type === 'Resource') {
+        return Promise.resolve(codingSchemes);
+      }
+      return Promise.resolve([]);
+    });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('should mark base XML variables as derived when the VOCS sourceType is derived', async () => {
+    const service = makeService();
+
+    const [unit] = await service.getUnitVariableDetails(1);
+    const derivedFromScheme = unit.variables.find(variable => variable.alias === 'derived_alias');
+    const baseVariable = unit.variables.find(variable => variable.alias === 'base_alias');
+
+    expect(baseVariable).toMatchObject({
+      id: 'B1',
+      alias: 'base_alias',
+      isDerived: false
+    });
+    expect(derivedFromScheme).toMatchObject({
+      id: 'D1',
+      alias: 'derived_alias',
+      type: 'integer',
+      isDerived: true
+    });
+  });
+
+  it('should include XML-derived and scheme-only derived variables', async () => {
+    const service = makeService();
+
+    const [unit] = await service.getUnitVariableDetails(1);
+    const xmlDerived = unit.variables.find(variable => variable.alias === 'xml_derived_alias');
+    const schemeOnlyDerived = unit.variables.find(variable => variable.alias === 'scheme_only_alias');
+    const excludedVariable = unit.variables.find(variable => variable.alias === 'excluded_alias');
+
+    expect(xmlDerived).toMatchObject({
+      id: 'DX',
+      alias: 'xml_derived_alias',
+      isDerived: true
+    });
+    expect(schemeOnlyDerived).toMatchObject({
+      id: 'S1',
+      alias: 'scheme_only_alias',
+      type: 'number',
+      isDerived: true
+    });
+    expect(excludedVariable).toBeUndefined();
   });
 });

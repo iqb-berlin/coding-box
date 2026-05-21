@@ -9,6 +9,7 @@ import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { BullJobManagementService } from '../jobs/bull-job-management.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 describe('CodingStatisticsService', () => {
   let service: CodingStatisticsService;
@@ -17,6 +18,8 @@ describe('CodingStatisticsService', () => {
   let mockJobQueueService: jest.Mocked<JobQueueService>;
   let mockBullJobManagementService: jest.Mocked<BullJobManagementService>;
   let mockWorkspaceCoreService: jest.Mocked<WorkspaceCoreService>;
+  let mockWorkspaceExclusionService: jest.Mocked<WorkspaceExclusionService>;
+  let mockWorkspaceFilesService: jest.Mocked<WorkspaceFilesService>;
 
   const mockFileUploadRepository = {
     find: jest.fn()
@@ -54,6 +57,21 @@ describe('CodingStatisticsService', () => {
       getIgnoredUnits: jest.fn()
     } as unknown as jest.Mocked<WorkspaceCoreService>;
 
+    mockWorkspaceFilesService = {
+      getUnitVariableMap: jest.fn().mockResolvedValue(new Map([
+        ['Unit1', new Set(['var1'])]
+      ])),
+      getDerivedVariableMap: jest.fn().mockResolvedValue(new Map())
+    } as unknown as jest.Mocked<WorkspaceFilesService>;
+
+    mockWorkspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    } as unknown as jest.Mocked<WorkspaceExclusionService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CodingStatisticsService,
@@ -68,15 +86,10 @@ describe('CodingStatisticsService', () => {
           useValue: mockBullJobManagementService
         },
         { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService },
+        { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
         {
           provide: WorkspaceExclusionService,
-          useValue: {
-            resolveExclusionsForQueries: jest.fn().mockResolvedValue({
-              globalIgnoredUnits: [],
-              ignoredBooklets: [],
-              testletIgnoredUnits: []
-            })
-          }
+          useValue: mockWorkspaceExclusionService
         }
       ]
     }).compile();
@@ -106,14 +119,16 @@ describe('CodingStatisticsService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([
-        { statusValue: 1, count: '10' },
-        { statusValue: 2, count: '20' }
+        { statusValue: 5, isDerived: false, count: '10' },
+        { statusValue: 8, isDerived: false, count: '20' }
       ]);
 
       const result = await service.getCodingStatistics(1, 'v1');
 
       expect(result.totalResponses).toBe(30);
-      expect(result.statusCounts).toEqual({ 1: 10, 2: 20 });
+      expect(result.baseResponseCount).toBe(30);
+      expect(result.derivedResponseCount).toBe(0);
+      expect(result.statusCounts).toEqual({ 5: 10, 8: 20 });
       expect(mockCacheService.set).toHaveBeenCalled();
     });
 
@@ -121,8 +136,8 @@ describe('CodingStatisticsService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([
-        { statusValue: 1, count: '15' },
-        { statusValue: 2, count: '25' }
+        { statusValue: 5, isDerived: false, count: '15' },
+        { statusValue: 9, isDerived: false, count: '25' }
       ]);
 
       const result = await service.getCodingStatistics(1, 'v2');
@@ -135,12 +150,41 @@ describe('CodingStatisticsService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([
-        { statusValue: 1, count: '5' }
+        { statusValue: 5, isDerived: false, count: '5' }
       ]);
 
       const result = await service.getCodingStatistics(1, 'v3');
 
       expect(result.totalResponses).toBe(5);
+    });
+
+    it('should use numeric status_v3 before falling back to effective earlier versions', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
+      mockResponseRepository.query.mockResolvedValue([]);
+
+      await service.getCodingStatistics(1, 'v3');
+
+      const queryCall = mockResponseRepository.query.mock.calls[0];
+      expect(queryCall[0]).not.toContain('response.status_v3::smallint');
+      expect(queryCall[0]).not.toContain("response.status_v3 ~ '^-?[0-9]+$'");
+      expect(queryCall[0]).toContain('COALESCE(response.status_v3');
+      expect(queryCall[0]).toContain('response.status_v2 = 8');
+      expect(queryCall[0]).toContain('response.status_v2, response.status_v1');
+    });
+
+    it('should ignore open manual-coding placeholders in effective v2/v3 status', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
+      mockResponseRepository.query.mockResolvedValue([]);
+
+      await service.getCodingStatistics(1, 'v2');
+
+      const queryCall = mockResponseRepository.query.mock.calls[0];
+      expect(queryCall[0]).toContain('FROM coding_job_unit effective_status_cju');
+      expect(queryCall[0]).toContain("effective_status_cj.status <> 'results_applied'");
+      expect(queryCall[0]).toContain("effective_status_applied_cj.status = 'results_applied'");
+      expect(queryCall[0]).toContain('THEN response.status_v1');
     });
 
     it('should default to v1 when no version specified', async () => {
@@ -175,9 +219,9 @@ describe('CodingStatisticsService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([
-        { statusValue: 1, count: '100' },
-        { statusValue: 2, count: '50' },
-        { statusValue: 3, count: '25' }
+        { statusValue: 5, isDerived: false, count: '100' },
+        { statusValue: 8, isDerived: false, count: '50' },
+        { statusValue: 9, isDerived: false, count: '25' }
       ]);
 
       const result = await service.getCodingStatistics(1);
@@ -190,13 +234,74 @@ describe('CodingStatisticsService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([
-        { statusValue: 1, count: 'invalid' }
+        { statusValue: 5, isDerived: false, count: 'invalid' }
       ]);
 
       const result = await service.getCodingStatistics(1);
 
       expect(result.totalResponses).toBe(0);
-      expect(result.statusCounts[1]).toBe(0);
+      expect(result.statusCounts[5]).toBe(0);
+    });
+
+    it('should include autocoder-generated responses in derived answer counts', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      jest
+        .spyOn(
+          service as unknown as {
+            getUnitVariables: (
+              workspaceId: number
+            ) => Promise<Record<string, string[]>>;
+          },
+          'getUnitVariables'
+        )
+        .mockResolvedValue({ Unit1: ['baseVar', 'derivedVar'] });
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+        ['Unit1', new Set(['baseVar', 'derivedVar'])]
+      ]));
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map([
+        ['Unit1', new Set(['derivedVar'])]
+      ]));
+      mockResponseRepository.query.mockResolvedValue([
+        { statusValue: 5, isDerived: false, count: '7' },
+        { statusValue: 5, isDerived: true, count: '3' },
+        { statusValue: 8, isDerived: true, count: '2' }
+      ]);
+
+      const result = await service.getCodingStatistics(1);
+
+      expect(result.totalResponses).toBe(12);
+      expect(result.baseResponseCount).toBe(7);
+      expect(result.derivedResponseCount).toBe(5);
+      expect(result.derivedVariableCount).toBe(1);
+      expect(result.statusCounts).toEqual({ 5: 10, 8: 2 });
+      expect(result.derivedStatusCounts).toEqual({ 5: 3, 8: 2 });
+      expect(mockResponseRepository.query).toHaveBeenCalledWith(
+        expect.stringContaining('response.is_autocoder_generated = TRUE'),
+        expect.arrayContaining([
+          expect.arrayContaining(['Unit1\u001FbaseVar', 'Unit1\u001FderivedVar'])
+        ])
+      );
+      expect(mockResponseRepository.query.mock.calls[0][0]).not.toContain(
+        'OR response.is_autocoder_generated = TRUE'
+      );
+    });
+
+    it('should exclude raw response states from statistics totals', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
+      mockResponseRepository.query.mockResolvedValue([
+        { statusValue: 5, isDerived: false, count: '4' }
+      ]);
+
+      const result = await service.getCodingStatistics(1);
+
+      expect(result.totalResponses).toBe(4);
+      expect(mockResponseRepository.query.mock.calls[0][0]).toContain(
+        '<> ALL($5::smallint[])'
+      );
+      expect(mockResponseRepository.query.mock.calls[0][1]).toEqual(
+        expect.arrayContaining([[0, 1, 2, 3, 10]])
+      );
     });
   });
 
@@ -207,7 +312,7 @@ describe('CodingStatisticsService', () => {
       await service.invalidateCache(1, 'v1');
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:1:v1'
+        'coding-statistics:schema-v4:1:v1'
       );
     });
 
@@ -217,13 +322,13 @@ describe('CodingStatisticsService', () => {
       await service.invalidateCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:1:v1'
+        'coding-statistics:schema-v4:1:v1'
       );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:1:v2'
+        'coding-statistics:schema-v4:1:v2'
       );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:1:v3'
+        'coding-statistics:schema-v4:1:v3'
       );
     });
 
@@ -233,7 +338,7 @@ describe('CodingStatisticsService', () => {
       await service.invalidateIncompleteVariablesCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v2:1'
+        'coding_incomplete_variables_v3:1'
       );
     });
 
@@ -279,13 +384,12 @@ describe('CodingStatisticsService', () => {
       await service.getCodingStatistics(1, 'v2');
 
       const queryCall = mockResponseRepository.query.mock.calls[0];
-      expect(queryCall[0]).toContain(
-        'COALESCE(response.status_v2, response.status_v1)'
-      );
+      expect(queryCall[0]).toContain('response.status_v2 = 8');
+      expect(queryCall[0]).toContain('COALESCE(response.status_v2, response.status_v1)');
       expect(queryCall[0]).toContain('code_v2');
     });
 
-    it.skip('should use COALESCE chain for v3 version query', async () => {
+    it.skip('should use v3 effective status expression', async () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([]);
@@ -293,9 +397,7 @@ describe('CodingStatisticsService', () => {
       await service.getCodingStatistics(1, 'v3');
 
       const queryCall = mockResponseRepository.query.mock.calls[0];
-      expect(queryCall[0]).toContain(
-        'COALESCE(response.status_v3, response.status_v2, response.status_v1)'
-      );
+      expect(queryCall[0]).toContain('COALESCE(response.status_v3');
       expect(queryCall[0]).toContain('code_v2');
     });
   });
@@ -307,7 +409,13 @@ describe('CodingStatisticsService', () => {
 
       const result = await service.getCodingStatistics(1);
 
-      expect(result).toEqual(cachedStats);
+      expect(result).toEqual({
+        ...cachedStats,
+        baseResponseCount: 0,
+        derivedResponseCount: 0,
+        derivedVariableCount: 0,
+        derivedStatusCounts: {}
+      });
       expect(mockResponseRepository.query).not.toHaveBeenCalled();
     });
   });
@@ -315,28 +423,24 @@ describe('CodingStatisticsService', () => {
   describe('Unit variable parsing', () => {
     it('should filter out ignored units', async () => {
       mockCacheService.get.mockResolvedValue(null);
-      mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue(['UNIT1']);
       mockResponseRepository.query.mockResolvedValueOnce([
         { workspace_id: '1' }
       ]);
-      mockFileUploadRepository.find.mockResolvedValue([
-        {
-          file_id: 'unit1.xml',
-          data: Buffer.from(`<?xml version="1.0"?>
-            <Unit>
-              <Metadata><Id>Unit1</Id></Metadata>
-              <BaseVariables>
-                <Variable alias="var1" type="string"/>
-              </BaseVariables>
-            </Unit>`)
-        }
-      ]);
+      mockWorkspaceExclusionService.resolveExclusionsForQueries.mockResolvedValue({
+        globalIgnoredUnits: ['UNIT1'],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      });
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+        ['Unit1', new Set(['var1'])]
+      ]));
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
 
       const result = await service.getCodingStatistics(1);
 
       // When all units are filtered out, returns empty statistics
       expect(result.totalResponses).toBe(0);
-      expect(result.statusCounts).toEqual({ undefined: 0 });
+      expect(result.statusCounts).toEqual({});
       expect(mockCacheService.set).toHaveBeenCalled();
     });
   });
@@ -353,6 +457,9 @@ describe('CodingStatisticsService', () => {
       const result = await service.createCodingStatisticsJob(1, 'v1');
 
       expect(result.jobId).toBe('job-123');
+      expect(mockCacheService.get).toHaveBeenCalledWith(
+        'coding-statistics:schema-v4:1:v1'
+      );
       expect(mockJobQueueService.addCodingStatisticsJob).toHaveBeenCalledWith(
         1,
         'v1'
@@ -369,6 +476,40 @@ describe('CodingStatisticsService', () => {
 
       expect(result.jobId).toBe('');
       expect(result.message).toBe('Using cached coding statistics');
+      expect(mockCacheService.get).toHaveBeenCalledWith(
+        'coding-statistics:schema-v4:1:v1'
+      );
+    });
+
+    it('should read coding statistics job status only from the statistics queue', async () => {
+      const mockAutoCodingJob: Partial<Job> = {
+        getState: jest.fn().mockResolvedValue('completed'),
+        progress: jest.fn().mockReturnValue(100)
+      };
+      const mockStatisticsJob: Partial<Job> = {
+        getState: jest.fn().mockResolvedValue('completed'),
+        progress: jest.fn().mockReturnValue(100)
+      };
+      const mockStatistics = { totalResponses: 12, statusCounts: { 5: 12 } };
+
+      mockJobQueueService.getTestPersonCodingJob.mockResolvedValue(
+        mockAutoCodingJob as Job
+      );
+      mockJobQueueService.getCodingStatisticsJob.mockResolvedValue(
+        mockStatisticsJob as Job
+      );
+      mockBullJobManagementService.mapJobStateToStatus.mockReturnValue('completed');
+      mockBullJobManagementService.extractJobResult.mockReturnValue({
+        result: mockStatistics
+      });
+
+      const result = await service.getCodingStatisticsJobStatus('job-123');
+
+      expect(mockJobQueueService.getTestPersonCodingJob).not.toHaveBeenCalled();
+      expect(mockJobQueueService.getCodingStatisticsJob).toHaveBeenCalledWith('job-123');
+      expect(mockBullJobManagementService.extractJobResult)
+        .toHaveBeenCalledWith(mockStatisticsJob, 'completed');
+      expect(result?.result).toEqual(mockStatistics);
     });
 
     it('should cancel job successfully', async () => {

@@ -6,8 +6,10 @@ import {
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 import { SERVER_URL } from '../../injection-tokens';
 import { AppService } from '../../core/services/app.service';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ResponseEntity } from '../../shared/models/response-entity.model';
+import { CodingFreshnessSummaryDto } from '../../../../../../api-dto/coding/coding-freshness.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -29,9 +31,27 @@ export class CodingStatisticsService {
     return this.http
       .get<CodingStatistics>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics`,
-      { params })
+      {
+        params,
+        context: suppressGlobalHttpErrorContext()
+      })
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
+      );
+  }
+
+  getCodingFreshness(workspace_id: number): Observable<CodingFreshnessSummaryDto> {
+    return this.http
+      .get<CodingFreshnessSummaryDto>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/freshness`,
+      { context: suppressGlobalHttpErrorContext() }
+    )
+      .pipe(
+        catchError(() => of({
+          workspaceId: workspace_id,
+          currentRevision: 0,
+          items: []
+        }))
       );
   }
 
@@ -77,8 +97,7 @@ export class CodingStatisticsService {
     variableId?: string,
     derivation?: string
   ): Observable<PaginatedResponse<VariableAnalysisItemDto>> {
-    const identity = this.appService.loggedUser?.sub || '';
-    return this.appService.createToken(workspace_id, identity, 60).pipe(
+    return this.appService.createOwnToken(workspace_id, 60).pipe(
       catchError(() => of('')),
       switchMap(token => {
         let params = new HttpParams()

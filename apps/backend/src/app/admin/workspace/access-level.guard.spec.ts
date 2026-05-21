@@ -11,8 +11,10 @@ describe('AccessLevelGuard (Backend)', () => {
 
   beforeEach(async () => {
     const mockReflector = {
-      get: jest.fn()
+      get: jest.fn(),
+      getAllAndOverride: jest.fn()
     };
+    mockReflector.getAllAndOverride.mockImplementation((metadataKey, targets) => mockReflector.get(metadataKey, targets[0]));
 
     const mockUsersService = {
       getUserIsAdmin: jest.fn(),
@@ -50,7 +52,8 @@ describe('AccessLevelGuard (Backend)', () => {
           params: { workspace_id: workspaceId }
         })
       }),
-      getHandler: () => ({})
+      getHandler: () => ({}),
+      getClass: () => ({})
     } as unknown as ExecutionContext;
 
     if (requiredLevel !== undefined) {

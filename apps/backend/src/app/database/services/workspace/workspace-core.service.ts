@@ -15,6 +15,10 @@ import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
+import {
+  CODING_STATISTICS_CACHE_VERSIONS,
+  getCodingStatisticsCacheKey
+} from '../coding/coding-statistics-cache-key.util';
 
 @Injectable()
 export class WorkspaceCoreService {
@@ -96,6 +100,9 @@ export class WorkspaceCoreService {
       if (workspaceData.settings) workspaceGroupToUpdate.settings = workspaceData.settings;
       await this.workspaceRepository.save(workspaceGroupToUpdate);
       await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceData.id}`);
+      if (workspaceData.settings) {
+        await this.invalidateCachesAffectedByExclusions(workspaceData.id);
+      }
     }
   }
 
@@ -155,6 +162,7 @@ export class WorkspaceCoreService {
     await this.workspaceRepository.save(workspace);
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
     await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+    await this.invalidateCachesAffectedByExclusions(workspaceId);
   }
 
   async getWorkspaceSettings(workspaceId: number): Promise<WorkspaceSettingsDto> {
@@ -170,5 +178,19 @@ export class WorkspaceCoreService {
     await this.workspaceRepository.save(workspace);
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
     await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+    await this.invalidateCachesAffectedByExclusions(workspaceId);
+  }
+
+  private async invalidateCachesAffectedByExclusions(workspaceId: number): Promise<void> {
+    await Promise.all([
+      ...CODING_STATISTICS_CACHE_VERSIONS.map(version => (
+        this.cacheService.delete(getCodingStatisticsCacheKey(workspaceId, version))
+      )),
+      this.cacheService.delete(`coding_incomplete_variables_v3:${workspaceId}`),
+      this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
+      this.cacheService.deleteByPattern(`response-analysis:${workspaceId}_*`),
+      this.cacheService.deleteByPattern(`responses:${workspaceId}:*`),
+      this.cacheService.deleteByPattern(`flat_response_filter_options:${workspaceId}:*`)
+    ]);
   }
 }

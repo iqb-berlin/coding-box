@@ -34,7 +34,7 @@
           "fileReplacements": [
             {
               "replace": "apps/backend/src/environments/environment.ts",
-              "with": "apps/backend/environments/environment.prod.ts"
+              "with": "apps/backend/src/environments/environment.prod.ts"
             }
           ]
         }
@@ -65,18 +65,6 @@
       "options": {
         "jestConfig": "apps/backend/jest.config.ts",
         "passWithNoTests": true
-      }
-    },
-    "compodoc": {
-      "executor": "@twittwer/compodoc:compodoc",
-      "options": {
-        "tsConfig": "apps/backend/tsconfig.app.json",
-        "outputPath": "dist/compodoc/backend"
-      },
-      "configurations": {
-        "json": {
-          "exportFormat": "json"
-        }
       }
     },
     "docker-build": {

@@ -1,8 +1,8 @@
 import {
-  Controller, Get, Param, UseGuards
+  Controller, Get, Param, Query, UseGuards
 } from '@nestjs/common';
 import {
-  ApiOperation, ApiParam, ApiResponse, ApiTags
+  ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -76,6 +76,8 @@ export class WorkspacePlayerController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'bookletId', type: String })
+  @ApiQuery({ name: 'testPerson', type: String, required: false })
+  @ApiQuery({ name: 'includeReplayStatus', type: Boolean, required: false })
   @ApiOperation({ summary: 'Get units from a booklet in order' })
   @ApiResponse({
     status: 200,
@@ -84,8 +86,17 @@ export class WorkspacePlayerController {
   })
   async getBookletUnits(
     @WorkspaceId() workspaceId: number,
-      @Param('bookletId') bookletId: string
+      @Param('bookletId') bookletId: string,
+      @Query('testPerson') testPerson?: string,
+      @Query('includeReplayStatus') includeReplayStatus?: string
   ): Promise<BookletUnit[]> {
-    return this.workspacePlayerService.getBookletUnits(workspaceId, bookletId);
+    return this.workspacePlayerService.getBookletUnits(
+      workspaceId,
+      bookletId,
+      {
+        testPerson,
+        includeReplayStatus: includeReplayStatus === 'true' || !!testPerson
+      }
+    );
   }
 }

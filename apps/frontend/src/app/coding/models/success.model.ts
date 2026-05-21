@@ -4,10 +4,13 @@ export interface Success {
   variableid: string;
   status: string;
   value: string;
+  isGeoGebraValue?: boolean;
+  geoGebraBase64?: string | null;
   subform: string;
   code: string | null;
   score: string | null;
   codedstatus: string;
+  unit?: { name: string };
   unitname: string;
   login_name?: string;
   login_code?: string;

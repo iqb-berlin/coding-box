@@ -1,8 +1,10 @@
 .wrapper {
   margin: 20px auto;
   max-width: 1200px;
-  padding: 0 20px;
+  padding: 0 clamp(0px, 3vw, 20px);
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 h2 {
@@ -16,6 +18,7 @@ h2 {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-radius: 8px;
   overflow: hidden;
+  min-width: 0;
 }
 
 .background-settings-card {
@@ -25,25 +28,36 @@ h2 {
   border-radius: 8px;
   overflow: hidden;
   background-color: #f8f8f8;
+  min-width: 0;
+}
+
+.content-pool-settings-card,
+.database-export-card {
+  margin-bottom: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 mat-card-header {
   background-color: #f5f5f5;
-  padding: 16px 24px;
+  padding: 16px clamp(16px, 3vw, 24px);
   border-bottom: 1px solid #e0e0e0;
 }
 
 mat-card-title {
   color: #07465e;
-  font-size: 20px;
+  font-size: clamp(18px, 2.5vw, 20px);
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 mat-card-content {
-  padding: 24px;
+  padding: clamp(16px, 3vw, 24px);
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 30px;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: clamp(16px, 3vw, 30px);
+  min-width: 0;
 }
 
 @media (max-width: 768px) {
@@ -53,13 +67,14 @@ mat-card-content {
   }
 
   .wrapper {
-    padding: 0 10px;
+    margin: 12px auto;
   }
 
   .logo-preview-container,
   .logo-upload-container,
   .logo-alt-text-container,
-  .background-color-container {
+  .background-color-container,
+  .content-pool-settings-container {
     padding: 15px;
   }
 }
@@ -75,12 +90,15 @@ mat-card-content {
 
   .alt-text-actions,
   .background-color-actions,
-  .preview-actions {
+  .preview-actions,
+  .export-actions {
     flex-direction: column;
     align-items: stretch;
   }
 
-  button[mat-raised-button] {
+  button[mat-raised-button],
+  button[mat-button],
+  .file-input-label {
     width: 100%;
   }
 }
@@ -88,11 +106,14 @@ mat-card-content {
 .logo-preview-container,
 .logo-upload-container,
 .logo-alt-text-container,
-.background-color-container {
+.background-color-container,
+.content-pool-settings-container {
   background-color: #f9f9f9;
   border-radius: 6px;
   padding: 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 h3 {
@@ -147,6 +168,7 @@ h4 {
   flex-direction: column;
   align-items: flex-start;
   margin-bottom: 20px;
+  min-width: 0;
 }
 
 .file-input {
@@ -156,12 +178,16 @@ h4 {
 .file-input-label {
   display: flex;
   align-items: center;
+  justify-content: center;
   padding: 8px 16px;
   background-color: #07465e;
   color: white;
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.3s;
+  box-sizing: border-box;
+  min-height: 36px;
+  text-align: center;
 }
 
 .file-input-label:hover {
@@ -173,9 +199,11 @@ h4 {
 }
 
 .file-name {
-  margin-left: 15px;
+  margin-top: 10px;
   font-size: 14px;
   color: #555;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .file-hint {
@@ -195,10 +223,12 @@ h4 {
   border: 1px dashed #ccc;
   border-radius: 4px;
   background-color: #f9f9f9;
+  min-width: 0;
 }
 
 .preview-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 15px;
 }
@@ -222,24 +252,52 @@ button mat-icon {
 
 button[mat-raised-button] {
   min-width: 120px;
-  height: 36px;
+  min-height: 36px;
+  height: auto;
   font-weight: 500;
-  letter-spacing: 0.3px;
+  letter-spacing: 0;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+button[mat-button] {
+  min-height: 36px;
+  line-height: 1.25;
+  white-space: normal;
 }
 
 mat-form-field {
   margin-bottom: 5px;
+  max-width: 100%;
 }
 
 .logo-alt-text-container,
-.background-color-container {
+.background-color-container,
+.content-pool-settings-container {
   margin-bottom: 30px;
+}
+
+.content-pool-description {
+  margin: 0 0 18px;
+  color: #555;
+  line-height: 1.5;
+}
+
+.content-pool-toggle {
+  margin-bottom: 18px;
+}
+
+.content-pool-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .alt-text-actions,
 .background-color-actions,
 .preview-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 15px;
   justify-content: flex-start;
@@ -322,4 +380,51 @@ mat-form-field {
   margin-top: 5px;
   text-align: center;
   max-width: 350px;
+}
+
+.database-export-card {
+  margin-bottom: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.database-export-container {
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.export-description {
+  margin: 0 0 12px 0;
+  color: #555;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.export-progress {
+  margin-top: 16px;
+}
+
+.progress-text {
+  margin: 8px 0 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.export-error {
+  margin-top: 12px;
+  color: #b00020;
+  font-weight: 500;
 }

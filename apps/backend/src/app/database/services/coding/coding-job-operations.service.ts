@@ -2,9 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CodingJob } from '../../entities/coding-job.entity';
-import { CodingResultsService } from './coding-results.service';
+import {
+  ApplyCodingResultsOptions,
+  ApplyCodingResultsResult,
+  CodingResultsService
+} from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingValidationService } from './coding-validation.service';
+
+type BulkApplySkippedReason = 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
 
 @Injectable()
 export class CodingJobOperationsService {
@@ -20,17 +26,13 @@ export class CodingJobOperationsService {
 
   async applyCodingResults(
     workspaceId: number,
-    codingJobId: number
-  ): Promise<{
-      success: boolean;
-      updatedResponsesCount: number;
-      skippedReviewCount: number;
-      messageKey: string;
-      messageParams?: Record<string, unknown>;
-    }> {
+    codingJobId: number,
+    options: ApplyCodingResultsOptions = {}
+  ): Promise<ApplyCodingResultsResult> {
     const result = await this.codingResultsService.applyCodingResults(
       workspaceId,
-      codingJobId
+      codingJobId,
+      options
     );
 
     if (result.success && result.updatedResponsesCount > 0) {
@@ -48,16 +50,21 @@ export class CodingJobOperationsService {
     jobsProcessed: number;
     totalUpdatedResponses: number;
     totalSkippedReview: number;
+    totalSkippedAlreadyCoded: number;
+    totalOverwrittenExisting: number;
     message: string;
     results: Array<{
       jobId: number;
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
+      skippedReason?: BulkApplySkippedReason;
       result?: {
         success: boolean;
         updatedResponsesCount: number;
         skippedReviewCount: number;
+        skippedAlreadyCodedCount: number;
+        overwrittenExistingCount: number;
         message: string;
       };
     }>;
@@ -68,7 +75,7 @@ export class CodingJobOperationsService {
 
     const codingJobs = await this.codingJobRepository.find({
       where: { workspace_id: workspaceId },
-      select: ['id', 'name']
+      select: ['id', 'name', 'status', 'training_id', 'freshness_status']
     });
 
     const results: Array<{
@@ -76,19 +83,57 @@ export class CodingJobOperationsService {
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
+      skippedReason?: BulkApplySkippedReason;
       result?: {
         success: boolean;
         updatedResponsesCount: number;
         skippedReviewCount: number;
+        skippedAlreadyCodedCount: number;
+        overwrittenExistingCount: number;
         message: string;
       };
     }> = [];
 
     let totalUpdatedResponses = 0;
     let totalSkippedReview = 0;
+    let totalSkippedAlreadyCoded = 0;
+    let totalOverwrittenExisting = 0;
     let jobsProcessed = 0;
 
     for (const job of codingJobs) {
+      if (job.training_id !== null && job.training_id !== undefined) {
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: false,
+          skipped: true,
+          skippedReason: 'training-job'
+        });
+        continue;
+      }
+
+      if (job.status !== 'completed') {
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: false,
+          skipped: true,
+          skippedReason: 'not-completed'
+        });
+        continue;
+      }
+
+      if (job.freshness_status === 'stale_source') {
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: false,
+          skipped: true,
+          skippedReason: 'freshness-stale'
+        });
+        continue;
+      }
+
       const hasIssues = await this.codingJobService.hasCodingIssues(job.id);
 
       if (hasIssues) {
@@ -96,7 +141,8 @@ export class CodingJobOperationsService {
           jobId: job.id,
           jobName: job.name,
           hasIssues: true,
-          skipped: true
+          skipped: true,
+          skippedReason: 'coding-issues'
         });
         continue;
       }
@@ -112,6 +158,8 @@ export class CodingJobOperationsService {
             success: applyResult.success,
             updatedResponsesCount: applyResult.updatedResponsesCount,
             skippedReviewCount: applyResult.skippedReviewCount,
+            skippedAlreadyCodedCount: applyResult.skippedAlreadyCodedCount,
+            overwrittenExistingCount: applyResult.overwrittenExistingCount,
             message: applyResult.messageKey || 'Apply result'
           }
         });
@@ -119,6 +167,8 @@ export class CodingJobOperationsService {
         if (applyResult.success) {
           totalUpdatedResponses += applyResult.updatedResponsesCount;
           totalSkippedReview += applyResult.skippedReviewCount;
+          totalSkippedAlreadyCoded += applyResult.skippedAlreadyCodedCount;
+          totalOverwrittenExisting += applyResult.overwrittenExistingCount;
           jobsProcessed += 1;
         }
       } catch (error) {
@@ -134,14 +184,21 @@ export class CodingJobOperationsService {
             success: false,
             updatedResponsesCount: 0,
             skippedReviewCount: 0,
+            skippedAlreadyCodedCount: 0,
+            overwrittenExistingCount: 0,
             message: `Error: ${error.message}`
           }
         });
       }
     }
 
-    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review. ${results.filter(r => r.hasIssues).length
-    } jobs skipped due to coding issues.`;
+    const codingIssueJobs = results.filter(result => result.skippedReason === 'coding-issues').length;
+    const trainingJobs = results.filter(result => result.skippedReason === 'training-job').length;
+    const notCompletedJobs = results.filter(result => result.skippedReason === 'not-completed').length;
+    const freshnessStaleJobs = results.filter(result => result.skippedReason === 'freshness-stale').length;
+    const failedJobs = results.filter(result => !result.skipped && result.result && !result.result.success).length;
+    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review. ${codingIssueJobs
+    } jobs skipped due to coding issues.${trainingJobs > 0 ? ` ${trainingJobs} training jobs skipped.` : ''}${notCompletedJobs > 0 ? ` ${notCompletedJobs} jobs skipped because they are not completed.` : ''}${freshnessStaleJobs > 0 ? ` ${freshnessStaleJobs} jobs skipped because their source responses changed.` : ''}${failedJobs > 0 ? ` ${failedJobs} jobs could not be applied due to conflicts or errors.` : ''}`;
 
     this.logger.log(message);
 
@@ -150,6 +207,8 @@ export class CodingJobOperationsService {
       jobsProcessed,
       totalUpdatedResponses,
       totalSkippedReview,
+      totalSkippedAlreadyCoded,
+      totalOverwrittenExisting,
       message,
       results
     };
@@ -162,13 +221,24 @@ export class CodingJobOperationsService {
       selectedVariableBundles?: {
         id: number;
         name: string;
+        caseOrderingMode?: 'continuous' | 'alternating';
         variables: { unitName: string; variableId: string }[];
       }[];
-      selectedCoders: { id: number; name: string; username: string }[];
+      selectedCoders: {
+        id: number;
+        name: string;
+        username: string;
+        weight?: number;
+        capacityPercent?: number;
+      }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
       caseOrderingMode?: 'continuous' | 'alternating';
       maxCodingCases?: number;
+      distributionSeed?: string | number;
+      showScore?: boolean;
+      allowComments?: boolean;
+      suppressGeneralInstructions?: boolean;
     }
   ): Promise<{
       success: boolean;

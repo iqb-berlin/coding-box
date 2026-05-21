@@ -49,19 +49,27 @@ export class WorkspaceCodingService {
     personIds: string[],
     autoCoderRun: number = 1,
     progressCallback?: (progress: number) => void,
-    jobId?: string
+    jobId?: string,
+    unitIds?: number[],
+    freshnessSourceRevision?: number
   ): Promise<CodingStatistics> {
     const statistics = await this.codingProcessService.processTestPersonsBatch(
       workspace_id,
       personIds,
       autoCoderRun,
       progressCallback,
-      jobId
+      jobId,
+      unitIds,
+      freshnessSourceRevision
     );
 
     await this.invalidateIncompleteVariablesCache(workspace_id);
-    this.codingAnalysisService.invalidateCache(workspace_id);
-    await this.codingStatisticsService.refreshStatistics(workspace_id);
+    await this.codingAnalysisService.invalidateCache(workspace_id);
+    await this.codingStatisticsService.invalidateCache(workspace_id);
+    await this.codingStatisticsService.refreshStatistics(
+      workspace_id,
+      autoCoderRun === 2 ? 'v3' : 'v1'
+    );
 
     return statistics;
   }
@@ -263,7 +271,7 @@ export class WorkspaceCodingService {
         updatedScore: number | null;
       }>;
     }> {
-    this.codingAnalysisService.invalidateCache(workspaceId);
+    await this.codingAnalysisService.invalidateCache(workspaceId);
     return this.externalCodingImportService.importExternalCodingWithProgress(
       workspaceId,
       body,
@@ -294,7 +302,7 @@ export class WorkspaceCodingService {
         updatedScore: number | null;
       }>;
     }> {
-    this.codingAnalysisService.invalidateCache(workspaceId);
+    await this.codingAnalysisService.invalidateCache(workspaceId);
     return this.externalCodingImportService.importExternalCoding(
       workspaceId,
       body
@@ -378,10 +386,12 @@ export class WorkspaceCodingService {
       success: boolean;
       updatedResponsesCount: number;
       skippedReviewCount: number;
+      skippedAlreadyCodedCount: number;
+      overwrittenExistingCount: number;
       messageKey: string;
       messageParams?: Record<string, unknown>;
     }> {
-    this.codingAnalysisService.invalidateCache(workspaceId);
+    await this.codingAnalysisService.invalidateCache(workspaceId);
     return this.codingJobOperationsService.applyCodingResults(
       workspaceId,
       codingJobId
@@ -395,13 +405,24 @@ export class WorkspaceCodingService {
       selectedVariableBundles?: {
         id: number;
         name: string;
+        caseOrderingMode?: 'continuous' | 'alternating';
         variables: { unitName: string; variableId: string }[];
       }[];
-      selectedCoders: { id: number; name: string; username: string }[];
+      selectedCoders: {
+        id: number;
+        name: string;
+        username: string;
+        weight?: number;
+        capacityPercent?: number;
+      }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
       caseOrderingMode?: 'continuous' | 'alternating';
       maxCodingCases?: number;
+      distributionSeed?: string | number;
+      showScore?: boolean;
+      allowComments?: boolean;
+      suppressGeneralInstructions?: boolean;
     }
   ): Promise<{
       success: boolean;
@@ -463,21 +484,26 @@ export class WorkspaceCodingService {
     jobsProcessed: number;
     totalUpdatedResponses: number;
     totalSkippedReview: number;
+    totalSkippedAlreadyCoded: number;
+    totalOverwrittenExisting: number;
     message: string;
     results: Array<{
       jobId: number;
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
+      skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
       result?: {
         success: boolean;
         updatedResponsesCount: number;
         skippedReviewCount: number;
+        skippedAlreadyCodedCount: number;
+        overwrittenExistingCount: number;
         message: string;
       };
     }>;
   }> {
-    this.codingAnalysisService.invalidateCache(workspaceId);
+    await this.codingAnalysisService.invalidateCache(workspaceId);
     return this.codingJobOperationsService.bulkApplyCodingResults(workspaceId);
   }
 
@@ -491,11 +517,18 @@ export class WorkspaceCodingService {
 
   async getCaseCoverageOverview(workspaceId: number): Promise<{
     totalCasesToCode: number;
+    effectiveTotalCasesToCode: number;
     casesInJobs: number;
+    effectiveCasesInJobs: number;
     doubleCodedCases: number;
     singleCodedCases: number;
     unassignedCases: number;
+    effectiveUnassignedCases: number;
     coveragePercentage: number;
+    rawCoveragePercentage: number;
+    aggregationActive: boolean;
+    aggregationThreshold: number | null;
+    aggregatedDuplicateCases: number;
   }> {
     return this.codingProgressService.getCaseCoverageOverview(workspaceId);
   }
@@ -635,10 +668,11 @@ export class WorkspaceCodingService {
     variableFilters?: string[]
   ): Promise<{
       affectedResponseCount: number;
+      deletedGeneratedResponseCount: number;
       cascadeResetVersions: ('v2' | 'v3')[];
       message: string;
     }> {
-    this.codingAnalysisService.invalidateCache(workspaceId);
+    await this.codingAnalysisService.invalidateCache(workspaceId);
     return this.codingVersionService.resetCodingVersion(
       workspaceId,
       version,
