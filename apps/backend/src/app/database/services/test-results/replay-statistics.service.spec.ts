@@ -71,5 +71,27 @@ describe('ReplayStatisticsService', () => {
         }
       }));
     });
+
+    it('should truncate strings to database column lengths', async () => {
+      await service.storeReplayStatistics({
+        workspaceId: 1,
+        unitId: 'U'.repeat(300),
+        bookletId: 'B'.repeat(300),
+        testPersonLogin: 'L'.repeat(300),
+        testPersonCode: 'C'.repeat(300),
+        durationMilliseconds: 100,
+        replayUrl: `https://example.test/${'r'.repeat(2500)}`,
+        errorMessage: 'E'.repeat(2500)
+      });
+
+      expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({
+        unit_id: 'U'.repeat(255),
+        booklet_id: 'B'.repeat(255),
+        test_person_login: 'L'.repeat(255),
+        test_person_code: 'C'.repeat(255),
+        replay_url: `https://example.test/${'r'.repeat(2500)}`.slice(0, 2000),
+        error_message: 'E'.repeat(2000)
+      }));
+    });
   });
 });

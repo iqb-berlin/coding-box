@@ -43,7 +43,6 @@ export class StoreReplayStatisticsDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MaxLength(2000)
     replayUrl?: string;
 
   @ApiPropertyOptional()
@@ -54,7 +53,6 @@ export class StoreReplayStatisticsDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MaxLength(2000)
     errorMessage?: string;
 
   @ApiPropertyOptional({

@@ -25,4 +25,15 @@ describe('StoreReplayStatisticsDto', () => {
 
     expect(errors.some(error => error.property === 'clientTimings')).toBe(true);
   });
+
+  it('should accept oversized telemetry strings so the service can truncate them', async () => {
+    const dto = plainToInstance(StoreReplayStatisticsDto, {
+      unitId: 'UNIT-1',
+      durationMilliseconds: 1000,
+      replayUrl: `https://example.test/${'x'.repeat(5000)}`,
+      errorMessage: 'E'.repeat(5000)
+    });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
 });

@@ -15,6 +15,8 @@ export class ReplayStatisticsService {
   private readonly logger = new Logger(ReplayStatisticsService.name);
 
   private static readonly MAX_TIMING_VALUE_MS = 86_400_000;
+  private static readonly MAX_IDENTIFIER_LENGTH = 255;
+  private static readonly MAX_MESSAGE_LENGTH = 2000;
 
   private static readonly CLIENT_TIMING_KEYS = new Set([
     'routeToVisibleMs',
@@ -100,16 +102,34 @@ export class ReplayStatisticsService {
     try {
       const mappedData = {
         workspace_id: data.workspaceId,
-        unit_id: data.unitId,
-        booklet_id: data.bookletId,
-        test_person_login: data.testPersonLogin,
-        test_person_code: data.testPersonCode,
+        unit_id: this.truncateString(
+          data.unitId,
+          ReplayStatisticsService.MAX_IDENTIFIER_LENGTH
+        ) || 'unknown',
+        booklet_id: this.truncateString(
+          data.bookletId,
+          ReplayStatisticsService.MAX_IDENTIFIER_LENGTH
+        ),
+        test_person_login: this.truncateString(
+          data.testPersonLogin,
+          ReplayStatisticsService.MAX_IDENTIFIER_LENGTH
+        ),
+        test_person_code: this.truncateString(
+          data.testPersonCode,
+          ReplayStatisticsService.MAX_IDENTIFIER_LENGTH
+        ),
         duration_milliseconds: this.normalizeDurationMilliseconds(
           data.durationMilliseconds
         ),
-        replay_url: data.replayUrl,
+        replay_url: this.truncateString(
+          data.replayUrl,
+          ReplayStatisticsService.MAX_MESSAGE_LENGTH
+        ),
         success: data.success !== undefined ? data.success : true,
-        error_message: data.errorMessage,
+        error_message: this.truncateString(
+          data.errorMessage,
+          ReplayStatisticsService.MAX_MESSAGE_LENGTH
+        ),
         client_timings: this.sanitizeTimingMap(
           data.clientTimings,
           ReplayStatisticsService.CLIENT_TIMING_KEYS
@@ -140,6 +160,13 @@ export class ReplayStatisticsService {
       0,
       Math.min(Math.trunc(durationMilliseconds), 2147483647)
     );
+  }
+
+  private truncateString(value: string | undefined, maxLength: number): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+    return value.length > maxLength ? value.slice(0, maxLength) : value;
   }
 
   private sanitizeTimingMap(
