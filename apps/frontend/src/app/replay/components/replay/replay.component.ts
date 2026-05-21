@@ -17,7 +17,6 @@ import {
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
-import { logger } from 'nx/src/utils/logger';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { FileService } from '../../../shared/services/file/file.service';
 import {
@@ -480,8 +479,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       )
     );
     this.payloadResponseTime = performance.now();
-    const payloadDuration = Math.round(this.payloadResponseTime - this.payloadRequestStartTime);
-    logger.log(`Replay payload loaded in ${payloadDuration}ms for unit ${this.unitId}`);
     this.setIsLoaded();
     return {
       unitDef: unitData.unitDef,
@@ -544,15 +541,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       return;
     }
     const now = performance.now();
-    const clientTimings = this.getClientTimings(now);
-    logger.log(
-      `Replay timings unit=${this.unitId} routeToVisible=${clientTimings.routeToVisibleMs ?? 'n/a'}ms ` +
-      `loadToVisible=${clientTimings.loadToVisibleMs ?? 'n/a'}ms ` +
-      `payload=${clientTimings.payloadMs ?? 'n/a'}ms ` +
-      `payloadToVisible=${clientTimings.payloadToVisibleMs ?? 'n/a'}ms ` +
-      `payloadToPlayerReady=${clientTimings.payloadToPlayerReadyMs ?? 'n/a'}ms ` +
-      `playerReadyToVisible=${clientTimings.playerReadyToVisibleMs ?? 'n/a'}ms`
-    );
     const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
     this.storeReplayStatistics(true, duration, undefined, now);
     this.successStoredForCurrentReplay = true;
@@ -612,14 +600,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       clientTimings: this.getClientTimings(visibleTime),
       serverTimings: this.serverTimings ?? undefined
     }).subscribe({
-      next: () => {
-        logger.log(
-          `${success ? 'Replay' : 'Replay error'} statistics stored successfully. Duration: ${Math.max(0, duration)}ms`
-        );
-      },
-      error: error => {
-        logger.error(`Error storing replay statistics: ${error}`);
-      }
+      error: () => undefined
     });
   }
 

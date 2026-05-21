@@ -3,7 +3,7 @@
 ARG REGISTRY_PATH=""
 
 
-FROM ${REGISTRY_PATH}node:lts-bookworm AS builder
+FROM ${REGISTRY_PATH}node:22-bookworm AS builder
 
 # Update npm to latest version
 RUN npm --version
