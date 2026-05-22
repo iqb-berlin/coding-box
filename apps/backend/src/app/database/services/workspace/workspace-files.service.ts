@@ -360,9 +360,19 @@ export class WorkspaceFilesService implements OnModuleInit {
     fileIds: string[]
   ): Promise<boolean> {
     this.logger.log(`Delete test files for workspace ${workspace_id}`);
-    const numericIds = fileIds
-      .map(id => parseInt(id, 10))
-      .filter(id => !Number.isNaN(id));
+    const numericIds = Array.from(new Set(
+      fileIds
+        .filter(id => /^[1-9]\d*$/.test(id))
+        .map(id => Number(id))
+        .filter(id => Number.isSafeInteger(id))
+    ));
+
+    if (numericIds.length === 0) {
+      this.logger.warn(
+        `No valid test file IDs provided for workspace ${workspace_id}`
+      );
+      return false;
+    }
 
     const res = await this.fileUploadRepository
       .createQueryBuilder()
@@ -378,7 +388,15 @@ export class WorkspaceFilesService implements OnModuleInit {
     // Invalidate coding statistics cache since test files changed
     await this.codingStatisticsService.invalidateCache(workspace_id);
 
-    return !!res;
+    const deletedCount = res.affected ?? 0;
+    const success = deletedCount === numericIds.length;
+    if (!success) {
+      this.logger.warn(
+        `Requested deletion of ${numericIds.length} test files for workspace ${workspace_id}, but deleted ${deletedCount}`
+      );
+    }
+
+    return success;
   }
 
   async validateTestFiles(

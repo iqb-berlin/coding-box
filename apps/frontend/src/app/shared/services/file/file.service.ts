@@ -57,6 +57,11 @@ interface PaginatedResponse<T> {
   limit: number;
 }
 
+export interface DeleteFilesResult {
+  success: boolean;
+  requestHandled: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -97,34 +102,60 @@ export class FileService {
   }
 
   deleteFiles(workspaceId: number, fileIds: number[]): Observable<boolean> {
-    const batchSize = 100;
-    const batches = [];
-
-    for (let i = 0; i < fileIds.length; i += batchSize) {
-      batches.push(fileIds.slice(i, i + batchSize));
-    }
-
-    return batches.reduce<Observable<boolean>>(
-      (acc, batch) => acc.pipe(
-        switchMap(() => this.http
-          .delete(`${this.serverUrl}admin/workspace/${workspaceId}/files`, {
-            headers: this.authHeader,
-            params: { fileIds: batch.join(',') }
-          })
-          .pipe(
-            map(() => true),
-            catchError(() => of(false))
-          )
-        )
-      ),
-      of(true)
-    ).pipe(
-      tap(success => {
-        if (success) {
-          this.validationTaskStateService.invalidateWorkspace(workspaceId);
-        }
-      })
+    return this.deleteFilesWithResult(workspaceId, fileIds).pipe(
+      map(result => result.success)
     );
+  }
+
+  deleteFilesWithResult(
+    workspaceId: number,
+    fileIds: number[]
+  ): Observable<DeleteFilesResult> {
+    return defer(() => {
+      const batchSize = 100;
+      const batches: number[][] = [];
+
+      for (let i = 0; i < fileIds.length; i += batchSize) {
+        batches.push(fileIds.slice(i, i + batchSize));
+      }
+
+      if (batches.length === 0) {
+        return of({ success: false, requestHandled: false });
+      }
+
+      return batches.reduce<Observable<DeleteFilesResult>>(
+        (acc, batch) => acc.pipe(
+          switchMap(previousResult => {
+            if (!previousResult.success) {
+              return of(previousResult);
+            }
+            return this.http.delete<boolean>(
+              `${this.serverUrl}admin/workspace/${workspaceId}/files`,
+              {
+                headers: this.authHeader,
+                params: { fileIds: batch.join(',') }
+              }
+            ).pipe(
+              map(success => ({
+                success: success === true,
+                requestHandled: true
+              })),
+              catchError(() => of({
+                success: false,
+                requestHandled: previousResult.requestHandled
+              }))
+            );
+          })
+        ),
+        of({ success: true, requestHandled: false })
+      ).pipe(
+        tap(result => {
+          if (result.requestHandled) {
+            this.validationTaskStateService.invalidateWorkspace(workspaceId);
+          }
+        })
+      );
+    });
   }
 
   downloadFile(

@@ -237,14 +237,16 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockQueryBuilder.execute.mockResolvedValue({ affected: 1 });
   });
 
   it('should use createQueryBuilder to delete files', async () => {
     const service = makeService();
     const workspaceId = 1;
     const fileIds = ['1', '2', '3'];
+    mockQueryBuilder.execute.mockResolvedValueOnce({ affected: 3 });
 
-    await service.deleteTestFiles(workspaceId, fileIds);
+    const result = await service.deleteTestFiles(workspaceId, fileIds);
 
     expect(mockFileUploadRepository.createQueryBuilder).toHaveBeenCalled();
     expect(mockQueryBuilder.delete).toHaveBeenCalled();
@@ -258,19 +260,22 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       { ids: [1, 2, 3] }
     );
     expect(mockQueryBuilder.execute).toHaveBeenCalled();
+    expect(result).toBe(true);
   });
 
   it('should filter out invalid IDs', async () => {
     const service = makeService();
     const workspaceId = 1;
-    const fileIds = ['1', 'nan', '3'];
+    const fileIds = ['1', 'nan', '3', '1e2', '0x10', '2.5', '03'];
+    mockQueryBuilder.execute.mockResolvedValueOnce({ affected: 2 });
 
-    await service.deleteTestFiles(workspaceId, fileIds);
+    const result = await service.deleteTestFiles(workspaceId, fileIds);
 
     expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
       'id IN (:...ids)',
       { ids: [1, 3] }
     );
+    expect(result).toBe(true);
   });
 
   it('should invalidate coding statistics cache', async () => {
@@ -280,6 +285,30 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
 
     await service.deleteTestFiles(workspaceId, fileIds);
 
+    expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+  });
+
+  it('should not execute delete query when no valid IDs are provided', async () => {
+    const service = makeService();
+    const workspaceId = 1;
+    const fileIds = ['nan', '0', '-1'];
+
+    const result = await service.deleteTestFiles(workspaceId, fileIds);
+
+    expect(result).toBe(false);
+    expect(mockFileUploadRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(mockCodingStatisticsService.invalidateCache).not.toHaveBeenCalled();
+  });
+
+  it('should return false when not all requested files were deleted', async () => {
+    const service = makeService();
+    const workspaceId = 1;
+    const fileIds = ['1', '2', '3'];
+    mockQueryBuilder.execute.mockResolvedValueOnce({ affected: 2 });
+
+    const result = await service.deleteTestFiles(workspaceId, fileIds);
+
+    expect(result).toBe(false);
     expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
   });
 });
