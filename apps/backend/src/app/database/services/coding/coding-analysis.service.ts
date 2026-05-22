@@ -166,7 +166,8 @@ export class CodingAnalysisService {
   async startAnalysis(
     workspaceId: number,
     matchingFlags?: ResponseMatchingFlag[],
-    threshold?: number
+    threshold?: number,
+    options: { forceRefresh?: boolean } = {}
   ): Promise<void> {
     const activeMatchingFlags = matchingFlags ||
       await this.codingJobService.getResponseMatchingMode(workspaceId);
@@ -181,6 +182,11 @@ export class CodingAnalysisService {
       activeThreshold;
 
     const cacheKey = this.getCacheKey(workspaceId, activeMatchingFlags, effectiveThreshold);
+
+    if (options.forceRefresh) {
+      await this.cacheService.delete(cacheKey);
+      this.logger.log(`Invalidated response analysis cache before restart for workspace ${workspaceId}`);
+    }
 
     // Check if job already running
     const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);

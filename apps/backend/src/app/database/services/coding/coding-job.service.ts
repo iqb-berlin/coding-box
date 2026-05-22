@@ -43,6 +43,7 @@ import {
 } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 import { CodingFreshnessService } from './coding-freshness.service';
+import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -1363,7 +1364,7 @@ export class CodingJobService {
   }
 
   private async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
-    const cacheKey = `coding_incomplete_variables_v3:${workspaceId}`;
+    const cacheKey = getCodingIncompleteVariablesCacheKey(workspaceId);
     await this.cacheService.delete(cacheKey);
     this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }

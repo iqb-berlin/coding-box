@@ -21,6 +21,7 @@ import {
 } from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
 import { buildAggregationGroups } from './aggregation-metrics.util';
+import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
 
 interface NormalizedExpectedCombination {
   unitKey: string;
@@ -871,7 +872,7 @@ export class CodingValidationService {
   }
 
   generateIncompleteVariablesCacheKey(workspaceId: number): string {
-    return `coding_incomplete_variables_v4:${workspaceId}`;
+    return getCodingIncompleteVariablesCacheKey(workspaceId);
   }
 
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
