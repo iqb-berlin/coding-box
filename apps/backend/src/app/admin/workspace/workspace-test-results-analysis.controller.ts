@@ -82,6 +82,7 @@ export class WorkspaceTestResultsAnalysisController {
                                          @Query('sessionScreens') sessionScreens?: string,
                                          @Query('sessionIds') sessionIds?: string,
                                          @Query('logAnomalies') logAnomalies?: string,
+                                         @Query('includeLogAnomalies') includeLogAnomalies?: string,
                                          @Query('focusLostThresholdMs', new DefaultValuePipe(300000), ParseIntPipe) focusLostThresholdMs?: number,
                                          @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
                                          @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number
@@ -117,6 +118,7 @@ export class WorkspaceTestResultsAnalysisController {
         sessionScreens,
         sessionIds,
         logAnomalies,
+        includeLogAnomalies,
         focusLostThresholdMs,
         sessionSpanThresholdMs,
         repeatedStartThreshold

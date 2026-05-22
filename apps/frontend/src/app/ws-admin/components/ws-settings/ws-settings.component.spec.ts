@@ -54,7 +54,9 @@ describe('WsSettingsComponent', () => {
 
     mockWorkspaceSettingsService = {
       getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(true)),
-      setAutoFetchCodingStatistics: jest.fn().mockReturnValue(of({}))
+      setAutoFetchCodingStatistics: jest.fn().mockReturnValue(of({})),
+      getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false)),
+      setShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of({}))
     } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     mockClipboard = {
@@ -111,9 +113,11 @@ describe('WsSettingsComponent', () => {
   });
 
   describe('ngOnInit', () => {
-    it('should load auto-fetch setting on init', () => {
+    it('should load workspace settings on init', () => {
       expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
       expect(component.autoFetchCodingStatistics).toBe(true);
+      expect(mockWorkspaceSettingsService.getShowTestResultsLogAnomalies).toHaveBeenCalledWith(1);
+      expect(component.showTestResultsLogAnomalies).toBe(false);
     });
   });
 
@@ -198,6 +202,28 @@ describe('WsSettingsComponent', () => {
       component.autoFetchCodingStatistics = true;
       component.toggleAutoFetchCodingStatistics({ checked: false });
       expect(component.autoFetchCodingStatistics).toBe(true);
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('toggleShowTestResultsLogAnomalies', () => {
+    it('should call service with true', () => {
+      component.toggleShowTestResultsLogAnomalies({ checked: true });
+      expect(component.showTestResultsLogAnomalies).toBe(true);
+      expect(mockWorkspaceSettingsService.setShowTestResultsLogAnomalies).toHaveBeenCalledWith(1, true);
+    });
+
+    it('should call service with false', () => {
+      component.toggleShowTestResultsLogAnomalies({ checked: false });
+      expect(component.showTestResultsLogAnomalies).toBe(false);
+      expect(mockWorkspaceSettingsService.setShowTestResultsLogAnomalies).toHaveBeenCalledWith(1, false);
+    });
+
+    it('should revert state on error', () => {
+      mockWorkspaceSettingsService.setShowTestResultsLogAnomalies.mockReturnValue(throwError(() => new Error('error')));
+      component.showTestResultsLogAnomalies = true;
+      component.toggleShowTestResultsLogAnomalies({ checked: false });
+      expect(component.showTestResultsLogAnomalies).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });

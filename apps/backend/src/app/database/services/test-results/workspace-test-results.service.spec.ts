@@ -61,6 +61,13 @@ const mockQueryBuilder = () => ({
   execute: jest.fn().mockResolvedValue({ affected: 0 })
 });
 
+type WorkspaceTestResultsServiceWithLogAnomalyLookup = {
+  findLogAnomaliesForBooklets: (
+    bookletIds: number[],
+    thresholds: unknown
+  ) => Promise<Map<number, unknown[]>>;
+};
+
 describe('WorkspaceTestResultsService', () => {
   let service: WorkspaceTestResultsService;
   let responseManagementService: ResponseManagementService;
@@ -1022,6 +1029,46 @@ describe('WorkspaceTestResultsService', () => {
 
       expect(qb.where).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId });
       expect(qb.andWhere).toHaveBeenCalledWith('person.code ILIKE :code', { code: '%abc%' });
+    });
+
+    it('should not calculate log anomaly summaries for rows by default', async () => {
+      const workspaceId = 1;
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+      (workspaceCoreService.getIgnoredUnits as jest.Mock).mockResolvedValue([]);
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const anomalySpy = jest.spyOn(
+        serviceWithLogAnomalyLookup,
+        'findLogAnomaliesForBooklets'
+      );
+
+      await service.findFlatResponses(workspaceId, { page: 1, limit: 10 });
+
+      expect(anomalySpy).not.toHaveBeenCalled();
+    });
+
+    it('should calculate log anomaly summaries for rows when explicitly requested', async () => {
+      const workspaceId = 1;
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+      (workspaceCoreService.getIgnoredUnits as jest.Mock).mockResolvedValue([]);
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const anomalySpy = jest.spyOn(
+        serviceWithLogAnomalyLookup,
+        'findLogAnomaliesForBooklets'
+      ).mockResolvedValue(new Map());
+
+      await service.findFlatResponses(workspaceId, {
+        page: 1,
+        limit: 10,
+        includeLogAnomalies: 'true'
+      });
+
+      expect(anomalySpy).toHaveBeenCalled();
     });
   });
 

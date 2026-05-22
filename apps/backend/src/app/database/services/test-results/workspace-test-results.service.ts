@@ -2152,6 +2152,7 @@ export class WorkspaceTestResultsService {
       sessionScreens?: string;
       sessionIds?: string;
       logAnomalies?: string;
+      includeLogAnomalies?: string;
       focusLostThresholdMs?: number | string;
       sessionSpanThresholdMs?: number | string;
       repeatedStartThreshold?: number | string;
@@ -2327,6 +2328,13 @@ export class WorkspaceTestResultsService {
     const logAnomalyCodes = this.expandLogAnomalyCodes(
       parseCsv(options.logAnomalies)
     );
+    const includeLogAnomaliesRaw = String(options.includeLogAnomalies || '')
+      .trim()
+      .toLowerCase();
+    const includeLogAnomalies =
+      includeLogAnomaliesRaw === 'true' ||
+      includeLogAnomaliesRaw === '1' ||
+      includeLogAnomaliesRaw === 'yes';
 
     const parseResponseStatus = (s: string): number | null => {
       const v = (s || '').trim();
@@ -2874,10 +2882,12 @@ export class WorkspaceTestResultsService {
       };
     });
 
-    const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
-      mapped.map(row => row.bookletId),
-      logAnomalyThresholds
-    );
+    const anomaliesByBooklet = includeLogAnomalies ?
+      await this.findLogAnomaliesForBooklets(
+        mapped.map(row => row.bookletId),
+        logAnomalyThresholds
+      ) :
+      new Map<number, LogAnomalySummary[]>();
 
     return [
       mapped.map(row => ({

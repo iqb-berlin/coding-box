@@ -88,6 +88,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   readonly minTokenDurationDays = 1;
   readonly maxTokenDurationDays = 90;
   autoFetchCodingStatistics = true;
+  showTestResultsLogAnomalies = false;
   isExporting = false;
   databaseExportProgress = 0;
   databaseExportStatus: DatabaseExportStatus | null = null;
@@ -100,6 +101,11 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(enabled => {
           this.autoFetchCodingStatistics = enabled;
+        });
+      this.workspaceSettingsService
+        .getShowTestResultsLogAnomalies(workspaceId)
+        .subscribe(enabled => {
+          this.showTestResultsLogAnomalies = enabled;
         });
     }
   }
@@ -238,6 +244,46 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
               }
             );
             this.autoFetchCodingStatistics = !this.autoFetchCodingStatistics;
+          }
+        });
+    }
+  }
+
+  toggleShowTestResultsLogAnomalies(toggleEvent: { checked: boolean }): void {
+    this.showTestResultsLogAnomalies = toggleEvent.checked;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService
+        .setShowTestResultsLogAnomalies(
+          workspaceId,
+          this.showTestResultsLogAnomalies
+        )
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.showTestResultsLogAnomalies ?
+                this.translateService.instant(
+                  'ws-settings.show-test-results-log-anomalies-enabled'
+                ) :
+                this.translateService.instant(
+                  'ws-settings.show-test-results-log-anomalies-disabled'
+                ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
+            this.showTestResultsLogAnomalies =
+              !this.showTestResultsLogAnomalies;
           }
         });
     }

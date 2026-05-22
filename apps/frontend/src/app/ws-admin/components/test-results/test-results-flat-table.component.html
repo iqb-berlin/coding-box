@@ -234,6 +234,25 @@
             <td mat-cell *matCellDef="let row">{{ row.responseStatus }}</td>
           </ng-container>
 
+          <ng-container matColumnDef="logStatus">
+            <th mat-header-cell *matHeaderCellDef>Logstatus</th>
+            <td mat-cell *matCellDef="let row">
+              <span
+                class="log-status-chip"
+                [class.critical]="getLogAnomalySeverity(row) === 'critical'"
+                [class.warning]="getLogAnomalySeverity(row) === 'warning'"
+                [class.info]="getLogAnomalySeverity(row) === 'info'"
+                [class.clean]="!hasLogAnomaliesForRow(row)"
+                [matTooltip]="getLogAnomalyTooltip(row)"
+              >
+                {{ getLogAnomalySeverityLabel(row) }}
+                @if (row.logAnomalies?.length) {
+                <span class="log-status-count">{{ row.logAnomalies.length }}</span>
+                }
+              </span>
+            </td>
+          </ng-container>
+
           <ng-container matColumnDef="responseValue">
             <th mat-header-cell *matHeaderCellDef>Antwortwert</th>
             <td mat-cell *matCellDef="let row">
