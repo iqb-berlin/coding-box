@@ -13,6 +13,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
+import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 import { TestFilesUploadConflictsDialogComponent } from './test-files-upload-conflicts-dialog.component';
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
@@ -34,6 +35,7 @@ describe('TestFilesComponent', () => {
       getFilesList: jest.fn(),
       uploadTestFiles: jest.fn(),
       deleteFiles: jest.fn(),
+      deleteFilesWithResult: jest.fn(),
       downloadFile: jest.fn(),
       validateFiles: jest.fn(),
       createDummyTestTakerFile: jest.fn()
@@ -278,6 +280,60 @@ describe('TestFilesComponent', () => {
       expect(component.isUploading).toBe(false);
       expect(snackBar.open).toHaveBeenCalledWith('Fehler beim Hochladen der Dateien.', 'error', { duration: 3000 });
     }));
+  });
+
+  describe('deleteFiles', () => {
+    it('should pass all selected file IDs to the file service', () => {
+      const files: FilesInListDto[] = [
+        {
+          id: 11, filename: 'unit-1.xml', file_type: 'Unit'
+        },
+        {
+          id: 12, filename: 'unit-2.xml', file_type: 'Unit'
+        },
+        {
+          id: 13, filename: 'booklet.xml', file_type: 'Booklet'
+        }
+      ];
+
+      component.dataSource.data = files;
+      component.tableCheckboxSelection.select(...files);
+      fileService.deleteFilesWithResult.mockReturnValue(of({
+        success: true,
+        requestHandled: true
+      }));
+      fileService.getFilesList.mockClear();
+
+      component.deleteFiles();
+
+      expect(fileService.deleteFilesWithResult).toHaveBeenCalledWith(1, [11, 12, 13]);
+      expect(component.tableCheckboxSelection.selected).toHaveLength(0);
+      expect(fileService.getFilesList).toHaveBeenCalled();
+    });
+
+    it('should reload files when a delete request was handled but not fully successful', () => {
+      const files: FilesInListDto[] = [
+        {
+          id: 11, filename: 'unit-1.xml', file_type: 'Unit'
+        },
+        {
+          id: 12, filename: 'unit-2.xml', file_type: 'Unit'
+        }
+      ];
+
+      component.dataSource.data = files;
+      component.tableCheckboxSelection.select(...files);
+      fileService.deleteFilesWithResult.mockReturnValue(of({
+        success: false,
+        requestHandled: true
+      }));
+      fileService.getFilesList.mockClear();
+
+      component.deleteFiles();
+
+      expect(component.tableCheckboxSelection.selected).toHaveLength(0);
+      expect(fileService.getFilesList).toHaveBeenCalled();
+    });
   });
 
   describe('Busy State', () => {

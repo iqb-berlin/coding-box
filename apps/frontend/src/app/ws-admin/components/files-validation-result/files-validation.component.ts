@@ -1059,11 +1059,11 @@ export class FilesValidationDialogComponent implements OnInit {
     this.isDeletingUnusedFiles = true;
     const idsToDelete = this.unusedFilesSelection.selected.map(f => f.id);
 
-    this.fileService.deleteFiles(this.data.workspaceId, idsToDelete)
+    this.fileService.deleteFilesWithResult(this.data.workspaceId, idsToDelete)
       .subscribe({
-        next: (success: boolean) => {
+        next: result => {
           this.isDeletingUnusedFiles = false;
-          if (success) {
+          if (result.success) {
             this.filesDeleted = true;
             this.unusedTestFiles = this.unusedTestFiles.filter(f => !idsToDelete.includes(f.id));
             this.unusedFilesSelection.clear();
@@ -1071,6 +1071,12 @@ export class FilesValidationDialogComponent implements OnInit {
             this.refreshValidationData('Validierungsergebnisse wurden aktualisiert');
             this.snackBar.open('Dateien erfolgreich gelöscht', 'OK', { duration: 3000 });
           } else {
+            if (result.requestHandled) {
+              this.filesDeleted = true;
+              this.unusedFilesSelection.clear();
+              this.checkIfAllUnusedFilesSelected();
+              this.refreshValidationData();
+            }
             this.snackBar.open('Fehler beim Löschen der Dateien', 'Fehler', { duration: 3000 });
           }
         },

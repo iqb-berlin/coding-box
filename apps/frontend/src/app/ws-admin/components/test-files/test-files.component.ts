@@ -856,15 +856,15 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     const fileIds = this.tableCheckboxSelection.selected.map(file => file.id);
     this.isDeleting = true;
     this.fileService
-      .deleteFiles(this.appService.selectedWorkspaceId, fileIds)
+      .deleteFilesWithResult(this.appService.selectedWorkspaceId, fileIds)
       .pipe(
         finalize(() => {
           this.isDeleting = false;
         })
       )
       .subscribe({
-        next: respOk => {
-          this.handleDeleteResponse(respOk);
+        next: result => {
+          this.handleDeleteResponse(result.success, result.requestHandled);
         },
         error: () => {
           this.snackBar.open(
@@ -1121,7 +1121,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         `Validierung wird durchgeführt (${this.validationProgress}%)...`;
   }
 
-  private handleDeleteResponse(success: boolean): void {
+  private handleDeleteResponse(
+    success: boolean,
+    requestHandled: boolean
+  ): void {
     this.snackBar.open(
       success ?
         this.translate.instant('ws-admin.files-deleted') :
@@ -1129,7 +1132,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       success ? '' : this.translate.instant('error'),
       { duration: 1000 }
     );
-    if (success) {
+    if (requestHandled) {
       this.tableCheckboxSelection.clear();
       this.loadTestFiles();
     }

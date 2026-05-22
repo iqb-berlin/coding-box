@@ -11,6 +11,7 @@ import { WorkspaceService } from '../../../workspace/services/workspace.service'
 import { FileService } from '../../../shared/services/file/file.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
+import { UnusedTestFile } from '../../../../../../../api-dto/files/file-validation-result.dto';
 
 describe('FilesValidationComponent', () => {
   let component: FilesValidationDialogComponent;
@@ -58,7 +59,9 @@ describe('FilesValidationComponent', () => {
       getBookletInfo: jest.fn(),
       validateFiles: jest.fn().mockReturnValue(of(true)),
       getUnitInfo: jest.fn(),
-      downloadFile: jest.fn()
+      downloadFile: jest.fn(),
+      deleteFiles: jest.fn(),
+      deleteFilesWithResult: jest.fn()
     };
 
     await TestBed.configureTestingModule({
@@ -231,5 +234,84 @@ describe('FilesValidationComponent', () => {
         { bookletId: 'BOOK2', testletId: 'TL1' }
       ])
     );
+  });
+
+  it('should delete all selected unused file IDs and refresh validation data', () => {
+    const unusedFiles: UnusedTestFile[] = [
+      {
+        id: 101, fileId: 'u1', filename: 'unit-1.xml', fileType: 'Unit'
+      },
+      {
+        id: 102, fileId: 'u2', filename: 'unit-2.xml', fileType: 'Unit'
+      },
+      {
+        id: 103, fileId: 'b1', filename: 'booklet.xml', fileType: 'Booklet'
+      }
+    ];
+    const refreshSpy = jest
+      .spyOn(
+        component as unknown as {
+          refreshValidationData: (message?: string) => void;
+        },
+        'refreshValidationData'
+      )
+      .mockImplementation(() => undefined);
+
+    component.data = {
+      workspaceId: 1,
+      validationResults: [],
+      unusedTestFiles: unusedFiles
+    };
+    component.unusedTestFiles = [...unusedFiles];
+    component.unusedFilesSelection.select(...unusedFiles);
+    fileService.deleteFilesWithResult.mockReturnValue(of({
+      success: true,
+      requestHandled: true
+    }));
+
+    component.deleteSelectedUnusedFiles();
+
+    expect(fileService.deleteFilesWithResult).toHaveBeenCalledWith(1, [101, 102, 103]);
+    expect(component.filesDeleted).toBe(true);
+    expect(component.unusedTestFiles).toEqual([]);
+    expect(component.unusedFilesSelection.selected).toHaveLength(0);
+    expect(refreshSpy).toHaveBeenCalledWith('Validierungsergebnisse wurden aktualisiert');
+  });
+
+  it('should refresh validation data when unused file deletion was handled but incomplete', () => {
+    const unusedFiles: UnusedTestFile[] = [
+      {
+        id: 101, fileId: 'u1', filename: 'unit-1.xml', fileType: 'Unit'
+      },
+      {
+        id: 102, fileId: 'u2', filename: 'unit-2.xml', fileType: 'Unit'
+      }
+    ];
+    const refreshSpy = jest
+      .spyOn(
+        component as unknown as {
+          refreshValidationData: (message?: string) => void;
+        },
+        'refreshValidationData'
+      )
+      .mockImplementation(() => undefined);
+
+    component.data = {
+      workspaceId: 1,
+      validationResults: [],
+      unusedTestFiles: unusedFiles
+    };
+    component.unusedTestFiles = [...unusedFiles];
+    component.unusedFilesSelection.select(...unusedFiles);
+    fileService.deleteFilesWithResult.mockReturnValue(of({
+      success: false,
+      requestHandled: true
+    }));
+
+    component.deleteSelectedUnusedFiles();
+
+    expect(component.filesDeleted).toBe(true);
+    expect(component.unusedFilesSelection.selected).toHaveLength(0);
+    expect(refreshSpy).toHaveBeenCalledWith();
   });
 });
