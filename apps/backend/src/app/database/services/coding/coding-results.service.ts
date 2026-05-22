@@ -375,6 +375,7 @@ export class CodingResultsService {
 
           await this.invalidateIncompleteVariablesCache(workspaceId);
           await this.codingStatisticsService.invalidateCache(workspaceId);
+          await this.codingAnalysisService.invalidateCache(workspaceId);
         }
 
         return {
@@ -445,6 +446,7 @@ export class CodingResultsService {
 
         await this.invalidateIncompleteVariablesCache(workspaceId);
         await this.codingStatisticsService.invalidateCache(workspaceId);
+        await this.codingAnalysisService.invalidateCache(workspaceId);
 
         return {
           success: true,
