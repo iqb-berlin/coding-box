@@ -98,6 +98,129 @@
   </div>
   }
 
+  <div class="log-quality-card">
+    <div class="log-quality-header">
+      <div>
+        <h2 class="section-title">Log-Qualität</h2>
+        <p class="section-description">
+          Technische Auffälligkeiten in Booklet- und Aufgaben-Logs
+        </p>
+      </div>
+      @if (logAnomalySummary; as summary) {
+      <span
+        class="log-quality-pill"
+        [class.critical]="summary.criticalBooklets > 0"
+        [class.warning]="summary.criticalBooklets === 0 && summary.warningBooklets > 0"
+        [class.clean]="summary.affectedBooklets === 0"
+      >
+        {{ summary.affectedBooklets === 0 ? 'unauffällig' : summary.criticalBooklets > 0 ? 'kritisch' : 'auffällig' }}
+      </span>
+      }
+    </div>
+    <mat-divider></mat-divider>
+
+    @if (isLoadingLogAnomalySummary) {
+    <div class="loading-container compact">
+      <mat-spinner class="mat-spinner" diameter="32"></mat-spinner>
+      <p class="loading-text">Log-Qualität wird geladen...</p>
+    </div>
+    }
+
+    @if (!isLoadingLogAnomalySummary && logAnomalySummaryLoadFailed) {
+    <div class="log-quality-note warning">
+      <mat-icon>warning</mat-icon>
+      <span>Die Log-Qualität konnte nicht geladen werden.</span>
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="loadLogAnomalySummaryOnDemand()"
+      >
+        <mat-icon>refresh</mat-icon>
+        Erneut laden
+      </button>
+    </div>
+    }
+
+    @if (!isLoadingLogAnomalySummary && !logAnomalySummaryLoadFailed && !logAnomalySummaryRequested) {
+    <div class="log-quality-note neutral">
+      <mat-icon>troubleshoot</mat-icon>
+      <span>Die Log-Qualität wird bei Bedarf berechnet.</span>
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="loadLogAnomalySummaryOnDemand()"
+      >
+        <mat-icon>refresh</mat-icon>
+        Log-Qualität laden
+      </button>
+    </div>
+    }
+
+    @if (!isLoadingLogAnomalySummary && !logAnomalySummaryLoadFailed && logAnomalySummary; as summary) {
+    <div class="log-quality-grid">
+      <div class="log-quality-metric">
+        <div class="label">Booklets geprüft</div>
+        <div class="value">{{ summary.totalBooklets }}</div>
+      </div>
+      <div class="log-quality-metric affected">
+        <div class="label">Auffällig</div>
+        <div class="value">{{ summary.affectedBooklets }}</div>
+        <div class="hint">{{ logAnomalyAffectedPercent }}%</div>
+      </div>
+      <div class="log-quality-metric critical">
+        <div class="label">Kritisch</div>
+        <div class="value">{{ summary.criticalBooklets }}</div>
+      </div>
+      <div class="log-quality-metric warning">
+        <div class="label">Warnung</div>
+        <div class="value">{{ summary.warningBooklets }}</div>
+      </div>
+      <div class="log-quality-metric">
+        <div class="label">Ereignisse</div>
+        <div class="value">{{ summary.totalAnomalyEvents }}</div>
+      </div>
+    </div>
+
+    @if (summary.affectedBooklets === 0) {
+    <div class="log-quality-note clean">
+      <mat-icon>check_circle</mat-icon>
+      <span>In den vorhandenen Logs wurden keine technischen Auffälligkeiten erkannt.</span>
+    </div>
+    }
+
+    @if (summary.affectedBooklets > 0) {
+    <div class="log-quality-details">
+      <div class="log-quality-top-codes">
+        @for (item of logAnomalyTopCodes; track item.code) {
+        <span class="log-anomaly-chip">
+          {{ item.label }}
+          <span>{{ item.count }}</span>
+        </span>
+        }
+      </div>
+      <div class="log-quality-actions">
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="openLogAnomalyDetailsDialog()"
+        >
+          <mat-icon>troubleshoot</mat-icon>
+          Details anzeigen
+        </button>
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="showLogAnomaliesInTable()"
+        >
+          <mat-icon>table_chart</mat-icon>
+          In Tabelle anzeigen
+        </button>
+      </div>
+    </div>
+    }
+    }
+  </div>
+
   <div class="overview-card">
     <h2 class="section-title">Übersicht (Arbeitsbereich)</h2>
     <p class="section-description">
@@ -195,6 +318,7 @@
   } @if(!isUploadingResults){ @if (dataSource) { @if (isTableView) {
   <coding-box-test-results-flat-table
     [initialFilters]="quickSearchTableFilters"
+    [forceShowLogAnomalies]="forceShowLogAnomalyTableColumn"
     (responseDeleted)="onFlatTableResponseDeleted()"
   ></coding-box-test-results-flat-table>
   } @else {

@@ -85,6 +85,37 @@ export class WorkspaceSettingsService {
     );
   }
 
+  getShowTestResultsLogAnomalies(workspaceId: number): Observable<boolean> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(workspaceId, 'show-test-results-log-anomalies', true)
+        .subscribe({
+          next: setting => {
+            try {
+              const parsed = JSON.parse(setting.value);
+              observer.next(parsed.enabled ?? false);
+            } catch {
+              observer.next(false);
+            }
+            observer.complete();
+          },
+          error: () => {
+            observer.next(false);
+            observer.complete();
+          }
+        });
+    });
+  }
+
+  setShowTestResultsLogAnomalies(workspaceId: number, enabled: boolean): Observable<WorkspaceSettings> {
+    const value = JSON.stringify({ enabled });
+    return this.setWorkspaceSetting(
+      workspaceId,
+      'show-test-results-log-anomalies',
+      value,
+      'Controls whether log anomalies are shown as a column in the test results table'
+    );
+  }
+
   getResponseMatchingMode(workspaceId: number): Observable<ResponseMatchingFlag[]> {
     return new Observable(observer => {
       this.getWorkspaceSetting(workspaceId, 'response-matching-mode')

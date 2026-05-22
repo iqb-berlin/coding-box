@@ -117,6 +117,29 @@
     </mat-card-content>
   </mat-card>
 
+  <mat-card class="test-results-settings-card">
+    <mat-card-header>
+      <mat-card-title>{{ 'ws-settings.test-results' | translate }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="coding-settings-container">
+        <div class="setting-item">
+          <div class="setting-info">
+            <h4>{{ 'ws-settings.show-test-results-log-anomalies' | translate }}</h4>
+            <p>{{ 'ws-settings.show-test-results-log-anomalies-description' | translate }}</p>
+          </div>
+          <div class="setting-control">
+            <mat-slide-toggle
+              [checked]="showTestResultsLogAnomalies"
+              (change)="toggleShowTestResultsLogAnomalies($event)">
+              {{showTestResultsLogAnomalies ? ('ws-settings.enabled' | translate) : ('ws-settings.disabled' | translate)}}
+            </mat-slide-toggle>
+          </div>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
   <mat-card class="access-rights-card">
     <mat-card-header>
       <mat-card-title>

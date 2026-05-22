@@ -84,7 +84,9 @@ import {
   TestResultService,
   TestResultsOverviewResponse,
   PersonTestResult,
-  QuickSearchResultItem
+  QuickSearchResultItem,
+  LogAnomalyDashboardSummary,
+  LogAnomalyDetailRow
 } from '../../../shared/services/test-result/test-result.service';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
@@ -121,6 +123,10 @@ import {
   ExportOptionsDialogComponent,
   ExportOptions
 } from './export-options-dialog.component';
+import {
+  TestResultsLogAnomalyDetailsDialogComponent,
+  TestResultsLogAnomalyDetailsDialogResult
+} from './test-results-log-anomaly-details-dialog.component';
 
 import { ImportResultDto } from '../../../../../../../api-dto/files/import-options.dto';
 import {
@@ -412,6 +418,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   isTableView: boolean = false;
   quickSearchTableFilters: Partial<FlatResponseFilters> | null = null;
+  forceShowLogAnomalyTableColumn = false;
   data: P[] = [];
   booklets!: Booklet[];
   results: { [key: string]: unknown }[] = [];
@@ -444,6 +451,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   overview: TestResultsOverviewResponse | null = null;
   isLoadingOverview: boolean = false;
+  logAnomalySummary: LogAnomalyDashboardSummary | null = null;
+  isLoadingLogAnomalySummary: boolean = false;
+  logAnomalySummaryLoadFailed: boolean = false;
+  logAnomalySummaryRequested: boolean = false;
   codingFreshnessSummary: CodingFreshnessSummaryDto | null = null;
   manualAppliedResultsOverview: AppliedResultsOverview | null = null;
   manualAppliedResultsOverviewLoadFailed: boolean = false;
@@ -490,6 +501,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.uploadStateService.uploadsFinished$.subscribe((wsId: number) => {
       if (wsId === this.appService.selectedWorkspaceId) {
         this.loadWorkspaceOverview();
+        this.reloadLogAnomalySummaryIfRequested();
         this.loadCodingFreshnessStatus();
         this.createTestResultsList(
           this.pageIndex,
@@ -507,6 +519,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           return;
         }
         this.quickSearchTableFilters = { ...(request.filters || {}) };
+        this.forceShowLogAnomalyTableColumn = !!request.forceShowLogAnomalies;
         this.isTableView = true;
         this.isLoading = false;
         this.isUploadingResults = false;
@@ -1262,6 +1275,173 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadLogAnomalySummary(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.logAnomalySummary = null;
+      this.logAnomalySummaryLoadFailed = false;
+      this.isLoadingLogAnomalySummary = false;
+      this.logAnomalySummaryRequested = false;
+      return;
+    }
+
+    const getLogAnomalySummary =
+      (this.testResultService as Partial<TestResultService>).getLogAnomalySummary;
+    if (!getLogAnomalySummary) {
+      return;
+    }
+
+    this.logAnomalySummaryRequested = true;
+    this.isLoadingLogAnomalySummary = true;
+    this.logAnomalySummaryLoadFailed = false;
+    getLogAnomalySummary.call(this.testResultService, workspaceId)
+      .pipe(finalize(() => {
+        this.isLoadingLogAnomalySummary = false;
+      }))
+      .subscribe({
+        next: summary => {
+          this.logAnomalySummary = summary;
+        },
+        error: () => {
+          this.logAnomalySummary = null;
+          this.logAnomalySummaryLoadFailed = true;
+        }
+      });
+  }
+
+  loadLogAnomalySummaryOnDemand(): void {
+    this.loadLogAnomalySummary();
+  }
+
+  private reloadLogAnomalySummaryIfRequested(): void {
+    if (this.logAnomalySummaryRequested) {
+      this.loadLogAnomalySummary();
+    }
+  }
+
+  get hasLogAnomalySummary(): boolean {
+    return !!this.logAnomalySummary;
+  }
+
+  get logAnomalyAffectedPercent(): number {
+    const total = Number(this.logAnomalySummary?.totalBooklets || 0);
+    if (total <= 0) {
+      return 0;
+    }
+    return Math.round(
+      (Number(this.logAnomalySummary?.affectedBooklets || 0) / total) * 1000
+    ) / 10;
+  }
+
+  get logAnomalyTopCodes(): Array<{ code: string; label: string; count: number }> {
+    const byCode = this.logAnomalySummary?.byCode || {};
+    return Object.entries(byCode)
+      .map(([code, count]) => ({
+        code,
+        label: this.getLogAnomalyCodeLabel(code),
+        count: Number(count) || 0
+      }))
+      .filter(item => item.count > 0)
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+      .slice(0, 6);
+  }
+
+  getLogAnomalyCodeLabel(code: string): string {
+    const labels: Record<string, string> = {
+      controller_error: 'Controller-Fehler',
+      missing_termination: 'Kein Abschluss',
+      connection_lost: 'Verbindung verloren',
+      timestamp_zero: 'Timestamp 0',
+      player_stuck_loading: 'Player hängt',
+      repeated_start: 'Mehrfach gestartet',
+      long_loading: 'Lange Ladezeit',
+      timer_left_on_exit: 'Restzeit am Ende',
+      timer_never_finished: 'Timer nicht beendet',
+      focus_lost_long: 'Langer Fokusverlust',
+      unit_progress_incomplete: 'Units fehlen',
+      progress_incomplete: 'Progress unvollständig',
+      debug_command: 'Debug-Befehl',
+      session_span_long: 'Lange Zeitspanne',
+      orphan_logs: 'Logs ohne Start'
+    };
+    return labels[code] || code;
+  }
+
+  showLogAnomaliesInTable(): void {
+    this.quickSearchTableFilters = { logAnomalies: 'any' };
+    this.forceShowLogAnomalyTableColumn = true;
+    this.isTableView = true;
+    this.isLoading = false;
+    this.isUploadingResults = false;
+  }
+
+  openLogAnomalyDetailsDialog(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    const getLogAnomalyDetails =
+      (this.testResultService as Partial<TestResultService>).getLogAnomalyDetails;
+    if (!getLogAnomalyDetails) {
+      return;
+    }
+
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Log-Auffälligkeiten...',
+      '',
+      { duration: undefined }
+    );
+
+    getLogAnomalyDetails.call(this.testResultService, workspaceId)
+      .subscribe({
+        next: details => {
+          loadingSnackBar.dismiss();
+          if (!details.data.length) {
+            this.snackBar.open(
+              'Keine Log-Auffälligkeiten gefunden.',
+              'OK',
+              { duration: 4000 }
+            );
+            return;
+          }
+
+          const dialogRef = this.dialog.open<
+          TestResultsLogAnomalyDetailsDialogComponent,
+          {
+            affectedBooklets: number;
+            rows: LogAnomalyDetailRow[];
+            truncated: boolean;
+          },
+          TestResultsLogAnomalyDetailsDialogResult | undefined
+          >(TestResultsLogAnomalyDetailsDialogComponent, {
+            width: '900px',
+            maxWidth: '95vw',
+            data: {
+              affectedBooklets:
+                this.logAnomalySummary?.affectedBooklets || details.total,
+              rows: details.data,
+              truncated: details.total > details.data.length
+            }
+          });
+
+          dialogRef.afterClosed().subscribe(result => {
+            if (result?.showTable) {
+              this.showLogAnomaliesInTable();
+            }
+          });
+        },
+        error: () => {
+          loadingSnackBar.dismiss();
+          this.snackBar.open(
+            'Log-Auffälligkeiten konnten nicht geladen werden.',
+            'OK',
+            { duration: 4000 }
+          );
+        }
+      });
+  }
+
   private loadCodingFreshnessStatus(): void {
     this.loadCodingFreshnessSummary();
     this.loadManualAppliedResultsOverview();
@@ -1549,6 +1729,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   onFlatTableResponseDeleted(): void {
     this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
     this.loadWorkspaceOverview();
+    this.reloadLogAnomalySummaryIfRequested();
     this.loadCodingFreshnessStatus();
     this.testPersonCodingService.notifyTestResultsChanged();
   }
@@ -2409,6 +2590,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
       if (result.action === 'table') {
         this.quickSearchTableFilters = result.filters || null;
+        this.forceShowLogAnomalyTableColumn = false;
         this.isTableView = true;
         return;
       }

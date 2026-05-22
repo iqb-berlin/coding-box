@@ -8,7 +8,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
 import { environment } from '../../../../environments/environment';
@@ -155,6 +155,20 @@ describe('TestResultsComponent', () => {
               total: 0
             })),
             getWorkspaceOverview: jest.fn().mockReturnValue(of({})),
+            getLogAnomalySummary: jest.fn().mockReturnValue(of({
+              totalBooklets: 0,
+              affectedBooklets: 0,
+              criticalBooklets: 0,
+              warningBooklets: 0,
+              infoBooklets: 0,
+              totalAnomalyRules: 0,
+              totalAnomalyEvents: 0,
+              byCode: {}
+            })),
+            getLogAnomalyDetails: jest.fn().mockReturnValue(of({
+              total: 0,
+              data: []
+            })),
             invalidateCache: jest.fn(),
             flatResponseFilterRequests$: of(),
             previewDeleteTestResults: jest.fn().mockReturnValue(of(null)),
@@ -205,6 +219,15 @@ describe('TestResultsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should not load log anomaly summary automatically on init', () => {
+    const testResultService = TestBed.inject(TestResultService) as unknown as {
+      getLogAnomalySummary: jest.Mock;
+    };
+
+    expect(testResultService.getLogAnomalySummary).not.toHaveBeenCalled();
+    expect(component.logAnomalySummaryRequested).toBe(false);
   });
 
   it('should reload workspace overview after deleting a unit', () => {
@@ -302,6 +325,44 @@ describe('TestResultsComponent', () => {
 
     expect(component.overview).toBe(previousOverview);
     expect(component.isLoadingOverview).toBe(false);
+  });
+
+  it('should expose log anomaly summary load failures', () => {
+    const testResultService = TestBed.inject(TestResultService) as unknown as {
+      getLogAnomalySummary: jest.Mock;
+    };
+
+    component.logAnomalySummary = {
+      totalBooklets: 10,
+      affectedBooklets: 1,
+      criticalBooklets: 1,
+      warningBooklets: 0,
+      infoBooklets: 0,
+      totalAnomalyRules: 1,
+      totalAnomalyEvents: 1,
+      byCode: { controller_error: 1 }
+    };
+    testResultService.getLogAnomalySummary.mockReturnValue(
+      throwError(() => new Error('summary failed'))
+    );
+
+    (component as unknown as { loadLogAnomalySummary: () => void })
+      .loadLogAnomalySummary();
+
+    expect(component.logAnomalySummary).toBeNull();
+    expect(component.logAnomalySummaryLoadFailed).toBe(true);
+    expect(component.isLoadingLogAnomalySummary).toBe(false);
+    expect(component.logAnomalySummaryRequested).toBe(true);
+  });
+
+  it('should force the log anomaly table column for the dashboard table action', () => {
+    component.forceShowLogAnomalyTableColumn = false;
+
+    component.showLogAnomaliesInTable();
+
+    expect(component.quickSearchTableFilters).toEqual({ logAnomalies: 'any' });
+    expect(component.forceShowLogAnomalyTableColumn).toBe(true);
+    expect(component.isTableView).toBe(true);
   });
 
   it('should open booklet replay in booklet-view mode with a clean hash URL', () => {
@@ -583,10 +644,10 @@ describe('TestResultsComponent', () => {
     };
 
     expect(component.codingFreshnessWarnings).toHaveLength(1);
-    expect(component.codingFreshnessBannerTitle).toBe('Auto-Coding aktualisieren');
+    expect(component.codingFreshnessBannerTitle).toBe('Auto-Coding starten');
     expect(component.codingFreshnessSummaryText).toBe(
-      'Auto-Coding 2 muss für 671 Aufgabenbearbeitungen ausgeführt werden. ' +
-      'Das betrifft 5098 Antwortwerte.'
+      '671 Aufgabenbearbeitungen benötigen Auto-Coding 2. ' +
+      'Dabei werden 5098 Antwortwerte berücksichtigt.'
     );
     expect(component.codingFreshnessActionLabel).toBe('Auto-Coding öffnen');
   });
@@ -626,10 +687,10 @@ describe('TestResultsComponent', () => {
     expect(component.codingFreshnessWarnings).toEqual([
       expect.objectContaining({ version: 'v1' })
     ]);
-    expect(component.codingFreshnessBannerTitle).toBe('Auto-Coding aktualisieren');
+    expect(component.codingFreshnessBannerTitle).toBe('Auto-Coding starten');
     expect(component.codingFreshnessSummaryText).toBe(
-      'Auto-Coding 1 muss für 10 Aufgabenbearbeitungen ausgeführt werden. ' +
-      'Das betrifft 50 Antwortwerte.'
+      '10 Aufgabenbearbeitungen benötigen Auto-Coding 1. ' +
+      'Dabei werden 50 Antwortwerte berücksichtigt.'
     );
     expect(component.codingFreshnessActionLabel).toBe('Auto-Coding öffnen');
   });

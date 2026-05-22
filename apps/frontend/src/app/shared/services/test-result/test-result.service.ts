@@ -89,6 +89,7 @@ export interface FlatResponseFilterRequest {
   filters: {
     logAnomalies?: string;
   };
+  forceShowLogAnomalies?: boolean;
 }
 
 export interface FlatTestResultResponsesResponse {
@@ -293,23 +294,11 @@ export class TestResultService {
     addIf('sessionSpanThresholdMs', options.sessionSpanThresholdMs);
     addIf('repeatedStartThreshold', options.repeatedStartThreshold);
 
-    const emptySummary: LogAnomalyDashboardSummary = {
-      totalBooklets: 0,
-      affectedBooklets: 0,
-      criticalBooklets: 0,
-      warningBooklets: 0,
-      infoBooklets: 0,
-      totalAnomalyRules: 0,
-      totalAnomalyEvents: 0,
-      byCode: {}
-    };
-
     return this.http
       .get<LogAnomalyDashboardSummary>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/log-anomaly-summary`,
       { params }
-    )
-      .pipe(catchError(() => of(emptySummary)));
+    );
   }
 
   getLogAnomalyDetails(
@@ -340,15 +329,19 @@ export class TestResultService {
       .get<LogAnomalyDetailsResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/log-anomaly-details`,
       { params }
-    )
-      .pipe(catchError(() => of({ total: 0, data: [] })));
+    );
   }
 
   requestFlatResponseFilters(
     workspaceId: number,
-    filters: FlatResponseFilterRequest['filters']
+    filters: FlatResponseFilterRequest['filters'],
+    options: { forceShowLogAnomalies?: boolean } = {}
   ): void {
-    this.flatResponseFilterRequestSubject.next({ workspaceId, filters });
+    this.flatResponseFilterRequestSubject.next({
+      workspaceId,
+      filters,
+      forceShowLogAnomalies: options.forceShowLogAnomalies
+    });
   }
 
   quickSearch(
@@ -495,6 +488,7 @@ export class TestResultService {
       sessionScreens?: string;
       sessionIds?: string;
       logAnomalies?: string;
+      includeLogAnomalies?: string;
       focusLostThresholdMs?: string;
       sessionSpanThresholdMs?: string;
       repeatedStartThreshold?: string;
@@ -541,6 +535,7 @@ export class TestResultService {
     addIf('sessionScreens', options.sessionScreens);
     addIf('sessionIds', options.sessionIds);
     addIf('logAnomalies', options.logAnomalies);
+    addIf('includeLogAnomalies', options.includeLogAnomalies);
     addIf('focusLostThresholdMs', options.focusLostThresholdMs);
     addIf('sessionSpanThresholdMs', options.sessionSpanThresholdMs);
     addIf('repeatedStartThreshold', options.repeatedStartThreshold);

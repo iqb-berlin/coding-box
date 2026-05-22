@@ -250,14 +250,14 @@ describe('CodingManagementManualComponent', () => {
     };
 
     expect(component.hasCodingFreshnessWarnings).toBe(true);
-    expect(component.manualCodingFreshnessPanelTitle).toBe('Auto-Coding aktualisieren');
+    expect(component.manualCodingFreshnessPanelTitle).toBe('Auto-Coding starten');
     expect(component.manualCodingFreshnessSummaryText).toBe(
-      'Auto-Coding 1 muss für 671 Aufgabenbearbeitungen ausgeführt werden. ' +
-      'Das betrifft 5098 Antwortwerte.'
+      '671 Aufgabenbearbeitungen benötigen Auto-Coding 1. ' +
+      'Dabei werden 5098 Antwortwerte berücksichtigt.'
     );
     expect(component.codingFreshnessWarnings).toHaveLength(1);
     expect(component.getManualFreshnessChipLabel(component.codingFreshnessWarnings[0])).toBe(
-      'Auto-Coding 1: 671 Aufgabenbearbeitungen kodieren'
+      'Auto-Coding 1: 671 Aufgabenbearbeitungen starten'
     );
   });
 
@@ -307,7 +307,7 @@ describe('CodingManagementManualComponent', () => {
       'Starten Sie Auto-Coding 2 in der Kodierübersicht.'
     );
     expect(component.getManualFreshnessChipLabel(component.codingFreshnessWarnings[0])).toBe(
-      'Auto-Coding 2: 671 Aufgabenbearbeitungen kodieren'
+      'Auto-Coding 2: 671 Aufgabenbearbeitungen starten'
     );
   });
 

@@ -1,6 +1,14 @@
 import { CommonModule } from '@angular/common';
 import {
-  Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject
+  Component,
+  EventEmitter,
+  Input,
+  OnChanges,
+  OnDestroy,
+  OnInit,
+  Output,
+  SimpleChanges,
+  inject
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
@@ -36,6 +44,7 @@ import {
   BookletLogsForUnitResponse,
   FlatResponseFrequencyRequestCombo,
   FlatResponseFrequenciesResponse,
+  LogAnomalySummary,
   TestResultService
 } from '../../../shared/services/test-result/test-result.service';
 import {
@@ -52,6 +61,7 @@ import {
   TestResultsFlatTableSettingsDialogComponent,
   TestResultsFlatTableSettingsDialogResult
 } from './test-results-flat-table-settings-dialog.component';
+import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 
 interface FlatResponseRow {
   bookletId: number;
@@ -67,6 +77,7 @@ interface FlatResponseRow {
   responseStatus: string;
   responseValue: string;
   tags: string[];
+  logAnomalies?: LogAnomalySummary[];
 }
 
 export interface FlatResponseFilters {
@@ -167,13 +178,14 @@ type FlatTableMediaFilter =
   templateUrl: './test-results-flat-table.component.html',
   styleUrls: ['./test-results-flat-table.component.scss']
 })
-export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
+export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestroy {
   private fileService = inject(FileService);
   private unitNoteService = inject(UnitNoteService);
   private statisticsService = inject(CodingStatisticsService);
   private responseService = inject(ResponseService);
   private appService = inject(AppService);
   private testResultService = inject(TestResultService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
 
@@ -220,7 +232,7 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
   private personTestResultsCacheOrder: number[] = [];
   private readonly PERSON_TEST_RESULTS_CACHE_MAX = 5;
 
-  flatDisplayedColumns: string[] = [
+  private readonly baseFlatDisplayedColumns: string[] = [
     'code',
     'group',
     'login',
@@ -233,6 +245,13 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
     'tags',
     'actions'
   ];
+
+  flatDisplayedColumns: string[] = [...this.baseFlatDisplayedColumns];
+  showLogAnomaliesInTable = false;
+  private workspaceShowLogAnomaliesInTable = false;
+  private logAnomalyTableSettingLoaded = false;
+  private tableInitialized = false;
+  private flatResponsesRequestSequence = 0;
 
   isLoadingFrequencies: boolean = false;
   private frequenciesByComboKey = new Map<
@@ -318,6 +337,7 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
   private suppressNextFlatFilterChange = false;
 
   @Input() initialFilters: Partial<FlatResponseFilters> | null = null;
+  @Input() forceShowLogAnomalies = false;
   @Output() responseDeleted = new EventEmitter<void>();
 
   constructor() {
@@ -456,35 +476,45 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
         }
       );
 
-    this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
-    this.fetchFlatResponseFilterOptions();
+    this.syncMediaFiltersFromFlatFilters();
+  }
 
+  ngOnInit(): void {
+    this.tableInitialized = true;
+    this.fetchFlatResponseFilterOptions();
+    this.loadLogAnomalyTableSetting();
     this.syncMediaFiltersFromFlatFilters();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (!changes.initialFilters || !this.initialFilters) {
-      return;
+    let shouldFetch = false;
+
+    if (changes.forceShowLogAnomalies) {
+      shouldFetch = this.updateLogAnomalyTableVisibility() || shouldFetch;
     }
 
-    const hasFilterValues = Object.values(this.initialFilters).some(value => {
-      if (typeof value === 'boolean') {
-        return value;
+    if (changes.initialFilters && this.initialFilters) {
+      const hasFilterValues = Object.values(this.initialFilters).some(value => {
+        if (typeof value === 'boolean') {
+          return value;
+        }
+        return String(value || '').trim() !== '';
+      });
+
+      if (hasFilterValues) {
+        this.flatFilters = {
+          ...this.flatFilters,
+          ...this.initialFilters
+        };
+        this.flatPageIndex = 0;
+        this.syncMediaFiltersFromFlatFilters();
+        shouldFetch = true;
       }
-      return String(value || '').trim() !== '';
-    });
-
-    if (!hasFilterValues) {
-      return;
     }
 
-    this.flatFilters = {
-      ...this.flatFilters,
-      ...this.initialFilters
-    };
-    this.flatPageIndex = 0;
-    this.syncMediaFiltersFromFlatFilters();
-    this.fetchFlatResponses(0, this.flatPageSize);
+    if (shouldFetch && this.tableInitialized && this.logAnomalyTableSettingLoaded) {
+      this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+    }
   }
 
   private syncMediaFiltersFromFlatFilters(): void {
@@ -1341,6 +1371,54 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
       });
   }
 
+  private loadLogAnomalyTableSetting(): void {
+    if (!this.appService.selectedWorkspaceId) {
+      this.workspaceShowLogAnomaliesInTable = false;
+      this.logAnomalyTableSettingLoaded = true;
+      this.updateLogAnomalyTableVisibility();
+      return;
+    }
+
+    this.workspaceSettingsService
+      .getShowTestResultsLogAnomalies(this.appService.selectedWorkspaceId)
+      .subscribe(enabled => {
+        this.workspaceShowLogAnomaliesInTable = enabled;
+        this.logAnomalyTableSettingLoaded = true;
+        this.updateLogAnomalyTableVisibility();
+        this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+      });
+  }
+
+  private updateLogAnomalyTableVisibility(): boolean {
+    return this.setShowLogAnomaliesInTable(
+      this.workspaceShowLogAnomaliesInTable || this.forceShowLogAnomalies
+    );
+  }
+
+  private setShowLogAnomaliesInTable(enabled: boolean): boolean {
+    const changed = this.showLogAnomaliesInTable !== enabled;
+    this.showLogAnomaliesInTable = enabled;
+    if (enabled) {
+      this.flatDisplayedColumns = [
+        'code',
+        'group',
+        'login',
+        'booklet',
+        'unit',
+        'response',
+        'responseStatus',
+        'logStatus',
+        'responseValue',
+        'frequencies',
+        'tags',
+        'actions'
+      ];
+      return changed;
+    }
+    this.flatDisplayedColumns = [...this.baseFlatDisplayedColumns];
+    return changed;
+  }
+
   onFlatPaginatorChange(event: PageEvent): void {
     this.flatPageSize = event.pageSize;
     this.flatPageIndex = event.pageIndex;
@@ -1351,7 +1429,12 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
+    if (!this.logAnomalyTableSettingLoaded) {
+      return;
+    }
     const validPage = Math.max(0, page);
+    this.flatResponsesRequestSequence += 1;
+    const requestSequence = this.flatResponsesRequestSequence;
     this.isLoadingFlat = true;
 
     const sessionFilterActive = this.flatFilters.sessionFilter;
@@ -1400,34 +1483,90 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
         sessionScreens: sessionFilterActive ?
           this.parseCsv(this.sessionScreensAllowlist) :
           '',
-        logAnomalies: this.flatFilters.logAnomalies
+        logAnomalies: this.flatFilters.logAnomalies,
+        includeLogAnomalies: this.showLogAnomaliesInTable ? 'true' : ''
       })
-      .subscribe(resp => {
-        this.isLoadingFlat = false;
-        this.flatTotalRecords = resp.total;
-        this.flatData = (resp.data || []).map(r => ({
-          bookletId: r.bookletId,
-          responseId: r.responseId,
-          unitId: r.unitId,
-          personId: r.personId,
-          code: r.code,
-          group: r.group,
-          login: r.login,
-          booklet: r.booklet,
-          unit: r.unit,
-          response: r.response,
-          responseStatus: r.responseStatus,
-          responseValue: r.responseValue,
-          tags: Array.isArray(r.tags) ? r.tags : []
-        }));
+      .subscribe({
+        next: resp => {
+          if (requestSequence !== this.flatResponsesRequestSequence) {
+            return;
+          }
+          this.isLoadingFlat = false;
+          this.flatTotalRecords = resp.total;
+          this.flatData = (resp.data || []).map(r => ({
+            bookletId: r.bookletId,
+            responseId: r.responseId,
+            unitId: r.unitId,
+            personId: r.personId,
+            code: r.code,
+            group: r.group,
+            login: r.login,
+            booklet: r.booklet,
+            unit: r.unit,
+            response: r.response,
+            responseStatus: r.responseStatus,
+            responseValue: r.responseValue,
+            tags: Array.isArray(r.tags) ? r.tags : [],
+            logAnomalies: Array.isArray(r.logAnomalies) ? r.logAnomalies : []
+          }));
 
-        this.loadFrequenciesForCurrentPage();
-        this.loadNotesPresenceForCurrentPage();
+          this.loadFrequenciesForCurrentPage();
+          this.loadNotesPresenceForCurrentPage();
+        },
+        error: () => {
+          if (requestSequence === this.flatResponsesRequestSequence) {
+            this.isLoadingFlat = false;
+          }
+        }
       });
   }
 
   hasNotesForRow(row: FlatResponseRow): boolean {
     return this.unitIdsWithNotes.has(row.unitId);
+  }
+
+  hasLogAnomaliesForRow(row: FlatResponseRow): boolean {
+    return (row.logAnomalies || []).length > 0;
+  }
+
+  getLogAnomalySeverity(row: FlatResponseRow): LogAnomalySummary['severity'] | '' {
+    const anomalies = row.logAnomalies || [];
+    if (anomalies.some(anomaly => anomaly.severity === 'critical')) {
+      return 'critical';
+    }
+    if (anomalies.some(anomaly => anomaly.severity === 'warning')) {
+      return 'warning';
+    }
+    if (anomalies.some(anomaly => anomaly.severity === 'info')) {
+      return 'info';
+    }
+    return '';
+  }
+
+  getLogAnomalySeverityLabel(row: FlatResponseRow): string {
+    switch (this.getLogAnomalySeverity(row)) {
+      case 'critical':
+        return 'kritisch';
+      case 'warning':
+        return 'Warnung';
+      case 'info':
+        return 'Info';
+      default:
+        return 'unauffällig';
+    }
+  }
+
+  getLogAnomalyTooltip(row: FlatResponseRow): string {
+    const anomalies = row.logAnomalies || [];
+    if (anomalies.length === 0) {
+      return 'Keine Log-Auffälligkeiten für dieses Testheft erkannt.';
+    }
+    return anomalies
+      .map(anomaly => {
+        const count = anomaly.count > 1 ? ` (${anomaly.count}x)` : '';
+        return `${anomaly.label}${count}: ${anomaly.evidence}`;
+      })
+      .join('\n');
   }
 
   private loadNotesPresenceForCurrentPage(): void {

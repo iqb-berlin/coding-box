@@ -473,20 +473,29 @@ export class TestResultsUploadStateService {
   }
 
   private showLogUploadAnomalyFeedback(workspaceId: number): void {
-    this.testResultService.getLogAnomalySummary(workspaceId).subscribe(summary => {
-      const affectedBooklets = Number(summary?.affectedBooklets || 0);
-      const snackBarRef = this.snackBar.open(
-        affectedBooklets > 0 ?
-          `Logs importiert. ${affectedBooklets} auffällige Testhefte erkannt.` :
-          'Logs importiert. Keine auffälligen Testhefte erkannt.',
-        affectedBooklets > 0 ? 'anzeigen' : 'OK',
-        { duration: affectedBooklets > 0 ? 8000 : 5000 }
-      );
+    this.testResultService.getLogAnomalySummary(workspaceId).subscribe({
+      next: summary => {
+        const affectedBooklets = Number(summary?.affectedBooklets || 0);
+        const snackBarRef = this.snackBar.open(
+          affectedBooklets > 0 ?
+            `Logs importiert. ${affectedBooklets} auffällige Testhefte erkannt.` :
+            'Logs importiert. Keine auffälligen Testhefte erkannt.',
+          affectedBooklets > 0 ? 'anzeigen' : 'OK',
+          { duration: affectedBooklets > 0 ? 8000 : 5000 }
+        );
 
-      if (affectedBooklets > 0) {
-        snackBarRef.onAction().subscribe(() => {
-          this.openLogAnomalyDetailsDialog(workspaceId, affectedBooklets);
-        });
+        if (affectedBooklets > 0) {
+          snackBarRef.onAction().subscribe(() => {
+            this.openLogAnomalyDetailsDialog(workspaceId, affectedBooklets);
+          });
+        }
+      },
+      error: () => {
+        this.snackBar.open(
+          'Logs importiert. Die Log-Qualität konnte nicht geprüft werden.',
+          'OK',
+          { duration: 6000 }
+        );
       }
     });
   }
@@ -501,42 +510,54 @@ export class TestResultsUploadStateService {
       { duration: undefined }
     );
 
-    this.testResultService.getLogAnomalyDetails(workspaceId).subscribe(details => {
-      loadingSnackBar.dismiss();
-      if (!details.data.length) {
+    this.testResultService.getLogAnomalyDetails(workspaceId).subscribe({
+      next: details => {
+        loadingSnackBar.dismiss();
+        if (!details.data.length) {
+          this.snackBar.open(
+            'Keine Log-Auffälligkeiten gefunden.',
+            'OK',
+            { duration: 4000 }
+          );
+          return;
+        }
+
+        const dialogRef = this.dialog.open<
+        TestResultsLogAnomalyDetailsDialogComponent,
+        {
+          affectedBooklets: number;
+          rows: typeof details.data;
+          truncated: boolean;
+        },
+        TestResultsLogAnomalyDetailsDialogResult | undefined
+        >(TestResultsLogAnomalyDetailsDialogComponent, {
+          width: '900px',
+          maxWidth: '95vw',
+          data: {
+            affectedBooklets,
+            rows: details.data,
+            truncated: details.total > details.data.length
+          }
+        });
+
+        dialogRef.afterClosed().subscribe(result => {
+          if (result?.showTable) {
+            this.testResultService.requestFlatResponseFilters(
+              workspaceId,
+              { logAnomalies: 'any' },
+              { forceShowLogAnomalies: true }
+            );
+          }
+        });
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
         this.snackBar.open(
-          'Keine Log-Auffälligkeiten gefunden.',
+          'Log-Auffälligkeiten konnten nicht geladen werden.',
           'OK',
           { duration: 4000 }
         );
-        return;
       }
-
-      const dialogRef = this.dialog.open<
-      TestResultsLogAnomalyDetailsDialogComponent,
-      {
-        affectedBooklets: number;
-        rows: typeof details.data;
-        truncated: boolean;
-      },
-      TestResultsLogAnomalyDetailsDialogResult | undefined
-      >(TestResultsLogAnomalyDetailsDialogComponent, {
-        width: '900px',
-        maxWidth: '95vw',
-        data: {
-          affectedBooklets,
-          rows: details.data,
-          truncated: details.total > details.data.length
-        }
-      });
-
-      dialogRef.afterClosed().subscribe(result => {
-        if (result?.showTable) {
-          this.testResultService.requestFlatResponseFilters(workspaceId, {
-            logAnomalies: 'any'
-          });
-        }
-      });
     });
   }
 

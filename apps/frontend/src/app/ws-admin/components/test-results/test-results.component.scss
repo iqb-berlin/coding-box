@@ -135,7 +135,8 @@
   padding: 5px 8px;
 }
 
-.overview-card {
+.overview-card,
+.log-quality-card {
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -171,7 +172,9 @@
     margin-bottom: 20px;
     opacity: 0.7;
   }
+}
 
+.overview-card {
   .overview-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
@@ -346,6 +349,193 @@
   }
 }
 
+.log-quality-card {
+  .log-quality-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    min-width: 0;
+  }
+
+  .log-quality-pill {
+    align-items: center;
+    background-color: rgba(25, 118, 210, 0.08);
+    border: 1px solid rgba(25, 118, 210, 0.24);
+    border-radius: 999px;
+    color: #0d47a1;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    min-height: 28px;
+    padding: 5px 10px;
+    white-space: nowrap;
+
+    &.critical {
+      background-color: rgba(211, 47, 47, 0.09);
+      border-color: rgba(211, 47, 47, 0.3);
+      color: #b71c1c;
+    }
+
+    &.warning {
+      background-color: rgba(245, 124, 0, 0.1);
+      border-color: rgba(245, 124, 0, 0.34);
+      color: #bf5f00;
+    }
+
+    &.clean {
+      background-color: rgba(46, 125, 50, 0.08);
+      border-color: rgba(46, 125, 50, 0.24);
+      color: #1b5e20;
+    }
+  }
+
+  .log-quality-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+    margin-bottom: 14px;
+  }
+
+  .log-quality-metric {
+    background-color: #f9fafc;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    padding: 11px 13px;
+
+    .label {
+      color: #5c6b7a;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .value {
+      color: #1976d2;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .hint {
+      color: rgba(0, 0, 0, 0.58);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    &.affected .value {
+      color: #5d4037;
+    }
+
+    &.critical .value {
+      color: #c62828;
+    }
+
+    &.warning .value {
+      color: #ef6c00;
+    }
+  }
+
+  .log-quality-note {
+    align-items: center;
+    border-radius: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    line-height: 1.4;
+    padding: 10px 12px;
+
+    span {
+      flex: 1 1 260px;
+      min-width: 0;
+    }
+
+    button {
+      flex: 0 0 auto;
+      white-space: nowrap;
+
+      mat-icon {
+        margin-right: 6px;
+      }
+    }
+
+    &.neutral {
+      background-color: rgba(25, 118, 210, 0.06);
+      color: #0d47a1;
+    }
+
+    &.clean {
+      background-color: rgba(46, 125, 50, 0.08);
+      color: #1b5e20;
+    }
+
+    &.warning {
+      background-color: rgba(245, 124, 0, 0.08);
+      color: #8a4a00;
+    }
+  }
+
+  .log-quality-details {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+  }
+
+  .log-quality-top-codes {
+    display: flex;
+    flex: 1 1 280px;
+    flex-wrap: wrap;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .log-anomaly-chip {
+    align-items: center;
+    background-color: #f9fafc;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    color: rgba(0, 0, 0, 0.74);
+    display: inline-flex;
+    font-size: 12px;
+    font-weight: 650;
+    gap: 7px;
+    line-height: 1.2;
+    min-height: 28px;
+    padding: 5px 8px;
+
+    span {
+      background-color: rgba(25, 118, 210, 0.08);
+      border-radius: 999px;
+      color: #1976d2;
+      font-weight: 700;
+      padding: 1px 6px;
+    }
+  }
+
+  .log-quality-actions {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+
+    button {
+      white-space: nowrap;
+
+      mat-icon {
+        margin-right: 6px;
+      }
+    }
+  }
+}
+
 @media (max-width: 760px) {
   .coding-freshness-banner {
     grid-template-columns: auto minmax(0, 1fr);
@@ -354,6 +544,10 @@
       grid-column: 1 / -1;
       justify-self: start;
     }
+  }
+
+  .log-quality-card .log-quality-header {
+    flex-direction: column;
   }
 }
 
@@ -471,6 +665,7 @@
   }
 
   .overview-card,
+  .log-quality-card,
   .data-card,
   .booklets-card,
   .responses-card,

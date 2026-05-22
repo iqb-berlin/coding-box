@@ -69,6 +69,47 @@ describe('WorkspaceSettingsService', () => {
     });
   });
 
+  describe('getShowTestResultsLogAnomalies', () => {
+    it('should return parsed boolean', () => {
+      service.getShowTestResultsLogAnomalies(1).subscribe(val => {
+        expect(val).toBe(true);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/show-test-results-log-anomalies`);
+      req.flush({ value: '{"enabled":true}' });
+    });
+
+    it('should return false on invalid JSON', () => {
+      service.getShowTestResultsLogAnomalies(1).subscribe(val => {
+        expect(val).toBe(false);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/show-test-results-log-anomalies`);
+      req.flush({ value: 'not-json' });
+    });
+
+    it('should return false on error', () => {
+      service.getShowTestResultsLogAnomalies(1).subscribe(val => {
+        expect(val).toBe(false);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/show-test-results-log-anomalies`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setShowTestResultsLogAnomalies', () => {
+    it('should persist the setting', () => {
+      service.setShowTestResultsLogAnomalies(1, true).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'show-test-results-log-anomalies',
+        value: '{"enabled":true}',
+        description: 'Controls whether log anomalies are shown as a column in the test results table'
+      });
+      req.flush({});
+    });
+  });
+
   describe('getAggregationThreshold', () => {
     it('should return a persisted threshold', () => {
       service.getAggregationThreshold(1).subscribe(val => {

@@ -45,6 +45,7 @@ export type TestResultsUploadResultDialogData = {
 
 type LogBookletDetail = { name: string; hasLog: boolean };
 type LogUnitDetail = { bookletName: string; unitKey: string; hasLog: boolean };
+type ImportOutcomeMetric = { label: string; value: number };
 
 @Component({
   selector: 'coding-box-test-results-upload-result-dialog',
@@ -88,6 +89,22 @@ export class TestResultsUploadResultDialogComponent {
 
   get result(): TestResultsUploadResultDto {
     return this.data.result;
+  }
+
+  get dialogTitle(): string {
+    if (this.result.importedResponses && this.result.importedLogs) {
+      return 'Upload-Ergebnis (Antworten und Logs)';
+    }
+
+    return `Upload-Ergebnis (${this.resultTypeLabel})`;
+  }
+
+  get dialogIcon(): string {
+    if (this.result.importedResponses && this.result.importedLogs) {
+      return 'sync_alt';
+    }
+
+    return this.data.resultType === 'logs' ? 'article' : 'upload_file';
   }
 
   get filterText(): string {
@@ -176,6 +193,90 @@ export class TestResultsUploadResultDialogComponent {
 
   get resultTypeLabel(): string {
     return this.data.resultType === 'logs' ? 'Logs' : 'Antworten';
+  }
+
+  get importOutcomeTitle(): string {
+    if (this.result.overviewPending) {
+      return 'Import verarbeitet, Übersicht wird aktualisiert';
+    }
+
+    if (this.issues.length > 0 && this.hasCodingFreshnessWarning) {
+      return 'Import verarbeitet, Hinweise und Auto-Coding prüfen';
+    }
+
+    if (this.issues.length > 0) {
+      return 'Import verarbeitet, Hinweise prüfen';
+    }
+
+    return this.hasCodingFreshnessWarning ?
+      'Import verarbeitet, Auto-Coding ausstehend' :
+      'Import erfolgreich verarbeitet';
+  }
+
+  get importOutcomeText(): string {
+    if (this.result.overviewPending) {
+      return this.appendCodingCompletenessNote(
+        this.result.overviewMessage ||
+        'Die Daten wurden verarbeitet; die Arbeitsbereichszahlen werden noch aktualisiert.'
+      );
+    }
+
+    if (this.issues.length > 0) {
+      const issueCount = this.formatCount(
+        this.issues.length,
+        'technischer Hinweis',
+        'technische Hinweise'
+      );
+      return this.appendCodingCompletenessNote(
+        `Im Tab Probleme ${issueCount} prüfen, bevor mit den Daten weitergearbeitet wird.`
+      );
+    }
+
+    if (this.result.importedResponses && this.result.importedLogs) {
+      return this.appendCodingCompletenessNote(
+        'Antworten und Logs wurden verarbeitet. Keine technischen Importprobleme gefunden.'
+      );
+    }
+
+    if (this.result.importedLogs) {
+      return this.appendCodingCompletenessNote(
+        'Logs wurden vorhandenen Testergebnissen zugeordnet. Keine technischen Importprobleme gefunden.'
+      );
+    }
+
+    return this.appendCodingCompletenessNote(
+      'Antwortdaten wurden verarbeitet. Keine technischen Importprobleme gefunden.'
+    );
+  }
+
+  get importOutcomeMetrics(): ImportOutcomeMetric[] {
+    const metrics: ImportOutcomeMetric[] = [];
+
+    if (this.result.importedResponses) {
+      metrics.push(
+        { label: 'Testpersonen', value: this.result.expected.testPersons },
+        { label: 'Testhefte', value: this.result.expected.uniqueBooklets },
+        { label: 'Aufgaben-IDs', value: this.result.expected.uniqueUnits },
+        { label: 'Antwortwerte', value: this.result.expected.uniqueResponses }
+      );
+    }
+
+    if (this.result.importedLogs && this.result.importSummary) {
+      metrics.push(
+        { label: 'Log-Zeilen', value: this.result.importSummary.logRows ?? 0 },
+        { label: 'gespeicherte Logs', value: this.result.importSummary.savedLogs ?? 0 },
+        { label: 'übersprungene Logs', value: this.result.importSummary.skippedLogs ?? 0 }
+      );
+    }
+
+    return metrics;
+  }
+
+  get responseRowsNeedExplanation(): boolean {
+    const responseRows = this.result.importSummary?.responseRows;
+    return !!this.result.importedResponses &&
+      responseRows !== undefined &&
+      responseRows !== this.result.expected.uniqueResponses;
   }
 
   get statusCounts(): Array<{ status: string; count: number }> {
@@ -526,5 +627,19 @@ export class TestResultsUploadResultDialogComponent {
       .slice(0, 19);
     const scope = this.hasActiveIssueFilter ? 'gefiltert' : 'alle';
     return `upload-probleme-${this.data.resultType}-${scope}-${timestamp}.csv`;
+  }
+
+  private formatCount(count: number, singular: string, plural: string): string {
+    const safeCount = Number.isFinite(Number(count)) ? Number(count) : 0;
+    return `${safeCount} ${safeCount === 1 ? singular : plural}`;
+  }
+
+  private appendCodingCompletenessNote(text: string): string {
+    if (!this.hasCodingFreshnessWarning) {
+      return text;
+    }
+
+    return `${text} Die Kodier- und Auswertungsansicht ist erst vollständig, ` +
+      'nachdem die offenen Auto-Coding-Schritte abgeschlossen wurden.';
   }
 }

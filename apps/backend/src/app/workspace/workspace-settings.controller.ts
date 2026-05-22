@@ -31,6 +31,14 @@ export class WorkspaceSettingsController {
           description: 'Controls whether coding statistics are automatically fetched in the coding management component'
         };
       }
+      if (key === 'show-test-results-log-anomalies') {
+        return {
+          id: 0,
+          key: settingKey,
+          value: JSON.stringify({ enabled: false }),
+          description: 'Controls whether log anomalies are shown as a column in the test results table'
+        };
+      }
       if (key === 'response-matching-mode') {
         return {
           id: 0,

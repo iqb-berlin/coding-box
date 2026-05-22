@@ -404,10 +404,10 @@ describe('CodingManagementComponent', () => {
         aggregatedDuplicateCases: 0
       };
 
-      expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding aktualisieren');
+      expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding starten');
       expect(component.codingFreshnessSummaryText).toBe(
-        'Auto-Coding 1 muss für 10 Aufgabenbearbeitungen ausgeführt werden. ' +
-        'Das betrifft 50 Antwortwerte.'
+        '10 Aufgabenbearbeitungen benötigen Auto-Coding 1. ' +
+        'Dabei werden 50 Antwortwerte berücksichtigt.'
       );
       expect(component.hasFreshnessAutoCodingWork('v1')).toBe(true);
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
@@ -445,8 +445,8 @@ describe('CodingManagementComponent', () => {
       expect(component.hasCodingFreshnessWarnings).toBe(true);
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(true);
       expect(component.codingFreshnessSummaryText).toBe(
-        'Auto-Coding 2 muss für 671 Aufgabenbearbeitungen ausgeführt werden. ' +
-        'Das betrifft 5098 Antwortwerte.'
+        '671 Aufgabenbearbeitungen benötigen Auto-Coding 2. ' +
+        'Dabei werden 5098 Antwortwerte berücksichtigt.'
       );
     });
 

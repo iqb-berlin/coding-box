@@ -67,6 +67,7 @@ describe('TestResultsUploadResultDialogComponent', () => {
           other: 1
         }
       },
+      importedResponses: true,
       codingFreshness: {
         workspaceId: 1,
         currentRevision: 2,
@@ -149,17 +150,32 @@ describe('TestResultsUploadResultDialogComponent', () => {
       { category: 'other', label: 'Sonstiges', count: 1 },
       { category: 'unit_not_found', label: 'Unit nicht gefunden', count: 1 }
     ]);
-    expect(component.codingFreshnessDialogTitle).toBe('Auto-Coding aktualisieren');
+    expect(component.dialogTitle).toBe('Upload-Ergebnis (Antworten)');
+    expect(component.dialogIcon).toBe('upload_file');
+    expect(component.importOutcomeTitle).toBe('Import verarbeitet, Hinweise und Auto-Coding prüfen');
+    expect(component.importOutcomeText).toBe(
+      'Im Tab Probleme 2 technische Hinweise prüfen, bevor mit den Daten weitergearbeitet wird. ' +
+      'Die Kodier- und Auswertungsansicht ist erst vollständig, nachdem die offenen Auto-Coding-Schritte ' +
+      'abgeschlossen wurden.'
+    );
+    expect(component.importOutcomeMetrics).toEqual([
+      { label: 'Testpersonen', value: 1 },
+      { label: 'Testhefte', value: 1 },
+      { label: 'Aufgaben-IDs', value: 1 },
+      { label: 'Antwortwerte', value: 3 }
+    ]);
+    expect(component.responseRowsNeedExplanation).toBe(true);
+    expect(component.codingFreshnessDialogTitle).toBe('Auto-Coding starten');
     expect(component.codingFreshnessSummaryText).toBe(
-      'Auto-Coding 1 muss für 1 Aufgabenbearbeitung ausgeführt werden. ' +
-      'Das betrifft 3 Antwortwerte.'
+      '1 Aufgabenbearbeitung benötigt Auto-Coding 1. ' +
+      'Dabei werden 3 Antwortwerte berücksichtigt.'
     );
     expect(component.codingFreshnessWarnings).toEqual([
       expect.objectContaining({ version: 'v1' })
     ]);
     expect(component.codingFreshnessDisplayWarnings).toEqual(component.codingFreshnessWarnings);
     expect(component.getCodingFreshnessChipLabel(data.result.codingFreshness!.items[0])).toBe(
-      'Auto-Coding 1: 1 Aufgabenbearbeitung kodieren'
+      'Auto-Coding 1: 1 Aufgabenbearbeitung starten'
     );
     expect(component.filteredIssues).toBe(component.filteredIssues);
     expect(component.issueExportButtonLabel).toBe('Probleme exportieren (2)');
@@ -196,6 +212,27 @@ describe('TestResultsUploadResultDialogComponent', () => {
     component.onCategoryChange();
     component.close();
     expect(dialogRef.close).toHaveBeenCalled();
+  });
+
+  it('keeps the import status explicit when auto-coding is still open', () => {
+    component.data = {
+      ...data,
+      result: {
+        ...data.result,
+        issues: undefined,
+        importSummary: {
+          ...data.result.importSummary,
+          issueCounts: undefined
+        }
+      } as never
+    };
+
+    expect(component.importOutcomeTitle).toBe('Import verarbeitet, Auto-Coding ausstehend');
+    expect(component.importOutcomeText).toBe(
+      'Antwortdaten wurden verarbeitet. Keine technischen Importprobleme gefunden. ' +
+      'Die Kodier- und Auswertungsansicht ist erst vollständig, nachdem die offenen Auto-Coding-Schritte ' +
+      'abgeschlossen wurden.'
+    );
   });
 
   it('ignores zero-count coding freshness rows', () => {
@@ -291,10 +328,10 @@ describe('TestResultsUploadResultDialogComponent', () => {
     };
 
     expect(component.codingFreshnessWarnings).toHaveLength(1);
-    expect(component.codingFreshnessDialogTitle).toBe('Auto-Coding aktualisieren');
+    expect(component.codingFreshnessDialogTitle).toBe('Auto-Coding starten');
     expect(component.codingFreshnessSummaryText).toBe(
-      'Auto-Coding 2 muss für 671 Aufgabenbearbeitungen ausgeführt werden. ' +
-      'Das betrifft 5098 Antwortwerte.'
+      '671 Aufgabenbearbeitungen benötigen Auto-Coding 2. ' +
+      'Dabei werden 5098 Antwortwerte berücksichtigt.'
     );
   });
 });
