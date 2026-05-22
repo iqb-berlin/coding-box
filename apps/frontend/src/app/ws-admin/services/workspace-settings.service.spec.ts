@@ -104,7 +104,7 @@ describe('WorkspaceSettingsService', () => {
       expect(req.request.body).toEqual({
         key: 'show-test-results-log-anomalies',
         value: '{"enabled":true}',
-        description: 'Controls whether log anomalies are shown as a column in the test results table'
+        description: 'Controls whether log anomaly information is shown on the test results page'
       });
       req.flush({});
     });

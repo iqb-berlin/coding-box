@@ -114,6 +114,7 @@ import {
   UnitsReplay,
   UnitsReplayService
 } from '../../../replay/services/units-replay.service';
+import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
@@ -401,6 +402,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private translateService = inject(TranslateService);
   private validationTaskStateService = inject(ValidationTaskStateService);
   private unitsReplayService = inject(UnitsReplayService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private deleteTaskSubscription: Subscription | null = null;
@@ -451,6 +453,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   overview: TestResultsOverviewResponse | null = null;
   isLoadingOverview: boolean = false;
+  showTestResultsLogAnomalies: boolean = false;
   logAnomalySummary: LogAnomalyDashboardSummary | null = null;
   isLoadingLogAnomalySummary: boolean = false;
   logAnomalySummaryLoadFailed: boolean = false;
@@ -519,12 +522,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           return;
         }
         this.quickSearchTableFilters = { ...(request.filters || {}) };
-        this.forceShowLogAnomalyTableColumn = !!request.forceShowLogAnomalies;
+        this.forceShowLogAnomalyTableColumn =
+          this.showTestResultsLogAnomalies && !!request.forceShowLogAnomalies;
         this.isTableView = true;
         this.isLoading = false;
         this.isUploadingResults = false;
       });
 
+    this.loadTestResultsLogAnomalySetting();
     this.createTestResultsList(0, this.pageSize);
     this.loadWorkspaceOverview();
     this.loadCodingFreshnessStatus();
@@ -1275,9 +1280,34 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  private loadLogAnomalySummary(): void {
+  private loadTestResultsLogAnomalySetting(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      this.setShowTestResultsLogAnomalies(false);
+      return;
+    }
+
+    this.workspaceSettingsService
+      .getShowTestResultsLogAnomalies(workspaceId)
+      .subscribe(enabled => {
+        this.setShowTestResultsLogAnomalies(enabled);
+      });
+  }
+
+  private setShowTestResultsLogAnomalies(enabled: boolean): void {
+    this.showTestResultsLogAnomalies = enabled;
+
+    if (!enabled) {
+      this.logAnomalySummary = null;
+      this.logAnomalySummaryLoadFailed = false;
+      this.isLoadingLogAnomalySummary = false;
+      this.logAnomalySummaryRequested = false;
+    }
+  }
+
+  private loadLogAnomalySummary(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId || !this.showTestResultsLogAnomalies) {
       this.logAnomalySummary = null;
       this.logAnomalySummaryLoadFailed = false;
       this.isLoadingLogAnomalySummary = false;
@@ -1314,7 +1344,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private reloadLogAnomalySummaryIfRequested(): void {
-    if (this.logAnomalySummaryRequested) {
+    if (this.showTestResultsLogAnomalies && this.logAnomalySummaryRequested) {
       this.loadLogAnomalySummary();
     }
   }
@@ -1369,7 +1399,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   showLogAnomaliesInTable(): void {
     this.quickSearchTableFilters = { logAnomalies: 'any' };
-    this.forceShowLogAnomalyTableColumn = true;
+    this.forceShowLogAnomalyTableColumn = this.showTestResultsLogAnomalies;
     this.isTableView = true;
     this.isLoading = false;
     this.isUploadingResults = false;

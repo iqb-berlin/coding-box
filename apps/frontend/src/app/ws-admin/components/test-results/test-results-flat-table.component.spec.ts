@@ -13,7 +13,6 @@ import {
   FlatTestResultResponsesResponse,
   TestResultService
 } from '../../../shared/services/test-result/test-result.service';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
 
 describe('TestResultsFlatTableComponent', () => {
@@ -25,10 +24,6 @@ describe('TestResultsFlatTableComponent', () => {
     getFlatResponseFrequencies: jest.Mock;
     workspaceCacheInvalidated$: Subject<number>;
   };
-  let workspaceSettingsService: {
-    getShowTestResultsLogAnomalies: jest.Mock;
-  };
-
   const emptyFilterOptions = {
     codes: [],
     groups: [],
@@ -57,9 +52,6 @@ describe('TestResultsFlatTableComponent', () => {
       getFlatResponseFilterOptions: jest.fn().mockReturnValue(of(emptyFilterOptions)),
       getFlatResponseFrequencies: jest.fn().mockReturnValue(of({})),
       workspaceCacheInvalidated$: new Subject<number>()
-    };
-    workspaceSettingsService = {
-      getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false))
     };
 
     await TestBed.configureTestingModule({
@@ -92,7 +84,6 @@ describe('TestResultsFlatTableComponent', () => {
           }
         },
         { provide: TestResultService, useValue: testResultService },
-        { provide: WorkspaceSettingsService, useValue: workspaceSettingsService },
         {
           provide: MatSnackBar,
           useValue: { open: jest.fn().mockReturnValue({ dismiss: jest.fn() }) }
@@ -109,11 +100,23 @@ describe('TestResultsFlatTableComponent', () => {
     fixture.destroy();
   });
 
-  it('should include row log anomalies when the dashboard forces the column', () => {
+  it('should not include row log anomalies when the dashboard force is disabled by workspace setting', () => {
     component.forceShowLogAnomalies = true;
     component.ngOnChanges({
       forceShowLogAnomalies: new SimpleChange(false, true, true)
     });
+
+    component.ngOnInit();
+
+    expect(component.flatDisplayedColumns).not.toContain('logStatus');
+    expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ includeLogAnomalies: '' })
+    );
+  });
+
+  it('should include row log anomalies when the workspace setting enables the column', () => {
+    component.showWorkspaceLogAnomalies = true;
 
     component.ngOnInit();
 
@@ -124,10 +127,52 @@ describe('TestResultsFlatTableComponent', () => {
     );
   });
 
+  it('should expose the dashboard all-anomalies filter in the media filter UI', () => {
+    component.initialFilters = { logAnomalies: 'any' };
+
+    component.ngOnChanges({
+      initialFilters: new SimpleChange(null, component.initialFilters, true)
+    });
+
+    expect(component.flatFilters.logAnomalies).toBe('any');
+    expect(component.mediaFilters).toContain('logAny');
+  });
+
+  it('should keep the all-anomalies media filter exclusive', () => {
+    component.mediaFilters = [
+      'geogebra',
+      'logAny',
+      'logCritical',
+      'logTimer'
+    ];
+
+    component.onMediaFiltersChanged();
+
+    expect(component.mediaFilters).toEqual(['geogebra', 'logAny']);
+    expect(component.flatFilters.geogebra).toBe(true);
+    expect(component.flatFilters.logAnomalies).toBe('any');
+  });
+
+  it('should replace external table filters instead of keeping stale log filters', () => {
+    component.initialFilters = { logAnomalies: 'any' };
+    component.ngOnChanges({
+      initialFilters: new SimpleChange(null, component.initialFilters, true)
+    });
+
+    component.initialFilters = { code: 'person-a' };
+    component.ngOnChanges({
+      initialFilters: new SimpleChange({ logAnomalies: 'any' }, component.initialFilters, false)
+    });
+
+    expect(component.flatFilters.code).toBe('person-a');
+    expect(component.flatFilters.logAnomalies).toBe('');
+    expect(component.mediaFilters).not.toContain('logAny');
+  });
+
   it('should ignore stale flat-response requests', () => {
     const firstResponse = new Subject<FlatTestResultResponsesResponse>();
     const secondResponse = new Subject<FlatTestResultResponsesResponse>();
-    workspaceSettingsService.getShowTestResultsLogAnomalies.mockReturnValue(of(true));
+    component.showWorkspaceLogAnomalies = true;
     testResultService.getFlatResponses
       .mockReturnValueOnce(firstResponse.asObservable())
       .mockReturnValueOnce(secondResponse.asObservable());

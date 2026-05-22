@@ -64,7 +64,8 @@ const mockQueryBuilder = () => ({
 type WorkspaceTestResultsServiceWithLogAnomalyLookup = {
   findLogAnomaliesForBooklets: (
     bookletIds: number[],
-    thresholds: unknown
+    thresholds: unknown,
+    exclusions?: unknown
   ) => Promise<Map<number, unknown[]>>;
 };
 
@@ -81,6 +82,7 @@ describe('WorkspaceTestResultsService', () => {
   let responseRepository: Repository<ResponseEntity>;
   let sessionRepository: Repository<Session>;
   let bookletLogRepository: Repository<BookletLog>;
+  let unitLogRepository: Repository<UnitLog>;
   let chunkRepository: Repository<ChunkEntity>;
   let codingListService: {
     getVariablePageMap: jest.Mock;
@@ -173,6 +175,10 @@ describe('WorkspaceTestResultsService', () => {
       createQueryBuilder: jest.fn(() => mockQueryBuilder())
     } as unknown as Repository<BookletLog>;
 
+    unitLogRepository = {
+      createQueryBuilder: jest.fn(() => mockQueryBuilder())
+    } as unknown as Repository<UnitLog>;
+
     chunkRepository = {
       createQueryBuilder: jest.fn(() => mockQueryBuilder()),
       find: jest.fn().mockResolvedValue([])
@@ -205,7 +211,7 @@ describe('WorkspaceTestResultsService', () => {
       {} as unknown as Repository<BookletInfo>,
       bookletLogRepository,
       sessionRepository,
-      {} as unknown as Repository<UnitLog>,
+      unitLogRepository,
       chunkRepository,
       dataSource,
       unitTagService,
@@ -1069,6 +1075,230 @@ describe('WorkspaceTestResultsService', () => {
       });
 
       expect(anomalySpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('findLogAnomaliesForBooklets', () => {
+    const thresholds = {
+      longLoadingThresholdMs: 5000,
+      focusLostThresholdMs: 300000,
+      sessionSpanThresholdMs: 86400000,
+      repeatedStartThreshold: 2
+    };
+
+    it('should report long loading from unit STARTED/ENDED logs', async () => {
+      const bookletLogQb = mockQueryBuilder();
+      const sessionQb = mockQueryBuilder();
+      const unitQb = mockQueryBuilder();
+      const unitLogQb = mockQueryBuilder();
+      (bookletLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(bookletLogQb);
+      (sessionRepository.createQueryBuilder as jest.Mock).mockReturnValue(sessionQb);
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      (unitLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitLogQb);
+      bookletLogQb.getMany.mockResolvedValue([]);
+      sessionQb.getRawMany.mockResolvedValue([]);
+      unitQb.getMany.mockResolvedValue([
+        {
+          id: 11,
+          bookletid: 1,
+          name: 'unit-a.xml',
+          alias: 'unit-a'
+        }
+      ]);
+      unitLogQb.getMany.mockResolvedValue([
+        {
+          id: 1,
+          unitid: 11,
+          key: 'STARTED',
+          parameter: null,
+          ts: 1000
+        },
+        {
+          id: 2,
+          unitid: 11,
+          key: 'ENDED',
+          parameter: null,
+          ts: 8000
+        }
+      ]);
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const anomaliesByBooklet =
+        await serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+          [1],
+          thresholds
+        );
+      const anomalies = anomaliesByBooklet.get(1) as Array<{
+        code: string;
+        evidence: string;
+        count: number;
+      }>;
+
+      expect(anomalies).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'long_loading',
+            evidence: expect.stringContaining('Unit-Ladezeit'),
+            count: 1
+          })
+        ])
+      );
+    });
+
+    it('should not report long loading from null unit STARTED timestamps', async () => {
+      const bookletLogQb = mockQueryBuilder();
+      const sessionQb = mockQueryBuilder();
+      const unitQb = mockQueryBuilder();
+      const unitLogQb = mockQueryBuilder();
+      (bookletLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(bookletLogQb);
+      (sessionRepository.createQueryBuilder as jest.Mock).mockReturnValue(sessionQb);
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      (unitLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitLogQb);
+      bookletLogQb.getMany.mockResolvedValue([]);
+      sessionQb.getRawMany.mockResolvedValue([]);
+      unitQb.getMany.mockResolvedValue([
+        {
+          id: 11,
+          bookletid: 1,
+          name: 'unit-a.xml',
+          alias: 'unit-a'
+        }
+      ]);
+      unitLogQb.getMany.mockResolvedValue([
+        {
+          id: 1,
+          unitid: 11,
+          key: 'STARTED',
+          parameter: null,
+          ts: null
+        },
+        {
+          id: 2,
+          unitid: 11,
+          key: 'ENDED',
+          parameter: null,
+          ts: 8000
+        }
+      ]);
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const anomaliesByBooklet =
+        await serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+          [1],
+          thresholds
+        );
+      const anomalies = (anomaliesByBooklet.get(1) || []) as Array<{
+        code: string;
+      }>;
+
+      expect(
+        anomalies.some(anomaly => anomaly.code === 'long_loading')
+      ).toBe(false);
+    });
+
+    it('should ignore unit-based anomalies for globally ignored units', async () => {
+      const bookletNameQb = mockQueryBuilder();
+      const bookletLogQb = mockQueryBuilder();
+      const sessionQb = mockQueryBuilder();
+      const unitQb = mockQueryBuilder();
+      const unitLogQb = mockQueryBuilder();
+      (bookletRepository.createQueryBuilder as jest.Mock).mockReturnValue(bookletNameQb);
+      (bookletLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(bookletLogQb);
+      (sessionRepository.createQueryBuilder as jest.Mock).mockReturnValue(sessionQb);
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      (unitLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitLogQb);
+      bookletNameQb.getRawMany.mockResolvedValue([
+        { id: 1, name: 'booklet-a' }
+      ]);
+      bookletLogQb.getMany.mockResolvedValue([]);
+      sessionQb.getRawMany.mockResolvedValue([]);
+      unitQb.getMany.mockResolvedValue([
+        {
+          id: 11,
+          bookletid: 1,
+          name: 'ignored-unit.xml',
+          alias: 'ignored-unit'
+        }
+      ]);
+      unitLogQb.getMany.mockResolvedValue([
+        {
+          id: 1,
+          unitid: 11,
+          key: 'PLAYER',
+          parameter: 'LOADING',
+          ts: 1000
+        }
+      ]);
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const anomaliesByBooklet =
+        await serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+          [1],
+          thresholds,
+          {
+            globalIgnoredUnits: ['ignored-unit.xml'],
+            ignoredBooklets: [],
+            testletIgnoredUnits: []
+          }
+        );
+
+      expect(anomaliesByBooklet.get(1) || []).toEqual([]);
+      expect(unitLogRepository.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('should apply unit exclusions to SQL log anomaly filters', () => {
+      const qb = mockQueryBuilder();
+      const privateService = service as unknown as {
+        applyLogAnomalyFilters: (
+          queryBuilder: ReturnType<typeof mockQueryBuilder>,
+          codes: string[],
+          logThresholds: typeof thresholds,
+          exclusions?: {
+            globalIgnoredUnits: string[];
+            ignoredBooklets: string[];
+            testletIgnoredUnits: Array<{ bookletId: string; unitId: string }>;
+          }
+        ) => void;
+      };
+
+      privateService.applyLogAnomalyFilters(
+        qb,
+        ['long_loading', 'unit_progress_incomplete'],
+        thresholds,
+        {
+          globalIgnoredUnits: ['ignored-unit.xml'],
+          ignoredBooklets: [],
+          testletIgnoredUnits: [{
+            bookletId: 'booklet-a',
+            unitId: 'testlet-unit.xml'
+          }]
+        }
+      );
+
+      const [sql, params] = qb.andWhere.mock.calls[0];
+
+      expect(sql).toContain(
+        "REGEXP_REPLACE(UPPER(u.name), '\\.XML$', '', 'i') NOT IN"
+      );
+      expect(sql).toContain(
+        "REGEXP_REPLACE(UPPER(u2.name), '\\.XML$', '', 'i') NOT IN"
+      );
+      expect(sql).toContain(
+        "REGEXP_REPLACE(UPPER(u3.name), '\\.XML$', '', 'i') NOT IN"
+      );
+      expect(sql).toContain(
+        'UPPER(bookletinfo.name) = :logAnomaly0LongLoadingBooklet0'
+      );
+      expect(params).toMatchObject({
+        logAnomaly0LongLoadingIgnoredUnits: ['IGNORED-UNIT'],
+        logAnomaly0LongLoadingBooklet0: 'BOOKLET-A',
+        logAnomaly0LongLoadingUnit0: 'TESTLET-UNIT',
+        logAnomaly1UnitProgressAvailableIgnoredUnits: ['IGNORED-UNIT'],
+        logAnomaly1UnitProgressMissingIgnoredUnits: ['IGNORED-UNIT']
+      });
     });
   });
 

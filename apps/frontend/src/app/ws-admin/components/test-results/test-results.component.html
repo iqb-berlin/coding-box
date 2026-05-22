@@ -98,6 +98,7 @@
   </div>
   }
 
+  @if (showTestResultsLogAnomalies) {
   <div class="log-quality-card">
     <div class="log-quality-header">
       <div>
@@ -220,6 +221,7 @@
     }
     }
   </div>
+  }
 
   <div class="overview-card">
     <h2 class="section-title">Übersicht (Arbeitsbereich)</h2>
@@ -318,6 +320,7 @@
   } @if(!isUploadingResults){ @if (dataSource) { @if (isTableView) {
   <coding-box-test-results-flat-table
     [initialFilters]="quickSearchTableFilters"
+    [showWorkspaceLogAnomalies]="showTestResultsLogAnomalies"
     [forceShowLogAnomalies]="forceShowLogAnomalyTableColumn"
     (responseDeleted)="onFlatTableResponseDeleted()"
   ></coding-box-test-results-flat-table>

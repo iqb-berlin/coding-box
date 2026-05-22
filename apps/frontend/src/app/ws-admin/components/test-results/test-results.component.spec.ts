@@ -30,6 +30,7 @@ import { AppService } from '../../../core/services/app.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { UnitsReplayService } from '../../../replay/services/units-replay.service';
+import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 
 describe('TestResultsComponent', () => {
   let component: TestResultsComponent;
@@ -148,6 +149,12 @@ describe('TestResultsComponent', () => {
           }
         },
         {
+          provide: WorkspaceSettingsService,
+          useValue: {
+            getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false))
+          }
+        },
+        {
           provide: TestResultService,
           useValue: {
             getTestResults: jest.fn().mockReturnValue(of({
@@ -228,6 +235,18 @@ describe('TestResultsComponent', () => {
 
     expect(testResultService.getLogAnomalySummary).not.toHaveBeenCalled();
     expect(component.logAnomalySummaryRequested).toBe(false);
+  });
+
+  it('should hide log quality when disabled by workspace setting', () => {
+    expect(component.showTestResultsLogAnomalies).toBe(false);
+    expect(fixture.nativeElement.textContent).not.toContain('Log-Qualität');
+  });
+
+  it('should show log quality when enabled by workspace setting', () => {
+    component.showTestResultsLogAnomalies = true;
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Log-Qualität');
   });
 
   it('should reload workspace overview after deleting a unit', () => {
@@ -332,6 +351,7 @@ describe('TestResultsComponent', () => {
       getLogAnomalySummary: jest.Mock;
     };
 
+    component.showTestResultsLogAnomalies = true;
     component.logAnomalySummary = {
       totalBooklets: 10,
       affectedBooklets: 1,
@@ -356,12 +376,24 @@ describe('TestResultsComponent', () => {
   });
 
   it('should force the log anomaly table column for the dashboard table action', () => {
+    component.showTestResultsLogAnomalies = true;
     component.forceShowLogAnomalyTableColumn = false;
 
     component.showLogAnomaliesInTable();
 
     expect(component.quickSearchTableFilters).toEqual({ logAnomalies: 'any' });
     expect(component.forceShowLogAnomalyTableColumn).toBe(true);
+    expect(component.isTableView).toBe(true);
+  });
+
+  it('should not force the log anomaly table column when workspace setting is disabled', () => {
+    component.showTestResultsLogAnomalies = false;
+    component.forceShowLogAnomalyTableColumn = false;
+
+    component.showLogAnomaliesInTable();
+
+    expect(component.quickSearchTableFilters).toEqual({ logAnomalies: 'any' });
+    expect(component.forceShowLogAnomalyTableColumn).toBe(false);
     expect(component.isTableView).toBe(true);
   });
 
