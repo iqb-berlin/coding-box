@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
 import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
@@ -21,6 +22,11 @@ import { CodingStatisticsService } from './coding-statistics.service';
 import { CacheService } from '../../../cache/cache.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { createAggregationSummary } from './aggregation-metrics.util';
+import {
+  CODING_ANALYSIS_CACHE_KEY_PREFIX,
+  getCodingAnalysisCacheKey,
+  getCodingAnalysisRunMarkerKey
+} from './coding-analysis-cache-key.util';
 
 export interface AggregationSettingsResult {
   success: boolean;
@@ -34,7 +40,6 @@ export interface AggregationSettingsResult {
 @Injectable()
 export class CodingAnalysisService {
   private readonly logger = new Logger(CodingAnalysisService.name);
-  private readonly CACHE_KEY_PREFIX = 'response-analysis';
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -190,16 +195,26 @@ export class CodingAnalysisService {
 
     // Check if job already running
     const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);
-    if (activeJob) {
+    if (activeJob && !options.forceRefresh) {
       this.logger.log(`Analysis job already running for workspace ${workspaceId} (Job ID: ${activeJob.id})`);
       return;
     }
+
+    if (activeJob && options.forceRefresh) {
+      this.logger.log(
+        `Superseding active response analysis job for workspace ${workspaceId} (Job ID: ${activeJob.id})`
+      );
+    }
+
+    const runId = randomUUID();
+    await this.cacheService.set(getCodingAnalysisRunMarkerKey(cacheKey), runId, 0);
 
     await this.jobQueueService.addCodingAnalysisJob({
       workspaceId,
       matchingFlags: activeMatchingFlags as unknown as string[],
       threshold: effectiveThreshold,
-      cacheKey
+      cacheKey,
+      runId
     });
     this.logger.log(`Triggered background response analysis for workspace ${workspaceId}`);
   }
@@ -415,7 +430,7 @@ export class CodingAnalysisService {
   async invalidateCache(workspaceId: number): Promise<void> {
     this.logger.log(`Invalidating response analysis cache for workspace ${workspaceId}`);
     // "response-analysis:1_*" matches all variations (flags, thresholds) for workspace 1
-    const pattern = `${this.CACHE_KEY_PREFIX}:${workspaceId}_*`;
+    const pattern = `${CODING_ANALYSIS_CACHE_KEY_PREFIX}:${workspaceId}_*`;
     await this.cacheService.deleteByPattern(pattern);
   }
 
@@ -430,7 +445,7 @@ export class CodingAnalysisService {
     matchingFlags: ResponseMatchingFlag[],
     threshold: number
   ): string {
-    return `${this.CACHE_KEY_PREFIX}:${workspaceId}_${[...matchingFlags].sort().join(',')}_t${threshold}`;
+    return getCodingAnalysisCacheKey(workspaceId, matchingFlags, threshold);
   }
 
   private normalizeThreshold(threshold: number | null | undefined): number {
