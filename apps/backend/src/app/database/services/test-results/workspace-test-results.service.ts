@@ -56,6 +56,8 @@ import {
   applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
   normalizeExclusionBookletId,
+  normalizeExclusionUnitId,
+  ResolvedWorkspaceExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { FLAT_FREQUENCIES_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX } from '../workspace/workspace-constants';
@@ -159,6 +161,11 @@ interface LogAnomalyThresholds {
   focusLostThresholdMs: number;
   sessionSpanThresholdMs: number;
   repeatedStartThreshold: number;
+}
+
+interface LogAnomalySqlFragment {
+  sql: string;
+  params: Record<string, string | string[]>;
 }
 
 interface LogAnomalyDashboardSummary {
@@ -475,10 +482,57 @@ export class WorkspaceTestResultsService {
     return Array.from(new Set(expanded));
   }
 
+  private getNormalizedLogAnomalyUnitSql(expression: string): string {
+    return `REGEXP_REPLACE(UPPER(${expression}), '\\.XML$', '', 'i')`;
+  }
+
+  private buildLogAnomalyUnitVisibilitySql(
+    unitNameExpression: string,
+    exclusions: ResolvedWorkspaceExclusions | undefined,
+    parameterPrefix: string,
+    bookletNameExpression = 'bookletinfo.name'
+  ): LogAnomalySqlFragment {
+    const conditions: string[] = [];
+    const params: Record<string, string | string[]> = {};
+    const normalizedUnitExpression =
+      this.getNormalizedLogAnomalyUnitSql(unitNameExpression);
+
+    if (exclusions?.globalIgnoredUnits.length) {
+      conditions.push(
+        `${normalizedUnitExpression} NOT IN (:...${parameterPrefix}IgnoredUnits)`
+      );
+      params[`${parameterPrefix}IgnoredUnits`] =
+        exclusions.globalIgnoredUnits.map(normalizeExclusionUnitId);
+    }
+
+    if (exclusions?.testletIgnoredUnits.length) {
+      const testletCondition = exclusions.testletIgnoredUnits
+        .map((_, index) => (
+          `(UPPER(${bookletNameExpression}) = :${parameterPrefix}Booklet${index} ` +
+          `AND ${normalizedUnitExpression} = :${parameterPrefix}Unit${index})`
+        ))
+        .join(' OR ');
+      conditions.push(`NOT (${testletCondition})`);
+      exclusions.testletIgnoredUnits.forEach((ignoredUnit, index) => {
+        params[`${parameterPrefix}Booklet${index}`] =
+          normalizeExclusionBookletId(ignoredUnit.bookletId);
+        params[`${parameterPrefix}Unit${index}`] =
+          normalizeExclusionUnitId(ignoredUnit.unitId);
+      });
+    }
+
+    return {
+      sql: conditions.length > 0 ? conditions.join(' AND ') : 'TRUE',
+      params
+    };
+  }
+
   private getLogAnomalySql(
     code: LogAnomalyCode,
-    thresholds: LogAnomalyThresholds
-  ): string {
+    thresholds: LogAnomalyThresholds,
+    exclusions?: ResolvedWorkspaceExclusions,
+    parameterPrefix = 'logAnomaly'
+  ): LogAnomalySqlFragment | string {
     const longLoadingThreshold = Math.round(thresholds.longLoadingThresholdMs);
     const focusLostThreshold = Math.round(thresholds.focusLostThresholdMs);
     const sessionSpanThreshold = Math.round(thresholds.sessionSpanThresholdMs);
@@ -514,8 +568,14 @@ export class WorkspaceTestResultsService {
             AND bl.key = 'CONNECTION'
             AND bl.parameter = 'LOST'
         )`;
-      case 'timestamp_zero':
-        return `EXISTS (
+      case 'timestamp_zero': {
+        const unitVisibility = this.buildLogAnomalyUnitVisibilitySql(
+          'u.name',
+          exclusions,
+          `${parameterPrefix}TimestampZero`
+        );
+        return {
+          sql: `EXISTS (
           SELECT 1 FROM bookletlog bl
           WHERE bl.bookletid = "bookletEntity"."id"
             AND COALESCE(bl.ts, 0) = 0
@@ -524,20 +584,34 @@ export class WorkspaceTestResultsService {
           SELECT 1 FROM unit u
           JOIN unitlog ul ON ul.unitid = u.id
           WHERE u.bookletid = "bookletEntity"."id"
+            AND ${unitVisibility.sql}
             AND COALESCE(ul.ts, 0) = 0
-        )`;
-      case 'player_stuck_loading':
-        return `EXISTS (
+        )`,
+          params: unitVisibility.params
+        };
+      }
+      case 'player_stuck_loading': {
+        const unitVisibility = this.buildLogAnomalyUnitVisibilitySql(
+          'u.name',
+          exclusions,
+          `${parameterPrefix}PlayerLoading`
+        );
+        return {
+          sql: `EXISTS (
           SELECT 1 FROM unit u
           JOIN unitlog ul ON ul.unitid = u.id
           WHERE u.bookletid = "bookletEntity"."id"
+            AND ${unitVisibility.sql}
           GROUP BY u.id
           HAVING COUNT(*) FILTER (
             WHERE ul.key = 'PLAYER' AND ul.parameter = 'LOADING'
           ) > COUNT(*) FILTER (
             WHERE ul.key = 'PLAYER' AND ul.parameter = 'RUNNING'
           )
-        )`;
+        )`,
+          params: unitVisibility.params
+        };
+      }
       case 'repeated_start':
         return `(SELECT COUNT(*)
           FROM bookletlog bl
@@ -545,8 +619,14 @@ export class WorkspaceTestResultsService {
             AND bl.key = 'CONTROLLER'
             AND bl.parameter = 'LOADING'
         ) >= ${repeatedStartThreshold}`;
-      case 'long_loading':
-        return `EXISTS (
+      case 'long_loading': {
+        const unitVisibility = this.buildLogAnomalyUnitVisibilitySql(
+          'u.name',
+          exclusions,
+          `${parameterPrefix}LongLoading`
+        );
+        return {
+          sql: `EXISTS (
           SELECT 1 FROM session s
           WHERE s.bookletid = "bookletEntity"."id"
             AND COALESCE(s.loadcompletems, 0) >= ${longLoadingThreshold}
@@ -557,10 +637,14 @@ export class WorkspaceTestResultsService {
           JOIN unitlog ul_started ON ul_started.unitid = u.id
           JOIN unitlog ul_ended ON ul_ended.unitid = u.id
           WHERE u.bookletid = "bookletEntity"."id"
+            AND ${unitVisibility.sql}
             AND ul_started.key = 'STARTED'
             AND ul_ended.key = 'ENDED'
             AND (ul_ended.ts - ul_started.ts) >= ${longLoadingThreshold}
-        )`;
+        )`,
+          params: unitVisibility.params
+        };
+      }
       case 'timer_left_on_exit':
         return `EXISTS (
           SELECT 1 FROM bookletlog bl
@@ -619,28 +703,56 @@ export class WorkspaceTestResultsService {
               ) - bl_lost.ts
             ) >= ${focusLostThreshold}
         )`;
-      case 'unit_progress_incomplete':
-        return `EXISTS (
+      case 'unit_progress_incomplete': {
+        const availableUnitVisibility =
+          this.buildLogAnomalyUnitVisibilitySql(
+            'u2.name',
+            exclusions,
+            `${parameterPrefix}UnitProgressAvailable`
+          );
+        const missingUnitVisibility =
+          this.buildLogAnomalyUnitVisibilitySql(
+            'u3.name',
+            exclusions,
+            `${parameterPrefix}UnitProgressMissing`
+          );
+        return {
+          sql: `EXISTS (
           SELECT 1 FROM unit u2
           WHERE u2.bookletid = "bookletEntity"."id"
             AND u2.alias IS NOT NULL
+            AND ${availableUnitVisibility.sql}
         )
         AND EXISTS (
           SELECT 1 FROM unit u3
           WHERE u3.bookletid = "bookletEntity"."id"
             AND u3.alias IS NOT NULL
+            AND ${missingUnitVisibility.sql}
             AND NOT EXISTS (
               SELECT 1 FROM bookletlog bl
               WHERE bl.bookletid = "bookletEntity"."id"
                 AND bl.key = 'CURRENT_UNIT_ID'
                 AND bl.parameter = u3.alias
             )
-        )`;
-      case 'progress_incomplete':
-        return `EXISTS (
+        )`,
+          params: {
+            ...availableUnitVisibility.params,
+            ...missingUnitVisibility.params
+          }
+        };
+      }
+      case 'progress_incomplete': {
+        const unitVisibility = this.buildLogAnomalyUnitVisibilitySql(
+          'u.name',
+          exclusions,
+          `${parameterPrefix}ProgressIncomplete`
+        );
+        return {
+          sql: `EXISTS (
           SELECT 1 FROM unit u
           JOIN unitlog ul ON ul.unitid = u.id
           WHERE u.bookletid = "bookletEntity"."id"
+            AND ${unitVisibility.sql}
             AND ul.key IN ('PRESENTATION_PROGRESS', 'RESPONSE_PROGRESS')
             AND ul.id = (
               SELECT ul_last.id
@@ -651,7 +763,10 @@ export class WorkspaceTestResultsService {
               LIMIT 1
             )
             AND COALESCE(ul.parameter, '') <> 'complete'
-        )`;
+        )`,
+          params: unitVisibility.params
+        };
+      }
       case 'debug_command':
         return `EXISTS (
           SELECT 1 FROM bookletlog bl
@@ -684,13 +799,29 @@ export class WorkspaceTestResultsService {
   private applyLogAnomalyFilters(
     qb: SelectQueryBuilder<unknown>,
     codes: LogAnomalyCode[],
-    thresholds: LogAnomalyThresholds
+    thresholds: LogAnomalyThresholds,
+    exclusions?: ResolvedWorkspaceExclusions
   ): void {
     if (codes.length === 0) {
       return;
     }
-    const anomalySql = codes.map(code => `(${this.getLogAnomalySql(code, thresholds)})`);
-    qb.andWhere(`(${anomalySql.join(' OR ')})`);
+    const fragments = codes.map((code, index) => {
+      const fragment = this.getLogAnomalySql(
+        code,
+        thresholds,
+        exclusions,
+        `logAnomaly${index}`
+      );
+      return typeof fragment === 'string' ?
+        { sql: fragment, params: {} } :
+        fragment;
+    });
+    const params = fragments.reduce<Record<string, string | string[]>>(
+      (acc, fragment) => ({ ...acc, ...fragment.params }),
+      {}
+    );
+    const anomalySql = fragments.map(fragment => `(${fragment.sql})`);
+    qb.andWhere(`(${anomalySql.join(' OR ')})`, params);
   }
 
   private ensureLogAnomalyList(
@@ -733,6 +864,36 @@ export class WorkspaceTestResultsService {
     }
   }
 
+  private hasResolvedExclusions(
+    exclusions?: ResolvedWorkspaceExclusions
+  ): exclusions is ResolvedWorkspaceExclusions {
+    return !!exclusions && (
+      exclusions.globalIgnoredUnits.length > 0 ||
+      exclusions.ignoredBooklets.length > 0 ||
+      exclusions.testletIgnoredUnits.length > 0
+    );
+  }
+
+  private async getBookletNamesById(
+    bookletIds: number[]
+  ): Promise<Map<number, string>> {
+    if (bookletIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.bookletRepository
+      .createQueryBuilder('bookletEntity')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .select('bookletEntity.id', 'id')
+      .addSelect('bookletinfo.name', 'name')
+      .where('bookletEntity.id IN (:...bookletIds)', { bookletIds })
+      .getRawMany<{ id: number | string; name: string | null }>();
+
+    return new Map(
+      rows.map(row => [Number(row.id), String(row.name || '')])
+    );
+  }
+
   private toLogTimestamp(value: number | string | null | undefined): number | null {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
@@ -748,7 +909,8 @@ export class WorkspaceTestResultsService {
 
   private async findLogAnomaliesForBooklets(
     bookletIds: number[],
-    thresholds: LogAnomalyThresholds
+    thresholds: LogAnomalyThresholds,
+    exclusions?: ResolvedWorkspaceExclusions
   ): Promise<Map<number, LogAnomalySummary[]>> {
     type SessionLogRow = {
       id: number;
@@ -759,12 +921,30 @@ export class WorkspaceTestResultsService {
       ts: number | null;
       loadcompletems: number | null;
     };
-    const uniqueBookletIds = Array.from(
+    let uniqueBookletIds = Array.from(
       new Set(bookletIds.map(id => Number(id)).filter(id => id > 0))
     );
     const result = new Map<number, LogAnomalySummary[]>();
     if (uniqueBookletIds.length === 0) {
       return result;
+    }
+
+    const shouldApplyExclusions = this.hasResolvedExclusions(exclusions);
+    const bookletNamesById = shouldApplyExclusions ?
+      await this.getBookletNamesById(uniqueBookletIds) :
+      new Map<number, string>();
+
+    if (shouldApplyExclusions) {
+      uniqueBookletIds = uniqueBookletIds.filter(bookletId => (
+        !isExcludedByResolvedExclusions(
+          exclusions,
+          bookletNamesById.get(bookletId),
+          undefined
+        )
+      ));
+      if (uniqueBookletIds.length === 0) {
+        return result;
+      }
     }
 
     const [bookletLogs, sessions, units] = await Promise.all([
@@ -810,7 +990,16 @@ export class WorkspaceTestResultsService {
         .getMany()
     ]);
 
-    const unitIds = (units || []).map(unit => Number(unit.id)).filter(id => id > 0);
+    const visibleUnits = shouldApplyExclusions ?
+      (units || []).filter(unit => (
+        !isExcludedByResolvedExclusions(
+          exclusions,
+          bookletNamesById.get(unit.bookletid),
+          unit.name
+        )
+      )) :
+      (units || []);
+    const unitIds = visibleUnits.map(unit => Number(unit.id)).filter(id => id > 0);
     const unitLogs = unitIds.length > 0 ?
       await this.unitLogRepository
         .createQueryBuilder('unitLog')
@@ -844,7 +1033,7 @@ export class WorkspaceTestResultsService {
       list.push(session);
       sessionsByBooklet.set(bookletId, list);
     });
-    (units || []).forEach(unit => {
+    visibleUnits.forEach(unit => {
       const list = unitsByBooklet.get(unit.bookletid) || [];
       list.push(unit);
       unitsByBooklet.set(unit.bookletid, list);
@@ -931,19 +1120,58 @@ export class WorkspaceTestResultsService {
         });
       }
 
-      const maxLoadTime = Math.max(
+      const longLoadingSessions = bookletSessions
+        .map(session => Number(session.loadcompletems || 0))
+        .filter(loadCompleteMs => loadCompleteMs >= thresholds.longLoadingThresholdMs);
+      const longLoadingUnits: Array<{ unit: Unit; durationMs: number }> = [];
+      const toUnitLoadingTimestamp = (
+        value: number | string | null | undefined
+      ): number | null => {
+        if (value === null || value === undefined) {
+          return null;
+        }
+        if (typeof value === 'string' && value.trim() === '') {
+          return null;
+        }
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+      bookletUnits.forEach(unit => {
+        const logsForUnit = unitLogsByUnit.get(unit.id) || [];
+        const startedLogsForUnit = logsForUnit
+          .filter(log => log.key === 'STARTED')
+          .map(log => toUnitLoadingTimestamp(log.ts))
+          .filter((ts): ts is number => ts !== null);
+        const endedLogsForUnit = logsForUnit
+          .filter(log => log.key === 'ENDED')
+          .map(log => toUnitLoadingTimestamp(log.ts))
+          .filter((ts): ts is number => ts !== null);
+        const maxUnitDuration = Math.max(
+          0,
+          ...startedLogsForUnit.flatMap(startTs => endedLogsForUnit
+            .filter(endTs => endTs >= startTs)
+            .map(endTs => endTs - startTs))
+        );
+        if (maxUnitDuration >= thresholds.longLoadingThresholdMs) {
+          longLoadingUnits.push({ unit, durationMs: maxUnitDuration });
+        }
+      });
+      const maxSessionLoadTime = Math.max(0, ...longLoadingSessions);
+      const maxUnitLoadTime = Math.max(
         0,
-        ...bookletSessions.map(session => Number(session.loadcompletems || 0))
+        ...longLoadingUnits.map(item => item.durationMs)
       );
+      const maxLoadTime = Math.max(maxSessionLoadTime, maxUnitLoadTime);
       if (maxLoadTime >= thresholds.longLoadingThresholdMs) {
+        const evidence = maxUnitLoadTime > maxSessionLoadTime ?
+          `Maximale Unit-Ladezeit ${Math.round(maxUnitLoadTime)} ms` :
+          `Maximale LOADCOMPLETE-Ladezeit ${Math.round(maxSessionLoadTime)} ms`;
         this.addLogAnomaly(result, bookletId, {
           code: 'long_loading',
           severity: 'warning',
           label: 'Lange Ladezeit',
-          evidence: `Maximale LOADCOMPLETE-Ladezeit ${Math.round(maxLoadTime)} ms`,
-          count: bookletSessions.filter(
-            session => Number(session.loadcompletems || 0) >= thresholds.longLoadingThresholdMs
-          ).length
+          evidence,
+          count: longLoadingSessions.length + longLoadingUnits.length
         });
       }
 
@@ -1175,7 +1403,8 @@ export class WorkspaceTestResultsService {
 
     const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
       bookletIds,
-      this.buildLogAnomalyThresholds(options)
+      this.buildLogAnomalyThresholds(options),
+      exclusions
     );
 
     const summary: LogAnomalyDashboardSummary = {
@@ -1275,7 +1504,8 @@ export class WorkspaceTestResultsService {
 
     const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
       bookletIds,
-      this.buildLogAnomalyThresholds(options)
+      this.buildLogAnomalyThresholds(options),
+      exclusions
     );
 
     const details = filteredRows
@@ -2592,7 +2822,12 @@ export class WorkspaceTestResultsService {
       );
     }
 
-    this.applyLogAnomalyFilters(qb, logAnomalyCodes, logAnomalyThresholds);
+    this.applyLogAnomalyFilters(
+      qb,
+      logAnomalyCodes,
+      logAnomalyThresholds,
+      exclusions
+    );
 
     const countQb = this.responseRepository
       .createQueryBuilder('response')
@@ -2712,7 +2947,8 @@ export class WorkspaceTestResultsService {
     this.applyLogAnomalyFilters(
       countQb,
       logAnomalyCodes,
-      logAnomalyThresholds
+      logAnomalyThresholds,
+      exclusions
     );
 
     if (processingDurations.length > 0) {
@@ -2885,7 +3121,8 @@ export class WorkspaceTestResultsService {
     const anomaliesByBooklet = includeLogAnomalies ?
       await this.findLogAnomaliesForBooklets(
         mapped.map(row => row.bookletId),
-        logAnomalyThresholds
+        logAnomalyThresholds,
+        exclusions
       ) :
       new Map<number, LogAnomalySummary[]>();
 
@@ -6298,7 +6535,8 @@ export class WorkspaceTestResultsService {
       const anomaliesByBookletId = includeLogAnomalies ?
         await this.findLogAnomaliesForBooklets(
           Array.from(new Set(units.map(unit => unit.booklet.id))),
-          this.buildLogAnomalyThresholds({})
+          this.buildLogAnomalyThresholds({}),
+          exclusions
         ) :
         new Map<number, LogAnomalySummary[]>();
 

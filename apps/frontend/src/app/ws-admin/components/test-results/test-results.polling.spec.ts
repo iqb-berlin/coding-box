@@ -25,6 +25,7 @@ import { ValidationTaskStateService } from '../../../shared/services/validation/
 import { UnitsReplayService } from '../../../replay/services/units-replay.service';
 import { TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
 import { SERVER_URL } from '../../../injection-tokens';
+import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 
 describe('TestResultsComponent Polling', () => {
   let fixture: ComponentFixture<TestResultsComponent>;
@@ -71,6 +72,12 @@ describe('TestResultsComponent Polling', () => {
         { provide: CodingStatisticsService, useValue: { getCodingStatistics: jest.fn().mockReturnValue(of({})) } },
         { provide: VariableAnalysisService, useValue: { getVariableAnalysis: jest.fn().mockReturnValue(of([])) } },
         { provide: AppService, useValue: { selectedWorkspaceId: 1, loggedUser: { sub: 'user' } } },
+        {
+          provide: WorkspaceSettingsService,
+          useValue: {
+            getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false))
+          }
+        },
         {
           provide: TestResultService,
           useValue: {

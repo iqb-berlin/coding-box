@@ -61,7 +61,6 @@ import {
   TestResultsFlatTableSettingsDialogComponent,
   TestResultsFlatTableSettingsDialogResult
 } from './test-results-flat-table-settings-dialog.component';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 
 interface FlatResponseRow {
   bookletId: number;
@@ -148,6 +147,7 @@ type FlatTableMediaFilter =
   | 'longLoading'
   | 'processingDuration'
   | 'unitProgressComplete'
+  | 'logAny'
   | 'logCritical'
   | 'logTechnical'
   | 'logIncomplete'
@@ -156,6 +156,17 @@ type FlatTableMediaFilter =
   | 'logFocus'
   | 'logDebug'
   | 'logReloads';
+
+const SPECIFIC_LOG_MEDIA_FILTERS: FlatTableMediaFilter[] = [
+  'logCritical',
+  'logTechnical',
+  'logIncomplete',
+  'logConnectionLost',
+  'logTimer',
+  'logFocus',
+  'logDebug',
+  'logReloads'
+];
 
 @Component({
   selector: 'coding-box-test-results-flat-table',
@@ -185,7 +196,6 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   private responseService = inject(ResponseService);
   private appService = inject(AppService);
   private testResultService = inject(TestResultService);
-  private workspaceSettingsService = inject(WorkspaceSettingsService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
 
@@ -248,7 +258,6 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
   flatDisplayedColumns: string[] = [...this.baseFlatDisplayedColumns];
   showLogAnomaliesInTable = false;
-  private workspaceShowLogAnomaliesInTable = false;
   private logAnomalyTableSettingLoaded = false;
   private tableInitialized = false;
   private flatResponsesRequestSequence = 0;
@@ -265,24 +274,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   flatPageIndex: number = 0;
   isLoadingFlat: boolean = false;
 
-  flatFilters: FlatResponseFilters = {
-    code: '',
-    group: '',
-    login: '',
-    booklet: '',
-    unit: '',
-    response: '',
-    responseStatus: '',
-    responseValue: '',
-    tags: '',
-    geogebra: false,
-    audioLow: false,
-    nonEmptyResponse: false,
-    sessionFilter: false,
-    shortProcessing: false,
-    longLoading: false,
-    logAnomalies: ''
-  };
+  flatFilters: FlatResponseFilters = this.createDefaultFlatFilters();
 
   mediaFilters: FlatTableMediaFilter[] = [];
 
@@ -337,6 +329,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   private suppressNextFlatFilterChange = false;
 
   @Input() initialFilters: Partial<FlatResponseFilters> | null = null;
+  @Input() showWorkspaceLogAnomalies = false;
   @Input() forceShowLogAnomalies = false;
   @Output() responseDeleted = new EventEmitter<void>();
 
@@ -482,39 +475,56 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   ngOnInit(): void {
     this.tableInitialized = true;
     this.fetchFlatResponseFilterOptions();
-    this.loadLogAnomalyTableSetting();
+    this.logAnomalyTableSettingLoaded = true;
+    this.updateLogAnomalyTableVisibility();
+    this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
     this.syncMediaFiltersFromFlatFilters();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     let shouldFetch = false;
 
-    if (changes.forceShowLogAnomalies) {
+    if (changes.showWorkspaceLogAnomalies || changes.forceShowLogAnomalies) {
       shouldFetch = this.updateLogAnomalyTableVisibility() || shouldFetch;
     }
 
-    if (changes.initialFilters && this.initialFilters) {
-      const hasFilterValues = Object.values(this.initialFilters).some(value => {
-        if (typeof value === 'boolean') {
-          return value;
-        }
-        return String(value || '').trim() !== '';
-      });
-
-      if (hasFilterValues) {
-        this.flatFilters = {
-          ...this.flatFilters,
-          ...this.initialFilters
-        };
-        this.flatPageIndex = 0;
-        this.syncMediaFiltersFromFlatFilters();
-        shouldFetch = true;
-      }
+    if (changes.initialFilters) {
+      this.flatFilters = {
+        ...this.createDefaultFlatFilters(),
+        ...(this.initialFilters || {})
+      };
+      this.processingDurationEnabled = false;
+      this.processingDurationsFilters = [];
+      this.unitProgressFilters = [];
+      this.flatPageIndex = 0;
+      this.syncMediaFiltersFromFlatFilters();
+      shouldFetch = true;
     }
 
     if (shouldFetch && this.tableInitialized && this.logAnomalyTableSettingLoaded) {
       this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
     }
+  }
+
+  private createDefaultFlatFilters(): FlatResponseFilters {
+    return {
+      code: '',
+      group: '',
+      login: '',
+      booklet: '',
+      unit: '',
+      response: '',
+      responseStatus: '',
+      responseValue: '',
+      tags: '',
+      geogebra: false,
+      audioLow: false,
+      nonEmptyResponse: false,
+      sessionFilter: false,
+      shortProcessing: false,
+      longLoading: false,
+      logAnomalies: ''
+    };
   }
 
   private syncMediaFiltersFromFlatFilters(): void {
@@ -549,6 +559,9 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         .map(v => v.trim())
         .filter(Boolean)
     );
+    if (selectedAnomalyGroups.has('any') || selectedAnomalyGroups.has('all')) {
+      next.push('logAny');
+    }
     if (selectedAnomalyGroups.has('critical')) {
       next.push('logCritical');
     }
@@ -581,6 +594,13 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
   onMediaFiltersChanged(): void {
     const selected = new Set(this.mediaFilters || []);
+    if (selected.has('logAny')) {
+      SPECIFIC_LOG_MEDIA_FILTERS.forEach(filter => selected.delete(filter));
+      this.mediaFilters = (this.mediaFilters || []).filter(filter => (
+        selected.has(filter)
+      ));
+    }
+
     this.flatFilters.geogebra = selected.has('geogebra');
     this.flatFilters.audioLow = selected.has('audioLow');
     this.flatFilters.nonEmptyResponse = selected.has('nonEmptyResponse');
@@ -601,29 +621,33 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     }
 
     const anomalyGroups: string[] = [];
-    if (selected.has('logCritical')) {
-      anomalyGroups.push('critical');
-    }
-    if (selected.has('logTechnical')) {
-      anomalyGroups.push('technical');
-    }
-    if (selected.has('logIncomplete')) {
-      anomalyGroups.push('incomplete');
-    }
-    if (selected.has('logConnectionLost')) {
-      anomalyGroups.push('connection_lost');
-    }
-    if (selected.has('logTimer')) {
-      anomalyGroups.push('timer');
-    }
-    if (selected.has('logFocus')) {
-      anomalyGroups.push('focus');
-    }
-    if (selected.has('logDebug')) {
-      anomalyGroups.push('debug');
-    }
-    if (selected.has('logReloads')) {
-      anomalyGroups.push('reloads');
+    if (selected.has('logAny')) {
+      anomalyGroups.push('any');
+    } else {
+      if (selected.has('logCritical')) {
+        anomalyGroups.push('critical');
+      }
+      if (selected.has('logTechnical')) {
+        anomalyGroups.push('technical');
+      }
+      if (selected.has('logIncomplete')) {
+        anomalyGroups.push('incomplete');
+      }
+      if (selected.has('logConnectionLost')) {
+        anomalyGroups.push('connection_lost');
+      }
+      if (selected.has('logTimer')) {
+        anomalyGroups.push('timer');
+      }
+      if (selected.has('logFocus')) {
+        anomalyGroups.push('focus');
+      }
+      if (selected.has('logDebug')) {
+        anomalyGroups.push('debug');
+      }
+      if (selected.has('logReloads')) {
+        anomalyGroups.push('reloads');
+      }
     }
     this.flatFilters.logAnomalies = anomalyGroups.join(',');
 
@@ -1107,24 +1131,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   }
 
   clearFlatFilters(): void {
-    this.flatFilters = {
-      code: '',
-      group: '',
-      login: '',
-      booklet: '',
-      unit: '',
-      response: '',
-      responseStatus: '',
-      responseValue: '',
-      tags: '',
-      geogebra: false,
-      audioLow: false,
-      nonEmptyResponse: false,
-      sessionFilter: false,
-      shortProcessing: false,
-      longLoading: false,
-      logAnomalies: ''
-    };
+    this.flatFilters = this.createDefaultFlatFilters();
     this.syncMediaFiltersFromFlatFilters();
 
     this.processingDurationEnabled = false;
@@ -1371,28 +1378,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       });
   }
 
-  private loadLogAnomalyTableSetting(): void {
-    if (!this.appService.selectedWorkspaceId) {
-      this.workspaceShowLogAnomaliesInTable = false;
-      this.logAnomalyTableSettingLoaded = true;
-      this.updateLogAnomalyTableVisibility();
-      return;
-    }
-
-    this.workspaceSettingsService
-      .getShowTestResultsLogAnomalies(this.appService.selectedWorkspaceId)
-      .subscribe(enabled => {
-        this.workspaceShowLogAnomaliesInTable = enabled;
-        this.logAnomalyTableSettingLoaded = true;
-        this.updateLogAnomalyTableVisibility();
-        this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
-      });
-  }
-
   private updateLogAnomalyTableVisibility(): boolean {
-    return this.setShowLogAnomaliesInTable(
-      this.workspaceShowLogAnomaliesInTable || this.forceShowLogAnomalies
-    );
+    return this.setShowLogAnomaliesInTable(this.showWorkspaceLogAnomalies);
   }
 
   private setShowLogAnomaliesInTable(enabled: boolean): boolean {

@@ -112,7 +112,7 @@ export class WorkspaceSettingsService {
       workspaceId,
       'show-test-results-log-anomalies',
       value,
-      'Controls whether log anomalies are shown as a column in the test results table'
+      'Controls whether log anomaly information is shown on the test results page'
     );
   }
 
