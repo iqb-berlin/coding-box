@@ -208,6 +208,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private thresholdChangeSubject = new Subject<number>();
 
+  private matchingFlagChangeSubject = new Subject<ResponseMatchingFlag[]>();
+
   private statisticsRefreshSubject = new Subject<void>();
 
   codingProgressOverview: CodingProgressOverview | null = null;
@@ -374,6 +376,36 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               }
             });
         }
+      });
+
+    this.matchingFlagChangeSubject
+      .pipe(
+        debounceTime(500),
+        distinctUntilChanged((previous, current) => this.areMatchingFlagsEqual(previous, current)),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((flags: ResponseMatchingFlag[]) => {
+        const workspaceId = this.appService.selectedWorkspaceId;
+        if (!workspaceId) {
+          return;
+        }
+
+        this.isLoadingMatchingMode = true;
+        this.saveResponseMatchingMode(flags)
+          .pipe(
+            finalize(() => {
+              this.isLoadingMatchingMode = false;
+            }),
+            takeUntil(this.destroy$)
+          )
+          .subscribe({
+            next: () => {
+              this.onResponseMatchingModeChanged();
+            },
+            error: () => {
+              // Error handling is done in saveResponseMatchingMode.
+            }
+          });
       });
 
     this.testPersonCodingService.autoCodingCompleted$
@@ -1577,8 +1609,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.codingFreshnessWarnings.every(item => item.version === 'v3');
   }
 
-  private refreshAggregationDependentViews(): void {
-    this.loadResponseAnalysis();
+  private refreshAggregationDependentViews(includeResponseAnalysis = true): void {
+    if (includeResponseAnalysis) {
+      this.loadResponseAnalysis();
+    }
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
     this.loadCodingProgressOverview();
@@ -2261,9 +2295,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.isLoadingResponseAnalysis = true;
-    this.isLoadingMatchingMode = true;
-
     let newFlags: ResponseMatchingFlag[];
 
     if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
@@ -2283,22 +2314,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       }
     }
 
-    this.saveResponseMatchingMode(newFlags)
-      .pipe(
-        finalize(() => {
-          this.isLoadingMatchingMode = false;
-          this.isLoadingResponseAnalysis = false;
-        }),
-        takeUntil(this.destroy$)
-      )
-      .subscribe({
-        next: () => {
-          this.onResponseMatchingModeChanged();
-        },
-        error: () => {
-          // Error handling is mostly done in the individual methods (toasts)
-        }
-      });
+    this.responseMatchingFlags = newFlags;
+    this.emptyPageIndex = 0;
+    this.duplicatePageIndex = 0;
+    this.matchingFlagChangeSubject.next(newFlags);
   }
 
   private saveResponseMatchingMode(flags: ResponseMatchingFlag[]): Observable<void> {
@@ -2349,7 +2368,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private onResponseMatchingModeChanged(): void {
     this.restartAnalysis();
-    this.refreshAggregationDependentViews();
+    this.refreshAggregationDependentViews(false);
+  }
+
+  private areMatchingFlagsEqual(
+    previous: ResponseMatchingFlag[],
+    current: ResponseMatchingFlag[]
+  ): boolean {
+    if (previous.length !== current.length) {
+      return false;
+    }
+    return previous.every(flag => current.includes(flag));
   }
 
   isMatchingOptionDisabled(flag: ResponseMatchingFlag): boolean {

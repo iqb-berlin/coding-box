@@ -613,7 +613,8 @@ export class WorkspaceCodingAnalysisController {
     await this.codingAnalysisService.startAnalysis(
       workspace_id,
       undefined,
-      threshold
+      threshold,
+      { forceRefresh: true }
     );
   }
 

@@ -54,9 +54,13 @@ describe('CodingAnalysisService aggregation settings', () => {
       invalidateCache: jest.fn().mockResolvedValue(undefined)
     };
     const cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
       deleteByPattern: jest.fn().mockResolvedValue(undefined)
     };
-    const jobQueueService = {};
+    const jobQueueService = {
+      getActiveCodingAnalysisJob: jest.fn().mockResolvedValue(null),
+      addCodingAnalysisJob: jest.fn().mockResolvedValue(undefined)
+    };
 
     const service = new CodingAnalysisService(
       responseRepository,
@@ -76,7 +80,8 @@ describe('CodingAnalysisService aggregation settings', () => {
       codingJobService,
       codingValidationService,
       codingStatisticsService,
-      cacheService
+      cacheService,
+      jobQueueService
     };
   }
 
@@ -126,5 +131,25 @@ describe('CodingAnalysisService aggregation settings', () => {
     expect(codingJobService.setResponseMatchingMode).toHaveBeenCalledWith(7, [
       ResponseMatchingFlag.NO_AGGREGATION
     ]);
+  });
+
+  it('clears the selected analysis cache before a forced restart', async () => {
+    const {
+      service,
+      cacheService,
+      jobQueueService
+    } = createService();
+
+    await service.startAnalysis(7, [ResponseMatchingFlag.IGNORE_CASE], 4, {
+      forceRefresh: true
+    });
+
+    expect(cacheService.delete).toHaveBeenCalledWith('response-analysis:7_IGNORE_CASE_t4');
+    expect(jobQueueService.addCodingAnalysisJob).toHaveBeenCalledWith({
+      workspaceId: 7,
+      matchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
+      threshold: 4,
+      cacheKey: 'response-analysis:7_IGNORE_CASE_t4'
+    });
   });
 });

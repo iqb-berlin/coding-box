@@ -2,7 +2,6 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
-import { CacheService } from '../../../cache/cache.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
@@ -14,6 +13,7 @@ import {
 } from './coding-progress-key.util';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { CodingValidationService } from './coding-validation.service';
 
 export interface ApplyCodingResultsOptions {
   overwriteExisting?: boolean;
@@ -36,9 +36,9 @@ export class CodingResultsService {
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    private cacheService: CacheService,
     private codingStatisticsService: CodingStatisticsService,
     private codingJobService: CodingJobService,
+    private codingValidationService: CodingValidationService,
     private codingAnalysisService: CodingAnalysisService,
     @Optional()
     private codingFreshnessService?: CodingFreshnessService
@@ -529,8 +529,7 @@ export class CodingResultsService {
   }
 
   private async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
-    const cacheKey = `coding_incomplete_variables_v3:${workspaceId}`;
-    await this.cacheService.delete(cacheKey);
+    await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
     this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }
 

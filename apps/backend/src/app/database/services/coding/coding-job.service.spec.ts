@@ -775,7 +775,7 @@ describe('CodingJobService', () => {
       job_definition_id: 42
     }));
     expect(codingJobRepository.create.mock.calls[0][0]).not.toHaveProperty('job_definition_id');
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v3:7');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v4:7');
   });
 
   it('loads one coding job and expands bundle variables', async () => {
