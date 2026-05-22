@@ -85,6 +85,7 @@ export interface CodingAnalysisJobData {
   matchingFlags: string[]; // passed as string array, converted in processor if needed or kept as is
   threshold: number;
   cacheKey: string;
+  runId?: string;
 }
 
 export interface VariableAnalysisJobData {

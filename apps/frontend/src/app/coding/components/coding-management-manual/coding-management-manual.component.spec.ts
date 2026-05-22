@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Observable, of } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
@@ -142,6 +142,38 @@ describe('CodingManagementManualComponent', () => {
     expect(refreshSpy).toHaveBeenCalledWith(false);
 
     jest.useRealTimers();
+  });
+
+  it('rolls response matching flags back when saving fails', () => {
+    jest.useFakeTimers();
+    try {
+      const componentInternals = component as unknown as {
+        appService: { selectedWorkspaceId: number };
+        persistedResponseMatchingFlags: ResponseMatchingFlag[];
+        testPersonCodingService: {
+          saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
+        };
+      };
+      const appService = componentInternals.appService;
+      const testPersonCodingService = componentInternals.testPersonCodingService;
+
+      appService.selectedWorkspaceId = 5;
+      component.responseMatchingFlags = [ResponseMatchingFlag.NO_AGGREGATION];
+      componentInternals.persistedResponseMatchingFlags = [ResponseMatchingFlag.NO_AGGREGATION];
+
+      jest.spyOn(testPersonCodingService, 'saveAggregationSettings')
+        .mockReturnValue(throwError(() => new Error('save failed')));
+
+      component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
+
+      expect(component.responseMatchingFlags).toEqual([ResponseMatchingFlag.IGNORE_CASE]);
+
+      jest.advanceTimersByTime(500);
+
+      expect(component.responseMatchingFlags).toEqual([ResponseMatchingFlag.NO_AGGREGATION]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should not block preparation for duplicates when aggregation is active', () => {

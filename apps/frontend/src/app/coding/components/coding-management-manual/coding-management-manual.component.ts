@@ -172,6 +172,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   // Response matching mode configuration
   responseMatchingFlags: ResponseMatchingFlag[] = [];
+  private persistedResponseMatchingFlags: ResponseMatchingFlag[] = [];
   isLoadingMatchingMode = false;
   isSavingMatchingMode = false;
   ResponseMatchingFlag = ResponseMatchingFlag; // Expose enum to template
@@ -368,6 +369,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
                   return;
                 }
                 this.responseMatchingFlags = result.flags;
+                this.persistedResponseMatchingFlags = [...result.flags];
                 this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(result.threshold);
                 this.refreshAggregationDependentViews();
               },
@@ -1647,12 +1649,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe({
         next: settings => {
           this.responseMatchingFlags = settings.flags;
+          this.persistedResponseMatchingFlags = [...settings.flags];
           this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(settings.threshold);
           this.refreshAllStatistics();
           this.loadResponseAnalysis();
         },
         error: () => {
           this.responseMatchingFlags = [];
+          this.persistedResponseMatchingFlags = [];
           this.duplicateAggregationThreshold = 2;
           this.refreshAllStatistics();
           this.loadResponseAnalysis();
@@ -2251,11 +2255,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe({
         next: settings => {
           this.responseMatchingFlags = settings.flags;
+          this.persistedResponseMatchingFlags = [...settings.flags];
           this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(settings.threshold);
           this.isLoadingMatchingMode = false;
         },
         error: () => {
           this.responseMatchingFlags = [];
+          this.persistedResponseMatchingFlags = [];
           this.isLoadingMatchingMode = false;
         }
       });
@@ -2275,6 +2281,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe({
         next: settings => {
           this.responseMatchingFlags = settings.flags;
+          this.persistedResponseMatchingFlags = [...settings.flags];
           this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(settings.threshold);
           this.loadResponseAnalysis();
         },
@@ -2326,6 +2333,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return of(undefined);
     }
 
+    const rollbackFlags = [...this.persistedResponseMatchingFlags];
     this.isSavingMatchingMode = true;
     return this.testPersonCodingService
       .saveAggregationSettings(
@@ -2343,6 +2351,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         tap({
           next: result => {
             this.responseMatchingFlags = result.flags;
+            this.persistedResponseMatchingFlags = [...result.flags];
             this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(result.threshold);
             this.showSuccess(
               this.translateService.instant(
@@ -2351,6 +2360,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
+            this.responseMatchingFlags = rollbackFlags;
             this.isSavingMatchingMode = false;
             this.showError(
               this.translateService.instant(
