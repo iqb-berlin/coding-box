@@ -16,7 +16,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import {
   Subject, takeUntil, debounceTime, finalize, Observable, of, tap,
-  distinctUntilChanged,
+  distinctUntilChanged, filter,
   firstValueFrom,
   map
 } from 'rxjs';
@@ -383,7 +383,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.matchingFlagChangeSubject
       .pipe(
         debounceTime(500),
-        distinctUntilChanged((previous, current) => this.areMatchingFlagsEqual(previous, current)),
+        filter(flags => !this.areMatchingFlagsEqual(flags, this.persistedResponseMatchingFlags)),
         takeUntil(this.destroy$)
       )
       .subscribe((flags: ResponseMatchingFlag[]) => {
