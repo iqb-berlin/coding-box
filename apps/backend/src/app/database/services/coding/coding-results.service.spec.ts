@@ -148,6 +148,7 @@ describe('CodingResultsService', () => {
       { codingJobId: 10, manager: queryRunner.manager }
     );
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
+    expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
   });
 
   it('rolls back response updates when manual freshness cannot be finalized', async () => {
@@ -161,6 +162,7 @@ describe('CodingResultsService', () => {
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
     expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
     expect(codingStatisticsService.invalidateCache).not.toHaveBeenCalled();
+    expect(codingAnalysisService.invalidateCache).not.toHaveBeenCalled();
   });
 
   it('blocks applying a completed coding job when its source freshness is stale', async () => {
@@ -323,6 +325,7 @@ describe('CodingResultsService', () => {
       queryRunner.manager
     );
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
+    expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
   });
 
   it('does not propagate matching sibling responses when aggregation is disabled', async () => {
