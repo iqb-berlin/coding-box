@@ -245,6 +245,7 @@ describe('CodingReviewService', () => {
       where: { response_id: expect.any(Object) },
       relations: [
         'coding_job',
+        'coding_job.training',
         'coding_job.codingJobCoders',
         'coding_job.codingJobCoders.user',
         'response',

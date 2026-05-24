@@ -1193,6 +1193,36 @@ export class TestPersonCodingService {
       );
   }
 
+  exportCohensKappaStatisticsAsCsv(
+    workspaceId: number,
+    weightedMean: boolean = true,
+    excludeTrainings: boolean = true,
+    unitName?: string,
+    variableId?: string
+  ): Observable<Blob> {
+    let params = new HttpParams()
+      .set('weightedMean', weightedMean.toString())
+      .set('excludeTrainings', excludeTrainings.toString());
+
+    if (unitName) {
+      params = params.set('unitName', unitName);
+    }
+    if (variableId) {
+      params = params.set('variableId', variableId);
+    }
+
+    return this.http
+      .get(
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/export/csv`,
+        {
+          headers: this.authHeader,
+          params,
+          responseType: 'blob',
+          context: suppressGlobalHttpErrorContext()
+        }
+      );
+  }
+
   getWorkspaceCohensKappaSummary(
     workspaceId: number,
     weightedMean: boolean = true,

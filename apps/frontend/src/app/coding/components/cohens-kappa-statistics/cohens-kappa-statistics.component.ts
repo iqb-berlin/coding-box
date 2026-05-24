@@ -9,8 +9,10 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { finalize } from 'rxjs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
 
@@ -45,6 +47,7 @@ interface KappaStatistics {
     MatDialogModule,
     MatTooltipModule,
     MatSlideToggleModule,
+    MatSnackBarModule,
     FormsModule,
     TranslateModule
   ]
@@ -53,6 +56,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
   private testPersonCodingService = inject(TestPersonCodingService);
   private appService: AppService = inject(AppService);
   private translateService = inject(TranslateService);
+  private snackBar = inject(MatSnackBar);
 
   constructor(
     @Optional() public dialogRef: MatDialogRef<CohensKappaStatisticsComponent>,
@@ -64,6 +68,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
   showInterpretationScale = false;
   useWeightedMean = true; // Default to weighted mean (matching R reference implementation)
   excludeTrainings = true; // Default: exclude trainings
+  isExporting = false;
 
   workspaceKappaSummary: {
     coderPairs: Array<{
@@ -139,6 +144,47 @@ export class CohensKappaStatisticsComponent implements OnInit {
   toggleExcludeTrainings(): void {
     this.loadWorkspaceKappaSummary();
     this.loadKappaStatistics();
+  }
+
+  exportKappaDetails(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId || this.isExporting || this.kappaStatistics.length === 0) {
+      return;
+    }
+
+    this.isExporting = true;
+    this.testPersonCodingService
+      .exportCohensKappaStatisticsAsCsv(workspaceId, this.useWeightedMean, this.excludeTrainings)
+      .pipe(finalize(() => {
+        this.isExporting = false;
+      }))
+      .subscribe({
+        next: blob => {
+          this.saveBlob(blob, `cohens-kappa-details-${this.getDateString()}.csv`);
+        },
+        error: () => {
+          this.snackBar.open(
+            'Kappa-Details konnten nicht exportiert werden.',
+            'Schließen',
+            { duration: 5000, panelClass: ['error-snackbar'] }
+          );
+        }
+      });
+  }
+
+  private saveBlob(blob: Blob, filename: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
+  private getDateString(): string {
+    return new Date().toISOString().slice(0, 10);
   }
 
   getKappaClass(kappa: number | null): string {

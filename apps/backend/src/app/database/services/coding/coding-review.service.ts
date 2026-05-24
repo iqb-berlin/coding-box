@@ -55,6 +55,9 @@ export class CodingReviewService {
           coderName: string;
           jobId: number;
           jobName: string;
+          jobDefinitionId: number | null;
+          trainingId: number | null;
+          trainingLabel: string | null;
           code: number | null;
           score: number | null;
           notes: string | null;
@@ -217,6 +220,7 @@ export class CodingReviewService {
 
       const relations = includeRelations ? [
         'coding_job',
+        'coding_job.training',
         'coding_job.codingJobCoders',
         'coding_job.codingJobCoders.user',
         'response',
@@ -225,6 +229,7 @@ export class CodingReviewService {
         'response.unit.booklet.person'
       ] : [
         'coding_job',
+        'coding_job.training',
         'coding_job.codingJobCoders',
         'coding_job.codingJobCoders.user'
       ];
@@ -276,6 +281,9 @@ export class CodingReviewService {
           coderName: string;
           jobId: number;
           jobName: string;
+          jobDefinitionId: number | null;
+          trainingId: number | null;
+          trainingLabel: string | null;
           code: number | null;
           score: number | null;
           notes: string | null;
@@ -312,6 +320,9 @@ export class CodingReviewService {
             coderName: coder.user?.username || `Coder ${coder.user_id}`,
             jobId: unit.coding_job_id,
             jobName: unit.coding_job?.name || '',
+            jobDefinitionId: unit.coding_job?.job_definition_id ?? null,
+            trainingId: unit.coding_job?.training_id ?? null,
+            trainingLabel: unit.coding_job?.training?.label ?? null,
             code: unit.code,
             score: unit.score,
             notes: unit.notes,

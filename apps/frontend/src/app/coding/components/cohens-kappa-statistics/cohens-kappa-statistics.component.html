@@ -103,6 +103,15 @@
             Kodierer-Paaren.</mat-card-subtitle>
         </mat-card-header>
 
+        <div class="kappa-detail-actions">
+          <button mat-stroked-button color="primary" (click)="exportKappaDetails()"
+            [disabled]="isExporting || isLoading || kappaStatistics.length === 0"
+            matTooltip="Kappa-Details als CSV exportieren">
+            <mat-icon>{{ isExporting ? 'hourglass_empty' : 'download' }}</mat-icon>
+            <span>{{ isExporting ? 'Export läuft...' : 'CSV exportieren' }}</span>
+          </button>
+        </div>
+
         <!-- Collapsible Interpretation Scale -->
         <div class="interpretation-scale-container">
           <button mat-button class="scale-toggle-btn" (click)="toggleInterpretationScale()"
