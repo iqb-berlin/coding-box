@@ -1114,6 +1114,7 @@ export class TestPersonCodingService {
       variables: Array<{
         unitName: string;
         variableId: string;
+        meanKappa: number | null;
         coderPairs: Array<{
           coder1Id: number;
           coder1Name: string;
@@ -1132,6 +1133,7 @@ export class TestPersonCodingService {
         averageKappa: number | null;
         variablesIncluded: number;
         codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
       };
     }> {
     let params = new HttpParams();
@@ -1151,6 +1153,7 @@ export class TestPersonCodingService {
       variables: Array<{
         unitName: string;
         variableId: string;
+        meanKappa: number | null;
         coderPairs: Array<{
           coder1Id: number;
           coder1Name: string;

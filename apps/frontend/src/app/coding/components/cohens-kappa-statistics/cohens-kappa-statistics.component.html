@@ -158,7 +158,17 @@
             <div class="kappa-results">
               @for (stat of kappaStatistics; track stat.unitName + stat.variableId) {
               <div class="kappa-unit-variable">
-                <h4>{{ stat.unitName }} - {{ stat.variableId }}</h4>
+                <div class="kappa-variable-header">
+                  <h4>{{ stat.unitName }} - {{ stat.variableId }}</h4>
+                  <div class="variable-mean-kappa"
+                    matTooltip="Gewichtet: Mittelwert der paarweisen Kappa-Werte nach gültigen Paaren. Ungewichtet: arithmetischer Mittelwert der gültigen Kappa-Werte."
+                    matTooltipPosition="left">
+                    <span class="label">Mittleres Kappa:</span>
+                    <span class="value" [ngClass]="getKappaClass(stat.meanKappa)">
+                      {{ stat.meanKappa !== null ? (stat.meanKappa | number:'1.3-3') : 'N/A' }}
+                    </span>
+                  </div>
+                </div>
                 <div class="kappa-pairs">
                   @for (pair of stat.coderPairs; track pair.coder1Id + '-' + pair.coder2Id) {
                   <div class="kappa-pair">
@@ -170,13 +180,17 @@
                     <div class="kappa-values">
                       <div class="kappa-value">
                         <span class="label">Kappa:</span>
-                        <span class="value" [class]="getKappaClass(pair.kappa)">
+                        <span class="value" [ngClass]="getKappaClass(pair.kappa)">
                           {{ pair.kappa !== null ? (pair.kappa | number:'1.3-3') : 'N/A' }}
                         </span>
                       </div>
                       <div class="agreement-value">
                         <span class="label">Übereinstimmung:</span>
                         <span class="value">{{ (pair.agreement * 100) | number:'1.1-1' }}%</span>
+                      </div>
+                      <div class="valid-pairs-value">
+                        <span class="label">Gültige Paare:</span>
+                        <span class="value">{{ pair.validPairs }} / {{ pair.totalItems }}</span>
                       </div>
                       <div class="interpretation">
                         <span class="interpretation-text">{{ getTranslatedInterpretation(pair.interpretation) }}</span>

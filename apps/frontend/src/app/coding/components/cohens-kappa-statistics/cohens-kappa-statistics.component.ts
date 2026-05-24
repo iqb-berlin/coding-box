@@ -17,6 +17,7 @@ import { AppService } from '../../../core/services/app.service';
 interface KappaStatistics {
   unitName: string;
   variableId: string;
+  meanKappa: number | null;
   coderPairs: Array<{
     coder1Id: number;
     coder1Name: string;

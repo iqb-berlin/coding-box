@@ -584,6 +584,58 @@ describe('TestPersonCodingService', () => {
     });
   });
 
+  describe('getCohensKappaStatistics', () => {
+    it('should request detailed kappa statistics with filters and return variable mean kappa', () => {
+      const mockResponse = {
+        variables: [
+          {
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            meanKappa: 0.667,
+            coderPairs: [
+              {
+                coder1Id: 1,
+                coder1Name: 'Coder 1',
+                coder2Id: 2,
+                coder2Name: 'Coder 2',
+                kappa: 0.667,
+                agreement: 0.8,
+                totalItems: 10,
+                validPairs: 8,
+                interpretation: 'kappa.substantial'
+              }
+            ]
+          }
+        ],
+        workspaceSummary: {
+          totalDoubleCodedResponses: 10,
+          totalCoderPairs: 1,
+          averageKappa: 0.667,
+          variablesIncluded: 1,
+          codersIncluded: 2,
+          weightingMethod: 'weighted' as const
+        }
+      };
+
+      service
+        .getCohensKappaStatistics(mockWorkspaceId, true, false, 'UNIT', 'VAR')
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+          expect(response.variables[0].meanKappa).toBe(0.667);
+        });
+
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa` &&
+        request.params.get('weightedMean') === 'true' &&
+        request.params.get('excludeTrainings') === 'false' &&
+        request.params.get('unitName') === 'UNIT' &&
+        request.params.get('variableId') === 'VAR'
+      ));
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+    });
+  });
+
   describe('coding freshness', () => {
     it('should request autocoding readiness with run and force-refresh params', () => {
       const mockResponse = {

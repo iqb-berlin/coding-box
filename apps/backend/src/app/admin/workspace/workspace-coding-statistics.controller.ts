@@ -90,6 +90,11 @@ type DistributedCodingJobsResponse = DistributionCalculationResponse & {
   }>;
 };
 
+type KappaMeanInput = {
+  kappa: number | null;
+  validPairs: number;
+};
+
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingStatisticsController {
@@ -105,6 +110,41 @@ export class WorkspaceCodingStatisticsController {
     private codingReadinessService: CodingReadinessService,
     private jobQueueService: JobQueueService
   ) { }
+
+  private calculateMeanKappa(
+    kappaResults: KappaMeanInput[],
+    weightedMean: boolean
+  ): number | null {
+    if (weightedMean) {
+      let totalWeightedKappa = 0;
+      let totalWeight = 0;
+
+      for (const result of kappaResults) {
+        if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+          totalWeightedKappa += result.kappa * result.validPairs;
+          totalWeight += result.validPairs;
+        }
+      }
+
+      return totalWeight > 0 ?
+        Math.round((totalWeightedKappa / totalWeight) * 1000) / 1000 :
+        null;
+    }
+
+    let totalKappa = 0;
+    let validKappaCount = 0;
+
+    for (const result of kappaResults) {
+      if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+        totalKappa += result.kappa;
+        validKappaCount += 1;
+      }
+    }
+
+    return validKappaCount > 0 ?
+      Math.round((totalKappa / validKappaCount) * 1000) / 1000 :
+      null;
+  }
 
   @Get(':workspace_id/coding/statistics')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -866,6 +906,11 @@ export class WorkspaceCodingStatisticsController {
             properties: {
               unitName: { type: 'string', description: 'Name of the unit' },
               variableId: { type: 'string', description: 'Variable ID' },
+              meanKappa: {
+                type: 'number',
+                nullable: true,
+                description: "Mean Cohen's Kappa for this variable, using the selected weighting method"
+              },
               coderPairs: {
                 type: 'array',
                 items: {
@@ -914,6 +959,7 @@ export class WorkspaceCodingStatisticsController {
         variables: Array<{
           unitName: string;
           variableId: string;
+          meanKappa: number | null;
           coderPairs: Array<{
             coder1Id: number;
             coder1Name: string;
@@ -942,6 +988,7 @@ export class WorkspaceCodingStatisticsController {
       );
 
       // Get all double-coded data
+      const useWeightedMean = weightedMean !== 'false'; // Default true
       const isExcludeTrainings = excludeTrainings !== 'false'; // Default true
       const allDoubleCodedItems = [];
       let currentPage = 1;
@@ -1006,7 +1053,7 @@ export class WorkspaceCodingStatisticsController {
       });
 
       const variables = [];
-      const allKappaResults: Array<{ kappa: number | null }> = [];
+      const allKappaResults: KappaMeanInput[] = [];
       const uniqueVariables = new Set<string>();
       const uniqueCoders = new Set<number>();
 
@@ -1084,28 +1131,20 @@ export class WorkspaceCodingStatisticsController {
           variables.push({
             unitName: unitNameKey,
             variableId: variableIdKey,
+            meanKappa: this.calculateMeanKappa(kappaResults, useWeightedMean),
             coderPairs: kappaResults
           });
         }
       }
 
-      // Calculate workspace summary by averaging all collected kappa values
-      let totalKappa = 0;
       let validKappaCount = 0;
       allKappaResults.forEach(result => {
         if (result.kappa !== null && !Number.isNaN(result.kappa)) {
-          totalKappa += result.kappa;
           validKappaCount += 1;
         }
       });
 
-      // Calculate workspace summary - return 0 instead of null when no valid kappa values
-      const averageKappa =
-        validKappaCount > 0 ?
-          Math.round((totalKappa / validKappaCount) * 1000) / 1000 :
-          0;
-
-      const useWeightedMean = weightedMean !== 'false'; // Default true
+      const averageKappa = this.calculateMeanKappa(allKappaResults, useWeightedMean) ?? 0;
       const workspaceSummary = {
         totalDoubleCodedResponses: totalItemsData,
         totalCoderPairs: validKappaCount,
