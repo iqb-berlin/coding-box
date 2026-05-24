@@ -585,6 +585,9 @@ export class WorkspaceCodingService {
           coderName: string;
           jobId: number;
           jobName: string;
+          jobDefinitionId: number | null;
+          trainingId: number | null;
+          trainingLabel: string | null;
           code: number | null;
           score: number | null;
           notes: string | null;

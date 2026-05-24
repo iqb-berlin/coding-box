@@ -149,6 +149,19 @@
     .kappa-card {
       margin-bottom: 24px;
 
+      .kappa-detail-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding: 0 16px 12px;
+
+        button {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 148px;
+        }
+      }
+
       .kappa-info {
         p {
           margin-bottom: 16px;

@@ -267,4 +267,164 @@ describe('WorkspaceCodingStatisticsController', () => {
     expect(result.variables[0].meanKappa).toBe(0.75);
     expect(result.workspaceSummary.averageKappa).toBe(0.75);
   });
+
+  it('exports detailed kappa coder-pair statistics as CSV with filters and scope metadata', async () => {
+    codingReviewService.getDoubleCodedVariablesForReview.mockResolvedValue({
+      total: 1,
+      data: [{
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        personLogin: 'p1',
+        personCode: 'P1',
+        coderResults: [
+          {
+            coderId: 1,
+            coderName: 'Coder 1',
+            jobId: 11,
+            jobName: 'Coding Job A',
+            jobDefinitionId: 21,
+            trainingId: null,
+            trainingLabel: null,
+            code: 1,
+            score: null,
+            notes: null,
+            codedAt: new Date()
+          },
+          {
+            coderId: 2,
+            coderName: 'Coder 2',
+            jobId: 12,
+            jobName: 'Training Job B',
+            jobDefinitionId: null,
+            trainingId: 31,
+            trainingLabel: 'Training Alpha',
+            code: 1,
+            score: null,
+            notes: null,
+            codedAt: new Date()
+          }
+        ]
+      }]
+    });
+    codingStatisticsService.calculateCohensKappa.mockReturnValue([
+      {
+        coder1Id: 1,
+        coder1Name: 'Coder 1',
+        coder2Id: 2,
+        coder2Name: 'Coder 2',
+        kappa: 0.8,
+        agreement: 0.9,
+        totalItems: 10,
+        validPairs: 9,
+        interpretation: 'kappa.substantial'
+      }
+    ]);
+    const response = {
+      setHeader: jest.fn(),
+      send: jest.fn()
+    };
+
+    await controller.exportCohensKappaStatisticsAsCsv(
+      5,
+      'false',
+      'UNIT',
+      'VAR',
+      'false',
+      response as never
+    );
+
+    expect(codingReviewService.getDoubleCodedVariablesForReview)
+      .toHaveBeenCalledWith(5, 1, 1000, false, false);
+    expect(response.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'text/csv; charset=utf-8'
+    );
+    expect(response.setHeader).toHaveBeenCalledWith(
+      'Content-Disposition',
+      expect.stringContaining('cohens-kappa-details-5-')
+    );
+    const csv = response.send.mock.calls[0][0] as string;
+    expect(csv).toContain('Variable;Unit;Variablen-ID');
+    expect(csv).toContain('UNIT - VAR');
+    expect(csv).toContain('Job-Definitionen: 21; Trainings: Training Alpha');
+    expect(csv).toContain('Coding Job A, Training Job B');
+    expect(csv).toContain('ungewichteter Mittelwert');
+    expect(csv).toContain(';nein;');
+  });
+
+  it('sanitizes formula-like text values in the detailed kappa CSV export', async () => {
+    codingReviewService.getDoubleCodedVariablesForReview.mockResolvedValue({
+      total: 1,
+      data: [{
+        unitName: '=UNIT',
+        variableId: '+VAR',
+        personLogin: 'p1',
+        personCode: 'P1',
+        coderResults: [
+          {
+            coderId: 1,
+            coderName: '=Coder 1',
+            jobId: 11,
+            jobName: '@Coding Job',
+            jobDefinitionId: 21,
+            trainingId: null,
+            trainingLabel: null,
+            code: 1,
+            score: null,
+            notes: null,
+            codedAt: new Date()
+          },
+          {
+            coderId: 2,
+            coderName: '-Coder 2',
+            jobId: 12,
+            jobName: 'Training Job B',
+            jobDefinitionId: null,
+            trainingId: 31,
+            trainingLabel: '=Training Alpha',
+            code: 1,
+            score: null,
+            notes: null,
+            codedAt: new Date()
+          }
+        ]
+      }]
+    });
+    codingStatisticsService.calculateCohensKappa.mockReturnValue([
+      {
+        coder1Id: 1,
+        coder1Name: '=Coder 1',
+        coder2Id: 2,
+        coder2Name: '-Coder 2',
+        kappa: 0.8,
+        agreement: 0.9,
+        totalItems: 10,
+        validPairs: 9,
+        interpretation: 'kappa.substantial'
+      }
+    ]);
+    const response = {
+      setHeader: jest.fn(),
+      send: jest.fn()
+    };
+
+    await controller.exportCohensKappaStatisticsAsCsv(
+      5,
+      'true',
+      '=UNIT',
+      '+VAR',
+      'true',
+      response as never
+    );
+
+    const csv = response.send.mock.calls[0][0] as string;
+    expect(csv).toContain("'=UNIT - +VAR");
+    expect(csv).toContain(";'=UNIT;");
+    expect(csv).toContain(";'+VAR;");
+    expect(csv).toContain("'@Coding Job");
+    expect(csv).toContain("'=Training Alpha");
+    expect(csv).toContain(";'=Coder 1;");
+    expect(csv).toContain(";'-Coder 2;");
+    expect(csv).toContain(";'=UNIT;'+VAR;");
+  });
 });

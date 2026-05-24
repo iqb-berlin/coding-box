@@ -636,6 +636,51 @@ describe('TestPersonCodingService', () => {
     });
   });
 
+  describe('exportCohensKappaStatisticsAsCsv', () => {
+    it('should request kappa detail export as CSV with current options', () => {
+      const mockBlob = new Blob(['Variable;Kappa-Wert'], { type: 'text/csv' });
+
+      service
+        .exportCohensKappaStatisticsAsCsv(mockWorkspaceId, false, false, 'UNIT', 'VAR')
+        .subscribe(response => {
+          expect(response).toEqual(mockBlob);
+        });
+
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/csv` &&
+        request.params.get('weightedMean') === 'false' &&
+        request.params.get('excludeTrainings') === 'false' &&
+        request.params.get('unitName') === 'UNIT' &&
+        request.params.get('variableId') === 'VAR'
+      ));
+      expect(req.request.method).toBe('GET');
+      expect(req.request.responseType).toBe('blob');
+      req.flush(mockBlob);
+    });
+
+    it('should propagate errors when kappa detail export fails', () => {
+      let receivedError: unknown;
+
+      service.exportCohensKappaStatisticsAsCsv(mockWorkspaceId).subscribe({
+        next: () => {
+          throw new Error('Expected kappa CSV export to fail');
+        },
+        error: error => {
+          receivedError = error;
+        }
+      });
+
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/csv` &&
+        request.params.get('weightedMean') === 'true' &&
+        request.params.get('excludeTrainings') === 'true'
+      ));
+      req.error(new ProgressEvent('error'));
+
+      expect(receivedError).toBeTruthy();
+    });
+  });
+
   describe('coding freshness', () => {
     it('should request autocoding readiness with run and force-refresh params', () => {
       const mockResponse = {
