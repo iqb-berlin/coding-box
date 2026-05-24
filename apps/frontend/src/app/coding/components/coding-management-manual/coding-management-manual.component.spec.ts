@@ -4,9 +4,11 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { Observable, of, throwError } from 'rxjs';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
+import { ResponseMatchingFlag } from '../../../ws-admin/services/workspace-settings.service';
 
 type VariableCoverageOverview = NonNullable<CodingManagementManualComponent['variableCoverageOverview']>;
 type CaseCoverageOverview = NonNullable<CodingManagementManualComponent['caseCoverageOverview']>;
@@ -91,6 +93,136 @@ describe('CodingManagementManualComponent', () => {
 
     expect(component.hasDuplicateFindingsWithoutAggregation).toBe(true);
     expect(component.hasPreparationWarnings()).toBe(true);
+  });
+
+  it('debounces response matching changes into one analysis restart', () => {
+    jest.useFakeTimers();
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
+      };
+    };
+    const appService = componentInternals.appService;
+    const testPersonCodingService = componentInternals.testPersonCodingService;
+
+    appService.selectedWorkspaceId = 5;
+    component.duplicateAggregationThreshold = 2;
+
+    const saveSpy = jest.spyOn(testPersonCodingService, 'saveAggregationSettings')
+      .mockReturnValue(of({
+        success: true,
+        threshold: 2,
+        flags: [
+          ResponseMatchingFlag.IGNORE_CASE,
+          ResponseMatchingFlag.IGNORE_WHITESPACE
+        ],
+        aggregationActive: true,
+        revertedResponses: 0,
+        message: 'saved'
+      }));
+    const restartSpy = jest.spyOn(component, 'restartAnalysis')
+      .mockImplementation(() => undefined);
+    const refreshSpy = jest.spyOn(component as unknown as { refreshAggregationDependentViews: (includeResponseAnalysis?: boolean) => void }, 'refreshAggregationDependentViews')
+      .mockImplementation(() => undefined);
+
+    component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
+    component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE);
+
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(500);
+
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(saveSpy).toHaveBeenCalledWith(5, 2, [
+      ResponseMatchingFlag.IGNORE_CASE,
+      ResponseMatchingFlag.IGNORE_WHITESPACE
+    ]);
+    expect(restartSpy).toHaveBeenCalledTimes(1);
+    expect(refreshSpy).toHaveBeenCalledWith(false);
+
+    jest.useRealTimers();
+  });
+
+  it('rolls response matching flags back when saving fails', () => {
+    jest.useFakeTimers();
+    try {
+      const componentInternals = component as unknown as {
+        appService: { selectedWorkspaceId: number };
+        persistedResponseMatchingFlags: ResponseMatchingFlag[];
+        testPersonCodingService: {
+          saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
+        };
+      };
+      const appService = componentInternals.appService;
+      const testPersonCodingService = componentInternals.testPersonCodingService;
+
+      appService.selectedWorkspaceId = 5;
+      component.responseMatchingFlags = [ResponseMatchingFlag.NO_AGGREGATION];
+      componentInternals.persistedResponseMatchingFlags = [ResponseMatchingFlag.NO_AGGREGATION];
+
+      jest.spyOn(testPersonCodingService, 'saveAggregationSettings')
+        .mockReturnValue(throwError(() => new Error('save failed')));
+
+      component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
+
+      expect(component.responseMatchingFlags).toEqual([ResponseMatchingFlag.IGNORE_CASE]);
+
+      jest.advanceTimersByTime(500);
+
+      expect(component.responseMatchingFlags).toEqual([ResponseMatchingFlag.NO_AGGREGATION]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('allows retrying the same response matching flags after a failed save', () => {
+    jest.useFakeTimers();
+    try {
+      const componentInternals = component as unknown as {
+        appService: { selectedWorkspaceId: number };
+        persistedResponseMatchingFlags: ResponseMatchingFlag[];
+        testPersonCodingService: {
+          saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
+        };
+      };
+      const appService = componentInternals.appService;
+      const testPersonCodingService = componentInternals.testPersonCodingService;
+
+      appService.selectedWorkspaceId = 5;
+      component.duplicateAggregationThreshold = 2;
+      component.responseMatchingFlags = [ResponseMatchingFlag.NO_AGGREGATION];
+      componentInternals.persistedResponseMatchingFlags = [ResponseMatchingFlag.NO_AGGREGATION];
+
+      const saveSpy = jest.spyOn(testPersonCodingService, 'saveAggregationSettings')
+        .mockReturnValueOnce(throwError(() => new Error('save failed')))
+        .mockReturnValueOnce(of({
+          success: true,
+          threshold: 2,
+          flags: [ResponseMatchingFlag.IGNORE_CASE],
+          aggregationActive: true,
+          revertedResponses: 0,
+          message: 'saved'
+        }));
+      const restartSpy = jest.spyOn(component, 'restartAnalysis')
+        .mockImplementation(() => undefined);
+
+      component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
+      jest.advanceTimersByTime(500);
+
+      expect(saveSpy).toHaveBeenCalledTimes(1);
+      expect(component.responseMatchingFlags).toEqual([ResponseMatchingFlag.NO_AGGREGATION]);
+
+      component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
+      jest.advanceTimersByTime(500);
+
+      expect(saveSpy).toHaveBeenCalledTimes(2);
+      expect(saveSpy).toHaveBeenLastCalledWith(5, 2, [ResponseMatchingFlag.IGNORE_CASE]);
+      expect(component.responseMatchingFlags).toEqual([ResponseMatchingFlag.IGNORE_CASE]);
+      expect(restartSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should not block preparation for duplicates when aggregation is active', () => {

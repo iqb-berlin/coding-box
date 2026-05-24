@@ -24,6 +24,7 @@ import {
   isDerivedAggregationVariable,
   normalizeAggregationValue
 } from '../../database/services/coding/aggregation-metrics.util';
+import { getCodingAnalysisRunMarkerKey } from '../../database/services/coding/coding-analysis-cache-key.util';
 
 @Processor('response-analysis')
 export class CodingAnalysisProcessor {
@@ -46,6 +47,18 @@ export class CodingAnalysisProcessor {
 
     try {
       const analysis = await this.computeResponseAnalysis(workspaceId, matchingFlags as ResponseMatchingFlag[], threshold, job);
+      if (job.data.runId) {
+        const currentRunId = await this.cacheService.get<string>(
+          getCodingAnalysisRunMarkerKey(cacheKey)
+        );
+        if (currentRunId !== job.data.runId) {
+          this.logger.log(
+            `Skipping stale response analysis cache write for workspace ${workspaceId} (job ${job.id})`
+          );
+          return analysis;
+        }
+      }
+
       await this.cacheService.set(cacheKey, analysis);
 
       this.logger.log(`Response analysis for workspace ${workspaceId} completed and cached.`);

@@ -7,6 +7,8 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingFreshnessVersion } from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import { CodingAnalysisService } from './coding-analysis.service';
+import { CodingValidationService } from './coding-validation.service';
 
 type ResetCodingVersion = 'v1' | 'v2' | 'v3';
 type ResetUnitIdsByVersion = Record<ResetCodingVersion, Set<number>>;
@@ -21,6 +23,8 @@ export class CodingVersionService {
     private responseRepository: Repository<ResponseEntity>,
     @Inject(forwardRef(() => CodingStatisticsService))
     private codingStatisticsService: CodingStatisticsService,
+    private codingAnalysisService: CodingAnalysisService,
+    private codingValidationService: CodingValidationService,
     @Optional()
     private codingFreshnessService?: CodingFreshnessService
   ) { }
@@ -117,7 +121,7 @@ export class CodingVersionService {
           unitFilters,
           variableFilters
         );
-        await this.invalidateStatisticsCaches(workspaceId, version);
+        await this.invalidateCodingMutationCaches(workspaceId, version);
         if (progressCallback) await progressCallback(100);
         return {
           affectedResponseCount: 0,
@@ -198,7 +202,7 @@ export class CodingVersionService {
         );
       }
 
-      // Invalidate statistics cache for all affected versions
+      // Invalidate caches for all affected coding views
       await this.codingFreshnessService?.markVersionsPendingAfterReset(
         workspaceId,
         this.toResetUnitIdsByVersion(resetUnitIdsByVersion)
@@ -210,7 +214,7 @@ export class CodingVersionService {
         unitFilters,
         variableFilters
       );
-      await this.invalidateStatisticsCaches(workspaceId, version);
+      await this.invalidateCodingMutationCaches(workspaceId, version);
 
       if (progressCallback) await progressCallback(100);
 
@@ -326,6 +330,17 @@ export class CodingVersionService {
       this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version v3 (cascade)`);
       await this.codingStatisticsService.invalidateCache(workspaceId, 'v3');
     }
+  }
+
+  private async invalidateCodingMutationCaches(
+    workspaceId: number,
+    version: ResetCodingVersion
+  ): Promise<void> {
+    await this.invalidateStatisticsCaches(workspaceId, version);
+    await Promise.all([
+      this.codingAnalysisService.invalidateCache(workspaceId),
+      this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId)
+    ]);
   }
 
   private createResetUnitIdsByVersion(): ResetUnitIdsByVersion {

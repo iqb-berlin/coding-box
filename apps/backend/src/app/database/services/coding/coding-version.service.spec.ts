@@ -5,6 +5,8 @@ import { CodingVersionService } from './coding-version.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingFreshnessService } from './coding-freshness.service';
+import { CodingAnalysisService } from './coding-analysis.service';
+import { CodingValidationService } from './coding-validation.service';
 
 describe('CodingVersionService', () => {
   let service: CodingVersionService;
@@ -29,6 +31,14 @@ describe('CodingVersionService', () => {
 
   const mockCodingStatisticsService = {
     invalidateCache: jest.fn().mockResolvedValue(undefined)
+  };
+
+  const mockCodingAnalysisService = {
+    invalidateCache: jest.fn().mockResolvedValue(undefined)
+  };
+
+  const mockCodingValidationService = {
+    invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
   };
 
   const mockCodingFreshnessService = {
@@ -61,6 +71,14 @@ describe('CodingVersionService', () => {
           useValue: mockCodingStatisticsService
         },
         {
+          provide: CodingAnalysisService,
+          useValue: mockCodingAnalysisService
+        },
+        {
+          provide: CodingValidationService,
+          useValue: mockCodingValidationService
+        },
+        {
           provide: CodingFreshnessService,
           useValue: mockCodingFreshnessService
         }
@@ -79,6 +97,8 @@ describe('CodingVersionService', () => {
     mockResponseRepository.delete.mockReset();
     mockResponseRepository.update.mockResolvedValue({ affected: 0 });
     mockResponseRepository.delete.mockResolvedValue({ affected: 0 });
+    mockCodingAnalysisService.invalidateCache.mockClear();
+    mockCodingValidationService.invalidateIncompleteVariablesCache.mockClear();
     mockCodingFreshnessService.markVersionsPendingAfterReset.mockClear();
     mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForUnitIds.mockClear();
     mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds.mockClear();
@@ -132,6 +152,8 @@ describe('CodingVersionService', () => {
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v2');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(3);
+      expect(mockCodingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
+      expect(mockCodingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(1);
     });
 
     it('should reset v2 version and cascade to v3', async () => {
