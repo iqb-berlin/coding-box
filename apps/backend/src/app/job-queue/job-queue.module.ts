@@ -69,6 +69,9 @@ import { ValidationTask } from '../database/entities/validation-task.entity';
     BullModule.registerQueue({
       name: 'external-coding-import'
     }),
+    BullModule.registerQueue({
+      name: 'database-export'
+    }),
     forwardRef(() => CodingModule),
     forwardRef(() => WorkspaceModule),
     CacheModule

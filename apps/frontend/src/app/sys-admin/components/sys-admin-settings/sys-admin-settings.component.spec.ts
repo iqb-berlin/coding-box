@@ -1,29 +1,55 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture, fakeAsync, TestBed, tick
+} from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting
+} from '@angular/common/http/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations'; // Importieren
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
 import { SysAdminSettingsComponent } from './sys-admin-settings.component';
-import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
 import { SystemSettingsService } from '../../../core/services/system-settings.service';
+import { AppService, standardLogo } from '../../../core/services/app.service';
+import { LogoService } from '../../../core/services/logo.service';
 
 describe('SysAdminSettingsComponent', () => {
   let component: SysAdminSettingsComponent;
   let fixture: ComponentFixture<SysAdminSettingsComponent>;
+  let httpMock: HttpTestingController;
+  let snackBar: { open: jest.Mock };
 
   beforeEach(async () => {
+    snackBar = { open: jest.fn() };
+
     await TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
+        provideHttpClientTesting(),
         {
           provide: SERVER_URL,
-          useValue: environment.backendUrl
+          useValue: 'http://test-url'
         },
         {
           provide: MatSnackBar,
-          useValue: { open: jest.fn() }
+          useValue: snackBar
+        },
+        {
+          provide: AppService,
+          useValue: {
+            appLogo: { ...standardLogo }
+          }
+        },
+        {
+          provide: LogoService,
+          useValue: {
+            uploadLogo: jest.fn(),
+            deleteLogo: jest.fn(),
+            saveLogoSettings: jest.fn()
+          }
         },
         {
           provide: SystemSettingsService,
@@ -39,9 +65,86 @@ describe('SysAdminSettingsComponent', () => {
     fixture = TestBed.createComponent(SysAdminSettingsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+    jest.restoreAllMocks();
   });
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  describe('exportDatabase', () => {
+    beforeEach(() => {
+      if (typeof window.URL.createObjectURL === 'undefined') {
+        Object.defineProperty(window.URL, 'createObjectURL', { value: jest.fn(), configurable: true });
+      }
+      if (typeof window.URL.revokeObjectURL === 'undefined') {
+        Object.defineProperty(window.URL, 'revokeObjectURL', { value: jest.fn(), configurable: true });
+      }
+
+      jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('test-token');
+    });
+
+    it('starts an export job, polls status and downloads the SQLite file', fakeAsync(() => {
+      const anchor = document.createElement('a');
+      const clickSpy = jest.spyOn(anchor, 'click').mockImplementation(() => {});
+      const createElementSpy = jest.spyOn(document, 'createElement').mockReturnValue(anchor as HTMLAnchorElement);
+      const appendChildSpy = jest.spyOn(document.body, 'appendChild').mockImplementation(node => node);
+      const removeChildSpy = jest.spyOn(document.body, 'removeChild').mockImplementation(node => node);
+
+      component.exportDatabase();
+
+      const startRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job');
+      expect(startRequest.request.method).toBe('POST');
+      startRequest.flush({ jobId: 'job-1', message: 'started' });
+
+      tick(0);
+
+      const statusRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1');
+      expect(statusRequest.request.method).toBe('GET');
+      statusRequest.flush({ status: 'completed', progress: 100 });
+
+      const downloadRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1/download');
+      expect(downloadRequest.request.method).toBe('GET');
+      downloadRequest.flush(new Blob(['sqlite']));
+
+      expect(clickSpy).toHaveBeenCalled();
+      expect(component.isExporting).toBe(false);
+      expect(component.databaseExportStatus).toBe('completed');
+
+      appendChildSpy.mockRestore();
+      removeChildSpy.mockRestore();
+      createElementSpy.mockRestore();
+    }));
+
+    it('re-enables export after a failed job status', fakeAsync(() => {
+      component.exportDatabase();
+
+      const startRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job');
+      startRequest.flush({ jobId: 'job-1', message: 'started' });
+
+      tick(0);
+
+      const statusRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1');
+      statusRequest.flush({ status: 'failed', progress: 42, error: 'Export failed' });
+
+      expect(component.isExporting).toBe(false);
+      expect(component.databaseExportStatus).toBe('failed');
+      expect(component.databaseExportError).toBe('Export failed');
+      expect(snackBar.open).toHaveBeenCalledWith('Export failed', 'Schließen', { duration: 5000 });
+    }));
+
+    it('shows an error when no token is available', () => {
+      jest.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+
+      component.exportDatabase();
+
+      expect(snackBar.open).toHaveBeenCalled();
+      expect(component.isExporting).toBe(false);
+    });
   });
 });

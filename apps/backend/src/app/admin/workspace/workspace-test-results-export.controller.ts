@@ -31,7 +31,6 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
-import { DatabaseExportService } from '../database/database-export.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
 import { JournalService } from '../../database/services/shared';
@@ -61,64 +60,12 @@ export class WorkspaceTestResultsExportController {
 
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
-    private databaseExportService: DatabaseExportService,
     private jobQueueService: JobQueueService,
     private cacheService: CacheService,
     private journalService: JournalService,
     @InjectQueue('database-export')
     private readonly databaseExportQueue: Queue<DatabaseExportJobData>
   ) { }
-
-  @Get(':workspace_id/export/sqlite')
-  @ApiOperation({
-    summary: 'Export workspace test results to SQLite',
-    description:
-            'Exports workspace-specific test results data to SQLite format with streaming support'
-  })
-  @ApiParam({
-    name: 'workspace_id',
-    type: Number,
-    description: 'ID of the workspace'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'SQLite database file downloaded successfully',
-    content: {
-      'application/x-sqlite3': {
-        schema: {
-          type: 'string',
-          format: 'binary'
-        }
-      }
-    }
-  })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
-  @RequireAccessLevel(3)
-  async exportWorkspaceToSqlite(
-    @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Res() response: Response
-  ): Promise<void> {
-    try {
-      response.setHeader('Content-Type', 'application/x-sqlite3');
-      response.setHeader(
-        'Content-Disposition',
-        `attachment; filename=workspace-${workspace_id}-export-${new Date().toISOString().split('T')[0]
-        }.sqlite`
-      );
-
-      await this.databaseExportService.exportWorkspaceToSqliteStream(
-        response,
-        workspace_id
-      );
-    } catch (error) {
-      if (!response.headersSent) {
-        response
-          .status(500)
-          .json({ error: 'Failed to export workspace database to SQLite' });
-      }
-    }
-  }
 
   @Post(':workspace_id/export/sqlite/job')
   @ApiOperation({
