@@ -14,6 +14,7 @@ import { statusStringToNumber, statusNumberToString } from '../../utils/response
 import FileUpload from '../../entities/file_upload.entity';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
 
 interface ExternalCodingRow {
   unit_key?: string;
@@ -1216,7 +1217,7 @@ export class ExternalCodingImportService {
   }
 
   private generateIncompleteVariablesCacheKey(workspaceId: number): string {
-    return `coding_incomplete_variables_v3:${workspaceId}`;
+    return getCodingIncompleteVariablesCacheKey(workspaceId);
   }
 
   /**

@@ -26,6 +26,7 @@ import {
   getCodingStatisticsCacheKey,
   type CodingStatisticsVersion
 } from './coding-statistics-cache-key.util';
+import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
 import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 
 @Injectable()
@@ -276,7 +277,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {
-    const cacheKey = `coding_incomplete_variables_v3:${workspace_id}`;
+    const cacheKey = getCodingIncompleteVariablesCacheKey(workspace_id);
     await this.cacheService.delete(cacheKey);
     this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
   }

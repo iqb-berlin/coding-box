@@ -54,9 +54,14 @@ describe('CodingAnalysisService aggregation settings', () => {
       invalidateCache: jest.fn().mockResolvedValue(undefined)
     };
     const cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      set: jest.fn().mockResolvedValue(true),
       deleteByPattern: jest.fn().mockResolvedValue(undefined)
     };
-    const jobQueueService = {};
+    const jobQueueService = {
+      getActiveCodingAnalysisJob: jest.fn().mockResolvedValue(null),
+      addCodingAnalysisJob: jest.fn().mockResolvedValue(undefined)
+    };
 
     const service = new CodingAnalysisService(
       responseRepository,
@@ -76,7 +81,8 @@ describe('CodingAnalysisService aggregation settings', () => {
       codingJobService,
       codingValidationService,
       codingStatisticsService,
-      cacheService
+      cacheService,
+      jobQueueService
     };
   }
 
@@ -126,5 +132,58 @@ describe('CodingAnalysisService aggregation settings', () => {
     expect(codingJobService.setResponseMatchingMode).toHaveBeenCalledWith(7, [
       ResponseMatchingFlag.NO_AGGREGATION
     ]);
+  });
+
+  it('clears the selected analysis cache before a forced restart', async () => {
+    const {
+      service,
+      cacheService,
+      jobQueueService
+    } = createService();
+
+    await service.startAnalysis(7, [ResponseMatchingFlag.IGNORE_CASE], 4, {
+      forceRefresh: true
+    });
+
+    expect(cacheService.delete).toHaveBeenCalledWith('response-analysis:7_IGNORE_CASE_t4');
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'response-analysis:7_IGNORE_CASE_t4:run',
+      expect.any(String),
+      0
+    );
+    expect(jobQueueService.addCodingAnalysisJob).toHaveBeenCalledWith({
+      workspaceId: 7,
+      matchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
+      threshold: 4,
+      cacheKey: 'response-analysis:7_IGNORE_CASE_t4',
+      runId: expect.any(String)
+    });
+  });
+
+  it('queues a superseding forced restart even when an older workspace analysis is active', async () => {
+    const {
+      service,
+      jobQueueService
+    } = createService();
+    jobQueueService.getActiveCodingAnalysisJob.mockResolvedValue({
+      id: 'old-job',
+      data: {
+        workspaceId: 7,
+        matchingFlags: [],
+        threshold: 2,
+        cacheKey: 'response-analysis:7__t2',
+        runId: 'old-run'
+      }
+    });
+
+    await service.startAnalysis(7, [ResponseMatchingFlag.IGNORE_CASE], 4, {
+      forceRefresh: true
+    });
+
+    expect(jobQueueService.addCodingAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceId: 7,
+      cacheKey: 'response-analysis:7_IGNORE_CASE_t4',
+      runId: expect.any(String)
+    }));
   });
 });

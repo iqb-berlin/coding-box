@@ -239,8 +239,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.resetProgress = progress;
         if (previousProgress !== undefined &&
           previousProgress !== null &&
-          progress === null &&
-          this.statisticsLoaded) {
+          progress === null) {
           this.fetchCodingStatistics();
           this.loadCodingFreshness();
           this.loadManualAppliedResultsOverview();

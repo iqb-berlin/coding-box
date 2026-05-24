@@ -1,6 +1,9 @@
+import { STATISTICS_IGNORED_STATUSES } from './response-status-converter';
+
 export type CodingVersion = 'v1' | 'v2' | 'v3';
 
 const CODING_INCOMPLETE_STATUS = 8;
+const STATISTICS_IGNORED_STATUS_LIST = STATISTICS_IGNORED_STATUSES.join(', ');
 
 export function getNumericStatusExpression(
   responseAlias: string,
@@ -19,7 +22,11 @@ export function getEffectiveCodingStatusExpression(
 
   if (version === 'v3') {
     const statusV3Expression = getNumericStatusExpression(responseAlias, 'v3');
-    return `COALESCE(${statusV3Expression}, ${getEffectiveManualCodingStatusExpression(responseAlias)})`;
+    const manualStatusExpression = getEffectiveManualCodingStatusExpression(responseAlias);
+    return `CASE
+      WHEN ${statusV3Expression} IN (${STATISTICS_IGNORED_STATUS_LIST}) THEN ${manualStatusExpression}
+      ELSE COALESCE(${statusV3Expression}, ${manualStatusExpression})
+    END`;
   }
 
   return `${responseAlias}.status_v1`;
@@ -27,6 +34,7 @@ export function getEffectiveCodingStatusExpression(
 
 function getEffectiveManualCodingStatusExpression(responseAlias: string): string {
   return `CASE
+      WHEN ${responseAlias}.status_v2 IN (${STATISTICS_IGNORED_STATUS_LIST}) THEN ${responseAlias}.status_v1
       WHEN ${getOpenManualCodingPlaceholderCondition(responseAlias)} THEN ${responseAlias}.status_v1
       ELSE COALESCE(${responseAlias}.status_v2, ${responseAlias}.status_v1)
     END`;

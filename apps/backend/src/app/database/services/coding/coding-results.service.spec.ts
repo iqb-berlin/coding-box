@@ -1,11 +1,11 @@
 import { Repository } from 'typeorm';
 import { CodingResultsService } from './coding-results.service';
 import { ResponseEntity } from '../../entities/response.entity';
-import { CacheService } from '../../../cache/cache.service';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingAnalysisService } from './coding-analysis.service';
 import { CodingFreshnessService } from './coding-freshness.service';
+import { CodingValidationService } from './coding-validation.service';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: jest.fn()
@@ -27,6 +27,8 @@ describe('CodingResultsService', () => {
   };
   let codingJobService: jest.Mocked<CodingJobService>;
   let codingStatisticsService: jest.Mocked<CodingStatisticsService>;
+  let codingValidationService: jest.Mocked<Pick<CodingValidationService, 'invalidateIncompleteVariablesCache'>>;
+  let codingAnalysisService: jest.Mocked<Pick<CodingAnalysisService, 'invalidateCache'>>;
   let codingFreshnessService: jest.Mocked<Pick<CodingFreshnessService, 'markManualCodingCurrent'>>;
 
   const createQueryBuilderMock = (rows: unknown[]) => ({
@@ -95,16 +97,24 @@ describe('CodingResultsService', () => {
       invalidateCache: jest.fn().mockResolvedValue(undefined)
     } as unknown as jest.Mocked<CodingStatisticsService>;
 
+    codingValidationService = {
+      invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
+    };
+
+    codingAnalysisService = {
+      invalidateCache: jest.fn().mockResolvedValue(undefined)
+    };
+
     codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
 
     service = new CodingResultsService(
       responseRepository,
-      { delete: jest.fn().mockResolvedValue(undefined) } as unknown as CacheService,
       codingStatisticsService,
       codingJobService,
-      {} as CodingAnalysisService,
+      codingValidationService as unknown as CodingValidationService,
+      codingAnalysisService as unknown as CodingAnalysisService,
       codingFreshnessService as unknown as CodingFreshnessService
     );
   });
@@ -138,6 +148,7 @@ describe('CodingResultsService', () => {
       { codingJobId: 10, manager: queryRunner.manager }
     );
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
+    expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
   });
 
   it('rolls back response updates when manual freshness cannot be finalized', async () => {
@@ -151,6 +162,7 @@ describe('CodingResultsService', () => {
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
     expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
     expect(codingStatisticsService.invalidateCache).not.toHaveBeenCalled();
+    expect(codingAnalysisService.invalidateCache).not.toHaveBeenCalled();
   });
 
   it('blocks applying a completed coding job when its source freshness is stale', async () => {
@@ -313,6 +325,7 @@ describe('CodingResultsService', () => {
       queryRunner.manager
     );
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
+    expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
   });
 
   it('does not propagate matching sibling responses when aggregation is disabled', async () => {
@@ -568,5 +581,34 @@ describe('CodingResultsService', () => {
       100,
       expect.any(Object)
     );
+  });
+
+  it('applies empty response coding and invalidates dependent caches', async () => {
+    const rows = [
+      { id: 1 },
+      { id: 2 }
+    ] as ResponseEntity[];
+    responseRepository.createQueryBuilder = jest.fn(() => createQueryBuilderMock(rows)) as never;
+
+    const result = await service.applyEmptyResponseCoding(17);
+
+    expect(result).toEqual({
+      success: true,
+      updatedCount: 2,
+      message: '2 leere Antworten erfolgreich kodiert'
+    });
+    expect(queryRunner.manager.update).toHaveBeenCalledTimes(2);
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      1,
+      {
+        code_v2: -98,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
+    expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(17);
+    expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
+    expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
   });
 });
