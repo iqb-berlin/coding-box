@@ -93,6 +93,14 @@ describe('ProcessOverviewComponent', () => {
 
     expect(component.canRemoveProcess({
       id: 'job-2',
+      queueName: 'database-export',
+      status: 'active',
+      progress: 50,
+      timestamp: 100
+    })).toBe(true);
+
+    expect(component.canRemoveProcess({
+      id: 'job-3',
       queueName: 'coding-statistics',
       status: 'active',
       progress: 0,

@@ -393,7 +393,9 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
           if (state.status === 'failed' || state.status === 'cancelled') {
             this.stopExportPolling();
             this.isExporting = false;
-            this.databaseExportError = state.error || 'Der Datenbank-Export ist fehlgeschlagen.';
+            this.databaseExportError =
+              state.error ||
+              'Der Datenbank-Export ist fehlgeschlagen. Sie können den Export erneut starten.';
             this.snackBar.open(this.databaseExportError, 'Schließen', { duration: 5000 });
           }
         },

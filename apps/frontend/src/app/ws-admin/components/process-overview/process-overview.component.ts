@@ -158,7 +158,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
 
   canRemoveProcess(process: ProcessDto): boolean {
     if (process.status !== 'active') return true;
-    return process.queueName === 'data-export' || process.queueName === 'test-person-coding';
+    return ['data-export', 'database-export', 'test-person-coding'].includes(process.queueName);
   }
 
   getActionTooltip(process: ProcessDto): string {

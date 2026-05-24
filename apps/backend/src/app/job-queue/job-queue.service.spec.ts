@@ -32,7 +32,7 @@ describe('JobQueueService', () => {
   let service: JobQueueService;
 
   beforeEach(() => {
-    queues = Array.from({ length: 11 }, () => createQueue());
+    queues = Array.from({ length: 12 }, () => createQueue());
     validationTaskRepository = {
       find: jest.fn().mockResolvedValue([{ id: 7, workspace_id: 1 }])
     };
@@ -48,6 +48,7 @@ describe('JobQueueService', () => {
       queues[8] as never,
       queues[9] as never,
       queues[10] as never,
+      queues[11] as never,
       validationTaskRepository as never
     );
   });
@@ -185,6 +186,22 @@ describe('JobQueueService', () => {
     expect(exportJob.discard).toHaveBeenCalled();
     expect(exportJob.remove).not.toHaveBeenCalled();
 
+    const databaseExportJob = createJob({
+      requestedByUserId: 3,
+      scope: 'workspace',
+      workspaceId: 1
+    }, 'active');
+    queues[11].getJob.mockResolvedValue(databaseExportJob);
+    await expect(service.cancelWorkspaceJob(1, 'database-export', 'job-1')).resolves.toBe(true);
+    expect(databaseExportJob.update).toHaveBeenCalledWith({
+      requestedByUserId: 3,
+      scope: 'workspace',
+      workspaceId: 1,
+      isCancelled: true
+    });
+    expect(databaseExportJob.discard).toHaveBeenCalled();
+    expect(databaseExportJob.remove).not.toHaveBeenCalled();
+
     const unsupportedActiveJob = createJob({ workspaceId: 1 }, 'active');
     queues[1].getJob.mockResolvedValue(unsupportedActiveJob);
     await expect(service.cancelWorkspaceJob(1, 'coding-statistics', 'job-1')).resolves.toBe(false);
@@ -249,6 +266,33 @@ describe('JobQueueService', () => {
     });
     expect(JSON.stringify(workspaceJobs[0].data)).not.toContain('secret-token');
     expect(JSON.stringify(workspaceJobs[0].data)).not.toContain('example.test');
+  });
+
+  it('lists workspace-scoped database export jobs in the process overview', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[11].getJobs.mockResolvedValue([
+      createJob({
+        requestedByUserId: 9,
+        scope: 'workspace',
+        workspaceId: 1,
+        isCancelled: false
+      })
+    ]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toHaveLength(1);
+    expect(workspaceJobs[0]).toMatchObject({
+      queueName: 'database-export',
+      status: 'waiting',
+      progress: 40,
+      data: {
+        scope: 'workspace',
+        workspaceId: 1,
+        isCancelled: false
+      }
+    });
+    expect(JSON.stringify(workspaceJobs[0].data)).not.toContain('requestedByUserId');
   });
 
   it('ignores stale null jobs returned by Bull when listing workspace jobs', async () => {

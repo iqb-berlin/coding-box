@@ -103,6 +103,13 @@ export interface ExternalCodingImportJobData {
   existingCodingMode?: 'skip-conflicts' | 'fill-empty' | 'overwrite';
 }
 
+export interface DatabaseExportJobData {
+  requestedByUserId: number;
+  scope?: 'system' | 'workspace';
+  workspaceId?: number;
+  isCancelled?: boolean;
+}
+
 export interface ExportJobData {
   workspaceId: number;
   userId: number;
@@ -221,6 +228,7 @@ export class JobQueueService {
     @InjectQueue('response-analysis') private responseAnalysisQueue: Queue,
     @InjectQueue('variable-analysis') private variableAnalysisQueue: Queue,
     @InjectQueue('external-coding-import') private externalCodingImportQueue: Queue,
+    @InjectQueue('database-export') private databaseExportQueue: Queue<DatabaseExportJobData>,
     @InjectRepository(ValidationTask)
     private readonly validationTaskRepository: Repository<ValidationTask>
   ) { }
@@ -241,7 +249,8 @@ export class JobQueueService {
       ['validation-task', this.validationTaskQueue],
       ['response-analysis', this.responseAnalysisQueue],
       ['variable-analysis', this.variableAnalysisQueue],
-      ['external-coding-import', this.externalCodingImportQueue]
+      ['external-coding-import', this.externalCodingImportQueue],
+      ['database-export', this.databaseExportQueue]
     ]);
   }
 
@@ -274,7 +283,7 @@ export class JobQueueService {
       }
 
       if (state === 'active') {
-        if (queueName === 'data-export') {
+        if (queueName === 'data-export' || queueName === 'database-export') {
           await job.update({ ...job.data, isCancelled: true });
           await job.discard();
           return true;
