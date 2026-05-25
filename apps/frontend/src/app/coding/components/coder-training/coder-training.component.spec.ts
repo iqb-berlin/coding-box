@@ -427,6 +427,47 @@ describe('CoderTrainingComponent', () => {
     );
   });
 
+  it('submits manual variables and variable bundles together for training jobs', () => {
+    component.trainingForm.get('includeDerivedVariables')?.setValue(false);
+    component.onVariablesSelectionChange(['UNIT::VAR']);
+    component.onBundleSelectionChange([5]);
+    component.toggleCoderSelection(component.coders[0]);
+    component.trainingForm.get('trainingLabel')?.setValue('Mixed Selection');
+
+    expect(component.getManualVariablesCount()).toBe(1);
+    expect(component.getBundleVariablesCount()).toBe(1);
+    expect(component.canStartTraining()).toBe(true);
+
+    component.onStartTraining();
+
+    expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalledWith(
+      1,
+      [component.coders[0]],
+      [
+        { variableId: 'VAR', unitId: 'UNIT', sampleCount: 8 },
+        { variableId: 'VAR2', unitId: 'UNIT2', sampleCount: 4 }
+      ],
+      'Mixed Selection',
+      undefined,
+      [
+        { variableId: 'VAR', unitName: 'UNIT', sampleCount: 8 }
+      ],
+      [
+        {
+          id: 5,
+          name: 'Bundle',
+          sampleCount: 4,
+          caseOrderingMode: 'continuous'
+        }
+      ],
+      'continuous',
+      'oldest_first',
+      undefined,
+      undefined,
+      false
+    );
+  });
+
   it('preserves bundle ordering overrides when importing a job definition', () => {
     component.availableBundles = [
       {

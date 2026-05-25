@@ -192,6 +192,111 @@ describe('CoderTrainingService', () => {
 
       generatePackagesSpy.mockRestore();
     });
+
+    it('should create job metadata and units for mixed manual and bundled training variables', async () => {
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages')
+        .mockResolvedValue([{
+          coderId: 10,
+          coderName: 'Coder 1',
+          responses: [
+            {
+              responseId: 101,
+              unitAlias: 'Manual Unit',
+              variableId: 'VAR',
+              unitName: 'UNIT',
+              value: 'manual value',
+              personLogin: 'login-1',
+              personCode: 'code-1',
+              personGroup: 'group-1',
+              bookletName: 'booklet-1',
+              variable: 'VAR'
+            },
+            {
+              responseId: 202,
+              unitAlias: 'Bundle Unit',
+              variableId: 'VAR2',
+              unitName: 'UNIT2',
+              value: 'bundle value',
+              personLogin: 'login-2',
+              personCode: 'code-2',
+              personGroup: 'group-2',
+              bookletName: 'booklet-2',
+              variable: 'VAR2'
+            }
+          ]
+        }]);
+      const assignedVariables = [{ variableId: 'VAR', unitName: 'UNIT', sampleCount: 8 }];
+      const assignedVariableBundles = [{ id: 5, name: 'Bundle', sampleCount: 4 }];
+
+      mockRepository.find.mockReset();
+      mockRepository.find.mockResolvedValue([{
+        id: 5,
+        name: 'Bundle',
+        variables: [{ unitName: 'UNIT2', variableId: 'VAR2' }]
+      }]);
+      mockRepository.save.mockReset();
+      mockRepository.save.mockImplementation(async entity => {
+        if (entity instanceof CodingJob) {
+          return { ...entity, id: 200 };
+        }
+        return entity;
+      });
+
+      const result = await service.createCoderTrainingJobs(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [
+          { variableId: 'VAR', unitId: 'UNIT', sampleCount: 8 },
+          { variableId: 'VAR2', unitId: 'UNIT2', sampleCount: 4 }
+        ],
+        'Mixed Training',
+        undefined,
+        assignedVariables,
+        assignedVariableBundles
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.jobsCreated).toBe(1);
+      expect(coderTrainingVariableRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        variable_id: 'VAR',
+        unit_name: 'UNIT',
+        sample_count: 8
+      }));
+      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        variable_bundle_id: 5,
+        sample_count: 4
+      }));
+      expect(mockRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        coding_job_id: 200,
+        variable_bundle_id: 5
+      }));
+      expect(mockRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        coding_job_id: 200,
+        variable_id: 'VAR',
+        unit_name: 'UNIT'
+      }));
+      expect(mockRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        coding_job_id: 200,
+        variable_id: 'VAR2',
+        unit_name: 'UNIT2'
+      }));
+      expect(mockRepository.save).toHaveBeenCalledWith(expect.arrayContaining([
+        expect.objectContaining({
+          response_id: 101,
+          variable_id: 'VAR',
+          unit_name: 'UNIT',
+          variable_bundle_id: null
+        }),
+        expect.objectContaining({
+          response_id: 202,
+          variable_id: 'VAR2',
+          unit_name: 'UNIT2',
+          variable_bundle_id: 5
+        })
+      ]));
+
+      generatePackagesSpy.mockRestore();
+    });
   });
 
   describe('updateCoderTraining', () => {
