@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import {
+  Repository, In, IsNull, Not
+} from 'typeorm';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
@@ -165,8 +167,9 @@ export class CoderTrainingService {
   }
 
   /**
-   * Get response IDs used in the given trainings, grouped by variable (unitAlias:variableId).
-   * Used for referenceMode 'same' (only these cases) or 'different' (exclude these cases).
+   * Get response IDs used in the given trainings, grouped by variable.
+   * Both unit name and unit alias are exposed as keys so reference training filters
+   * match whichever unit identifier the current training configuration uses.
    */
   async getTrainingResponseIds(
     workspaceId: number,
@@ -182,7 +185,8 @@ export class CoderTrainingService {
     const query = this.codingJobUnitRepository
       .createQueryBuilder('cju')
       .innerJoin('cju.coding_job', 'cj')
-      .select('COALESCE(cju.unit_alias, cju.unit_name)', 'unitKey')
+      .select('cju.unit_name', 'unitName')
+      .addSelect('cju.unit_alias', 'unitAlias')
       .addSelect('cju.variable_id', 'variableId')
       .addSelect('cju.response_id', 'responseId')
       .where('cj.workspace_id = :workspaceId', { workspaceId })
@@ -193,21 +197,74 @@ export class CoderTrainingService {
       bookletNameExpression: 'cju.booklet_name',
       parameterPrefix: 'trainingResponseIds'
     });
-    const rows = await query.getRawMany<{ unitKey: string; variableId: string; responseId: number }>();
+    const rows = await query.getRawMany<{
+      unitName?: string | null;
+      unitAlias?: string | null;
+      unitKey?: string | null;
+      variableId: string;
+      responseId: number;
+    }>();
 
     const result: TrainingResponseIdsMap = {};
     for (const row of rows) {
-      const key = `${row.unitKey}:${row.variableId}`;
-      if (!result[key]) {
-        result[key] = [];
-      }
-      if (!result[key].includes(row.responseId)) {
-        result[key].push(row.responseId);
+      const unitKeys = new Set([row.unitName, row.unitAlias, row.unitKey].filter((key): key is string => !!key));
+      for (const unitKey of unitKeys) {
+        const key = `${unitKey}:${row.variableId}`;
+        if (!result[key]) {
+          result[key] = [];
+        }
+        if (!result[key].includes(row.responseId)) {
+          result[key].push(row.responseId);
+        }
       }
     }
 
     this.logger.log(`Found response IDs for ${Object.keys(result).length} variable configs`);
     return result;
+  }
+
+  private applyReferenceFilter(
+    responses: CoderTrainingResponse[],
+    referenceMode: ReferenceMode | undefined,
+    referenceResponseIdsByConfig: TrainingResponseIdsMap | null,
+    configKey: string
+  ): CoderTrainingResponse[] {
+    if (!referenceMode || !referenceResponseIdsByConfig) {
+      return responses;
+    }
+
+    const refIds = referenceResponseIdsByConfig[configKey] ?
+      new Set(referenceResponseIdsByConfig[configKey]) :
+      null;
+
+    if (referenceMode === 'same') {
+      return refIds ? responses.filter(r => refIds.has(r.responseId)) : [];
+    }
+
+    if (referenceMode === 'different' && refIds) {
+      return responses.filter(r => !refIds.has(r.responseId));
+    }
+
+    return responses;
+  }
+
+  private async hasCodingProgressForJobs(jobIds: number[]): Promise<boolean> {
+    const distinctJobIds = [...new Set(jobIds.filter(jobId => Number.isInteger(jobId) && jobId > 0))];
+    if (distinctJobIds.length === 0) {
+      return false;
+    }
+
+    const codedUnits = await this.codingJobUnitRepository.count({
+      where: [
+        { coding_job_id: In(distinctJobIds), code: Not(IsNull()) },
+        { coding_job_id: In(distinctJobIds), score: Not(IsNull()) },
+        { coding_job_id: In(distinctJobIds), notes: Not(IsNull()) },
+        { coding_job_id: In(distinctJobIds), coding_issue_option: Not(IsNull()) },
+        { coding_job_id: In(distinctJobIds), supervisor_comment: Not(IsNull()) }
+      ]
+    });
+
+    return codedUnits > 0;
   }
 
   private mapDisplayCodeAndScore(
@@ -654,18 +711,12 @@ export class CoderTrainingService {
         responsesForSampling = transformedResponses;
       }
 
-      if (referenceMode && referenceResponseIdsByConfig) {
-        const refIds = referenceResponseIdsByConfig[configKey] ?
-          new Set(referenceResponseIdsByConfig[configKey]) :
-          null;
-        if (refIds) {
-          if (referenceMode === 'same') {
-            responsesForSampling = responsesForSampling.filter(r => refIds.has(r.responseId));
-          } else if (referenceMode === 'different') {
-            responsesForSampling = responsesForSampling.filter(r => !refIds.has(r.responseId));
-          }
-        }
-      }
+      responsesForSampling = this.applyReferenceFilter(
+        responsesForSampling,
+        referenceMode,
+        referenceResponseIdsByConfig,
+        configKey
+      );
 
       const sampledResponses = this.sampleResponses(responsesForSampling, sampleCount, caseSelectionMode);
       sampledResponsesByConfig.set(configKey, sampledResponses);
@@ -1438,6 +1489,36 @@ export class CoderTrainingService {
 
       const bundlesChanged = JSON.stringify(currentBundles) !== JSON.stringify(newBundles);
       const caseOrderingChanged = currentCaseOrderingMode !== newCaseOrderingMode;
+      const currentCaseSelectionMode = training.case_selection_mode || 'oldest_first';
+      const newCaseSelectionMode = caseSelectionMode ?? currentCaseSelectionMode;
+      const currentReferenceTrainingIds = [...(training.reference_training_ids ?? [])].sort((a, b) => a - b);
+      const effectiveReferenceTrainingIds = referenceTrainingIds ?? training.reference_training_ids ?? [];
+      const newReferenceTrainingIds = [...effectiveReferenceTrainingIds].sort((a, b) => a - b);
+      const currentReferenceMode = training.reference_mode ?? null;
+      const newReferenceMode = effectiveReferenceTrainingIds.length > 0 ?
+        referenceMode ?? currentReferenceMode :
+        null;
+      const caseSelectionChanged = currentCaseSelectionMode !== newCaseSelectionMode;
+      const referenceSelectionChanged = JSON.stringify(currentReferenceTrainingIds) !== JSON.stringify(newReferenceTrainingIds) ||
+        currentReferenceMode !== newReferenceMode;
+      const shouldRecreateJobs =
+        codersChanged ||
+        variablesChanged ||
+        bundlesChanged ||
+        caseOrderingChanged ||
+        caseSelectionChanged ||
+        referenceSelectionChanged;
+
+      if (shouldRecreateJobs) {
+        const jobIds = (training.codingJobs || []).map(job => job.id);
+        const hasCodingProgress = await this.hasCodingProgressForJobs(jobIds);
+        if (hasCodingProgress) {
+          return {
+            success: false,
+            message: 'Die Schulung wurde bereits bearbeitet. Änderungen an Fallauswahl, Fallreihenfolge, Referenzen, Kodierern oder Variablen würden bestehende Kodierungen löschen.'
+          };
+        }
+      }
 
       const resolvedSuppressGeneralInstructions = suppressGeneralInstructions ??
         training.suppress_general_instructions ??
@@ -1445,15 +1526,15 @@ export class CoderTrainingService {
 
       training.label = trainingLabel;
       training.case_ordering_mode = newCaseOrderingMode;
-      training.case_selection_mode = caseSelectionMode ?? training.case_selection_mode ?? 'oldest_first';
-      training.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
-      training.reference_mode = referenceMode ?? null;
+      training.case_selection_mode = newCaseSelectionMode;
+      training.reference_training_ids = effectiveReferenceTrainingIds.length ? effectiveReferenceTrainingIds : null;
+      training.reference_mode = newReferenceMode;
       training.suppress_general_instructions = resolvedSuppressGeneralInstructions;
       training.updated_at = new Date();
 
       await this.coderTrainingRepository.save(training);
 
-      if (codersChanged || variablesChanged || bundlesChanged || caseOrderingChanged) {
+      if (shouldRecreateJobs) {
         this.logger.log(`Configuration changed for training ${trainingId}. Recreating jobs.`);
 
         // Delete existing configuration relations
@@ -1498,9 +1579,9 @@ export class CoderTrainingService {
 
         // Generate and create new jobs
         const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs, {
-          caseSelectionMode: caseSelectionMode ?? training.case_selection_mode ?? 'oldest_first',
-          referenceTrainingIds,
-          referenceMode
+          caseSelectionMode: newCaseSelectionMode,
+          referenceTrainingIds: effectiveReferenceTrainingIds,
+          referenceMode: newReferenceMode ?? undefined
         });
 
         // Build mapping from variable to bundle id and bundle sorting mode

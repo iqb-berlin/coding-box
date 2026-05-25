@@ -1248,7 +1248,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         assignedVariableBundles,
         caseOrderingMode,
         caseSelectionMode,
-        referenceTrainingIds.length ? referenceTrainingIds : undefined,
+        referenceTrainingIds,
         referenceMode ?? undefined,
         this.trainingForm.get('suppressGeneralInstructions')?.value ?? false
       ) :
