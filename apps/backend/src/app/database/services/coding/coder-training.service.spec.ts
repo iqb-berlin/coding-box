@@ -29,6 +29,7 @@ describe('CoderTrainingService', () => {
   let coderTrainingVariableRepository: Repository<CoderTrainingVariable>;
   let coderTrainingBundleRepository: Repository<CoderTrainingBundle>;
   let coderTrainingCoderRepository: Repository<CoderTrainingCoder>;
+  let codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>;
 
   const mockRepository = {
     find: jest.fn(),
@@ -90,6 +91,7 @@ describe('CoderTrainingService', () => {
     coderTrainingVariableRepository = module.get<Repository<CoderTrainingVariable>>(getRepositoryToken(CoderTrainingVariable));
     coderTrainingBundleRepository = module.get<Repository<CoderTrainingBundle>>(getRepositoryToken(CoderTrainingBundle));
     coderTrainingCoderRepository = module.get<Repository<CoderTrainingCoder>>(getRepositoryToken(CoderTrainingCoder));
+    codingJobVariableBundleRepository = module.get<Repository<CodingJobVariableBundle>>(getRepositoryToken(CodingJobVariableBundle));
   });
 
   it('should be defined', () => {
@@ -387,6 +389,288 @@ describe('CoderTrainingService', () => {
         id: 100,
         suppressGeneralInstructions: true
       }));
+    });
+
+    it('should keep existing assignments when update omits optional assignment fields', async () => {
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages');
+      const existingJob = { id: 100, suppressGeneralInstructions: false };
+      const existingTraining = {
+        id: 1,
+        workspace_id: 1,
+        label: 'Old Label',
+        case_ordering_mode: 'alternating',
+        suppress_general_instructions: false,
+        coders: [{ user_id: 10 }],
+        variables: [{ variable_id: 'v1', unit_name: 'u1', sample_count: 5 }],
+        bundles: [{
+          variable_bundle_id: 5,
+          sample_count: 4,
+          case_ordering_mode: 'alternating'
+        }],
+        codingJobs: [existingJob]
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.delete.mockClear();
+      mockRepository.save.mockClear();
+
+      const result = await service.updateCoderTraining(
+        1,
+        1,
+        'Updated Label',
+        [{ id: 10, name: 'Coder 1' }],
+        [{ variableId: 'v1', unitId: 'u1', sampleCount: 5 }]
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockRepository.delete).not.toHaveBeenCalled();
+      expect(generatePackagesSpy).not.toHaveBeenCalled();
+      expect(codingJobRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        id: 100,
+        suppressGeneralInstructions: false
+      }));
+
+      generatePackagesSpy.mockRestore();
+    });
+
+    it('should recreate jobs with existing assignments when only global ordering changes', async () => {
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages')
+        .mockResolvedValue([{
+          coderId: 10,
+          coderName: 'Coder 1',
+          responses: [
+            {
+              responseId: 2,
+              unitAlias: 'Unit',
+              variableId: 'b',
+              unitName: 'Unit',
+              value: 'value',
+              personLogin: 'person-1',
+              personCode: '1',
+              personGroup: 'group-1',
+              bookletName: 'booklet',
+              variable: 'b'
+            },
+            {
+              responseId: 1,
+              unitAlias: 'Unit',
+              variableId: 'a',
+              unitName: 'Unit',
+              value: 'value',
+              personLogin: 'person-1',
+              personCode: '1',
+              personGroup: 'group-1',
+              bookletName: 'booklet',
+              variable: 'a'
+            }
+          ]
+        }]);
+      const existingTraining = {
+        id: 1,
+        workspace_id: 1,
+        label: 'Old Label',
+        case_ordering_mode: 'continuous',
+        coders: [{ user_id: 10 }],
+        variables: [{ variable_id: 'manual', unit_name: 'Manual Unit', sample_count: 3 }],
+        bundles: [{
+          variable_bundle_id: 5,
+          sample_count: 4,
+          case_ordering_mode: null
+        }],
+        codingJobs: [{ id: 100 }]
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.find.mockResolvedValue([{
+        id: 5,
+        name: 'Bundle',
+        variables: [
+          { unitName: 'Unit', variableId: 'a' },
+          { unitName: 'Unit', variableId: 'b' }
+        ]
+      }]);
+      mockRepository.save.mockImplementation(async entity => {
+        if (entity instanceof CodingJob) {
+          return { ...entity, id: 200 };
+        }
+        return entity;
+      });
+      mockRepository.save.mockClear();
+      mockRepository.delete.mockClear();
+
+      const result = await service.updateCoderTraining(
+        1,
+        1,
+        'Updated Label',
+        [{ id: 10, name: 'Coder 1' }],
+        [
+          { variableId: 'a', unitId: 'Unit', sampleCount: 4 },
+          { variableId: 'b', unitId: 'Unit', sampleCount: 4 }
+        ],
+        undefined,
+        undefined,
+        undefined,
+        'alternating'
+      );
+
+      expect(result.success).toBe(true);
+      expect(coderTrainingVariableRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        coder_training_id: 1,
+        variable_id: 'manual',
+        unit_name: 'Manual Unit',
+        sample_count: 3
+      }));
+      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        coder_training_id: 1,
+        variable_bundle_id: 5,
+        sample_count: 4,
+        case_ordering_mode: null
+      }));
+      expect(codingJobRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        workspace_id: 1,
+        training_id: 1,
+        case_ordering_mode: 'alternating'
+      }));
+      expect(codingJobVariableBundleRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        coding_job_id: 200,
+        variable_bundle_id: 5,
+        case_ordering_mode: null
+      }));
+
+      generatePackagesSpy.mockRestore();
+    });
+
+    it('should recreate jobs when a bundle ordering mode changes', async () => {
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages')
+        .mockResolvedValue([{
+          coderId: 10,
+          coderName: 'Coder 1',
+          responses: [
+            {
+              responseId: 3,
+              unitAlias: 'Unit',
+              variableId: 'b',
+              unitName: 'Unit',
+              value: 'value',
+              personLogin: 'person-2',
+              personCode: '2',
+              personGroup: 'group-2',
+              bookletName: 'booklet',
+              variable: 'b'
+            },
+            {
+              responseId: 1,
+              unitAlias: 'Unit',
+              variableId: 'a',
+              unitName: 'Unit',
+              value: 'value',
+              personLogin: 'person-1',
+              personCode: '1',
+              personGroup: 'group-1',
+              bookletName: 'booklet',
+              variable: 'a'
+            },
+            {
+              responseId: 4,
+              unitAlias: 'Unit',
+              variableId: 'a',
+              unitName: 'Unit',
+              value: 'value',
+              personLogin: 'person-2',
+              personCode: '2',
+              personGroup: 'group-2',
+              bookletName: 'booklet',
+              variable: 'a'
+            },
+            {
+              responseId: 2,
+              unitAlias: 'Unit',
+              variableId: 'b',
+              unitName: 'Unit',
+              value: 'value',
+              personLogin: 'person-1',
+              personCode: '1',
+              personGroup: 'group-1',
+              bookletName: 'booklet',
+              variable: 'b'
+            }
+          ]
+        }]);
+      const existingTraining = {
+        id: 1,
+        workspace_id: 1,
+        label: 'Old Label',
+        case_ordering_mode: 'continuous',
+        coders: [{ user_id: 10 }],
+        variables: [],
+        bundles: [{
+          variable_bundle_id: 5,
+          sample_count: 4,
+          case_ordering_mode: 'continuous'
+        }],
+        codingJobs: [{ id: 100 }]
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.find.mockResolvedValue([{
+        id: 5,
+        name: 'Bundle',
+        variables: [
+          { unitName: 'Unit', variableId: 'a' },
+          { unitName: 'Unit', variableId: 'b' }
+        ]
+      }]);
+      mockRepository.save.mockImplementation(async entity => {
+        if (entity instanceof CodingJob) {
+          return { ...entity, id: 200 };
+        }
+        return entity;
+      });
+      mockRepository.save.mockClear();
+      mockRepository.delete.mockClear();
+
+      const result = await service.updateCoderTraining(
+        1,
+        1,
+        'Updated Label',
+        [{ id: 10, name: 'Coder 1' }],
+        [
+          { variableId: 'a', unitId: 'Unit', sampleCount: 4 },
+          { variableId: 'b', unitId: 'Unit', sampleCount: 4 }
+        ],
+        undefined,
+        [],
+        [{
+          id: 5,
+          name: 'Bundle',
+          sampleCount: 4,
+          caseOrderingMode: 'alternating'
+        }],
+        'continuous'
+      );
+
+      expect(result.success).toBe(true);
+      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        coder_training_id: 1,
+        variable_bundle_id: 5,
+        sample_count: 4,
+        case_ordering_mode: 'alternating'
+      }));
+      expect(mockRepository.delete).toHaveBeenCalledWith({ coding_job_id: 100 });
+      expect(mockRepository.delete).toHaveBeenCalledWith(100);
+      expect(mockRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        coding_job_id: 200,
+        variable_bundle_id: 5,
+        case_ordering_mode: 'alternating'
+      }));
+
+      const savedUnits = (mockRepository.save as jest.Mock).mock.calls
+        .map(([arg]) => arg)
+        .find(arg => Array.isArray(arg) && arg.every(unit => unit instanceof CodingJobUnit)) as CodingJobUnit[];
+      expect(savedUnits.map(unit => unit.response_id)).toEqual([1, 2, 4, 3]);
+      expect(savedUnits.map(unit => unit.person_group)).toEqual(['group-1', 'group-1', 'group-2', 'group-2']);
+
+      generatePackagesSpy.mockRestore();
     });
   });
 
