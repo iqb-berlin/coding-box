@@ -1391,36 +1391,60 @@ export class CoderTrainingService {
       const newCoderIds = selectedCoders.map(c => c.id).sort();
       const codersChanged = JSON.stringify(currentCoderIds) !== JSON.stringify(newCoderIds);
 
-      const currentVariables = training.variables?.map(v => ({
+      const currentAssignedVariables: JobDefinitionVariable[] = training.variables?.map(v => ({
         variableId: v.variable_id,
         unitName: v.unit_name,
-        sampleCount: v.sample_count
-      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName)) || [];
+        sampleCount: v.sample_count || 10
+      })) || [];
 
-      const newVariables = assignedVariables?.map(v => ({
+      const currentCaseOrderingMode = training.case_ordering_mode || 'continuous';
+      const newCaseOrderingMode = caseOrderingMode ?? currentCaseOrderingMode;
+
+      const currentAssignedVariableBundles: JobDefinitionVariableBundle[] = training.bundles?.map(b => ({
+        id: b.variable_bundle_id,
+        name: b.bundle?.name || '',
+        sampleCount: b.sample_count || 10,
+        caseOrderingMode: b.case_ordering_mode ?? undefined
+      })) || [];
+
+      const effectiveAssignedVariables = assignedVariables ?? currentAssignedVariables;
+      const effectiveAssignedVariableBundles = assignedVariableBundles ?? currentAssignedVariableBundles;
+
+      const currentVariables = currentAssignedVariables.map(v => ({
         variableId: v.variableId,
         unitName: v.unitName,
         sampleCount: v.sampleCount || 10
-      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName)) || [];
+      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName));
+
+      const newVariables = effectiveAssignedVariables.map(v => ({
+        variableId: v.variableId,
+        unitName: v.unitName,
+        sampleCount: v.sampleCount || 10
+      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName));
 
       const variablesChanged = JSON.stringify(currentVariables) !== JSON.stringify(newVariables);
 
-      const currentBundles = training.bundles?.map(b => ({
-        id: b.variable_bundle_id
-      })).sort((a, b) => a.id - b.id) || [];
+      const currentBundles = currentAssignedVariableBundles.map(b => ({
+        id: b.id,
+        sampleCount: b.sampleCount || 10,
+        caseOrderingMode: b.caseOrderingMode ?? currentCaseOrderingMode
+      })).sort((a, b) => a.id - b.id);
 
-      const newBundles = assignedVariableBundles?.map(b => ({
-        id: b.id
-      })).sort((a, b) => a.id - b.id) || [];
+      const newBundles = effectiveAssignedVariableBundles.map(b => ({
+        id: b.id,
+        sampleCount: b.sampleCount || 10,
+        caseOrderingMode: b.caseOrderingMode ?? newCaseOrderingMode
+      })).sort((a, b) => a.id - b.id);
 
       const bundlesChanged = JSON.stringify(currentBundles) !== JSON.stringify(newBundles);
+      const caseOrderingChanged = currentCaseOrderingMode !== newCaseOrderingMode;
 
       const resolvedSuppressGeneralInstructions = suppressGeneralInstructions ??
         training.suppress_general_instructions ??
         false;
 
       training.label = trainingLabel;
-      training.case_ordering_mode = caseOrderingMode || 'continuous';
+      training.case_ordering_mode = newCaseOrderingMode;
       training.case_selection_mode = caseSelectionMode ?? training.case_selection_mode ?? 'oldest_first';
       training.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
       training.reference_mode = referenceMode ?? null;
@@ -1429,7 +1453,7 @@ export class CoderTrainingService {
 
       await this.coderTrainingRepository.save(training);
 
-      if (codersChanged || variablesChanged || bundlesChanged) {
+      if (codersChanged || variablesChanged || bundlesChanged || caseOrderingChanged) {
         this.logger.log(`Configuration changed for training ${trainingId}. Recreating jobs.`);
 
         // Delete existing configuration relations
@@ -1438,26 +1462,22 @@ export class CoderTrainingService {
         await this.coderTrainingCoderRepository.delete({ coder_training_id: trainingId });
 
         // Save new configuration relations
-        if (assignedVariables) {
-          for (const variable of assignedVariables) {
-            const trainingVariable = new CoderTrainingVariable();
-            trainingVariable.coder_training_id = trainingId;
-            trainingVariable.variable_id = variable.variableId;
-            trainingVariable.unit_name = variable.unitName;
-            trainingVariable.sample_count = variable.sampleCount || 10;
-            await this.coderTrainingVariableRepository.save(trainingVariable);
-          }
+        for (const variable of effectiveAssignedVariables) {
+          const trainingVariable = new CoderTrainingVariable();
+          trainingVariable.coder_training_id = trainingId;
+          trainingVariable.variable_id = variable.variableId;
+          trainingVariable.unit_name = variable.unitName;
+          trainingVariable.sample_count = variable.sampleCount || 10;
+          await this.coderTrainingVariableRepository.save(trainingVariable);
         }
 
-        if (assignedVariableBundles) {
-          for (const bundle of assignedVariableBundles) {
-            const trainingBundle = new CoderTrainingBundle();
-            trainingBundle.coder_training_id = trainingId;
-            trainingBundle.variable_bundle_id = bundle.id;
-            trainingBundle.sample_count = bundle.sampleCount || 10;
-            trainingBundle.case_ordering_mode = bundle.caseOrderingMode || null;
-            await this.coderTrainingBundleRepository.save(trainingBundle);
-          }
+        for (const bundle of effectiveAssignedVariableBundles) {
+          const trainingBundle = new CoderTrainingBundle();
+          trainingBundle.coder_training_id = trainingId;
+          trainingBundle.variable_bundle_id = bundle.id;
+          trainingBundle.sample_count = bundle.sampleCount || 10;
+          trainingBundle.case_ordering_mode = bundle.caseOrderingMode ?? null;
+          await this.coderTrainingBundleRepository.save(trainingBundle);
         }
 
         for (const coder of selectedCoders) {
@@ -1485,18 +1505,18 @@ export class CoderTrainingService {
 
         // Build mapping from variable to bundle id and bundle sorting mode
         const variableToBundleMap = new Map<string, number>();
-        const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating'>();
-        this.logger.log(`[Update] Building bundle maps for ${assignedVariableBundles?.length || 0} bundles`);
-        if (assignedVariableBundles && assignedVariableBundles.length > 0) {
-          const bundleIds = assignedVariableBundles.map(b => b.id);
+        const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating' | null>();
+        this.logger.log(`[Update] Building bundle maps for ${effectiveAssignedVariableBundles.length} bundles`);
+        if (effectiveAssignedVariableBundles.length > 0) {
+          const bundleIds = effectiveAssignedVariableBundles.map(b => b.id);
           if (bundleIds.length > 0) {
             const fetchedBundles = await this.variableBundleRepository.find({
               where: { id: In(bundleIds) }
             });
             for (const bundle of fetchedBundles) {
               // Store the bundle's sorting mode (if set, otherwise null)
-              const bundleConfig = assignedVariableBundles.find(b => b.id === bundle.id);
-              const mode = bundleConfig?.caseOrderingMode || null;
+              const bundleConfig = effectiveAssignedVariableBundles.find(b => b.id === bundle.id);
+              const mode = bundleConfig?.caseOrderingMode ?? null;
               bundleSortingModeMap.set(bundle.id, mode);
               this.logger.log(`[Update] Bundle ${bundle.id} (${bundle.name}): mode=${mode}`);
               if (bundle.variables) {
@@ -1522,7 +1542,7 @@ export class CoderTrainingService {
           codingJob.workspace_id = workspaceId;
           codingJob.training_id = trainingId;
           codingJob.missings_profile_id = missingsProfileId;
-          codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
+          codingJob.case_ordering_mode = newCaseOrderingMode;
           codingJob.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
           codingJob.created_at = new Date();
           codingJob.updated_at = new Date();
@@ -1553,7 +1573,7 @@ export class CoderTrainingService {
               const jobVariableBundle = new CodingJobVariableBundle();
               jobVariableBundle.coding_job_id = jobId;
               jobVariableBundle.variable_bundle_id = bundleId;
-              jobVariableBundle.case_ordering_mode = bundleMode || null;
+              jobVariableBundle.case_ordering_mode = bundleMode ?? null;
               await this.codingJobVariableBundleRepository.save(jobVariableBundle);
               this.logger.log(`[Update] Saved CodingJobVariableBundle: job=${jobId}, bundle=${bundleId}, mode=${bundleMode || 'null'}`);
             }
@@ -1574,7 +1594,7 @@ export class CoderTrainingService {
 
           // Sort responses with bundle-specific sorting modes
           // Group responses by their effective sorting mode
-          const defaultMode = caseOrderingMode || 'continuous';
+          const defaultMode = newCaseOrderingMode;
           const alternatingResponses: CoderTrainingResponse[] = [];
           const continuousResponses: CoderTrainingResponse[] = [];
 
@@ -1612,6 +1632,7 @@ export class CoderTrainingService {
             codingJobUnit.booklet_name = response.bookletName;
             codingJobUnit.person_login = response.personLogin;
             codingJobUnit.person_code = response.personCode;
+            codingJobUnit.person_group = response.personGroup;
             codingJobUnit.is_open = true;
             codingJobUnit.variable_bundle_id = variableToBundleMap.get(`${response.unitName}::${response.variableId}`) || null;
             return codingJobUnit;

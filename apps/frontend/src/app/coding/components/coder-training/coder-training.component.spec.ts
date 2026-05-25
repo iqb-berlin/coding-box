@@ -392,6 +392,51 @@ describe('CoderTrainingComponent', () => {
     expect(component.getPrimaryActionLabel()).toBe('Schulung wird aktualisiert...');
   });
 
+  it('preserves saved bundle ordering when editing and updating a training', () => {
+    component.editTraining = {
+      id: 77,
+      workspace_id: 1,
+      label: 'Existing training',
+      case_ordering_mode: 'continuous',
+      assigned_coders: [1],
+      assigned_variables: [],
+      assigned_variable_bundles: [
+        {
+          id: 5,
+          name: 'Bundle',
+          sampleCount: 4,
+          caseOrderingMode: 'alternating'
+        }
+      ],
+      jobsCount: 1,
+      created_at: new Date(),
+      updated_at: new Date()
+    } as never;
+
+    (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
+
+    expect(component.getSelectedBundleCount()).toBe(1);
+    expect(component.getBundleOrderingOverrides()).toEqual([
+      { name: 'Bundle', label: 'Abwechselnd' }
+    ]);
+    expect(component.variablesFormArray.at(0).get('bundleCaseOrderingMode')?.value).toBe('alternating');
+
+    component.onVariablesSelectionChange(['UNIT::VAR']);
+    component.onStartTraining();
+
+    expect(codingTrainingBackendService.updateCoderTraining).toHaveBeenCalled();
+    const updateCall = codingTrainingBackendService.updateCoderTraining.mock.calls[0];
+    expect(updateCall[7]).toEqual([
+      {
+        id: 5,
+        name: 'Bundle',
+        sampleCount: 4,
+        caseOrderingMode: 'alternating'
+      }
+    ]);
+    expect(updateCall[8]).toBe('continuous');
+  });
+
   it('skips derived variables from bundles when disabled and submits only included variables', () => {
     component.trainingForm.get('includeDerivedVariables')?.setValue(false);
     component.onBundleSelectionChange([5]);
