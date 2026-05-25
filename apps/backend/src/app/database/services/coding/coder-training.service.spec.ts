@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CoderTrainingService } from './coder-training.service';
+import { CoderTrainingService, TrainingResponseIdsMap } from './coder-training.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
@@ -20,7 +20,7 @@ import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.serv
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import User from '../../entities/user.entity';
 import { MissingsProfilesService } from './missings-profiles.service';
-import type { CaseSelectionMode } from '../../entities/coder-training.entity';
+import type { CaseSelectionMode, ReferenceMode } from '../../entities/coder-training.entity';
 
 describe('CoderTrainingService', () => {
   let service: CoderTrainingService;
@@ -34,6 +34,7 @@ describe('CoderTrainingService', () => {
   const mockRepository = {
     find: jest.fn(),
     findOne: jest.fn(),
+    count: jest.fn().mockResolvedValue(0),
     save: jest.fn(),
     delete: jest.fn(),
     create: jest.fn()
@@ -52,6 +53,9 @@ describe('CoderTrainingService', () => {
   };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+    mockRepository.count.mockResolvedValue(0);
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CoderTrainingService,
@@ -352,6 +356,9 @@ describe('CoderTrainingService', () => {
         id: 1,
         workspace_id: 1,
         label: 'Old Label',
+        case_selection_mode: 'random',
+        reference_training_ids: [44],
+        reference_mode: 'same',
         suppress_general_instructions: false,
         coders: [{ user_id: 10 }],
         variables: [{ variable_id: 'v1', unit_name: 'u1', sample_count: 5 }],
@@ -360,6 +367,7 @@ describe('CoderTrainingService', () => {
       };
 
       mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.count.mockRejectedValue(new Error('Display-only update must not check coding progress'));
       (coderTrainingRepository.save as jest.Mock).mockClear();
       (coderTrainingCoderRepository.delete as jest.Mock).mockClear();
       (codingJobRepository.save as jest.Mock).mockClear();
@@ -382,13 +390,169 @@ describe('CoderTrainingService', () => {
       );
 
       expect(coderTrainingRepository.save).toHaveBeenCalledWith(expect.objectContaining({
-        suppress_general_instructions: true
+        suppress_general_instructions: true,
+        reference_training_ids: [44],
+        reference_mode: 'same'
       }));
       expect(coderTrainingCoderRepository.delete).not.toHaveBeenCalled();
+      expect(mockRepository.count).not.toHaveBeenCalled();
       expect(codingJobRepository.save).toHaveBeenCalledWith(expect.objectContaining({
         id: 100,
         suppressGeneralInstructions: true
       }));
+    });
+
+    it('should recreate jobs when only the case selection mode changes', async () => {
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages')
+        .mockResolvedValue([]);
+      const existingTraining = {
+        id: 1,
+        workspace_id: 1,
+        label: 'Old Label',
+        case_selection_mode: 'oldest_first',
+        coders: [{ user_id: 10 }],
+        variables: [{ variable_id: 'v1', unit_name: 'u1', sample_count: 5 }],
+        bundles: [],
+        codingJobs: [{ id: 100 }]
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.delete.mockClear();
+      (coderTrainingRepository.save as jest.Mock).mockClear();
+
+      const result = await service.updateCoderTraining(
+        1,
+        1,
+        'Updated Label',
+        [{ id: 10, name: 'Coder 1' }],
+        [{ variableId: 'v1', unitId: 'u1', sampleCount: 5 }],
+        undefined,
+        [{ variableId: 'v1', unitName: 'u1', sampleCount: 5 }],
+        [],
+        undefined,
+        'newest_first'
+      );
+
+      expect(result.success).toBe(true);
+      expect(coderTrainingRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        case_selection_mode: 'newest_first'
+      }));
+      expect(mockRepository.count).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.arrayContaining([
+          expect.objectContaining({ coding_job_id: expect.any(Object), code: expect.any(Object) })
+        ])
+      }));
+      expect(mockRepository.delete).toHaveBeenCalledWith({ coding_job_id: 100 });
+      expect(mockRepository.delete).toHaveBeenCalledWith(100);
+      expect(generatePackagesSpy).toHaveBeenCalledWith(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [{ variableId: 'v1', unitId: 'u1', sampleCount: 5 }],
+        {
+          caseSelectionMode: 'newest_first',
+          referenceTrainingIds: [],
+          referenceMode: undefined
+        }
+      );
+
+      generatePackagesSpy.mockRestore();
+    });
+
+    it('should reject destructive updates when the training already has coding progress', async () => {
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages')
+        .mockResolvedValue([]);
+      const existingTraining = {
+        id: 1,
+        workspace_id: 1,
+        label: 'Old Label',
+        case_selection_mode: 'oldest_first',
+        coders: [{ user_id: 10 }],
+        variables: [{ variable_id: 'v1', unit_name: 'u1', sample_count: 5 }],
+        bundles: [],
+        codingJobs: [{ id: 100 }]
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.count.mockResolvedValueOnce(1);
+      mockRepository.delete.mockClear();
+      (coderTrainingRepository.save as jest.Mock).mockClear();
+
+      const result = await service.updateCoderTraining(
+        1,
+        1,
+        'Updated Label',
+        [{ id: 10, name: 'Coder 1' }],
+        [{ variableId: 'v1', unitId: 'u1', sampleCount: 5 }],
+        undefined,
+        [{ variableId: 'v1', unitName: 'u1', sampleCount: 5 }],
+        [],
+        undefined,
+        'newest_first'
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('bereits bearbeitet');
+      expect(coderTrainingRepository.save).not.toHaveBeenCalled();
+      expect(mockRepository.delete).not.toHaveBeenCalled();
+      expect(generatePackagesSpy).not.toHaveBeenCalled();
+
+      generatePackagesSpy.mockRestore();
+    });
+
+    it('should recreate jobs when only the reference training selection changes', async () => {
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages')
+        .mockResolvedValue([]);
+      const existingTraining = {
+        id: 1,
+        workspace_id: 1,
+        label: 'Old Label',
+        case_selection_mode: 'oldest_first',
+        reference_training_ids: null,
+        reference_mode: null,
+        coders: [{ user_id: 10 }],
+        variables: [{ variable_id: 'v1', unit_name: 'u1', sample_count: 5 }],
+        bundles: [],
+        codingJobs: [{ id: 100 }]
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.delete.mockClear();
+      (coderTrainingRepository.save as jest.Mock).mockClear();
+
+      const result = await service.updateCoderTraining(
+        1,
+        1,
+        'Updated Label',
+        [{ id: 10, name: 'Coder 1' }],
+        [{ variableId: 'v1', unitId: 'u1', sampleCount: 5 }],
+        undefined,
+        [{ variableId: 'v1', unitName: 'u1', sampleCount: 5 }],
+        [],
+        undefined,
+        'oldest_first',
+        [44],
+        'same'
+      );
+
+      expect(result.success).toBe(true);
+      expect(coderTrainingRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        reference_training_ids: [44],
+        reference_mode: 'same'
+      }));
+      expect(mockRepository.delete).toHaveBeenCalledWith({ coding_job_id: 100 });
+      expect(mockRepository.delete).toHaveBeenCalledWith(100);
+      expect(generatePackagesSpy).toHaveBeenCalledWith(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [{ variableId: 'v1', unitId: 'u1', sampleCount: 5 }],
+        {
+          caseSelectionMode: 'oldest_first',
+          referenceTrainingIds: [44],
+          referenceMode: 'same'
+        }
+      );
+
+      generatePackagesSpy.mockRestore();
     });
 
     it('should keep existing assignments when update omits optional assignment fields', async () => {
@@ -713,6 +877,65 @@ describe('CoderTrainingService', () => {
   });
 
   describe('generateCoderTrainingPackages', () => {
+    const makeResponseEntity = (responseId: number) => ({
+      id: responseId,
+      variableid: 'var1',
+      value: `value-${responseId}`,
+      unitid: responseId + 100,
+      unit: {
+        alias: 'Alias Unit',
+        name: 'Real Unit',
+        booklet: {
+          person: {
+            login: `person-${responseId}`,
+            code: `${responseId}`,
+            group: 'Group'
+          },
+          bookletinfo: {
+            name: 'Booklet'
+          }
+        }
+      }
+    });
+
+    const mockResponseRepository = (responses: ReturnType<typeof makeResponseEntity>[]) => {
+      const responseQb = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue(responses)
+      };
+      const responseRepository = {
+        createQueryBuilder: jest.fn().mockReturnValue(responseQb)
+      };
+
+      (service as unknown as { responseRepository: typeof responseRepository }).responseRepository = responseRepository;
+
+      return responseQb;
+    };
+
+    const mockReferenceQuery = (rows: Array<{
+      unitName: string | null;
+      unitAlias: string | null;
+      variableId: string;
+      responseId: number;
+    }>) => {
+      const referenceQb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        distinct: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(rows)
+      };
+
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn().mockReturnValue(referenceQb);
+
+      return referenceQb;
+    };
+
     it('should match configured units by alias or visible unit name', async () => {
       const responseQb = {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
@@ -744,6 +967,52 @@ describe('CoderTrainingService', () => {
           responses: []
         }
       ]);
+    });
+
+    it('should keep the same referenced cases when the training uses a unit alias', async () => {
+      mockResponseRepository([makeResponseEntity(1), makeResponseEntity(2), makeResponseEntity(3)]);
+      mockReferenceQuery([{
+        unitName: 'Real Unit',
+        unitAlias: 'Alias Unit',
+        variableId: 'var1',
+        responseId: 2
+      }]);
+
+      const result = await service.generateCoderTrainingPackages(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [{ unitId: 'Alias Unit', variableId: 'var1', sampleCount: 5 }],
+        {
+          caseSelectionMode: 'random',
+          referenceTrainingIds: [99],
+          referenceMode: 'same'
+        }
+      );
+
+      expect(result[0].responses.map(response => response.responseId)).toEqual([2]);
+    });
+
+    it('should return no cases for same mode when the reference training has no matching unit variable', async () => {
+      mockResponseRepository([makeResponseEntity(1), makeResponseEntity(2)]);
+      mockReferenceQuery([{
+        unitName: 'Other Unit',
+        unitAlias: null,
+        variableId: 'otherVar',
+        responseId: 2
+      }]);
+
+      const result = await service.generateCoderTrainingPackages(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [{ unitId: 'Alias Unit', variableId: 'var1', sampleCount: 5 }],
+        {
+          caseSelectionMode: 'random',
+          referenceTrainingIds: [99],
+          referenceMode: 'same'
+        }
+      );
+
+      expect(result[0].responses).toEqual([]);
     });
   });
 
@@ -891,6 +1160,77 @@ describe('CoderTrainingService', () => {
     });
   });
 
+  describe('applyReferenceFilter', () => {
+    type ReferenceResponse = {
+      responseId: number;
+      unitAlias: string;
+      variableId: string;
+      unitName: string;
+      value: string;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      bookletName: string;
+      variable: string;
+    };
+
+    type ApplyReferenceFilterFn = (
+      responses: ReferenceResponse[],
+      referenceMode: ReferenceMode | undefined,
+      referenceResponseIdsByConfig: TrainingResponseIdsMap | null,
+      configKey: string
+    ) => ReferenceResponse[];
+
+    const getApplyReferenceFilter = (svc: CoderTrainingService): ApplyReferenceFilterFn => (
+      svc as unknown as { applyReferenceFilter: ApplyReferenceFilterFn }
+    ).applyReferenceFilter.bind(svc);
+
+    const responses: ReferenceResponse[] = [
+      {
+        responseId: 1,
+        unitAlias: 'alias',
+        variableId: 'var',
+        unitName: 'unit',
+        value: 'one',
+        personLogin: 'login-1',
+        personCode: 'code-1',
+        personGroup: 'group',
+        bookletName: 'booklet',
+        variable: 'var'
+      },
+      {
+        responseId: 2,
+        unitAlias: 'alias',
+        variableId: 'var',
+        unitName: 'unit',
+        value: 'two',
+        personLogin: 'login-2',
+        personCode: 'code-2',
+        personGroup: 'group',
+        bookletName: 'booklet',
+        variable: 'var'
+      }
+    ];
+
+    it('should keep only referenced cases for same mode', () => {
+      const result = getApplyReferenceFilter(service)(responses, 'same', { 'unit:var': [2] }, 'unit:var');
+
+      expect(result.map(r => r.responseId)).toEqual([2]);
+    });
+
+    it('should return no cases for same mode when the reference has no matching variable', () => {
+      const result = getApplyReferenceFilter(service)(responses, 'same', { 'other:var': [2] }, 'unit:var');
+
+      expect(result).toEqual([]);
+    });
+
+    it('should keep all cases for different mode when the reference has no matching variable', () => {
+      const result = getApplyReferenceFilter(service)(responses, 'different', { 'other:var': [2] }, 'unit:var');
+
+      expect(result).toEqual(responses);
+    });
+  });
+
   describe('deriveAutomaticDiscussionResult', () => {
     type DeriveAutomaticDiscussionResultFn = (
       coders: Array<{
@@ -961,10 +1301,30 @@ describe('CoderTrainingService', () => {
         andWhere: jest.fn().mockReturnThis(),
         distinct: jest.fn().mockReturnThis(),
         getRawMany: jest.fn().mockResolvedValue([
-          { unitKey: 'unitA', variableId: 'v1', responseId: 5 },
-          { unitKey: 'unitA', variableId: 'v1', responseId: 5 },
-          { unitKey: 'unitA', variableId: 'v1', responseId: 7 },
-          { unitKey: 'unitB', variableId: 'v2', responseId: 3 }
+          {
+            unitName: 'unitA',
+            unitAlias: 'aliasA',
+            variableId: 'v1',
+            responseId: 5
+          },
+          {
+            unitName: 'unitA',
+            unitAlias: 'aliasA',
+            variableId: 'v1',
+            responseId: 5
+          },
+          {
+            unitName: 'unitA',
+            unitAlias: 'aliasA',
+            variableId: 'v1',
+            responseId: 7
+          },
+          {
+            unitName: 'unitB',
+            unitAlias: null,
+            variableId: 'v2',
+            responseId: 3
+          }
         ])
       };
 
@@ -975,6 +1335,7 @@ describe('CoderTrainingService', () => {
       expect((mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder).toHaveBeenCalledWith('cju');
       expect(result).toEqual({
         'unitA:v1': [5, 7],
+        'aliasA:v1': [5, 7],
         'unitB:v2': [3]
       });
     });

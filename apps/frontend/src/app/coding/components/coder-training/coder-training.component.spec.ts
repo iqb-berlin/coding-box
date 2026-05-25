@@ -437,6 +437,78 @@ describe('CoderTrainingComponent', () => {
     expect(updateCall[8]).toBe('continuous');
   });
 
+  it('preserves saved case selection and reference options when editing a training', () => {
+    component.editTraining = {
+      id: 78,
+      workspace_id: 1,
+      label: 'Reference training',
+      case_ordering_mode: 'continuous',
+      case_selection_mode: 'random_per_testgroup',
+      reference_training_ids: [99],
+      reference_mode: 'different',
+      assigned_coders: [1],
+      assigned_variables: [
+        {
+          unitName: 'UNIT',
+          variableId: 'VAR',
+          sampleCount: 2
+        }
+      ],
+      assigned_variable_bundles: [],
+      jobsCount: 1,
+      created_at: new Date(),
+      updated_at: new Date()
+    } as never;
+
+    (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
+
+    expect(component.trainingForm.get('caseSelectionMode')?.value).toBe('random_per_testgroup');
+    expect(component.trainingForm.get('referenceTrainingIds')?.value).toEqual([99]);
+    expect(component.trainingForm.get('referenceMode')?.value).toBe('different');
+
+    component.onStartTraining();
+
+    expect(codingTrainingBackendService.updateCoderTraining).toHaveBeenCalled();
+    const updateCall = codingTrainingBackendService.updateCoderTraining.mock.calls[0];
+    expect(updateCall[9]).toBe('random_per_testgroup');
+    expect(updateCall[10]).toEqual([99]);
+    expect(updateCall[11]).toBe('different');
+  });
+
+  it('submits an empty reference list when references are cleared while editing', () => {
+    component.editTraining = {
+      id: 79,
+      workspace_id: 1,
+      label: 'Clear references',
+      case_ordering_mode: 'continuous',
+      case_selection_mode: 'oldest_first',
+      reference_training_ids: [99],
+      reference_mode: 'same',
+      assigned_coders: [1],
+      assigned_variables: [
+        {
+          unitName: 'UNIT',
+          variableId: 'VAR',
+          sampleCount: 2
+        }
+      ],
+      assigned_variable_bundles: [],
+      jobsCount: 1,
+      created_at: new Date(),
+      updated_at: new Date()
+    } as never;
+
+    (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
+
+    component.trainingForm.get('referenceTrainingIds')?.setValue([]);
+    component.onStartTraining();
+
+    expect(codingTrainingBackendService.updateCoderTraining).toHaveBeenCalled();
+    const updateCall = codingTrainingBackendService.updateCoderTraining.mock.calls[0];
+    expect(updateCall[10]).toEqual([]);
+    expect(updateCall[11]).toBeUndefined();
+  });
+
   it('skips derived variables from bundles when disabled and submits only included variables', () => {
     component.trainingForm.get('includeDerivedVariables')?.setValue(false);
     component.onBundleSelectionChange([5]);
