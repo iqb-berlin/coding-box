@@ -67,6 +67,7 @@ type FileStatus = {
   exists: boolean;
   schemaValid?: boolean;
   schemaErrors?: string[];
+  schemaWarnings?: string[];
   ignored?: boolean;
   parents?: string[];
 };

@@ -656,6 +656,12 @@
                         report_problem
                       </mat-icon>
                       }
+                      @if ((file.schemaWarnings || []).length > 0) {
+                      <mat-icon class="file-status-icon schema-warning-icon"
+                        matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                        warning
+                      </mat-icon>
+                      }
                       @if (file.exists) {
                       <button mat-icon-button class="file-action-button" (click)="openBookletInfo(file.filename)"
                         matTooltip="Testheft anzeigen" [attr.aria-label]="'Testheft anzeigen'">
@@ -778,6 +784,12 @@
                         report_problem
                       </mat-icon>
                       }
+                      @if ((file.schemaWarnings || []).length > 0) {
+                      <mat-icon class="file-status-icon schema-warning-icon"
+                        matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                        warning
+                      </mat-icon>
+                      }
                       @if (file.exists) {
                       <button mat-icon-button class="file-action-button" (click)="openUnitInfo(file.filename)"
                         matTooltip="Aufgabe anzeigen" [attr.aria-label]="'Aufgabe anzeigen'">
@@ -868,6 +880,12 @@
                       report_problem
                     </mat-icon>
                     }
+                    @if ((file.schemaWarnings || []).length > 0) {
+                    <mat-icon class="file-status-icon schema-warning-icon"
+                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                      warning
+                    </mat-icon>
+                    }
                     @if (file.exists) {
                     <button mat-icon-button class="file-action-button" (click)="openSchemeFile(file.filename)"
                       matTooltip="Kodierschema anzeigen" [attr.aria-label]="'Kodierschema anzeigen'">
@@ -953,6 +971,12 @@
                       report_problem
                     </mat-icon>
                     }
+                    @if ((file.schemaWarnings || []).length > 0) {
+                    <mat-icon class="file-status-icon schema-warning-icon"
+                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                      warning
+                    </mat-icon>
+                    }
                     </div>
                   </li>
                   }
@@ -1030,6 +1054,12 @@
                     @if (file.schemaValid === false) {
                     <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
                       report_problem
+                    </mat-icon>
+                    }
+                    @if ((file.schemaWarnings || []).length > 0) {
+                    <mat-icon class="file-status-icon schema-warning-icon"
+                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                      warning
                     </mat-icon>
                     }
                     @if (file.exists) {
@@ -1117,6 +1147,12 @@
                       report_problem
                     </mat-icon>
                     }
+                    @if ((file.schemaWarnings || []).length > 0) {
+                    <mat-icon class="file-status-icon schema-warning-icon"
+                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                      warning
+                    </mat-icon>
+                    }
                     </div>
                   </li>
                   }
@@ -1194,6 +1230,12 @@
                     @if (file.schemaValid === false) {
                     <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
                       report_problem
+                    </mat-icon>
+                    }
+                    @if ((file.schemaWarnings || []).length > 0) {
+                    <mat-icon class="file-status-icon schema-warning-icon"
+                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                      warning
                     </mat-icon>
                     }
                     @if (file.exists) {
