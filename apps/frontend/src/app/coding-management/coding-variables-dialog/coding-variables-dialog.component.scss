@@ -182,6 +182,23 @@
   color: #777;
 }
 
+.training-required-chip {
+  margin-top: 8px;
+  min-height: 24px;
+  width: fit-content;
+  background-color: #fff4e5 !important;
+  color: #a84900 !important;
+  border: 1px solid #ffcc80;
+
+  mat-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
+    font-size: 14px;
+    color: #e65100;
+  }
+}
+
 // Type chip styling
 mat-chip-set {
   mat-chip {

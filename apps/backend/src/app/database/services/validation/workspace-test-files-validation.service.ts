@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { ILike, In, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
 import * as crypto from 'crypto';
 import Ajv, { ValidateFunction } from 'ajv';
@@ -31,8 +31,15 @@ type FileStatus = {
   exists: boolean;
   schemaValid?: boolean;
   schemaErrors?: string[];
+  schemaWarnings?: string[];
   ignored?: boolean;
   parents?: string[];
+};
+
+type SchemaValidationResult = {
+  schemaValid: boolean;
+  errors: string[];
+  warnings?: string[];
 };
 
 type TestletDto = {
@@ -81,7 +88,7 @@ type ValidationProgressReporter = (
 ) => void | Promise<void>;
 
 // Bump this whenever test-file validation semantics or result shape changes.
-export const TEST_FILES_VALIDATION_CACHE_VERSION = 3;
+export const TEST_FILES_VALIDATION_CACHE_VERSION = 4;
 
 @Injectable()
 export class WorkspaceTestFilesValidationService {
@@ -332,13 +339,17 @@ export class WorkspaceTestFilesValidationService {
 
       const summarizeSchemaResults = (
         label: string,
-        results: Map<string, { schemaValid: boolean; errors: string[] }>
+        results: Map<string, SchemaValidationResult>
       ): void => {
         const entries = Array.from(results.entries());
         const ok = entries.filter(([, r]) => r.schemaValid).length;
         const failed = entries.length - ok;
+        const warnings = entries.reduce(
+          (sum, [, r]) => sum + (r.warnings || []).length,
+          0
+        );
         this.logger.log(
-          `${label} validation results for workspace ${workspaceId}: total=${entries.length}, ok=${ok}, failed=${failed}`
+          `${label} validation results for workspace ${workspaceId}: total=${entries.length}, ok=${ok}, failed=${failed}, warnings=${warnings}`
         );
         if (failed > 0) {
           const maxFailedToLog = 20;
@@ -357,6 +368,18 @@ export class WorkspaceTestFilesValidationService {
               `${label} validation: ${failed - maxFailedToLog} more failed file(s) not logged (preview limit reached).`
             );
           }
+        }
+        if (warnings > 0) {
+          const warningPreview = entries
+            .filter(([, r]) => (r.warnings || []).length > 0)
+            .slice(0, 20)
+            .map(([key, r]) => ({
+              key,
+              warnings: (r.warnings || []).slice(0, 5)
+            }));
+          this.logger.warn(
+            `${label} validation warnings for workspace ${workspaceId}: ${JSON.stringify(warningPreview)}`
+          );
         }
       };
 
@@ -1296,7 +1319,7 @@ export class WorkspaceTestFilesValidationService {
     xmlSchemaResults: Map<string, { schemaValid: boolean; errors: string[] }>,
     codingSchemeResults: Map<
     string,
-    { schemaValid: boolean; errors: string[] }
+    SchemaValidationResult
     >,
     exclusions: WorkspaceSettingsDto
   ): ValidationData | null {
@@ -1552,6 +1575,9 @@ export class WorkspaceTestFilesValidationService {
         const schemaInfo = codingSchemeResults.get(key);
         if (schemaInfo) {
           status.schemaValid = schemaInfo.schemaValid;
+          if (schemaInfo.warnings?.length) {
+            status.schemaWarnings = schemaInfo.warnings;
+          }
           if (!schemaInfo.schemaValid) {
             status.schemaErrors = schemaInfo.errors;
           }
@@ -1709,46 +1735,118 @@ export class WorkspaceTestFilesValidationService {
     return this.codingSchemeValidator;
   }
 
+  private static isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
+  private normalizeLegacyCodingSchemeForValidation(
+    codingScheme: unknown
+  ): { value: unknown; warnings: string[] } {
+    if (!WorkspaceTestFilesValidationService.isRecord(codingScheme)) {
+      return { value: codingScheme, warnings: [] };
+    }
+
+    const variableCodings = codingScheme.variableCodings;
+    if (!Array.isArray(variableCodings)) {
+      return { value: codingScheme, warnings: [] };
+    }
+
+    const legacyCodeModelLabels: string[] = [];
+    const normalizedVariableCodings = variableCodings.map((variable, index) => {
+      if (
+        !WorkspaceTestFilesValidationService.isRecord(variable) ||
+        variable.codeModel !== 'NONE'
+      ) {
+        return variable;
+      }
+
+      const normalizedVariable = { ...variable };
+      delete normalizedVariable.codeModel;
+
+      let label = `#${index + 1}`;
+      if (typeof normalizedVariable.id === 'string' && normalizedVariable.id) {
+        label = normalizedVariable.id;
+      } else if (
+        typeof normalizedVariable.alias === 'string' &&
+        normalizedVariable.alias
+      ) {
+        label = normalizedVariable.alias;
+      }
+
+      legacyCodeModelLabels.push(label);
+      return normalizedVariable;
+    });
+
+    return {
+      value: {
+        ...codingScheme,
+        variableCodings: normalizedVariableCodings
+      },
+      warnings: this.createLegacyCodeModelWarnings(legacyCodeModelLabels)
+    };
+  }
+
+  private createLegacyCodeModelWarnings(labels: string[]): string[] {
+    if (labels.length === 0) {
+      return [];
+    }
+
+    if (labels.length === 1) {
+      return [
+        `Legacy codeModel "NONE" wurde bei Variable "${labels[0]}" als fehlender Wert behandelt.`
+      ];
+    }
+
+    const preview = labels
+      .slice(0, 3)
+      .map(label => `"${label}"`)
+      .join(', ');
+    const suffix = labels.length > 3 ? ', ...' : '';
+    return [
+      `Legacy codeModel "NONE" wurde bei ${labels.length} Variablen als fehlender Wert behandelt (z. B. ${preview}${suffix}).`
+    ];
+  }
+
+  private formatAjvErrors(validator: ValidateFunction): string[] {
+    return (validator.errors || []).map(error => {
+      const location = error.instancePath || '/';
+      const message = error.message || 'ist nicht schema-konform';
+      const additionalProperty =
+        error.keyword === 'additionalProperties' &&
+        typeof error.params?.additionalProperty === 'string' ?
+          ` (${error.params.additionalProperty})` :
+          '';
+      return `${location} ${message}${additionalProperty}`;
+    });
+  }
+
   private async validateAllCodingSchemes(
     workspaceId: number
-  ): Promise<Map<string, { schemaValid: boolean; errors: string[] }>> {
-    const results = new Map<
-    string,
-    { schemaValid: boolean; errors: string[] }
-    >();
+  ): Promise<Map<string, SchemaValidationResult>> {
+    const results = new Map<string, SchemaValidationResult>();
 
-    const schemerFiles = await this.fileUploadRepository.find({
-      where: { workspace_id: workspaceId, file_type: 'Schemer' },
+    const codingSchemeFiles = await this.fileUploadRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_type: 'Resource',
+        file_id: ILike('%.VOCS')
+      },
       select: ['file_id', 'filename', 'data']
     });
 
-    if (schemerFiles.length === 0) {
+    if (codingSchemeFiles.length === 0) {
       return results;
     }
 
     const validator = this.getCodingSchemeValidator();
 
-    for (const file of schemerFiles) {
+    for (const file of codingSchemeFiles) {
       const key = (file.file_id || file.filename || '').toUpperCase();
 
       try {
-        const html = file.data;
-        const $ = cheerio.load(html);
-        const metaDataElement = $('script[type="application/ld+json"]');
-
-        if (!metaDataElement.length) {
-          results.set(key, {
-            schemaValid: false,
-            errors: [
-              'No <script type="application/ld+json"> block found in HTML'
-            ]
-          });
-          continue;
-        }
-
         let metadata: unknown;
         try {
-          metadata = JSON.parse(metaDataElement.text());
+          metadata = JSON.parse(file.data);
         } catch (parseError) {
           const message =
             parseError instanceof Error ?
@@ -1756,24 +1854,38 @@ export class WorkspaceTestFilesValidationService {
               'Unknown JSON parse error';
           results.set(key, {
             schemaValid: false,
-            errors: [`Invalid JSON in ld+json: ${message}`]
+            errors: [`Invalid JSON in coding scheme: ${message}`]
           });
           continue;
         }
 
-        const valid = validator(metadata);
+        const normalized = this.normalizeLegacyCodingSchemeForValidation(
+          metadata
+        );
+        const valid = validator(normalized.value);
         if (!valid) {
-          const errors = (validator.errors || []).map(
-            e => `${e.instancePath} ${e.message}`
-          );
-          results.set(key, { schemaValid: false, errors });
+          const errors = this.formatAjvErrors(validator);
+          results.set(key, {
+            schemaValid: false,
+            errors,
+            warnings: normalized.warnings
+          });
           const maxErrors = 10;
           this.logger.warn(
-            `JSON schema validation failed: Schemer:${key} (errors: ${errors.length}) ${JSON.stringify(errors.slice(0, maxErrors))}`
+            `JSON schema validation failed: Resource:${key} (errors: ${errors.length}) ${JSON.stringify(errors.slice(0, maxErrors))}`
           );
         } else {
-          results.set(key, { schemaValid: true, errors: [] });
-          this.logger.debug(`JSON schema validation ok: Schemer:${key}`);
+          results.set(key, {
+            schemaValid: true,
+            errors: [],
+            warnings: normalized.warnings
+          });
+          this.logger.debug(`JSON schema validation ok: Resource:${key}`);
+        }
+        if (normalized.warnings.length > 0) {
+          this.logger.debug(
+            `JSON schema validation warnings: Resource:${key} ${JSON.stringify(normalized.warnings)}`
+          );
         }
       } catch (e) {
         const message =
@@ -1782,7 +1894,7 @@ export class WorkspaceTestFilesValidationService {
             'Unknown coding scheme validation error';
         results.set(key, { schemaValid: false, errors: [message] });
         this.logger.error(
-          `JSON schema validation error: Schemer:${key}: ${message}`,
+          `JSON schema validation error: Resource:${key}: ${message}`,
           e instanceof Error ? e.stack : undefined
         );
       }

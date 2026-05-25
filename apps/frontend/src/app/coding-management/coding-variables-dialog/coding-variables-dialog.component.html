@@ -33,6 +33,15 @@
             </mat-option>
           </mat-select>
         </mat-form-field>
+
+        <mat-form-field class="filter-field">
+          <mat-label>{{ 'coding-variables-dialog.filters.training-effort' | translate }}</mat-label>
+          <mat-select [(ngModel)]="trainingRequiredFilter" (selectionChange)="applyFilter()">
+            <mat-option value="all">{{ 'coding-variables-dialog.filters.all' | translate }}</mat-option>
+            <mat-option value="required">{{ 'coding-variables-dialog.filters.only-increased' | translate }}</mat-option>
+            <mat-option value="not-required">{{ 'coding-variables-dialog.filters.only-normal' | translate }}</mat-option>
+          </mat-select>
+        </mat-form-field>
       </div>
 
       <div class="filter-row">
@@ -93,6 +102,12 @@
                 <div class="variable-id">ID: {{ element.variableId }}</div>
               } @else {
                 <div class="variable-alias">{{ element.variableId }}</div>
+              }
+              @if (element.coderTrainingRequired) {
+                <mat-chip class="training-required-chip" matTooltip="{{ 'coding-variables-dialog.training-required-tooltip' | translate }}" matTooltipPosition="above">
+                  <mat-icon>school</mat-icon>
+                  {{ 'coding-variables-dialog.training-required-chip' | translate }}
+                </mat-chip>
               }
             </td>
           </ng-container>

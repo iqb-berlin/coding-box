@@ -23,4 +23,5 @@ export interface VariableDetailDto {
   isDerived?: boolean;
   hasManualInstruction?: boolean;
   hasClosedCoding?: boolean;
+  coderTrainingRequired?: boolean;
 }

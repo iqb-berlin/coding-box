@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { CodingVariablesDialogComponent } from './coding-variables-dialog.component';
 import { FileBackendService } from '../../shared/services/file/file-backend.service';
@@ -23,7 +24,8 @@ describe('CodingVariablesDialogComponent', () => {
           type: 'string',
           hasCodingScheme: true,
           codingSchemeRef: 'Unit A.VOCS',
-          codes: [{ id: 1, label: 'Code 1' }]
+          codes: [{ id: 1, label: 'Code 1' }],
+          coderTrainingRequired: true
         },
         {
           id: 'INTERNAL_2',
@@ -69,6 +71,7 @@ describe('CodingVariablesDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         NoopAnimationsModule,
+        TranslateModule.forRoot(),
         CodingVariablesDialogComponent
       ],
       providers: [
@@ -121,6 +124,19 @@ describe('CodingVariablesDialogComponent', () => {
     expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['INTERNAL_2']);
   });
 
+  it('should filter variables by training effort', () => {
+    component.trainingRequiredFilter = 'required';
+    component.applyFilter();
+    expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['INTERNAL_1']);
+
+    component.trainingRequiredFilter = 'not-required';
+    component.applyFilter();
+    expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual([
+      'INTERNAL_2',
+      'INTERNAL_3'
+    ]);
+  });
+
   it('should distinguish source data from filtered results', () => {
     component.variableIdFilter = 'missing';
     component.applyFilter();
@@ -135,6 +151,7 @@ describe('CodingVariablesDialogComponent', () => {
     component.variableIdFilter = 'INTERNAL_1';
     component.hasCodingSchemeFilter = true;
     component.hasCodesFilter = true;
+    component.trainingRequiredFilter = 'required';
     component.selectedTypes = ['string'];
     component.applyFilter();
 
@@ -143,6 +160,7 @@ describe('CodingVariablesDialogComponent', () => {
     expect(component.variableIdFilter).toBe('');
     expect(component.hasCodingSchemeFilter).toBe(false);
     expect(component.hasCodesFilter).toBe(false);
+    expect(component.trainingRequiredFilter).toBe('all');
     expect(component.selectedTypes).toEqual([]);
     expect(component.dataSource.filteredData).toHaveLength(3);
   });
