@@ -68,6 +68,16 @@ interface CompactByVariableCoding {
   updatedAt: Date | string | null;
 }
 
+interface AggregatedMostFrequentCoding {
+  code: number;
+  codingIssueOption: number | null;
+}
+
+interface AggregatedMostFrequentVariableData {
+  codings: AggregatedMostFrequentCoding[];
+  comments: string[];
+}
+
 interface CompactByVariableGroup {
   key: string;
   unitName: string;
@@ -161,6 +171,47 @@ export class CodingExportService {
       return mappedCode.toString();
     }
     return `${mappedCode} (${issueSuffix})`;
+  }
+
+  private formatCodeWithIssueSuffixes(
+    code: number | null | undefined,
+    issueOptions: number[]
+  ): string {
+    const mappedCode = mapCodeForExport(code);
+    if (mappedCode === null) {
+      return '';
+    }
+
+    const issueSuffixes = issueOptions
+      .map(issueOption => this.getCodingIssueSuffix(issueOption))
+      .filter(Boolean);
+    if (issueSuffixes.length === 0) {
+      return mappedCode.toString();
+    }
+
+    return `${mappedCode} (${issueSuffixes.join('; ')})`;
+  }
+
+  private getCodingIssueOptionsForModalCode(
+    codings: AggregatedMostFrequentCoding[],
+    modalCode: number | null | undefined
+  ): number[] {
+    if (modalCode === null || modalCode === undefined) {
+      return [];
+    }
+
+    const normalizedIssueOptions = new Set<number>();
+    codings.forEach(coding => {
+      if (coding.code !== modalCode) {
+        return;
+      }
+      const normalizedIssueOption = this.normalizeCodingIssueOption(coding.codingIssueOption);
+      if (normalizedIssueOption !== null) {
+        normalizedIssueOptions.add(normalizedIssueOption);
+      }
+    });
+
+    return Array.from(normalizedIssueOptions).sort((a, b) => a - b);
   }
 
   private variablePageMapsCache = new Map<string, Map<string, string>>();
@@ -759,6 +810,7 @@ export class CodingExportService {
         .addSelect('cju.unit_name', 'unitName')
         .addSelect('cju.variable_id', 'variableId')
         .addSelect('cju.code', 'cju_code')
+        .addSelect('cju.coding_issue_option', 'coding_issue_option')
         .addSelect('resp.code_v3', 'code_v3')
         .addSelect('resp.code_v2', 'code_v2')
         .addSelect('resp.code_v1', 'code_v1')
@@ -833,18 +885,25 @@ export class CodingExportService {
         .getRawMany();
 
       // Group data by person and variable
-      const personData = new Map<number, Map<string, { codes: number[], comments: string[] }>>();
+      const personData = new Map<number, Map<string, AggregatedMostFrequentVariableData>>();
 
       manualCoding.forEach(row => {
         const pid = parseInt(row.personId, 10);
         const compositeKey = `${row.unitName}_${row.variableId}`;
         if (!personData.has(pid)) personData.set(pid, new Map());
         const varData = personData.get(pid)!;
-        if (!varData.has(compositeKey)) varData.set(compositeKey, { codes: [], comments: [] });
+        if (!varData.has(compositeKey)) varData.set(compositeKey, { codings: [], comments: [] });
         const d = varData.get(compositeKey)!;
         const rawCode = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
         const code = mapCodeForExport(rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null);
-        if (code !== null) d.codes.push(code);
+        if (code !== null) {
+          d.codings.push({
+            code,
+            codingIssueOption: row.coding_issue_option !== null && row.coding_issue_option !== undefined ?
+              parseInt(row.coding_issue_option, 10) :
+              null
+          });
+        }
         if (row.notes) {
           const coderName = row.username || `Job ${row.jobId}`;
           d.comments.push(`${coderName}: ${row.notes}`);
@@ -856,10 +915,12 @@ export class CodingExportService {
         const compositeKey = `${row.unitName}_${row.variableId}`;
         if (!personData.has(pid)) personData.set(pid, new Map());
         const varData = personData.get(pid)!;
-        if (!varData.has(compositeKey)) varData.set(compositeKey, { codes: [], comments: [] });
+        if (!varData.has(compositeKey)) varData.set(compositeKey, { codings: [], comments: [] });
         const d = varData.get(compositeKey)!;
         const code = mapCodeForExport(row.code_v1 !== null && row.code_v1 !== undefined ? parseInt(row.code_v1, 10) : null);
-        if (code !== null) d.codes.push(code);
+        if (code !== null) {
+          d.codings.push({ code, codingIssueOption: null });
+        }
       });
 
       // Write rows
@@ -876,10 +937,17 @@ export class CodingExportService {
 
         for (const vKey of variables) {
           const data = varData?.get(vKey);
-          if (data && data.codes.length > 0) {
-            const modalResult = calculateModalValue(data.codes);
+          if (data && data.codings.length > 0) {
+            const codes = data.codings.map(coding => coding.code);
+            const modalResult = calculateModalValue(codes);
+            const codingIssueOptions = this.getCodingIssueOptionsForModalCode(
+              data.codings,
+              modalResult.modalValue
+            );
             modalValues.set(vKey, modalResult.modalValue);
-            row[vKey] = outputCommentsInsteadOfCodes ? data.comments.join(' | ') : (mapCodeForExport(modalResult.modalValue) ?? '');
+            row[vKey] = outputCommentsInsteadOfCodes ?
+              data.comments.join(' | ') :
+              this.formatCodeWithIssueSuffixes(modalResult.modalValue, codingIssueOptions);
           } else {
             row[vKey] = '';
           }
