@@ -22,6 +22,7 @@ export interface ContentPoolConnectionTestRequest {
 export interface ContentPoolConnectionTestResponse {
   success: boolean;
   acpCount: number;
+  validatedScopes: string[];
   message: string;
 }
 

@@ -42,6 +42,7 @@ export interface TestContentPoolConnectionInput {
 export interface ContentPoolConnectionTestResult {
   success: boolean;
   acpCount: number;
+  validatedScopes: string[];
   message: string;
 }
 
@@ -172,6 +173,10 @@ ContentPoolUploadFilesJobProgress,
 
 @Injectable()
 export class ContentPoolIntegrationService {
+  private readonly requiredCodingBoxScopes = ['acp.read', 'files.read', 'files.write'];
+
+  private readonly scopeProbeAcpId = '__coding-box-connection-test__';
+
   private readonly enabledSettingKey = 'system-content-pool-enabled';
 
   private readonly baseUrlSettingKey = 'system-content-pool-base-url';
@@ -262,7 +267,7 @@ export class ContentPoolIntegrationService {
   }
 
   async testConnection(
-    input: TestContentPoolConnectionInput
+    input: TestContentPoolConnectionInput = {}
   ): Promise<ContentPoolConnectionTestResult> {
     const storedSettings = await this.getRuntimeSettings();
     const baseUrl = (input.baseUrl || storedSettings.baseUrl || '').trim();
@@ -283,15 +288,24 @@ export class ContentPoolIntegrationService {
     }
 
     try {
+      const apiBaseUrl = this.normalizeApiBaseUrl(baseUrl);
       const acps = await this.fetchAcps(
-        this.normalizeApiBaseUrl(baseUrl),
+        apiBaseUrl,
         applicationToken
+      );
+      await this.validateRequiredCodingBoxScopes(
+        apiBaseUrl,
+        applicationToken,
+        acps
       );
 
       return {
         success: true,
         acpCount: acps.length,
-        message: `Verbindung erfolgreich. ${acps.length} ACPs erreichbar.`
+        validatedScopes: [...this.requiredCodingBoxScopes],
+        message:
+          `Verbindung erfolgreich. ${acps.length} ACPs erreichbar. ` +
+          'Benötigte Scopes geprüft.'
       };
     } catch (error) {
       const message = this.extractExceptionMessage(
@@ -955,6 +969,52 @@ export class ContentPoolIntegrationService {
 
   private getApplicationTokenHeaders(token: string): { 'X-Server-Token': string } {
     return { 'X-Server-Token': token };
+  }
+
+  private async validateRequiredCodingBoxScopes(
+    apiBaseUrl: string,
+    token: string,
+    acps: ContentPoolAcpSummary[]
+  ): Promise<void> {
+    const probeAcpId =
+      acps.find(acp => (acp.id || '').trim())?.id ||
+      this.scopeProbeAcpId;
+    const encodedAcpId = encodeURIComponent(probeAcpId);
+    const filesUrl = `${apiBaseUrl}/server/acp/${encodedAcpId}/files`;
+    const uploadUrl = `${filesUrl}/upload?conflictStrategy=reject`;
+    const headers = this.getApplicationTokenHeaders(token);
+
+    await this.assertScopeProbe('files.read', () => this.httpService.axiosRef.get(filesUrl, { headers }));
+    await this.assertScopeProbe('files.write', () => this.httpService.axiosRef.post(uploadUrl, null, { headers }));
+  }
+
+  private async assertScopeProbe(
+    scope: string,
+    request: () => Promise<unknown>
+  ): Promise<void> {
+    try {
+      await request();
+    } catch (error) {
+      if (this.isNonAuthScopeProbeRejection(error)) {
+        return;
+      }
+
+      this.throwHttpError(
+        error,
+        `Content-Pool-Scope ${scope} konnte nicht geprüft werden.`
+      );
+    }
+  }
+
+  private isNonAuthScopeProbeRejection(error: unknown): boolean {
+    if ((error as AxiosError)?.isAxiosError) {
+      const status = (error as AxiosError).response?.status;
+      // These responses happen after the Content-Pool scope guard has accepted the token.
+      return status === 400 || status === 404 || status === 415;
+    }
+
+    return error instanceof BadRequestException ||
+      error instanceof NotFoundException;
   }
 
   private async fetchAcps(
