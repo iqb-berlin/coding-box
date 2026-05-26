@@ -81,6 +81,8 @@ export class WorkspaceFilesService implements OnModuleInit {
   private readonly detailedUnitCacheLogging =
     process.env.DEBUG_UNIT_CACHE === 'true';
 
+  private readonly unitVariableCacheRefreshes = new Map<number, Promise<void>>();
+
   private getCacheKey(workspaceId: number, type: string): string {
     return `workspace_files:${type}:${workspaceId}`;
   }
@@ -2410,6 +2412,23 @@ ${bookletRefs}
   }
 
   async refreshUnitVariableCache(workspaceId: number): Promise<void> {
+    const activeRefresh = this.unitVariableCacheRefreshes.get(workspaceId);
+    if (activeRefresh) {
+      await activeRefresh;
+      return;
+    }
+
+    const refresh = this.refreshUnitVariableCacheInternal(workspaceId);
+    this.unitVariableCacheRefreshes.set(workspaceId, refresh);
+
+    try {
+      await refresh;
+    } finally {
+      this.unitVariableCacheRefreshes.delete(workspaceId);
+    }
+  }
+
+  private async refreshUnitVariableCacheInternal(workspaceId: number): Promise<void> {
     this.logger.log(
       `Refreshing unit variable cache for workspace ${workspaceId}`
     );
