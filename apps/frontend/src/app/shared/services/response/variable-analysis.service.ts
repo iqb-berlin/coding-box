@@ -1,8 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import {
-  Observable
-} from 'rxjs';
+import { Observable } from 'rxjs';
 import { SERVER_URL } from '../../../injection-tokens';
 import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
 
@@ -41,6 +39,20 @@ export interface VariableAnalysisResultDto {
   variableCombos: VariableCombo[];
   frequencies: { [key: string]: VariableFrequencyDto[] };
   total: number;
+}
+
+export interface VariableAnalysisResultPageDto extends VariableAnalysisResultDto {
+  unfilteredTotal: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface VariableAnalysisResultPageOptions {
+  page: number;
+  pageSize: number;
+  search?: string;
+  onlyEmpty?: boolean;
 }
 
 @Injectable({
@@ -86,6 +98,9 @@ export class VariableAnalysisService {
     );
   }
 
+  /**
+   * @deprecated Use getAnalysisResultsPage to avoid loading large result sets into memory.
+   */
   getAnalysisResults(
     workspaceId: number,
     jobId: number | string
@@ -96,6 +111,29 @@ export class VariableAnalysisService {
     );
   }
 
+  getAnalysisResultsPage(
+    workspaceId: number,
+    jobId: number | string,
+    options: VariableAnalysisResultPageOptions
+  ): Observable<VariableAnalysisResultPageDto> {
+    let params = new HttpParams()
+      .set('page', options.page.toString())
+      .set('pageSize', options.pageSize.toString());
+
+    if (options.search) {
+      params = params.set('search', options.search);
+    }
+
+    if (options.onlyEmpty) {
+      params = params.set('onlyEmpty', 'true');
+    }
+
+    return this.http.get<VariableAnalysisResultPageDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/results/page`,
+      { headers: this.authHeader, params }
+    );
+  }
+
   getAllJobs(workspaceId: number): Observable<VariableAnalysisJobDto[]> {
     return this.http.get<VariableAnalysisJobDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs`,
@@ -103,7 +141,10 @@ export class VariableAnalysisService {
     );
   }
 
-  cancelJob(workspaceId: number, jobId: number | string): Observable<JobCancelResult> {
+  cancelJob(
+    workspaceId: number,
+    jobId: number | string
+  ): Observable<JobCancelResult> {
     return this.http.post<JobCancelResult>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/cancel`,
       null,
@@ -111,7 +152,10 @@ export class VariableAnalysisService {
     );
   }
 
-  deleteJob(workspaceId: number, jobId: number | string): Observable<JobCancelResult> {
+  deleteJob(
+    workspaceId: number,
+    jobId: number | string
+  ): Observable<JobCancelResult> {
     return this.http.delete<JobCancelResult>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}`,
       { headers: this.authHeader }
