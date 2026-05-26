@@ -521,6 +521,7 @@ export class CodingJobBackendService {
       unitAlias: string | null;
       variableId: string;
       variableAnchor: string;
+      variablePage: string;
       bookletName: string;
       personLogin: string;
       personCode: string;
@@ -541,6 +542,7 @@ export class CodingJobBackendService {
       unitAlias: string | null;
       variableId: string;
       variableAnchor: string;
+      variablePage: string;
       bookletName: string;
       personLogin: string;
       personCode: string;

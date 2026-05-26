@@ -659,6 +659,7 @@ export class WsgCodingJobController {
           unitAlias: { type: 'string' },
           variableId: { type: 'string' },
           variableAnchor: { type: 'string' },
+          variablePage: { type: 'string' },
           bookletName: { type: 'string' },
           personLogin: { type: 'string' },
           personCode: { type: 'string' }
@@ -686,6 +687,7 @@ export class WsgCodingJobController {
         unitAlias: string | null;
         variableId: string;
         variableAnchor: string;
+        variablePage: string;
         bookletName: string;
         personLogin: string;
         personCode: string;

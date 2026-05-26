@@ -54,4 +54,30 @@ describe('UnitPlayerComponent', () => {
 
     expect(emitSpy).toHaveBeenCalled();
   });
+
+  it('should not emit a page error when requested page 0 is valid and current', () => {
+    const emitSpy = jest.spyOn(component.invalidPage, 'emit');
+
+    (component as unknown as {
+      evaluatePageError: (
+        pageId: string,
+        validPages: { pages: string[]; current: string }
+      ) => void;
+    }).evaluatePageError('0', { pages: ['0'], current: '0' });
+
+    expect(emitSpy).not.toHaveBeenCalled();
+  });
+
+  it('should emit a page error when requested page 1 is not part of a single-page unit', () => {
+    const emitSpy = jest.spyOn(component.invalidPage, 'emit');
+
+    (component as unknown as {
+      evaluatePageError: (
+        pageId: string,
+        validPages: { pages: string[]; current: string }
+      ) => void;
+    }).evaluatePageError('1', { pages: ['0'], current: '0' });
+
+    expect(emitSpy).toHaveBeenCalledWith('notInList');
+  });
 });

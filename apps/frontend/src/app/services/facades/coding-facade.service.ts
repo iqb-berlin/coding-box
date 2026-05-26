@@ -294,7 +294,7 @@ export class CodingFacadeService {
     return this.codingJobBackendService.getCodingNotes(workspaceId, codingJobId);
   }
 
-  getCodingJobUnits(workspaceId: number, codingJobId: number): Observable<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>> {
+  getCodingJobUnits(workspaceId: number, codingJobId: number): Observable<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; variablePage: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>> {
     return this.codingJobBackendService.getCodingJobUnits(workspaceId, codingJobId);
   }
 

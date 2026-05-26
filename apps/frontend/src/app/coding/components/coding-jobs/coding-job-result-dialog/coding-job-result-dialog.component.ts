@@ -44,6 +44,7 @@ interface CodingResult {
   unitAlias: string | null;
   variableId: string;
   variableAnchor: string;
+  variablePage?: string;
   bookletName: string;
   personLogin: string;
   personCode: string;
@@ -75,6 +76,7 @@ interface CodingJobUnitResult {
   unitAlias: string | null;
   variableId: string;
   variableAnchor: string;
+  variablePage?: string;
   bookletName: string;
   personLogin: string;
   personCode: string;
@@ -234,6 +236,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       unitAlias: unit.unitAlias,
       variableId: unit.variableId,
       variableAnchor: unit.variableAnchor,
+      variablePage: unit.variablePage,
       bookletName: unit.bookletName,
       personLogin: unit.personLogin,
       personCode: unit.personCode,
@@ -699,7 +702,8 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
           bookletId: 0, // Not needed for replay
           testPerson: testPerson,
           variableId: result.variableId,
-          variableAnchor: result.variableAnchor
+          variableAnchor: result.variableAnchor,
+          variablePage: result.variablePage || '0'
         };
 
         const unitsData: UnitsReplay = {
@@ -721,7 +725,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${testPerson}/${unitName}/0/${result.variableId}`],
+              [`replay/${testPerson}/${unitName}/${result.variablePage || '0'}/${result.variableId}`],
               { queryParams: queryParams })
           );
 

@@ -44,6 +44,7 @@ import {
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import { CodingFileCacheService } from './coding-file-cache.service';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -306,7 +307,9 @@ export class CodingJobService {
     private workspaceExclusionService: WorkspaceExclusionService,
     private usersService: UsersService,
     @Optional()
-    private codingFreshnessService?: CodingFreshnessService
+    private codingFreshnessService?: CodingFreshnessService,
+    @Optional()
+    private codingFileCacheService?: CodingFileCacheService
   ) { }
 
   async assertUserCanAccessCodingJob(
@@ -2116,6 +2119,7 @@ export class CodingJobService {
     unitAlias: string | null;
     variableId: string;
     variableAnchor: string;
+    variablePage: string;
     bookletName: string;
     personLogin: string;
     personCode: string;
@@ -2232,14 +2236,21 @@ export class CodingJobService {
       sortedUnits = sortedUnits.concat(units);
     }
 
+    const variablePageMaps = await this.getVariablePageMapsForUnits(
+      visibleCodingJobUnits,
+      codingJob.workspace_id
+    );
+
     return sortedUnits.map(unit => {
       const otherCoders = Array.from(otherCodersMap.get(unit.response_id) || []);
+      const variablePage = variablePageMaps.get(unit.unit_name)?.get(unit.variable_id) || '0';
       return {
         responseId: unit.response_id,
         unitName: unit.unit_name,
         unitAlias: unit.unit_alias,
         variableId: unit.variable_id,
         variableAnchor: unit.variable_anchor,
+        variablePage,
         bookletName: unit.booklet_name,
         personLogin: unit.person_login,
         personCode: unit.person_code,
@@ -2250,6 +2261,44 @@ export class CodingJobService {
         otherCoders: otherCoders
       };
     });
+  }
+
+  private async getVariablePageMapsForUnits(
+    units: CodingJobUnit[],
+    workspaceId: number
+  ): Promise<Map<string, Map<string, string>>> {
+    const variablePageMaps = new Map<string, Map<string, string>>();
+
+    if (!this.codingFileCacheService) {
+      return variablePageMaps;
+    }
+
+    const unitNames = Array.from(
+      new Set(
+        units
+          .map(unit => unit.unit_name)
+          .filter(unitName => unitName.length > 0)
+      )
+    );
+
+    await Promise.all(
+      unitNames.map(async unitName => {
+        try {
+          const pageMap = await this.codingFileCacheService!.getVariablePageMap(
+            unitName,
+            workspaceId
+          );
+          variablePageMaps.set(unitName, pageMap);
+        } catch (error) {
+          this.logger.warn(
+            `Error loading variable page map for coding job unit ${unitName}: ${error.message}`
+          );
+          variablePageMaps.set(unitName, new Map<string, string>());
+        }
+      })
+    );
+
+    return variablePageMaps;
   }
 
   private isComparableDoubleCodingScope(currentJob: CodingJob, otherJob: CodingJob): boolean {

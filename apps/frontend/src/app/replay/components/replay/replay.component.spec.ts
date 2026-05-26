@@ -385,6 +385,23 @@ describe('ReplayComponent', () => {
     expect(component.testPerson).toBe('valid@test@person');
   });
 
+  it('should update the requested page when changing coding units', async () => {
+    component.isCodingMode = true;
+    component.page = '0';
+
+    await component.handleUnitChanged({
+      id: 1,
+      name: 'UNIT_2',
+      alias: null,
+      bookletId: 0,
+      variableId: 'VAR_2',
+      variablePage: '1'
+    });
+
+    expect(component.page).toBe('1');
+    expect(component.codingService.currentVariableId).toBe('VAR_2');
+  });
+
   it('should retry anchor highlighting after the player reports visible content', () => {
     jest.useFakeTimers();
     const iframe = document.createElement('iframe');
