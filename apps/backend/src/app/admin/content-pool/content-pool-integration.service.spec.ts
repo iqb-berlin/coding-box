@@ -1,10 +1,14 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  InternalServerErrorException,
+  NotFoundException
+} from '@nestjs/common';
 import { ContentPoolIntegrationService } from './content-pool-integration.service';
 import { WorkspaceFilesService } from '../../database/services/workspace';
 
 type HttpServiceMock = {
   axiosRef: {
-    delete: jest.Mock;
     get: jest.Mock;
     post: jest.Mock;
   };
@@ -14,12 +18,28 @@ type WorkspaceFilesServiceMock = {
   uploadTestFiles: jest.Mock;
 };
 
+type SettingRepositoryMock = {
+  findOne: jest.Mock;
+  create: jest.Mock;
+  save: jest.Mock;
+  getContent: (key: string) => string | undefined;
+};
+
 function createHttpServiceMock(): HttpServiceMock {
   return {
     axiosRef: {
-      delete: jest.fn(),
       get: jest.fn(),
       post: jest.fn()
+    }
+  };
+}
+
+function createAxiosError(status: number, message: string): unknown {
+  return {
+    isAxiosError: true,
+    response: {
+      status,
+      data: { message }
     }
   };
 }
@@ -30,18 +50,45 @@ function createWorkspaceFilesServiceMock(): WorkspaceFilesServiceMock {
   };
 }
 
+function createSettingRepositoryMock(
+  initial: Record<string, string> = {}
+): SettingRepositoryMock {
+  const store = new Map(Object.entries(initial));
+
+  return {
+    findOne: jest.fn(({ where }: { where: { key: string } }) => Promise.resolve(
+      store.has(where.key) ? { key: where.key, content: store.get(where.key) } : null
+    )),
+    create: jest.fn(entity => entity),
+    save: jest.fn(entity => {
+      store.set(entity.key, entity.content);
+      return Promise.resolve(entity);
+    }),
+    getContent: (key: string) => store.get(key)
+  };
+}
+
 function createService(
   httpService: HttpServiceMock = createHttpServiceMock(),
-  workspaceFilesService: WorkspaceFilesServiceMock = createWorkspaceFilesServiceMock()
+  workspaceFilesService: WorkspaceFilesServiceMock = createWorkspaceFilesServiceMock(),
+  settingRepository: SettingRepositoryMock = createSettingRepositoryMock()
 ): ContentPoolIntegrationService {
   type CtorParams = ConstructorParameters<typeof ContentPoolIntegrationService>;
 
   return new ContentPoolIntegrationService(
-    {} as unknown as CtorParams[0],
+    settingRepository as unknown as CtorParams[0],
     {} as unknown as CtorParams[1],
     httpService as unknown as CtorParams[2],
     workspaceFilesService as unknown as CtorParams[3]
   );
+}
+
+function createEnabledSettings(): SettingRepositoryMock {
+  return createSettingRepositoryMock({
+    'system-content-pool-enabled': 'true',
+    'system-content-pool-base-url': 'http://content-pool.test',
+    'system-content-pool-application-token': 'cp_test_token'
+  });
 }
 
 function normalizeApiBaseUrl(
@@ -51,23 +98,6 @@ function normalizeApiBaseUrl(
   return (
     service as unknown as { normalizeApiBaseUrl: (x: string) => string }
   ).normalizeApiBaseUrl(rawBaseUrl);
-}
-
-function authenticate(
-  service: ContentPoolIntegrationService,
-  apiBaseUrl: string,
-  username: string,
-  password: string
-): Promise<string> {
-  return (
-    service as unknown as {
-      authenticate: (
-        apiBaseUrl: string,
-        username: string,
-        password: string
-      ) => Promise<string>;
-    }
-  ).authenticate(apiBaseUrl, username, password);
 }
 
 describe('ContentPoolIntegrationService.normalizeApiBaseUrl', () => {
@@ -108,109 +138,223 @@ describe('ContentPoolIntegrationService.normalizeApiBaseUrl', () => {
   });
 });
 
-describe('ContentPoolIntegrationService.authenticate', () => {
-  it('should return token from Content Pool password login', async () => {
-    const httpService = createHttpServiceMock();
-    const service = createService(httpService);
-    httpService.axiosRef.post.mockResolvedValueOnce({
-      data: { accessToken: 'content-pool-token' }
+describe('ContentPoolIntegrationService settings', () => {
+  it('should report whether an application token is configured without returning it', async () => {
+    const settingRepository = createEnabledSettings();
+    const service = createService(undefined, undefined, settingRepository);
+
+    await expect(service.getSettings()).resolves.toEqual({
+      enabled: true,
+      baseUrl: 'http://content-pool.test',
+      hasApplicationToken: true
     });
-
-    const token = await authenticate(
-      service,
-      'http://content-pool.test/api',
-      'local-user',
-      'local-password'
-    );
-
-    expect(token).toBe('content-pool-token');
-    expect(httpService.axiosRef.post).toHaveBeenCalledWith(
-      'http://content-pool.test/api/auth/login',
-      {
-        username: 'local-user',
-        password: 'local-password'
-      }
-    );
   });
 
-  it('should fall back to Keycloak password grant after invalid local login', async () => {
-    const httpService = createHttpServiceMock();
-    const service = createService(httpService);
-    const unauthorizedError = {
-      isAxiosError: true,
-      response: { status: 401, data: { message: 'Invalid credentials' } }
-    };
+  it('should store a new application token and only return token presence', async () => {
+    const settingRepository = createSettingRepositoryMock();
+    const service = createService(undefined, undefined, settingRepository);
 
-    httpService.axiosRef.post
-      .mockRejectedValueOnce(unauthorizedError)
+    await expect(service.updateSettings({
+      enabled: true,
+      baseUrl: 'http://content-pool.test',
+      applicationToken: 'cp_new_token'
+    })).resolves.toEqual({
+      enabled: true,
+      baseUrl: 'http://content-pool.test',
+      hasApplicationToken: true
+    });
+    expect(settingRepository.getContent('system-content-pool-application-token'))
+      .toBe('cp_new_token');
+  });
+
+  it('should reject enabling the integration without an application token', async () => {
+    const service = createService();
+
+    await expect(service.updateSettings({
+      enabled: true,
+      baseUrl: 'http://content-pool.test'
+    })).rejects.toThrow(BadRequestException);
+  });
+
+  it('should test a new application token without storing it', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
+    httpService.axiosRef.get
       .mockResolvedValueOnce({
-        data: { id_token: 'keycloak-id-token' }
+        data: [
+          { id: 'acp-1', name: 'ACP 1' },
+          { id: 'acp-2', name: 'ACP 2' }
+        ]
       })
+      .mockResolvedValueOnce({ data: [] });
+    httpService.axiosRef.post.mockRejectedValueOnce(
+      createAxiosError(400, 'At least one file is required')
+    );
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test',
+      applicationToken: 'cp_unsaved_token'
+    })).resolves.toEqual({
+      success: true,
+      acpCount: 2,
+      validatedScopes: ['acp.read', 'files.read', 'files.write'],
+      message:
+        'Verbindung erfolgreich. 2 ACPs erreichbar. Benötigte Scopes geprüft.'
+    });
+    expect(httpService.axiosRef.get).toHaveBeenNthCalledWith(
+      1,
+      'http://content-pool.test/api/server/acp',
+      { headers: { 'X-Server-Token': 'cp_unsaved_token' } }
+    );
+    expect(httpService.axiosRef.get).toHaveBeenNthCalledWith(
+      2,
+      'http://content-pool.test/api/server/acp/acp-1/files',
+      { headers: { 'X-Server-Token': 'cp_unsaved_token' } }
+    );
+    expect(httpService.axiosRef.post).toHaveBeenCalledWith(
+      'http://content-pool.test/api/server/acp/acp-1/files/upload?conflictStrategy=reject',
+      null,
+      { headers: { 'X-Server-Token': 'cp_unsaved_token' } }
+    );
+    expect(settingRepository.getContent('system-content-pool-application-token'))
+      .toBe('cp_test_token');
+  });
+
+  it('should reject testing with an empty request body as a bad request', async () => {
+    const service = createService();
+
+    await expect(service.testConnection(null)).rejects.toThrow(BadRequestException);
+  });
+
+  it('should reject testing without a usable application token', async () => {
+    const settingRepository = createEnabledSettings();
+    const service = createService(undefined, undefined, settingRepository);
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test',
+      clearApplicationToken: true
+    })).rejects.toThrow(BadRequestException);
+  });
+
+  it('should reject testing when a required file scope is missing', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
+    httpService.axiosRef.get
       .mockResolvedValueOnce({
-        data: { accessToken: 'content-pool-oidc-token' }
-      });
+        data: [{ id: 'acp-1', name: 'ACP 1' }]
+      })
+      .mockRejectedValueOnce(
+        createAxiosError(403, 'Missing required scopes: files.read')
+      );
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test'
+    })).rejects.toThrow(ForbiddenException);
+    expect(httpService.axiosRef.post).not.toHaveBeenCalled();
+  });
+
+  it('should not treat a real ACP file route 404 as a successful scope probe', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
+    httpService.axiosRef.get
+      .mockResolvedValueOnce({
+        data: [{ id: 'acp-1', name: 'ACP 1' }]
+      })
+      .mockRejectedValueOnce(
+        createAxiosError(404, 'Cannot GET /api/server/acp/acp-1/files')
+      );
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test'
+    })).rejects.toThrow(NotFoundException);
+    expect(httpService.axiosRef.post).not.toHaveBeenCalled();
+  });
+
+  it('should not treat unsupported media type as a successful write scope probe', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
+    httpService.axiosRef.get
+      .mockResolvedValueOnce({
+        data: [{ id: 'acp-1', name: 'ACP 1' }]
+      })
+      .mockResolvedValueOnce({ data: [] });
+    httpService.axiosRef.post.mockRejectedValueOnce(
+      createAxiosError(415, 'Unsupported Media Type')
+    );
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test'
+    })).rejects.toThrow(InternalServerErrorException);
+  });
+
+  it('should validate file scopes without ACP side effects when no ACP is visible', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
+    httpService.axiosRef.get
+      .mockResolvedValueOnce({ data: [] })
+      .mockRejectedValueOnce(createAxiosError(404, 'ACP not found'));
+    httpService.axiosRef.post.mockRejectedValueOnce(
+      createAxiosError(404, 'ACP not found')
+    );
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test'
+    })).resolves.toEqual({
+      success: true,
+      acpCount: 0,
+      validatedScopes: ['acp.read', 'files.read', 'files.write'],
+      message:
+        'Verbindung erfolgreich. 0 ACPs erreichbar. Benötigte Scopes geprüft.'
+    });
+    expect(httpService.axiosRef.get).toHaveBeenNthCalledWith(
+      2,
+      'http://content-pool.test/api/server/acp/__coding-box-connection-test__/files',
+      { headers: { 'X-Server-Token': 'cp_test_token' } }
+    );
+    expect(httpService.axiosRef.post).toHaveBeenCalledWith(
+      'http://content-pool.test/api/server/acp/__coding-box-connection-test__/files/upload?conflictStrategy=reject',
+      null,
+      { headers: { 'X-Server-Token': 'cp_test_token' } }
+    );
+  });
+});
+
+describe('ContentPoolIntegrationService.listAccessibleAcps', () => {
+  it('should list ACPs through the Content Pool server API token', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
     httpService.axiosRef.get.mockResolvedValueOnce({
-      data: {
-        enabled: true,
-        issuerUrl: 'http://keycloak.test/realms/iqb/',
-        clientId: 'contentpool',
-        scope: 'openid profile email'
-      }
+      data: [{ id: 'acp-1', name: 'ACP 1' }]
     });
 
-    const token = await authenticate(
-      service,
-      'http://content-pool.test/api',
-      'keycloak-user',
-      'keycloak-password'
-    );
-
-    expect(token).toBe('content-pool-oidc-token');
+    await expect(service.listAccessibleAcps()).resolves.toEqual({
+      settings: {
+        enabled: true,
+        baseUrl: 'http://content-pool.test',
+        hasApplicationToken: true
+      },
+      acps: [expect.objectContaining({ id: 'acp-1', name: 'ACP 1' })]
+    });
     expect(httpService.axiosRef.get).toHaveBeenCalledWith(
-      'http://content-pool.test/api/auth/oidc-config'
-    );
-    expect(httpService.axiosRef.post).toHaveBeenNthCalledWith(
-      2,
-      'http://keycloak.test/realms/iqb/protocol/openid-connect/token',
-      expect.stringContaining('grant_type=password'),
-      {
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded'
-        }
-      }
-    );
-    expect(httpService.axiosRef.post).toHaveBeenNthCalledWith(
-      3,
-      'http://content-pool.test/api/auth/oidc-callback',
-      { idToken: 'keycloak-id-token' }
+      'http://content-pool.test/api/server/acp',
+      { headers: { 'X-Server-Token': 'cp_test_token' } }
     );
   });
 });
 
 describe('ContentPoolIntegrationService.importAcpFilesToWorkspace', () => {
-  it('should download ACP files and pass them through the workspace upload pipeline', async () => {
+  it('should download ACP files through the server API and pass them through the workspace upload pipeline', async () => {
     const httpService = createHttpServiceMock();
     const workspaceFilesService = createWorkspaceFilesServiceMock();
-    const settingRepository = {
-      findOne: jest.fn(({ where }: { where: { key: string } }) => Promise.resolve(
-        {
-          content:
-            where.key === 'system-content-pool-enabled' ?
-              'true' :
-              'http://content-pool.test'
-        }
-      ))
-    };
-    const service = new ContentPoolIntegrationService(
-      settingRepository as never,
-      {} as never,
-      httpService as never,
-      workspaceFilesService as unknown as WorkspaceFilesService
-    );
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, workspaceFilesService, settingRepository);
 
-    httpService.axiosRef.post.mockResolvedValueOnce({
-      data: { accessToken: 'content-pool-token' }
-    });
     httpService.axiosRef.get
       .mockResolvedValueOnce({
         data: [{ id: 'acp-1', name: 'ACP 1' }]
@@ -239,8 +383,6 @@ describe('ContentPoolIntegrationService.importAcpFilesToWorkspace', () => {
     const result = await service.importAcpFilesToWorkspace({
       workspaceId: 123,
       acpId: 'acp-1',
-      username: 'user',
-      password: 'pass',
       overwriteExisting: true,
       overwriteFileIds: ['UNIT']
     }, reportProgress);
@@ -252,8 +394,11 @@ describe('ContentPoolIntegrationService.importAcpFilesToWorkspace', () => {
     });
     expect(httpService.axiosRef.get).toHaveBeenNthCalledWith(
       3,
-      'http://content-pool.test/api/acp/acp-1/files/file-1/download',
-      expect.objectContaining({ responseType: 'arraybuffer' })
+      'http://content-pool.test/api/server/acp/acp-1/files/file-1/download',
+      expect.objectContaining({
+        headers: { 'X-Server-Token': 'cp_test_token' },
+        responseType: 'arraybuffer'
+      })
     );
     expect(workspaceFilesService.uploadTestFiles).toHaveBeenCalledWith(
       123,
@@ -286,26 +431,17 @@ describe('ContentPoolIntegrationService.importAcpFilesToWorkspace', () => {
 });
 
 describe('ContentPoolIntegrationService.uploadWorkspaceFilesToAcp', () => {
-  it('should replace matching ACP files and report skipped files', async () => {
+  it('should replace matching coding schemes through the server API and report skipped files', async () => {
     const httpService = createHttpServiceMock();
     const workspaceFilesService = createWorkspaceFilesServiceMock();
-    const settingRepository = {
-      findOne: jest.fn(({ where }: { where: { key: string } }) => Promise.resolve(
-        {
-          content:
-            where.key === 'system-content-pool-enabled' ?
-              'true' :
-              'http://content-pool.test'
-        }
-      ))
-    };
+    const settingRepository = createEnabledSettings();
     const fileUploadRepository = {
       find: jest.fn().mockResolvedValue([
         {
           id: 11,
-          filename: 'unit.xml',
+          filename: 'scheme.vocs',
           workspace_id: 123,
-          data: Buffer.from('<Unit/>').toString('base64')
+          data: Buffer.from('{}').toString('base64')
         },
         {
           id: 12,
@@ -322,31 +458,21 @@ describe('ContentPoolIntegrationService.uploadWorkspaceFilesToAcp', () => {
       workspaceFilesService as unknown as WorkspaceFilesService
     );
 
-    httpService.axiosRef.post
-      .mockResolvedValueOnce({
-        data: { accessToken: 'content-pool-token' }
-      })
-      .mockResolvedValueOnce({
-        data: {}
-      })
-      .mockResolvedValueOnce({
-        data: { id: 'snapshot-1', versionNumber: 7 }
-      });
     httpService.axiosRef.get
       .mockResolvedValueOnce({
         data: [{ id: 'acp-1', name: 'ACP 1' }]
       })
       .mockResolvedValueOnce({
-        data: [{ id: 'target-file-1', originalName: 'unit.xml' }]
+        data: [{ id: 'target-file-1', originalName: 'scheme.vocs' }]
       });
-    httpService.axiosRef.delete.mockResolvedValueOnce({});
+    httpService.axiosRef.post.mockResolvedValueOnce({
+      data: { snapshot: { id: 'snapshot-1', versionNumber: 7 } }
+    });
     const reportProgress = jest.fn();
 
     const result = await service.uploadWorkspaceFilesToAcp({
       workspaceId: 123,
       acpId: 'acp-1',
-      username: 'user',
-      password: 'pass',
       fileIds: [11, 12],
       changelog: 'manual changelog'
     }, reportProgress);
@@ -357,7 +483,7 @@ describe('ContentPoolIntegrationService.uploadWorkspaceFilesToAcp', () => {
       replaced: 1,
       skipped: 1,
       failed: 0,
-      replacedFiles: [{ fileId: 11, filename: 'unit.xml' }],
+      replacedFiles: [{ fileId: 11, filename: 'scheme.vocs' }],
       skippedFiles: [{
         fileId: 12,
         filename: 'missing.vocs',
@@ -368,31 +494,19 @@ describe('ContentPoolIntegrationService.uploadWorkspaceFilesToAcp', () => {
       versionNumber: 7,
       changelog: 'manual changelog'
     });
-    expect(httpService.axiosRef.delete).toHaveBeenCalledWith(
-      'http://content-pool.test/api/acp/acp-1/files/target-file-1',
-      expect.anything()
-    );
-    expect(httpService.axiosRef.post).toHaveBeenNthCalledWith(
-      2,
-      'http://content-pool.test/api/acp/acp-1/files/upload',
+    expect(httpService.axiosRef.post).toHaveBeenCalledWith(
+      'http://content-pool.test/api/server/acp/acp-1/coding-schemes/replace',
       expect.anything(),
-      expect.objectContaining({ maxBodyLength: Infinity })
-    );
-    expect(httpService.axiosRef.post).toHaveBeenNthCalledWith(
-      3,
-      'http://content-pool.test/api/acp/acp-1/snapshots',
-      { changelog: 'manual changelog' },
-      expect.anything()
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-Server-Token': 'cp_test_token' }),
+        maxBodyLength: Infinity
+      })
     );
     expect(reportProgress).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'replacing-files',
       processedFiles: 2,
       totalFiles: 2,
       progress: 90
-    }));
-    expect(reportProgress).toHaveBeenCalledWith(expect.objectContaining({
-      phase: 'creating-snapshot',
-      progress: 94
     }));
   });
 });

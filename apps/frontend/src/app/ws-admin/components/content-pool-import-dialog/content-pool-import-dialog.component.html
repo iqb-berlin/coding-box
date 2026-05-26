@@ -5,37 +5,21 @@
     Content-Pool: <strong>{{ data.settings.baseUrl || 'nicht konfiguriert' }}</strong>
   </p>
 
-  <div class="credentials-grid">
-    <mat-form-field appearance="outline">
-      <mat-label>Benutzername</mat-label>
-      <input matInput [(ngModel)]="username" [disabled]="isLoadingAcps || isImporting">
-    </mat-form-field>
-
-    <mat-form-field appearance="outline">
-      <mat-label>Passwort</mat-label>
-      <input
-        matInput
-        type="password"
-        [(ngModel)]="password"
-        [disabled]="isLoadingAcps || isImporting">
-    </mat-form-field>
-  </div>
-
   <div class="load-acps-actions">
     <button
       mat-stroked-button
       color="primary"
       (click)="loadAcps()"
       [disabled]="isLoadingAcps || isImporting">
-      <mat-icon>login</mat-icon>
-      {{ isLoadingAcps ? 'Lade ACPs...' : 'Anmelden und ACPs laden' }}
+      <mat-icon>sync</mat-icon>
+      {{ isLoadingAcps ? 'Lade ACPs...' : 'ACPs laden' }}
     </button>
     @if (isLoadingAcps) {
       <mat-spinner diameter="20"></mat-spinner>
     }
   </div>
 
-  @if (hasAuthenticated) {
+  @if (hasLoadedAcps) {
     <mat-form-field appearance="outline" class="full-width">
       <mat-label>ACP auswählen</mat-label>
       <mat-select [(ngModel)]="selectedAcpId" [disabled]="isImporting">
@@ -74,7 +58,7 @@
     mat-raised-button
     color="primary"
     (click)="importAcp()"
-    [disabled]="isImporting || !hasAuthenticated || !selectedAcpId">
+    [disabled]="isImporting || !hasLoadedAcps || !selectedAcpId">
     <mat-icon>download</mat-icon>
     {{ isImporting ? 'Importiere...' : 'ACP importieren' }}
   </button>
