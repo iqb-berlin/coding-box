@@ -1,5 +1,6 @@
 import { Repository } from 'typeorm';
 import { Readable } from 'stream';
+import * as ExcelJS from 'exceljs';
 import { CodingExportService } from './coding-export.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -362,6 +363,137 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('EXISTS'),
       { coderIds: [33] }
+    );
+  });
+
+  it('keeps uncertain codes visible in most-frequent aggregated export', async () => {
+    const createQueryBuilder = (rawRows: unknown[] = []) => {
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(rawRows)
+      };
+      return qb;
+    };
+
+    const variableRecordsQuery = createQueryBuilder([{
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      bookletName: 'BOOKLET-A'
+    }]);
+    const manualCodingQuery = createQueryBuilder([
+      {
+        personId: '10',
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        cju_code: '7',
+        coding_issue_option: '-1',
+        code_v1: null,
+        code_v2: null,
+        code_v3: null,
+        notes: null,
+        username: 'Coder A',
+        jobId: '1',
+        trainingId: null,
+        responseId: '100'
+      },
+      {
+        personId: '10',
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        cju_code: '7',
+        coding_issue_option: '-2',
+        code_v1: null,
+        code_v2: null,
+        code_v3: null,
+        notes: null,
+        username: 'Coder B',
+        jobId: '2',
+        trainingId: null,
+        responseId: '100'
+      },
+      {
+        personId: '10',
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        cju_code: '8',
+        coding_issue_option: null,
+        code_v1: null,
+        code_v2: null,
+        code_v3: null,
+        notes: null,
+        username: 'Coder C',
+        jobId: '3',
+        trainingId: null,
+        responseId: '100'
+      }
+    ]);
+    const personResultsQuery = createQueryBuilder([{
+      id: '10',
+      login: 'login-a',
+      code: 'code-a',
+      group: 'group-a',
+      bookletName: 'BOOKLET-A'
+    }]);
+    const autoVariablesQuery = createQueryBuilder([]);
+    const autoCodingQuery = createQueryBuilder([]);
+
+    const codingJobUnitRepository = {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(variableRecordsQuery)
+        .mockReturnValueOnce(manualCodingQuery)
+    };
+    const responseRepository = {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(autoVariablesQuery)
+        .mockReturnValueOnce(personResultsQuery)
+        .mockReturnValueOnce(autoCodingQuery)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+
+    const service = new CodingExportService(
+      responseRepository as unknown as Repository<ResponseEntity>,
+      {} as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
+      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn() } as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService
+    );
+
+    const buffer = await service.exportCodingResultsAggregated(
+      7,
+      false,
+      false,
+      false,
+      false,
+      'most-frequent'
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.getWorksheet('Coding Results');
+
+    expect(worksheet?.getRow(1).getCell(4).value).toBe('UNIT_VAR');
+    expect(worksheet?.getRow(2).getCell(4).value).toBe('7 (unsicher; neuer Code nötig)');
+    expect(manualCodingQuery.addSelect).toHaveBeenCalledWith(
+      'cju.coding_issue_option',
+      'coding_issue_option'
     );
   });
 
