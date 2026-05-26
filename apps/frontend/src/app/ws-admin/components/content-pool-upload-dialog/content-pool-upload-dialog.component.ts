@@ -65,10 +65,6 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
     MatDialogRef<ContentPoolUploadDialogComponent>
   );
 
-  username = '';
-
-  password = '';
-
   changelog = '';
 
   acps: ContentPoolAcpSummary[] = [];
@@ -79,7 +75,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
 
   isUploading = false;
 
-  hasAuthenticated = false;
+  hasLoadedAcps = false;
 
   errorMessage = '';
 
@@ -100,28 +96,18 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
   }
 
   loadAcps(): void {
-    if (!this.username.trim() || !this.password.trim()) {
-      this.errorMessage =
-        'Bitte Benutzername und Passwort für den Content Pool eingeben.';
-      return;
-    }
-
     this.errorMessage = '';
     this.isLoadingAcps = true;
-    this.hasAuthenticated = false;
+    this.hasLoadedAcps = false;
     this.selectedAcpId = '';
     this.acps = [];
 
     this.contentPoolIntegrationService
-      .listAccessibleAcps(
-        this.data.workspaceId,
-        this.username.trim(),
-        this.password
-      )
+      .listAccessibleAcps(this.data.workspaceId)
       .subscribe({
         next: response => {
           this.isLoadingAcps = false;
-          this.hasAuthenticated = true;
+          this.hasLoadedAcps = true;
           this.acps = response.acps || [];
           if (this.acps.length === 0) {
             this.errorMessage = 'Keine ACPs gefunden oder kein Zugriff vorhanden.';
@@ -131,7 +117,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
           this.isLoadingAcps = false;
           this.errorMessage = this.extractErrorMessage(
             error,
-            'Anmeldung am Content Pool fehlgeschlagen.'
+            'ACP-Liste konnte nicht aus dem Content Pool geladen werden.'
           );
         }
       });
@@ -160,8 +146,6 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
 
     this.uploadSubscription = this.contentPoolIntegrationService
       .uploadFilesToAcpWithProgress(this.data.workspaceId, {
-        username: this.username.trim(),
-        password: this.password,
         acpId: this.selectedAcpId,
         fileIds: this.data.files.map(file => file.id),
         changelog: this.changelog.trim()

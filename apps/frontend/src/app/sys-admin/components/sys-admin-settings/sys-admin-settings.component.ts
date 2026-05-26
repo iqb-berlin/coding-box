@@ -75,10 +75,15 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   databaseExportError: string | null = null;
   isLoadingContentPoolSettings = false;
   isSavingContentPoolSettings = false;
+  isTestingContentPoolConnection = false;
   contentPoolSettings: ContentPoolSettings = {
     enabled: false,
-    baseUrl: ''
+    baseUrl: '',
+    hasApplicationToken: false
   };
+
+  contentPoolApplicationToken = '';
+  clearContentPoolApplicationToken = false;
 
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
   constructor() {
@@ -277,8 +282,11 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       next: settings => {
         this.contentPoolSettings = {
           enabled: !!settings.enabled,
-          baseUrl: (settings.baseUrl || '').trim()
+          baseUrl: (settings.baseUrl || '').trim(),
+          hasApplicationToken: !!settings.hasApplicationToken
         };
+        this.contentPoolApplicationToken = '';
+        this.clearContentPoolApplicationToken = false;
         this.isLoadingContentPoolSettings = false;
       },
       error: () => {
@@ -294,9 +302,22 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
   saveContentPoolSettings(): void {
     const normalizedBaseUrl = (this.contentPoolSettings.baseUrl || '').trim();
+    const applicationToken = this.contentPoolApplicationToken.trim();
     if (this.contentPoolSettings.enabled && !normalizedBaseUrl) {
       this.snackBar.open(
         'Bitte eine Content-Pool URL hinterlegen, bevor das Feature aktiviert wird.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+    if (
+      this.contentPoolSettings.enabled &&
+      !applicationToken &&
+      (!this.contentPoolSettings.hasApplicationToken || this.clearContentPoolApplicationToken)
+    ) {
+      this.snackBar.open(
+        'Bitte ein Content-Pool Application-Token hinterlegen, bevor das Feature aktiviert wird.',
         'Schließen',
         { duration: 4000 }
       );
@@ -307,14 +328,19 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     this.systemSettingsService
       .updateContentPoolSettings({
         enabled: this.contentPoolSettings.enabled,
-        baseUrl: normalizedBaseUrl
+        baseUrl: normalizedBaseUrl,
+        applicationToken: applicationToken || undefined,
+        clearApplicationToken: this.clearContentPoolApplicationToken && !applicationToken
       })
       .subscribe({
         next: settings => {
           this.contentPoolSettings = {
             enabled: !!settings.enabled,
-            baseUrl: (settings.baseUrl || '').trim()
+            baseUrl: (settings.baseUrl || '').trim(),
+            hasApplicationToken: !!settings.hasApplicationToken
           };
+          this.contentPoolApplicationToken = '';
+          this.clearContentPoolApplicationToken = false;
           this.isSavingContentPoolSettings = false;
           this.snackBar.open(
             'Content-Pool-Einstellungen wurden gespeichert.',
@@ -329,6 +355,69 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
             'Content-Pool-Einstellungen konnten nicht gespeichert werden.'
           );
           this.snackBar.open(message, 'Schließen', { duration: 4000 });
+        }
+      });
+  }
+
+  clearStoredContentPoolToken(): void {
+    this.contentPoolApplicationToken = '';
+    this.clearContentPoolApplicationToken = true;
+  }
+
+  onContentPoolTokenInputChange(value: string): void {
+    if ((value || '').trim()) {
+      this.clearContentPoolApplicationToken = false;
+    }
+  }
+
+  testContentPoolConnection(): void {
+    const normalizedBaseUrl = (this.contentPoolSettings.baseUrl || '').trim();
+    const applicationToken = this.contentPoolApplicationToken.trim();
+    if (!normalizedBaseUrl) {
+      this.snackBar.open(
+        'Bitte eine Content-Pool URL für den Verbindungstest hinterlegen.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    if (
+      !applicationToken &&
+      (!this.contentPoolSettings.hasApplicationToken || this.clearContentPoolApplicationToken)
+    ) {
+      this.snackBar.open(
+        'Bitte ein Content-Pool Application-Token für den Verbindungstest hinterlegen.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    this.isTestingContentPoolConnection = true;
+    this.systemSettingsService
+      .testContentPoolConnection({
+        baseUrl: normalizedBaseUrl,
+        applicationToken: applicationToken || undefined,
+        clearApplicationToken: this.clearContentPoolApplicationToken && !applicationToken
+      })
+      .subscribe({
+        next: result => {
+          this.isTestingContentPoolConnection = false;
+          this.snackBar.open(
+            result.message ||
+              `Verbindung erfolgreich. ${result.acpCount} ACPs erreichbar.`,
+            'Schließen',
+            { duration: 4000 }
+          );
+        },
+        error: error => {
+          this.isTestingContentPoolConnection = false;
+          const message = this.extractErrorMessage(
+            error,
+            'Content-Pool-Verbindung konnte nicht getestet werden. Token und Scopes prüfen.'
+          );
+          this.snackBar.open(message, 'Schließen', { duration: 6000 });
         }
       });
   }
