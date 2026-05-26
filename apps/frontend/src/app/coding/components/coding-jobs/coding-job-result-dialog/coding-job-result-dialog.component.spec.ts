@@ -125,6 +125,7 @@ describe('CodingJobResultDialogComponent', () => {
       unitAlias: 'UNIT_1',
       variableId: 'VAR_1',
       variableAnchor: 'VAR_1',
+      variablePage: '2',
       bookletName: 'BOOKLET_A',
       personLogin: 'login',
       personCode: 'code',
@@ -164,6 +165,7 @@ describe('CodingJobResultDialogComponent', () => {
       unitAlias: 'UNIT_1',
       variableId: 'VAR_1',
       variableAnchor: 'VAR_1',
+      variablePage: '2',
       bookletName: 'BOOKLET_A',
       personLogin: 'login',
       personCode: 'code',
@@ -177,6 +179,10 @@ describe('CodingJobResultDialogComponent', () => {
     const openedUrl = windowOpenSpy.mock.calls[0][0] as string;
     expect(openedUrl).toContain('/#/replay/path');
     expect(openedUrl).not.toContain('#//replay');
+    expect(mockRouter.createUrlTree).toHaveBeenCalledWith(
+      ['replay/login@code@group@BOOKLET_A/UNIT_1/2/VAR_1'],
+      expect.any(Object)
+    );
 
     windowOpenSpy.mockRestore();
   });

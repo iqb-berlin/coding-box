@@ -43,6 +43,26 @@ describe('CodingFileCacheService', () => {
     expect(pageMap.get('VAR_WITHOUT_OVERRIDE')).toBe('2');
   });
 
+  it('resolves a single-page unit variable to Verona page 0', async () => {
+    const repository = createRepository({
+      'UNIT.VOUD': createFile('UNIT.VOUD', {
+        pages: [
+          { sections: [{ elements: [{ id: 'VAR_ON_ONLY_PAGE' }] }] }
+        ]
+      }),
+      'UNIT.VOCS': createFile('UNIT.VOCS', {
+        variableCodings: [
+          { id: 'VAR_ON_ONLY_PAGE', page: '1' }
+        ]
+      })
+    });
+    const service = new CodingFileCacheService(repository);
+
+    const pageMap = await service.loadVoudData('UNIT', 1);
+
+    expect(pageMap.get('VAR_ON_ONLY_PAGE')).toBe('0');
+  });
+
   it('maps coding scheme pages from 1-based Studio pages to 0-based Verona pages', async () => {
     const repository = createRepository({
       'UNIT.VOCS': createFile('UNIT.VOCS', {

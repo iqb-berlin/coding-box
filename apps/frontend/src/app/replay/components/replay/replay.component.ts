@@ -216,7 +216,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                       `${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}` :
                       `${item.personLogin}@${item.personCode}@${item.bookletName}`,
                     variableId: item.variableId,
-                    variableAnchor: item.variableAnchor
+                    variableAnchor: item.variableAnchor,
+                    variablePage: item.variablePage
                   })),
                   currentUnitIndex: 0
                 };
@@ -242,12 +243,19 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             this.isReviewMode = this.unitsData.name.includes(' - Review: ');
             this.currentUnitIndex = deserializedUnits.currentUnitIndex;
             this.totalUnits = deserializedUnits.units.length;
-            const unitAny = (this.unitsData.units[this.currentUnitIndex] || {}) as unknown as { variableAnchor?: string; variableId?: string };
+            const unitAny = (this.unitsData.units[this.currentUnitIndex] || {}) as unknown as {
+              variableAnchor?: string;
+              variableId?: string;
+              variablePage?: string;
+            };
             if (unitAny.variableAnchor) {
               this.anchor = unitAny.variableAnchor;
             }
             if (unitAny.variableId) {
               this.codingService.currentVariableId = unitAny.variableId || '';
+            }
+            if (unitAny.variablePage) {
+              this.page = unitAny.variablePage;
             }
 
             if (this.isCodingMode) {
@@ -668,12 +676,23 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (!unit) return;
     this.cancelPendingAnchorHighlight();
     this.routeStartTime = 0;
-    const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
+    const unitAny = unit as unknown as {
+      name: string;
+      testPerson?: string;
+      variableId?: string;
+      variablePage?: string;
+    };
     const incomingTestPerson = unitAny.testPerson;
 
     if (typeof unitAny.variableId === 'string' && unitAny.variableId.length > 0) {
       this.anchor = unitAny.variableId;
       this.codingService.currentVariableId = unitAny.variableId;
+    }
+
+    if (typeof unitAny.variablePage === 'string' && unitAny.variablePage.length > 0) {
+      this.page = unitAny.variablePage;
+    } else if (this.isCodingMode) {
+      this.page = '0';
     }
 
     if (incomingTestPerson && incomingTestPerson !== this.testPerson) {

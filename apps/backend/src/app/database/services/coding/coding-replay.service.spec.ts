@@ -163,6 +163,40 @@ describe('CodingReplayService', () => {
         })
       );
     });
+
+    it('should keep resolved single-page variables on page 0', async () => {
+      const mockResponse = {
+        id: 1,
+        variableid: 'var1',
+        unit: {
+          name: 'unit1',
+          booklet: {
+            person: {
+              workspace_id: 1,
+              login: 'testuser',
+              code: 'code123',
+              group: 'group1'
+            },
+            bookletinfo: {
+              name: 'booklet1'
+            }
+          }
+        }
+      };
+
+      mockResponseRepository.findOne.mockResolvedValue(mockResponse);
+      mockCodingListService.getVariablePageMap.mockResolvedValue(new Map([['var1', '0']]));
+      (replayUrlUtil.generateReplayUrl as jest.Mock).mockReturnValue('http://example.com/replay');
+
+      await service.generateReplayUrlForResponse(1, 1, 'http://example.com', 'token');
+
+      expect(replayUrlUtil.generateReplayUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variablePage: '0',
+          variableAnchor: 'var1'
+        })
+      );
+    });
   });
 
   describe('generateReplayUrlsForItems', () => {

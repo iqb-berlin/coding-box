@@ -69,6 +69,7 @@ describe('CodingJobService', () => {
   let connection: { transaction: jest.Mock };
   let cacheService: { delete: jest.Mock };
   let codingFreshnessService: { reconcileAppliedManualCodingJobs: jest.Mock };
+  let codingFileCacheService: { getVariablePageMap: jest.Mock };
   let usersService: {
     getUserIsAdmin: jest.Mock;
     getUserAccessLevel: jest.Mock;
@@ -174,6 +175,9 @@ describe('CodingJobService', () => {
     codingFreshnessService = {
       reconcileAppliedManualCodingJobs: jest.fn().mockResolvedValue(0)
     };
+    codingFileCacheService = {
+      getVariablePageMap: jest.fn().mockResolvedValue(new Map())
+    };
 
     service = new CodingJobService(
       codingJobRepository as never,
@@ -190,7 +194,8 @@ describe('CodingJobService', () => {
       workspaceFilesService as never,
       workspaceExclusionService as never,
       usersService as never,
-      codingFreshnessService as never
+      codingFreshnessService as never,
+      codingFileCacheService as never
     );
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'warn').mockImplementation(jest.fn());
@@ -1798,9 +1803,11 @@ describe('CodingJobService', () => {
           }
         }
       ]);
+    codingFileCacheService.getVariablePageMap.mockResolvedValue(new Map([['VAR', '0']]));
 
     const result = await service.getCodingJobUnits(10);
 
+    expect(result[0].variablePage).toBe('0');
     expect(result[0].isDoubleCoded).toBe(true);
     expect(result[0].otherCoders).toEqual(['coder1']);
   });

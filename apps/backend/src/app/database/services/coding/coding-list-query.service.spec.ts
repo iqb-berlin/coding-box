@@ -64,7 +64,7 @@ describe('CodingListQueryService', () => {
     const fileCacheService = new CodingFileCacheService(fileRepository);
     const workspaceFilesService = {
       getUnitVariableMap: jest.fn().mockResolvedValue(
-        new Map([['UNIT', new Set(['VAR_WITH_OVERRIDE'])]])
+        new Map([['UNIT', new Set(['VAR_WITH_OVERRIDE', 'VAR_ON_ONLY_PAGE'])]])
       ),
       getIntendedIncompleteSchemeVariableMap: jest.fn().mockResolvedValue(new Map()),
       getCoderTrainingRequiredVariableMap: jest.fn().mockResolvedValue(new Map())
@@ -135,6 +135,56 @@ describe('CodingListQueryService', () => {
       variable_page: '1',
       variable_anchor: 'VAR_WITH_OVERRIDE',
       url: 'https://iqb-kodierbox.de/#/replay/login@code@group@BOOKLET/UNIT/1/VAR_WITH_OVERRIDE?auth=token'
+    });
+  });
+
+  it('keeps single-page coding-list replay URLs on page 0', async () => {
+    const fileRepository = createFileRepository({
+      'UNIT.VOUD': createFile('UNIT.VOUD', {
+        pages: [
+          { sections: [{ elements: [{ id: 'VAR_ON_ONLY_PAGE' }] }] }
+        ]
+      }),
+      'UNIT.VOCS': createFile('UNIT.VOCS', {
+        variableCodings: [
+          { id: 'VAR_ON_ONLY_PAGE', page: '1' }
+        ]
+      })
+    });
+    const response = {
+      id: 1,
+      variableid: 'VAR_ON_ONLY_PAGE',
+      value: 'Antwort',
+      status_v1: statusStringToNumber('CODING_INCOMPLETE'),
+      unit: {
+        name: 'UNIT',
+        alias: 'Unit Alias',
+        booklet: {
+          person: {
+            login: 'login',
+            code: 'code',
+            group: 'group'
+          },
+          bookletinfo: {
+            name: 'BOOKLET'
+          }
+        }
+      }
+    } as unknown as ResponseEntity;
+    const service = createService([response], fileRepository);
+
+    const result = await service.getCodingList(
+      1,
+      'token',
+      'https://iqb-kodierbox.de'
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      variable_id: 'VAR_ON_ONLY_PAGE',
+      variable_page: '0',
+      variable_anchor: 'VAR_ON_ONLY_PAGE',
+      url: 'https://iqb-kodierbox.de/#/replay/login@code@group@BOOKLET/UNIT/0/VAR_ON_ONLY_PAGE?auth=token'
     });
   });
 });
