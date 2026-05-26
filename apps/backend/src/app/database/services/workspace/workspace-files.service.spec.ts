@@ -197,6 +197,32 @@ describe('WorkspaceFilesService.onModuleInit', () => {
       'Skipping unit variable cache refresh for invalid workspace id: null'
     );
   });
+
+  it('should reuse one unit variable cache refresh for concurrent workspace requests', async () => {
+    const service = makeService();
+    let resolveRefresh: () => void = () => undefined;
+    const refreshSpy = jest
+      .spyOn(
+        service as unknown as {
+          refreshUnitVariableCacheInternal: (workspaceId: number) => Promise<void>;
+        },
+        'refreshUnitVariableCacheInternal'
+      )
+      .mockImplementation(
+        () => new Promise<void>(resolve => {
+          resolveRefresh = resolve;
+        })
+      );
+
+    const firstRefresh = service.refreshUnitVariableCache(4);
+    const secondRefresh = service.refreshUnitVariableCache(4);
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    expect(refreshSpy).toHaveBeenCalledWith(4);
+
+    resolveRefresh();
+    await Promise.all([firstRefresh, secondRefresh]);
+  });
 });
 
 describe('WorkspaceFilesService.deleteTestFiles', () => {
