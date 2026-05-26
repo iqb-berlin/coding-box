@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  InternalServerErrorException,
   NotFoundException
 } from '@nestjs/common';
 import { ContentPoolIntegrationService } from './content-pool-integration.service';
@@ -270,6 +271,24 @@ describe('ContentPoolIntegrationService settings', () => {
       baseUrl: 'http://content-pool.test'
     })).rejects.toThrow(NotFoundException);
     expect(httpService.axiosRef.post).not.toHaveBeenCalled();
+  });
+
+  it('should not treat unsupported media type as a successful write scope probe', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
+    httpService.axiosRef.get
+      .mockResolvedValueOnce({
+        data: [{ id: 'acp-1', name: 'ACP 1' }]
+      })
+      .mockResolvedValueOnce({ data: [] });
+    httpService.axiosRef.post.mockRejectedValueOnce(
+      createAxiosError(415, 'Unsupported Media Type')
+    );
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test'
+    })).rejects.toThrow(InternalServerErrorException);
   });
 
   it('should validate file scopes without ACP side effects when no ACP is visible', async () => {

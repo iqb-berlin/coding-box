@@ -1057,10 +1057,9 @@ export class ContentPoolIntegrationService {
     }
 
     const normalizedMessage = message.toLowerCase();
-    return status === 415 ||
-      (status === 400 &&
-        normalizedMessage.includes('file') &&
-        normalizedMessage.includes('required'));
+    return status === 400 &&
+      normalizedMessage.includes('file') &&
+      normalizedMessage.includes('required');
   }
 
   private isExpectedFallbackAcpNotFound(
