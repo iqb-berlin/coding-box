@@ -592,6 +592,96 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.variableKappaSummaries).toEqual([]);
   });
 
+  it('should render mean kappa summaries per variable', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.showKappaStatistics = true;
+    component.codersFormControl.setValue([1, 2, 3]);
+    component.withinTrainingData = [
+      {
+        responseId: 1,
+        unitName: 'U1',
+        variableId: 'V1',
+        testperson: 'Test1',
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'C1',
+            code: '1',
+            score: null
+          },
+          {
+            jobId: 2,
+            coderName: 'C2',
+            code: '1',
+            score: null
+          }
+        ]
+      }
+    ];
+    component.originalKappaStatistics = {
+      variables: [
+        {
+          unitName: 'U1',
+          variableId: 'V1',
+          coderPairs: [
+            {
+              coder1Id: 1,
+              coder1Name: 'C1',
+              coder2Id: 2,
+              coder2Name: 'C2',
+              kappa: 0.82,
+              agreement: 0.9,
+              totalItems: 10,
+              validPairs: 10,
+              interpretation: 'kappa.good'
+            },
+            {
+              coder1Id: 1,
+              coder1Name: 'C1',
+              coder2Id: 3,
+              coder2Name: 'C3',
+              kappa: 0.88,
+              agreement: 0.8,
+              totalItems: 5,
+              validPairs: 5,
+              interpretation: 'kappa.good'
+            }
+          ]
+        }
+      ],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 1,
+        totalCoderPairs: 2,
+        averageKappa: 0.85,
+        variablesIncluded: 1,
+        codersIncluded: 3,
+        weightingMethod: 'unweighted'
+      }
+    };
+
+    component.filterKappaStatistics();
+    fixture.detectChanges();
+
+    const summaryTable: HTMLElement | null = fixture.nativeElement.querySelector('.variable-mean-table');
+    const tableText = summaryTable?.textContent?.replace(/\s+/g, ' ');
+
+    expect(component.variableKappaSummaries).toHaveLength(1);
+    expect(component.variableKappaSummaries[0]).toMatchObject({
+      key: 'U1::V1',
+      unitName: 'U1',
+      variableId: 'V1',
+      meanKappa: 0.85,
+      caseCount: 15
+    });
+    expect(component.variableKappaSummaries[0].meanAgreement).toBeCloseTo(0.85, 10);
+    expect(tableText).toContain('Mittelwerte je Variable');
+    expect(tableText).toContain('U1 - V1');
+    expect(tableText).toContain('0.850');
+    expect(tableText).toContain('85.0%');
+    expect(tableText).toContain('15');
+  });
+
   describe('calculateMeanAgreement', () => {
     it('should calculate weighted mean agreement correctly', () => {
       component.kappaStatistics = {

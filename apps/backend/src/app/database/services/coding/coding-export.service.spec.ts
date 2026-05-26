@@ -257,6 +257,63 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     expect(csv).toContain(';"4";""');
   });
 
+  it('leaves training discussion results empty when no manager result was stored', async () => {
+    const { service } = createServiceWithDetailedMocks(0, {
+      unit: {
+        code: 7,
+        coding_issue_option: null,
+        notes: '',
+        updated_at: new Date('2026-04-14T10:00:00.000Z'),
+        response_id: 123,
+        unit_name: 'U1',
+        variable_id: 'V1',
+        coding_job: {
+          training_id: 5,
+          codingJobCoders: [{ user: { username: 'coder1' } }]
+        },
+        response: {
+          status_v1: 8,
+          unit: {
+            name: 'U1',
+            booklet: {
+              person: {
+                login: 'p-login',
+                code: 'p-code',
+                group: 'G1'
+              },
+              bookletinfo: {
+                name: 'B1'
+              }
+            }
+          }
+        }
+      },
+      discussionResults: [],
+      users: []
+    });
+
+    const buffer = await service.exportCodingResultsDetailed(
+      1,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      false,
+      undefined,
+      undefined,
+      [5]
+    );
+    const csv = buffer.toString('utf-8');
+    const rows = csv.trim().split('\n');
+
+    expect(rows).toHaveLength(2);
+    expect(csv).toContain('"p-login";"p-code";"G1";"coder1";"U1";"V1";"";');
+    expect(csv).not.toContain('"manager1"');
+    expect(csv).not.toContain('"stored-manager"');
+  });
+
   it('rejects detailed export when scoped filters match no coding rows', async () => {
     const { service } = createServiceWithDetailedMocks(0, { totalCount: 0 });
 
