@@ -455,6 +455,9 @@ export class CodingFacadeService {
     return this.variableAnalysisService.createAnalysisJob(workspaceId, unitId, variableId);
   }
 
+  /**
+   * @deprecated Use the paginated variable-analysis service call for large result sets.
+   */
   getVariableAnalysisResults(workspaceId: number, jobId: number): Observable<VariableAnalysisResultDto> {
     return this.variableAnalysisService.getAnalysisResults(workspaceId, jobId);
   }

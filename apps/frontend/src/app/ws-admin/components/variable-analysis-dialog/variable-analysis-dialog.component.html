@@ -88,9 +88,9 @@
         <div class="empty-state">
           <mat-icon class="empty-icon">info</mat-icon>
           <p>
-            {{ (allVariableCombos.length === 0 ? 'variable-analysis.no-results-yet' : 'variable-analysis.no-variables-found') | translate }}
+            {{ getEmptyStateMessageKey() | translate }}
           </p>
-          @if (allVariableCombos.length === 0 && !activeJob && !isStartingJob) {
+          @if (shouldShowStartAnalysisButton()) {
           <button mat-raised-button color="primary" (click)="startNewAnalysis()" [disabled]="isJobsLoading">
             <mat-icon>add</mat-icon>
             {{ 'variable-analysis.start-new-analysis' | translate }}

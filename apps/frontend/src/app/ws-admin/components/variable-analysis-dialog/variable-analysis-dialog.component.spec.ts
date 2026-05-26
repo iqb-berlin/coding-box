@@ -1,13 +1,26 @@
 import {
-  ComponentFixture, TestBed, fakeAsync, tick
+  ComponentFixture,
+  TestBed,
+  fakeAsync,
+  tick
 } from '@angular/core/testing';
-import { MatDialogRef, MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
+import {
+  MatDialogRef,
+  MAT_DIALOG_DATA,
+  MatDialog
+} from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
-import { VariableAnalysisDialogComponent, VariableAnalysisData } from './variable-analysis-dialog.component';
-import { VariableAnalysisService } from '../../../shared/services/response/variable-analysis.service';
+import {
+  VariableAnalysisDialogComponent,
+  VariableAnalysisData
+} from './variable-analysis-dialog.component';
+import {
+  VariableAnalysisResultPageDto,
+  VariableAnalysisService
+} from '../../../shared/services/response/variable-analysis.service';
 import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
 
 describe('VariableAnalysisDialogComponent', () => {
@@ -37,13 +50,28 @@ describe('VariableAnalysisDialogComponent', () => {
     workspaceId: 1,
     responses: [
       {
-        id: 1, unitid: 10, variableid: 'VAR1', status: 'VALUE', value: 'Val1', subform: ''
+        id: 1,
+        unitid: 10,
+        variableid: 'VAR1',
+        status: 'VALUE',
+        value: 'Val1',
+        subform: ''
       },
       {
-        id: 2, unitid: 10, variableid: 'VAR1', status: 'VALUE', value: 'Val1', subform: ''
+        id: 2,
+        unitid: 10,
+        variableid: 'VAR1',
+        status: 'VALUE',
+        value: 'Val1',
+        subform: ''
       },
       {
-        id: 3, unitid: 10, variableid: 'VAR2', status: 'VALUE', value: 'Val2', subform: ''
+        id: 3,
+        unitid: 10,
+        variableid: 'VAR2',
+        status: 'VALUE',
+        value: 'Val2',
+        subform: ''
       }
     ]
   };
@@ -58,7 +86,20 @@ describe('VariableAnalysisDialogComponent', () => {
       createAnalysisJob: jest.fn().mockReturnValue(of(mockJobs[0])),
       cancelJob: jest.fn().mockReturnValue(of({ success: true })),
       deleteJob: jest.fn().mockReturnValue(of({ success: true })),
-      getAnalysisResults: jest.fn().mockReturnValue(of({ variableCombos: [], frequencies: {}, total: 0 }))
+      getAnalysisResults: jest
+        .fn()
+        .mockReturnValue(of({ variableCombos: [], frequencies: {}, total: 0 })),
+      getAnalysisResultsPage: jest.fn().mockReturnValue(
+        of({
+          variableCombos: [],
+          frequencies: {},
+          total: 0,
+          unfilteredTotal: 0,
+          page: 1,
+          pageSize: 50,
+          totalPages: 0
+        })
+      )
     } as unknown as jest.Mocked<VariableAnalysisService>;
 
     mockSnackBar = {
@@ -80,7 +121,10 @@ describe('VariableAnalysisDialogComponent', () => {
       providers: [
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: mockDialogData },
-        { provide: VariableAnalysisService, useValue: mockVariableAnalysisService },
+        {
+          provide: VariableAnalysisService,
+          useValue: mockVariableAnalysisService
+        },
         { provide: MatSnackBar, useValue: mockSnackBar },
         { provide: MatDialog, useValue: mockDialog }
       ]
@@ -103,16 +147,26 @@ describe('VariableAnalysisDialogComponent', () => {
       expect(component.variableFrequencies[comboKey]).toBeDefined();
       expect(component.variableFrequencies[comboKey][0].value).toBe('Val1');
       expect(component.variableFrequencies[comboKey][0].count).toBe(2);
-      expect(component.variableFrequencies[comboKey][0].percentage).toBe((2 / 2) * 100);
+      expect(component.variableFrequencies[comboKey][0].percentage).toBe(
+        (2 / 2) * 100
+      );
     });
 
     it('should use analysisResults if provided', () => {
       component.data.analysisResults = {
-        variableCombos: [{ unitId: 10, unitName: 'Unit 10', variableId: 'VAR1' }],
+        variableCombos: [
+          { unitId: 10, unitName: 'Unit 10', variableId: 'VAR1' }
+        ],
         frequencies: {
-          '10:VAR1': [{
-            unitId: 10, variableId: 'VAR1', value: 'Result1', count: 5, percentage: 50
-          }]
+          '10:VAR1': [
+            {
+              unitId: 10,
+              variableId: 'VAR1',
+              value: 'Result1',
+              count: 5,
+              percentage: 50
+            }
+          ]
         },
         total: 10
       };
@@ -127,12 +181,43 @@ describe('VariableAnalysisDialogComponent', () => {
 
   describe('filterVariables', () => {
     it('should filter variables based on searchText', fakeAsync(() => {
-      component.onSearchChange({ target: { value: 'VAR1' } } as unknown as Event);
+      component.onSearchChange({
+        target: { value: 'VAR1' }
+      } as unknown as Event);
       tick(300);
 
       expect(component.variableCombos.length).toBe(1);
       expect(component.variableCombos[0].variableId).toBe('VAR1');
     }));
+  });
+
+  describe('empty state', () => {
+    it('should distinguish no analysis from filtered server-side results', () => {
+      component.data.analysisResults = undefined;
+      component.allVariableCombos = [];
+      component.activeJob = undefined;
+      component.isStartingJob = false;
+
+      expect(component.getEmptyStateMessageKey()).toBe(
+        'variable-analysis.no-results-yet'
+      );
+      expect(component.shouldShowStartAnalysisButton()).toBe(true);
+
+      component.data.analysisResults = {
+        variableCombos: [],
+        frequencies: {},
+        total: 0,
+        unfilteredTotal: 3,
+        page: 1,
+        pageSize: 50,
+        totalPages: 0
+      };
+
+      expect(component.getEmptyStateMessageKey()).toBe(
+        'variable-analysis.no-variables-found'
+      );
+      expect(component.shouldShowStartAnalysisButton()).toBe(false);
+    });
   });
 
   describe('refreshJobs', () => {
@@ -143,7 +228,9 @@ describe('VariableAnalysisDialogComponent', () => {
     });
 
     it('should show error snackbar on failure', () => {
-      mockVariableAnalysisService.getAllJobs.mockReturnValue(throwError(() => new Error('error')));
+      mockVariableAnalysisService.getAllJobs.mockReturnValue(
+        throwError(() => new Error('error'))
+      );
       component.refreshJobs();
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
@@ -153,7 +240,9 @@ describe('VariableAnalysisDialogComponent', () => {
     it('should call service and refresh jobs', () => {
       component.activeJob = undefined;
       component.startNewAnalysis();
-      expect(mockVariableAnalysisService.createAnalysisJob).toHaveBeenCalledWith(1, 10);
+      expect(
+        mockVariableAnalysisService.createAnalysisJob
+      ).toHaveBeenCalledWith(1, 10);
       expect(mockVariableAnalysisService.getAllJobs).toHaveBeenCalled();
     });
   });
@@ -172,18 +261,86 @@ describe('VariableAnalysisDialogComponent', () => {
       expect(mockDialog.open).toHaveBeenCalled();
       expect(mockVariableAnalysisService.deleteJob).toHaveBeenCalledWith(1, 1);
     });
+
+    it('should stop loading when deleting the job currently loading results', () => {
+      const pendingResults = new Subject<VariableAnalysisResultPageDto>();
+      const dismissLoadingResults = jest.fn();
+      mockSnackBar.open.mockReturnValueOnce({
+        dismiss: dismissLoadingResults
+      } as never);
+      mockVariableAnalysisService.getAnalysisResultsPage.mockReturnValue(
+        pendingResults
+      );
+
+      component.viewJobResults(1);
+      expect(component.isLoading).toBe(true);
+
+      component.deleteJob(1);
+
+      expect(component.isLoading).toBe(false);
+      expect(component.data.analysisResults).toBeUndefined();
+      expect(dismissLoadingResults).toHaveBeenCalled();
+    });
   });
 
   describe('viewJobResults', () => {
     it('should load results and call analyzeVariables', () => {
-      const mockResults = { variableCombos: [], frequencies: {}, total: 0 };
-      mockVariableAnalysisService.getAnalysisResults.mockReturnValue(of(mockResults));
+      const mockResults = {
+        variableCombos: [],
+        frequencies: {},
+        total: 0,
+        unfilteredTotal: 0,
+        page: 1,
+        pageSize: 50,
+        totalPages: 0
+      };
+      mockVariableAnalysisService.getAnalysisResultsPage.mockReturnValue(
+        of(mockResults)
+      );
       const analyzeSpy = jest.spyOn(component, 'analyzeVariables');
 
       component.viewJobResults(1);
 
-      expect(mockVariableAnalysisService.getAnalysisResults).toHaveBeenCalledWith(1, 1);
+      expect(
+        mockVariableAnalysisService.getAnalysisResultsPage
+      ).toHaveBeenCalledWith(1, 1, {
+        page: 1,
+        pageSize: 50,
+        search: '',
+        onlyEmpty: false
+      });
       expect(analyzeSpy).toHaveBeenCalled();
     });
+
+    it('should dismiss stale loading snackbars without applying stale results', fakeAsync(() => {
+      const firstResults = new Subject<VariableAnalysisResultPageDto>();
+      const secondResults = new Subject<VariableAnalysisResultPageDto>();
+      const firstDismiss = jest.fn();
+      mockSnackBar.open.mockReturnValueOnce({
+        dismiss: firstDismiss
+      } as never);
+      mockVariableAnalysisService.getAnalysisResultsPage
+        .mockReturnValueOnce(firstResults)
+        .mockReturnValueOnce(secondResults);
+
+      component.viewJobResults(1);
+      component.onSearchChange({
+        target: { value: 'VAR' }
+      } as unknown as Event);
+      tick(300);
+
+      firstResults.next({
+        variableCombos: [],
+        frequencies: {},
+        total: 1,
+        unfilteredTotal: 1,
+        page: 1,
+        pageSize: 50,
+        totalPages: 1
+      });
+
+      expect(firstDismiss).toHaveBeenCalled();
+      expect(component.data.analysisResults?.total).not.toBe(1);
+    }));
   });
 });
