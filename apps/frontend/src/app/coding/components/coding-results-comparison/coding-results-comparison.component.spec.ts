@@ -672,10 +672,12 @@ describe('CodingResultsComparisonComponent', () => {
       unitName: 'U1',
       variableId: 'V1',
       meanKappa: 0.85,
-      caseCount: 15
+      caseCount: 1,
+      validPairCount: 15
     });
     expect(component.variableKappaSummaries[0].meanAgreement).toBeCloseTo(0.85, 10);
     expect(tableText).toContain('Mittelwerte je Variable');
+    expect(tableText).toContain('Gültige Paarwerte');
     expect(tableText).toContain('U1 - V1');
     expect(tableText).toContain('0.850');
     expect(tableText).toContain('85.0%');

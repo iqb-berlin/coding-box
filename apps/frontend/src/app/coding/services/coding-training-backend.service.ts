@@ -229,6 +229,11 @@ export class CodingTrainingBackendService {
       variables: Array<{
         unitName: string;
         variableId: string;
+        meanKappa: number | null;
+        meanAgreement: number | null;
+        caseCount: number;
+        validPairCount: number;
+        coderPairCount: number;
         coderPairs: Array<{
           coder1Id: number;
           coder1Name: string;
@@ -256,6 +261,11 @@ export class CodingTrainingBackendService {
       variables: Array<{
         unitName: string;
         variableId: string;
+        meanKappa: number | null;
+        meanAgreement: number | null;
+        caseCount: number;
+        validPairCount: number;
+        coderPairCount: number;
         coderPairs: Array<{
           coder1Id: number;
           coder1Name: string;
