@@ -27,12 +27,15 @@ import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
 import { VariableAnalysisService } from '../../database/services/test-results';
 import { VariableAnalysisResultDto } from './dto/variable-analysis-result.dto';
+import { VariableAnalysisResultPageDto } from './dto/variable-analysis-result-page.dto';
 import { VariableAnalysisJobDto } from './dto/variable-analysis-job.dto';
 
 @ApiTags('Variable Analysis')
 @Controller('admin/workspace/:workspace_id/variable-analysis')
 export class VariableAnalysisController {
-  constructor(private readonly variableAnalysisService: VariableAnalysisService) { }
+  constructor(
+    private readonly variableAnalysisService: VariableAnalysisService
+  ) {}
 
   @Post('jobs')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -70,7 +73,8 @@ export class VariableAnalysisController {
     description: 'Workspace not found.'
   })
   @ApiConflictResponse({
-    description: 'A variable analysis job is already in progress for this workspace.'
+    description:
+      'A variable analysis job is already in progress for this workspace.'
   })
   async createAnalysisJob(
     @WorkspaceId() workspaceId: number,
@@ -84,10 +88,15 @@ export class VariableAnalysisController {
         variableId
       );
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      ) {
         throw error;
       }
-      throw new BadRequestException(`Failed to create variable analysis job: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to create variable analysis job: ${error.message}`
+      );
     }
   }
 
@@ -123,7 +132,9 @@ export class VariableAnalysisController {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException(`Failed to retrieve variable analysis jobs: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to retrieve variable analysis jobs: ${error.message}`
+      );
     }
   }
 
@@ -161,7 +172,10 @@ export class VariableAnalysisController {
       @Param('job_id') jobId: string
   ): Promise<VariableAnalysisJobDto> {
     try {
-      return await this.variableAnalysisService.getAnalysisJob(jobId, workspaceId);
+      return await this.variableAnalysisService.getAnalysisJob(
+        jobId,
+        workspaceId
+      );
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -169,7 +183,9 @@ export class VariableAnalysisController {
       if (error.message && error.message.includes('not found in workspace')) {
         throw new NotFoundException(error.message);
       }
-      throw new BadRequestException(`Failed to retrieve variable analysis job: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to retrieve variable analysis job: ${error.message}`
+      );
     }
   }
 
@@ -193,7 +209,8 @@ export class VariableAnalysisController {
     description: 'The ID of the job'
   })
   @ApiOkResponse({
-    description: 'The variable analysis results have been successfully retrieved.',
+    description:
+      'The variable analysis results have been successfully retrieved.',
     type: VariableAnalysisResultDto
   })
   @ApiBadRequestResponse({
@@ -207,7 +224,10 @@ export class VariableAnalysisController {
       @Param('job_id') jobId: string
   ): Promise<VariableAnalysisResultDto> {
     try {
-      return await this.variableAnalysisService.getAnalysisResults(jobId, workspaceId);
+      return await this.variableAnalysisService.getAnalysisResults(
+        jobId,
+        workspaceId
+      );
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -215,7 +235,96 @@ export class VariableAnalysisController {
       if (error.message && error.message.includes('not found in workspace')) {
         throw new NotFoundException(error.message);
       }
-      throw new BadRequestException(`Failed to retrieve variable analysis results: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to retrieve variable analysis results: ${error.message}`
+      );
+    }
+  }
+
+  @Get('jobs/:job_id/results/page')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get paginated results of a variable analysis job',
+    description:
+      'Retrieves one page of the completed variable analysis job results'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'job_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the job'
+  })
+  @ApiQuery({
+    name: 'page',
+    type: Number,
+    required: false,
+    description: '1-based page number'
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    type: Number,
+    required: false,
+    description: 'Number of variables per page, capped by the server'
+  })
+  @ApiQuery({
+    name: 'search',
+    type: String,
+    required: false,
+    description: 'Search term matched against unit name and variable ID'
+  })
+  @ApiQuery({
+    name: 'onlyEmpty',
+    type: Boolean,
+    required: false,
+    description: 'Only include variables with empty responses'
+  })
+  @ApiOkResponse({
+    description:
+      'The variable analysis result page has been successfully retrieved.',
+    type: VariableAnalysisResultPageDto
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data or job not completed.'
+  })
+  @ApiNotFoundResponse({
+    description: 'Job not found.'
+  })
+  async getAnalysisResultsPage(
+    @WorkspaceId() workspaceId: number,
+      @Param('job_id') jobId: string,
+      @Query('page') page?: string,
+      @Query('pageSize') pageSize?: string,
+      @Query('search') search?: string,
+      @Query('onlyEmpty') onlyEmpty?: string
+  ): Promise<VariableAnalysisResultPageDto> {
+    try {
+      return await this.variableAnalysisService.getAnalysisResultsPage(
+        jobId,
+        workspaceId,
+        {
+          page,
+          pageSize,
+          search,
+          onlyEmpty
+        }
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message && error.message.includes('not found in workspace')) {
+        throw new NotFoundException(error.message);
+      }
+      throw new BadRequestException(
+        `Failed to retrieve variable analysis result page: ${error.message}`
+      );
     }
   }
 
@@ -246,10 +355,15 @@ export class VariableAnalysisController {
       @Param('job_id') jobId: string
   ): Promise<{ success: boolean; message?: string }> {
     try {
-      const success = await this.variableAnalysisService.deleteJob(workspaceId, jobId);
+      const success = await this.variableAnalysisService.deleteJob(
+        workspaceId,
+        jobId
+      );
       return { success };
     } catch (error) {
-      throw new BadRequestException(`Failed to delete variable analysis job: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to delete variable analysis job: ${error.message}`
+      );
     }
   }
 
@@ -280,7 +394,9 @@ export class VariableAnalysisController {
       await this.variableAnalysisService.deleteAllJobs(workspaceId);
       return { success: true };
     } catch (error) {
-      throw new BadRequestException(`Failed to delete all variable analysis jobs: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to delete all variable analysis jobs: ${error.message}`
+      );
     }
   }
 
@@ -311,10 +427,15 @@ export class VariableAnalysisController {
       @Param('job_id') jobId: string
   ): Promise<{ success: boolean; message?: string }> {
     try {
-      const success = await this.variableAnalysisService.cancelJob(workspaceId, jobId);
+      const success = await this.variableAnalysisService.cancelJob(
+        workspaceId,
+        jobId
+      );
       return { success };
     } catch (error) {
-      throw new BadRequestException(`Failed to cancel variable analysis job: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to cancel variable analysis job: ${error.message}`
+      );
     }
   }
 }

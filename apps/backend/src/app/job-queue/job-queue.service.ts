@@ -92,6 +92,26 @@ export interface VariableAnalysisJobData {
   workspaceId: number;
   unitId?: number;
   variableId?: string;
+  cacheKey?: string;
+}
+
+export interface VariableAnalysisJobResult {
+  cacheKey: string;
+  workspaceId: number;
+  total: number;
+  storage: 'chunked';
+  variableComboChunks: number;
+  frequencyChunks: number;
+  storedAt: string;
+}
+
+export interface VariableAnalysisResultCacheManifest {
+  storage: 'chunked';
+  workspaceId: number;
+  total: number;
+  variableComboChunks: number;
+  frequencyChunks: number;
+  storedAt: string;
 }
 
 export interface ExternalCodingImportJobData {
@@ -937,7 +957,11 @@ export class JobQueueService {
     options?: JobOptions
   ): Promise<Job<VariableAnalysisJobData>> {
     this.logger.log(`Adding variable analysis job for workspace ${data.workspaceId}`);
-    return this.variableAnalysisQueue.add(data, options);
+    return this.variableAnalysisQueue.add(data, {
+      removeOnComplete: { age: 86400 },
+      removeOnFail: { age: 604800 },
+      ...options
+    });
   }
 
   async getVariableAnalysisJob(
