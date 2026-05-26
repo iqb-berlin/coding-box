@@ -609,6 +609,51 @@ describe('CodingStatisticsService', () => {
         expect(result[0].interpretation).toBe(testCase.expected);
       });
     });
+
+    it('should use the updated good and almost perfect kappa boundaries', () => {
+      const buildCodes = (
+        matchingOnes: number,
+        oneVsTwo: number,
+        twoVsOne: number,
+        matchingTwos: number
+      ): Array<{ code1: number; code2: number }> => [
+        ...Array.from({ length: matchingOnes }, () => ({ code1: 1, code2: 1 })),
+        ...Array.from({ length: oneVsTwo }, () => ({ code1: 1, code2: 2 })),
+        ...Array.from({ length: twoVsOne }, () => ({ code1: 2, code2: 1 })),
+        ...Array.from({ length: matchingTwos }, () => ({ code1: 2, code2: 2 }))
+      ];
+
+      [
+        {
+          codes: buildCodes(90, 10, 9, 91),
+          expectedKappa: 0.81,
+          expectedInterpretation: 'kappa.good'
+        },
+        {
+          codes: buildCodes(98, 2, 3, 97),
+          expectedKappa: 0.95,
+          expectedInterpretation: 'kappa.good'
+        },
+        {
+          codes: buildCodes(99, 1, 1, 99),
+          expectedKappa: 0.98,
+          expectedInterpretation: 'kappa.almost_perfect'
+        }
+      ].forEach(testCase => {
+        const result = service.calculateCohensKappa([
+          {
+            coder1Id: 1,
+            coder1Name: 'C1',
+            coder2Id: 2,
+            coder2Name: 'C2',
+            codes: testCase.codes
+          }
+        ]);
+
+        expect(result[0].kappa).toBeCloseTo(testCase.expectedKappa, 10);
+        expect(result[0].interpretation).toBe(testCase.expectedInterpretation);
+      });
+    });
   });
 
   describe('Application bootstrap', () => {
