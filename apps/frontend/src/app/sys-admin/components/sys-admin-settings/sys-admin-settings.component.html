@@ -124,7 +124,7 @@
           <input
             matInput
             [(ngModel)]="contentPoolSettings.baseUrl"
-            [disabled]="isSavingContentPoolSettings"
+            [disabled]="isSavingContentPoolSettings || isTestingContentPoolConnection"
             placeholder="z. B. content-pool.example.org oder https://192.168.10.11:4201">
           <mat-hint>
             Wenn kein Protokoll gesetzt ist, wird HTTPS verwendet. Der API-Pfad wird automatisch ergänzt.
@@ -139,7 +139,7 @@
             autocomplete="new-password"
             [(ngModel)]="contentPoolApplicationToken"
             (ngModelChange)="onContentPoolTokenInputChange($event)"
-            [disabled]="isSavingContentPoolSettings"
+            [disabled]="isSavingContentPoolSettings || isTestingContentPoolConnection"
             placeholder="Neues Token eintragen">
           <mat-hint>
             @if (contentPoolSettings.hasApplicationToken && !clearContentPoolApplicationToken) {
@@ -152,20 +152,33 @@
           </mat-hint>
         </mat-form-field>
 
+        <p class="content-pool-description">
+          Benötigte Content-Pool-Scopes: acp.read, files.read, files.write.
+          Der Verbindungstest prüft URL, Token und ACP-Lesezugriff.
+        </p>
+
         <div class="content-pool-actions">
           <button
             mat-raised-button
             color="primary"
-            [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings"
+            [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings || isTestingContentPoolConnection"
             (click)="saveContentPoolSettings()">
             <mat-icon>save</mat-icon>
             {{ isSavingContentPoolSettings ? 'Speichere...' : 'Einstellungen speichern' }}
+          </button>
+          <button
+            mat-stroked-button
+            color="primary"
+            [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings || isTestingContentPoolConnection"
+            (click)="testContentPoolConnection()">
+            <mat-icon>{{ isTestingContentPoolConnection ? 'hourglass_empty' : 'wifi_tethering' }}</mat-icon>
+            {{ isTestingContentPoolConnection ? 'Teste...' : 'Verbindung testen' }}
           </button>
           @if (contentPoolSettings.hasApplicationToken && !clearContentPoolApplicationToken) {
             <button
               mat-stroked-button
               color="warn"
-              [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings"
+              [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings || isTestingContentPoolConnection"
               (click)="clearStoredContentPoolToken()">
               <mat-icon>delete</mat-icon>
               Token entfernen
@@ -189,8 +202,9 @@
         </p>
         <p class="export-description">
           Enthalten sind unter anderem Benutzer- und Rechteverwaltung, Arbeitsbereiche,
-          Kodierungen, Antworten, Logs und Systemeinstellungen. Die Datei kann sensible
-          Daten enthalten und sollte entsprechend geschützt abgelegt werden.
+          Kodierungen, Antworten, Logs und Systemeinstellungen. Dazu zählen auch
+          System-Secrets wie ein gespeichertes Content-Pool Application-Token. Die Datei
+          kann sensible Daten enthalten und sollte entsprechend geschützt abgelegt werden.
         </p>
         <div class="export-actions">
           <button

@@ -13,6 +13,18 @@ export interface ContentPoolSettingsUpdate {
   clearApplicationToken?: boolean;
 }
 
+export interface ContentPoolConnectionTestRequest {
+  baseUrl?: string;
+  applicationToken?: string;
+  clearApplicationToken?: boolean;
+}
+
+export interface ContentPoolConnectionTestResponse {
+  success: boolean;
+  acpCount: number;
+  message: string;
+}
+
 export interface ContentPoolAcpSummary {
   id: string;
   packageId?: string;

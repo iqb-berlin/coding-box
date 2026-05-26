@@ -33,6 +33,18 @@ export interface UpdateContentPoolSettingsInput {
   clearApplicationToken?: boolean;
 }
 
+export interface TestContentPoolConnectionInput {
+  baseUrl?: string;
+  applicationToken?: string;
+  clearApplicationToken?: boolean;
+}
+
+export interface ContentPoolConnectionTestResult {
+  success: boolean;
+  acpCount: number;
+  message: string;
+}
+
 interface ContentPoolRuntimeSettings extends ContentPoolSettings {
   applicationToken: string;
 }
@@ -247,6 +259,57 @@ export class ContentPoolIntegrationService {
       settings: this.toPublicSettings(settings),
       acps
     };
+  }
+
+  async testConnection(
+    input: TestContentPoolConnectionInput
+  ): Promise<ContentPoolConnectionTestResult> {
+    const storedSettings = await this.getRuntimeSettings();
+    const baseUrl = (input.baseUrl || storedSettings.baseUrl || '').trim();
+    const tokenInput = (input.applicationToken || '').trim();
+    const applicationToken = tokenInput ||
+      (input.clearApplicationToken ? '' : storedSettings.applicationToken);
+
+    if (!baseUrl) {
+      throw new BadRequestException(
+        'Content-Pool URL ist für den Verbindungstest erforderlich.'
+      );
+    }
+
+    if (!applicationToken) {
+      throw new BadRequestException(
+        'Content-Pool Application-Token ist für den Verbindungstest erforderlich.'
+      );
+    }
+
+    try {
+      const acps = await this.fetchAcps(
+        this.normalizeApiBaseUrl(baseUrl),
+        applicationToken
+      );
+
+      return {
+        success: true,
+        acpCount: acps.length,
+        message: `Verbindung erfolgreich. ${acps.length} ACPs erreichbar.`
+      };
+    } catch (error) {
+      const message = this.extractExceptionMessage(
+        error,
+        'Content-Pool-Verbindung konnte nicht getestet werden.'
+      );
+      const scopeHint =
+        'Benötigte Scopes: acp.read, files.read, files.write.';
+
+      if (error instanceof UnauthorizedException) {
+        throw new UnauthorizedException(`${message} Token prüfen. ${scopeHint}`);
+      }
+      if (error instanceof ForbiddenException) {
+        throw new ForbiddenException(`${message} Token-Scopes prüfen. ${scopeHint}`);
+      }
+
+      throw error;
+    }
   }
 
   private async getRuntimeSettings(): Promise<ContentPoolRuntimeSettings> {

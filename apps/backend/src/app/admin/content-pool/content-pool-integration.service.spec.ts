@@ -160,6 +160,43 @@ describe('ContentPoolIntegrationService settings', () => {
       baseUrl: 'http://content-pool.test'
     })).rejects.toThrow(BadRequestException);
   });
+
+  it('should test a new application token without storing it', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
+    httpService.axiosRef.get.mockResolvedValueOnce({
+      data: [
+        { id: 'acp-1', name: 'ACP 1' },
+        { id: 'acp-2', name: 'ACP 2' }
+      ]
+    });
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test',
+      applicationToken: 'cp_unsaved_token'
+    })).resolves.toEqual({
+      success: true,
+      acpCount: 2,
+      message: 'Verbindung erfolgreich. 2 ACPs erreichbar.'
+    });
+    expect(httpService.axiosRef.get).toHaveBeenCalledWith(
+      'http://content-pool.test/api/server/acp',
+      { headers: { 'X-Server-Token': 'cp_unsaved_token' } }
+    );
+    expect(settingRepository.getContent('system-content-pool-application-token'))
+      .toBe('cp_test_token');
+  });
+
+  it('should reject testing without a usable application token', async () => {
+    const settingRepository = createEnabledSettings();
+    const service = createService(undefined, undefined, settingRepository);
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test',
+      clearApplicationToken: true
+    })).rejects.toThrow(BadRequestException);
+  });
 });
 
 describe('ContentPoolIntegrationService.listAccessibleAcps', () => {

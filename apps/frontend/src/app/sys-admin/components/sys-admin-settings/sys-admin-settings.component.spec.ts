@@ -21,9 +21,31 @@ describe('SysAdminSettingsComponent', () => {
   let fixture: ComponentFixture<SysAdminSettingsComponent>;
   let httpMock: HttpTestingController;
   let snackBar: { open: jest.Mock };
+  let systemSettingsService: {
+    getContentPoolSettings: jest.Mock;
+    updateContentPoolSettings: jest.Mock;
+    testContentPoolConnection: jest.Mock;
+  };
 
   beforeEach(async () => {
     snackBar = { open: jest.fn() };
+    systemSettingsService = {
+      getContentPoolSettings: jest.fn(() => of({
+        enabled: false,
+        baseUrl: '',
+        hasApplicationToken: false
+      })),
+      updateContentPoolSettings: jest.fn(() => of({
+        enabled: false,
+        baseUrl: '',
+        hasApplicationToken: false
+      })),
+      testContentPoolConnection: jest.fn(() => of({
+        success: true,
+        acpCount: 2,
+        message: 'Verbindung erfolgreich. 2 ACPs erreichbar.'
+      }))
+    };
 
     await TestBed.configureTestingModule({
       providers: [
@@ -53,10 +75,7 @@ describe('SysAdminSettingsComponent', () => {
         },
         {
           provide: SystemSettingsService,
-          useValue: {
-            getContentPoolSettings: () => of({ enabled: false, baseUrl: '' }),
-            updateContentPoolSettings: () => of({ enabled: false, baseUrl: '' })
-          }
+          useValue: systemSettingsService
         },
         provideNoopAnimations() // Hier hinzufügen
       ],
@@ -75,6 +94,50 @@ describe('SysAdminSettingsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  describe('testContentPoolConnection', () => {
+    it('tests the current URL with an unsaved token and shows the result', () => {
+      component.contentPoolSettings = {
+        enabled: true,
+        baseUrl: ' http://content-pool.test ',
+        hasApplicationToken: false
+      };
+      component.contentPoolApplicationToken = ' cp_unsaved_token ';
+
+      component.testContentPoolConnection();
+
+      expect(systemSettingsService.testContentPoolConnection)
+        .toHaveBeenCalledWith({
+          baseUrl: 'http://content-pool.test',
+          applicationToken: 'cp_unsaved_token',
+          clearApplicationToken: false
+        });
+      expect(snackBar.open).toHaveBeenCalledWith(
+        'Verbindung erfolgreich. 2 ACPs erreichbar.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      expect(component.isTestingContentPoolConnection).toBe(false);
+    });
+
+    it('requires a token when no stored token is available', () => {
+      component.contentPoolSettings = {
+        enabled: true,
+        baseUrl: 'http://content-pool.test',
+        hasApplicationToken: false
+      };
+      component.contentPoolApplicationToken = '';
+
+      component.testContentPoolConnection();
+
+      expect(systemSettingsService.testContentPoolConnection).not.toHaveBeenCalled();
+      expect(snackBar.open).toHaveBeenCalledWith(
+        'Bitte ein Content-Pool Application-Token für den Verbindungstest hinterlegen.',
+        'Schließen',
+        { duration: 4000 }
+      );
+    });
   });
 
   describe('exportDatabase', () => {
