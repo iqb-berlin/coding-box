@@ -4,7 +4,12 @@ import { Job } from 'bull';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../database/entities/response.entity';
-import { VariableAnalysisJobData } from '../job-queue.service';
+import { CacheService } from '../../cache/cache.service';
+import {
+  VariableAnalysisJobData,
+  VariableAnalysisJobResult,
+  VariableAnalysisResultCacheManifest
+} from '../job-queue.service';
 import { VariableAnalysisResultDto, VariableCombo } from '../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableFrequencyDto } from '../../admin/variable-analysis/dto/variable-frequency.dto';
 import {
@@ -17,15 +22,19 @@ export class VariableAnalysisProcessor {
   private readonly logger = new Logger(VariableAnalysisProcessor.name);
 
   private readonly MAX_VALUES_PER_VARIABLE = 20;
+  private readonly MAX_VALUE_PREVIEW_LENGTH = 500;
+  private readonly RESULT_CACHE_TTL_SECONDS = 86400;
+  private readonly RESULT_CACHE_CHUNK_SIZE = 100;
 
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
+    private cacheService: CacheService,
     private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   @Process()
-  async process(job: Job<VariableAnalysisJobData>): Promise<VariableAnalysisResultDto> {
+  async process(job: Job<VariableAnalysisJobData>): Promise<VariableAnalysisJobResult> {
     this.logger.log(`Processing variable analysis job ${job.id} for workspace ${job.data.workspaceId}`);
 
     try {
@@ -34,6 +43,7 @@ export class VariableAnalysisProcessor {
       const workspaceId = job.data.workspaceId;
       const unitId = job.data.unitId;
       const variableId = job.data.variableId;
+      const cacheKey = job.data.cacheKey || this.createResultCacheKey(workspaceId, job.id);
       const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
       // Build the query
@@ -81,11 +91,11 @@ export class VariableAnalysisProcessor {
       // If no variable combinations found, return empty result
       if (variableCombos.length === 0) {
         await job.progress(100);
-        return {
+        return await this.cacheAndReturnMetadata(job, cacheKey, {
           variableCombos: [],
           frequencies: {},
           total: 0
-        };
+        });
       }
 
       const total = variableCombos.length;
@@ -138,9 +148,18 @@ export class VariableAnalysisProcessor {
 
       const [topValuesSql, topValuesParameters] = topValuesQuery.getQueryAndParameters();
       const maxValuesParameter = `$${topValuesParameters.length + 1}`;
+      const maxValuePreviewLengthParameter = `$${topValuesParameters.length + 2}`;
       const valueRows = await this.responseRepository.query(
         `
-          SELECT ranked_values.*
+          SELECT
+            ranked_values."unitId",
+            ranked_values."unitName",
+            ranked_values."variableId",
+            LEFT(ranked_values."value", ${maxValuePreviewLengthParameter}) AS "value",
+            LENGTH(ranked_values."value") AS "valueLength",
+            md5(ranked_values."value") AS "valueHash",
+            ranked_values."count",
+            ranked_values."rank"
           FROM (
             SELECT
               grouped_values.*,
@@ -153,7 +172,7 @@ export class VariableAnalysisProcessor {
           WHERE ranked_values."rank" <= ${maxValuesParameter}
           ORDER BY ranked_values."unitName" ASC, ranked_values."variableId" ASC, ranked_values."count" DESC
         `,
-        [...topValuesParameters, this.MAX_VALUES_PER_VARIABLE]
+        [...topValuesParameters, this.MAX_VALUES_PER_VARIABLE, this.MAX_VALUE_PREVIEW_LENGTH]
       );
 
       for (const row of valueRows) {
@@ -167,7 +186,11 @@ export class VariableAnalysisProcessor {
             unitId: unitIdNumber,
             unitName: row.unitName,
             variableId: row.variableId,
-            value: row.value || '',
+            value: this.formatValuePreview(
+              row.value || '',
+              parseInt(row.valueLength, 10),
+              row.valueHash
+            ),
             count,
             percentage: 0
           });
@@ -219,14 +242,136 @@ export class VariableAnalysisProcessor {
       await job.progress(100);
       this.logger.log(`Job ${job.id} completed successfully`);
 
-      return {
+      return await this.cacheAndReturnMetadata(job, cacheKey, {
         variableCombos,
         frequencies,
         total
-      };
+      });
     } catch (error) {
       this.logger.error(`Error processing job ${job.id}: ${error.message}`, error.stack);
       throw error;
     }
+  }
+
+  private async cacheAndReturnMetadata(
+    job: Job<VariableAnalysisJobData>,
+    cacheKey: string,
+    result: VariableAnalysisResultDto
+  ): Promise<VariableAnalysisJobResult> {
+    const manifest = await this.storeResultInChunks(cacheKey, result, job.data.workspaceId);
+
+    if (!manifest) {
+      throw new Error(`Failed to cache variable analysis result for job ${job.id}`);
+    }
+
+    return {
+      cacheKey,
+      workspaceId: job.data.workspaceId,
+      total: result.total,
+      storage: manifest.storage,
+      variableComboChunks: manifest.variableComboChunks,
+      frequencyChunks: manifest.frequencyChunks,
+      storedAt: manifest.storedAt
+    };
+  }
+
+  private async storeResultInChunks(
+    cacheKey: string,
+    result: VariableAnalysisResultDto,
+    workspaceId: number
+  ): Promise<VariableAnalysisResultCacheManifest | null> {
+    const variableComboChunks = this.chunkArray(result.variableCombos, this.RESULT_CACHE_CHUNK_SIZE);
+    const frequencyChunks = this.chunkArray(Object.entries(result.frequencies), this.RESULT_CACHE_CHUNK_SIZE);
+    const writtenKeys: string[] = [];
+    const manifest: VariableAnalysisResultCacheManifest = {
+      storage: 'chunked',
+      workspaceId,
+      total: result.total,
+      variableComboChunks: variableComboChunks.length,
+      frequencyChunks: frequencyChunks.length,
+      storedAt: new Date().toISOString()
+    };
+
+    try {
+      for (let index = 0; index < variableComboChunks.length; index += 1) {
+        const chunkKey = this.getVariableComboChunkKey(cacheKey, index);
+        const stored = await this.cacheService.set(
+          chunkKey,
+          variableComboChunks[index],
+          this.RESULT_CACHE_TTL_SECONDS
+        );
+        if (!stored) {
+          return await this.cleanupFailedChunkedWrite(writtenKeys, cacheKey);
+        }
+        writtenKeys.push(chunkKey);
+      }
+
+      for (let index = 0; index < frequencyChunks.length; index += 1) {
+        const chunkKey = this.getFrequencyChunkKey(cacheKey, index);
+        const stored = await this.cacheService.set(
+          chunkKey,
+          frequencyChunks[index],
+          this.RESULT_CACHE_TTL_SECONDS
+        );
+        if (!stored) {
+          return await this.cleanupFailedChunkedWrite(writtenKeys, cacheKey);
+        }
+        writtenKeys.push(chunkKey);
+      }
+
+      const storedManifest = await this.cacheService.set(
+        cacheKey,
+        manifest,
+        this.RESULT_CACHE_TTL_SECONDS
+      );
+      if (!storedManifest) {
+        return await this.cleanupFailedChunkedWrite(writtenKeys, cacheKey);
+      }
+
+      return manifest;
+    } catch (error) {
+      this.logger.error(
+        `Failed to store variable analysis result chunks for ${cacheKey}: ${error.message}`,
+        error.stack
+      );
+      await this.cleanupFailedChunkedWrite(writtenKeys, cacheKey);
+      return null;
+    }
+  }
+
+  private async cleanupFailedChunkedWrite(writtenKeys: string[], manifestKey: string): Promise<null> {
+    await Promise.all([
+      ...writtenKeys.map(key => this.cacheService.delete(key)),
+      this.cacheService.delete(manifestKey)
+    ]);
+    return null;
+  }
+
+  private chunkArray<T>(items: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let index = 0; index < items.length; index += size) {
+      chunks.push(items.slice(index, index + size));
+    }
+    return chunks;
+  }
+
+  private getVariableComboChunkKey(cacheKey: string, index: number): string {
+    return `${cacheKey}:variable-combos:${index}`;
+  }
+
+  private getFrequencyChunkKey(cacheKey: string, index: number): string {
+    return `${cacheKey}:frequencies:${index}`;
+  }
+
+  private createResultCacheKey(workspaceId: number, jobId: Job['id']): string {
+    return `variable-analysis:${workspaceId}:${jobId}`;
+  }
+
+  private formatValuePreview(value: string, valueLength: number, valueHash?: string): string {
+    if (!Number.isFinite(valueLength) || valueLength <= this.MAX_VALUE_PREVIEW_LENGTH) {
+      return value;
+    }
+
+    return `${value}... [truncated ${valueLength} chars, md5:${valueHash || 'unknown'}]`;
   }
 }
