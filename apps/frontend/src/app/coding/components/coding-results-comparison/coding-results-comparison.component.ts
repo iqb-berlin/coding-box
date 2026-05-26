@@ -117,6 +117,11 @@ interface KappaCoderPair {
 interface KappaVariable {
   unitName: string;
   variableId: string;
+  meanKappa?: number | null;
+  meanAgreement?: number | null;
+  caseCount?: number;
+  validPairCount?: number;
+  coderPairCount?: number;
   coderPairs: KappaCoderPair[];
 }
 
@@ -130,6 +135,7 @@ interface KappaStatistics {
     variablesIncluded: number;
     codersIncluded: number;
     weightingMethod: 'weighted' | 'unweighted';
+    calculationLevel?: 'code' | 'score';
   };
 }
 
@@ -140,6 +146,7 @@ interface VariableKappaSummary {
   meanKappa: number | null;
   meanAgreement: number | null;
   caseCount: number;
+  validPairCount: number;
 }
 
 interface ComparisonWarning {
@@ -1238,24 +1245,41 @@ export class CodingResultsComparisonComponent implements OnInit {
     return `${unitName}::${variableId}`;
   }
 
+  private countSelectedValidCoderValues(coders: WithinTrainingComparison['coders'], selectedCoderIds: number[]): number {
+    return coders.filter(coder => (
+      selectedCoderIds.includes(coder.jobId) &&
+      (this.useCodeLevel ? coder.code !== null : coder.score !== null)
+    )).length;
+  }
+
+  private countValidCasesForVariable(unitName: string, variableId: string, selectedCoderIds: number[]): number {
+    return this.withinTrainingData.filter(item => (
+      item.unitName === unitName &&
+      item.variableId === variableId &&
+      this.countSelectedValidCoderValues(item.coders, selectedCoderIds) >= 2
+    )).length;
+  }
+
   private buildVariableKappaSummaries(): void {
     if (!this.kappaStatistics) {
       this.variableKappaSummaries = [];
       return;
     }
 
+    const selectedCoderIds = this.codersFormControl.value || [];
+
     this.variableKappaSummaries = this.kappaStatistics.variables.map(variable => {
       let kappaSum = 0;
       let kappaCount = 0;
       let agreementSum = 0;
       let agreementCount = 0;
-      let caseCount = 0;
+      let validPairCount = 0;
 
       variable.coderPairs.forEach(pair => {
         if (pair.validPairs > 0) {
           agreementSum += pair.agreement;
           agreementCount += 1;
-          caseCount += pair.validPairs;
+          validPairCount += pair.validPairs;
         }
 
         if (pair.kappa !== null && pair.validPairs > 0) {
@@ -1270,7 +1294,8 @@ export class CodingResultsComparisonComponent implements OnInit {
         variableId: variable.variableId,
         meanKappa: kappaCount > 0 ? kappaSum / kappaCount : null,
         meanAgreement: agreementCount > 0 ? agreementSum / agreementCount : null,
-        caseCount
+        caseCount: this.countValidCasesForVariable(variable.unitName, variable.variableId, selectedCoderIds),
+        validPairCount
       };
     });
   }
@@ -1303,13 +1328,9 @@ export class CodingResultsComparisonComponent implements OnInit {
 
     // Recalculate totalDoubleCodedResponses based on selected coders and withinTrainingData
     const selectedCoderIds = this.codersFormControl.value || [];
-    this.kappaStatistics.workspaceSummary.totalDoubleCodedResponses = this.withinTrainingData.filter(d => {
-      const coderCodes = d.coders
-        .filter(c => selectedCoderIds.includes(c.jobId))
-        .map(c => c.code)
-        .filter(c => c !== null);
-      return coderCodes.length >= 2;
-    }).length;
+    this.kappaStatistics.workspaceSummary.totalDoubleCodedResponses = this.withinTrainingData.filter(
+      d => this.countSelectedValidCoderValues(d.coders, selectedCoderIds) >= 2
+    ).length;
 
     let totalWeight = 0;
     let pairCount = 0;

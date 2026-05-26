@@ -654,6 +654,48 @@ describe('CodingStatisticsService', () => {
         expect(result[0].interpretation).toBe(testCase.expectedInterpretation);
       });
     });
+
+    it('should summarize variable-level kappa and agreement over valid coder pairs', () => {
+      const summary = service.calculateKappaVariableSummary([
+        {
+          kappa: 0.5,
+          agreement: 0.8,
+          validPairs: 10
+        },
+        {
+          kappa: 0.7,
+          agreement: 0.9,
+          validPairs: 5
+        },
+        {
+          kappa: null,
+          agreement: 0,
+          validPairs: 0
+        }
+      ]);
+
+      expect(summary.meanKappa).toBeCloseTo(0.6, 10);
+      expect(summary.meanAgreement).toBeCloseTo(0.85, 10);
+      expect(summary.validPairCount).toBe(15);
+      expect(summary.coderPairCount).toBe(2);
+    });
+
+    it('should define empty variable summaries when no coder pair has valid pairs', () => {
+      const summary = service.calculateKappaVariableSummary([
+        {
+          kappa: null,
+          agreement: 0,
+          validPairs: 0
+        }
+      ]);
+
+      expect(summary).toEqual({
+        meanKappa: null,
+        meanAgreement: null,
+        validPairCount: 0,
+        coderPairCount: 0
+      });
+    });
   });
 
   describe('Application bootstrap', () => {
