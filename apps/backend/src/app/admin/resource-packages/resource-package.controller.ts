@@ -113,7 +113,7 @@ export class ResourcePackageController {
   @Header('Content-Disposition', 'filename="resource-package.zip"')
   @Header('Cache-Control', 'none')
   @Header('Content-Type', 'application/zip')
-  @UseGuards(JwtAuthGuard, AccessLevelGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiTags('admin resource-packages')

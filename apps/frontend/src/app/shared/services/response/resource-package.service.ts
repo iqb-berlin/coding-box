@@ -24,8 +24,6 @@ export class ResourcePackageService {
     return this.http.get<ResourcePackageDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages`,
       { headers: this.authHeader }
-    ).pipe(
-      catchError(() => of([]))
     );
   }
 

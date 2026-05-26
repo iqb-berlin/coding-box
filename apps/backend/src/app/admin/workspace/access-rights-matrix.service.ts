@@ -105,6 +105,11 @@ export class AccessRightsMatrixService {
         minAccessLevel: 3
       },
       {
+        featureKey: 'upload-resource-packages',
+        translationKey: 'access-matrix.feature.upload-resource-packages',
+        minAccessLevel: 3
+      },
+      {
         featureKey: 'delete-resource-packages',
         translationKey: 'access-matrix.feature.delete-resource-packages',
         minAccessLevel: 3
