@@ -6,7 +6,8 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AdminGuard } from '../admin.guard';
 import {
   ContentPoolIntegrationService,
-  ContentPoolSettings
+  ContentPoolSettings,
+  UpdateContentPoolSettingsInput
 } from './content-pool-integration.service';
 
 @ApiTags('admin')
@@ -27,7 +28,7 @@ export class ContentPoolSettingsController {
   @Put()
   @ApiOperation({ summary: 'Update Content-Pool integration settings' })
   async updateSettings(
-    @Body() body: ContentPoolSettings
+    @Body() body: UpdateContentPoolSettingsInput
   ): Promise<ContentPoolSettings> {
     return this.contentPoolIntegrationService.updateSettings(body);
   }

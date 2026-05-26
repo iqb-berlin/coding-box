@@ -217,7 +217,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   resourcePackagesModified = false;
   contentPoolSettings: ContentPoolSettings = {
     enabled: false,
-    baseUrl: ''
+    baseUrl: '',
+    hasApplicationToken: false
   };
 
   textFilterValue: string = '';
@@ -384,13 +385,15 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         next: settings => {
           this.contentPoolSettings = {
             enabled: !!settings.enabled,
-            baseUrl: (settings.baseUrl || '').trim()
+            baseUrl: (settings.baseUrl || '').trim(),
+            hasApplicationToken: !!settings.hasApplicationToken
           };
         },
         error: () => {
           this.contentPoolSettings = {
             enabled: false,
-            baseUrl: ''
+            baseUrl: '',
+            hasApplicationToken: false
           };
         }
       });
@@ -401,6 +404,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       !this.isLoadingContentPoolConfig &&
       this.contentPoolSettings.enabled &&
       this.contentPoolSettings.baseUrl &&
+      this.contentPoolSettings.hasApplicationToken &&
       this.tableCheckboxSelection.selected.length > 0
     );
   }
@@ -418,6 +422,15 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     if (!this.contentPoolSettings.baseUrl) {
       this.snackBar.open(
         'In den Systemeinstellungen ist keine Content-Pool URL hinterlegt.',
+        'OK',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    if (!this.contentPoolSettings.hasApplicationToken) {
+      this.snackBar.open(
+        'In den Systemeinstellungen ist kein Content-Pool Application-Token hinterlegt.',
         'OK',
         { duration: 4000 }
       );
@@ -468,6 +481,15 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     if (!this.contentPoolSettings.baseUrl) {
       this.snackBar.open(
         'In den Systemeinstellungen ist keine Content-Pool URL hinterlegt.',
+        'OK',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    if (!this.contentPoolSettings.hasApplicationToken) {
+      this.snackBar.open(
+        'In den Systemeinstellungen ist kein Content-Pool Application-Token hinterlegt.',
         'OK',
         { duration: 4000 }
       );
@@ -533,8 +555,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           .length;
         this.contentPoolIntegrationService
           .importAcp(this.appService.selectedWorkspaceId, {
-            username: payload.username,
-            password: payload.password,
             acpId: payload.acpId,
             overwriteExisting: true,
             overwriteFileIds: resultChoice.overwriteFileIds

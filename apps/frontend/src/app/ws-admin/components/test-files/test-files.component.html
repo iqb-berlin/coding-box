@@ -52,7 +52,7 @@
       <a
         mat-raised-button
         color="accent"
-        [disabled]="isBusy || isLoadingContentPoolConfig"
+        [disabled]="isBusy || isLoadingContentPoolConfig || !contentPoolSettings.hasApplicationToken"
         (click)="openContentPoolImportDialog()"
         matTooltip="Importiert alle Dateien eines Content-Pool-ACP in diese Testdateien-Abteilung">
         <mat-icon>cloud_download</mat-icon>

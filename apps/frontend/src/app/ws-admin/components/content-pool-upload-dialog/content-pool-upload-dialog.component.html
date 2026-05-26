@@ -20,37 +20,21 @@
     </div>
   </div>
 
-  <div class="credentials-grid">
-    <mat-form-field appearance="outline">
-      <mat-label>Benutzername</mat-label>
-      <input matInput [(ngModel)]="username" [disabled]="isLoadingAcps || isUploading">
-    </mat-form-field>
-
-    <mat-form-field appearance="outline">
-      <mat-label>Passwort</mat-label>
-      <input
-        matInput
-        type="password"
-        [(ngModel)]="password"
-        [disabled]="isLoadingAcps || isUploading">
-    </mat-form-field>
-  </div>
-
   <div class="load-acps-actions">
     <button
       mat-stroked-button
       color="primary"
       (click)="loadAcps()"
       [disabled]="isLoadingAcps || isUploading">
-      <mat-icon>login</mat-icon>
-      {{ isLoadingAcps ? 'Lade ACPs...' : 'Anmelden und ACPs laden' }}
+      <mat-icon>sync</mat-icon>
+      {{ isLoadingAcps ? 'Lade ACPs...' : 'ACPs laden' }}
     </button>
     @if (isLoadingAcps) {
       <mat-spinner diameter="20"></mat-spinner>
     }
   </div>
 
-  @if (hasAuthenticated) {
+  @if (hasLoadedAcps) {
     <mat-form-field appearance="outline" class="full-width">
       <mat-label>ACP auswählen</mat-label>
       <mat-select [(ngModel)]="selectedAcpId" [disabled]="isUploading">
@@ -98,7 +82,7 @@
     mat-raised-button
     color="primary"
     (click)="uploadFiles()"
-    [disabled]="isUploading || !hasAuthenticated || !selectedAcpId">
+    [disabled]="isUploading || !hasLoadedAcps || !selectedAcpId">
     <mat-icon>publish</mat-icon>
     {{ isUploading ? 'Übertrage...' : 'Dateien ersetzen' }}
   </button>

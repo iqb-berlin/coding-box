@@ -2,7 +2,10 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
-import { ContentPoolSettings } from '../../ws-admin/models/content-pool.model';
+import {
+  ContentPoolSettings,
+  ContentPoolSettingsUpdate
+} from '../../ws-admin/models/content-pool.model';
 
 @Injectable({
   providedIn: 'root'
@@ -26,7 +29,7 @@ export class SystemSettingsService {
   }
 
   updateContentPoolSettings(
-    settings: ContentPoolSettings
+    settings: ContentPoolSettingsUpdate
   ): Observable<ContentPoolSettings> {
     return this.http.put<ContentPoolSettings>(
       `${this.serverUrl}admin/content-pool/settings`,
