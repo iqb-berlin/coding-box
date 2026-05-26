@@ -75,6 +75,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   databaseExportError: string | null = null;
   isLoadingContentPoolSettings = false;
   isSavingContentPoolSettings = false;
+  isTestingContentPoolConnection = false;
   contentPoolSettings: ContentPoolSettings = {
     enabled: false,
     baseUrl: '',
@@ -367,6 +368,58 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     if ((value || '').trim()) {
       this.clearContentPoolApplicationToken = false;
     }
+  }
+
+  testContentPoolConnection(): void {
+    const normalizedBaseUrl = (this.contentPoolSettings.baseUrl || '').trim();
+    const applicationToken = this.contentPoolApplicationToken.trim();
+    if (!normalizedBaseUrl) {
+      this.snackBar.open(
+        'Bitte eine Content-Pool URL für den Verbindungstest hinterlegen.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    if (
+      !applicationToken &&
+      (!this.contentPoolSettings.hasApplicationToken || this.clearContentPoolApplicationToken)
+    ) {
+      this.snackBar.open(
+        'Bitte ein Content-Pool Application-Token für den Verbindungstest hinterlegen.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    this.isTestingContentPoolConnection = true;
+    this.systemSettingsService
+      .testContentPoolConnection({
+        baseUrl: normalizedBaseUrl,
+        applicationToken: applicationToken || undefined,
+        clearApplicationToken: this.clearContentPoolApplicationToken && !applicationToken
+      })
+      .subscribe({
+        next: result => {
+          this.isTestingContentPoolConnection = false;
+          this.snackBar.open(
+            result.message ||
+              `Verbindung erfolgreich. ${result.acpCount} ACPs erreichbar.`,
+            'Schließen',
+            { duration: 4000 }
+          );
+        },
+        error: error => {
+          this.isTestingContentPoolConnection = false;
+          const message = this.extractErrorMessage(
+            error,
+            'Content-Pool-Verbindung konnte nicht getestet werden. Token und Scopes prüfen.'
+          );
+          this.snackBar.open(message, 'Schließen', { duration: 6000 });
+        }
+      });
   }
 
   exportDatabase(): void {
