@@ -368,6 +368,7 @@
       "import-from-testcenter": "Aus Testcenter importieren",
       "exclude-persons": "Personen ausschließen",
       "view-resource-packages": "Ressourcenpakete ansehen",
+      "upload-resource-packages": "Ressourcenpakete hochladen",
       "delete-resource-packages": "Ressourcenpakete löschen",
       "view-test-results": "Testergebnisse ansehen",
       "view-responses": "Antworten ansehen",
