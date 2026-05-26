@@ -46,6 +46,11 @@ export interface ContentPoolConnectionTestResult {
   message: string;
 }
 
+interface ScopeProbeOptions {
+  acceptsEmptyUploadRejection?: boolean;
+  acceptsFallbackAcpNotFound?: boolean;
+}
+
 interface ContentPoolRuntimeSettings extends ContentPoolSettings {
   applicationToken: string;
 }
@@ -267,13 +272,14 @@ export class ContentPoolIntegrationService {
   }
 
   async testConnection(
-    input: TestContentPoolConnectionInput = {}
+    input: TestContentPoolConnectionInput | null = {}
   ): Promise<ContentPoolConnectionTestResult> {
+    const request = input ?? {};
     const storedSettings = await this.getRuntimeSettings();
-    const baseUrl = (input.baseUrl || storedSettings.baseUrl || '').trim();
-    const tokenInput = (input.applicationToken || '').trim();
+    const baseUrl = (request.baseUrl || storedSettings.baseUrl || '').trim();
+    const tokenInput = (request.applicationToken || '').trim();
     const applicationToken = tokenInput ||
-      (input.clearApplicationToken ? '' : storedSettings.applicationToken);
+      (request.clearApplicationToken ? '' : storedSettings.applicationToken);
 
     if (!baseUrl) {
       throw new BadRequestException(
@@ -976,26 +982,38 @@ export class ContentPoolIntegrationService {
     token: string,
     acps: ContentPoolAcpSummary[]
   ): Promise<void> {
-    const probeAcpId =
-      acps.find(acp => (acp.id || '').trim())?.id ||
-      this.scopeProbeAcpId;
+    const visibleAcp = acps.find(acp => (acp.id || '').trim());
+    const probeAcpId = visibleAcp?.id || this.scopeProbeAcpId;
+    const isFallbackProbe = !visibleAcp;
     const encodedAcpId = encodeURIComponent(probeAcpId);
     const filesUrl = `${apiBaseUrl}/server/acp/${encodedAcpId}/files`;
     const uploadUrl = `${filesUrl}/upload?conflictStrategy=reject`;
     const headers = this.getApplicationTokenHeaders(token);
 
-    await this.assertScopeProbe('files.read', () => this.httpService.axiosRef.get(filesUrl, { headers }));
-    await this.assertScopeProbe('files.write', () => this.httpService.axiosRef.post(uploadUrl, null, { headers }));
+    await this.assertScopeProbe(
+      'files.read',
+      () => this.httpService.axiosRef.get(filesUrl, { headers }),
+      { acceptsFallbackAcpNotFound: isFallbackProbe }
+    );
+    await this.assertScopeProbe(
+      'files.write',
+      () => this.httpService.axiosRef.post(uploadUrl, null, { headers }),
+      {
+        acceptsEmptyUploadRejection: true,
+        acceptsFallbackAcpNotFound: isFallbackProbe
+      }
+    );
   }
 
   private async assertScopeProbe(
     scope: string,
-    request: () => Promise<unknown>
+    request: () => Promise<unknown>,
+    options: ScopeProbeOptions = {}
   ): Promise<void> {
     try {
       await request();
     } catch (error) {
-      if (this.isNonAuthScopeProbeRejection(error)) {
+      if (this.isNonAuthScopeProbeRejection(error, options)) {
         return;
       }
 
@@ -1006,15 +1024,58 @@ export class ContentPoolIntegrationService {
     }
   }
 
-  private isNonAuthScopeProbeRejection(error: unknown): boolean {
+  private isNonAuthScopeProbeRejection(
+    error: unknown,
+    options: ScopeProbeOptions
+  ): boolean {
     if ((error as AxiosError)?.isAxiosError) {
-      const status = (error as AxiosError).response?.status;
+      const axiosError = error as AxiosError;
+      const status = axiosError.response?.status;
+      const message = this.extractResponseMessage(axiosError.response?.data) || '';
       // These responses happen after the Content-Pool scope guard has accepted the token.
-      return status === 400 || status === 404 || status === 415;
+      return this.isExpectedEmptyUploadRejection(status, message, options) ||
+        this.isExpectedFallbackAcpNotFound(status, message, options);
     }
 
-    return error instanceof BadRequestException ||
-      error instanceof NotFoundException;
+    if (error instanceof HttpException) {
+      const status = error.getStatus();
+      const message = this.extractExceptionMessage(error, '');
+      return this.isExpectedEmptyUploadRejection(status, message, options) ||
+        this.isExpectedFallbackAcpNotFound(status, message, options);
+    }
+
+    return false;
+  }
+
+  private isExpectedEmptyUploadRejection(
+    status: number | undefined,
+    message: string,
+    options: ScopeProbeOptions
+  ): boolean {
+    if (!options.acceptsEmptyUploadRejection) {
+      return false;
+    }
+
+    const normalizedMessage = message.toLowerCase();
+    return status === 415 ||
+      (status === 400 &&
+        normalizedMessage.includes('file') &&
+        normalizedMessage.includes('required'));
+  }
+
+  private isExpectedFallbackAcpNotFound(
+    status: number | undefined,
+    message: string,
+    options: ScopeProbeOptions
+  ): boolean {
+    if (!options.acceptsFallbackAcpNotFound || status !== 404) {
+      return false;
+    }
+
+    const normalizedMessage = message.toLowerCase();
+    return normalizedMessage.includes('acp') &&
+      (normalizedMessage.includes('not found') ||
+        normalizedMessage.includes('nicht gefunden'));
   }
 
   private async fetchAcps(

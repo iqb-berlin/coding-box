@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException
+} from '@nestjs/common';
 import { ContentPoolIntegrationService } from './content-pool-integration.service';
 import { WorkspaceFilesService } from '../../database/services/workspace';
 
@@ -219,7 +223,7 @@ describe('ContentPoolIntegrationService settings', () => {
   it('should reject testing with an empty request body as a bad request', async () => {
     const service = createService();
 
-    await expect(service.testConnection()).rejects.toThrow(BadRequestException);
+    await expect(service.testConnection(null)).rejects.toThrow(BadRequestException);
   });
 
   it('should reject testing without a usable application token', async () => {
@@ -247,6 +251,24 @@ describe('ContentPoolIntegrationService settings', () => {
     await expect(service.testConnection({
       baseUrl: 'http://content-pool.test'
     })).rejects.toThrow(ForbiddenException);
+    expect(httpService.axiosRef.post).not.toHaveBeenCalled();
+  });
+
+  it('should not treat a real ACP file route 404 as a successful scope probe', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
+    httpService.axiosRef.get
+      .mockResolvedValueOnce({
+        data: [{ id: 'acp-1', name: 'ACP 1' }]
+      })
+      .mockRejectedValueOnce(
+        createAxiosError(404, 'Cannot GET /api/server/acp/acp-1/files')
+      );
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test'
+    })).rejects.toThrow(NotFoundException);
     expect(httpService.axiosRef.post).not.toHaveBeenCalled();
   });
 
