@@ -43,7 +43,9 @@ describe('SysAdminSettingsComponent', () => {
       testContentPoolConnection: jest.fn(() => of({
         success: true,
         acpCount: 2,
-        message: 'Verbindung erfolgreich. 2 ACPs erreichbar.'
+        validatedScopes: ['acp.read', 'files.read', 'files.write'],
+        message:
+          'Verbindung erfolgreich. 2 ACPs erreichbar. Benötigte Scopes geprüft.'
       }))
     };
 
@@ -114,7 +116,7 @@ describe('SysAdminSettingsComponent', () => {
           clearApplicationToken: false
         });
       expect(snackBar.open).toHaveBeenCalledWith(
-        'Verbindung erfolgreich. 2 ACPs erreichbar.',
+        'Verbindung erfolgreich. 2 ACPs erreichbar. Benötigte Scopes geprüft.',
         'Schließen',
         { duration: 4000 }
       );

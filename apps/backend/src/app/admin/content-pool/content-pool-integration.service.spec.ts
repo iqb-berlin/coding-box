@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ContentPoolIntegrationService } from './content-pool-integration.service';
 import { WorkspaceFilesService } from '../../database/services/workspace';
 
@@ -25,6 +25,16 @@ function createHttpServiceMock(): HttpServiceMock {
     axiosRef: {
       get: jest.fn(),
       post: jest.fn()
+    }
+  };
+}
+
+function createAxiosError(status: number, message: string): unknown {
+  return {
+    isAxiosError: true,
+    response: {
+      status,
+      data: { message }
     }
   };
 }
@@ -165,12 +175,17 @@ describe('ContentPoolIntegrationService settings', () => {
     const httpService = createHttpServiceMock();
     const settingRepository = createEnabledSettings();
     const service = createService(httpService, undefined, settingRepository);
-    httpService.axiosRef.get.mockResolvedValueOnce({
-      data: [
-        { id: 'acp-1', name: 'ACP 1' },
-        { id: 'acp-2', name: 'ACP 2' }
-      ]
-    });
+    httpService.axiosRef.get
+      .mockResolvedValueOnce({
+        data: [
+          { id: 'acp-1', name: 'ACP 1' },
+          { id: 'acp-2', name: 'ACP 2' }
+        ]
+      })
+      .mockResolvedValueOnce({ data: [] });
+    httpService.axiosRef.post.mockRejectedValueOnce(
+      createAxiosError(400, 'At least one file is required')
+    );
 
     await expect(service.testConnection({
       baseUrl: 'http://content-pool.test',
@@ -178,14 +193,33 @@ describe('ContentPoolIntegrationService settings', () => {
     })).resolves.toEqual({
       success: true,
       acpCount: 2,
-      message: 'Verbindung erfolgreich. 2 ACPs erreichbar.'
+      validatedScopes: ['acp.read', 'files.read', 'files.write'],
+      message:
+        'Verbindung erfolgreich. 2 ACPs erreichbar. Benötigte Scopes geprüft.'
     });
-    expect(httpService.axiosRef.get).toHaveBeenCalledWith(
+    expect(httpService.axiosRef.get).toHaveBeenNthCalledWith(
+      1,
       'http://content-pool.test/api/server/acp',
+      { headers: { 'X-Server-Token': 'cp_unsaved_token' } }
+    );
+    expect(httpService.axiosRef.get).toHaveBeenNthCalledWith(
+      2,
+      'http://content-pool.test/api/server/acp/acp-1/files',
+      { headers: { 'X-Server-Token': 'cp_unsaved_token' } }
+    );
+    expect(httpService.axiosRef.post).toHaveBeenCalledWith(
+      'http://content-pool.test/api/server/acp/acp-1/files/upload?conflictStrategy=reject',
+      null,
       { headers: { 'X-Server-Token': 'cp_unsaved_token' } }
     );
     expect(settingRepository.getContent('system-content-pool-application-token'))
       .toBe('cp_test_token');
+  });
+
+  it('should reject testing with an empty request body as a bad request', async () => {
+    const service = createService();
+
+    await expect(service.testConnection()).rejects.toThrow(BadRequestException);
   });
 
   it('should reject testing without a usable application token', async () => {
@@ -196,6 +230,56 @@ describe('ContentPoolIntegrationService settings', () => {
       baseUrl: 'http://content-pool.test',
       clearApplicationToken: true
     })).rejects.toThrow(BadRequestException);
+  });
+
+  it('should reject testing when a required file scope is missing', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
+    httpService.axiosRef.get
+      .mockResolvedValueOnce({
+        data: [{ id: 'acp-1', name: 'ACP 1' }]
+      })
+      .mockRejectedValueOnce(
+        createAxiosError(403, 'Missing required scopes: files.read')
+      );
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test'
+    })).rejects.toThrow(ForbiddenException);
+    expect(httpService.axiosRef.post).not.toHaveBeenCalled();
+  });
+
+  it('should validate file scopes without ACP side effects when no ACP is visible', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
+    httpService.axiosRef.get
+      .mockResolvedValueOnce({ data: [] })
+      .mockRejectedValueOnce(createAxiosError(404, 'ACP not found'));
+    httpService.axiosRef.post.mockRejectedValueOnce(
+      createAxiosError(404, 'ACP not found')
+    );
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test'
+    })).resolves.toEqual({
+      success: true,
+      acpCount: 0,
+      validatedScopes: ['acp.read', 'files.read', 'files.write'],
+      message:
+        'Verbindung erfolgreich. 0 ACPs erreichbar. Benötigte Scopes geprüft.'
+    });
+    expect(httpService.axiosRef.get).toHaveBeenNthCalledWith(
+      2,
+      'http://content-pool.test/api/server/acp/__coding-box-connection-test__/files',
+      { headers: { 'X-Server-Token': 'cp_test_token' } }
+    );
+    expect(httpService.axiosRef.post).toHaveBeenCalledWith(
+      'http://content-pool.test/api/server/acp/__coding-box-connection-test__/files/upload?conflictStrategy=reject',
+      null,
+      { headers: { 'X-Server-Token': 'cp_test_token' } }
+    );
   });
 });
 
