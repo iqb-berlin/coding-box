@@ -23,6 +23,18 @@ import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-f
 export interface ContentPoolSettings {
   enabled: boolean;
   baseUrl: string;
+  hasApplicationToken: boolean;
+}
+
+export interface UpdateContentPoolSettingsInput {
+  enabled: boolean;
+  baseUrl: string;
+  applicationToken?: string;
+  clearApplicationToken?: boolean;
+}
+
+interface ContentPoolRuntimeSettings extends ContentPoolSettings {
+  applicationToken: string;
 }
 
 export interface ContentPoolAcpSummary {
@@ -35,8 +47,6 @@ export interface ContentPoolAcpSummary {
 export interface ImportAcpToWorkspaceInput {
   workspaceId: number;
   acpId: string;
-  username: string;
-  password: string;
   overwriteExisting?: boolean;
   overwriteFileIds?: string[];
 }
@@ -44,8 +54,6 @@ export interface ImportAcpToWorkspaceInput {
 export interface UploadWorkspaceFilesToAcpInput {
   workspaceId: number;
   acpId: string;
-  username: string;
-  password: string;
   fileIds: number[];
   changelog?: string;
 }
@@ -150,18 +158,13 @@ ContentPoolUploadFilesJobProgress,
 >
 >;
 
-interface ContentPoolOidcConfig {
-  enabled?: boolean;
-  issuerUrl?: string;
-  clientId?: string;
-  scope?: string;
-}
-
 @Injectable()
 export class ContentPoolIntegrationService {
   private readonly enabledSettingKey = 'system-content-pool-enabled';
 
   private readonly baseUrlSettingKey = 'system-content-pool-base-url';
+
+  private readonly applicationTokenSettingKey = 'system-content-pool-application-token';
 
   private readonly importJobTtlMs = 30 * 60 * 1000;
 
@@ -179,27 +182,34 @@ export class ContentPoolIntegrationService {
   ) {}
 
   async getSettings(): Promise<ContentPoolSettings> {
-    const [enabledSetting, baseUrlSetting] = await Promise.all([
-      this.settingRepository.findOne({
-        where: { key: this.enabledSettingKey }
-      }),
-      this.settingRepository.findOne({
-        where: { key: this.baseUrlSettingKey }
-      })
-    ]);
+    const settings = await this.getRuntimeSettings();
 
     return {
-      enabled: enabledSetting?.content === 'true',
-      baseUrl: (baseUrlSetting?.content || '').trim()
+      enabled: settings.enabled,
+      baseUrl: settings.baseUrl,
+      hasApplicationToken: settings.hasApplicationToken
     };
   }
 
-  async updateSettings(input: ContentPoolSettings): Promise<ContentPoolSettings> {
+  async updateSettings(
+    input: UpdateContentPoolSettingsInput
+  ): Promise<ContentPoolSettings> {
     const baseUrl = (input.baseUrl || '').trim();
+    const tokenInput = (input.applicationToken || '').trim();
+    const existingToken = await this.getStoredApplicationToken();
+    const applicationToken = input.clearApplicationToken && !tokenInput ?
+      '' :
+      tokenInput || existingToken;
 
     if (input.enabled && !baseUrl) {
       throw new BadRequestException(
         'Content-Pool URL darf bei aktiviertem Feature nicht leer sein.'
+      );
+    }
+
+    if (input.enabled && !applicationToken) {
+      throw new BadRequestException(
+        'Content-Pool Application-Token darf bei aktiviertem Feature nicht leer sein.'
       );
     }
 
@@ -212,25 +222,68 @@ export class ContentPoolIntegrationService {
       input.enabled ? 'true' : 'false'
     );
     await this.upsertSetting(this.baseUrlSettingKey, baseUrl);
+    if (input.clearApplicationToken || tokenInput) {
+      await this.upsertSetting(this.applicationTokenSettingKey, applicationToken);
+    }
 
     return {
       enabled: input.enabled,
-      baseUrl
+      baseUrl,
+      hasApplicationToken: !!applicationToken
     };
   }
 
-  async listAccessibleAcps(
-    username: string,
-    password: string
-  ): Promise<{ settings: ContentPoolSettings; acps: ContentPoolAcpSummary[] }> {
-    const settings = await this.getSettings();
+  async listAccessibleAcps(): Promise<{
+    settings: ContentPoolSettings;
+    acps: ContentPoolAcpSummary[];
+  }> {
+    const settings = await this.getRuntimeSettings();
     this.assertFeatureEnabled(settings);
 
     const apiBaseUrl = this.normalizeApiBaseUrl(settings.baseUrl);
-    const token = await this.authenticate(apiBaseUrl, username, password);
-    const acps = await this.fetchAcps(apiBaseUrl, token);
+    const acps = await this.fetchAcps(apiBaseUrl, settings.applicationToken);
 
-    return { settings, acps };
+    return {
+      settings: this.toPublicSettings(settings),
+      acps
+    };
+  }
+
+  private async getRuntimeSettings(): Promise<ContentPoolRuntimeSettings> {
+    const [enabledSetting, baseUrlSetting, applicationTokenSetting] = await Promise.all([
+      this.settingRepository.findOne({
+        where: { key: this.enabledSettingKey }
+      }),
+      this.settingRepository.findOne({
+        where: { key: this.baseUrlSettingKey }
+      }),
+      this.settingRepository.findOne({
+        where: { key: this.applicationTokenSettingKey }
+      })
+    ]);
+    const applicationToken = (applicationTokenSetting?.content || '').trim();
+
+    return {
+      enabled: enabledSetting?.content === 'true',
+      baseUrl: (baseUrlSetting?.content || '').trim(),
+      hasApplicationToken: !!applicationToken,
+      applicationToken
+    };
+  }
+
+  private async getStoredApplicationToken(): Promise<string> {
+    const tokenSetting = await this.settingRepository.findOne({
+      where: { key: this.applicationTokenSettingKey }
+    });
+    return (tokenSetting?.content || '').trim();
+  }
+
+  private toPublicSettings(settings: ContentPoolRuntimeSettings): ContentPoolSettings {
+    return {
+      enabled: settings.enabled,
+      baseUrl: settings.baseUrl,
+      hasApplicationToken: settings.hasApplicationToken
+    };
   }
 
   async importAcpFilesToWorkspace(
@@ -239,11 +292,11 @@ export class ContentPoolIntegrationService {
   ): Promise<TestFilesUploadResultDto> {
     reportProgress?.({
       phase: 'authenticating',
-      message: 'Authentifizierung am Content Pool...',
+      message: 'Content-Pool-Verbindung wird vorbereitet...',
       progress: 5
     });
 
-    const settings = await this.getSettings();
+    const settings = await this.getRuntimeSettings();
     this.assertFeatureEnabled(settings);
 
     if (!input.acpId || !input.acpId.trim()) {
@@ -251,13 +304,12 @@ export class ContentPoolIntegrationService {
     }
 
     const apiBaseUrl = this.normalizeApiBaseUrl(settings.baseUrl);
-    const token = await this.authenticate(apiBaseUrl, input.username, input.password);
     reportProgress?.({
       phase: 'checking-acp',
       message: 'ACP-Zugriff wird geprüft...',
       progress: 12
     });
-    const acps = await this.fetchAcps(apiBaseUrl, token);
+    const acps = await this.fetchAcps(apiBaseUrl, settings.applicationToken);
     const targetAcp = acps.find(acp => acp.id === input.acpId);
 
     if (!targetAcp) {
@@ -271,7 +323,11 @@ export class ContentPoolIntegrationService {
       message: 'Dateiliste des ACP wird geladen...',
       progress: 18
     });
-    const acpFiles = await this.fetchAcpFiles(apiBaseUrl, token, input.acpId);
+    const acpFiles = await this.fetchAcpFiles(
+      apiBaseUrl,
+      settings.applicationToken,
+      input.acpId
+    );
     reportProgress?.({
       phase: 'downloading-files',
       message: 'Dateien werden aus dem Content Pool geladen...',
@@ -281,7 +337,7 @@ export class ContentPoolIntegrationService {
     });
     const fileIos = await this.downloadAcpFilesAsFileIo(
       apiBaseUrl,
-      token,
+      settings.applicationToken,
       input.acpId,
       acpFiles,
       reportProgress
@@ -363,11 +419,11 @@ export class ContentPoolIntegrationService {
 
     reportProgress?.({
       phase: 'authenticating',
-      message: 'Authentifizierung am Content Pool...',
+      message: 'Content-Pool-Verbindung wird vorbereitet...',
       progress: 5
     });
 
-    const settings = await this.getSettings();
+    const settings = await this.getRuntimeSettings();
     this.assertFeatureEnabled(settings);
 
     if (!input.acpId || !input.acpId.trim()) {
@@ -392,14 +448,13 @@ export class ContentPoolIntegrationService {
     }
 
     const apiBaseUrl = this.normalizeApiBaseUrl(settings.baseUrl);
-    const token = await this.authenticate(apiBaseUrl, input.username, input.password);
 
     reportProgress?.({
       phase: 'checking-acp',
       message: 'ACP-Zugriff wird geprüft...',
       progress: 12
     });
-    const acps = await this.fetchAcps(apiBaseUrl, token);
+    const acps = await this.fetchAcps(apiBaseUrl, settings.applicationToken);
     const targetAcp = acps.find(acp => acp.id === input.acpId);
 
     if (!targetAcp) {
@@ -413,7 +468,11 @@ export class ContentPoolIntegrationService {
       message: 'Dateiliste des ACP wird geladen...',
       progress: 18
     });
-    const acpFiles = await this.fetchAcpFiles(apiBaseUrl, token, input.acpId);
+    const acpFiles = await this.fetchAcpFiles(
+      apiBaseUrl,
+      settings.applicationToken,
+      input.acpId
+    );
     const acpFileByName = new Map(
       acpFiles.map(file => [file.originalName.toLowerCase(), file])
     );
@@ -430,7 +489,28 @@ export class ContentPoolIntegrationService {
     };
 
     let processedFiles = 0;
+    const replacementPlan: Array<{
+      workspaceFile: FileUpload;
+      targetFileName: string;
+    }> = [];
     for (const workspaceFile of orderedWorkspaceFiles) {
+      if (!this.isCodingSchemeFile(workspaceFile.filename)) {
+        processedFiles += 1;
+        result.skipped += 1;
+        result.skippedFiles.push({
+          fileId: workspaceFile.id,
+          filename: workspaceFile.filename,
+          reason: 'Nur Kodierschemata (.vocs) können im Content Pool ersetzt werden.'
+        });
+        this.reportUploadFileProgress(
+          reportProgress,
+          workspaceFile.filename,
+          processedFiles,
+          orderedWorkspaceFiles.length
+        );
+        continue;
+      }
+
       const targetFile = acpFileByName.get(workspaceFile.filename.toLowerCase());
       if (!targetFile?.id) {
         processedFiles += 1;
@@ -449,12 +529,24 @@ export class ContentPoolIntegrationService {
         continue;
       }
 
+      replacementPlan.push({
+        workspaceFile,
+        targetFileName: targetFile.originalName || workspaceFile.filename
+      });
+    }
+
+    if (replacementPlan.length > 0) {
+      const changelog = (input.changelog || '').trim() ||
+        `Dateien aus Coding-Box ersetzt: ${
+          replacementPlan.map(plan => plan.workspaceFile.filename).join(', ')
+        }`;
+
       reportProgress?.({
         phase: 'replacing-files',
-        message: `Datei wird ersetzt: ${workspaceFile.filename}`,
+        message: 'Kodierschemata werden im Content Pool ersetzt...',
         processedFiles,
         totalFiles: orderedWorkspaceFiles.length,
-        currentFileName: workspaceFile.filename,
+        currentFileName: undefined,
         progress: this.calculateUploadFilesProgress(
           processedFiles,
           orderedWorkspaceFiles.length
@@ -462,66 +554,55 @@ export class ContentPoolIntegrationService {
       });
 
       try {
-        await this.deleteAcpFile(apiBaseUrl, token, input.acpId, targetFile.id);
-        await this.uploadAcpFile(
+        const replacement = await this.replaceCodingSchemeFiles(
           apiBaseUrl,
-          token,
+          settings.applicationToken,
           input.acpId,
-          workspaceFile,
-          targetFile.originalName || workspaceFile.filename
+          replacementPlan,
+          changelog
         );
-        result.replaced += 1;
-        result.replacedFiles.push({
-          fileId: workspaceFile.id,
-          filename: workspaceFile.filename
-        });
+        result.snapshotId = replacement.snapshot?.id ?
+          String(replacement.snapshot.id) :
+          undefined;
+        result.versionNumber = Number.isFinite(replacement.snapshot?.versionNumber) ?
+          Number(replacement.snapshot.versionNumber) :
+          undefined;
+        result.changelog = changelog;
+
+        for (const plan of replacementPlan) {
+          processedFiles += 1;
+          result.replaced += 1;
+          result.replacedFiles.push({
+            fileId: plan.workspaceFile.id,
+            filename: plan.workspaceFile.filename
+          });
+          this.reportUploadFileProgress(
+            reportProgress,
+            plan.workspaceFile.filename,
+            processedFiles,
+            orderedWorkspaceFiles.length
+          );
+        }
       } catch (error) {
-        result.failed += 1;
-        result.failedFiles.push({
-          fileId: workspaceFile.id,
-          filename: workspaceFile.filename,
-          reason: this.extractExceptionMessage(
-            error,
-            'Datei konnte nicht in den Content Pool übertragen werden.'
-          )
-        });
+        for (const plan of replacementPlan) {
+          processedFiles += 1;
+          result.failed += 1;
+          result.failedFiles.push({
+            fileId: plan.workspaceFile.id,
+            filename: plan.workspaceFile.filename,
+            reason: this.extractExceptionMessage(
+              error,
+              'Datei konnte nicht in den Content Pool übertragen werden.'
+            )
+          });
+          this.reportUploadFileProgress(
+            reportProgress,
+            plan.workspaceFile.filename,
+            processedFiles,
+            orderedWorkspaceFiles.length
+          );
+        }
       }
-
-      processedFiles += 1;
-      this.reportUploadFileProgress(
-        reportProgress,
-        workspaceFile.filename,
-        processedFiles,
-        orderedWorkspaceFiles.length
-      );
-    }
-
-    if (result.replaced > 0) {
-      const changelog = (input.changelog || '').trim() ||
-        `Dateien aus Coding-Box ersetzt: ${
-          result.replacedFiles.map(file => file.filename).join(', ')
-        }`;
-
-      reportProgress?.({
-        phase: 'creating-snapshot',
-        message: 'ACP-Snapshot wird erstellt...',
-        processedFiles,
-        totalFiles: orderedWorkspaceFiles.length,
-        currentFileName: undefined,
-        progress: 94
-      });
-      const snapshot = await this.createSnapshot(
-        apiBaseUrl,
-        token,
-        input.acpId,
-        changelog
-      );
-
-      result.snapshotId = snapshot?.id ? String(snapshot.id) : undefined;
-      result.versionNumber = Number.isFinite(snapshot?.versionNumber) ?
-        Number(snapshot.versionNumber) :
-        undefined;
-      result.changelog = changelog;
     }
 
     return result;
@@ -744,7 +825,7 @@ export class ContentPoolIntegrationService {
     return fallback;
   }
 
-  private assertFeatureEnabled(settings: ContentPoolSettings): void {
+  private assertFeatureEnabled(settings: ContentPoolRuntimeSettings): void {
     if (!settings.enabled) {
       throw new ForbiddenException(
         'Die Content-Pool-Integration ist in den Systemeinstellungen deaktiviert.'
@@ -753,6 +834,12 @@ export class ContentPoolIntegrationService {
 
     if (!settings.baseUrl) {
       throw new BadRequestException('Keine Content-Pool-URL konfiguriert.');
+    }
+
+    if (!settings.applicationToken) {
+      throw new BadRequestException(
+        'Kein Content-Pool Application-Token konfiguriert.'
+      );
     }
   }
 
@@ -803,141 +890,8 @@ export class ContentPoolIntegrationService {
       `${normalized}/api`;
   }
 
-  private async authenticate(
-    apiBaseUrl: string,
-    username: string,
-    password: string
-  ): Promise<string> {
-    if (!username || !password) {
-      throw new BadRequestException(
-        'Benutzername und Passwort für den Content Pool sind erforderlich.'
-      );
-    }
-
-    try {
-      return await this.authenticateWithPasswordLogin(
-        apiBaseUrl,
-        username,
-        password
-      );
-    } catch (error) {
-      if (this.shouldTryOidcAuthentication(error)) {
-        try {
-          return await this.authenticateWithOidcPasswordGrant(
-            apiBaseUrl,
-            username,
-            password
-          );
-        } catch (oidcError) {
-          return this.throwHttpError(
-            oidcError,
-            'Authentifizierung am Content Pool über Keycloak fehlgeschlagen',
-            UnauthorizedException
-          );
-        }
-      }
-
-      return this.throwHttpError(
-        error,
-        'Authentifizierung am Content Pool fehlgeschlagen',
-        UnauthorizedException
-      );
-    }
-  }
-
-  private async authenticateWithPasswordLogin(
-    apiBaseUrl: string,
-    username: string,
-    password: string
-  ): Promise<string> {
-    const response = await this.httpService.axiosRef.post(
-      `${apiBaseUrl}/auth/login`,
-      {
-        username,
-        password
-      }
-    );
-
-    return this.extractContentPoolAccessToken(response.data);
-  }
-
-  private async authenticateWithOidcPasswordGrant(
-    apiBaseUrl: string,
-    username: string,
-    password: string
-  ): Promise<string> {
-    const configResponse = await this.httpService.axiosRef.get(
-      `${apiBaseUrl}/auth/oidc-config`
-    );
-    const oidcConfig = configResponse.data as ContentPoolOidcConfig;
-
-    if (!oidcConfig?.enabled || !oidcConfig.issuerUrl || !oidcConfig.clientId) {
-      throw new UnauthorizedException(
-        'Keycloak-Anmeldung ist im Content Pool nicht konfiguriert.'
-      );
-    }
-
-    let issuerUrl = oidcConfig.issuerUrl;
-    while (issuerUrl.endsWith('/')) {
-      issuerUrl = issuerUrl.slice(0, -1);
-    }
-
-    const tokenRequest = new URLSearchParams({
-      grant_type: 'password',
-      client_id: oidcConfig.clientId,
-      username,
-      password,
-      scope: oidcConfig.scope || 'openid profile email'
-    });
-
-    const tokenResponse = await this.httpService.axiosRef.post(
-      `${issuerUrl}/protocol/openid-connect/token`,
-      tokenRequest.toString(),
-      {
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded'
-        }
-      }
-    );
-
-    const oidcToken = tokenResponse.data?.id_token ||
-      tokenResponse.data?.access_token;
-
-    if (!oidcToken) {
-      throw new UnauthorizedException(
-        'Keycloak-Login war erfolgreich, aber es wurde kein Token geliefert.'
-      );
-    }
-
-    const callbackResponse = await this.httpService.axiosRef.post(
-      `${apiBaseUrl}/auth/oidc-callback`,
-      { idToken: oidcToken }
-    );
-
-    return this.extractContentPoolAccessToken(callbackResponse.data);
-  }
-
-  private extractContentPoolAccessToken(data: unknown): string {
-    const source = data as {
-      accessToken?: string;
-      access_token?: string;
-      token?: string;
-    };
-    const token = source?.accessToken || source?.access_token || source?.token;
-
-    if (!token) {
-      throw new UnauthorizedException(
-        'Content-Pool-Login war erfolgreich, aber es wurde kein Token geliefert.'
-      );
-    }
-
-    return String(token);
-  }
-
-  private shouldTryOidcAuthentication(error: unknown): boolean {
-    const status = (error as AxiosError)?.response?.status;
-    return Boolean((error as AxiosError)?.isAxiosError) &&
-      (status === 401 || status === 404);
+  private getApplicationTokenHeaders(token: string): { 'X-Server-Token': string } {
+    return { 'X-Server-Token': token };
   }
 
   private async fetchAcps(
@@ -946,9 +900,9 @@ export class ContentPoolIntegrationService {
   ): Promise<ContentPoolAcpSummary[]> {
     try {
       const response = await this.httpService.axiosRef.get(
-        `${apiBaseUrl}/acp`,
+        `${apiBaseUrl}/server/acp`,
         {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: this.getApplicationTokenHeaders(token)
         }
       );
 
@@ -986,9 +940,9 @@ export class ContentPoolIntegrationService {
   ): Promise<Array<{ id: string; originalName: string }>> {
     try {
       const response = await this.httpService.axiosRef.get(
-        `${apiBaseUrl}/acp/${encodeURIComponent(acpId)}/files`,
+        `${apiBaseUrl}/server/acp/${encodeURIComponent(acpId)}/files`,
         {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: this.getApplicationTokenHeaders(token)
         }
       );
 
@@ -1044,9 +998,9 @@ export class ContentPoolIntegrationService {
 
       try {
         const response = await this.httpService.axiosRef.get(
-          `${apiBaseUrl}/acp/${encodeURIComponent(acpId)}/files/${encodeURIComponent(file.id)}/download`,
+          `${apiBaseUrl}/server/acp/${encodeURIComponent(acpId)}/files/${encodeURIComponent(file.id)}/download`,
           {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: this.getApplicationTokenHeaders(token),
             responseType: 'arraybuffer'
           }
         );
@@ -1116,79 +1070,48 @@ export class ContentPoolIntegrationService {
     return normalizedContentType || 'application/octet-stream';
   }
 
-  private async deleteAcpFile(
-    apiBaseUrl: string,
-    token: string,
-    acpId: string,
-    fileId: string
-  ): Promise<void> {
-    try {
-      await this.httpService.axiosRef.delete(
-        `${apiBaseUrl}/acp/${encodeURIComponent(acpId)}/files/${encodeURIComponent(fileId)}`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-    } catch (error) {
-      this.throwHttpError(
-        error,
-        'Bestehende Datei im Content Pool konnte nicht gelöscht werden.'
-      );
-    }
+  private isCodingSchemeFile(fileName: string): boolean {
+    return fileName.toLowerCase().endsWith('.vocs');
   }
 
-  private async uploadAcpFile(
+  private async replaceCodingSchemeFiles(
     apiBaseUrl: string,
     token: string,
     acpId: string,
-    workspaceFile: FileUpload,
-    targetFileName: string
-  ): Promise<void> {
+    replacementPlan: Array<{ workspaceFile: FileUpload; targetFileName: string }>,
+    changelog: string
+  ): Promise<{
+      snapshot?: {
+        id?: string;
+        versionNumber?: number;
+      };
+    }> {
     const formData = new FormData();
-    formData.append('files', this.decodeStoredFileData(workspaceFile.data), {
-      filename: targetFileName,
-      contentType: this.inferMimeType(targetFileName)
-    });
+    for (const plan of replacementPlan) {
+      formData.append('files', this.decodeStoredFileData(plan.workspaceFile.data), {
+        filename: plan.targetFileName,
+        contentType: this.inferMimeType(plan.targetFileName)
+      });
+    }
+    formData.append('changelog', changelog);
 
     try {
-      await this.httpService.axiosRef.post(
-        `${apiBaseUrl}/acp/${encodeURIComponent(acpId)}/files/upload`,
+      const response = await this.httpService.axiosRef.post(
+        `${apiBaseUrl}/server/acp/${encodeURIComponent(acpId)}/coding-schemes/replace`,
         formData,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            ...this.getApplicationTokenHeaders(token),
             ...formData.getHeaders()
           },
           maxBodyLength: Infinity
-        }
-      );
-    } catch (error) {
-      this.throwHttpError(
-        error,
-        'Neue Datei konnte nicht in den Content Pool hochgeladen werden.'
-      );
-    }
-  }
-
-  private async createSnapshot(
-    apiBaseUrl: string,
-    token: string,
-    acpId: string,
-    changelog: string
-  ): Promise<{ id?: string; versionNumber?: number }> {
-    try {
-      const response = await this.httpService.axiosRef.post(
-        `${apiBaseUrl}/acp/${encodeURIComponent(acpId)}/snapshots`,
-        { changelog },
-        {
-          headers: { Authorization: `Bearer ${token}` }
         }
       );
       return response.data || {};
     } catch (error) {
       return this.throwHttpError(
         error,
-        'Snapshot im Content Pool konnte nicht erstellt werden.'
+        'Kodierschemata konnten nicht im Content Pool ersetzt werden.'
       );
     }
   }

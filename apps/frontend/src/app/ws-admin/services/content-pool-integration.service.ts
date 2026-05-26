@@ -34,14 +34,10 @@ export class ContentPoolIntegrationService {
     );
   }
 
-  listAccessibleAcps(
-    workspaceId: number,
-    username: string,
-    password: string
-  ): Observable<ContentPoolAcpListResponse> {
+  listAccessibleAcps(workspaceId: number): Observable<ContentPoolAcpListResponse> {
     return this.http.post<ContentPoolAcpListResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/content-pool/acps`,
-      { username, password },
+      {},
       { headers: this.authHeader }
     );
   }

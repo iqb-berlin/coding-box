@@ -109,7 +109,8 @@
       <div class="content-pool-settings-container">
         <p class="content-pool-description">
           Steuert die Übertragung von Kodierschemata aus der Coding-Box in den Content Pool.
-          Die URL kann flexibel als Domain oder IP hinterlegt werden.
+          Die URL kann flexibel als Domain oder IP hinterlegt werden; der Zugriff erfolgt
+          über ein Application-Token aus dem Content Pool.
         </p>
 
         <div class="content-pool-toggle">
@@ -130,6 +131,27 @@
           </mat-hint>
         </mat-form-field>
 
+        <mat-form-field class="full-width">
+          <mat-label>Content-Pool Application-Token</mat-label>
+          <input
+            matInput
+            type="password"
+            autocomplete="new-password"
+            [(ngModel)]="contentPoolApplicationToken"
+            (ngModelChange)="onContentPoolTokenInputChange($event)"
+            [disabled]="isSavingContentPoolSettings"
+            placeholder="Neues Token eintragen">
+          <mat-hint>
+            @if (contentPoolSettings.hasApplicationToken && !clearContentPoolApplicationToken) {
+              Token ist gespeichert. Feld nur zum Ersetzen ausfüllen.
+            } @else if (clearContentPoolApplicationToken) {
+              Gespeichertes Token wird beim Speichern entfernt.
+            } @else {
+              Token wird nur backendseitig gespeichert und nicht wieder angezeigt.
+            }
+          </mat-hint>
+        </mat-form-field>
+
         <div class="content-pool-actions">
           <button
             mat-raised-button
@@ -139,6 +161,16 @@
             <mat-icon>save</mat-icon>
             {{ isSavingContentPoolSettings ? 'Speichere...' : 'Einstellungen speichern' }}
           </button>
+          @if (contentPoolSettings.hasApplicationToken && !clearContentPoolApplicationToken) {
+            <button
+              mat-stroked-button
+              color="warn"
+              [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings"
+              (click)="clearStoredContentPoolToken()">
+              <mat-icon>delete</mat-icon>
+              Token entfernen
+            </button>
+          }
         </div>
       </div>
     </mat-card-content>

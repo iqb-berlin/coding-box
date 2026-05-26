@@ -16,13 +16,7 @@ import {
 import { WorkspaceGuard } from './workspace.guard';
 import { ContentPoolIntegrationService } from '../content-pool/content-pool-integration.service';
 
-interface ContentPoolCredentialsDto {
-  username: string;
-
-  password: string;
-}
-
-interface ImportAcpDto extends ContentPoolCredentialsDto {
+interface ImportAcpDto {
   acpId: string;
 
   overwriteExisting?: boolean;
@@ -30,7 +24,7 @@ interface ImportAcpDto extends ContentPoolCredentialsDto {
   overwriteFileIds?: string[];
 }
 
-interface UploadFilesToAcpDto extends ContentPoolCredentialsDto {
+interface UploadFilesToAcpDto {
   acpId: string;
 
   fileIds: number[];
@@ -59,13 +53,10 @@ export class WorkspaceContentPoolController {
   @Post('acps')
   @RequireAccessLevel(3)
   @ApiOperation({
-    summary: 'Authenticate against Content Pool and list accessible ACPs'
+    summary: 'List ACPs available through the configured Content-Pool token'
   })
-  async listAcps(@Body() body: ContentPoolCredentialsDto) {
-    return this.contentPoolIntegrationService.listAccessibleAcps(
-      body.username,
-      body.password
-    );
+  async listAcps() {
+    return this.contentPoolIntegrationService.listAccessibleAcps();
   }
 
   @Post('import-acp')
@@ -80,8 +71,6 @@ export class WorkspaceContentPoolController {
     return this.contentPoolIntegrationService.importAcpFilesToWorkspace({
       workspaceId,
       acpId: body.acpId,
-      username: body.username,
-      password: body.password,
       overwriteExisting: body.overwriteExisting,
       overwriteFileIds: body.overwriteFileIds
     });
@@ -99,8 +88,6 @@ export class WorkspaceContentPoolController {
     return this.contentPoolIntegrationService.startAcpImportToWorkspace({
       workspaceId,
       acpId: body.acpId,
-      username: body.username,
-      password: body.password,
       overwriteExisting: body.overwriteExisting,
       overwriteFileIds: body.overwriteFileIds
     });
@@ -127,8 +114,6 @@ export class WorkspaceContentPoolController {
     return this.contentPoolIntegrationService.startUploadWorkspaceFilesToAcp({
       workspaceId,
       acpId: body.acpId,
-      username: body.username,
-      password: body.password,
       fileIds: body.fileIds,
       changelog: body.changelog
     });
