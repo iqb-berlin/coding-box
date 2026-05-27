@@ -281,6 +281,108 @@ describe('VariableAnalysisService', () => {
     });
   });
 
+  it('applies schema code visibility to chunked cached result pages', async () => {
+    const manifest = {
+      storage: 'chunked',
+      workspaceId: 1,
+      total: 1,
+      variableComboChunks: 1,
+      frequencyChunks: 1,
+      storedAt: '2026-05-26T00:00:00.000Z'
+    };
+    const variableCombos = [
+      {
+        unitId: 1,
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        totalCount: 4,
+        emptyCount: 0,
+        emptyPercentage: 0,
+        distinctValueCount: 3,
+        statusCounts: []
+      }
+    ];
+    const frequencyChunks = [
+      [
+        '1:VAR',
+        [
+          {
+            unitId: 1,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            value: 'Z',
+            count: 2,
+            percentage: 50
+          },
+          {
+            unitId: 1,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            value: 'A',
+            label: 'Alpha',
+            schemaOrder: 0,
+            count: 1,
+            percentage: 25
+          },
+          {
+            unitId: 1,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            value: 'B',
+            label: 'Beta',
+            schemaOrder: 1,
+            isSchemaOnly: true,
+            isSchemaSupplemental: true,
+            count: 0,
+            percentage: 0
+          }
+        ]
+      ]
+    ];
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(
+      createJob({
+        returnvalue: manifest
+      })
+    );
+    cacheService.get
+      .mockResolvedValueOnce(manifest)
+      .mockResolvedValueOnce(variableCombos)
+      .mockResolvedValueOnce(frequencyChunks)
+      .mockResolvedValueOnce(manifest)
+      .mockResolvedValueOnce(variableCombos)
+      .mockResolvedValueOnce(frequencyChunks);
+
+    await expect(
+      service.getAnalysisResultsPage('job-1', 1, {
+        page: 1,
+        pageSize: 10
+      })
+    ).resolves.toMatchObject({
+      frequencies: {
+        '1:VAR': [
+          { value: 'Z' },
+          { value: 'A' }
+        ]
+      }
+    });
+
+    await expect(
+      service.getAnalysisResultsPage('job-1', 1, {
+        page: 1,
+        pageSize: 10,
+        includeSchemaCodes: true
+      })
+    ).resolves.toMatchObject({
+      frequencies: {
+        '1:VAR': [
+          { value: 'A' },
+          { value: 'B', count: 0 },
+          { value: 'Z' }
+        ]
+      }
+    });
+  });
+
   it('exports filtered chunked cached results as formula-safe CSV', async () => {
     jobQueueService.getVariableAnalysisJob.mockResolvedValue(
       createJob({
@@ -421,9 +523,95 @@ describe('VariableAnalysisService', () => {
     expect(worksheet?.getRow(1).getCell(1).value).toBe('Unit-ID');
     expect(worksheet?.getRow(2).getCell(2).value).toBe('UNIT');
     expect(worksheet?.getRow(2).getCell(4).value).toBe('=kept-as-text');
-    expect(worksheet?.getRow(2).getCell(6).value).toBe(10);
-    expect(worksheet?.getRow(2).getCell(7).value).toBe(100);
-    expect(worksheet?.getColumn(7).numFmt).toBe('0.0');
+    expect(worksheet?.getRow(2).getCell(7).value).toBe(10);
+    expect(worksheet?.getRow(2).getCell(8).value).toBe(100);
+    expect(worksheet?.getColumn(8).numFmt).toBe('0.0');
+  });
+
+  it('hides supplemental schema code rows by default and includes them on request', async () => {
+    const result = {
+      variableCombos: [
+        {
+          unitId: 1,
+          unitName: 'UNIT',
+          variableId: 'VAR',
+          totalCount: 4,
+          emptyCount: 0,
+          emptyPercentage: 0,
+          distinctValueCount: 3,
+          statusCounts: []
+        }
+      ],
+      frequencies: {
+        '1:VAR': [
+          {
+            unitId: 1,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            value: 'Z',
+            count: 2,
+            percentage: 50
+          },
+          {
+            unitId: 1,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            value: 'A',
+            label: 'Alpha',
+            schemaOrder: 0,
+            count: 1,
+            percentage: 25
+          },
+          {
+            unitId: 1,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            value: 'B',
+            label: 'Beta',
+            schemaOrder: 1,
+            isSchemaOnly: true,
+            isSchemaSupplemental: true,
+            count: 0,
+            percentage: 0
+          }
+        ]
+      },
+      total: 1
+    };
+    jobQueueService.getVariableAnalysisJob
+      .mockResolvedValueOnce(createJob({
+        data: { workspaceId: 1 },
+        returnvalue: result
+      }))
+      .mockResolvedValueOnce(createJob({
+        data: { workspaceId: 1 },
+        returnvalue: result
+      }));
+
+    await expect(
+      service.getAnalysisResultsPage('job-1', 1)
+    ).resolves.toMatchObject({
+      frequencies: {
+        '1:VAR': [
+          { value: 'Z' },
+          { value: 'A' }
+        ]
+      }
+    });
+
+    await expect(
+      service.getAnalysisResultsPage('job-1', 1, {
+        includeSchemaCodes: true
+      })
+    ).resolves.toMatchObject({
+      frequencies: {
+        '1:VAR': [
+          { value: 'A' },
+          { value: 'B' },
+          { value: 'Z' }
+        ]
+      }
+    });
   });
 
   it('lists, deletes and cancels jobs', async () => {

@@ -2,7 +2,7 @@ import { Processor, Process } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { CacheService } from '../../cache/cache.service';
 import {
@@ -16,6 +16,21 @@ import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../../database/services/workspace/workspace-exclusion.service';
+import { WorkspaceFilesService } from '../../database/services/workspace/workspace-files.service';
+
+interface SchemaCodeInfo {
+  value: string;
+  label?: string;
+  score?: number;
+  order: number;
+}
+
+interface SchemaValueCountRow {
+  unitId: string | number;
+  variableId: string;
+  value: string | null;
+  count: string | number;
+}
 
 @Processor('variable-analysis')
 export class VariableAnalysisProcessor {
@@ -30,7 +45,8 @@ export class VariableAnalysisProcessor {
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     private cacheService: CacheService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    private workspaceFilesService: WorkspaceFilesService
   ) { }
 
   @Process()
@@ -107,6 +123,10 @@ export class VariableAnalysisProcessor {
         comboByKey.set(comboKey, combo);
         frequencies[comboKey] = [];
       });
+      const schemaCodesByComboKey = await this.getSchemaCodesByComboKey(
+        workspaceId,
+        variableCombos
+      );
 
       await job.progress(25);
 
@@ -206,6 +226,13 @@ export class VariableAnalysisProcessor {
           percentage: totalResponses > 0 ? (item.count / totalResponses) * 100 : 0
         }));
       });
+
+      await this.addSchemaCodeFrequencies(
+        query,
+        variableCombos,
+        frequencies,
+        schemaCodesByComboKey
+      );
 
       await job.progress(70);
 
@@ -373,5 +400,190 @@ export class VariableAnalysisProcessor {
     }
 
     return `${value}... [truncated ${valueLength} chars, md5:${valueHash || 'unknown'}]`;
+  }
+
+  private async getSchemaCodesByComboKey(
+    workspaceId: number,
+    variableCombos: VariableCombo[]
+  ): Promise<Map<string, SchemaCodeInfo[]>> {
+    const schemaCodesByComboKey = new Map<string, SchemaCodeInfo[]>();
+
+    if (variableCombos.length === 0) {
+      return schemaCodesByComboKey;
+    }
+
+    try {
+      const unitVariableDetails =
+        await this.workspaceFilesService.getUnitVariableDetails(workspaceId);
+      const detailsByUnitName = new Map(
+        unitVariableDetails.map(details => [
+          details.unitName.toUpperCase(),
+          details
+        ])
+      );
+
+      variableCombos.forEach(combo => {
+        const details = detailsByUnitName.get(combo.unitName.toUpperCase());
+        if (!details) {
+          return;
+        }
+
+        const variable = details.variables.find(
+          item => item.id === combo.variableId || item.alias === combo.variableId
+        );
+        if (!variable?.codes?.length) {
+          return;
+        }
+
+        const seenValues = new Set<string>();
+        const schemaCodes = variable.codes.reduce<SchemaCodeInfo[]>(
+          (items, code) => {
+            const value = String(code.id);
+            if (seenValues.has(value)) {
+              return items;
+            }
+            seenValues.add(value);
+            items.push({
+              value,
+              label: code.label,
+              score: code.score,
+              order: items.length
+            });
+            return items;
+          },
+          []
+        );
+
+        if (schemaCodes.length > 0) {
+          schemaCodesByComboKey.set(
+            `${combo.unitId}:${combo.variableId}`,
+            schemaCodes
+          );
+        }
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Could not enrich variable analysis with coding scheme codes: ${error.message}`
+      );
+    }
+
+    return schemaCodesByComboKey;
+  }
+
+  private async addSchemaCodeFrequencies(
+    query: SelectQueryBuilder<ResponseEntity>,
+    variableCombos: VariableCombo[],
+    frequencies: Record<string, VariableFrequencyDto[]>,
+    schemaCodesByComboKey: Map<string, SchemaCodeInfo[]>
+  ): Promise<void> {
+    if (schemaCodesByComboKey.size === 0) {
+      return;
+    }
+
+    const observedSchemaCounts = await this.getObservedSchemaValueCounts(
+      query,
+      variableCombos,
+      schemaCodesByComboKey
+    );
+
+    variableCombos.forEach(combo => {
+      const comboKey = `${combo.unitId}:${combo.variableId}`;
+      const schemaCodes = schemaCodesByComboKey.get(comboKey);
+      if (!schemaCodes?.length) {
+        return;
+      }
+
+      const rows = frequencies[comboKey] || [];
+      const rowsByValue = new Map(rows.map(row => [row.value, row]));
+      const observedCountsForCombo =
+        observedSchemaCounts.get(comboKey) || new Map<string, number>();
+      const totalResponses = combo.totalCount || 0;
+
+      schemaCodes.forEach(schemaCode => {
+        const existingRow = rowsByValue.get(schemaCode.value);
+
+        if (existingRow) {
+          existingRow.label = schemaCode.label;
+          existingRow.score = schemaCode.score;
+          existingRow.schemaOrder = schemaCode.order;
+          return;
+        }
+
+        const count = observedCountsForCombo.get(schemaCode.value) || 0;
+        rows.push({
+          unitId: combo.unitId,
+          unitName: combo.unitName,
+          variableId: combo.variableId,
+          value: schemaCode.value,
+          label: schemaCode.label,
+          score: schemaCode.score,
+          schemaOrder: schemaCode.order,
+          isSchemaOnly: count === 0,
+          isSchemaSupplemental: true,
+          count,
+          percentage: totalResponses > 0 ? (count / totalResponses) * 100 : 0
+        });
+      });
+
+      frequencies[comboKey] = rows;
+    });
+  }
+
+  private async getObservedSchemaValueCounts(
+    query: SelectQueryBuilder<ResponseEntity>,
+    variableCombos: VariableCombo[],
+    schemaCodesByComboKey: Map<string, SchemaCodeInfo[]>
+  ): Promise<Map<string, Map<string, number>>> {
+    const countsByComboKey = new Map<string, Map<string, number>>();
+    const combosWithSchemaCodes = variableCombos.filter(combo => {
+      const comboKey = `${combo.unitId}:${combo.variableId}`;
+      return (schemaCodesByComboKey.get(comboKey)?.length || 0) > 0;
+    });
+    const chunkSize = 100;
+
+    for (let index = 0; index < combosWithSchemaCodes.length; index += chunkSize) {
+      const comboChunk = combosWithSchemaCodes.slice(index, index + chunkSize);
+      const schemaCountQuery = query.clone()
+        .select('unit.id', 'unitId')
+        .addSelect('response.variableid', 'variableId')
+        .addSelect("COALESCE(response.value, '')", 'value')
+        .addSelect('COUNT(*)', 'count')
+        .andWhere(new Brackets(qb => {
+          comboChunk.forEach((combo, comboIndex) => {
+            const comboKey = `${combo.unitId}:${combo.variableId}`;
+            const schemaValues = (schemaCodesByComboKey.get(comboKey) || [])
+              .map(schemaCode => schemaCode.value);
+            const params = {
+              [`schemaUnitId${comboIndex}`]: combo.unitId,
+              [`schemaVariableId${comboIndex}`]: combo.variableId,
+              [`schemaValues${comboIndex}`]: schemaValues
+            };
+            const condition =
+              `unit.id = :schemaUnitId${comboIndex} ` +
+              `AND response.variableid = :schemaVariableId${comboIndex} ` +
+              `AND COALESCE(response.value, '') IN (:...schemaValues${comboIndex})`;
+
+            if (comboIndex === 0) {
+              qb.where(condition, params);
+            } else {
+              qb.orWhere(condition, params);
+            }
+          });
+        }))
+        .groupBy('unit.id')
+        .addGroupBy('response.variableid')
+        .addGroupBy("COALESCE(response.value, '')");
+
+      const rows: SchemaValueCountRow[] = await schemaCountQuery.getRawMany();
+
+      rows.forEach(row => {
+        const comboKey = `${Number(row.unitId)}:${row.variableId}`;
+        const valueCounts = countsByComboKey.get(comboKey) || new Map<string, number>();
+        valueCounts.set(row.value || '', parseInt(String(row.count), 10));
+        countsByComboKey.set(comboKey, valueCounts);
+      });
+    }
+
+    return countsByComboKey;
   }
 }

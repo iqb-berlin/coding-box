@@ -890,6 +890,7 @@
     "search-variables": "Variablen suchen",
     "search-placeholder": "Variablenname eingeben...",
     "only-empty-values": "Nur Variablen mit leeren Werten",
+    "include-schema-codes": "Schema-Codes mit 0 anzeigen",
     "no-variables-found": "Keine Variablen gefunden.",
     "no-results-yet": "Noch keine Antwortwertanalyse geladen.",
     "max-values-info": "Es werden maximal die {{max}} häufigsten Werte pro Variable angezeigt.",
