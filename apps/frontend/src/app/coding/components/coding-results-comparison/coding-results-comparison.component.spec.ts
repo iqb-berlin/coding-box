@@ -25,6 +25,17 @@ describe('CodingResultsComparisonComponent', () => {
     saveDiscussionResult: jest.Mock;
     getTrainingCohensKappa: jest.Mock;
   };
+  let codingStatisticsService: {
+    getReplayUrl: jest.Mock;
+  };
+  let appService: {
+    authData: { userName: string };
+    loggedUser: { preferred_username?: string } | undefined;
+    createOwnToken: jest.Mock;
+  };
+  let snackBar: {
+    open: jest.Mock;
+  };
 
   beforeEach(async () => {
     codingTrainingBackendService = {
@@ -39,6 +50,17 @@ describe('CodingResultsComparisonComponent', () => {
         managerName: 'Test User'
       })),
       getTrainingCohensKappa: jest.fn()
+    };
+    codingStatisticsService = {
+      getReplayUrl: jest.fn()
+    };
+    appService = {
+      authData: { userName: 'Test User' },
+      loggedUser: undefined,
+      createOwnToken: jest.fn()
+    };
+    snackBar = {
+      open: jest.fn()
     };
 
     await TestBed.configureTestingModule({
@@ -63,7 +85,7 @@ describe('CodingResultsComparisonComponent', () => {
         },
         {
           provide: MatSnackBar,
-          useValue: { open: jest.fn() }
+          useValue: snackBar
         },
         {
           provide: CodingTrainingBackendService,
@@ -71,17 +93,11 @@ describe('CodingResultsComparisonComponent', () => {
         },
         {
           provide: CodingStatisticsService,
-          useValue: {
-            getReplayUrl: jest.fn()
-          }
+          useValue: codingStatisticsService
         },
         {
           provide: AppService,
-          useValue: {
-            authData: { userName: 'Test User' },
-            loggedUser: undefined,
-            createOwnToken: jest.fn()
-          }
+          useValue: appService
         }
       ]
     }).compileComponents();
@@ -91,8 +107,73 @@ describe('CodingResultsComparisonComponent', () => {
     fixture.detectChanges();
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should expose replay as its own table column', () => {
+    expect(component.displayedColumns).toEqual([
+      'index',
+      'unitVariable',
+      'personInfo',
+      'replay',
+      'givenAnswer',
+      'match'
+    ]);
+  });
+
+  it('should open replay for the row response with coding context', () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    appService.createOwnToken.mockReturnValue(of('token-123'));
+    codingStatisticsService.getReplayUrl.mockReturnValue(of({
+      replayUrl: 'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?auth=token-123'
+    }));
+
+    component.openReplay({
+      responseId: 77,
+      unitName: 'UNIT_1',
+      variableId: 'VAR_1',
+      personCode: 'code',
+      personLogin: 'login',
+      personGroup: '',
+      testPerson: 'login@code@booklet',
+      coders: []
+    } as never);
+
+    expect(appService.createOwnToken).toHaveBeenCalledWith(1, 1);
+    expect(codingStatisticsService.getReplayUrl).toHaveBeenCalledWith(1, 77, 'token-123');
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?auth=token-123&mode=coding&originResponseId=77',
+      '_blank'
+    );
+  });
+
+  it('should show feedback when no replay URL is returned', () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    appService.createOwnToken.mockReturnValue(of('token-123'));
+    codingStatisticsService.getReplayUrl.mockReturnValue(of({ replayUrl: '' }));
+
+    component.openReplay({
+      responseId: 77,
+      unitName: 'UNIT_1',
+      variableId: 'VAR_1',
+      personCode: 'code',
+      personLogin: 'login',
+      personGroup: '',
+      testPerson: 'login@code@booklet',
+      coders: []
+    } as never);
+
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'Replay-URL konnte nicht erzeugt werden.',
+      'common.close',
+      { duration: 3000 }
+    );
   });
 
   it('should format and filter trainings with stable disambiguation data', () => {
