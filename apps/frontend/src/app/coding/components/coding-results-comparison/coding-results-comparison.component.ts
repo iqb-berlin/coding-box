@@ -92,6 +92,7 @@ interface WithinTrainingComparison {
 
 type NotesFilterMode = 'all' | 'none' | 'with-notes';
 type ComparisonStatus = 'match' | 'differ' | 'incomplete' | 'not_comparable';
+type ComparisonCoderResult = TrainingComparison['coders'][number] | WithinTrainingComparison['coders'][number];
 
 interface ComparisonFilters {
   unitName: string;
@@ -315,8 +316,23 @@ export class CodingResultsComparisonComponent implements OnInit {
     return (value || '').trim().toLowerCase();
   }
 
+  private getSelectedCoderResults(comparison: TrainingComparison | WithinTrainingComparison): ComparisonCoderResult[] {
+    if (this.comparisonMode === 'between-trainings') {
+      const selectedKeys = this.codersFromTrainingsFormControl.value || [];
+      return selectedKeys
+        .map(key => this.getCoderFromTraining(comparison as TrainingComparison, key))
+        .filter((coder): coder is TrainingComparison['coders'][number] => !!coder);
+    }
+
+    const selectedJobIds = this.codersFormControl.value || [];
+    return selectedJobIds
+      .map(jobId => this.getCoderForWithin(comparison as WithinTrainingComparison, jobId))
+      .filter((coder): coder is WithinTrainingComparison['coders'][number] => !!coder);
+  }
+
   private rowHasNotes(comparison: TrainingComparison | WithinTrainingComparison): boolean {
-    return comparison.coders.some(coder => !!coder.notes && coder.notes.trim().length > 0);
+    return this.getSelectedCoderResults(comparison)
+      .some(coder => !!coder.notes && coder.notes.trim().length > 0);
   }
 
   private setupFilterPredicate(): void {
@@ -358,6 +374,7 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   applyTableFilters(): void {
     this.dataSource.filter = JSON.stringify(this.tableFilters);
+    this.dataSource.paginator?.firstPage();
     this.calculateStatistics();
   }
 
