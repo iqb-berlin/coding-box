@@ -951,7 +951,7 @@
                     Zu den Kodierjobs
                   </button>
                   <button
-                    *ngIf="hasCompletedJobsReadyForApply()"
+                    *ngIf="canShowCompletedJobApplyActions()"
                     mat-raised-button
                     color="accent"
                     type="button"
@@ -971,15 +971,20 @@
                     <span>{{ getCodingJobResultSummary(job) }}</span>
                   </div>
                   <button
+                    *ngIf="canApplyCompletedJobResults()"
                     mat-stroked-button
                     color="primary"
                     type="button"
                     (click)="applyCompletedJobResults(job)"
-                    [disabled]="!canApplyCompletedJobResults() || isApplyingCodingResults || isApplyingJobResults(job.id)">
+                    [disabled]="isApplyingCodingResults || isApplyingJobResults(job.id)">
                     <mat-icon *ngIf="!isApplyingJobResults(job.id)">input</mat-icon>
                     <mat-spinner *ngIf="isApplyingJobResults(job.id)" diameter="18"></mat-spinner>
                     Ergebnisse anwenden
                   </button>
+                  <span *ngIf="!canApplyCompletedJobResults()" class="completed-job-readonly-note">
+                    <mat-icon>lock</mat-icon>
+                    {{ 'coding-management-manual.completed-jobs.readonly-note' | translate }}
+                  </span>
                 </div>
               </div>
 

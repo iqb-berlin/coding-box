@@ -1,6 +1,10 @@
 import { Routes } from '@angular/router';
 import { canActivateAuth } from '../core/guards/auth.guard';
-import { canActivateAccessLevel, canActivateCodingJobs } from '../core/guards/access-level.guard';
+import {
+  canActivateAccessLevel,
+  canActivateCodingJobs,
+  canActivateCodingManagement
+} from '../core/guards/access-level.guard';
 
 export const wsAdminRoutes: Routes = [
   {
@@ -30,7 +34,7 @@ export const wsAdminRoutes: Routes = [
           { path: '', redirectTo: 'management', pathMatch: 'full' },
           {
             path: 'management',
-            canActivate: [canActivateAccessLevel(2)],
+            canActivate: [canActivateCodingManagement()],
             loadComponent: () => import('../coding/components/coding-management/coding-management.component').then(m => m.CodingManagementComponent)
           },
           {

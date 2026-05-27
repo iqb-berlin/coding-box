@@ -31,6 +31,7 @@ import { CacheService } from '../../cache/cache.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   CodingExportService,
   CodingExportOrchestratorService,
@@ -59,6 +60,7 @@ type ByVariableExportEstimateResponse = {
 };
 
 @ApiTags('Admin Workspace Coding')
+@RequireAccessLevel(2)
 @Controller('admin/workspace')
 export class WorkspaceCodingExportController {
   private readonly logger = new Logger(WorkspaceCodingExportController.name);
@@ -160,7 +162,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/coding-list')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -203,7 +205,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/coding-list/excel')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -258,7 +260,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/coding-list/json')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -327,7 +329,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/results-by-version')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -422,7 +424,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/results-by-version/excel')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -501,7 +503,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/aggregated')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -632,7 +634,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/by-coder')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -730,7 +732,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/by-variable')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -855,7 +857,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/detailed')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -950,7 +952,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/coding-times')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -1015,7 +1017,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Post(':workspace_id/coding/export/estimate')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   async estimateExportJob(
@@ -1040,7 +1042,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Post(':workspace_id/coding/export/start')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -1142,7 +1144,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/job/:jobId')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -1248,7 +1250,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/job/:jobId/download')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -1329,7 +1331,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/jobs')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -1384,7 +1386,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Delete(':workspace_id/coding/export/job/:jobId')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -1458,7 +1460,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Post(':workspace_id/coding/export/job/:jobId/cancel')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
