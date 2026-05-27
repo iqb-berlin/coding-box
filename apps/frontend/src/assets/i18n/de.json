@@ -67,6 +67,182 @@
       "results-by-version": "Finale Ergebnisdaten"
     }
   },
+  "process-overview": {
+    "title": "Zentrale Prozess-Übersicht",
+    "refresh": "Aktualisieren",
+    "no-data": "Keine Prozesse in der Warteschlange.",
+    "no-filter-data": "Keine Prozesse für die aktuellen Filter.",
+    "confirm-content": "Möchten Sie den Prozess \"{{queue}}\" (ID: {{id}}) wirklich {{action}}?",
+    "filters": {
+      "status": "Status",
+      "all-status": "Alle Status",
+      "type": "Typ",
+      "all-types": "Alle Typen",
+      "search": "Suchen",
+      "search-placeholder": "ID, Name oder Detail",
+      "clear": "Filter leeren"
+    },
+    "columns": {
+      "type": "Typ",
+      "status": "Status",
+      "progress": "Fortschritt",
+      "time": "Zeit",
+      "details": "Details",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "active": "Läuft",
+      "waiting": "Wartet",
+      "delayed": "Geplant",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "paused": "Pausiert",
+      "unknown": "Unbekannt"
+    },
+    "status-tooltips": {
+      "active": "Der Prozess wird gerade bearbeitet.",
+      "waiting": "Der Prozess wartet auf einen freien Worker oder auf vorgelagerte Arbeit.",
+      "delayed": "Der Prozess ist für einen späteren Start eingeplant.",
+      "completed": "Der Prozess wurde erfolgreich abgeschlossen.",
+      "failed": "Der Prozess ist mit einem Fehler beendet worden.",
+      "paused": "Der Prozess wurde angehalten.",
+      "unknown": "Der aktuelle Prozessstatus ist nicht eindeutig bekannt."
+    },
+    "progress": {
+      "active": "Läuft ohne Fortschrittsangabe",
+      "waiting": "Wartet auf Start",
+      "delayed": "Start geplant",
+      "completed": "Abgeschlossen",
+      "failed": "Keine Fortschrittsangabe",
+      "paused": "Pausiert",
+      "unknown": "Keine Fortschrittsangabe"
+    },
+    "time": {
+      "created": "Erstellt",
+      "started": "Gestartet",
+      "finished": "Beendet",
+      "duration": "Dauer"
+    },
+    "queues": {
+      "test-person-coding": {
+        "label": "Auto-Kodierung",
+        "description": "Automatisches Kodieren von Testpersonen-Antworten"
+      },
+      "coding-statistics": {
+        "label": "Kodierstatistiken",
+        "description": "Berechnung der Kodierstatistiken für den Arbeitsbereich"
+      },
+      "data-export": {
+        "label": "Datenexport",
+        "description": "Export von Kodier- oder Testergebnisdaten"
+      },
+      "flat-response-filter-options": {
+        "label": "Filteroptionen",
+        "description": "Vorberechnung von Filteroptionen für die Ergebnisansicht"
+      },
+      "test-results-upload": {
+        "label": "Testergebnis-Import",
+        "description": "Import von Responses oder Logs"
+      },
+      "codebook-generation": {
+        "label": "Codebook-Erstellung",
+        "description": "Erstellung eines Codebooks"
+      },
+      "reset-coding-version": {
+        "label": "Kodierung zurücksetzen",
+        "description": "Zurücksetzen einer Kodier-Version"
+      },
+      "validation-task": {
+        "label": "Validierung",
+        "description": "Validierungsaufgabe für den Arbeitsbereich"
+      },
+      "response-analysis": {
+        "label": "Antwortanalyse",
+        "description": "Analyse von Antworten und Auffälligkeiten"
+      },
+      "variable-analysis": {
+        "label": "Variablenanalyse",
+        "description": "Analyse von Variablenwerten und Häufigkeiten"
+      },
+      "external-coding-import": {
+        "label": "Externer Kodierimport",
+        "description": "Import externer Kodierungen"
+      },
+      "database-export": {
+        "label": "Datenbankexport",
+        "description": "Export der Arbeitsbereichsdatenbank"
+      }
+    },
+    "details": {
+      "none": "Keine Details",
+      "unknown-key": "{{key}}",
+      "taskId": "Task",
+      "resultType": "Ergebnistyp",
+      "overwriteExisting": "Bestehende überschreiben",
+      "personMatchMode": "Personenabgleich",
+      "overwriteMode": "Überschreibmodus",
+      "scope": "Umfang",
+      "exportType": "Exporttyp",
+      "version": "Version",
+      "format": "Format",
+      "source": "Quelle",
+      "autoCoderRun": "Auto-Kodierlauf",
+      "freshnessVersion": "Freshness-Version",
+      "processingDurationThresholdMs": "Schwellwert",
+      "missingsProfile": "Missing-Profil",
+      "unitId": "Unit",
+      "variableId": "Variable",
+      "fileName": "Datei",
+      "sourceFormat": "Quellformat",
+      "sourceVersion": "Quellversion",
+      "scoreMode": "Score-Modus",
+      "existingCodingMode": "Importmodus",
+      "validationType": "Validierung",
+      "progressMessage": "Statusmeldung",
+      "isPaused": "Pausiert",
+      "isCancelled": "Abgebrochen",
+      "personCount": "Personen",
+      "unitCount": "Units",
+      "groupCount": "Gruppen",
+      "jobDefinitionCount": "Job-Definitionen",
+      "coderTrainingCount": "Trainings",
+      "coderCount": "Kodierer:innen",
+      "matchingFlagCount": "Matching-Flags"
+    },
+    "actions": {
+      "not-safe": "Für diesen Status oder Prozesstyp gibt es keine sichere Aktion.",
+      "cancel": {
+        "label": "Abbrechen",
+        "tooltip": "Laufenden Prozess abbrechen",
+        "confirm-title": "Prozess abbrechen",
+        "infinitive": "abbrechen",
+        "success": "Prozess wurde abgebrochen"
+      },
+      "pause": {
+        "label": "Anhalten",
+        "tooltip": "Laufenden Prozess anhalten",
+        "confirm-title": "Prozess anhalten",
+        "infinitive": "anhalten",
+        "success": "Prozess wurde angehalten"
+      },
+      "remove": {
+        "label": "Entfernen",
+        "tooltip": "Prozess aus der Warteschlange entfernen",
+        "confirm-title": "Prozess entfernen",
+        "infinitive": "entfernen",
+        "success": "Prozess wurde entfernt"
+      }
+    },
+    "messages": {
+      "load-error": "Fehler beim Laden der Prozesse",
+      "action-failed": "Prozess konnte nicht aktualisiert werden",
+      "action-error": "Fehler beim Aktualisieren des Prozesses"
+    },
+    "values": {
+      "yes": "Ja",
+      "no": "Nein"
+    }
+  },
   "status-cancelled": "Abgebrochen",
   "status-paused": "Pausiert",
   "home": {
