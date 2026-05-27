@@ -77,6 +77,12 @@ const STATUS_PRESENTATIONS: Record<ProcessStatus, ProcessStatusPresentation> = {
     icon: 'pause_circle',
     cssClass: 'paused'
   },
+  cancelled: {
+    labelKey: 'process-overview.status.cancelled',
+    tooltipKey: 'process-overview.status-tooltips.cancelled',
+    icon: 'cancel',
+    cssClass: 'cancelled'
+  },
   unknown: {
     labelKey: 'process-overview.status.unknown',
     tooltipKey: 'process-overview.status-tooltips.unknown',
@@ -245,7 +251,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   typeFilter = '';
   searchFilter = '';
   availableTypes: string[] = [];
-  statusOptions: ProcessStatus[] = ['active', 'waiting', 'delayed', 'completed', 'failed', 'paused', 'unknown'];
+  statusOptions: ProcessStatus[] = ['active', 'waiting', 'delayed', 'completed', 'failed', 'paused', 'cancelled', 'unknown'];
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
@@ -472,7 +478,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
       return null;
     }
 
-    if (['waiting', 'delayed', 'paused', 'completed', 'failed'].includes(process.status)) {
+    if (['waiting', 'delayed', 'paused', 'completed', 'failed', 'cancelled'].includes(process.status)) {
       return 'remove';
     }
 
