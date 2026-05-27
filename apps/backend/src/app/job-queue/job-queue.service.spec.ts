@@ -243,6 +243,110 @@ describe('JobQueueService', () => {
     await expect(service.getActiveResetCodingVersionJob(1)).resolves.toHaveProperty('id', 'job-1');
   });
 
+  it('covers all registered process overview queues', async () => {
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs.map(job => job.queueName).sort()).toEqual([
+      'codebook-generation',
+      'coding-statistics',
+      'data-export',
+      'database-export',
+      'external-coding-import',
+      'flat-response-filter-options',
+      'reset-coding-version',
+      'response-analysis',
+      'test-person-coding',
+      'test-results-upload',
+      'validation-task',
+      'variable-analysis'
+    ]);
+  });
+
+  it('uses validation task progress and errors from the task entity in the process overview', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[7].getJobs.mockResolvedValue([
+      createJob({ taskId: 7 }, 'active')
+    ]);
+    validationTaskRepository.find.mockResolvedValueOnce([{
+      id: 7,
+      workspace_id: 1,
+      validation_type: 'testFiles',
+      status: 'processing',
+      progress: 65,
+      progress_message: 'Testdateien werden geprüft...',
+      error: 'Schema validation failed'
+    }]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toEqual([
+      expect.objectContaining({
+        queueName: 'validation-task',
+        status: 'active',
+        progress: 65,
+        failedReason: 'Schema validation failed',
+        data: {
+          taskId: 7,
+          validationType: 'testFiles',
+          progressMessage: 'Testdateien werden geprüft...'
+        }
+      })
+    ]);
+  });
+
+  it('uses the validation task entity status even when Bull completed the job', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[7].getJobs.mockResolvedValue([
+      createJob({ taskId: 7 }, 'completed')
+    ]);
+    validationTaskRepository.find.mockResolvedValueOnce([{
+      id: 7,
+      workspace_id: 1,
+      validation_type: 'testFiles',
+      status: 'failed',
+      progress: 100,
+      progress_message: 'Validierung fehlgeschlagen.',
+      error: 'Schema validation failed'
+    }]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toEqual([
+      expect.objectContaining({
+        queueName: 'validation-task',
+        status: 'failed',
+        progress: 100,
+        failedReason: 'Schema validation failed',
+        data: {
+          taskId: 7,
+          validationType: 'testFiles',
+          progressMessage: 'Validierung fehlgeschlagen.'
+        }
+      })
+    ]);
+  });
+
+  it('shows completed paused auto-coding jobs as paused in the process overview', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[0].getJobs.mockResolvedValue([
+      createJob({ workspaceId: 1, isPaused: true }, 'completed')
+    ]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toEqual([
+      expect.objectContaining({
+        queueName: 'test-person-coding',
+        status: 'paused',
+        progress: 40,
+        data: {
+          workspaceId: 1,
+          isPaused: true
+        }
+      })
+    ]);
+  });
+
   it('sanitizes workspace job data before exposing process metadata', async () => {
     queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
     queues[2].getJobs.mockResolvedValue([
