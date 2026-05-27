@@ -1093,6 +1093,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       (this.appService.authData.isAdmin === true);
   }
 
+  canShowCompletedJobApplyActions(): boolean {
+    return this.hasCompletedJobsReadyForApply() &&
+      this.canApplyCompletedJobResults();
+  }
+
   getCompletionActionTitle(): string {
     if (this.isCompletionComplete()) {
       return 'Alle Ergebnisse sind übernommen';

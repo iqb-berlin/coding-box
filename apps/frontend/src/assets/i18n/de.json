@@ -1605,6 +1605,9 @@
       "second-autocoding-ready-summary": "Die manuelle Kodierung ist abgeschlossen. Auto-Coding 2 kann nun für {{taskResults}} gestartet oder aktualisiert werden. Das betrifft {{responses}}.",
       "second-autocoding-ready-help": "Starten Sie Auto-Coding 2 in der Kodierübersicht. {{taskResultHelp}}"
     },
+    "completed-jobs": {
+      "readonly-note": "Nur lesbar"
+    },
     "duplicate-aggregation": {
       "is-applied": "Aggregation angewendet",
       "config-title": "Aggregationseinstellungen",

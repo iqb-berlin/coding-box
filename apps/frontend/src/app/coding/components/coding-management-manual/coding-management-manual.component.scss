@@ -437,6 +437,23 @@
           }
         }
 
+        .completed-job-readonly-note {
+          display: inline-flex;
+          flex: 0 0 auto;
+          align-items: center;
+          gap: 6px;
+          color: #666;
+          font-size: 13px;
+          font-weight: 600;
+          white-space: nowrap;
+
+          mat-icon {
+            width: 18px;
+            height: 18px;
+            font-size: 18px;
+          }
+        }
+
         .completed-job-copy {
           display: flex;
           flex-direction: column;

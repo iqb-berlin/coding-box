@@ -182,6 +182,27 @@ export function canActivateAccessLevel(minLevel: number): CanActivateFn {
   );
 }
 
+export function canActivateCodingManagement(): CanActivateFn {
+  return createWorkspaceAccessGuard(
+    context => hasMinimumWorkspaceAccess(context.currentUser, 3),
+    async context => {
+      const {
+        currentUser, router, state, userAccessLevel, workspaceId
+      } = context;
+
+      if (userAccessLevel === 2) {
+        return router.createUrlTree([`/workspace-admin/${workspaceId}/coding/statistics`]);
+      }
+
+      if (getEffectiveCanCode(currentUser) || await hasAssignedCodingJobs(context)) {
+        return router.createUrlTree([`/workspace-admin/${workspaceId}/coding/my-jobs`]);
+      }
+
+      return createAccessDeniedUrlTree(router, state.url);
+    }
+  );
+}
+
 export function canActivateCodingJobs(): CanActivateFn {
   return createWorkspaceAccessGuard(
     async context => getEffectiveCanCode(context.currentUser) || await hasAssignedCodingJobs(context),
