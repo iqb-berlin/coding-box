@@ -90,6 +90,9 @@
           <mat-checkbox [(ngModel)]="onlyWithEmptyValues" (change)="onEmptyValuesFilterChange()">
             {{ 'variable-analysis.only-empty-values' | translate }}
           </mat-checkbox>
+          <mat-slide-toggle [(ngModel)]="includeSchemaCodes" (change)="onSchemaCodesToggleChange()" color="primary">
+            {{ 'variable-analysis.include-schema-codes' | translate }}
+          </mat-slide-toggle>
         </div>
 
         @if (variableCombos.length === 0) {
@@ -150,6 +153,9 @@
                       <span class="empty-value">{{ 'variable-analysis.empty-value' | translate }}</span>
                       } @else {
                       <span>{{ item.value | slice:0:100 }}{{ item.value.length > 100 ? '...' : '' }}</span>
+                      }
+                      @if (item.label && item.label !== item.value) {
+                      <span class="value-label">{{ item.label }}</span>
                       }
                     </div>
                   </td>

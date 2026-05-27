@@ -22,6 +22,7 @@ import {
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { FormsModule } from '@angular/forms';
 import { Subject, Subscription, timer } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
@@ -74,6 +75,11 @@ export interface VariableAnalysisData {
         unitName?: string;
         variableId: string;
         value: string;
+        label?: string;
+        score?: number;
+        schemaOrder?: number;
+        isSchemaOnly?: boolean;
+        isSchemaSupplemental?: boolean;
         count: number;
         percentage: number;
       }[];
@@ -92,6 +98,11 @@ export interface VariableFrequency {
   unitName?: string;
   variableid: string;
   value: string;
+  label?: string;
+  score?: number;
+  schemaOrder?: number;
+  isSchemaOnly?: boolean;
+  isSchemaSupplemental?: boolean;
   count: number;
   percentage: number;
 }
@@ -142,6 +153,7 @@ type VariableAnalysisExportFormat = 'csv' | 'xlsx';
     MatInputModule,
     MatFormFieldModule,
     MatCheckboxModule,
+    MatSlideToggleModule,
     MatTabsModule,
     MatTooltipModule,
     TranslateModule
@@ -168,6 +180,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   searchText = '';
   onlyWithEmptyValues = false;
+  includeSchemaCodes = false;
   isInfoVisible = false;
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | undefined;
@@ -347,6 +360,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 unitName: freq.unitName,
                 variableid: freq.variableId,
                 value: freq.value,
+                label: freq.label,
+                score: freq.score,
+                schemaOrder: freq.schemaOrder,
+                isSchemaOnly: freq.isSchemaOnly,
+                isSchemaSupplemental: freq.isSchemaSupplemental,
                 count: freq.count,
                 percentage: freq.percentage
               }));
@@ -559,7 +577,10 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   getHiddenValueCount(combo: VariableCombo): number {
     const frequencies = this.variableFrequencies[this.getComboKey(combo)] || [];
     const distinctValueCount = combo.distinctValueCount ?? frequencies.length;
-    return Math.max(0, distinctValueCount - frequencies.length);
+    const displayedObservedValueCount = frequencies.filter(
+      item => !item.isSchemaOnly
+    ).length;
+    return Math.max(0, distinctValueCount - displayedObservedValueCount);
   }
 
   private getFilteredCombos(): VariableCombo[] {
@@ -610,6 +631,15 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   onEmptyValuesFilterChange(): void {
+    this.currentPage = 0;
+    if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
+      this.loadAnalysisResultsPage(this.currentAnalysisJobId);
+      return;
+    }
+    this.filterVariables();
+  }
+
+  onSchemaCodesToggleChange(): void {
     this.currentPage = 0;
     if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
       this.loadAnalysisResultsPage(this.currentAnalysisJobId);
@@ -904,7 +934,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.isExporting = true;
     const options = {
       search: this.searchText.trim() || undefined,
-      onlyEmpty: this.onlyWithEmptyValues
+      onlyEmpty: this.onlyWithEmptyValues,
+      includeSchemaCodes: this.includeSchemaCodes
     };
     const request = format === 'csv' ?
       this.variableAnalysisService.exportAnalysisResultsAsCsv(
@@ -978,7 +1009,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         page: this.currentPage + 1,
         pageSize: this.pageSize,
         search: this.searchText,
-        onlyEmpty: this.onlyWithEmptyValues
+        onlyEmpty: this.onlyWithEmptyValues,
+        includeSchemaCodes: this.includeSchemaCodes
       })
       .subscribe({
         next: (results: VariableAnalysisResultPageDto) => {

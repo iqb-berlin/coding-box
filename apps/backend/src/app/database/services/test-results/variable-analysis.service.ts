@@ -28,11 +28,17 @@ interface NormalizedVariableAnalysisPaging {
   pageSize: number;
   search: string;
   onlyEmpty: boolean;
+  includeSchemaCodes: boolean;
+}
+
+interface VariableAnalysisResultOptions {
+  includeSchemaCodes?: boolean | string;
 }
 
 interface NormalizedVariableAnalysisFilter {
   search: string;
   onlyEmpty: boolean;
+  includeSchemaCodes: boolean;
 }
 
 const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
@@ -40,6 +46,7 @@ const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
   { header: 'Unit-Name', key: 'unitName', width: 24 },
   { header: 'Variablen-ID', key: 'variableId', width: 22 },
   { header: 'Wert', key: 'value', width: 36 },
+  { header: 'Label', key: 'label', width: 36 },
   { header: 'Wert ist leer', key: 'isEmptyValue', width: 14 },
   { header: 'Anzahl', key: 'count', width: 12 },
   { header: 'Anteil (%)', key: 'percentage', width: 14 },
@@ -154,16 +161,23 @@ export class VariableAnalysisService {
 
   async getAnalysisResults(
     jobId: number | string,
-    workspaceId?: number
+    workspaceId?: number,
+    options: VariableAnalysisResultOptions = {}
   ): Promise<VariableAnalysisResultDto> {
     const job = await this.getCompletedAnalysisJob(jobId, workspaceId);
+    const includeSchemaCodes = this.normalizeBooleanOption(
+      options.includeSchemaCodes
+    );
 
     const cacheKey = this.getResultCacheKey(job.returnvalue, job.data.cacheKey);
 
     if (cacheKey) {
       const cachedResult = await this.getCachedResult(cacheKey);
       if (cachedResult) {
-        return cachedResult;
+        return this.withSchemaCodeVisibility(
+          cachedResult,
+          includeSchemaCodes
+        );
       }
 
       throw new Error(`Job with ID ${jobId} has no cached results`);
@@ -173,7 +187,10 @@ export class VariableAnalysisService {
       throw new Error(`Job with ID ${jobId} has no results`);
     }
 
-    return job.returnvalue as VariableAnalysisResultDto;
+    return this.withSchemaCodeVisibility(
+      job.returnvalue as VariableAnalysisResultDto,
+      includeSchemaCodes
+    );
   }
 
   async getAnalysisResultsPage(
@@ -184,6 +201,7 @@ export class VariableAnalysisService {
       pageSize?: number | string;
       search?: string;
       onlyEmpty?: boolean | string;
+      includeSchemaCodes?: boolean | string;
     } = {}
   ): Promise<VariableAnalysisResultPageDto> {
     const job = await this.getCompletedAnalysisJob(jobId, workspaceId);
@@ -215,6 +233,7 @@ export class VariableAnalysisService {
     options: {
       search?: string;
       onlyEmpty?: boolean | string;
+      includeSchemaCodes?: boolean | string;
     } = {}
   ): Promise<string> {
     const result = await this.getAnalysisResultsForExport(
@@ -240,6 +259,7 @@ export class VariableAnalysisService {
     options: {
       search?: string;
       onlyEmpty?: boolean | string;
+      includeSchemaCodes?: boolean | string;
     } = {}
   ): Promise<Buffer> {
     const result = await this.getAnalysisResultsForExport(
@@ -494,6 +514,7 @@ export class VariableAnalysisService {
     options: {
       search?: string;
       onlyEmpty?: boolean | string;
+      includeSchemaCodes?: boolean | string;
     }
   ): Promise<VariableAnalysisResultDto> {
     const job = await this.getCompletedAnalysisJob(jobId, workspaceId);
@@ -570,7 +591,8 @@ export class VariableAnalysisService {
     const frequencies = await this.getFrequenciesForCombos(
       cacheKey,
       manifest,
-      selectedComboKeys
+      selectedComboKeys,
+      filter.includeSchemaCodes
     );
     if (!frequencies) {
       return null;
@@ -619,7 +641,8 @@ export class VariableAnalysisService {
     const frequencies = await this.getFrequenciesForCombos(
       cacheKey,
       manifest,
-      selectedComboKeys
+      selectedComboKeys,
+      paging.includeSchemaCodes
     );
     if (!frequencies) {
       return null;
@@ -639,7 +662,8 @@ export class VariableAnalysisService {
   private async getFrequenciesForCombos(
     cacheKey: string,
     manifest: VariableAnalysisResultCacheManifest,
-    selectedComboKeys: Set<string>
+    selectedComboKeys: Set<string>,
+    includeSchemaCodes: boolean
   ): Promise<Record<string, VariableFrequencyDto[]> | null> {
     const frequencies: Record<string, VariableFrequencyDto[]> = {};
     selectedComboKeys.forEach(comboKey => {
@@ -660,7 +684,10 @@ export class VariableAnalysisService {
 
       for (const [key, values] of chunk) {
         if (selectedComboKeys.has(key)) {
-          frequencies[key] = values;
+          frequencies[key] = this.getVisibleFrequencyRows(
+            values,
+            includeSchemaCodes
+          );
         }
       }
     }
@@ -685,7 +712,10 @@ export class VariableAnalysisService {
     const frequencies: Record<string, VariableFrequencyDto[]> = {};
 
     selectedComboKeys.forEach(comboKey => {
-      frequencies[comboKey] = result.frequencies[comboKey] || [];
+      frequencies[comboKey] = this.getVisibleFrequencyRows(
+        result.frequencies[comboKey] || [],
+        paging.includeSchemaCodes
+      );
     });
 
     return {
@@ -711,7 +741,10 @@ export class VariableAnalysisService {
     const frequencies: Record<string, VariableFrequencyDto[]> = {};
 
     selectedComboKeys.forEach(comboKey => {
-      frequencies[comboKey] = result.frequencies[comboKey] || [];
+      frequencies[comboKey] = this.getVisibleFrequencyRows(
+        result.frequencies[comboKey] || [],
+        filter.includeSchemaCodes
+      );
     });
 
     return {
@@ -737,9 +770,12 @@ export class VariableAnalysisService {
         this.calculatePercentage(emptyCount, totalCount);
       const distinctValueCount =
         combo.distinctValueCount ?? frequencies.length;
+      const displayedObservedValueCount = frequencies.filter(
+        frequency => !frequency.isSchemaOnly
+      ).length;
       const hiddenValueCount = Math.max(
         0,
-        distinctValueCount - frequencies.length
+        distinctValueCount - displayedObservedValueCount
       );
       const statusSummary = this.formatStatusSummary(combo.statusCounts || []);
 
@@ -749,6 +785,7 @@ export class VariableAnalysisService {
           unitName: combo.unitName,
           variableId: combo.variableId,
           value: frequency.value,
+          label: frequency.label || '',
           isEmptyValue: frequency.value === '' ? 'ja' : 'nein',
           count: frequency.count,
           percentage: this.roundPercentage(frequency.percentage),
@@ -811,6 +848,7 @@ export class VariableAnalysisService {
     pageSize?: number | string;
     search?: string;
     onlyEmpty?: boolean | string;
+    includeSchemaCodes?: boolean | string;
   }): NormalizedVariableAnalysisPaging {
     const page = Math.max(
       this.DEFAULT_PAGE,
@@ -824,25 +862,36 @@ export class VariableAnalysisService {
       Math.min(requestedPageSize, this.MAX_PAGE_SIZE)
     );
     const search = (options.search || '').trim().toLowerCase();
-    const onlyEmpty =
-      options.onlyEmpty === true || options.onlyEmpty === 'true';
+    const onlyEmpty = this.normalizeBooleanOption(options.onlyEmpty);
+    const includeSchemaCodes = this.normalizeBooleanOption(
+      options.includeSchemaCodes
+    );
 
     return {
       page,
       pageSize,
       search,
-      onlyEmpty
+      onlyEmpty,
+      includeSchemaCodes
     };
   }
 
   private normalizeFilterOptions(options: {
     search?: string;
     onlyEmpty?: boolean | string;
+    includeSchemaCodes?: boolean | string;
   }): NormalizedVariableAnalysisFilter {
     return {
       search: (options.search || '').trim().toLowerCase(),
-      onlyEmpty: options.onlyEmpty === true || options.onlyEmpty === 'true'
+      onlyEmpty: this.normalizeBooleanOption(options.onlyEmpty),
+      includeSchemaCodes: this.normalizeBooleanOption(
+        options.includeSchemaCodes
+      )
     };
+  }
+
+  private normalizeBooleanOption(value?: boolean | string): boolean {
+    return value === true || value === 'true';
   }
 
   private matchesPagingFilter(
@@ -876,6 +925,47 @@ export class VariableAnalysisService {
 
   private getComboKey(combo: { unitId: number; variableId: string }): string {
     return `${combo.unitId}:${combo.variableId}`;
+  }
+
+  private withSchemaCodeVisibility(
+    result: VariableAnalysisResultDto,
+    includeSchemaCodes: boolean
+  ): VariableAnalysisResultDto {
+    const frequencies = Object.fromEntries(
+      Object.entries(result.frequencies).map(([comboKey, rows]) => [
+        comboKey,
+        this.getVisibleFrequencyRows(rows, includeSchemaCodes)
+      ])
+    );
+
+    return {
+      ...result,
+      frequencies
+    };
+  }
+
+  private getVisibleFrequencyRows(
+    rows: VariableFrequencyDto[],
+    includeSchemaCodes: boolean
+  ): VariableFrequencyDto[] {
+    if (!includeSchemaCodes) {
+      return rows.filter(row => !row.isSchemaSupplemental);
+    }
+
+    return [...rows].sort((a, b) => {
+      const aHasSchemaOrder = Number.isFinite(a.schemaOrder);
+      const bHasSchemaOrder = Number.isFinite(b.schemaOrder);
+
+      if (aHasSchemaOrder && bHasSchemaOrder) {
+        return (a.schemaOrder as number) - (b.schemaOrder as number);
+      }
+
+      if (aHasSchemaOrder !== bHasSchemaOrder) {
+        return aHasSchemaOrder ? -1 : 1;
+      }
+
+      return 0;
+    });
   }
 
   private async deleteCachedResult(
