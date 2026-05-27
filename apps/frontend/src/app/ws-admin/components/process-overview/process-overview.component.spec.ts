@@ -90,6 +90,7 @@ describe('ProcessOverviewComponent', () => {
           completed: 'Abgeschlossen',
           failed: 'Fehlgeschlagen',
           paused: 'Pausiert',
+          cancelled: 'Abgebrochen',
           unknown: 'Unbekannt'
         },
         'status-tooltips': {
@@ -99,6 +100,7 @@ describe('ProcessOverviewComponent', () => {
           completed: 'Der Prozess wurde erfolgreich abgeschlossen.',
           failed: 'Der Prozess ist mit einem Fehler beendet worden.',
           paused: 'Der Prozess wurde angehalten.',
+          cancelled: 'Der Prozess wurde abgebrochen.',
           unknown: 'Der aktuelle Prozessstatus ist nicht eindeutig bekannt.'
         },
         progress: {
@@ -108,6 +110,7 @@ describe('ProcessOverviewComponent', () => {
           completed: 'Abgeschlossen',
           failed: 'Keine Fortschrittsangabe',
           paused: 'Pausiert',
+          cancelled: 'Abgebrochen',
           unknown: 'Keine Fortschrittsangabe'
         },
         time: {
@@ -238,6 +241,14 @@ describe('ProcessOverviewComponent', () => {
       progress: 0,
       timestamp: 100
     })).toBe(false);
+
+    expect(component.getProcessAction({
+      id: 'job-5',
+      queueName: 'validation-task',
+      status: 'cancelled',
+      progress: 30,
+      timestamp: 100
+    })).toBe('remove');
   });
 
   it('keeps the tooltip on a wrapper around disabled action buttons', () => {
@@ -261,6 +272,7 @@ describe('ProcessOverviewComponent', () => {
     expect(component.getQueueLabel('data-export')).toBe('Datenexport');
     expect(component.getQueueLabel('unknown-queue')).toBe('unknown-queue');
     expect(component.getStatusLabel('waiting')).toBe('Wartet');
+    expect(component.getStatusLabel('cancelled')).toBe('Abgebrochen');
     expect(component.getStatusIcon('failed')).toBe('error');
   });
 
