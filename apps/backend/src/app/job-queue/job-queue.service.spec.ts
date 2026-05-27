@@ -214,6 +214,12 @@ describe('JobQueueService', () => {
 
     await expect(service.cancelWorkspaceJob(1, 'coding-statistics', 'job-1')).resolves.toBe(true);
     expect(pausedJob.remove).toHaveBeenCalled();
+
+    const cancelledJob = createJob({ workspaceId: 1 }, 'cancelled');
+    queues[1].getJob.mockResolvedValue(cancelledJob);
+
+    await expect(service.cancelWorkspaceJob(1, 'coding-statistics', 'job-1')).resolves.toBe(true);
+    expect(cancelledJob.remove).toHaveBeenCalled();
   });
 
   it('handles missing jobs and failing queue operations', async () => {
@@ -262,7 +268,7 @@ describe('JobQueueService', () => {
     ]);
   });
 
-  it('uses validation task progress and errors from the task entity in the process overview', async () => {
+  it('uses validation task progress and metadata from the task entity in the process overview', async () => {
     queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
     queues[7].getJobs.mockResolvedValue([
       createJob({ taskId: 7 }, 'active')
@@ -284,11 +290,75 @@ describe('JobQueueService', () => {
         queueName: 'validation-task',
         status: 'active',
         progress: 65,
-        failedReason: 'Schema validation failed',
+        failedReason: undefined,
         data: {
           taskId: 7,
           validationType: 'testFiles',
           progressMessage: 'Testdateien werden geprüft...'
+        }
+      })
+    ]);
+  });
+
+  it('shows cancelled validation task entity statuses in the process overview', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[7].getJobs.mockResolvedValue([
+      createJob({ taskId: 7 }, 'completed')
+    ]);
+    validationTaskRepository.find.mockResolvedValueOnce([{
+      id: 7,
+      workspace_id: 1,
+      validation_type: 'testFiles',
+      status: 'cancelled',
+      progress: 30,
+      progress_message: 'Validierung abgebrochen.',
+      error: 'Cancelled by user'
+    }]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toEqual([
+      expect.objectContaining({
+        queueName: 'validation-task',
+        status: 'cancelled',
+        progress: 30,
+        failedReason: undefined,
+        data: {
+          taskId: 7,
+          validationType: 'testFiles',
+          progressMessage: 'Validierung abgebrochen.'
+        }
+      })
+    ]);
+  });
+
+  it('keeps active Bull validation tasks active even when the task entity is cancelled', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[7].getJobs.mockResolvedValue([
+      createJob({ taskId: 7 }, 'active')
+    ]);
+    validationTaskRepository.find.mockResolvedValueOnce([{
+      id: 7,
+      workspace_id: 1,
+      validation_type: 'testFiles',
+      status: 'cancelled',
+      progress: 30,
+      progress_message: 'Validierung abgebrochen.',
+      error: 'Cancelled by user'
+    }]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toEqual([
+      expect.objectContaining({
+        queueName: 'validation-task',
+        status: 'active',
+        progress: 30,
+        failedReason: undefined,
+        data: {
+          taskId: 7,
+          validationType: 'testFiles',
+          progressMessage: 'Validierung abgebrochen.'
         }
       })
     ]);

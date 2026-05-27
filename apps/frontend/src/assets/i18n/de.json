@@ -97,6 +97,7 @@
       "completed": "Abgeschlossen",
       "failed": "Fehlgeschlagen",
       "paused": "Pausiert",
+      "cancelled": "Abgebrochen",
       "unknown": "Unbekannt"
     },
     "status-tooltips": {
@@ -106,6 +107,7 @@
       "completed": "Der Prozess wurde erfolgreich abgeschlossen.",
       "failed": "Der Prozess ist mit einem Fehler beendet worden.",
       "paused": "Der Prozess wurde angehalten.",
+      "cancelled": "Der Prozess wurde abgebrochen.",
       "unknown": "Der aktuelle Prozessstatus ist nicht eindeutig bekannt."
     },
     "progress": {
@@ -115,6 +117,7 @@
       "completed": "Abgeschlossen",
       "failed": "Keine Fortschrittsangabe",
       "paused": "Pausiert",
+      "cancelled": "Abgebrochen",
       "unknown": "Keine Fortschrittsangabe"
     },
     "time": {
