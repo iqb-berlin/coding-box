@@ -287,7 +287,8 @@ export class JobQueueService {
       state === 'delayed' ||
       state === 'completed' ||
       state === 'failed' ||
-      state === 'paused'
+      state === 'paused' ||
+      state === 'cancelled'
     ) {
       return state;
     }
@@ -299,12 +300,13 @@ export class JobQueueService {
     status: string | undefined,
     fallbackBullState: string
   ): ProcessDto['status'] {
+    if (fallbackBullState === 'active') return 'active';
     if (status === 'pending') return 'waiting';
     if (status === 'processing') return 'active';
     if (status === 'completed') return 'completed';
     if (status === 'failed') return 'failed';
     if (status === 'paused') return 'paused';
-    if (status === 'cancelled') return 'unknown';
+    if (status === 'cancelled') return 'cancelled';
 
     return this.mapBullStateToProcessStatus(fallbackBullState);
   }
@@ -332,6 +334,15 @@ export class JobQueueService {
     return this.mapBullStateToProcessStatus(bullState);
   }
 
+  private getProcessFailedReason(
+    status: ProcessDto['status'],
+    job: Job,
+    validationTask?: ProcessOverviewValidationTask
+  ): string | undefined {
+    if (status !== 'failed') return undefined;
+    return validationTask?.error || job.failedReason;
+  }
+
   private async jobBelongsToWorkspace(
     queueName: string,
     job: Job,
@@ -355,7 +366,8 @@ export class JobQueueService {
   private async cancelKnownJob(queueName: string, job: Job): Promise<boolean> {
     try {
       const state = await job.getState();
-      if (state === 'waiting' || state === 'delayed' || state === 'paused' || state === 'completed' || state === 'failed') {
+      const removableStates = ['waiting', 'delayed', 'paused', 'completed', 'failed', 'cancelled'];
+      if (removableStates.includes(state)) {
         await job.remove();
         return true;
       }
@@ -484,7 +496,7 @@ export class JobQueueService {
                 validationType: validationTask?.validation_type,
                 progressMessage: validationTask?.progress_message
               }),
-              failedReason: validationTask?.error || job.failedReason,
+              failedReason: this.getProcessFailedReason(status, job, validationTask),
               timestamp: job.timestamp,
               processedOn: job.processedOn,
               finishedOn: job.finishedOn
