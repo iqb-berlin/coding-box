@@ -96,4 +96,45 @@ describe('VariableAnalysisService', () => {
       req.flush({});
     });
   });
+
+  describe('exports', () => {
+    it('should export results as CSV with filters', () => {
+      service
+        .exportAnalysisResultsAsCsv(mockWorkspaceId, 5, {
+          search: 'VAR',
+          onlyEmpty: true
+        })
+        .subscribe();
+
+      const req = httpMock.expectOne(
+        r => r.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/variable-analysis/jobs/5/results/export/csv` &&
+          r.params.get('search') === 'VAR' &&
+          r.params.get('onlyEmpty') === 'true'
+      );
+      expect(req.request.method).toBe('GET');
+      expect(req.request.responseType).toBe('blob');
+      req.flush(new Blob(['csv'], { type: 'text/csv' }));
+    });
+
+    it('should export results as XLSX with filters', () => {
+      service
+        .exportAnalysisResultsAsXlsx(mockWorkspaceId, 5, {
+          search: 'VAR'
+        })
+        .subscribe();
+
+      const req = httpMock.expectOne(
+        r => r.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/variable-analysis/jobs/5/results/export/xlsx` &&
+          r.params.get('search') === 'VAR' &&
+          !r.params.has('onlyEmpty')
+      );
+      expect(req.request.method).toBe('GET');
+      expect(req.request.responseType).toBe('blob');
+      req.flush(new Blob(['xlsx'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      }));
+    });
+  });
 });

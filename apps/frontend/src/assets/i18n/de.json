@@ -940,7 +940,11 @@
     "status-cancelled": "Abgebrochen",
     "status-paused": "Pausiert",
     "loading-results": "Lade Analyse-Ergebnisse...",
-    "error-loading-results": "Fehler beim Laden der Analyse-Ergebnisse"
+    "error-loading-results": "Fehler beim Laden der Analyse-Ergebnisse",
+    "export-csv": "CSV",
+    "export-xlsx": "XLSX",
+    "export-success": "Export erfolgreich erstellt",
+    "export-error": "Fehler beim Export"
   },
   "coding-management": {
     "buttons": {
