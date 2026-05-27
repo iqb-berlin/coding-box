@@ -22,6 +22,14 @@
             <mat-icon>add</mat-icon>
             {{ 'variable-analysis.start-new-analysis' | translate }}
           </button>
+          <button mat-button (click)="downloadAnalysisResults('csv')" [disabled]="!canExportAnalysisResults()">
+            <mat-icon>download</mat-icon>
+            {{ 'variable-analysis.export-csv' | translate }}
+          </button>
+          <button mat-button (click)="downloadAnalysisResults('xlsx')" [disabled]="!canExportAnalysisResults()">
+            <mat-icon>download</mat-icon>
+            {{ 'variable-analysis.export-xlsx' | translate }}
+          </button>
           <button mat-button (click)="isInfoVisible = !isInfoVisible" class="info-toggle">
             <mat-icon>{{ isInfoVisible ? 'expand_less' : 'help_outline' }}</mat-icon>
             {{ (isInfoVisible ? 'variable-analysis.hide-info' : 'variable-analysis.show-info') | translate }}
