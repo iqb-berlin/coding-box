@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Query,
+  Res,
   UseGuards
 } from '@nestjs/common';
 import {
@@ -22,6 +23,7 @@ import {
   ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
@@ -328,6 +330,184 @@ export class VariableAnalysisController {
     }
   }
 
+  @Get('jobs/:job_id/results/export/csv')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Export variable analysis results as CSV',
+    description:
+      'Exports all filtered results of a completed variable analysis job as CSV'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'job_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the job'
+  })
+  @ApiQuery({
+    name: 'search',
+    type: String,
+    required: false,
+    description: 'Search term matched against unit name and variable ID'
+  })
+  @ApiQuery({
+    name: 'onlyEmpty',
+    type: Boolean,
+    required: false,
+    description: 'Only include variables with empty responses'
+  })
+  @ApiOkResponse({
+    description: 'Variable analysis results exported as CSV.',
+    content: {
+      'text/csv': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data or job not completed.'
+  })
+  @ApiNotFoundResponse({
+    description: 'Job not found.'
+  })
+  async exportAnalysisResultsAsCsv(
+    @WorkspaceId() workspaceId: number,
+      @Param('job_id') jobId: string,
+      @Query('search') search: string | undefined,
+      @Query('onlyEmpty') onlyEmpty: string | undefined,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const csv = await this.variableAnalysisService.exportAnalysisResultsAsCsv(
+        jobId,
+        workspaceId,
+        {
+          search,
+          onlyEmpty
+        }
+      );
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const safeJobId = this.toSafeFilenamePart(jobId);
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="variable-analysis-${workspaceId}-${safeJobId}-${timestamp}.csv"`
+      );
+      res.send(csv);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message && error.message.includes('not found in workspace')) {
+        throw new NotFoundException(error.message);
+      }
+      throw new BadRequestException(
+        `Failed to export variable analysis results as CSV: ${error.message}`
+      );
+    }
+  }
+
+  @Get('jobs/:job_id/results/export/xlsx')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Export variable analysis results as XLSX',
+    description:
+      'Exports all filtered results of a completed variable analysis job as XLSX'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'job_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the job'
+  })
+  @ApiQuery({
+    name: 'search',
+    type: String,
+    required: false,
+    description: 'Search term matched against unit name and variable ID'
+  })
+  @ApiQuery({
+    name: 'onlyEmpty',
+    type: Boolean,
+    required: false,
+    description: 'Only include variables with empty responses'
+  })
+  @ApiOkResponse({
+    description: 'Variable analysis results exported as XLSX.',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data or job not completed.'
+  })
+  @ApiNotFoundResponse({
+    description: 'Job not found.'
+  })
+  async exportAnalysisResultsAsXlsx(
+    @WorkspaceId() workspaceId: number,
+      @Param('job_id') jobId: string,
+      @Query('search') search: string | undefined,
+      @Query('onlyEmpty') onlyEmpty: string | undefined,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const xlsx =
+        await this.variableAnalysisService.exportAnalysisResultsAsXlsx(
+          jobId,
+          workspaceId,
+          {
+            search,
+            onlyEmpty
+          }
+        );
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const safeJobId = this.toSafeFilenamePart(jobId);
+
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="variable-analysis-${workspaceId}-${safeJobId}-${timestamp}.xlsx"`
+      );
+      res.send(xlsx);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message && error.message.includes('not found in workspace')) {
+        throw new NotFoundException(error.message);
+      }
+      throw new BadRequestException(
+        `Failed to export variable analysis results as XLSX: ${error.message}`
+      );
+    }
+  }
+
   @Delete('jobs/:job_id')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
@@ -437,5 +617,9 @@ export class VariableAnalysisController {
         `Failed to cancel variable analysis job: ${error.message}`
       );
     }
+  }
+
+  private toSafeFilenamePart(value: string): string {
+    return value.replace(/[^a-zA-Z0-9_-]/g, '-');
   }
 }
