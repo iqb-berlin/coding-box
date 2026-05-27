@@ -14,6 +14,11 @@ export interface VariableFrequencyDto {
   unitName?: string;
   variableId: string;
   value: string;
+  label?: string;
+  score?: number;
+  schemaOrder?: number;
+  isSchemaOnly?: boolean;
+  isSchemaSupplemental?: boolean;
   count: number;
   percentage: number;
 }
@@ -53,11 +58,13 @@ export interface VariableAnalysisResultPageOptions {
   pageSize: number;
   search?: string;
   onlyEmpty?: boolean;
+  includeSchemaCodes?: boolean;
 }
 
 export interface VariableAnalysisExportOptions {
   search?: string;
   onlyEmpty?: boolean;
+  includeSchemaCodes?: boolean;
 }
 
 @Injectable({
@@ -163,6 +170,10 @@ export class VariableAnalysisService {
       params = params.set('onlyEmpty', 'true');
     }
 
+    if (options.includeSchemaCodes) {
+      params = params.set('includeSchemaCodes', 'true');
+    }
+
     return this.http.get<VariableAnalysisResultPageDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/results/page`,
       { headers: this.authHeader, params }
@@ -215,6 +226,10 @@ export class VariableAnalysisService {
 
     if (options.onlyEmpty) {
       params = params.set('onlyEmpty', 'true');
+    }
+
+    if (options.includeSchemaCodes) {
+      params = params.set('includeSchemaCodes', 'true');
     }
 
     return params;

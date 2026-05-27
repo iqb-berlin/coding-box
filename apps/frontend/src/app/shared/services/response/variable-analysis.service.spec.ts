@@ -80,7 +80,8 @@ describe('VariableAnalysisService', () => {
           page: 2,
           pageSize: 100,
           search: 'VAR',
-          onlyEmpty: true
+          onlyEmpty: true,
+          includeSchemaCodes: true
         })
         .subscribe();
 
@@ -90,7 +91,8 @@ describe('VariableAnalysisService', () => {
           r.params.get('page') === '2' &&
           r.params.get('pageSize') === '100' &&
           r.params.get('search') === 'VAR' &&
-          r.params.get('onlyEmpty') === 'true'
+          r.params.get('onlyEmpty') === 'true' &&
+          r.params.get('includeSchemaCodes') === 'true'
       );
       expect(req.request.method).toBe('GET');
       req.flush({});
@@ -102,7 +104,8 @@ describe('VariableAnalysisService', () => {
       service
         .exportAnalysisResultsAsCsv(mockWorkspaceId, 5, {
           search: 'VAR',
-          onlyEmpty: true
+          onlyEmpty: true,
+          includeSchemaCodes: true
         })
         .subscribe();
 
@@ -110,7 +113,8 @@ describe('VariableAnalysisService', () => {
         r => r.url ===
             `${mockServerUrl}admin/workspace/${mockWorkspaceId}/variable-analysis/jobs/5/results/export/csv` &&
           r.params.get('search') === 'VAR' &&
-          r.params.get('onlyEmpty') === 'true'
+          r.params.get('onlyEmpty') === 'true' &&
+          r.params.get('includeSchemaCodes') === 'true'
       );
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
