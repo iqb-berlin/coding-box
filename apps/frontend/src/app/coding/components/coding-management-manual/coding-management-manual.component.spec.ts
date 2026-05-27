@@ -55,6 +55,9 @@ describe('CodingManagementManualComponent', () => {
           'second-autocoding-ready-title': 'Auto-Coding 2 bereit',
           'second-autocoding-ready-summary': 'Die manuelle Kodierung ist abgeschlossen. Auto-Coding 2 kann nun für {{taskResults}} gestartet oder aktualisiert werden. Das betrifft {{responses}}.',
           'second-autocoding-ready-help': 'Starten Sie Auto-Coding 2 in der Kodierübersicht. {{taskResultHelp}}'
+        },
+        'completed-jobs': {
+          'readonly-note': 'Nur lesbar'
         }
       }
     });
@@ -298,6 +301,64 @@ describe('CodingManagementManualComponent', () => {
     expect(component.hasCompletedJobsReadyForApply()).toBe(true);
     expect(component.getCompletionActionTitle()).toContain('1 abgeschlossene');
     expect(component.getCodingJobResultSummary(component.completedJobsReadyForApply[0])).toBe('5/5 Ergebnisse kodiert');
+  });
+
+  it('should hide completed job apply actions without study-manager permission', () => {
+    component.completedJobsReadyForApply = [
+      {
+        id: 1,
+        workspace_id: 1,
+        name: 'Job 1',
+        status: 'completed',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 5,
+        codedUnits: 5
+      }
+    ];
+    component.codingJobsComponent = {
+      canApplyResults: false
+    } as unknown as CodingManagementManualComponent['codingJobsComponent'];
+
+    expect(component.canShowCompletedJobApplyActions()).toBe(false);
+
+    component.codingJobsComponent = {
+      canApplyResults: true
+    } as unknown as CodingManagementManualComponent['codingJobsComponent'];
+
+    expect(component.canShowCompletedJobApplyActions()).toBe(true);
+  });
+
+  it('should keep completed jobs visible as read-only without study-manager permission', () => {
+    setAppliedResults(5, 0, 5);
+    component.completedJobsReadyForApply = [
+      {
+        id: 1,
+        workspace_id: 1,
+        name: 'Job 1',
+        status: 'completed',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 5,
+        codedUnits: 5
+      }
+    ];
+    jest.spyOn(component, 'canApplyCompletedJobResults').mockReturnValue(false);
+
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('.completed-job-apply-row') as HTMLElement | null;
+    const applyButtons = Array.from(
+      fixture.nativeElement.querySelectorAll('.completed-job-apply-row button')
+    ) as HTMLButtonElement[];
+    const readonlyNote = fixture.nativeElement.querySelector('.completed-job-readonly-note') as HTMLElement | null;
+
+    expect(row?.textContent).toContain('Job 1');
+    expect(row?.textContent).toContain('5/5 Ergebnisse kodiert');
+    expect(applyButtons.some(button => button.textContent?.includes('Ergebnisse anwenden'))).toBe(false);
+    expect(readonlyNote?.textContent).toContain('Nur lesbar');
   });
 
   it('should describe complete planning with open coding work as ready for execution', () => {
