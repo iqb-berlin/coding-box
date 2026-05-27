@@ -207,7 +207,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   isLoading = false;
   isLoadingKappa = false;
   dataSource = new MatTableDataSource<TrainingComparison | WithinTrainingComparison>([]);
-  displayedColumns: string[] = ['index', 'unitVariable', 'personInfo', 'givenAnswer', 'match'];
+  displayedColumns: string[] = ['index', 'unitVariable', 'personInfo', 'replay', 'givenAnswer', 'match'];
   dynamicCoderColumns: string[] = [];
   availableTrainings: CoderTraining[] = [];
   filteredTrainings: CoderTraining[] = [];
@@ -833,13 +833,38 @@ export class CodingResultsComparisonComponent implements OnInit {
         this.codingStatisticsService.getReplayUrl(workspaceId, responseId, token).subscribe({
           next: result => {
             if (result.replayUrl) {
-              const separator = result.replayUrl.includes('?') ? '&' : '?';
-              window.open(`${result.replayUrl}${separator}mode=coding&originResponseId=${responseId}`, '_blank');
+              window.open(this.buildReplayUrl(result.replayUrl, responseId), '_blank');
+            } else {
+              this.snackBar.open('Replay-URL konnte nicht erzeugt werden.', this.translate.instant('common.close'), { duration: 3000 });
             }
+          },
+          error: () => {
+            this.snackBar.open('Replay konnte nicht geöffnet werden.', this.translate.instant('common.close'), { duration: 3000 });
           }
         });
+      },
+      error: () => {
+        this.snackBar.open('Replay-Token konnte nicht erzeugt werden.', this.translate.instant('common.close'), { duration: 3000 });
       }
     });
+  }
+
+  private buildReplayUrl(replayUrl: string, responseId: number): string {
+    const [baseUrl, fragment = ''] = replayUrl.split('#', 2);
+    const appendParams = (value: string): string => {
+      const [path, query = ''] = value.split('?', 2);
+      const params = new URLSearchParams(query);
+      params.set('mode', 'coding');
+      params.set('originResponseId', responseId.toString());
+      const serializedParams = params.toString();
+      return serializedParams ? `${path}?${serializedParams}` : path;
+    };
+
+    if (fragment) {
+      return `${baseUrl}#${appendParams(fragment)}`;
+    }
+
+    return appendParams(baseUrl);
   }
 
   loadCoderTrainings(): Promise<void> {
@@ -925,7 +950,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   private updateDisplayedColumns(): void {
-    const baseColumns = ['index', 'unitVariable', 'personInfo', 'givenAnswer'];
+    const baseColumns = ['index', 'unitVariable', 'personInfo', 'replay', 'givenAnswer'];
     this.dynamicCoderColumns = [];
 
     if (this.comparisonMode === 'between-trainings') {

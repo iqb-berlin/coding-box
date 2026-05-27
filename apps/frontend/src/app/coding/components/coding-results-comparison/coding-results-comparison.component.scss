@@ -671,10 +671,6 @@
           }
 
           .given-answer-cell {
-            display: grid;
-            grid-template-columns: auto minmax(0, 1fr);
-            align-items: start;
-            gap: 8px;
             max-width: 340px;
 
             .answer-text {
@@ -814,6 +810,11 @@
         .mat-column-personInfo {
           width: 210px;
           max-width: 210px;
+        }
+
+        .mat-column-replay {
+          width: 74px;
+          text-align: center;
         }
 
         .mat-column-givenAnswer {
