@@ -606,20 +606,27 @@
             </td>
           </ng-container>
 
+          <!-- Replay Column -->
+          <ng-container matColumnDef="replay">
+            <th mat-header-cell *matHeaderCellDef>Replay</th>
+            <td mat-cell *matCellDef="let comparison">
+              <button
+                mat-icon-button
+                type="button"
+                color="primary"
+                (click)="openReplay(comparison)"
+                matTooltip="Replay inkl. Kodieranweisungen öffnen"
+              >
+                <mat-icon>play_circle</mat-icon>
+              </button>
+            </td>
+          </ng-container>
+
           <!-- Given Answer Column -->
           <ng-container matColumnDef="givenAnswer">
             <th mat-header-cell *matHeaderCellDef>Gegebene Antwort</th>
             <td mat-cell *matCellDef="let comparison">
               <div class="given-answer-cell">
-                <button
-                  mat-icon-button
-                  type="button"
-                  color="primary"
-                  (click)="openReplay(comparison)"
-                  matTooltip="Replay inkl. Kodieranweisungen öffnen"
-                >
-                  <mat-icon>play_circle</mat-icon>
-                </button>
                 <div class="answer-text" [matTooltip]="comparison.givenAnswer || 'N/A'">
                   {{ comparison.givenAnswer || 'N/A' }}
                 </div>
