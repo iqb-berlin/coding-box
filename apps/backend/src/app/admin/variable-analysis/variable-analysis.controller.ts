@@ -210,6 +210,12 @@ export class VariableAnalysisController {
     required: true,
     description: 'The ID of the job'
   })
+  @ApiQuery({
+    name: 'includeSchemaCodes',
+    type: Boolean,
+    required: false,
+    description: 'Include coding scheme codes that are not part of the default top values'
+  })
   @ApiOkResponse({
     description:
       'The variable analysis results have been successfully retrieved.',
@@ -223,12 +229,14 @@ export class VariableAnalysisController {
   })
   async getAnalysisResults(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string
+      @Param('job_id') jobId: string,
+      @Query('includeSchemaCodes') includeSchemaCodes?: string
   ): Promise<VariableAnalysisResultDto> {
     try {
       return await this.variableAnalysisService.getAnalysisResults(
         jobId,
-        workspaceId
+        workspaceId,
+        { includeSchemaCodes }
       );
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -287,6 +295,12 @@ export class VariableAnalysisController {
     required: false,
     description: 'Only include variables with empty responses'
   })
+  @ApiQuery({
+    name: 'includeSchemaCodes',
+    type: Boolean,
+    required: false,
+    description: 'Include coding scheme codes that are not part of the default top values'
+  })
   @ApiOkResponse({
     description:
       'The variable analysis result page has been successfully retrieved.',
@@ -304,7 +318,8 @@ export class VariableAnalysisController {
       @Query('page') page?: string,
       @Query('pageSize') pageSize?: string,
       @Query('search') search?: string,
-      @Query('onlyEmpty') onlyEmpty?: string
+      @Query('onlyEmpty') onlyEmpty?: string,
+      @Query('includeSchemaCodes') includeSchemaCodes?: string
   ): Promise<VariableAnalysisResultPageDto> {
     try {
       return await this.variableAnalysisService.getAnalysisResultsPage(
@@ -314,7 +329,8 @@ export class VariableAnalysisController {
           page,
           pageSize,
           search,
-          onlyEmpty
+          onlyEmpty,
+          includeSchemaCodes
         }
       );
     } catch (error) {
@@ -362,6 +378,12 @@ export class VariableAnalysisController {
     required: false,
     description: 'Only include variables with empty responses'
   })
+  @ApiQuery({
+    name: 'includeSchemaCodes',
+    type: Boolean,
+    required: false,
+    description: 'Include coding scheme codes that are not part of the default top values'
+  })
   @ApiOkResponse({
     description: 'Variable analysis results exported as CSV.',
     content: {
@@ -384,6 +406,7 @@ export class VariableAnalysisController {
       @Param('job_id') jobId: string,
       @Query('search') search: string | undefined,
       @Query('onlyEmpty') onlyEmpty: string | undefined,
+      @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
       @Res() res: Response
   ): Promise<void> {
     try {
@@ -392,7 +415,8 @@ export class VariableAnalysisController {
         workspaceId,
         {
           search,
-          onlyEmpty
+          onlyEmpty,
+          includeSchemaCodes
         }
       );
       const timestamp = new Date().toISOString().slice(0, 10);
@@ -449,6 +473,12 @@ export class VariableAnalysisController {
     required: false,
     description: 'Only include variables with empty responses'
   })
+  @ApiQuery({
+    name: 'includeSchemaCodes',
+    type: Boolean,
+    required: false,
+    description: 'Include coding scheme codes that are not part of the default top values'
+  })
   @ApiOkResponse({
     description: 'Variable analysis results exported as XLSX.',
     content: {
@@ -471,6 +501,7 @@ export class VariableAnalysisController {
       @Param('job_id') jobId: string,
       @Query('search') search: string | undefined,
       @Query('onlyEmpty') onlyEmpty: string | undefined,
+      @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
       @Res() res: Response
   ): Promise<void> {
     try {
@@ -480,7 +511,8 @@ export class VariableAnalysisController {
           workspaceId,
           {
             search,
-            onlyEmpty
+            onlyEmpty,
+            includeSchemaCodes
           }
         );
       const timestamp = new Date().toISOString().slice(0, 10);

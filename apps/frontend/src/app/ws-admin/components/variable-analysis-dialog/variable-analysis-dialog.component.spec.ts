@@ -315,9 +315,28 @@ describe('VariableAnalysisDialogComponent', () => {
         page: 1,
         pageSize: 50,
         search: '',
-        onlyEmpty: false
+        onlyEmpty: false,
+        includeSchemaCodes: false
       });
       expect(analyzeSpy).toHaveBeenCalled();
+    });
+
+    it('reloads server-side results when schema code visibility changes', () => {
+      component.viewJobResults(1);
+      mockVariableAnalysisService.getAnalysisResultsPage.mockClear();
+
+      component.includeSchemaCodes = true;
+      component.onSchemaCodesToggleChange();
+
+      expect(
+        mockVariableAnalysisService.getAnalysisResultsPage
+      ).toHaveBeenCalledWith(1, 1, {
+        page: 1,
+        pageSize: 50,
+        search: '',
+        onlyEmpty: false,
+        includeSchemaCodes: true
+      });
     });
 
     it('should dismiss stale loading snackbars without applying stale results', fakeAsync(() => {
@@ -377,7 +396,8 @@ describe('VariableAnalysisDialogComponent', () => {
         mockVariableAnalysisService.exportAnalysisResultsAsCsv
       ).toHaveBeenCalledWith(1, 1, {
         search: 'VAR',
-        onlyEmpty: true
+        onlyEmpty: true,
+        includeSchemaCodes: false
       });
       expect(window.URL.createObjectURL).toHaveBeenCalled();
       expect(window.URL.revokeObjectURL).toHaveBeenCalledWith(
