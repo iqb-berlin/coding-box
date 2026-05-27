@@ -5,11 +5,14 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import * as ExcelJS from 'exceljs';
+import * as fastCsv from 'fast-csv';
 import {
   VariableAnalysisResultDto,
   VariableCombo
 } from '../../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableAnalysisResultPageDto } from '../../../admin/variable-analysis/dto/variable-analysis-result-page.dto';
+import { statusNumberToString } from '../../utils/response-status-converter';
 import {
   JobQueueService,
   VariableAnalysisJobData,
@@ -26,6 +29,37 @@ interface NormalizedVariableAnalysisPaging {
   search: string;
   onlyEmpty: boolean;
 }
+
+interface NormalizedVariableAnalysisFilter {
+  search: string;
+  onlyEmpty: boolean;
+}
+
+const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
+  { header: 'Unit-ID', key: 'unitId', width: 12 },
+  { header: 'Unit-Name', key: 'unitName', width: 24 },
+  { header: 'Variablen-ID', key: 'variableId', width: 22 },
+  { header: 'Wert', key: 'value', width: 36 },
+  { header: 'Wert ist leer', key: 'isEmptyValue', width: 14 },
+  { header: 'Anzahl', key: 'count', width: 12 },
+  { header: 'Anteil (%)', key: 'percentage', width: 14 },
+  { header: 'Antworten gesamt', key: 'totalCount', width: 18 },
+  { header: 'Leere Werte', key: 'emptyCount', width: 14 },
+  { header: 'Leere Werte (%)', key: 'emptyPercentage', width: 18 },
+  { header: 'Unterschiedliche Werte', key: 'distinctValueCount', width: 22 },
+  { header: 'Weitere Werte nicht enthalten', key: 'hiddenValueCount', width: 28 },
+  { header: 'Antwortstatus', key: 'statusSummary', width: 42 }
+] as const;
+
+type VariableAnalysisExportColumnKey =
+  typeof VARIABLE_ANALYSIS_EXPORT_COLUMNS[number]['key'];
+
+type VariableAnalysisExportCell = string | number;
+
+type VariableAnalysisExportRow = Record<
+VariableAnalysisExportColumnKey,
+VariableAnalysisExportCell
+>;
 
 @Injectable()
 export class VariableAnalysisService {
@@ -173,6 +207,90 @@ export class VariableAnalysisService {
       job.returnvalue as VariableAnalysisResultDto,
       paging
     );
+  }
+
+  async exportAnalysisResultsAsCsv(
+    jobId: number | string,
+    workspaceId: number,
+    options: {
+      search?: string;
+      onlyEmpty?: boolean | string;
+    } = {}
+  ): Promise<string> {
+    const result = await this.getAnalysisResultsForExport(
+      jobId,
+      workspaceId,
+      options
+    );
+    const rows = this.createExportRows(result);
+    const csvRows = rows.map(row => this.toCsvExportRow(row));
+    const csvContent = await fastCsv.writeToString(csvRows, {
+      headers: VARIABLE_ANALYSIS_EXPORT_COLUMNS.map(column => column.header),
+      alwaysWriteHeaders: true,
+      delimiter: ';',
+      quote: '"'
+    });
+
+    return `\uFEFF${csvContent}`;
+  }
+
+  async exportAnalysisResultsAsXlsx(
+    jobId: number | string,
+    workspaceId: number,
+    options: {
+      search?: string;
+      onlyEmpty?: boolean | string;
+    } = {}
+  ): Promise<Buffer> {
+    const result = await this.getAnalysisResultsForExport(
+      jobId,
+      workspaceId,
+      options
+    );
+    const rows = this.createExportRows(result);
+    const workbook = new ExcelJS.Workbook();
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    const worksheet = workbook.addWorksheet('Antwortwerte');
+    worksheet.columns = VARIABLE_ANALYSIS_EXPORT_COLUMNS.map(column => ({
+      header: column.header,
+      key: column.key,
+      width: column.width
+    }));
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+    worksheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: {
+        row: Math.max(1, rows.length + 1),
+        column: VARIABLE_ANALYSIS_EXPORT_COLUMNS.length
+      }
+    };
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    rows.forEach(row => worksheet.addRow(row));
+    ['percentage', 'emptyPercentage'].forEach(columnKey => {
+      worksheet.getColumn(columnKey).numFmt = '0.0';
+    });
+    [
+      'unitId',
+      'count',
+      'totalCount',
+      'emptyCount',
+      'distinctValueCount',
+      'hiddenValueCount'
+    ].forEach(columnKey => {
+      worksheet.getColumn(columnKey).numFmt = '0';
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
   }
 
   async getAnalysisJobs(
@@ -370,6 +488,101 @@ export class VariableAnalysisService {
     return this.getChunkedResultPage(cacheKey, cachedValue, paging);
   }
 
+  private async getAnalysisResultsForExport(
+    jobId: number | string,
+    workspaceId: number,
+    options: {
+      search?: string;
+      onlyEmpty?: boolean | string;
+    }
+  ): Promise<VariableAnalysisResultDto> {
+    const job = await this.getCompletedAnalysisJob(jobId, workspaceId);
+    const filter = this.normalizeFilterOptions(options);
+    const cacheKey = this.getResultCacheKey(job.returnvalue, job.data.cacheKey);
+
+    if (cacheKey) {
+      const cachedResult = await this.getCachedResultForExport(cacheKey, filter);
+      if (cachedResult) {
+        return cachedResult;
+      }
+
+      throw new Error(`Job with ID ${jobId} has no cached results`);
+    }
+
+    if (!this.isVariableAnalysisResult(job.returnvalue)) {
+      throw new Error(`Job with ID ${jobId} has no results`);
+    }
+
+    return this.getFilteredResultForExport(
+      job.returnvalue as VariableAnalysisResultDto,
+      filter
+    );
+  }
+
+  private async getCachedResultForExport(
+    cacheKey: string,
+    filter: NormalizedVariableAnalysisFilter
+  ): Promise<VariableAnalysisResultDto | null> {
+    const cachedValue = await this.cacheService.get<
+    VariableAnalysisResultDto | VariableAnalysisResultCacheManifest
+    >(cacheKey);
+
+    if (!cachedValue) {
+      return null;
+    }
+
+    if (this.isVariableAnalysisResult(cachedValue)) {
+      return this.getFilteredResultForExport(cachedValue, filter);
+    }
+
+    if (!this.isChunkedResultManifest(cachedValue)) {
+      return null;
+    }
+
+    return this.getChunkedResultForExport(cacheKey, cachedValue, filter);
+  }
+
+  private async getChunkedResultForExport(
+    cacheKey: string,
+    manifest: VariableAnalysisResultCacheManifest,
+    filter: NormalizedVariableAnalysisFilter
+  ): Promise<VariableAnalysisResultDto | null> {
+    const variableCombos: VariableCombo[] = [];
+
+    for (let index = 0; index < manifest.variableComboChunks; index += 1) {
+      const chunk = await this.cacheService.get<VariableCombo[]>(
+        this.getVariableComboChunkKey(cacheKey, index)
+      );
+      if (!chunk) {
+        return null;
+      }
+
+      chunk.forEach(combo => {
+        if (this.matchesFilter(combo, filter)) {
+          variableCombos.push(combo);
+        }
+      });
+    }
+
+    const selectedComboKeys = new Set(
+      variableCombos.map(combo => this.getComboKey(combo))
+    );
+    const frequencies = await this.getFrequenciesForCombos(
+      cacheKey,
+      manifest,
+      selectedComboKeys
+    );
+    if (!frequencies) {
+      return null;
+    }
+
+    return {
+      variableCombos,
+      frequencies,
+      total: variableCombos.length
+    };
+  }
+
   private async getChunkedResultPage(
     cacheKey: string,
     manifest: VariableAnalysisResultCacheManifest,
@@ -486,6 +699,113 @@ export class VariableAnalysisService {
     };
   }
 
+  private getFilteredResultForExport(
+    result: VariableAnalysisResultDto,
+    filter: NormalizedVariableAnalysisFilter
+  ): VariableAnalysisResultDto {
+    const variableCombos = result.variableCombos.filter(combo => this.matchesFilter(combo, filter)
+    );
+    const selectedComboKeys = new Set(
+      variableCombos.map(combo => this.getComboKey(combo))
+    );
+    const frequencies: Record<string, VariableFrequencyDto[]> = {};
+
+    selectedComboKeys.forEach(comboKey => {
+      frequencies[comboKey] = result.frequencies[comboKey] || [];
+    });
+
+    return {
+      variableCombos,
+      frequencies,
+      total: variableCombos.length
+    };
+  }
+
+  private createExportRows(
+    result: VariableAnalysisResultDto
+  ): VariableAnalysisExportRow[] {
+    const rows: VariableAnalysisExportRow[] = [];
+
+    result.variableCombos.forEach(combo => {
+      const comboKey = this.getComboKey(combo);
+      const frequencies = result.frequencies[comboKey] || [];
+      const totalCount = combo.totalCount ?? this.sumCounts(frequencies);
+      const emptyCount = combo.emptyCount ?? this.sumCounts(
+        frequencies.filter(frequency => frequency.value === '')
+      );
+      const emptyPercentage = combo.emptyPercentage ??
+        this.calculatePercentage(emptyCount, totalCount);
+      const distinctValueCount =
+        combo.distinctValueCount ?? frequencies.length;
+      const hiddenValueCount = Math.max(
+        0,
+        distinctValueCount - frequencies.length
+      );
+      const statusSummary = this.formatStatusSummary(combo.statusCounts || []);
+
+      frequencies.forEach(frequency => {
+        rows.push({
+          unitId: combo.unitId,
+          unitName: combo.unitName,
+          variableId: combo.variableId,
+          value: frequency.value,
+          isEmptyValue: frequency.value === '' ? 'ja' : 'nein',
+          count: frequency.count,
+          percentage: this.roundPercentage(frequency.percentage),
+          totalCount,
+          emptyCount,
+          emptyPercentage: this.roundPercentage(emptyPercentage),
+          distinctValueCount,
+          hiddenValueCount,
+          statusSummary
+        });
+      });
+    });
+
+    return rows;
+  }
+
+  private toCsvExportRow(
+    row: VariableAnalysisExportRow
+  ): Record<string, VariableAnalysisExportCell> {
+    return VARIABLE_ANALYSIS_EXPORT_COLUMNS.reduce<
+    Record<string, VariableAnalysisExportCell>
+    >((csvRow, column) => {
+      const value = row[column.key];
+      csvRow[column.header] = typeof value === 'string' ?
+        this.sanitizeCsvText(value) :
+        value;
+      return csvRow;
+    }, {});
+  }
+
+  private sanitizeCsvText(value: string): string {
+    const normalized = value.replace(/[\r\n\t]+/g, ' ');
+    return /^\s*[=+\-@]/.test(normalized) ? `'${normalized}` : normalized;
+  }
+
+  private sumCounts(frequencies: VariableFrequencyDto[]): number {
+    return frequencies.reduce((sum, frequency) => sum + frequency.count, 0);
+  }
+
+  private calculatePercentage(count: number, total: number): number {
+    return total > 0 ? (count / total) * 100 : 0;
+  }
+
+  private roundPercentage(value: number): number {
+    return Math.round(value * 10) / 10;
+  }
+
+  private formatStatusSummary(
+    statusCounts: Array<{ status: number; count: number; percentage: number }>
+  ): string {
+    return statusCounts.map(statusCount => `${this.getStatusLabel(statusCount.status)}: ${statusCount.count} (${this.roundPercentage(statusCount.percentage)}%)`).join(', ');
+  }
+
+  private getStatusLabel(status: number): string {
+    return statusNumberToString(status) || status.toString();
+  }
+
   private normalizePagingOptions(options: {
     page?: number | string;
     pageSize?: number | string;
@@ -515,22 +835,39 @@ export class VariableAnalysisService {
     };
   }
 
+  private normalizeFilterOptions(options: {
+    search?: string;
+    onlyEmpty?: boolean | string;
+  }): NormalizedVariableAnalysisFilter {
+    return {
+      search: (options.search || '').trim().toLowerCase(),
+      onlyEmpty: options.onlyEmpty === true || options.onlyEmpty === 'true'
+    };
+  }
+
   private matchesPagingFilter(
     combo: VariableCombo,
     paging: NormalizedVariableAnalysisPaging
   ): boolean {
-    if (paging.search) {
+    return this.matchesFilter(combo, paging);
+  }
+
+  private matchesFilter(
+    combo: VariableCombo,
+    filter: NormalizedVariableAnalysisFilter
+  ): boolean {
+    if (filter.search) {
       const unitName = combo.unitName.toLowerCase();
       const variableId = combo.variableId.toLowerCase();
       if (
-        !unitName.includes(paging.search) &&
-        !variableId.includes(paging.search)
+        !unitName.includes(filter.search) &&
+        !variableId.includes(filter.search)
       ) {
         return false;
       }
     }
 
-    if (paging.onlyEmpty && (combo.emptyCount || 0) <= 0) {
+    if (filter.onlyEmpty && (combo.emptyCount || 0) <= 0) {
       return false;
     }
 

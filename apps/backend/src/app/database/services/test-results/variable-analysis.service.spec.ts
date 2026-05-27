@@ -1,4 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import * as ExcelJS from 'exceljs';
 import { VariableAnalysisService } from './variable-analysis.service';
 
 const createJob = (
@@ -278,6 +279,151 @@ describe('VariableAnalysisService', () => {
       pageSize: 1,
       totalPages: 1
     });
+  });
+
+  it('exports filtered chunked cached results as formula-safe CSV', async () => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(
+      createJob({
+        returnvalue: {
+          cacheKey: 'variable-analysis:1:job-1',
+          workspaceId: 1,
+          total: 2,
+          storage: 'chunked',
+          variableComboChunks: 1,
+          frequencyChunks: 1,
+          storedAt: '2026-05-26T00:00:00.000Z'
+        }
+      })
+    );
+    cacheService.get
+      .mockResolvedValueOnce({
+        storage: 'chunked',
+        workspaceId: 1,
+        total: 2,
+        variableComboChunks: 1,
+        frequencyChunks: 1,
+        storedAt: '2026-05-26T00:00:00.000Z'
+      })
+      .mockResolvedValueOnce([
+        {
+          unitId: 1,
+          unitName: '=UNIT',
+          variableId: '+VAR',
+          totalCount: 10,
+          emptyCount: 2,
+          emptyPercentage: 20,
+          distinctValueCount: 2,
+          statusCounts: [
+            { status: 3, count: 8, percentage: 80 },
+            { status: 8, count: 2, percentage: 20 }
+          ]
+        },
+        {
+          unitId: 2,
+          unitName: 'OTHER',
+          variableId: 'VAR_FULL',
+          totalCount: 5,
+          emptyCount: 0,
+          emptyPercentage: 0,
+          distinctValueCount: 1,
+          statusCounts: []
+        }
+      ])
+      .mockResolvedValueOnce([
+        [
+          '1:+VAR',
+          [
+            {
+              unitId: 1,
+              unitName: '=UNIT',
+              variableId: '+VAR',
+              value: '@value',
+              count: 8,
+              percentage: 80
+            },
+            {
+              unitId: 1,
+              unitName: '=UNIT',
+              variableId: '+VAR',
+              value: '',
+              count: 2,
+              percentage: 20
+            }
+          ]
+        ],
+        [
+          '2:VAR_FULL',
+          [
+            {
+              unitId: 2,
+              unitName: 'OTHER',
+              variableId: 'VAR_FULL',
+              value: 'x',
+              count: 5,
+              percentage: 100
+            }
+          ]
+        ]
+      ]);
+
+    const csv = await service.exportAnalysisResultsAsCsv('job-1', 1, {
+      search: '=UNIT',
+      onlyEmpty: true
+    });
+
+    expect(csv).toContain('Unit-ID;Unit-Name;Variablen-ID');
+    expect(csv).toContain(";'=UNIT;'+VAR;'@value;");
+    expect(csv).toContain('VALUE_CHANGED: 8 (80%)');
+    expect(csv).toContain('CODING_INCOMPLETE: 2 (20%)');
+    expect(csv).not.toContain('OTHER');
+  });
+
+  it('exports direct cached results as XLSX with typed numeric columns', async () => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(
+      createJob({
+        data: { workspaceId: 1 },
+        returnvalue: {
+          variableCombos: [
+            {
+              unitId: 1,
+              unitName: 'UNIT',
+              variableId: 'VAR',
+              totalCount: 10,
+              emptyCount: 1,
+              emptyPercentage: 10,
+              distinctValueCount: 1,
+              statusCounts: [{ status: 5, count: 10, percentage: 100 }]
+            }
+          ],
+          frequencies: {
+            '1:VAR': [
+              {
+                unitId: 1,
+                unitName: 'UNIT',
+                variableId: 'VAR',
+                value: '=kept-as-text',
+                count: 10,
+                percentage: 100
+              }
+            ]
+          },
+          total: 1
+        }
+      })
+    );
+
+    const xlsx = await service.exportAnalysisResultsAsXlsx('job-1', 1);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(xlsx);
+    const worksheet = workbook.getWorksheet('Antwortwerte');
+
+    expect(worksheet).toBeDefined();
+    expect(worksheet?.getRow(1).getCell(1).value).toBe('Unit-ID');
+    expect(worksheet?.getRow(2).getCell(2).value).toBe('UNIT');
+    expect(worksheet?.getRow(2).getCell(4).value).toBe('=kept-as-text');
+    expect(worksheet?.getRow(2).getCell(6).value).toBe(10);
+    expect(worksheet?.getRow(2).getCell(7).value).toBe(100);
+    expect(worksheet?.getColumn(7).numFmt).toBe('0.0');
   });
 
   it('lists, deletes and cancels jobs', async () => {

@@ -55,6 +55,11 @@ export interface VariableAnalysisResultPageOptions {
   onlyEmpty?: boolean;
 }
 
+export interface VariableAnalysisExportOptions {
+  search?: string;
+  onlyEmpty?: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -86,6 +91,36 @@ export class VariableAnalysisService {
       null,
       { headers: this.authHeader, params }
     );
+  }
+
+  exportAnalysisResultsAsCsv(
+    workspaceId: number,
+    jobId: number | string,
+    options: VariableAnalysisExportOptions = {}
+  ): Observable<Blob> {
+    return this.http.get(
+      `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/results/export/csv`,
+      {
+        headers: this.authHeader,
+        params: this.buildExportParams(options),
+        responseType: 'blob' as 'json'
+      }
+    ) as unknown as Observable<Blob>;
+  }
+
+  exportAnalysisResultsAsXlsx(
+    workspaceId: number,
+    jobId: number | string,
+    options: VariableAnalysisExportOptions = {}
+  ): Observable<Blob> {
+    return this.http.get(
+      `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/results/export/xlsx`,
+      {
+        headers: this.authHeader,
+        params: this.buildExportParams(options),
+        responseType: 'blob' as 'json'
+      }
+    ) as unknown as Observable<Blob>;
   }
 
   getAnalysisJob(
@@ -167,5 +202,21 @@ export class VariableAnalysisService {
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs`,
       { headers: this.authHeader }
     );
+  }
+
+  private buildExportParams(
+    options: VariableAnalysisExportOptions
+  ): HttpParams {
+    let params = new HttpParams();
+
+    if (options.search) {
+      params = params.set('search', options.search);
+    }
+
+    if (options.onlyEmpty) {
+      params = params.set('onlyEmpty', 'true');
+    }
+
+    return params;
   }
 }

@@ -120,6 +120,8 @@ interface VariableComboSummary {
   statusSummary: string;
 }
 
+type VariableAnalysisExportFormat = 'csv' | 'xlsx';
+
 @Component({
   selector: 'coding-box-variable-analysis-dialog',
   templateUrl: './variable-analysis-dialog.component.html',
@@ -203,6 +205,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   isStartingJob = false;
   private hasAutoStarted = false;
   isInitializing = false;
+  isExporting = false;
 
   constructor(
     public dialogRef: MatDialogRef<VariableAnalysisDialogComponent>,
@@ -881,6 +884,76 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.currentPage = 0;
     this.isUsingServerSideResults = true;
     this.loadAnalysisResultsPage(jobId, true);
+  }
+
+  canExportAnalysisResults(): boolean {
+    return Boolean(
+      this.currentAnalysisJobId &&
+        this.isUsingServerSideResults &&
+        !this.isLoading &&
+        !this.isExporting
+    );
+  }
+
+  downloadAnalysisResults(format: VariableAnalysisExportFormat): void {
+    const jobId = this.currentAnalysisJobId;
+    if (!jobId || this.isExporting) {
+      return;
+    }
+
+    this.isExporting = true;
+    const options = {
+      search: this.searchText.trim() || undefined,
+      onlyEmpty: this.onlyWithEmptyValues
+    };
+    const request = format === 'csv' ?
+      this.variableAnalysisService.exportAnalysisResultsAsCsv(
+        this.data.workspaceId,
+        jobId,
+        options
+      ) :
+      this.variableAnalysisService.exportAnalysisResultsAsXlsx(
+        this.data.workspaceId,
+        jobId,
+        options
+      );
+
+    request.subscribe({
+      next: blob => {
+        this.saveBlob(blob, this.createExportFileName(format));
+        this.isExporting = false;
+        this.snackBar.open(
+          this.translate.instant('variable-analysis.export-success'),
+          'OK',
+          { duration: 3000 }
+        );
+      },
+      error: error => {
+        this.isExporting = false;
+        const errorMessage = error?.error?.message || error?.message || '';
+        this.snackBar.open(
+          `${this.translate.instant('variable-analysis.export-error')}${errorMessage ? `: ${errorMessage}` : ''}`,
+          this.translate.instant('error'),
+          { duration: 5000 }
+        );
+      }
+    });
+  }
+
+  private createExportFileName(format: VariableAnalysisExportFormat): string {
+    const date = new Date().toISOString().slice(0, 10);
+    return `variable-analysis-${this.data.workspaceId}-${date}.${format}`;
+  }
+
+  private saveBlob(blob: Blob, fileName: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    window.URL.revokeObjectURL(url);
   }
 
   private loadAnalysisResultsPage(
