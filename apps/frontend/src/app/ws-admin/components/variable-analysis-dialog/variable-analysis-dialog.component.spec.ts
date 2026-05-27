@@ -86,6 +86,14 @@ describe('VariableAnalysisDialogComponent', () => {
       createAnalysisJob: jest.fn().mockReturnValue(of(mockJobs[0])),
       cancelJob: jest.fn().mockReturnValue(of({ success: true })),
       deleteJob: jest.fn().mockReturnValue(of({ success: true })),
+      exportAnalysisResultsAsCsv: jest.fn().mockReturnValue(
+        of(new Blob(['csv'], { type: 'text/csv' }))
+      ),
+      exportAnalysisResultsAsXlsx: jest.fn().mockReturnValue(
+        of(new Blob(['xlsx'], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }))
+      ),
       getAnalysisResults: jest
         .fn()
         .mockReturnValue(of({ variableCombos: [], frequencies: {}, total: 0 })),
@@ -342,5 +350,41 @@ describe('VariableAnalysisDialogComponent', () => {
       expect(firstDismiss).toHaveBeenCalled();
       expect(component.data.analysisResults?.total).not.toBe(1);
     }));
+  });
+
+  describe('downloadAnalysisResults', () => {
+    it('should export the current completed analysis with active filters', () => {
+      Object.defineProperty(window.URL, 'createObjectURL', {
+        value: jest.fn().mockReturnValue('blob:variable-analysis'),
+        writable: true
+      });
+      Object.defineProperty(window.URL, 'revokeObjectURL', {
+        value: jest.fn(),
+        writable: true
+      });
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(jest.fn());
+
+      component.viewJobResults(1);
+      component.searchText = 'VAR';
+      component.onlyWithEmptyValues = true;
+
+      expect(component.canExportAnalysisResults()).toBe(true);
+      component.downloadAnalysisResults('csv');
+
+      expect(
+        mockVariableAnalysisService.exportAnalysisResultsAsCsv
+      ).toHaveBeenCalledWith(1, 1, {
+        search: 'VAR',
+        onlyEmpty: true
+      });
+      expect(window.URL.createObjectURL).toHaveBeenCalled();
+      expect(window.URL.revokeObjectURL).toHaveBeenCalledWith(
+        'blob:variable-analysis'
+      );
+
+      clickSpy.mockRestore();
+    });
   });
 });
