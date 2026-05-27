@@ -154,6 +154,203 @@ describe('CodingResultsComparisonComponent', () => {
     expect(discussionHeader?.textContent).toContain('Manager: reichlej@gmx.de');
   });
 
+  it('should apply combined table filters for task, variable, person, agreement and notes', () => {
+    component.comparisonMode = 'between-trainings';
+    component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
+    component.selectedCodersFromTrainings = new Set(['1_101', '2_201']);
+    component.comparisonData = [
+      {
+        responseId: 1,
+        unitName: 'Unit A',
+        variableId: 'VAR_1',
+        testPerson: 'Test1',
+        personLogin: 'login-1',
+        personCode: 'Code1',
+        personGroup: 'Group A',
+        coders: [
+          {
+            trainingId: 1,
+            trainingLabel: 'Training 1',
+            coderId: 101,
+            coderName: 'Coder 101',
+            code: '1',
+            score: 1,
+            notes: null
+          },
+          {
+            trainingId: 2,
+            trainingLabel: 'Training 2',
+            coderId: 201,
+            coderName: 'Coder 201',
+            code: '1',
+            score: 1,
+            notes: null
+          }
+        ]
+      },
+      {
+        responseId: 2,
+        unitName: 'Unit A',
+        variableId: 'VAR_2',
+        testPerson: 'Test2',
+        personLogin: 'login-2',
+        personCode: 'Code2',
+        personGroup: 'Group A',
+        coders: [
+          {
+            trainingId: 1,
+            trainingLabel: 'Training 1',
+            coderId: 101,
+            coderName: 'Coder 101',
+            code: '1',
+            score: 1,
+            notes: 'Bitte besprechen'
+          },
+          {
+            trainingId: 2,
+            trainingLabel: 'Training 2',
+            coderId: 201,
+            coderName: 'Coder 201',
+            code: '2',
+            score: 0,
+            notes: null
+          }
+        ]
+      },
+      {
+        responseId: 3,
+        unitName: 'Unit B',
+        variableId: 'VAR_2',
+        testPerson: 'Test3',
+        personLogin: 'login-2',
+        personCode: 'Code3',
+        personGroup: 'Group B',
+        coders: [
+          {
+            trainingId: 1,
+            trainingLabel: 'Training 1',
+            coderId: 101,
+            coderName: 'Coder 101',
+            code: '1',
+            score: 1,
+            notes: 'Andere Aufgabe'
+          },
+          {
+            trainingId: 2,
+            trainingLabel: 'Training 2',
+            coderId: 201,
+            coderName: 'Coder 201',
+            code: '2',
+            score: 0,
+            notes: null
+          }
+        ]
+      }
+    ];
+    component.dataSource.data = component.comparisonData;
+
+    component.tableFilters = {
+      unitName: 'unit a',
+      variableId: 'var_2',
+      personLogin: 'LOGIN-2',
+      personGroup: 'group a',
+      match: 'differ',
+      notesMode: 'with-notes'
+    };
+    component.applyTableFilters();
+
+    expect(component.getFilteredRowsCount()).toBe(1);
+    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([2]);
+    expect(component.totalComparisons).toBe(1);
+    expect(component.matchingComparisons).toBe(0);
+  });
+
+  it('should distinguish rows without visible coder notes from rows with visible coder notes', () => {
+    component.comparisonMode = 'between-trainings';
+    component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
+    component.selectedCodersFromTrainings = new Set(['1_101', '2_201']);
+    component.comparisonData = [
+      {
+        responseId: 10,
+        unitName: 'Unit A',
+        variableId: 'VAR_1',
+        testPerson: 'Test1',
+        personLogin: 'login-1',
+        personCode: 'Code1',
+        personGroup: 'Group A',
+        coders: [
+          {
+            trainingId: 1,
+            trainingLabel: 'Training 1',
+            coderId: 101,
+            coderName: 'Visible Coder 1',
+            code: '1',
+            score: 1,
+            notes: null
+          },
+          {
+            trainingId: 2,
+            trainingLabel: 'Training 2',
+            coderId: 201,
+            coderName: 'Visible Coder 2',
+            code: '1',
+            score: 1,
+            notes: '   '
+          },
+          {
+            trainingId: 3,
+            trainingLabel: 'Training 3',
+            coderId: 301,
+            coderName: 'Hidden Coder',
+            code: '2',
+            score: 0,
+            notes: 'Notiz eines ausgeblendeten Kodierers'
+          }
+        ]
+      },
+      {
+        responseId: 11,
+        unitName: 'Unit A',
+        variableId: 'VAR_2',
+        testPerson: 'Test2',
+        personLogin: 'login-2',
+        personCode: 'Code2',
+        personGroup: 'Group A',
+        coders: [
+          {
+            trainingId: 1,
+            trainingLabel: 'Training 1',
+            coderId: 101,
+            coderName: 'Visible Coder 1',
+            code: '1',
+            score: 1,
+            notes: 'Sichtbare Notiz'
+          },
+          {
+            trainingId: 2,
+            trainingLabel: 'Training 2',
+            coderId: 201,
+            coderName: 'Visible Coder 2',
+            code: '2',
+            score: 0,
+            notes: null
+          }
+        ]
+      }
+    ];
+    component.dataSource.data = component.comparisonData;
+
+    component.tableFilters.notesMode = 'with-notes';
+    component.applyTableFilters();
+
+    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([11]);
+
+    component.tableFilters.notesMode = 'none';
+    component.applyTableFilters();
+
+    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([10]);
+  });
+
   it('should initialize discussion values from automatic agreement but not from replay code fallback', () => {
     (component as unknown as {
       initDiscussionValues: (data: Array<{
