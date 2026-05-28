@@ -49,4 +49,16 @@ describe('JobDefinitionRefreshDialogComponent', () => {
       }
     ]);
   });
+
+  it('exposes newly available cases as a positive refresh preview stat', () => {
+    const component = createComponent({ addedCases: 3 });
+
+    expect(component.getCaseStats()).toEqual(expect.arrayContaining([
+      {
+        labelKey: 'coding-job-definitions.refresh-dialog.stats.added-cases',
+        value: 3,
+        tone: 'positive'
+      }
+    ]));
+  });
 });
