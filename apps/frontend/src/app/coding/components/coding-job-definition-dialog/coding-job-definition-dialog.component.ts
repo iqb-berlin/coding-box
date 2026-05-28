@@ -38,7 +38,10 @@ import {
   Variable
 } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
-import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import {
+  CodingJobBackendService,
+  ManualCodingScopeSummary
+} from '../../services/coding-job-backend.service';
 import { DistributedCodingService } from '../../services/distributed-coding.service';
 import { AppService } from '../../../core/services/app.service';
 import { CoderService } from '../../services/coder.service';
@@ -188,6 +191,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private disabledVariableKeys = new Set<string>();
   private baseAvailableCasesByVariable = new Map<string, number>();
   existingJobDefinitions: JobDefinition[] = [];
+  manualCodingScopeSummary: ManualCodingScopeSummary | null = null;
 
   constructor(
     public dialogRef: MatDialogRef<CodingJobDefinitionDialogComponent>,
@@ -423,6 +427,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     if (this.data.preloadedVariables && !forceReload && !unitNameFilter && trainingRequired === undefined) {
       this.variables = this.data.preloadedVariables;
+      this.loadManualCodingScopeSummary(undefined, undefined);
       this.snapshotBaseAvailability(this.variables);
       this.applyJobDefinitionUsage();
       this.applyAvailabilityFilter();
@@ -438,6 +443,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.loadManualCodingScopeSummary(unitNameFilter || undefined, trainingRequired);
     this.codingJobBackendService.getCodingIncompleteVariables(
       workspaceId,
       unitNameFilter || undefined,
@@ -454,6 +460,30 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.isLoadingVariableAnalysis = false;
+      }
+    });
+  }
+
+  private loadManualCodingScopeSummary(
+    unitNameFilter?: string,
+    trainingRequired?: boolean
+  ): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.manualCodingScopeSummary = null;
+      return;
+    }
+
+    this.codingJobBackendService.getManualCodingScopeSummary(
+      workspaceId,
+      unitNameFilter,
+      trainingRequired
+    ).subscribe({
+      next: summary => {
+        this.manualCodingScopeSummary = summary;
+      },
+      error: () => {
+        this.manualCodingScopeSummary = null;
       }
     });
   }

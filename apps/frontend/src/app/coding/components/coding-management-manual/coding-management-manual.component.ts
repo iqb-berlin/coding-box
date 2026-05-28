@@ -66,7 +66,8 @@ import { AppService } from '../../../core/services/app.service';
 import {
   ApplyCodingResultsResponse,
   BulkApplyCodingResultsResponse,
-  CodingJobBackendService
+  CodingJobBackendService,
+  ManualCodingScopeSummary
 } from '../../services/coding-job-backend.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import {
@@ -243,6 +244,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         }>;
       }>;
     };
+    statusTotalVariables?: number;
+    coveredSourceVariableCount?: number;
+    coveredSourceResponseCount?: number;
   } | null = null;
 
   caseCoverageOverview: CaseCoverageOverview | null = null;
@@ -275,6 +279,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     availableCases?: number;
     uniqueCasesAfterAggregation?: number;
   }[] = [];
+
+  manualCodingScopeSummary: ManualCodingScopeSummary | null = null;
 
   statusDistribution: { [status: string]: number } = {};
   statusDistributionV2: { [status: string]: number } = {};
@@ -1768,6 +1774,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               }>;
             }>;
           };
+          statusTotalVariables?: number;
+          coveredSourceVariableCount?: number;
+          coveredSourceResponseCount?: number;
         } | null) => {
           this.variableCoverageOverview = overview;
         },
@@ -1871,6 +1880,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         error: () => {
           this.codingIncompleteVariables = [];
           this.loadAppliedResultsOverview();
+        }
+      });
+
+    this.codingJobBackendService
+      .getManualCodingScopeSummary(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: summary => {
+          this.manualCodingScopeSummary = summary;
+        },
+        error: () => {
+          this.manualCodingScopeSummary = null;
         }
       });
   }

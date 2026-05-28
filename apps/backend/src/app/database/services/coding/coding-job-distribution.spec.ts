@@ -221,7 +221,7 @@ describe('CodingJobService distribution from job definitions', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v4:5');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v5:5');
     expect(result.distribution).toEqual(preview.distribution);
     expect(result.doubleCodingInfo).toEqual(preview.doubleCodingInfo);
     expect(result.jobsCreated).toBe(createdJobCalls.length);

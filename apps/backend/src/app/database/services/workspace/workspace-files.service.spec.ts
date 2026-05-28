@@ -1,6 +1,7 @@
 import { ConsoleLogger, Logger } from '@nestjs/common';
 import { WorkspaceFilesService } from './workspace-files.service';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
+import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 
 describe('WorkspaceFilesService.handleFile', () => {
   beforeAll(() => {
@@ -588,12 +589,22 @@ describe('WorkspaceFilesService.downloadWorkspaceFilesAsZip', () => {
 
 describe('WorkspaceFilesService.getUnitVariableDetails', () => {
   type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+  const cacheStore = new Map<string, unknown>();
 
   const unitXml = `
     <Unit>
       <Metadata><Id>UnitA</Id></Metadata>
       <BaseVariables>
-        <Variable id="B1" alias="base_alias" type="string" />
+        <Variable id="B1" alias="base_alias" type="string" multiple="1" nullable="false">
+          <Values complete="1">
+            <Value><label>Alpha</label><value>A</value></Value>
+            <Value><label>Beta</label><value>B</value></Value>
+          </Values>
+          <ValuePositionLabels>
+            <ValuePositionLabel>First option</ValuePositionLabel>
+            <ValuePositionLabel>Second option</ValuePositionLabel>
+          </ValuePositionLabels>
+        </Variable>
         <Variable alias="derived_alias" type="integer" />
       </BaseVariables>
       <DerivedVariables>
@@ -617,7 +628,16 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
         alias: 'derived_alias',
         sourceType: 'MANUAL',
         type: 'integer',
+        deriveSources: ['B1'],
         codes: [{ id: 1, label: 'Code 1', score: 1 }]
+      },
+      {
+        id: 'DX',
+        alias: 'xml_derived_alias',
+        sourceType: 'MANUAL',
+        type: 'boolean',
+        deriveSources: ['base_alias'],
+        codes: []
       },
       {
         id: 'S1',
@@ -657,6 +677,17 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
   const mockFileUploadRepository = {
     find: jest.fn()
   };
+  const mockCacheService = {
+    get: jest.fn((key: string) => Promise.resolve(cacheStore.get(key) || null)),
+    set: jest.fn((key: string, value: unknown) => {
+      cacheStore.set(key, value);
+      return Promise.resolve(true);
+    }),
+    delete: jest.fn((key: string) => {
+      cacheStore.delete(key);
+      return Promise.resolve(true);
+    })
+  };
 
   function makeService(): WorkspaceFilesService {
     return new WorkspaceFilesService(
@@ -670,13 +701,14 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
       {} as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
-      { delete: jest.fn() } as unknown as CtorParams[10],
+      mockCacheService as unknown as CtorParams[10],
       { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
     );
   }
 
   beforeEach(() => {
     jest.clearAllMocks();
+    cacheStore.clear();
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
@@ -705,7 +737,15 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
     expect(baseVariable).toMatchObject({
       id: 'B1',
       alias: 'base_alias',
-      isDerived: false
+      isDerived: false,
+      multiple: true,
+      nullable: false,
+      valuesComplete: true,
+      values: [
+        { value: 'A', label: 'Alpha' },
+        { value: 'B', label: 'Beta' }
+      ],
+      valuePositionLabels: ['First option', 'Second option']
     });
     expect(derivedFromScheme).toMatchObject({
       id: 'D1',
@@ -735,5 +775,23 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
       isDerived: true
     });
     expect(excludedVariable).toBeUndefined();
+  });
+
+  it('should resolve derived variable source mappings from deriveSources', async () => {
+    const service = makeService();
+
+    const sourceMap = await service.getDerivedVariablesBySourceMap(1);
+
+    expect(sourceMap.get(getManualCodingScopeKey('UnitA', 'base_alias')))
+      .toEqual(new Set(['derived_alias', 'xml_derived_alias']));
+    expect(mockCacheService.set).toHaveBeenCalledWith(
+      'workspace_files:derived_variables_by_source:1',
+      {
+        [getManualCodingScopeKey('UnitA', 'base_alias')]: [
+          'derived_alias',
+          'xml_derived_alias'
+        ]
+      }
+    );
   });
 });

@@ -121,6 +121,9 @@ export interface CaseCoverageOverview {
   aggregationActive: boolean;
   aggregationThreshold: number | null;
   aggregatedDuplicateCases: number;
+  statusTotalCasesToCode?: number;
+  coveredSourceVariableCount?: number;
+  coveredSourceResponseCount?: number;
 }
 
 export interface CodingProgressOverview {
@@ -133,6 +136,9 @@ export interface CodingProgressOverview {
   aggregationActive: boolean;
   aggregationThreshold: number | null;
   aggregatedDuplicateCases: number;
+  statusTotalCasesToCode?: number;
+  coveredSourceVariableCount?: number;
+  coveredSourceResponseCount?: number;
 }
 
 export interface AppliedResultsOverview {
@@ -146,6 +152,9 @@ export interface AppliedResultsOverview {
   aggregationActive: boolean;
   aggregationThreshold: number | null;
   aggregatedDuplicateCases: number;
+  statusTotalIncompleteResponses?: number;
+  coveredSourceVariableCount?: number;
+  coveredSourceResponseCount?: number;
 }
 
 @Injectable({
@@ -783,6 +792,9 @@ export class TestPersonCodingService {
         }>;
       }>;
     };
+    statusTotalVariables?: number;
+    coveredSourceVariableCount?: number;
+    coveredSourceResponseCount?: number;
   }> {
     return this.http
       .get<{
@@ -809,6 +821,9 @@ export class TestPersonCodingService {
           }>;
         }>;
       };
+      statusTotalVariables?: number;
+      coveredSourceVariableCount?: number;
+      coveredSourceResponseCount?: number;
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/variable-coverage-overview`,
       { headers: this.authHeader }
@@ -831,7 +846,10 @@ export class TestPersonCodingService {
             pending_review: [],
             approved: [],
             conflicted: []
-          }
+          },
+          statusTotalVariables: 0,
+          coveredSourceVariableCount: 0,
+          coveredSourceResponseCount: 0
         }))
       );
   }
@@ -856,7 +874,10 @@ export class TestPersonCodingService {
           rawCoveragePercentage: 0,
           aggregationActive: false,
           aggregationThreshold: null,
-          aggregatedDuplicateCases: 0
+          aggregatedDuplicateCases: 0,
+          statusTotalCasesToCode: 0,
+          coveredSourceVariableCount: 0,
+          coveredSourceResponseCount: 0
         }))
       );
   }

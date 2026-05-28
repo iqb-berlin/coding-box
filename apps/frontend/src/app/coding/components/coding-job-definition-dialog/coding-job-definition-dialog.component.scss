@@ -342,6 +342,24 @@
   }
 }
 
+.manual-scope-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-left: 4px solid #1976d2;
+  border-radius: 4px;
+  background-color: #e3f2fd;
+  color: rgba(0, 0, 0, 0.87);
+  line-height: 1.4;
+
+  mat-icon {
+    color: #1976d2;
+    flex: 0 0 auto;
+  }
+}
+
 .coders-tab-content {
   padding: 16px 0;
 

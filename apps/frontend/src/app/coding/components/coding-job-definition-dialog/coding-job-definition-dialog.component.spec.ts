@@ -92,6 +92,13 @@ describe('CodingJobDefinitionDialogComponent', () => {
         }
       ])),
       getCodingIncompleteVariables: jest.fn().mockImplementation(() => of(cloneVariables())),
+      getManualCodingScopeSummary: jest.fn().mockReturnValue(of({
+        manualVariableCount: cloneVariables().length,
+        manualResponseCount: 18,
+        coveredSourceVariableCount: 0,
+        coveredSourceResponseCount: 0,
+        coveredSourceVariables: []
+      })),
       getVariableBundles: jest.fn().mockImplementation(() => of(cloneBundles())),
       updateCodingJob: jest.fn(),
       createJobDefinition: jest.fn(),

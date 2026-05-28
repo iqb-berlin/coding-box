@@ -601,6 +601,18 @@
               </table>
             </div>
 
+            <div *ngIf="manualCodingScopeSummary && manualCodingScopeSummary.coveredSourceResponseCount > 0"
+              class="manual-scope-note">
+              <mat-icon>info_outline</mat-icon>
+              <span>
+                {{ 'coding-management-manual.manual-scope-note' | translate:{
+                  statusResponseCount: manualCodingScopeSummary.manualResponseCount + manualCodingScopeSummary.coveredSourceResponseCount,
+                  responseCount: manualCodingScopeSummary.coveredSourceResponseCount,
+                  variableCount: manualCodingScopeSummary.coveredSourceVariableCount
+                } }}
+              </span>
+            </div>
+
             <div *ngIf="codingProgressOverview.aggregationActive" class="aggregation-note">
               <mat-icon>filter_alt</mat-icon>
               <span>

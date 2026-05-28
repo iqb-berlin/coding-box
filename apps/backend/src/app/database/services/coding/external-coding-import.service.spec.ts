@@ -102,7 +102,7 @@ describe('ExternalCodingImportService', () => {
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v4:17');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v5:17');
   });
 
   it('rolls back and fails the import when manual freshness cannot be finalized', async () => {

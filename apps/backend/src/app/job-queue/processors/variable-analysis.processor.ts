@@ -25,11 +25,39 @@ interface SchemaCodeInfo {
   order: number;
 }
 
+interface VariableAnalysisMetadata {
+  multiple: boolean;
+  categoryDefinitions: SchemaCodeInfo[];
+  valuesByPosition: SchemaCodeInfo[];
+}
+
 interface SchemaValueCountRow {
   unitId: string | number;
   variableId: string;
   value: string | null;
   count: string | number;
+}
+
+interface MultipleResponseRow {
+  responseId: string | number;
+  unitId: string | number;
+  unitName: string;
+  variableId: string;
+  value: string | null;
+}
+
+interface ParsedMultipleCategory {
+  value: string;
+  label?: string;
+  score?: number;
+  schemaOrder?: number;
+}
+
+interface MultipleResponseSummary {
+  totalCount: number;
+  emptyCount: number;
+  counts: Map<string, number>;
+  categories: Map<string, ParsedMultipleCategory>;
 }
 
 @Processor('variable-analysis')
@@ -40,6 +68,8 @@ export class VariableAnalysisProcessor {
   private readonly MAX_VALUE_PREVIEW_LENGTH = 500;
   private readonly RESULT_CACHE_TTL_SECONDS = 86400;
   private readonly RESULT_CACHE_CHUNK_SIZE = 100;
+  private readonly MULTIPLE_RESPONSE_COMBO_CHUNK_SIZE = 100;
+  private readonly MULTIPLE_RESPONSE_ROW_BATCH_SIZE = 5000;
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -123,9 +153,12 @@ export class VariableAnalysisProcessor {
         comboByKey.set(comboKey, combo);
         frequencies[comboKey] = [];
       });
-      const schemaCodesByComboKey = await this.getSchemaCodesByComboKey(
+      const metadataByComboKey = await this.getVariableMetadataByComboKey(
         workspaceId,
         variableCombos
+      );
+      const categoryDefinitionsByComboKey = this.getCategoryDefinitionsByComboKey(
+        metadataByComboKey
       );
 
       await job.progress(25);
@@ -217,6 +250,14 @@ export class VariableAnalysisProcessor {
         }
       }
 
+      const multipleObservedCountsByComboKey =
+        await this.recalculateMultipleVariableFrequencies(
+          query,
+          variableCombos,
+          frequencies,
+          metadataByComboKey
+        );
+
       variableCombos.forEach(combo => {
         const comboKey = `${combo.unitId}:${combo.variableId}`;
         const totalResponses = combo.totalCount || 0;
@@ -231,7 +272,8 @@ export class VariableAnalysisProcessor {
         query,
         variableCombos,
         frequencies,
-        schemaCodesByComboKey
+        categoryDefinitionsByComboKey,
+        multipleObservedCountsByComboKey
       );
 
       await job.progress(70);
@@ -402,14 +444,14 @@ export class VariableAnalysisProcessor {
     return `${value}... [truncated ${valueLength} chars, md5:${valueHash || 'unknown'}]`;
   }
 
-  private async getSchemaCodesByComboKey(
+  private async getVariableMetadataByComboKey(
     workspaceId: number,
     variableCombos: VariableCombo[]
-  ): Promise<Map<string, SchemaCodeInfo[]>> {
-    const schemaCodesByComboKey = new Map<string, SchemaCodeInfo[]>();
+  ): Promise<Map<string, VariableAnalysisMetadata>> {
+    const metadataByComboKey = new Map<string, VariableAnalysisMetadata>();
 
     if (variableCombos.length === 0) {
-      return schemaCodesByComboKey;
+      return metadataByComboKey;
     }
 
     try {
@@ -431,12 +473,12 @@ export class VariableAnalysisProcessor {
         const variable = details.variables.find(
           item => item.id === combo.variableId || item.alias === combo.variableId
         );
-        if (!variable?.codes?.length) {
+        if (!variable) {
           return;
         }
 
         const seenValues = new Set<string>();
-        const schemaCodes = variable.codes.reduce<SchemaCodeInfo[]>(
+        const categoryDefinitions = (variable.codes || []).reduce<SchemaCodeInfo[]>(
           (items, code) => {
             const value = String(code.id);
             if (seenValues.has(value)) {
@@ -454,12 +496,57 @@ export class VariableAnalysisProcessor {
           []
         );
 
-        if (schemaCodes.length > 0) {
-          schemaCodesByComboKey.set(
-            `${combo.unitId}:${combo.variableId}`,
-            schemaCodes
-          );
-        }
+        (variable.values || []).forEach(valueInfo => {
+          const value = String(valueInfo.value);
+          if (seenValues.has(value)) {
+            return;
+          }
+          seenValues.add(value);
+          categoryDefinitions.push({
+            value,
+            label: valueInfo.label,
+            order: categoryDefinitions.length
+          });
+        });
+
+        const variableValues = variable.values || [];
+        const valuePositionLabels = variable.valuePositionLabels || [];
+        const positionCount = Math.max(
+          variableValues.length,
+          valuePositionLabels.length
+        );
+        const valuesByPosition: SchemaCodeInfo[] = [];
+        Array.from({ length: positionCount }).forEach((_, index) => {
+          const variableValue = variableValues[index]?.value;
+          const label =
+            valuePositionLabels[index] ||
+            variableValues[index]?.label ||
+            String(variableValue ?? index + 1);
+          valuesByPosition.push({
+            value: variableValue !== undefined ?
+              String(variableValue) :
+              String(index + 1),
+            label,
+            order: index
+          });
+        });
+
+        valuesByPosition.forEach(positionValue => {
+          if (seenValues.has(positionValue.value)) {
+            return;
+          }
+          seenValues.add(positionValue.value);
+          categoryDefinitions.push({
+            ...positionValue,
+            order: categoryDefinitions.length
+          });
+        });
+
+        metadataByComboKey.set(`${combo.unitId}:${combo.variableId}`, {
+          multiple: variable.multiple === true,
+          categoryDefinitions,
+          valuesByPosition
+        });
       });
     } catch (error) {
       this.logger.warn(
@@ -467,14 +554,313 @@ export class VariableAnalysisProcessor {
       );
     }
 
-    return schemaCodesByComboKey;
+    return metadataByComboKey;
+  }
+
+  private getCategoryDefinitionsByComboKey(
+    metadataByComboKey: Map<string, VariableAnalysisMetadata>
+  ): Map<string, SchemaCodeInfo[]> {
+    const categoryDefinitionsByComboKey = new Map<string, SchemaCodeInfo[]>();
+
+    metadataByComboKey.forEach((metadata, comboKey) => {
+      if (metadata.categoryDefinitions.length > 0) {
+        categoryDefinitionsByComboKey.set(
+          comboKey,
+          metadata.categoryDefinitions
+        );
+      }
+    });
+
+    return categoryDefinitionsByComboKey;
+  }
+
+  private async recalculateMultipleVariableFrequencies(
+    query: SelectQueryBuilder<ResponseEntity>,
+    variableCombos: VariableCombo[],
+    frequencies: Record<string, VariableFrequencyDto[]>,
+    metadataByComboKey: Map<string, VariableAnalysisMetadata>
+  ): Promise<Map<string, Map<string, number>>> {
+    const multipleCombos = variableCombos.filter(combo => {
+      const comboKey = `${combo.unitId}:${combo.variableId}`;
+      return Boolean(metadataByComboKey.get(comboKey)?.multiple);
+    });
+    const observedCountsByComboKey = new Map<string, Map<string, number>>();
+
+    if (multipleCombos.length === 0) {
+      return observedCountsByComboKey;
+    }
+
+    const summariesByComboKey = new Map<string, MultipleResponseSummary>();
+
+    multipleCombos.forEach(combo => {
+      const comboKey = `${combo.unitId}:${combo.variableId}`;
+      summariesByComboKey.set(comboKey, {
+        totalCount: 0,
+        emptyCount: 0,
+        counts: new Map<string, number>(),
+        categories: new Map<string, ParsedMultipleCategory>()
+      });
+    });
+
+    for (
+      let index = 0;
+      index < multipleCombos.length;
+      index += this.MULTIPLE_RESPONSE_COMBO_CHUNK_SIZE
+    ) {
+      const comboChunk = multipleCombos.slice(
+        index,
+        index + this.MULTIPLE_RESPONSE_COMBO_CHUNK_SIZE
+      );
+      let lastResponseId: string | number = 0;
+      let hasMoreRows = true;
+
+      while (hasMoreRows) {
+        const responseRows: MultipleResponseRow[] = await query.clone()
+          .select('response.id', 'responseId')
+          .addSelect('unit.id', 'unitId')
+          .addSelect('unit.name', 'unitName')
+          .addSelect('response.variableid', 'variableId')
+          .addSelect('response.value', 'value')
+          .andWhere('response.id > :multipleLastResponseId', {
+            multipleLastResponseId: lastResponseId
+          })
+          .andWhere(new Brackets(qb => {
+            comboChunk.forEach((combo, comboIndex) => {
+              const params = {
+                [`multipleUnitId${comboIndex}`]: combo.unitId,
+                [`multipleVariableId${comboIndex}`]: combo.variableId
+              };
+              const condition =
+                `unit.id = :multipleUnitId${comboIndex} ` +
+                `AND response.variableid = :multipleVariableId${comboIndex}`;
+
+              if (comboIndex === 0) {
+                qb.where(condition, params);
+              } else {
+                qb.orWhere(condition, params);
+              }
+            });
+          }))
+          .orderBy('response.id', 'ASC')
+          .limit(this.MULTIPLE_RESPONSE_ROW_BATCH_SIZE)
+          .getRawMany();
+
+        responseRows.forEach(row => this.addMultipleResponseRowToSummary(
+          row,
+          metadataByComboKey,
+          summariesByComboKey
+        ));
+
+        const lastRow = responseRows[responseRows.length - 1];
+        const nextLastResponseId = lastRow?.responseId;
+        const hasNextLastResponseId =
+          nextLastResponseId !== undefined && nextLastResponseId !== null;
+
+        if (hasNextLastResponseId) {
+          lastResponseId = nextLastResponseId;
+        }
+
+        hasMoreRows =
+          responseRows.length === this.MULTIPLE_RESPONSE_ROW_BATCH_SIZE &&
+          hasNextLastResponseId;
+      }
+    }
+
+    multipleCombos.forEach(combo => {
+      const comboKey = `${combo.unitId}:${combo.variableId}`;
+      const summary = summariesByComboKey.get(comboKey);
+
+      if (!summary) {
+        return;
+      }
+
+      combo.totalCount = summary.totalCount;
+      combo.emptyCount = summary.emptyCount;
+      combo.distinctValueCount = summary.counts.size;
+      observedCountsByComboKey.set(comboKey, summary.counts);
+
+      const sortedValues = Array.from(summary.counts.entries())
+        .sort(([valueA, countA], [valueB, countB]) => {
+          if (countA !== countB) {
+            return countB - countA;
+          }
+          return valueA.localeCompare(valueB);
+        })
+        .slice(0, this.MAX_VALUES_PER_VARIABLE);
+
+      frequencies[comboKey] = sortedValues.map(([value, count]) => {
+        const category = summary.categories.get(value);
+        return {
+          unitId: combo.unitId,
+          unitName: combo.unitName,
+          variableId: combo.variableId,
+          value,
+          label: category?.label,
+          score: category?.score,
+          schemaOrder: category?.schemaOrder,
+          count,
+          percentage: 0
+        };
+      });
+    });
+
+    return observedCountsByComboKey;
+  }
+
+  private addMultipleResponseRowToSummary(
+    row: MultipleResponseRow,
+    metadataByComboKey: Map<string, VariableAnalysisMetadata>,
+    summariesByComboKey: Map<string, MultipleResponseSummary>
+  ): void {
+    const comboKey = `${Number(row.unitId)}:${row.variableId}`;
+    const metadata = metadataByComboKey.get(comboKey);
+    const summary = summariesByComboKey.get(comboKey);
+
+    if (!metadata || !summary) {
+      return;
+    }
+
+    summary.totalCount += 1;
+    const categories = this.parseMultipleResponseCategories(
+      row.value,
+      metadata
+    );
+
+    if (categories.length === 0) {
+      summary.emptyCount += 1;
+      return;
+    }
+
+    const uniqueCategories = new Map<string, ParsedMultipleCategory>();
+    categories.forEach(category => {
+      if (!uniqueCategories.has(category.value)) {
+        uniqueCategories.set(category.value, category);
+      }
+    });
+
+    uniqueCategories.forEach(category => {
+      summary.counts.set(
+        category.value,
+        (summary.counts.get(category.value) || 0) + 1
+      );
+      summary.categories.set(category.value, category);
+    });
+  }
+
+  private parseMultipleResponseCategories(
+    rawValue: string | null,
+    metadata: VariableAnalysisMetadata
+  ): ParsedMultipleCategory[] {
+    const value = rawValue || '';
+    const trimmedValue = value.trim();
+
+    if (this.isEmptyStoredValue(trimmedValue)) {
+      return [];
+    }
+
+    try {
+      const parsedValue = JSON.parse(trimmedValue);
+
+      if (Array.isArray(parsedValue)) {
+        return this.parseMultipleArrayValue(parsedValue, metadata);
+      }
+
+      return this.valueToCategory(parsedValue, metadata);
+    } catch {
+      return this.valueToCategory(trimmedValue, metadata);
+    }
+  }
+
+  private parseMultipleArrayValue(
+    value: unknown[],
+    metadata: VariableAnalysisMetadata
+  ): ParsedMultipleCategory[] {
+    if (value.length === 0) {
+      return [];
+    }
+
+    if (value.every(item => typeof item === 'boolean')) {
+      return value.flatMap((item, index) => {
+        if (item === true) {
+          return [this.positionToCategory(index, metadata)];
+        }
+
+        return [];
+      });
+    }
+
+    return value.flatMap(item => this.valueToCategory(item, metadata));
+  }
+
+  private positionToCategory(
+    index: number,
+    metadata: VariableAnalysisMetadata
+  ): ParsedMultipleCategory {
+    const positionValue = metadata.valuesByPosition[index];
+    const fallbackValue = String(index + 1);
+    const value = positionValue?.value || fallbackValue;
+
+    return {
+      value,
+      label: positionValue?.label || this.getCategoryDefinition(value, metadata)?.label,
+      score: positionValue?.score ?? this.getCategoryDefinition(value, metadata)?.score,
+      schemaOrder: positionValue?.order ?? this.getCategoryDefinition(value, metadata)?.order
+    };
+  }
+
+  private valueToCategory(
+    value: unknown,
+    metadata: VariableAnalysisMetadata
+  ): ParsedMultipleCategory[] {
+    if (value === null || value === undefined) {
+      return [];
+    }
+
+    const normalizedValue = typeof value === 'object' ?
+      JSON.stringify(value) :
+      String(value);
+
+    if (this.isEmptyStoredValue(normalizedValue.trim())) {
+      return [];
+    }
+
+    const definition = this.getCategoryDefinition(normalizedValue, metadata);
+
+    return [{
+      value: this.formatDirectValuePreview(normalizedValue),
+      label: definition?.label,
+      score: definition?.score,
+      schemaOrder: definition?.order
+    }];
+  }
+
+  private getCategoryDefinition(
+    value: string,
+    metadata: VariableAnalysisMetadata
+  ): SchemaCodeInfo | undefined {
+    return metadata.categoryDefinitions.find(
+      definition => definition.value === value
+    );
+  }
+
+  private isEmptyStoredValue(value: string): boolean {
+    return value === '' || value.toLowerCase() === 'null';
+  }
+
+  private formatDirectValuePreview(value: string): string {
+    if (value.length <= this.MAX_VALUE_PREVIEW_LENGTH) {
+      return value;
+    }
+
+    return `${value.slice(0, this.MAX_VALUE_PREVIEW_LENGTH)}... [truncated ${value.length} chars]`;
   }
 
   private async addSchemaCodeFrequencies(
     query: SelectQueryBuilder<ResponseEntity>,
     variableCombos: VariableCombo[],
     frequencies: Record<string, VariableFrequencyDto[]>,
-    schemaCodesByComboKey: Map<string, SchemaCodeInfo[]>
+    schemaCodesByComboKey: Map<string, SchemaCodeInfo[]>,
+    observedCountsOverrideByComboKey = new Map<string, Map<string, number>>()
   ): Promise<void> {
     if (schemaCodesByComboKey.size === 0) {
       return;
@@ -496,7 +882,9 @@ export class VariableAnalysisProcessor {
       const rows = frequencies[comboKey] || [];
       const rowsByValue = new Map(rows.map(row => [row.value, row]));
       const observedCountsForCombo =
-        observedSchemaCounts.get(comboKey) || new Map<string, number>();
+        observedCountsOverrideByComboKey.get(comboKey) ||
+        observedSchemaCounts.get(comboKey) ||
+        new Map<string, number>();
       const totalResponses = combo.totalCount || 0;
 
       schemaCodes.forEach(schemaCode => {

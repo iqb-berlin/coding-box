@@ -2919,7 +2919,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           );
 
           this.dialog.open(VariableAnalysisDialogComponent, {
-            width: '900px',
+            width: 'min(96vw, 1320px)',
+            maxWidth: '96vw',
             data: {
               unitId: this.selectedUnit?.id,
               title: 'Antwortwertanalyse',
