@@ -112,8 +112,11 @@
         <mat-icon class="warning-icon" color="warn"
           [matTooltip]="'coding-management.statistics.missing-schemas' | translate">warning</mat-icon>
         } @else {
-        {{ 'coding-management.statistics.responses-with-status' | translate:{status: mapStatusToString(Number(status))}
-        }}
+        <span [matTooltip]="getStatusTooltipKey(status) | translate"
+          [matTooltipDisabled]="!getStatusTooltipKey(status)">
+          {{ 'coding-management.statistics.responses-with-status' | translate:{status: mapStatusToString(status)}
+          }}
+        </span>
         }
       </span>
       <span class="statistic-value">

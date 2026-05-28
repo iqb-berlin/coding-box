@@ -69,6 +69,11 @@ describe('ResponseFiltersComponent', () => {
     expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
   });
 
+  it('should keep DERIVE_ERROR as the visible status label', () => {
+    expect(component.mapStatusToString('4')).toBe('DERIVE_ERROR');
+    expect(component.mapStatusToString('4abc')).toBe('4abc');
+  });
+
   it('should switch GeoGebra searches from all to base responses', () => {
     jest.spyOn(component.filterChange, 'emit');
 

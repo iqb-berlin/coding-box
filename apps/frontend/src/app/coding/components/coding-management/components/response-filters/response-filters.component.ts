@@ -15,8 +15,8 @@ import { MatButton } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIcon } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
-import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { FilterParams } from '../../../../services/coding-management.service';
+import { getResponseStatusLabel } from '../../../../../shared/utils/response-status-metadata.util';
 
 @Component({
   selector: 'app-response-filters',
@@ -65,10 +65,6 @@ export class ResponseFiltersComponent implements OnDestroy {
     { value: 'derived' as const, label: 'coding-management.filters.response-source-derived' }
   ];
 
-  private responseStatusMap = new Map(
-    responseStatesNumericMap.map(entry => [entry.key, entry.value])
-  );
-
   ngOnDestroy(): void {
     this.clearFilterTimer();
   }
@@ -105,10 +101,6 @@ export class ResponseFiltersComponent implements OnDestroy {
   }
 
   mapStatusToString(status: string): string {
-    const statusNumber = parseInt(status, 10);
-    if (Number.isNaN(statusNumber)) {
-      return status;
-    }
-    return this.responseStatusMap.get(statusNumber) || status;
+    return getResponseStatusLabel(status) || status;
   }
 }

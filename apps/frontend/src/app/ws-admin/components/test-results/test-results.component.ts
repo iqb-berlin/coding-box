@@ -73,6 +73,7 @@ import { ValidationService } from '../../../shared/services/validation/validatio
 import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { UnitService } from '../../../shared/services/unit/unit.service';
+import { getResponseStatusTooltipKey } from '../../../shared/utils/response-status-metadata.util';
 import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
 import {
   AppliedResultsOverview,
@@ -290,11 +291,6 @@ string,
     numeric: 3,
     description:
       'Dieser Status zeigt an, dass eine Interaktion stattgefunden hat und also der Wert (Value) auszuwerten ist. Bei abgeleiteten Variablen zeigt dieser Status eine erfolgreiche Ableitung an.'
-  },
-  DERIVE_ERROR: {
-    numeric: 4,
-    description:
-      'Dieser Status zeigt an, dass eine Ableitung fehlgeschlagen ist. Dies kann sich beispielsweise auf einen Typkonflikt (numerisch, Text) beziehen und ist in den meisten Fällen über eine Anpassung des Kodierschemas korrigierbar. Der Status bezieht sich allerdings nicht darauf, ob die zugrundeliegenden Variablen einen unzureichenden Status haben, sondern es geht um technische Fehler beim Ableitungsprozess.'
   },
   CODING_COMPLETE: {
     numeric: 5,
@@ -1827,6 +1823,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   getResponseStatusTooltip(status: string): string {
+    const sharedTooltipKey = getResponseStatusTooltipKey(status);
+    if (sharedTooltipKey) {
+      return this.translateService.instant(sharedTooltipKey);
+    }
+
     const info = RESPONSE_STATUS_INFO[status];
     if (!info) {
       return status;

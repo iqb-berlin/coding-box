@@ -213,6 +213,11 @@ describe('TestResultsComponent', () => {
           'second-autocoding-waits-help': 'Der Start von Auto-Coding 2 bleibt bis dahin gesperrt. {{taskResultHelp}}',
           'second-autocoding-waits-chip': '{{version}}: {{count}} wartet'
         }
+      },
+      'response-status': {
+        tooltips: {
+          DERIVE_ERROR: 'DERIVE_ERROR bedeutet: Ableitung/Solver fehlgeschlagen, z. B. Typkonflikt im Kodierschema. Keine inhaltlich falsche Antwort.'
+        }
       }
     });
     translateService.use('de');
@@ -240,6 +245,11 @@ describe('TestResultsComponent', () => {
   it('should hide log quality when disabled by workspace setting', () => {
     expect(component.showTestResultsLogAnomalies).toBe(false);
     expect(fixture.nativeElement.textContent).not.toContain('Log-Qualität');
+  });
+
+  it('should use centralized DERIVE_ERROR tooltip text', () => {
+    expect(component.getResponseStatusTooltip('DERIVE_ERROR'))
+      .toBe('DERIVE_ERROR bedeutet: Ableitung/Solver fehlgeschlagen, z. B. Typkonflikt im Kodierschema. Keine inhaltlich falsche Antwort.');
   });
 
   it('should show log quality when enabled by workspace setting', () => {
