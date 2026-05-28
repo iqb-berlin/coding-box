@@ -670,6 +670,63 @@ describe('CodingFreshnessService', () => {
     );
   });
 
+  it('marks newly imported responses in existing units as RESULT_ADDED', async () => {
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([{ revision: 9 }])
+      .mockResolvedValueOnce({});
+
+    const importedResponsesQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([
+        { responseId: '100', unitId: '10' },
+        { responseId: '101', unitId: '10' },
+        { responseId: '102', unitId: '20' }
+      ])
+    });
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: true, v2: false, v3: true })
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(importedResponsesQb)
+      .mockReturnValueOnce(workspacePresenceQb);
+
+    await service.markResponsesPendingAfterImport(1, [100, 101, 102, 100, -1]);
+
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v1',
+          state: 'PENDING',
+          reason: 'RESULT_ADDED',
+          affected_response_count: 2,
+          source_revision: 9
+        }),
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v3',
+          state: 'PENDING',
+          reason: 'RESULT_ADDED',
+          affected_response_count: 2,
+          source_revision: 9
+        }),
+        expect.objectContaining({
+          unit_id: 20,
+          version: 'v1',
+          state: 'PENDING',
+          reason: 'RESULT_ADDED',
+          affected_response_count: 1,
+          source_revision: 9
+        })
+      ]),
+      ['workspace_id', 'unit_id', 'version']
+    );
+    expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('response.id = ANY($2::int[])'),
+      [1, [100, 101, 102], 'stale_source', 'RESULT_ADDED']
+    );
+  });
+
   it('blocks the second auto-coding run when auto-coding 1 has not run yet', async () => {
     const workspacePresenceQb = queryBuilder({
       getRawOne: jest.fn().mockResolvedValue({ v1: false, v2: false, v3: false })

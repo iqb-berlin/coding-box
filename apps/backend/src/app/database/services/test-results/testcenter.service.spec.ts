@@ -69,6 +69,7 @@ describe('TestCenterService', () => {
           provide: CodingFreshnessService,
           useValue: createMock<CodingFreshnessService>({
             markUnitsPendingAfterImport: jest.fn().mockResolvedValue(undefined),
+            markResponsesPendingAfterImport: jest.fn().mockResolvedValue(undefined),
             markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined),
             getSummary: jest.fn().mockResolvedValue({
               workspaceId: 123,
