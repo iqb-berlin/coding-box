@@ -69,6 +69,9 @@ export class CodeSelectorComponent implements OnChanges {
   selectedCode: number | null = null;
   selectedCodingIssueOption: number | null = null;
   variableManualInstruction: string | null = null;
+  legacySelectedCode: SelectableItem | null = null;
+  private allRegularCodeItems: SelectableItem[] = [];
+  private hasResolvedCodingScheme = false;
   constructor(private sanitizer: DomSanitizer, private translateService: TranslateService, private elementRef: ElementRef) { }
 
   @HostListener('document:click', ['$event'])
@@ -90,7 +93,10 @@ export class CodeSelectorComponent implements OnChanges {
   private loadCodes(): void {
     if (!this.codingScheme || !this.variableId) {
       this.selectableItems = [];
+      this.allRegularCodeItems = [];
+      this.hasResolvedCodingScheme = false;
       this.variableManualInstruction = null;
+      this.legacySelectedCode = null;
       return;
     }
 
@@ -100,19 +106,23 @@ export class CodeSelectorComponent implements OnChanges {
         scheme = JSON.parse(this.codingScheme);
       } catch (e) {
         this.selectableItems = [];
+        this.allRegularCodeItems = [];
+        this.hasResolvedCodingScheme = false;
+        this.variableManualInstruction = null;
+        this.legacySelectedCode = null;
         return;
       }
     } else {
       scheme = this.codingScheme;
     }
+    this.hasResolvedCodingScheme = true;
 
     const variableCoding = scheme.variableCodings.find(
       (v: VariableCoding) => v.alias === this.variableId || v.id === this.variableId
     );
     if (variableCoding) {
       this.variableManualInstruction = variableCoding.manualInstruction || null;
-      const codeItems: SelectableItem[] = variableCoding.codes
-        .filter((code: Code) => hasManualInstruction(code))
+      this.allRegularCodeItems = variableCoding.codes
         .map((code: Code) => ({
           id: code.id,
           label: code.label,
@@ -121,6 +131,8 @@ export class CodeSelectorComponent implements OnChanges {
           manualInstruction: code.manualInstruction,
           originalCode: code
         }));
+      const codeItems: SelectableItem[] = this.allRegularCodeItems
+        .filter((code: SelectableItem) => hasManualInstruction(code));
 
       const codingIssueOptions: SelectableItem[] = [
         {
@@ -149,15 +161,19 @@ export class CodeSelectorComponent implements OnChanges {
       setTimeout(() => this.selectPreSelectedCode(), 0);
     } else {
       this.selectableItems = [];
+      this.allRegularCodeItems = [];
       this.variableManualInstruction = null;
+      this.legacySelectedCode = null;
+      setTimeout(() => this.selectPreSelectedCode(), 0);
     }
   }
 
   private selectPreSelectedCode(): void {
     this.selectedCode = null;
     this.selectedCodingIssueOption = null;
+    this.legacySelectedCode = null;
 
-    if (this.selectableItems.length === 0) {
+    if (this.selectableItems.length === 0 && !this.hasResolvedCodingScheme) {
       return;
     }
 
@@ -169,6 +185,11 @@ export class CodeSelectorComponent implements OnChanges {
         } else {
           this.selectedCode = this.preSelectedCodeId;
         }
+      } else {
+        const legacyCodeInScheme = this.allRegularCodeItems.find(
+          item => item.id === this.preSelectedCodeId && !hasManualInstruction(item)
+        );
+        this.legacySelectedCode = legacyCodeInScheme || this.createMissingLegacyCode(this.preSelectedCodeId);
       }
     }
 
@@ -179,6 +200,7 @@ export class CodeSelectorComponent implements OnChanges {
         // Clear regular code selection when pre-selecting -3 or -4
         if (this.preSelectedCodingIssueOptionId === -3 || this.preSelectedCodingIssueOptionId === -4) {
           this.selectedCode = null;
+          this.legacySelectedCode = null;
         }
       }
     }
@@ -186,6 +208,20 @@ export class CodeSelectorComponent implements OnChanges {
 
   getSafeHtml(instructions: string): string {
     return this.sanitizer.sanitize(SecurityContext.HTML, instructions) || '';
+  }
+
+  private createMissingLegacyCode(codeId: number): SelectableItem {
+    return {
+      id: codeId,
+      label: '',
+      type: 'missingLegacyCode'
+    };
+  }
+
+  get legacyCodeNoteTranslationKey(): string {
+    return this.legacySelectedCode?.type === 'missingLegacyCode' ?
+      'code-selector.legacy-code-missing-note' :
+      'code-selector.legacy-code-note';
   }
 
   private createCodeOrCodingIssueOption(item: SelectableItem): Code | CodingIssueDto {
@@ -213,12 +249,14 @@ export class CodeSelectorComponent implements OnChanges {
 
     if (selectedItem.type === 'codingIssueOption') {
       this.selectedCodingIssueOption = codeId;
+      this.legacySelectedCode = null;
       // Clear regular code selection when selecting -3 or -4
       if (codeId === -3 || codeId === -4) {
         this.selectedCode = null;
       }
     } else {
       this.selectedCode = codeId;
+      this.legacySelectedCode = null;
     }
     const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
       this.selectableItems.find(item => item.id === this.selectedCode)!
@@ -246,13 +284,16 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   private hasCurrentSelection(): boolean {
-    return this.selectedCode !== null || this.selectedCodingIssueOption !== null;
+    return this.selectedCode !== null ||
+      this.selectedCodingIssueOption !== null ||
+      this.legacySelectedCode !== null;
   }
 
   deselectAll(): void {
     if (this.isReadOnly) return;
     this.selectedCode = null;
     this.selectedCodingIssueOption = null;
+    this.legacySelectedCode = null;
     this.codeSelected.emit({
       variableId: this.variableId,
       code: null,

@@ -89,10 +89,21 @@
   }
 
   <div class="codes-section">
-    <div *ngIf="regularCodes.length; else noCodes">
+    <div *ngIf="regularCodes.length || legacySelectedCode; else noCodes">
       <div class="code-list scrollable-codes">
         <div class="code-row general-instruction-row" *ngIf="!suppressGeneralInstructions && variableManualInstruction">
           <div class="code-instruction" [innerHTML]="getSafeHtml(variableManualInstruction)"></div>
+        </div>
+        <div class="code-row selected read-only legacy-code-row" *ngIf="legacySelectedCode">
+          <div class="code-content">
+            <span class="code-info">
+              <span class="legacy-code-prefix">{{ 'code-selector.legacy-code-label' | translate }}</span>
+              <span class="code-id">{{ legacySelectedCode.id }}</span>
+              <span class="code-score" *ngIf="showScore && legacySelectedCode.score !== undefined">{{
+                'code-selector.score-label' | translate }} {{ legacySelectedCode.score }}</span>
+            </span>
+          </div>
+          <div class="legacy-code-note">{{ legacyCodeNoteTranslationKey | translate }}</div>
         </div>
         <div class="code-row" [class.selected]="item.id === selectedCode"
           [class.read-only]="isReadOnly || isRegularSelectionDisabled" *ngFor="let item of regularCodes;"
