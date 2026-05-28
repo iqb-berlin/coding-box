@@ -89,43 +89,41 @@
   }
 
   <div class="codes-section">
-    <div *ngIf="regularCodes.length || legacySelectedCode; else noCodes">
-      <div class="code-list scrollable-codes">
-        <div class="code-row general-instruction-row" *ngIf="!suppressGeneralInstructions && variableManualInstruction">
-          <div class="code-instruction" [innerHTML]="getSafeHtml(variableManualInstruction)"></div>
+    <div class="code-list scrollable-codes" *ngIf="hasVariableManualInstruction || regularCodes.length || legacySelectedCode">
+      <div class="code-row general-instruction-row" *ngIf="hasVariableManualInstruction">
+        <div class="code-instruction" [innerHTML]="getSafeHtml(variableManualInstruction || '')"></div>
+      </div>
+      <div class="code-row selected read-only legacy-code-row" *ngIf="legacySelectedCode">
+        <div class="code-content">
+          <span class="code-info">
+            <span class="legacy-code-prefix">{{ 'code-selector.legacy-code-label' | translate }}</span>
+            <span class="code-id">{{ legacySelectedCode.id }}</span>
+            <span class="code-score" *ngIf="showScore && legacySelectedCode.score !== undefined">{{
+              'code-selector.score-label' | translate }} {{ legacySelectedCode.score }}</span>
+          </span>
         </div>
-        <div class="code-row selected read-only legacy-code-row" *ngIf="legacySelectedCode">
-          <div class="code-content">
-            <span class="code-info">
-              <span class="legacy-code-prefix">{{ 'code-selector.legacy-code-label' | translate }}</span>
-              <span class="code-id">{{ legacySelectedCode.id }}</span>
-              <span class="code-score" *ngIf="showScore && legacySelectedCode.score !== undefined">{{
-                'code-selector.score-label' | translate }} {{ legacySelectedCode.score }}</span>
-            </span>
-          </div>
-          <div class="legacy-code-note">{{ legacyCodeNoteTranslationKey | translate }}</div>
-        </div>
-        <div class="code-row" [class.selected]="item.id === selectedCode"
-          [class.read-only]="isReadOnly || isRegularSelectionDisabled" *ngFor="let item of regularCodes;"
-          [style.cursor]="(isReadOnly || isRegularSelectionDisabled) ? 'not-allowed' : 'pointer'"
-          (click)="(isReadOnly || isRegularSelectionDisabled) ? null : onSelect(item.id)">
+        <div class="legacy-code-note">{{ legacyCodeNoteTranslationKey | translate }}</div>
+      </div>
+      <div class="code-row" [class.selected]="item.id === selectedCode"
+        [class.read-only]="isReadOnly || isRegularSelectionDisabled" *ngFor="let item of regularCodes;"
+        [style.cursor]="(isReadOnly || isRegularSelectionDisabled) ? 'not-allowed' : 'pointer'"
+        (click)="(isReadOnly || isRegularSelectionDisabled) ? null : onSelect(item.id)">
 
-          <div class="code-content">
-            <span class="code-info">
-              <span class="code-id">{{ item.id }}</span>
-              <span class="code-score" *ngIf="showScore && item.score !== undefined">{{ 'code-selector.score-label' |
-                translate }} {{ item.score }}</span>
-            </span>
-          </div>
-          <div class="code-instruction" *ngIf="item.manualInstruction"
-            [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
+        <div class="code-content">
+          <span class="code-info">
+            <span class="code-id">{{ item.id }}</span>
+            <span class="code-score" *ngIf="showScore && item.score !== undefined">{{ 'code-selector.score-label' |
+              translate }} {{ item.score }}</span>
+          </span>
         </div>
+        <div class="code-instruction" *ngIf="item.manualInstruction"
+          [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
       </div>
     </div>
 
-    <ng-template #noCodes>
+    <div *ngIf="!regularCodes.length && !legacySelectedCode">
       <div class="hint">{{ 'code-selector.no-codes-found' | translate }} {{ variableId }}.</div>
-    </ng-template>
+    </div>
   </div>
 
   <div class="uncertain-codes-section fixed-section">
