@@ -197,6 +197,79 @@ describe('VariableAnalysisDialogComponent', () => {
       expect(component.variableCombos.length).toBe(1);
       expect(component.variableCombos[0].variableId).toBe('VAR1');
     }));
+
+    it('should render filtered analysis table rows', fakeAsync(() => {
+      const getAnalysisTableText = (): string => (
+        fixture.nativeElement.querySelector('.analysis-table')?.textContent || ''
+      );
+
+      component.data.analysisResults = undefined;
+      component.analyzeVariables();
+      fixture.detectChanges();
+      let tableText = getAnalysisTableText();
+
+      expect(tableText).toContain('VAR1');
+      expect(tableText).toContain('Val1');
+
+      component.onSearchChange({
+        target: { value: 'VAR2' }
+      } as unknown as Event);
+      tick(300);
+      fixture.detectChanges();
+      tableText = getAnalysisTableText();
+
+      expect(component.analysisRows.map(row => row.variableId)).toEqual([
+        'VAR2'
+      ]);
+      expect(tableText).toContain('VAR2');
+      expect(tableText).toContain('Val2');
+      expect(tableText).not.toContain('VAR1');
+    }));
+
+    it('should keep rows with missing labels last when sorting descending', () => {
+      component.data.analysisResults = {
+        variableCombos: [
+          { unitId: 10, unitName: 'Unit 10', variableId: 'VAR1' }
+        ],
+        frequencies: {
+          '10:VAR1': [
+            {
+              unitId: 10,
+              variableId: 'VAR1',
+              value: 'missing',
+              count: 1,
+              percentage: 33.3
+            },
+            {
+              unitId: 10,
+              variableId: 'VAR1',
+              value: 'alpha',
+              label: 'Alpha',
+              count: 1,
+              percentage: 33.3
+            },
+            {
+              unitId: 10,
+              variableId: 'VAR1',
+              value: 'beta',
+              label: 'Beta',
+              count: 1,
+              percentage: 33.3
+            }
+          ]
+        },
+        total: 1
+      };
+
+      component.analyzeVariables();
+      component.onSortChange({ active: 'label', direction: 'desc' });
+
+      expect(component.analysisRows.map(row => row.value)).toEqual([
+        'beta',
+        'alpha',
+        'missing'
+      ]);
+    });
   });
 
   describe('empty state', () => {
@@ -316,9 +389,59 @@ describe('VariableAnalysisDialogComponent', () => {
         pageSize: 50,
         search: '',
         onlyEmpty: false,
-        includeSchemaCodes: false
+        includeSchemaCodes: false,
+        sortBy: 'unitName',
+        sortDirection: 'asc'
       });
       expect(analyzeSpy).toHaveBeenCalled();
+    });
+
+    it('uses the pageable row total for server-side pagination limits', () => {
+      mockVariableAnalysisService.getAnalysisResultsPage.mockReturnValue(
+        of({
+          variableCombos: [],
+          frequencies: {},
+          total: 25,
+          unfilteredTotal: 25,
+          rows: [
+            {
+              unitId: 1,
+              unitName: 'Unit 1',
+              variableId: 'VAR1',
+              value: 'A',
+              count: 10,
+              percentage: 100,
+              totalCount: 10,
+              emptyCount: 0,
+              emptyPercentage: 0,
+              distinctValueCount: 1,
+              hiddenValueCount: 0,
+              statusSummary: ''
+            }
+          ],
+          rowTotal: 1000,
+          pageableRowTotal: 100,
+          maxPage: 2,
+          page: 1,
+          pageSize: 50,
+          totalPages: 2
+        })
+      );
+
+      component.viewJobResults(1);
+      fixture.detectChanges();
+
+      expect(component.getTotalFilteredVariables()).toBe(100);
+      expect(component.hasLimitedPageableRows()).toBe(true);
+      expect(component.getPageableRowLimitInfoParams()).toEqual({
+        pageable: 100,
+        total: 1000,
+        maxPage: 2
+      });
+      expect(
+        fixture.nativeElement.querySelector('.page-window-message')
+      ).not.toBeNull();
+      expect(component.currentPage).toBe(0);
     });
 
     it('reloads server-side results when schema code visibility changes', () => {
@@ -335,7 +458,30 @@ describe('VariableAnalysisDialogComponent', () => {
         pageSize: 50,
         search: '',
         onlyEmpty: false,
-        includeSchemaCodes: true
+        includeSchemaCodes: true,
+        sortBy: 'unitName',
+        sortDirection: 'asc'
+      });
+    });
+
+    it('reloads server-side results when sorting changes', () => {
+      component.viewJobResults(1);
+      mockVariableAnalysisService.getAnalysisResultsPage.mockClear();
+
+      component.onSortChange({ active: 'count', direction: 'desc' });
+
+      expect(component.sortBy).toBe('count');
+      expect(component.sortDirection).toBe('desc');
+      expect(
+        mockVariableAnalysisService.getAnalysisResultsPage
+      ).toHaveBeenCalledWith(1, 1, {
+        page: 1,
+        pageSize: 50,
+        search: '',
+        onlyEmpty: false,
+        includeSchemaCodes: false,
+        sortBy: 'count',
+        sortDirection: 'desc'
       });
     });
 
