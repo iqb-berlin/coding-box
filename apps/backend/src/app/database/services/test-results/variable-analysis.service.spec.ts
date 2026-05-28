@@ -698,6 +698,87 @@ describe('VariableAnalysisService', () => {
     });
   });
 
+  it('keeps chunked variables visible when default schema filtering leaves no frequency rows', async () => {
+    const manifest = {
+      storage: 'chunked',
+      workspaceId: 1,
+      total: 1,
+      variableComboChunks: 1,
+      frequencyChunks: 1,
+      storedAt: '2026-05-26T00:00:00.000Z'
+    };
+    const variableCombos = [
+      {
+        unitId: 1,
+        unitName: 'UNIT',
+        variableId: 'MISSING',
+        totalCount: 0,
+        emptyCount: 0,
+        emptyPercentage: 0,
+        distinctValueCount: 0,
+        statusCounts: []
+      }
+    ];
+    const frequencyChunks = [
+      [
+        '1:MISSING',
+        [
+          {
+            unitId: 1,
+            unitName: 'UNIT',
+            variableId: 'MISSING',
+            value: 'Z',
+            label: 'Zed',
+            schemaOrder: 0,
+            isSchemaOnly: true,
+            isSchemaSupplemental: true,
+            count: 0,
+            percentage: 0
+          }
+        ]
+      ]
+    ];
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(
+      createJob({
+        returnvalue: manifest
+      })
+    );
+    cacheService.get
+      .mockResolvedValueOnce(manifest)
+      .mockResolvedValueOnce(variableCombos)
+      .mockResolvedValueOnce(frequencyChunks);
+
+    const page = await service.getAnalysisResultsPage('job-1', 1, {
+      page: 1,
+      pageSize: 10
+    });
+
+    expect(page).toMatchObject({
+      variableCombos: [expect.objectContaining({ variableId: 'MISSING' })],
+      frequencies: {
+        '1:MISSING': [
+          expect.objectContaining({
+            value: '',
+            count: 0,
+            percentage: 0,
+            isSchemaOnly: true
+          })
+        ]
+      },
+      total: 1,
+      rowTotal: 1,
+      rows: [
+        expect.objectContaining({
+          unitName: 'UNIT',
+          variableId: 'MISSING',
+          value: '',
+          count: 0,
+          totalCount: 0
+        })
+      ]
+    });
+  });
+
   it('exports filtered chunked cached results as formula-safe CSV', async () => {
     jobQueueService.getVariableAnalysisJob.mockResolvedValue(
       createJob({
@@ -793,6 +874,64 @@ describe('VariableAnalysisService', () => {
     expect(csv).toContain('VALUE_CHANGED: 8 (80%)');
     expect(csv).toContain('CODING_INCOMPLETE: 2 (20%)');
     expect(csv).not.toContain('OTHER');
+  });
+
+  it('exports variables without visible frequency rows as zero-count rows', async () => {
+    const manifest = {
+      storage: 'chunked',
+      workspaceId: 1,
+      total: 1,
+      variableComboChunks: 1,
+      frequencyChunks: 1,
+      storedAt: '2026-05-26T00:00:00.000Z'
+    };
+    const variableCombos = [
+      {
+        unitId: 1,
+        unitName: 'UNIT',
+        variableId: 'MISSING',
+        totalCount: 0,
+        emptyCount: 0,
+        emptyPercentage: 0,
+        distinctValueCount: 0,
+        statusCounts: []
+      }
+    ];
+    const frequencyChunks = [
+      [
+        '1:MISSING',
+        [
+          {
+            unitId: 1,
+            unitName: 'UNIT',
+            variableId: 'MISSING',
+            value: 'Z',
+            label: 'Zed',
+            schemaOrder: 0,
+            isSchemaOnly: true,
+            isSchemaSupplemental: true,
+            count: 0,
+            percentage: 0
+          }
+        ]
+      ]
+    ];
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(
+      createJob({
+        returnvalue: manifest
+      })
+    );
+    cacheService.get
+      .mockResolvedValueOnce(manifest)
+      .mockResolvedValueOnce(variableCombos)
+      .mockResolvedValueOnce(frequencyChunks);
+
+    const csv = await service.exportAnalysisResultsAsCsv('job-1', 1);
+    const dataLine = csv.split(/\r?\n/).find(line => line.includes('MISSING'));
+
+    expect(dataLine).toBeDefined();
+    expect(dataLine).toContain('1;UNIT;MISSING;');
+    expect(dataLine).toContain(';ja;0;0;0;0;0;0;0;');
   });
 
   it('exports direct cached results as XLSX with typed numeric columns', async () => {
