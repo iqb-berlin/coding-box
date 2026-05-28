@@ -116,4 +116,54 @@ describe('CodebookGenerator', () => {
     expect(Array.isArray(codeInfos)).toBe(true);
     expect(codeInfos.length).toBeGreaterThan(0);
   });
+
+  it('filters codes without manual instructions in manual codebooks without closed variables', () => {
+    const generator = CodebookGenerator as unknown as Record<string, (...args: unknown[]) => unknown>;
+
+    const codeInfos = generator.getCodes(
+      [
+        manualCode,
+        { ...manualCode, id: 2, manualInstruction: '' },
+        { ...manualCode, id: 3, manualInstruction: '   ' }
+      ],
+      { ...contentSetting, hasOnlyManualCoding: true, hasClosedVars: false }
+    ) as { id: string; description: string }[];
+
+    expect(codeInfos).toHaveLength(1);
+    expect(codeInfos[0]).toMatchObject({
+      id: '1',
+      description: '<p>manual</p>'
+    });
+  });
+
+  it('keeps codes without manual instructions when closed variables are included', () => {
+    const generator = CodebookGenerator as unknown as Record<string, (...args: unknown[]) => unknown>;
+
+    const codeInfos = generator.getCodes(
+      [
+        manualCode,
+        { ...manualCode, id: 2, manualInstruction: '' },
+        { ...manualCode, id: 3, manualInstruction: '   ' }
+      ],
+      { ...contentSetting, hasOnlyManualCoding: true, hasClosedVars: true }
+    ) as { id: string; description: string }[];
+
+    expect(codeInfos.map(codeInfo => codeInfo.id)).toEqual(['1', '2', '3']);
+  });
+
+  it('treats whitespace-only manual instructions as missing for variable filtering', () => {
+    const generator = CodebookGenerator as unknown as Record<string, (...args: unknown[]) => unknown>;
+    const whitespaceManualVariable = {
+      ...variableCoding,
+      codes: [{ ...manualCode, manualInstruction: '   ' }]
+    };
+
+    expect(generator.isManual(whitespaceManualVariable)).toBe(false);
+    expect(generator.isManualWithoutClosed(whitespaceManualVariable)).toBe(false);
+    expect(generator.getManualOrClosedCodedBookVariable(
+      { ...contentSetting, hasOnlyManualCoding: true, hasClosedVars: false },
+      [],
+      whitespaceManualVariable
+    )).toBeNull();
+  });
 });
