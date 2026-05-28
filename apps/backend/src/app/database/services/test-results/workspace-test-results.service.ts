@@ -1563,9 +1563,13 @@ export class WorkspaceTestResultsService {
     await this.codingStatisticsService?.invalidateCache(workspaceId);
   }
 
+  async invalidateCodingAvailabilityCache(workspaceId: number): Promise<void> {
+    await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
+  }
+
   private async invalidateCachesAfterTestResultDeletion(workspaceId: number): Promise<void> {
     await Promise.all([
-      this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId),
+      this.invalidateCodingAvailabilityCache(workspaceId),
       this.invalidateWorkspaceStatsCache(workspaceId),
       this.invalidateCodingStatisticsCache(workspaceId)
     ]);
