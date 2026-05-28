@@ -301,6 +301,19 @@ export class VariableAnalysisController {
     required: false,
     description: 'Include coding scheme codes that are not part of the default top values'
   })
+  @ApiQuery({
+    name: 'sortBy',
+    type: String,
+    required: false,
+    description:
+      'Sort column for table rows: unitName, variableId, value, label, score, count, percentage, totalCount, emptyCount, emptyPercentage, statusSummary'
+  })
+  @ApiQuery({
+    name: 'sortDirection',
+    type: String,
+    required: false,
+    description: 'Sort direction: asc or desc'
+  })
   @ApiOkResponse({
     description:
       'The variable analysis result page has been successfully retrieved.',
@@ -319,7 +332,9 @@ export class VariableAnalysisController {
       @Query('pageSize') pageSize?: string,
       @Query('search') search?: string,
       @Query('onlyEmpty') onlyEmpty?: string,
-      @Query('includeSchemaCodes') includeSchemaCodes?: string
+      @Query('includeSchemaCodes') includeSchemaCodes?: string,
+      @Query('sortBy') sortBy?: string,
+      @Query('sortDirection') sortDirection?: string
   ): Promise<VariableAnalysisResultPageDto> {
     try {
       return await this.variableAnalysisService.getAnalysisResultsPage(
@@ -330,7 +345,9 @@ export class VariableAnalysisController {
           pageSize,
           search,
           onlyEmpty,
-          includeSchemaCodes
+          includeSchemaCodes,
+          sortBy,
+          sortDirection
         }
       );
     } catch (error) {
