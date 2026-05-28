@@ -50,6 +50,11 @@ type FreshnessScopeRow = {
   affectedResponseCount: string;
 };
 
+type ImportedResponseScopeRow = {
+  responseId: string;
+  unitId: string;
+};
+
 type DeleteImpactRow = {
   affectedUnits: string;
   autoCodingV1: string;
@@ -338,6 +343,45 @@ export class CodingFreshnessService {
     await this.markCodingJobsStaleForAddedUnitIds(
       workspaceId,
       ids,
+      'RESULT_ADDED',
+      'stale_source'
+    );
+  }
+
+  async markResponsesPendingAfterImport(
+    workspaceId: number,
+    responseIds: number[]
+  ): Promise<void> {
+    const responseIdsByUnit = await this.getImportedResponseIdsByUnit(
+      workspaceId,
+      responseIds
+    );
+    const unitIds = Array.from(responseIdsByUnit.keys());
+    if (unitIds.length === 0) {
+      return;
+    }
+
+    const revision = await this.incrementRevision(workspaceId);
+    const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
+    const rows: FreshnessUpsert[] = [];
+
+    this.getAutoCodingVersionsToRefresh(workspacePresence).forEach(version => {
+      unitIds.forEach(unitId => rows.push(this.buildRow(
+        workspaceId,
+        unitId,
+        version,
+        'PENDING',
+        'RESULT_ADDED',
+        responseIdsByUnit.get(unitId)?.length || 0,
+        revision,
+        null
+      )));
+    });
+
+    await this.upsertRows(rows);
+    await this.markCodingJobsStaleForAddedResponseIds(
+      workspaceId,
+      Array.from(responseIdsByUnit.values()).flat(),
       'RESULT_ADDED',
       'stale_source'
     );
@@ -1057,6 +1101,103 @@ export class CodingFreshnessService {
     );
   }
 
+  private async markCodingJobsStaleForAddedResponseIds(
+    workspaceId: number,
+    responseIds: number[],
+    reason: Extract<CodingFreshnessReason, 'RESULT_ADDED'>,
+    status: Exclude<CodingJobFreshnessStatus, 'current'> = 'stale_source'
+  ): Promise<void> {
+    const ids = this.uniquePositiveIds(responseIds);
+    if (ids.length === 0) {
+      return;
+    }
+
+    await this.connection.query(
+      `
+        WITH added_responses AS (
+          SELECT
+            response.id AS response_id,
+            unit.name AS unit_name,
+            response.variableid AS variable_id,
+            CONCAT_WS('|', person.login, COALESCE(bookletinfo.name, ''), unit.name) AS unit_key
+          FROM response
+          INNER JOIN unit ON unit.id = response.unitid
+          INNER JOIN booklet ON booklet.id = unit.bookletid
+          LEFT JOIN bookletinfo ON bookletinfo.id = booklet.infoid
+          INNER JOIN persons person ON person.id = booklet.personid
+          WHERE person.workspace_id = $1
+            AND person.consider = true
+            AND response.id = ANY($2::int[])
+            AND response.is_autocoder_generated IS NOT TRUE
+        ),
+        matched_job_responses AS (
+          SELECT
+            coding_job.id AS coding_job_id,
+            added_responses.unit_key,
+            added_responses.response_id
+          FROM added_responses
+          INNER JOIN coding_job_variable
+            ON coding_job_variable.unit_name = added_responses.unit_name
+            AND coding_job_variable.variable_id = added_responses.variable_id
+          INNER JOIN coding_job
+            ON coding_job.id = coding_job_variable.coding_job_id
+          WHERE coding_job.workspace_id = $1
+            AND coding_job.training_id IS NULL
+          UNION
+          SELECT
+            coding_job.id AS coding_job_id,
+            added_responses.unit_key,
+            added_responses.response_id
+          FROM added_responses
+          INNER JOIN variable_bundle
+            ON variable_bundle.workspace_id = $1
+            AND variable_bundle.variables @> jsonb_build_array(
+              jsonb_build_object(
+                'unitName', added_responses.unit_name,
+                'variableId', added_responses.variable_id
+              )
+            )
+          INNER JOIN coding_job_variable_bundle
+            ON coding_job_variable_bundle.variable_bundle_id = variable_bundle.id
+          INNER JOIN coding_job
+            ON coding_job.id = coding_job_variable_bundle.coding_job_id
+          WHERE coding_job.workspace_id = $1
+            AND coding_job.training_id IS NULL
+        ),
+        affected_jobs AS (
+          SELECT
+            coding_job_id,
+            COUNT(DISTINCT unit_key) AS affected_units,
+            COUNT(DISTINCT response_id) AS affected_responses
+          FROM matched_job_responses
+          GROUP BY coding_job_id
+        )
+        UPDATE coding_job
+        SET freshness_status = CASE
+              WHEN $3 = 'stale_source' OR coding_job.freshness_status = 'stale_source'
+                THEN 'stale_source'
+              WHEN coding_job.freshness_status = 'review_required' OR $3 = 'review_required'
+                THEN 'review_required'
+              ELSE $3
+            END,
+            freshness_reason = $4,
+            freshness_updated_at = now(),
+            freshness_affected_units = GREATEST(
+              COALESCE(coding_job.freshness_affected_units, 0),
+              affected_jobs.affected_units::int
+            ),
+            freshness_affected_responses = GREATEST(
+              COALESCE(coding_job.freshness_affected_responses, 0),
+              affected_jobs.affected_responses::int
+            ),
+            updated_at = now()
+        FROM affected_jobs
+        WHERE coding_job.id = affected_jobs.coding_job_id
+      `,
+      [workspaceId, ids, status, reason]
+    );
+  }
+
   private async getUnitIdsForResponseIds(
     workspaceId: number,
     responseIds: number[],
@@ -1432,6 +1573,50 @@ export class CodingFreshnessService {
     }));
 
     return presenceByUnit;
+  }
+
+  private async getImportedResponseIdsByUnit(
+    workspaceId: number,
+    responseIds: number[]
+  ): Promise<Map<number, number[]>> {
+    const ids = this.uniquePositiveIds(responseIds);
+    const responseIdsByUnit = new Map<number, number[]>();
+    if (ids.length === 0) {
+      return responseIdsByUnit;
+    }
+
+    const query = this.responseRepository
+      .createQueryBuilder('response')
+      .select('response.id', 'responseId')
+      .addSelect('response.unitid', 'unitId')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.id IN (:...responseIds)', { responseIds: ids })
+      .andWhere('response.is_autocoder_generated IS NOT TRUE');
+
+    await this.applyWorkspaceExclusions(workspaceId, query);
+
+    const rows = await query.getRawMany<ImportedResponseScopeRow>();
+    rows.forEach(row => {
+      const unitId = Number(row.unitId);
+      const responseId = Number(row.responseId);
+      if (!Number.isInteger(unitId) || unitId <= 0 || !Number.isInteger(responseId) || responseId <= 0) {
+        return;
+      }
+      const existing = responseIdsByUnit.get(unitId) || [];
+      existing.push(responseId);
+      responseIdsByUnit.set(unitId, existing);
+    });
+
+    responseIdsByUnit.forEach((unitResponseIds, unitId) => {
+      responseIdsByUnit.set(unitId, this.uniquePositiveIds(unitResponseIds));
+    });
+
+    return responseIdsByUnit;
   }
 
   private async getResponseCountsByUnit(
