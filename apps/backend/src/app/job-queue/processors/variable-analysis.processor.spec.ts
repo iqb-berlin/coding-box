@@ -387,6 +387,154 @@ describe('VariableAnalysisProcessor', () => {
     ]);
   });
 
+  it('calculates absolute counts and percentages for total and valid responses', async () => {
+    const { processor, cacheService, responseRepository } = createProcessor({
+      unitVariableDetails: [
+        {
+          unitName: 'UNIT',
+          unitId: 'UNIT',
+          variables: [
+            {
+              id: 'VAR',
+              alias: 'VAR',
+              type: 'string',
+              sourceType: 'BASE',
+              hasCodingScheme: true,
+              codes: [
+                { id: 'A', label: 'Alpha', score: 1 },
+                { id: 'B', label: 'Beta', score: 0 }
+              ]
+            }
+          ]
+        }
+      ],
+      queryResults: [
+        [
+          {
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            totalCount: '4',
+            validCount: '3',
+            emptyCount: '1',
+            distinctValueCount: '3'
+          }
+        ],
+        [
+          {
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            value: 'A',
+            valueLength: '1',
+            valueHash: 'hash-a',
+            count: '2',
+            validCount: '2'
+          },
+          {
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            value: 'B',
+            valueLength: '1',
+            valueHash: 'hash-b',
+            count: '1',
+            validCount: '1'
+          },
+          {
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            value: '',
+            valueLength: '0',
+            valueHash: 'hash-empty',
+            count: '1',
+            validCount: '0'
+          }
+        ],
+        [
+          {
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            value: 'A',
+            count: '2',
+            validCount: '2'
+          },
+          {
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            value: 'B',
+            count: '1',
+            validCount: '1'
+          }
+        ],
+        [
+          {
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            status: '3',
+            count: '3'
+          },
+          {
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            status: '7',
+            count: '1'
+          }
+        ]
+      ]
+    });
+
+    await processor.process(createJob());
+
+    const variableCombos = findCacheSetPayload<unknown[]>(
+      cacheService,
+      'variable-analysis:1:job-1:variable-combos:0'
+    );
+    expect(variableCombos).toEqual([
+      expect.objectContaining({
+        variableId: 'VAR',
+        totalCount: 4,
+        validCount: 3,
+        invalidCount: 1,
+        emptyCount: 1,
+        emptyPercentage: 25
+      })
+    ]);
+
+    const frequencies = findCacheSetPayload<Array<[string, unknown[]]>>(
+      cacheService,
+      'variable-analysis:1:job-1:frequencies:0'
+    );
+    expect(frequencies).toEqual([
+      ['1:VAR', [
+        expect.objectContaining({
+          value: 'A',
+          count: 2,
+          validOccurrenceCount: 2,
+          percentageTotal: 50,
+          percentageValid: 66.66666666666666
+        }),
+        expect.objectContaining({
+          value: 'B',
+          count: 1,
+          validOccurrenceCount: 1,
+          percentageTotal: 25,
+          percentageValid: 33.33333333333333
+        }),
+        expect.objectContaining({
+          value: '',
+          count: 1,
+          validOccurrenceCount: 0,
+          percentageTotal: 25,
+          percentageValid: 0
+        })
+      ]]
+    ]);
+    expect(String(responseRepository.query.mock.calls[0][0])).toContain(
+      'statusV1'
+    );
+    expect(String(responseRepository.query.mock.calls[1][0])).toContain(
+      '"validCount"'
+    );
+  });
+
   it('applies workspace exclusions and builds a deterministic duplicate-response selection query', async () => {
     const {
       processor,
@@ -498,19 +646,31 @@ describe('VariableAnalysisProcessor', () => {
             responseId: '1',
             unitName: 'UNIT',
             variableId: 'MULTI',
-            value: '["A","B"]'
+            value: '["A","B"]',
+            status: '3',
+            statusV1: '5',
+            codeV1: '1',
+            scoreV1: null
           },
           {
             responseId: '2',
             unitName: 'UNIT',
             variableId: 'MULTI',
-            value: '["B"]'
+            value: '["B"]',
+            status: '3',
+            statusV1: '7',
+            codeV1: '2',
+            scoreV1: null
           },
           {
             responseId: '3',
             unitName: 'UNIT',
             variableId: 'MULTI',
-            value: '[]'
+            value: '[]',
+            status: '7',
+            statusV1: null,
+            codeV1: null,
+            scoreV1: null
           }
         ],
         [],
@@ -528,6 +688,8 @@ describe('VariableAnalysisProcessor', () => {
       expect.objectContaining({
         variableId: 'MULTI',
         totalCount: 3,
+        validCount: 1,
+        invalidCount: 2,
         emptyCount: 1,
         distinctValueCount: 2
       })
@@ -543,12 +705,14 @@ describe('VariableAnalysisProcessor', () => {
           value: 'B',
           label: 'Beta',
           count: 2,
+          validOccurrenceCount: 1,
           percentage: 66.66666666666666
         }),
         expect.objectContaining({
           value: 'A',
           label: 'Alpha',
           count: 1,
+          validOccurrenceCount: 1,
           percentage: 33.33333333333333
         })
       ]]

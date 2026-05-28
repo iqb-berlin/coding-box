@@ -306,7 +306,7 @@ export class VariableAnalysisController {
     type: String,
     required: false,
     description:
-      'Sort column for table rows: unitName, variableId, value, label, score, count, percentage, totalCount, emptyCount, emptyPercentage, statusSummary'
+      'Sort column for table rows: unitName, variableId, value, label, score, count, validOccurrenceCount, percentage, percentageTotal, percentageValid, totalCount, validCount, emptyCount, emptyPercentage, statusSummary'
   })
   @ApiQuery({
     name: 'sortDirection',
