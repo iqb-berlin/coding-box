@@ -148,13 +148,17 @@ export class UploadResultsService {
   private responseImportMutatedTestResults(mutationSummary: {
     addedUnitIds?: number[];
     changedUnitIds?: number[];
+    addedResponseIds?: number[];
     addedResponseCount?: number;
     changedResponseCount?: number;
+    savedResponseCount?: number;
   }): boolean {
     return (mutationSummary.addedUnitIds?.length || 0) > 0 ||
       (mutationSummary.changedUnitIds?.length || 0) > 0 ||
+      (mutationSummary.addedResponseIds?.length || 0) > 0 ||
       (mutationSummary.addedResponseCount || 0) > 0 ||
-      (mutationSummary.changedResponseCount || 0) > 0;
+      (mutationSummary.changedResponseCount || 0) > 0 ||
+      (mutationSummary.savedResponseCount || 0) > 0;
   }
 
   private createUploadSummaryAccumulator(): UploadSummaryAccumulator {
@@ -728,6 +732,7 @@ export class UploadResultsService {
                 ) || {
                   addedUnitIds: [],
                   changedUnitIds: [],
+                  addedResponseIds: [],
                   addedResponseCount: 0,
                   changedResponseCount: 0
                 };
@@ -747,6 +752,12 @@ export class UploadResultsService {
                   mutationSummary.addedUnitIds,
                   mutationSummary.addedResponseCount
                 );
+                if ((mutationSummary.addedResponseIds?.length || 0) > 0) {
+                  await this.codingFreshnessService?.markResponsesPendingAfterImport?.(
+                    workspaceId,
+                    mutationSummary.addedResponseIds || []
+                  );
+                }
                 await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
                   workspaceId,
                   mutationSummary.changedUnitIds,

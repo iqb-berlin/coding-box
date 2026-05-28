@@ -4,14 +4,27 @@ import { createMock } from '@golevelup/ts-jest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { UploadResultsService } from './upload-results.service';
 import { PersonService } from './person.service';
+import { PersonQueryService } from './person-query.service';
+import { PersonPersistenceService } from './person-persistence.service';
 import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
+import Persons from '../../entities/persons.entity';
+import { Booklet } from '../../entities/booklet.entity';
+import { Unit } from '../../entities/unit.entity';
+import { UnitLastState } from '../../entities/unitLastState.entity';
+import { BookletInfo } from '../../entities/bookletInfo.entity';
+import { ResponseEntity } from '../../entities/response.entity';
+import { ChunkEntity } from '../../entities/chunk.entity';
+import { BookletLog } from '../../entities/bookletLog.entity';
+import { Session } from '../../entities/session.entity';
+import { UnitLog } from '../../entities/unitLog.entity';
+import { Person } from '../shared';
 
 describe('UploadResultsService', () => {
   let service: UploadResultsService;
@@ -59,6 +72,7 @@ describe('UploadResultsService', () => {
           provide: CodingFreshnessService,
           useValue: createMock<CodingFreshnessService>({
             markUnitsPendingAfterImport: jest.fn().mockResolvedValue(undefined),
+            markResponsesPendingAfterImport: jest.fn().mockResolvedValue(undefined),
             markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined)
           })
         },
@@ -92,6 +106,16 @@ describe('UploadResultsService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('treats saved responses as response import mutations', () => {
+    const responseImportMutatedTestResults = (
+      service as unknown as {
+        responseImportMutatedTestResults(summary: { savedResponseCount?: number }): boolean;
+      }
+    ).responseImportMutatedTestResults.bind(service);
+
+    expect(responseImportMutatedTestResults({ savedResponseCount: 1 })).toBe(true);
   });
 
   describe('uploadTestResults', () => {
@@ -814,6 +838,335 @@ existing-group;new-login;new-code;booklet1;unit1;"[{""subForm"":"""",""content""
       expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
     });
 
+    it('should merge a new unit for an existing person and refresh coding follow-up state', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
+existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""",""content"":""[{\\""id\\"":\\""VAR_1\\"",\\""status\\"":\\""VALUE_CHANGED\\""}]""}]";""`;
+
+      const filePath = path.join(os.tmpdir(), 'test-merge-new-unit-existing-person.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      jest.spyOn(personService, 'getWorkspaceUploadStats')
+        .mockResolvedValueOnce({
+          testPersons: 1,
+          testGroups: 1,
+          uniqueBooklets: 1,
+          uniqueUnits: 1,
+          uniqueResponses: 1
+        })
+        .mockResolvedValueOnce({
+          testPersons: 1,
+          testGroups: 1,
+          uniqueBooklets: 1,
+          uniqueUnits: 2,
+          uniqueResponses: 2
+        });
+
+      const existingPerson = {
+        workspace_id: 1,
+        group: 'existing-group',
+        login: 'existing-login',
+        code: 'existing-code',
+        booklets: []
+      };
+      const existingPersonWithBooklets = {
+        ...existingPerson,
+        booklets: [
+          {
+            id: 'booklet1',
+            logs: [],
+            units: [],
+            sessions: []
+          }
+        ]
+      };
+      const existingPersonWithNewUnit = {
+        ...existingPersonWithBooklets,
+        booklets: [
+          {
+            id: 'booklet1',
+            logs: [],
+            sessions: [],
+            units: [
+              {
+                id: 'unit2',
+                alias: 'unit2',
+                laststate: [],
+                chunks: [],
+                subforms: [],
+                logs: []
+              }
+            ]
+          }
+        ]
+      };
+
+      jest.spyOn(personService, 'createPersonList').mockResolvedValue([existingPerson]);
+      jest.spyOn(personService, 'assignBookletsToPerson').mockResolvedValue(existingPersonWithBooklets);
+      jest.spyOn(personService, 'assignUnitsToBookletAndPerson').mockResolvedValue(existingPersonWithNewUnit);
+      jest.spyOn(personService, 'processPersonBooklets').mockResolvedValue({
+        addedUnitIds: [202],
+        changedUnitIds: [],
+        addedResponseCount: 1,
+        changedResponseCount: 0,
+        savedResponseCount: 1,
+        deletedResponseCount: 0,
+        skippedExistingResponseCount: 0
+      });
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'responses',
+          overwriteMode: 'merge',
+          scope: 'person'
+        }
+      }));
+
+      expect(personService.processPersonBooklets).toHaveBeenCalledWith(
+        [existingPersonWithNewUnit],
+        1,
+        'merge',
+        'person'
+      );
+      expect(result.delta).toEqual({
+        testPersons: 0,
+        testGroups: 0,
+        uniqueBooklets: 0,
+        uniqueUnits: 1,
+        uniqueResponses: 1
+      });
+      expect(codingFreshnessService.markUnitsPendingAfterImport).toHaveBeenCalledWith(1, [202], 1);
+      expect(codingFreshnessService.markUnitsStaleAfterResultChange).toHaveBeenCalledWith(
+        1,
+        [],
+        'RESULT_UPDATED'
+      );
+      expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
+      expect(workspaceTestResultsService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
+      expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    });
+
+    it('should parse a merge upload and persist a new unit through the real person services', async () => {
+      const personsRepository = createMock<Repository<Persons>>();
+      const bookletRepository = createMock<Repository<Booklet>>();
+      const unitRepository = createMock<Repository<Unit>>();
+      const unitLastStateRepository = createMock<Repository<UnitLastState>>();
+      const bookletInfoRepository = createMock<Repository<BookletInfo>>();
+      const responseRepository = createMock<Repository<ResponseEntity>>();
+      const chunkRepository = createMock<Repository<ChunkEntity>>();
+      const bookletLogRepository = createMock<Repository<BookletLog>>();
+      const sessionRepository = createMock<Repository<Session>>();
+      const unitLogRepository = createMock<Repository<UnitLog>>();
+      const realWorkspaceService = createMock<WorkspaceTestResultsService>({
+        invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
+        invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined)
+      });
+      const realCodingFreshnessService = createMock<CodingFreshnessService>({
+        markUnitsPendingAfterImport: jest.fn().mockResolvedValue(undefined),
+        markResponsesPendingAfterImport: jest.fn().mockResolvedValue(undefined),
+        markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined)
+      });
+      const realCodingAnalysisService = createMock<CodingAnalysisService>({
+        invalidateCache: jest.fn().mockResolvedValue(undefined)
+      });
+
+      let persistedPersons: Persons[] = [];
+      const personQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockImplementation(async () => persistedPersons)
+      };
+
+      jest.spyOn(personsRepository, 'upsert').mockImplementation(async input => {
+        const batch = (Array.isArray(input) ? input : [input]) as Person[];
+        persistedPersons = batch.map(person => ({
+          ...person,
+          id: 11,
+          workspace_id: 1
+        } as unknown as Persons));
+        return {} as never;
+      });
+      jest.spyOn(personsRepository, 'createQueryBuilder').mockReturnValue(personQueryBuilder as never);
+      jest.spyOn(bookletInfoRepository, 'findOne').mockResolvedValue({
+        id: 101,
+        name: 'booklet1'
+      } as unknown as BookletInfo);
+      jest.spyOn(bookletRepository, 'findOne').mockResolvedValue({
+        id: 201,
+        personid: 11,
+        infoid: 101
+      } as unknown as Booklet);
+      jest.spyOn(unitRepository, 'findOne').mockResolvedValue(null);
+      jest.spyOn(unitRepository, 'create').mockImplementation(entity => entity as Unit);
+      jest.spyOn(unitRepository, 'save').mockResolvedValue({
+        id: 202,
+        alias: 'original-unit2',
+        name: 'unit2',
+        bookletid: 201
+      } as unknown as Unit);
+      jest.spyOn(unitLastStateRepository, 'find').mockResolvedValue([]);
+      jest.spyOn(unitLastStateRepository, 'insert').mockResolvedValue({} as never);
+      jest.spyOn(chunkRepository, 'delete').mockResolvedValue({} as never);
+      jest.spyOn(chunkRepository, 'insert').mockResolvedValue({} as never);
+      jest.spyOn(responseRepository, 'find').mockResolvedValue([]);
+      jest.spyOn(responseRepository, 'save').mockResolvedValue([] as never);
+
+      const realPersonService = new PersonService(
+        createMock<PersonQueryService>({
+          getWorkspaceUploadStats: jest.fn()
+            .mockResolvedValueOnce({
+              testPersons: 1,
+              testGroups: 1,
+              uniqueBooklets: 1,
+              uniqueUnits: 1,
+              uniqueResponses: 1
+            })
+            .mockResolvedValueOnce({
+              testPersons: 1,
+              testGroups: 1,
+              uniqueBooklets: 1,
+              uniqueUnits: 2,
+              uniqueResponses: 2
+            })
+        }),
+        new PersonPersistenceService(
+          personsRepository,
+          bookletRepository,
+          unitRepository,
+          unitLastStateRepository,
+          bookletInfoRepository,
+          responseRepository,
+          chunkRepository,
+          bookletLogRepository,
+          sessionRepository,
+          unitLogRepository
+        )
+      );
+      const realUploadService = new UploadResultsService(
+        realPersonService,
+        createMock<JobQueueService>(),
+        realWorkspaceService,
+        {
+          createQueryRunner: jest.fn().mockReturnValue({
+            connect: jest.fn().mockResolvedValue(undefined),
+            query: jest.fn().mockResolvedValue([]),
+            release: jest.fn().mockResolvedValue(undefined)
+          })
+        } as unknown as DataSource,
+        realCodingFreshnessService,
+        realCodingAnalysisService
+      );
+
+      const csvField = (value: string): string => `"${value.replace(/"/g, '""')}"`;
+      const responses = JSON.stringify([
+        {
+          subForm: '',
+          content: JSON.stringify([
+            {
+              id: 'VAR_1',
+              status: 'VALUE_CHANGED',
+              value: 'answer-new'
+            }
+          ])
+        }
+      ]);
+      const laststate = JSON.stringify({ unitState: 'new' });
+      const fileContent = [
+        'groupname;loginname;code;bookletname;unitname;originalUnitId;responses;laststate',
+        [
+          'existing-group',
+          'existing-login',
+          'existing-code',
+          'booklet1',
+          'unit2',
+          'original-unit2',
+          csvField(responses),
+          csvField(laststate)
+        ].join(';')
+      ].join('\n');
+      const filePath = path.join(os.tmpdir(), 'test-merge-new-unit-real-person-services.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      const result = await realUploadService.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'responses',
+          overwriteMode: 'merge',
+          scope: 'person'
+        }
+      }));
+
+      expect(unitRepository.findOne).toHaveBeenCalledWith({
+        where: { alias: 'original-unit2', name: 'unit2', bookletid: 201 }
+      });
+      expect(unitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        alias: 'original-unit2',
+        name: 'unit2',
+        bookletid: 201
+      }));
+      expect(responseRepository.find).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          unitid: 202,
+          subform: '',
+          variableid: expect.anything()
+        })
+      }));
+      expect(responseRepository.save).toHaveBeenCalledWith([
+        expect.objectContaining({
+          unitid: 202,
+          variableid: 'VAR_1',
+          value: 'answer-new',
+          subform: ''
+        })
+      ]);
+      expect(result.delta).toEqual({
+        testPersons: 0,
+        testGroups: 0,
+        uniqueBooklets: 0,
+        uniqueUnits: 1,
+        uniqueResponses: 1
+      });
+      expect(result.importSummary).toMatchObject({
+        overwriteMode: 'merge',
+        scope: 'person',
+        responseRows: 1,
+        savedResponses: 1,
+        addedUnits: 1
+      });
+      expect(realCodingFreshnessService.markUnitsPendingAfterImport).toHaveBeenCalledWith(1, [202], 1);
+      expect(realCodingFreshnessService.markUnitsStaleAfterResultChange).toHaveBeenCalledWith(
+        1,
+        [],
+        'RESULT_UPDATED'
+      );
+      expect(realCodingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
+      expect(realWorkspaceService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
+    });
+
     it('should mark freshness and invalidate response-analysis and coding-statistics caches after importing responses', async () => {
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;[];""`;
@@ -865,6 +1218,7 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       jest.spyOn(personService, 'processPersonBooklets').mockResolvedValue({
         addedUnitIds: [101],
         changedUnitIds: [202],
+        addedResponseIds: [303],
         addedResponseCount: 1,
         changedResponseCount: 1
       });
@@ -890,6 +1244,7 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       }));
 
       expect(codingFreshnessService.markUnitsPendingAfterImport).toHaveBeenCalledWith(1, [101], 1);
+      expect(codingFreshnessService.markResponsesPendingAfterImport).toHaveBeenCalledWith(1, [303]);
       expect(codingFreshnessService.markUnitsStaleAfterResultChange).toHaveBeenCalledWith(
         1,
         [202],
