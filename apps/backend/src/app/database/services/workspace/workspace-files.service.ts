@@ -3193,6 +3193,7 @@ ${bookletRefs}
                     codingSchemeRef: hasCodingScheme ?
                       codingSchemeMap.get(unitName) :
                       undefined,
+                    sourceType,
                     codes: variableCodes,
                     values: variableMetadata.values,
                     valuesComplete: variableMetadata.valuesComplete,
@@ -3267,6 +3268,7 @@ ${bookletRefs}
                     codingSchemeRef: hasCodingScheme ?
                       codingSchemeMap.get(unitName) :
                       undefined,
+                    sourceType,
                     codes: variableCodes,
                     values: variableMetadata.values,
                     valuesComplete: variableMetadata.valuesComplete,
@@ -3320,6 +3322,7 @@ ${bookletRefs}
                   type: unitVariableTypes?.get(schemeId) || 'string',
                   hasCodingScheme: true,
                   codingSchemeRef: codingSchemeMap.get(unitName),
+                  sourceType,
                   codes: variableCodes,
                   isDerived: true,
                   hasManualInstruction,
