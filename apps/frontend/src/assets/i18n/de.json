@@ -962,6 +962,9 @@
     "open-explanation": "Diese Frage ist offen kodiert",
     "score-label": "Bewertung:",
     "no-codes-found": "Keine Codes gefunden für Variable",
+    "legacy-code-label": "Bisher gespeicherter Code:",
+    "legacy-code-note": "Dieser Code ist nicht mehr manuell auswählbar.",
+    "legacy-code-missing-note": "Dieser Code ist im aktuellen Kodierschema nicht mehr vorhanden.",
     "coder-notes": "Notiz zu diesem Kodierfall",
     "coder-notes-placeholder": "Notiz zu diesem Kodierfall",
     "coding-issue-options": {
