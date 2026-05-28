@@ -23,6 +23,21 @@ export interface VariableFrequencyDto {
   percentage: number;
 }
 
+export type VariableAnalysisSortBy =
+  | 'unitName'
+  | 'variableId'
+  | 'value'
+  | 'label'
+  | 'score'
+  | 'count'
+  | 'percentage'
+  | 'totalCount'
+  | 'emptyCount'
+  | 'emptyPercentage'
+  | 'statusSummary';
+
+export type VariableAnalysisSortDirection = 'asc' | 'desc';
+
 export interface VariableCombo {
   unitId: number;
   unitName: string;
@@ -35,7 +50,7 @@ export interface VariableCombo {
 }
 
 export interface VariableStatusCount {
-  status: number;
+  status: number | string;
   count: number;
   percentage: number;
 }
@@ -46,8 +61,29 @@ export interface VariableAnalysisResultDto {
   total: number;
 }
 
+export interface VariableAnalysisTableRowDto extends VariableFrequencyDto {
+  unitId: number;
+  unitName: string;
+  variableId: string;
+  totalCount: number;
+  emptyCount: number;
+  emptyPercentage: number;
+  distinctValueCount: number;
+  hiddenValueCount: number;
+  statusCounts?: VariableStatusCount[];
+  statusSummary: string;
+  pointBiserial?: number | null;
+  codePbc?: number | null;
+  categoryPbc?: number | null;
+}
+
 export interface VariableAnalysisResultPageDto extends VariableAnalysisResultDto {
   unfilteredTotal: number;
+  rows?: VariableAnalysisTableRowDto[];
+  rowTotal?: number;
+  pageableRowTotal?: number;
+  unfilteredRowTotal?: number;
+  maxPage?: number;
   page: number;
   pageSize: number;
   totalPages: number;
@@ -59,6 +95,8 @@ export interface VariableAnalysisResultPageOptions {
   search?: string;
   onlyEmpty?: boolean;
   includeSchemaCodes?: boolean;
+  sortBy?: VariableAnalysisSortBy;
+  sortDirection?: VariableAnalysisSortDirection;
 }
 
 export interface VariableAnalysisExportOptions {
@@ -172,6 +210,14 @@ export class VariableAnalysisService {
 
     if (options.includeSchemaCodes) {
       params = params.set('includeSchemaCodes', 'true');
+    }
+
+    if (options.sortBy) {
+      params = params.set('sortBy', options.sortBy);
+    }
+
+    if (options.sortDirection) {
+      params = params.set('sortDirection', options.sortDirection);
     }
 
     return this.http.get<VariableAnalysisResultPageDto>(

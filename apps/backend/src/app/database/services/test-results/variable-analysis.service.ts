@@ -12,6 +12,7 @@ import {
   VariableCombo
 } from '../../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableAnalysisResultPageDto } from '../../../admin/variable-analysis/dto/variable-analysis-result-page.dto';
+import { VariableAnalysisTableRowDto } from '../../../admin/variable-analysis/dto/variable-analysis-table-row.dto';
 import { statusNumberToString } from '../../utils/response-status-converter';
 import {
   JobQueueService,
@@ -29,6 +30,8 @@ interface NormalizedVariableAnalysisPaging {
   search: string;
   onlyEmpty: boolean;
   includeSchemaCodes: boolean;
+  sortBy: VariableAnalysisSortBy;
+  sortDirection: VariableAnalysisSortDirection;
 }
 
 interface VariableAnalysisResultOptions {
@@ -40,6 +43,21 @@ interface NormalizedVariableAnalysisFilter {
   onlyEmpty: boolean;
   includeSchemaCodes: boolean;
 }
+
+type VariableAnalysisSortDirection = 'asc' | 'desc';
+
+type VariableAnalysisSortBy =
+  | 'unitName'
+  | 'variableId'
+  | 'value'
+  | 'label'
+  | 'score'
+  | 'count'
+  | 'percentage'
+  | 'totalCount'
+  | 'emptyCount'
+  | 'emptyPercentage'
+  | 'statusSummary';
 
 const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
   { header: 'Unit-ID', key: 'unitId', width: 12 },
@@ -75,6 +93,24 @@ export class VariableAnalysisService {
   private readonly DEFAULT_PAGE = 1;
   private readonly DEFAULT_PAGE_SIZE = 50;
   private readonly MAX_PAGE_SIZE = 200;
+  private readonly MAX_SORTED_PAGE_WINDOW_ROWS = 100000;
+  private readonly DEFAULT_SORT_BY: VariableAnalysisSortBy = 'unitName';
+  private readonly DEFAULT_SORT_DIRECTION: VariableAnalysisSortDirection =
+    'asc';
+
+  private readonly SORTABLE_FIELDS = new Set<VariableAnalysisSortBy>([
+    'unitName',
+    'variableId',
+    'value',
+    'label',
+    'score',
+    'count',
+    'percentage',
+    'totalCount',
+    'emptyCount',
+    'emptyPercentage',
+    'statusSummary'
+  ]);
 
   constructor(
     private jobQueueService: JobQueueService,
@@ -202,6 +238,8 @@ export class VariableAnalysisService {
       search?: string;
       onlyEmpty?: boolean | string;
       includeSchemaCodes?: boolean | string;
+      sortBy?: string;
+      sortDirection?: string;
     } = {}
   ): Promise<VariableAnalysisResultPageDto> {
     const job = await this.getCompletedAnalysisJob(jobId, workspaceId);
@@ -610,10 +648,10 @@ export class VariableAnalysisService {
     manifest: VariableAnalysisResultCacheManifest,
     paging: NormalizedVariableAnalysisPaging
   ): Promise<VariableAnalysisResultPageDto | null> {
-    const startIndex = (paging.page - 1) * paging.pageSize;
-    const endIndex = startIndex + paging.pageSize;
-    const variableCombos: VariableCombo[] = [];
-    let matchedCount = 0;
+    const matchingComboByKey = new Map<string, VariableCombo>();
+    const maxPage = this.getMaxSortedPage(paging.pageSize);
+    const pageableRowLimit = maxPage * paging.pageSize;
+    const requestedPage = Math.min(paging.page, maxPage);
 
     for (let index = 0; index < manifest.variableComboChunks; index += 1) {
       const chunk = await this.cacheService.get<VariableCombo[]>(
@@ -624,39 +662,182 @@ export class VariableAnalysisService {
       }
 
       for (const combo of chunk) {
-        if (!this.matchesPagingFilter(combo, paging)) {
-          continue;
+        if (this.matchesPagingFilter(combo, paging)) {
+          matchingComboByKey.set(this.getComboKey(combo), combo);
         }
-
-        if (matchedCount >= startIndex && matchedCount < endIndex) {
-          variableCombos.push(combo);
-        }
-        matchedCount += 1;
       }
     }
 
-    const selectedComboKeys = new Set(
-      variableCombos.map(combo => this.getComboKey(combo))
-    );
-    const frequencies = await this.getFrequenciesForCombos(
-      cacheKey,
-      manifest,
-      selectedComboKeys,
-      paging.includeSchemaCodes
-    );
-    if (!frequencies) {
-      return null;
+    if (matchingComboByKey.size === 0) {
+      return {
+        variableCombos: [],
+        frequencies: {},
+        total: 0,
+        unfilteredTotal: manifest.total,
+        rows: [],
+        rowTotal: 0,
+        pageableRowTotal: 0,
+        maxPage,
+        page: this.DEFAULT_PAGE,
+        pageSize: paging.pageSize,
+        totalPages: 0
+      };
     }
 
+    const candidateEndIndex = requestedPage * paging.pageSize;
+    const pageCandidates: VariableAnalysisTableRowDto[] = [];
+    let rowTotal = 0;
+
+    for (let index = 0; index < manifest.frequencyChunks; index += 1) {
+      const chunk = await this.cacheService.get<
+      Array<[string, VariableFrequencyDto[]]>
+      >(this.getFrequencyChunkKey(cacheKey, index));
+      if (!chunk) {
+        return null;
+      }
+
+      for (const [comboKey, frequencyRows] of chunk) {
+        const combo = matchingComboByKey.get(comboKey);
+        if (!combo) {
+          continue;
+        }
+
+        const visibleRows = this.getVisibleFrequencyRows(
+          frequencyRows,
+          paging.includeSchemaCodes
+        );
+        const tableRows = this.createTableRowsForCombo(combo, visibleRows);
+        rowTotal += tableRows.length;
+        tableRows.forEach(row => this.addPageCandidate(
+          pageCandidates,
+          row,
+          candidateEndIndex,
+          paging
+        ));
+      }
+    }
+
+    const pageableRowTotal = Math.min(rowTotal, pageableRowLimit);
+    const totalPages = Math.ceil(pageableRowTotal / paging.pageSize);
+    const page = totalPages === 0 ?
+      this.DEFAULT_PAGE :
+      Math.min(requestedPage, totalPages);
+    const startIndex = (page - 1) * paging.pageSize;
+    const pageEndIndex = page * paging.pageSize;
+    const pageRows = pageCandidates
+      .sort((a, b) => this.compareRows(a, b, paging))
+      .slice(startIndex, pageEndIndex);
+    const matchingCombos = Array.from(matchingComboByKey.values());
+
     return {
-      variableCombos,
-      frequencies,
-      total: matchedCount,
+      variableCombos: this.getCombosForRows(matchingCombos, pageRows),
+      frequencies: this.getFrequenciesForRows(pageRows),
+      total: matchingComboByKey.size,
       unfilteredTotal: manifest.total,
-      page: paging.page,
+      rows: pageRows,
+      rowTotal,
+      pageableRowTotal,
+      maxPage,
+      page,
       pageSize: paging.pageSize,
-      totalPages: Math.ceil(matchedCount / paging.pageSize)
+      totalPages
     };
+  }
+
+  private getMaxSortedPage(pageSize: number): number {
+    return Math.max(
+      this.DEFAULT_PAGE,
+      Math.floor(this.MAX_SORTED_PAGE_WINDOW_ROWS / pageSize)
+    );
+  }
+
+  private addPageCandidate(
+    pageCandidates: VariableAnalysisTableRowDto[],
+    row: VariableAnalysisTableRowDto,
+    limit: number,
+    paging: NormalizedVariableAnalysisPaging
+  ): void {
+    if (limit <= 0) {
+      return;
+    }
+
+    if (pageCandidates.length < limit) {
+      pageCandidates.push(row);
+      this.siftUpWorstRow(pageCandidates, pageCandidates.length - 1, paging);
+      return;
+    }
+
+    if (this.compareRows(row, pageCandidates[0], paging) < 0) {
+      pageCandidates[0] = row;
+      this.siftDownWorstRow(pageCandidates, 0, paging);
+    }
+  }
+
+  private siftUpWorstRow(
+    rows: VariableAnalysisTableRowDto[],
+    index: number,
+    paging: NormalizedVariableAnalysisPaging
+  ): void {
+    let currentIndex = index;
+
+    while (currentIndex > 0) {
+      const parentIndex = Math.floor((currentIndex - 1) / 2);
+      if (!this.isWorseRow(rows[currentIndex], rows[parentIndex], paging)) {
+        return;
+      }
+
+      [rows[parentIndex], rows[currentIndex]] = [
+        rows[currentIndex],
+        rows[parentIndex]
+      ];
+      currentIndex = parentIndex;
+    }
+  }
+
+  private siftDownWorstRow(
+    rows: VariableAnalysisTableRowDto[],
+    index: number,
+    paging: NormalizedVariableAnalysisPaging
+  ): void {
+    let currentIndex = index;
+
+    while (currentIndex < rows.length) {
+      const leftIndex = currentIndex * 2 + 1;
+      const rightIndex = leftIndex + 1;
+      let worstIndex = currentIndex;
+
+      if (
+        leftIndex < rows.length &&
+        this.isWorseRow(rows[leftIndex], rows[worstIndex], paging)
+      ) {
+        worstIndex = leftIndex;
+      }
+
+      if (
+        rightIndex < rows.length &&
+        this.isWorseRow(rows[rightIndex], rows[worstIndex], paging)
+      ) {
+        worstIndex = rightIndex;
+      }
+
+      if (worstIndex === currentIndex) {
+        return;
+      }
+
+      [rows[currentIndex], rows[worstIndex]] = [
+        rows[worstIndex],
+        rows[currentIndex]
+      ];
+      currentIndex = worstIndex;
+    }
+  }
+
+  private isWorseRow(
+    a: VariableAnalysisTableRowDto,
+    b: VariableAnalysisTableRowDto,
+    paging: NormalizedVariableAnalysisPaging
+  ): boolean {
+    return this.compareRows(a, b, paging) > 0;
   }
 
   private async getFrequenciesForCombos(
@@ -701,32 +882,272 @@ export class VariableAnalysisService {
   ): VariableAnalysisResultPageDto {
     const filteredCombos = result.variableCombos.filter(combo => this.matchesPagingFilter(combo, paging)
     );
-    const startIndex = (paging.page - 1) * paging.pageSize;
-    const variableCombos = filteredCombos.slice(
-      startIndex,
-      startIndex + paging.pageSize
+    const frequencies = this.getVisibleFrequenciesForCombos(
+      result,
+      filteredCombos,
+      paging.includeSchemaCodes
     );
-    const selectedComboKeys = new Set(
-      variableCombos.map(combo => this.getComboKey(combo))
-    );
-    const frequencies: Record<string, VariableFrequencyDto[]> = {};
 
-    selectedComboKeys.forEach(comboKey => {
-      frequencies[comboKey] = this.getVisibleFrequencyRows(
-        result.frequencies[comboKey] || [],
-        paging.includeSchemaCodes
-      );
-    });
+    return this.getRowPageFromResult(
+      {
+        variableCombos: filteredCombos,
+        frequencies,
+        total: filteredCombos.length
+      },
+      paging,
+      {
+        unfilteredTotal: result.total,
+        unfilteredRowTotal: this.createTableRows(
+          result.variableCombos,
+          this.getVisibleFrequenciesForCombos(
+            result,
+            result.variableCombos,
+            paging.includeSchemaCodes
+          )
+        ).length
+      }
+    );
+  }
+
+  private getRowPageFromResult(
+    result: VariableAnalysisResultDto,
+    paging: NormalizedVariableAnalysisPaging,
+    totals: { unfilteredTotal: number; unfilteredRowTotal?: number }
+  ): VariableAnalysisResultPageDto {
+    const rows = this.sortRows(
+      this.createTableRows(result.variableCombos, result.frequencies),
+      paging
+    );
+    const startIndex = (paging.page - 1) * paging.pageSize;
+    const pageRows = rows.slice(startIndex, startIndex + paging.pageSize);
+    const variableCombos = this.getCombosForRows(
+      result.variableCombos,
+      pageRows
+    );
+    const frequencies = this.getFrequenciesForRows(pageRows);
 
     return {
       variableCombos,
       frequencies,
-      total: filteredCombos.length,
-      unfilteredTotal: result.total,
+      total: result.variableCombos.length,
+      unfilteredTotal: totals.unfilteredTotal,
+      rows: pageRows,
+      rowTotal: rows.length,
+      pageableRowTotal: rows.length,
+      unfilteredRowTotal: totals.unfilteredRowTotal,
       page: paging.page,
       pageSize: paging.pageSize,
-      totalPages: Math.ceil(filteredCombos.length / paging.pageSize)
+      totalPages: Math.ceil(rows.length / paging.pageSize)
     };
+  }
+
+  private getVisibleFrequenciesForCombos(
+    result: VariableAnalysisResultDto,
+    combos: VariableCombo[],
+    includeSchemaCodes: boolean
+  ): Record<string, VariableFrequencyDto[]> {
+    const frequencies: Record<string, VariableFrequencyDto[]> = {};
+
+    combos.forEach(combo => {
+      const comboKey = this.getComboKey(combo);
+      frequencies[comboKey] = this.getVisibleFrequencyRows(
+        result.frequencies[comboKey] || [],
+        includeSchemaCodes
+      );
+    });
+
+    return frequencies;
+  }
+
+  private createTableRows(
+    combos: VariableCombo[],
+    frequencies: Record<string, VariableFrequencyDto[]>
+  ): VariableAnalysisTableRowDto[] {
+    return combos.flatMap(combo => this.createTableRowsForCombo(
+      combo,
+      frequencies[this.getComboKey(combo)] || []
+    ));
+  }
+
+  private createTableRowsForCombo(
+    combo: VariableCombo,
+    rows: VariableFrequencyDto[]
+  ): VariableAnalysisTableRowDto[] {
+    const totalCount = combo.totalCount ?? this.sumCounts(rows);
+    const emptyCount = combo.emptyCount ?? this.sumCounts(
+      rows.filter(frequency => frequency.value === '')
+    );
+    const emptyPercentage = combo.emptyPercentage ??
+      this.calculatePercentage(emptyCount, totalCount);
+    const distinctValueCount = combo.distinctValueCount ?? rows.length;
+    const displayedObservedValueCount = rows.filter(
+      frequency => !frequency.isSchemaOnly
+    ).length;
+    const hiddenValueCount = Math.max(
+      0,
+      distinctValueCount - displayedObservedValueCount
+    );
+    const statusSummary = this.formatStatusSummary(combo.statusCounts || []);
+
+    return rows.map(row => ({
+      unitId: combo.unitId,
+      unitName: combo.unitName,
+      variableId: combo.variableId,
+      value: row.value,
+      label: row.label,
+      score: row.score,
+      schemaOrder: row.schemaOrder,
+      isSchemaOnly: row.isSchemaOnly,
+      isSchemaSupplemental: row.isSchemaSupplemental,
+      count: row.count,
+      percentage: row.percentage,
+      totalCount,
+      emptyCount,
+      emptyPercentage,
+      distinctValueCount,
+      hiddenValueCount,
+      statusCounts: combo.statusCounts || [],
+      statusSummary
+    }));
+  }
+
+  private sortRows(
+    rows: VariableAnalysisTableRowDto[],
+    paging: NormalizedVariableAnalysisPaging
+  ): VariableAnalysisTableRowDto[] {
+    return [...rows].sort((a, b) => this.compareRows(a, b, paging));
+  }
+
+  private compareRows(
+    a: VariableAnalysisTableRowDto,
+    b: VariableAnalysisTableRowDto,
+    paging: NormalizedVariableAnalysisPaging
+  ): number {
+    return this.compareSortValues(
+      this.getSortValue(a, paging.sortBy),
+      this.getSortValue(b, paging.sortBy),
+      paging.sortDirection
+    ) || this.compareRowsByDefaultOrder(a, b);
+  }
+
+  private getSortValue(
+    row: VariableAnalysisTableRowDto,
+    sortBy: VariableAnalysisSortBy
+  ): string | number | null | undefined {
+    return row[sortBy];
+  }
+
+  private compareSortValues(
+    a: string | number | null | undefined,
+    b: string | number | null | undefined,
+    direction: VariableAnalysisSortDirection
+  ): number {
+    if (a === b) {
+      return 0;
+    }
+    if (a === null || a === undefined) {
+      return 1;
+    }
+    if (b === null || b === undefined) {
+      return -1;
+    }
+
+    const result = this.compareDefinedRowValues(a, b);
+    return direction === 'desc' ? -result : result;
+  }
+
+  private compareRowValues(
+    a: string | number | null | undefined,
+    b: string | number | null | undefined
+  ): number {
+    if (a === b) {
+      return 0;
+    }
+    if (a === null || a === undefined) {
+      return 1;
+    }
+    if (b === null || b === undefined) {
+      return -1;
+    }
+    return this.compareDefinedRowValues(a, b);
+  }
+
+  private compareDefinedRowValues(
+    a: string | number,
+    b: string | number
+  ): number {
+    if (typeof a === 'number' && typeof b === 'number') {
+      return a - b;
+    }
+    return String(a).localeCompare(String(b), 'de', {
+      numeric: true,
+      sensitivity: 'base'
+    });
+  }
+
+  private compareRowsByDefaultOrder(
+    a: VariableAnalysisTableRowDto,
+    b: VariableAnalysisTableRowDto
+  ): number {
+    return (
+      this.compareRowValues(a.unitName, b.unitName) ||
+      this.compareRowValues(a.unitId, b.unitId) ||
+      this.compareRowValues(a.variableId, b.variableId) ||
+      this.compareRowValues(a.schemaOrder, b.schemaOrder) ||
+      this.compareRowValues(a.value, b.value) ||
+      this.compareRowValues(a.label, b.label)
+    );
+  }
+
+  private getCombosForRows(
+    combos: VariableCombo[],
+    rows: VariableAnalysisTableRowDto[]
+  ): VariableCombo[] {
+    const comboByKey = new Map(
+      combos.map(combo => [this.getComboKey(combo), combo])
+    );
+    const seenKeys = new Set<string>();
+    const selectedCombos: VariableCombo[] = [];
+
+    rows.forEach(row => {
+      const comboKey = this.getComboKey(row);
+      if (seenKeys.has(comboKey)) {
+        return;
+      }
+      const combo = comboByKey.get(comboKey);
+      if (combo) {
+        selectedCombos.push(combo);
+        seenKeys.add(comboKey);
+      }
+    });
+
+    return selectedCombos;
+  }
+
+  private getFrequenciesForRows(
+    rows: VariableAnalysisTableRowDto[]
+  ): Record<string, VariableFrequencyDto[]> {
+    const frequencies: Record<string, VariableFrequencyDto[]> = {};
+
+    rows.forEach(row => {
+      const comboKey = this.getComboKey(row);
+      frequencies[comboKey] = frequencies[comboKey] || [];
+      frequencies[comboKey].push({
+        unitId: row.unitId,
+        unitName: row.unitName,
+        variableId: row.variableId,
+        value: row.value,
+        label: row.label,
+        score: row.score,
+        schemaOrder: row.schemaOrder,
+        isSchemaOnly: row.isSchemaOnly,
+        isSchemaSupplemental: row.isSchemaSupplemental,
+        count: row.count,
+        percentage: row.percentage
+      });
+    });
+
+    return frequencies;
   }
 
   private getFilteredResultForExport(
@@ -849,6 +1270,8 @@ export class VariableAnalysisService {
     search?: string;
     onlyEmpty?: boolean | string;
     includeSchemaCodes?: boolean | string;
+    sortBy?: string;
+    sortDirection?: string;
   }): NormalizedVariableAnalysisPaging {
     const page = Math.max(
       this.DEFAULT_PAGE,
@@ -866,14 +1289,32 @@ export class VariableAnalysisService {
     const includeSchemaCodes = this.normalizeBooleanOption(
       options.includeSchemaCodes
     );
+    const sortBy = this.normalizeSortBy(options.sortBy);
+    const sortDirection = this.normalizeSortDirection(options.sortDirection);
 
     return {
       page,
       pageSize,
       search,
       onlyEmpty,
-      includeSchemaCodes
+      includeSchemaCodes,
+      sortBy,
+      sortDirection
     };
+  }
+
+  private normalizeSortBy(sortBy?: string): VariableAnalysisSortBy {
+    return this.SORTABLE_FIELDS.has(sortBy as VariableAnalysisSortBy) ?
+      sortBy as VariableAnalysisSortBy :
+      this.DEFAULT_SORT_BY;
+  }
+
+  private normalizeSortDirection(
+    sortDirection?: string
+  ): VariableAnalysisSortDirection {
+    return sortDirection === 'desc' || sortDirection === 'asc' ?
+      sortDirection :
+      this.DEFAULT_SORT_DIRECTION;
   }
 
   private normalizeFilterOptions(options: {
