@@ -6,6 +6,7 @@ import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingAnalysisService } from './coding-analysis.service';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingValidationService } from './coding-validation.service';
+import { statusStringToNumber } from '../../utils/response-status-converter';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: jest.fn()
@@ -137,6 +138,10 @@ describe('CodingResultsService', () => {
         status_v2: 5
       }
     );
+    const updateData = queryRunner.manager.update.mock.calls[0][2] as Partial<ResponseEntity>;
+    expect(updateData).not.toHaveProperty('status_v1');
+    expect(updateData).not.toHaveProperty('code_v1');
+    expect(updateData).not.toHaveProperty('score_v1');
     expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(
       10,
       17,
@@ -588,7 +593,8 @@ describe('CodingResultsService', () => {
       { id: 1 },
       { id: 2 }
     ] as ResponseEntity[];
-    responseRepository.createQueryBuilder = jest.fn(() => createQueryBuilderMock(rows)) as never;
+    const queryBuilder = createQueryBuilderMock(rows);
+    responseRepository.createQueryBuilder = jest.fn(() => queryBuilder) as never;
 
     const result = await service.applyEmptyResponseCoding(17);
 
@@ -607,6 +613,19 @@ describe('CodingResultsService', () => {
         status_v2: 5
       }
     );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'response.status_v1 IN (:...statuses)',
+      {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      }
+    );
+    const statusFilterCall = queryBuilder.andWhere.mock.calls.find(call => (
+      call[0] === 'response.status_v1 IN (:...statuses)'
+    ));
+    expect(statusFilterCall?.[1].statuses).not.toContain(statusStringToNumber('DERIVE_ERROR'));
     expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(17);
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);

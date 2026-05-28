@@ -18,6 +18,10 @@ import {
 } from '../../utils/manual-coding-scope.util';
 
 const PAGE_MAP_LOOKUP_BATCH_SIZE = 8;
+const MANUAL_CODING_CANDIDATE_STATUSES = [
+  statusStringToNumber('CODING_INCOMPLETE'),
+  statusStringToNumber('INTENDED_INCOMPLETE')
+].filter((status): status is number => status !== null);
 
 /**
  * Service responsible for querying coding lists and variables.
@@ -63,7 +67,7 @@ export class CodingListQueryService {
     try {
       const server = serverUrl;
 
-      // 1) Query CODING_INCOMPLETE and INTENDED_INCOMPLETE responses
+      // 1) Query explicitly selected manual-coding candidate responses.
       const queryBuilder = this.responseRepository
         .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
@@ -71,10 +75,7 @@ export class CodingListQueryService {
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('response.status_v1 IN (:...statuses)', {
-          statuses: [
-            statusStringToNumber('CODING_INCOMPLETE'),
-            statusStringToNumber('INTENDED_INCOMPLETE')
-          ]
+          statuses: MANUAL_CODING_CANDIDATE_STATUSES
         })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id })
         .andWhere('person.consider = :consider', { consider: true })
@@ -116,6 +117,7 @@ export class CodingListQueryService {
         const variableId = r.variableid || '';
         const hasValue = r.value != null && r.value.trim() !== '';
 
+        if (!this.isManualCodingCandidateStatus(r.status_v1)) return false;
         if (!hasValue) return false;
 
         const hasExcludedSubstring = /image|text|audio|frame|video|_0/i.test(variableId);
@@ -265,10 +267,7 @@ export class CodingListQueryService {
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
+        statuses: MANUAL_CODING_CANDIDATE_STATUSES
       })
       .andWhere("(response.value IS NOT NULL AND response.value != '')");
 
@@ -311,6 +310,8 @@ export class CodingListQueryService {
     const baseFilteredResults = rawResults.filter(row => {
       const unitNameUpper = row.unitName?.toUpperCase();
       const variableId: string = row.variableId;
+
+      if (!this.isManualCodingCandidateStatus(row.statusV1)) return false;
 
       const validVars = validVariableSets.get(unitNameUpper);
       if (!validVars?.has(variableId)) return false;
@@ -361,5 +362,9 @@ export class CodingListQueryService {
     );
 
     return filteredResults;
+  }
+
+  private isManualCodingCandidateStatus(status: unknown): boolean {
+    return MANUAL_CODING_CANDIDATE_STATUSES.includes(Number(status));
   }
 }
