@@ -230,8 +230,11 @@
 
   .mat-column-score,
   .mat-column-count,
-  .mat-column-percentage,
+  .mat-column-validOccurrenceCount,
+  .mat-column-percentageTotal,
+  .mat-column-percentageValid,
   .mat-column-totalCount,
+  .mat-column-validCount,
   .mat-column-emptyCount,
   .mat-column-metric {
     text-align: right;

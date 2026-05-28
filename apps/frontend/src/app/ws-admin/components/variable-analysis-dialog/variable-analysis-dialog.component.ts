@@ -74,6 +74,8 @@ export interface VariableAnalysisData {
       isDerived?: boolean;
       hasCodingScheme?: boolean;
       totalCount?: number;
+      validCount?: number;
+      invalidCount?: number;
       emptyCount?: number;
       emptyPercentage?: number;
       distinctValueCount?: number;
@@ -91,7 +93,10 @@ export interface VariableAnalysisData {
         isSchemaOnly?: boolean;
         isSchemaSupplemental?: boolean;
         count: number;
+        validOccurrenceCount?: number;
         percentage: number;
+        percentageTotal?: number;
+        percentageValid?: number | null;
       }[];
     };
     total: number;
@@ -119,7 +124,10 @@ export interface VariableFrequency {
   isSchemaOnly?: boolean;
   isSchemaSupplemental?: boolean;
   count: number;
+  validOccurrenceCount?: number;
   percentage: number;
+  percentageTotal?: number;
+  percentageValid?: number | null;
 }
 
 export interface VariableStatusCount {
@@ -139,6 +147,8 @@ export interface VariableCombo {
   isDerived?: boolean;
   hasCodingScheme?: boolean;
   totalCount?: number;
+  validCount?: number;
+  invalidCount?: number;
   emptyCount?: number;
   emptyPercentage?: number;
   distinctValueCount?: number;
@@ -147,6 +157,8 @@ export interface VariableCombo {
 
 interface VariableComboSummary {
   totalCount: number;
+  validCount: number;
+  invalidCount: number;
   emptyCount: number;
   emptyPercentage: number;
   statusSummary: string;
@@ -190,8 +202,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     'label',
     'score',
     'count',
-    'percentage',
+    'validOccurrenceCount',
+    'percentageTotal',
+    'percentageValid',
     'totalCount',
+    'validCount',
     'emptyCount',
     'statusSummary',
     'metric'
@@ -396,7 +411,10 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 isSchemaOnly: freq.isSchemaOnly,
                 isSchemaSupplemental: freq.isSchemaSupplemental,
                 count: freq.count,
-                percentage: freq.percentage
+                validOccurrenceCount: freq.validOccurrenceCount,
+                percentage: freq.percentage,
+                percentageTotal: freq.percentageTotal,
+                percentageValid: freq.percentageValid
               }));
           }
         }
@@ -456,6 +474,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         summary.totalCount = (summary.totalCount || 0) + 1;
         if (value === '') {
           summary.emptyCount = (summary.emptyCount || 0) + 1;
+        } else {
+          summary.validCount = (summary.validCount || 0) + 1;
         }
 
         const status = response.status;
@@ -479,15 +499,24 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           0
         );
         const comboKey = `0:${variableid}`;
+        const emptyResponses = valueMap[''] || 0;
+        const validResponses = Math.max(0, totalResponses - emptyResponses);
         this.variableFrequencies[comboKey] = Object.keys(valueMap)
           .map(value => {
             const count = valueMap[value];
+            const validOccurrenceCount = value === '' ? 0 : count;
+            const percentageTotal = (count / totalResponses) * 100;
             return {
               unitName: 'Unknown',
               variableid,
               value,
               count,
-              percentage: (count / totalResponses) * 100
+              validOccurrenceCount,
+              percentage: percentageTotal,
+              percentageTotal,
+              percentageValid: validResponses > 0 ?
+                (validOccurrenceCount / validResponses) * 100 :
+                null
             };
           })
           .sort((a, b) => b.count - a.count)
@@ -498,8 +527,13 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         const summary = comboSummaries.get(comboKey) || combo;
         const totalCount = summary.totalCount || 0;
         const emptyCount = summary.emptyCount || 0;
+        const validCount = summary.validCount ??
+          Math.max(0, totalCount - emptyCount);
         return {
           ...summary,
+          validCount,
+          invalidCount: summary.invalidCount ??
+            Math.max(0, totalCount - validCount),
           emptyPercentage: totalCount > 0 ? (emptyCount / totalCount) * 100 : 0,
           distinctValueCount: Object.keys(
             responsesByVariable[combo.variableId] || {}
@@ -544,10 +578,14 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       frequencies
         .filter(item => item.value === '')
         .reduce((sum, item) => sum + item.count, 0);
+    const validCount = combo.validCount ??
+      Math.max(0, totalCount - emptyCount);
 
     return {
       ...combo,
       totalCount,
+      validCount,
+      invalidCount: combo.invalidCount ?? Math.max(0, totalCount - validCount),
       emptyCount,
       emptyPercentage:
         combo.emptyPercentage ??
@@ -570,9 +608,13 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     const emptyPercentage =
       combo.emptyPercentage ??
       (totalCount > 0 ? (emptyCount / totalCount) * 100 : 0);
+    const validCount = combo.validCount ??
+      Math.max(0, totalCount - emptyCount);
 
     return {
       totalCount,
+      validCount,
+      invalidCount: combo.invalidCount ?? Math.max(0, totalCount - validCount),
       emptyCount,
       emptyPercentage,
       statusSummary: this.getStatusSummary(combo.statusCounts || [])
@@ -749,6 +791,12 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   formatOptionalNumber(value: number | null | undefined): string {
     return value === null || value === undefined ? '-' : value.toString();
+  }
+
+  formatOptionalPercentage(value: number | null | undefined): string {
+    return value === null || value === undefined ?
+      '-' :
+      `${value.toFixed(1)}%`;
   }
 
   getEmptyStateMessageKey(): string {
@@ -1205,36 +1253,55 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           variableid: combo.variableId,
           value: '',
           count: 0,
+          validOccurrenceCount: 0,
           percentage: 0,
+          percentageTotal: 0,
+          percentageValid: summary.validCount > 0 ? 0 : null,
           isSchemaOnly: true
         }];
 
-      return visibleFrequencies.map(frequency => ({
-        unitId: combo.unitId,
-        unitName: combo.unitName,
-        variableId: combo.variableId,
-        sourceVariableId: combo.sourceVariableId,
-        variableAlias: combo.variableAlias,
-        selectionSource: combo.selectionSource,
-        sourceType: combo.sourceType,
-        isDerived: combo.isDerived,
-        hasCodingScheme: combo.hasCodingScheme,
-        value: frequency.value,
-        label: frequency.label,
-        score: frequency.score,
-        schemaOrder: frequency.schemaOrder,
-        isSchemaOnly: frequency.isSchemaOnly,
-        isSchemaSupplemental: frequency.isSchemaSupplemental,
-        count: frequency.count,
-        percentage: frequency.percentage,
-        totalCount: summary.totalCount,
-        emptyCount: summary.emptyCount,
-        emptyPercentage: summary.emptyPercentage,
-        distinctValueCount,
-        hiddenValueCount,
-        statusCounts: combo.statusCounts,
-        statusSummary: summary.statusSummary
-      }));
+      return visibleFrequencies.map(frequency => {
+        const validOccurrenceCount = frequency.validOccurrenceCount ??
+          (frequency.value === '' ? 0 : frequency.count);
+        const percentageTotal = frequency.percentageTotal ??
+          frequency.percentage;
+        const percentageValid = frequency.percentageValid ??
+          (summary.validCount > 0 ?
+            (validOccurrenceCount / summary.validCount) * 100 :
+            null);
+
+        return {
+          unitId: combo.unitId,
+          unitName: combo.unitName,
+          variableId: combo.variableId,
+          sourceVariableId: combo.sourceVariableId,
+          variableAlias: combo.variableAlias,
+          selectionSource: combo.selectionSource,
+          sourceType: combo.sourceType,
+          isDerived: combo.isDerived,
+          hasCodingScheme: combo.hasCodingScheme,
+          value: frequency.value,
+          label: frequency.label,
+          score: frequency.score,
+          schemaOrder: frequency.schemaOrder,
+          isSchemaOnly: frequency.isSchemaOnly,
+          isSchemaSupplemental: frequency.isSchemaSupplemental,
+          count: frequency.count,
+          validOccurrenceCount,
+          percentage: percentageTotal,
+          percentageTotal,
+          percentageValid,
+          totalCount: summary.totalCount,
+          validCount: summary.validCount,
+          invalidCount: summary.invalidCount,
+          emptyCount: summary.emptyCount,
+          emptyPercentage: summary.emptyPercentage,
+          distinctValueCount,
+          hiddenValueCount,
+          statusCounts: combo.statusCounts,
+          statusSummary: summary.statusSummary
+        };
+      });
     });
   }
 
@@ -1346,8 +1413,12 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       'label',
       'score',
       'count',
+      'validOccurrenceCount',
       'percentage',
+      'percentageTotal',
+      'percentageValid',
       'totalCount',
+      'validCount',
       'emptyCount',
       'emptyPercentage',
       'statusSummary'

@@ -11,6 +11,8 @@ export interface VariableCombo {
   isDerived?: boolean;
   hasCodingScheme?: boolean;
   totalCount?: number;
+  validCount?: number;
+  invalidCount?: number;
   emptyCount?: number;
   emptyPercentage?: number;
   distinctValueCount?: number;

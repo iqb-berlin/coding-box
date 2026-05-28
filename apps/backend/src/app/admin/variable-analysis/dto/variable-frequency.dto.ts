@@ -9,5 +9,8 @@ export class VariableFrequencyDto {
   isSchemaOnly?: boolean;
   isSchemaSupplemental?: boolean;
   count: number;
+  validOccurrenceCount?: number;
   percentage: number;
+  percentageTotal?: number;
+  percentageValid?: number | null;
 }

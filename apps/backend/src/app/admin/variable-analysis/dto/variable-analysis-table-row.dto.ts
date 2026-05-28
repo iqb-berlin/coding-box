@@ -17,8 +17,13 @@ export class VariableAnalysisTableRowDto {
   isSchemaOnly?: boolean;
   isSchemaSupplemental?: boolean;
   count: number;
+  validOccurrenceCount?: number;
   percentage: number;
+  percentageTotal?: number;
+  percentageValid?: number | null;
   totalCount: number;
+  validCount?: number;
+  invalidCount?: number;
   emptyCount: number;
   emptyPercentage: number;
   distinctValueCount: number;
