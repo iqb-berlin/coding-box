@@ -66,6 +66,12 @@ export interface VariableAnalysisData {
       unitId: number;
       unitName: string;
       variableId: string;
+      sourceVariableId?: string;
+      variableAlias?: string;
+      selectionSource?: string;
+      sourceType?: string;
+      isDerived?: boolean;
+      hasCodingScheme?: boolean;
       totalCount?: number;
       emptyCount?: number;
       emptyPercentage?: number;
@@ -125,6 +131,12 @@ export interface VariableCombo {
   unitId: number;
   unitName: string;
   variableId: string;
+  sourceVariableId?: string;
+  variableAlias?: string;
+  selectionSource?: string;
+  sourceType?: string;
+  isDerived?: boolean;
+  hasCodingScheme?: boolean;
   totalCount?: number;
   emptyCount?: number;
   emptyPercentage?: number;
@@ -1196,10 +1208,28 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         distinctValueCount - displayedObservedValueCount
       );
 
-      return frequencies.map(frequency => ({
+      const visibleFrequencies: VariableFrequency[] = frequencies.length > 0 ?
+        frequencies :
+        [{
+          unitId: combo.unitId,
+          unitName: combo.unitName,
+          variableid: combo.variableId,
+          value: '',
+          count: 0,
+          percentage: 0,
+          isSchemaOnly: true
+        }];
+
+      return visibleFrequencies.map(frequency => ({
         unitId: combo.unitId,
         unitName: combo.unitName,
         variableId: combo.variableId,
+        sourceVariableId: combo.sourceVariableId,
+        variableAlias: combo.variableAlias,
+        selectionSource: combo.selectionSource,
+        sourceType: combo.sourceType,
+        isDerived: combo.isDerived,
+        hasCodingScheme: combo.hasCodingScheme,
         value: frequency.value,
         label: frequency.label,
         score: frequency.score,

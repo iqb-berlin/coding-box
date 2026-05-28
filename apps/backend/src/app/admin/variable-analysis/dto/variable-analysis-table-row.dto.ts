@@ -4,6 +4,12 @@ export class VariableAnalysisTableRowDto {
   unitId: number;
   unitName: string;
   variableId: string;
+  sourceVariableId?: string;
+  variableAlias?: string;
+  selectionSource?: string;
+  sourceType?: string;
+  isDerived?: boolean;
+  hasCodingScheme?: boolean;
   value: string;
   label?: string;
   score?: number;

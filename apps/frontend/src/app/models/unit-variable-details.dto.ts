@@ -26,6 +26,7 @@ export interface VariableDetailDto {
   nullable?: boolean;
   hasCodingScheme: boolean;
   codingSchemeRef?: string;
+  sourceType?: string;
   codes?: CodeInfo[];
   values?: VariableValueInfo[];
   valuesComplete?: boolean;

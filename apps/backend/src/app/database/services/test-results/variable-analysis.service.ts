@@ -989,10 +989,18 @@ export class VariableAnalysisService {
     );
     const statusSummary = this.formatStatusSummary(combo.statusCounts || []);
 
-    return rows.map(row => ({
+    const toTableRow = (
+      row: VariableFrequencyDto
+    ): VariableAnalysisTableRowDto => ({
       unitId: combo.unitId,
       unitName: combo.unitName,
       variableId: combo.variableId,
+      sourceVariableId: combo.sourceVariableId,
+      variableAlias: combo.variableAlias,
+      selectionSource: combo.selectionSource,
+      sourceType: combo.sourceType,
+      isDerived: combo.isDerived,
+      hasCodingScheme: combo.hasCodingScheme,
       value: row.value,
       label: row.label,
       score: row.score,
@@ -1008,7 +1016,21 @@ export class VariableAnalysisService {
       hiddenValueCount,
       statusCounts: combo.statusCounts || [],
       statusSummary
-    }));
+    });
+
+    if (rows.length === 0) {
+      return [toTableRow({
+        unitId: combo.unitId,
+        unitName: combo.unitName,
+        variableId: combo.variableId,
+        value: '',
+        count: 0,
+        percentage: 0,
+        isSchemaOnly: true
+      })];
+    }
+
+    return rows.map(toTableRow);
   }
 
   private sortRows(
@@ -1200,7 +1222,19 @@ export class VariableAnalysisService {
       );
       const statusSummary = this.formatStatusSummary(combo.statusCounts || []);
 
-      frequencies.forEach(frequency => {
+      const visibleFrequencies: VariableFrequencyDto[] = frequencies.length > 0 ?
+        frequencies :
+        [{
+          unitId: combo.unitId,
+          unitName: combo.unitName,
+          variableId: combo.variableId,
+          value: '',
+          count: 0,
+          percentage: 0,
+          isSchemaOnly: true
+        }];
+
+      visibleFrequencies.forEach(frequency => {
         rows.push({
           unitId: combo.unitId,
           unitName: combo.unitName,

@@ -42,6 +42,12 @@ export interface VariableCombo {
   unitId: number;
   unitName: string;
   variableId: string;
+  sourceVariableId?: string;
+  variableAlias?: string;
+  selectionSource?: string;
+  sourceType?: string;
+  isDerived?: boolean;
+  hasCodingScheme?: boolean;
   totalCount?: number;
   emptyCount?: number;
   emptyPercentage?: number;
@@ -65,6 +71,12 @@ export interface VariableAnalysisTableRowDto extends VariableFrequencyDto {
   unitId: number;
   unitName: string;
   variableId: string;
+  sourceVariableId?: string;
+  variableAlias?: string;
+  selectionSource?: string;
+  sourceType?: string;
+  isDerived?: boolean;
+  hasCodingScheme?: boolean;
   totalCount: number;
   emptyCount: number;
   emptyPercentage: number;
