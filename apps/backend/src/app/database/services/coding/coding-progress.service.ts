@@ -296,12 +296,15 @@ export class CodingProgressService {
   }
 
   private async getCoverageResponseScope(workspaceId: number): Promise<CoverageResponseScope> {
-    const allResponses = await this.getCoverageResponses(workspaceId);
+    const [allResponses, manualPoolResponses] = await Promise.all([
+      this.getCoverageResponses(workspaceId),
+      this.getCoverageResponses(workspaceId, true)
+    ]);
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const derivedVariablesBySourceMap =
       await this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId);
     const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
-      allResponses
+      manualPoolResponses
         .filter(response => response.statusV1 === codingIncompleteStatus)
         .map(response => ({
           unitName: response.unitName,
@@ -309,12 +312,12 @@ export class CodingProgressService {
         })),
       derivedVariablesBySourceMap
     );
-    const manualResponses = allResponses.filter(response => (
+    const manualResponses = manualPoolResponses.filter(response => (
       response.statusV1 === codingIncompleteStatus ||
       !isCoveredSourceVariable(response, coveredSourceKeys)
     ));
     const excludedSourceSummary = summarizeCoveredSourceVariables(
-      allResponses
+      manualPoolResponses
         .filter(response => response.statusV1 !== codingIncompleteStatus)
         .map(response => ({
           unitName: response.unitName,
@@ -397,7 +400,10 @@ export class CodingProgressService {
     };
   }
 
-  private async getCoverageResponses(workspaceId: number): Promise<CoverageResponse[]> {
+  private async getCoverageResponses(
+    workspaceId: number,
+    manualPoolOnly = false
+  ): Promise<CoverageResponse[]> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const query = this.responseRepository
       .createQueryBuilder('response')
@@ -420,9 +426,36 @@ export class CodingProgressService {
       })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))')
       .orderBy('response.id', 'ASC');
-    applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: 'coverageResponses' });
+
+    if (manualPoolOnly) {
+      query.andWhere(new Brackets(qb => {
+        qb.where('response.code_v2 IS NULL')
+          .orWhere(subQuery => {
+            const exists = subQuery
+              .subQuery()
+              .select('1')
+              .from('coding_job_unit', 'manual_cju')
+              .innerJoin('coding_job', 'manual_cj', 'manual_cj.id = manual_cju.coding_job_id')
+              .where('manual_cju.response_id = response.id')
+              .andWhere('manual_cj.training_id IS NULL')
+              .getQuery();
+            return `EXISTS (${exists})`;
+          });
+      }));
+    } else {
+      query.andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))');
+    }
+
+    applyResolvedExclusionsToQuery(
+      query,
+      exclusions,
+      {
+        parameterPrefix: manualPoolOnly ?
+          'coverageResponsesManualPool' :
+          'coverageResponses'
+      }
+    );
     const raw = await query.getRawMany();
 
     return raw.map(row => ({
@@ -661,8 +694,10 @@ export class CodingProgressService {
               const exists = subQuery
                 .subQuery()
                 .select('1')
-                .from('coding_job_unit', 'cju')
-                .where('cju.response_id = response.id')
+                .from('coding_job_unit', 'manual_cju')
+                .innerJoin('coding_job', 'manual_cj', 'manual_cj.id = manual_cju.coding_job_id')
+                .where('manual_cju.response_id = response.id')
+                .andWhere('manual_cj.training_id IS NULL')
                 .getQuery();
               return `EXISTS (${exists})`;
             });
