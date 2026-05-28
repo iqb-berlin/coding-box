@@ -690,6 +690,130 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       expect(result.issues?.some(issue => issue.category === 'other')).toBe(true);
     });
 
+    it('should merge a new person into an existing test group and report the follow-up state', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
+existing-group;new-login;new-code;booklet1;unit1;"[{""subForm"":"""",""content"":""[{\\""id\\"":\\""VAR_1\\"",\\""status\\"":\\""VALUE_CHANGED\\""}]""}]";""`;
+
+      const filePath = path.join(os.tmpdir(), 'test-merge-new-person-existing-group.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      jest.spyOn(personService, 'getWorkspaceUploadStats')
+        .mockResolvedValueOnce({
+          testPersons: 1,
+          testGroups: 1,
+          uniqueBooklets: 1,
+          uniqueUnits: 1,
+          uniqueResponses: 1
+        })
+        .mockResolvedValueOnce({
+          testPersons: 2,
+          testGroups: 1,
+          uniqueBooklets: 1,
+          uniqueUnits: 2,
+          uniqueResponses: 2
+        });
+
+      const newPerson = {
+        workspace_id: 1,
+        group: 'existing-group',
+        login: 'new-login',
+        code: 'new-code',
+        booklets: []
+      };
+      const newPersonWithBooklets = {
+        ...newPerson,
+        booklets: [
+          {
+            id: 'booklet1',
+            logs: [],
+            units: [],
+            sessions: []
+          }
+        ]
+      };
+      const newPersonWithUnits = {
+        ...newPersonWithBooklets,
+        booklets: [
+          {
+            id: 'booklet1',
+            logs: [],
+            sessions: [],
+            units: [
+              {
+                id: 'unit1',
+                alias: 'unit1',
+                laststate: [],
+                chunks: [],
+                subforms: [],
+                logs: []
+              }
+            ]
+          }
+        ]
+      };
+
+      jest.spyOn(personService, 'createPersonList').mockResolvedValue([newPerson]);
+      jest.spyOn(personService, 'assignBookletsToPerson').mockResolvedValue(newPersonWithBooklets);
+      jest.spyOn(personService, 'assignUnitsToBookletAndPerson').mockResolvedValue(newPersonWithUnits);
+      jest.spyOn(personService, 'processPersonBooklets').mockResolvedValue({
+        addedUnitIds: [101],
+        changedUnitIds: [],
+        addedResponseCount: 1,
+        changedResponseCount: 0
+      });
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'responses',
+          overwriteMode: 'merge',
+          scope: 'person'
+        }
+      }));
+
+      expect(personService.processPersonBooklets).toHaveBeenCalledWith(
+        [newPersonWithUnits],
+        1,
+        'merge',
+        'person'
+      );
+      expect(result.expected).toMatchObject({
+        testPersons: 1,
+        testGroups: 1,
+        uniqueBooklets: 1,
+        uniqueUnits: 1,
+        uniqueResponses: 1
+      });
+      expect(result.delta).toEqual({
+        testPersons: 1,
+        testGroups: 0,
+        uniqueBooklets: 0,
+        uniqueUnits: 1,
+        uniqueResponses: 1
+      });
+      expect(codingFreshnessService.markUnitsPendingAfterImport).toHaveBeenCalledWith(1, [101], 1);
+      expect(codingFreshnessService.markUnitsStaleAfterResultChange).toHaveBeenCalledWith(
+        1,
+        [],
+        'RESULT_UPDATED'
+      );
+      expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
+      expect(workspaceTestResultsService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
+      expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    });
+
     it('should mark freshness and invalidate response-analysis and coding-statistics caches after importing responses', async () => {
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;[];""`;
