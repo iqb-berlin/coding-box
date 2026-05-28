@@ -1,9 +1,11 @@
 .dialog-container {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   padding: 16px;
   max-height: 80vh;
-  min-width: 600px;
+  min-width: 0;
+  width: 100%;
 }
 
 .dialog-title {
@@ -199,7 +201,7 @@
 }
 
 .analysis-table {
-  min-width: 1120px;
+  min-width: 1260px;
 
   .mat-mdc-header-row {
     background: #f7f7f7;
@@ -214,12 +216,14 @@
 
   .mat-column-unitName,
   .mat-column-variableId {
-    max-width: 180px;
+    min-width: 140px;
+    max-width: 220px;
     overflow-wrap: anywhere;
   }
 
   .mat-column-value,
   .mat-column-label {
+    min-width: 150px;
     max-width: 220px;
     overflow-wrap: anywhere;
   }
@@ -235,7 +239,12 @@
   }
 
   .mat-column-statusSummary {
+    min-width: 160px;
     max-width: 240px;
+  }
+
+  .mat-column-emptyCount {
+    min-width: 120px;
   }
 }
 
