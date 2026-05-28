@@ -923,6 +923,21 @@ export class WorkspaceCodingStatisticsController {
           type: 'number',
           description: 'Total number of cases that need to be coded'
         },
+        statusTotalCasesToCode: {
+          type: 'number',
+          description:
+            'Raw status total before covered source variables are excluded'
+        },
+        coveredSourceVariableCount: {
+          type: 'number',
+          description:
+            'Number of source variables represented by derived manual variables'
+        },
+        coveredSourceResponseCount: {
+          type: 'number',
+          description:
+            'Number of source responses excluded because their derived variables are coded manually'
+        },
         completedCases: {
           type: 'number',
           description:
@@ -964,6 +979,9 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number
   ): Promise<{
         totalCasesToCode: number;
+        statusTotalCasesToCode: number;
+        coveredSourceVariableCount: number;
+        coveredSourceResponseCount: number;
         completedCases: number;
         completionPercentage: number;
         rawTotalCasesToCode: number;
@@ -988,6 +1006,21 @@ export class WorkspaceCodingStatisticsController {
         totalIncompleteResponses: {
           type: 'number',
           description: 'Total cases after duplicate aggregation'
+        },
+        statusTotalIncompleteResponses: {
+          type: 'number',
+          description:
+            'Raw status total before covered source variables are excluded'
+        },
+        coveredSourceVariableCount: {
+          type: 'number',
+          description:
+            'Number of source variables represented by derived manual variables'
+        },
+        coveredSourceResponseCount: {
+          type: 'number',
+          description:
+            'Number of source responses excluded because their derived variables are coded manually'
         },
         appliedResponses: {
           type: 'number',
@@ -1033,6 +1066,9 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number
   ): Promise<{
         totalIncompleteResponses: number;
+        statusTotalIncompleteResponses: number;
+        coveredSourceVariableCount: number;
+        coveredSourceResponseCount: number;
         appliedResponses: number;
         remainingResponses: number;
         completionPercentage: number;
@@ -1058,6 +1094,21 @@ export class WorkspaceCodingStatisticsController {
         totalCasesToCode: {
           type: 'number',
           description: 'Raw total number of cases that need to be coded'
+        },
+        statusTotalCasesToCode: {
+          type: 'number',
+          description:
+            'Raw status total before covered source variables are excluded'
+        },
+        coveredSourceVariableCount: {
+          type: 'number',
+          description:
+            'Number of source variables represented by derived manual variables'
+        },
+        coveredSourceResponseCount: {
+          type: 'number',
+          description:
+            'Number of source responses excluded because their derived variables are coded manually'
         },
         effectiveTotalCasesToCode: {
           type: 'number',
@@ -1113,6 +1164,9 @@ export class WorkspaceCodingStatisticsController {
   })
   async getCaseCoverageOverview(@WorkspaceId() workspace_id: number): Promise<{
     totalCasesToCode: number;
+    statusTotalCasesToCode: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
     effectiveTotalCasesToCode: number;
     casesInJobs: number;
     effectiveCasesInJobs: number;
@@ -1141,6 +1195,21 @@ export class WorkspaceCodingStatisticsController {
         totalVariables: {
           type: 'number',
           description: 'Total number of potential variables from unit XML files'
+        },
+        statusTotalVariables: {
+          type: 'number',
+          description:
+            'Raw status variable total before covered source variables are excluded'
+        },
+        coveredSourceVariableCount: {
+          type: 'number',
+          description:
+            'Number of source variables represented by derived manual variables'
+        },
+        coveredSourceResponseCount: {
+          type: 'number',
+          description:
+            'Number of source responses excluded because their derived variables are coded manually'
         },
         coveredVariables: {
           type: 'number',
@@ -1253,6 +1322,9 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number
   ): Promise<{
         totalVariables: number;
+        statusTotalVariables: number;
+        coveredSourceVariableCount: number;
+        coveredSourceResponseCount: number;
         coveredVariables: number;
         coveredByDraft: number;
         coveredByPendingReview: number;

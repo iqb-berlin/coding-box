@@ -14,6 +14,7 @@ const createQueryBuilder = (rawRows: unknown[] = []) => ({
   distinct: jest.fn().mockReturnThis(),
   orderBy: jest.fn().mockReturnThis(),
   addOrderBy: jest.fn().mockReturnThis(),
+  limit: jest.fn().mockReturnThis(),
   groupBy: jest.fn().mockReturnThis(),
   addGroupBy: jest.fn().mockReturnThis(),
   clone: jest.fn().mockReturnThis(),
@@ -255,6 +256,507 @@ describe('VariableAnalysisProcessor', () => {
           schemaOrder: 2,
           isSchemaOnly: true,
           isSchemaSupplemental: true
+        })
+      ]]],
+      86400
+    );
+  });
+
+  it('splits multiple response arrays and applies metadata value labels', async () => {
+    const baseQuery = createQueryBuilder();
+    const variableCombosQuery = createQueryBuilder([
+      { unitId: '1', unitName: 'UNIT', variableId: 'MULTI' }
+    ]);
+    const summaryQuery = createQueryBuilder([
+      {
+        unitId: '1',
+        variableId: 'MULTI',
+        totalCount: '3',
+        emptyCount: '0',
+        distinctValueCount: '3'
+      }
+    ]);
+    const topValuesQuery = createQueryBuilder();
+    const multipleResponseQuery = createQueryBuilder([
+      {
+        responseId: '1',
+        unitId: '1',
+        unitName: 'UNIT',
+        variableId: 'MULTI',
+        value: '["A","B"]'
+      },
+      {
+        responseId: '2',
+        unitId: '1',
+        unitName: 'UNIT',
+        variableId: 'MULTI',
+        value: '["B"]'
+      },
+      {
+        responseId: '3',
+        unitId: '1',
+        unitName: 'UNIT',
+        variableId: 'MULTI',
+        value: '[]'
+      }
+    ]);
+    const schemaCountQuery = createQueryBuilder([]);
+    const statusQuery = createQueryBuilder([]);
+    baseQuery.clone = jest.fn()
+      .mockReturnValueOnce(variableCombosQuery)
+      .mockReturnValueOnce(summaryQuery)
+      .mockReturnValueOnce(topValuesQuery)
+      .mockReturnValueOnce(multipleResponseQuery)
+      .mockReturnValueOnce(schemaCountQuery)
+      .mockReturnValueOnce(statusQuery);
+
+    const responseRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(baseQuery),
+      query: jest.fn().mockResolvedValue([
+        {
+          unitId: '1',
+          unitName: 'UNIT',
+          variableId: 'MULTI',
+          value: '["A","B"]',
+          valueLength: '9',
+          valueHash: 'hash-array',
+          count: '1'
+        }
+      ])
+    };
+    const cacheService = {
+      set: jest.fn().mockResolvedValue(true)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+    const workspaceFilesService = {
+      getUnitVariableDetails: jest.fn().mockResolvedValue([
+        {
+          unitName: 'UNIT',
+          unitId: 'UNIT',
+          variables: [
+            {
+              id: 'MULTI',
+              alias: 'MULTI',
+              type: 'string',
+              multiple: true,
+              hasCodingScheme: false,
+              values: [
+                { value: 'A', label: 'Alpha' },
+                { value: 'B', label: 'Beta' }
+              ]
+            }
+          ]
+        }
+      ])
+    };
+    const processor = new VariableAnalysisProcessor(
+      responseRepository as never,
+      cacheService as unknown as CacheService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService,
+      workspaceFilesService as unknown as WorkspaceFilesService
+    );
+    const job = {
+      id: 'job-1',
+      data: {
+        workspaceId: 1,
+        cacheKey: 'variable-analysis:1:job-1'
+      },
+      progress: jest.fn().mockResolvedValue(undefined)
+    } as unknown as Job<VariableAnalysisJobData>;
+
+    await processor.process(job);
+
+    expect(multipleResponseQuery.andWhere).toHaveBeenCalledWith(
+      'response.id > :multipleLastResponseId',
+      { multipleLastResponseId: 0 }
+    );
+    expect(multipleResponseQuery.limit).toHaveBeenCalledWith(5000);
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'variable-analysis:1:job-1:variable-combos:0',
+      [expect.objectContaining({
+        unitId: 1,
+        unitName: 'UNIT',
+        variableId: 'MULTI',
+        totalCount: 3,
+        emptyCount: 1,
+        distinctValueCount: 2
+      })],
+      86400
+    );
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'variable-analysis:1:job-1:frequencies:0',
+      [['1:MULTI', [
+        expect.objectContaining({
+          value: 'B',
+          label: 'Beta',
+          count: 2,
+          percentage: 66.66666666666666
+        }),
+        expect.objectContaining({
+          value: 'A',
+          label: 'Alpha',
+          count: 1,
+          percentage: 33.33333333333333
+        })
+      ]]],
+      86400
+    );
+  });
+
+  it('paginates multiple response rows across batches', async () => {
+    const baseQuery = createQueryBuilder();
+    const variableCombosQuery = createQueryBuilder([
+      { unitId: '1', unitName: 'UNIT', variableId: 'MULTI' }
+    ]);
+    const summaryQuery = createQueryBuilder([
+      {
+        unitId: '1',
+        variableId: 'MULTI',
+        totalCount: '5001',
+        emptyCount: '0',
+        distinctValueCount: '3'
+      }
+    ]);
+    const topValuesQuery = createQueryBuilder();
+    const multipleResponseBatchSize = 5000;
+    const multipleResponsePage1Query = createQueryBuilder(
+      Array.from({ length: multipleResponseBatchSize }, (_, index) => ({
+        responseId: index + 1,
+        unitId: '1',
+        unitName: 'UNIT',
+        variableId: 'MULTI',
+        value: '["A"]'
+      }))
+    );
+    const multipleResponsePage2Query = createQueryBuilder([
+      {
+        responseId: multipleResponseBatchSize + 1,
+        unitId: '1',
+        unitName: 'UNIT',
+        variableId: 'MULTI',
+        value: '["B","C"]'
+      }
+    ]);
+    const schemaCountQuery = createQueryBuilder([]);
+    const statusQuery = createQueryBuilder([]);
+    baseQuery.clone = jest.fn()
+      .mockReturnValueOnce(variableCombosQuery)
+      .mockReturnValueOnce(summaryQuery)
+      .mockReturnValueOnce(topValuesQuery)
+      .mockReturnValueOnce(multipleResponsePage1Query)
+      .mockReturnValueOnce(multipleResponsePage2Query)
+      .mockReturnValueOnce(schemaCountQuery)
+      .mockReturnValueOnce(statusQuery);
+
+    const responseRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(baseQuery),
+      query: jest.fn().mockResolvedValue([])
+    };
+    const cacheService = {
+      set: jest.fn().mockResolvedValue(true)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+    const workspaceFilesService = {
+      getUnitVariableDetails: jest.fn().mockResolvedValue([
+        {
+          unitName: 'UNIT',
+          unitId: 'UNIT',
+          variables: [
+            {
+              id: 'MULTI',
+              alias: 'MULTI',
+              type: 'string',
+              multiple: true,
+              hasCodingScheme: false,
+              values: [
+                { value: 'A', label: 'Alpha' },
+                { value: 'B', label: 'Beta' },
+                { value: 'C', label: 'Gamma' }
+              ]
+            }
+          ]
+        }
+      ])
+    };
+    const processor = new VariableAnalysisProcessor(
+      responseRepository as never,
+      cacheService as unknown as CacheService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService,
+      workspaceFilesService as unknown as WorkspaceFilesService
+    );
+    const job = {
+      id: 'job-1',
+      data: {
+        workspaceId: 1,
+        cacheKey: 'variable-analysis:1:job-1'
+      },
+      progress: jest.fn().mockResolvedValue(undefined)
+    } as unknown as Job<VariableAnalysisJobData>;
+
+    await processor.process(job);
+
+    expect(multipleResponsePage1Query.andWhere).toHaveBeenCalledWith(
+      'response.id > :multipleLastResponseId',
+      { multipleLastResponseId: 0 }
+    );
+    expect(multipleResponsePage2Query.andWhere).toHaveBeenCalledWith(
+      'response.id > :multipleLastResponseId',
+      { multipleLastResponseId: multipleResponseBatchSize }
+    );
+    expect(multipleResponsePage1Query.limit)
+      .toHaveBeenCalledWith(multipleResponseBatchSize);
+    expect(multipleResponsePage2Query.limit)
+      .toHaveBeenCalledWith(multipleResponseBatchSize);
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'variable-analysis:1:job-1:frequencies:0',
+      [['1:MULTI', [
+        expect.objectContaining({
+          value: 'A',
+          label: 'Alpha',
+          count: multipleResponseBatchSize
+        }),
+        expect.objectContaining({
+          value: 'B',
+          label: 'Beta',
+          count: 1
+        }),
+        expect.objectContaining({
+          value: 'C',
+          label: 'Gamma',
+          count: 1
+        })
+      ]]],
+      86400
+    );
+  });
+
+  it('maps boolean multiple response arrays to value position labels', async () => {
+    const baseQuery = createQueryBuilder();
+    const variableCombosQuery = createQueryBuilder([
+      { unitId: '1', unitName: 'UNIT', variableId: 'BOOL_MULTI' }
+    ]);
+    const summaryQuery = createQueryBuilder([]);
+    const topValuesQuery = createQueryBuilder();
+    const multipleResponseQuery = createQueryBuilder([
+      {
+        responseId: '1',
+        unitId: '1',
+        unitName: 'UNIT',
+        variableId: 'BOOL_MULTI',
+        value: '[true,false]'
+      },
+      {
+        responseId: '2',
+        unitId: '1',
+        unitName: 'UNIT',
+        variableId: 'BOOL_MULTI',
+        value: '[true,true]'
+      },
+      {
+        responseId: '3',
+        unitId: '1',
+        unitName: 'UNIT',
+        variableId: 'BOOL_MULTI',
+        value: '[false,false]'
+      }
+    ]);
+    const schemaCountQuery = createQueryBuilder([]);
+    const statusQuery = createQueryBuilder([]);
+    baseQuery.clone = jest.fn()
+      .mockReturnValueOnce(variableCombosQuery)
+      .mockReturnValueOnce(summaryQuery)
+      .mockReturnValueOnce(topValuesQuery)
+      .mockReturnValueOnce(multipleResponseQuery)
+      .mockReturnValueOnce(schemaCountQuery)
+      .mockReturnValueOnce(statusQuery);
+
+    const responseRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(baseQuery),
+      query: jest.fn().mockResolvedValue([])
+    };
+    const cacheService = {
+      set: jest.fn().mockResolvedValue(true)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+    const workspaceFilesService = {
+      getUnitVariableDetails: jest.fn().mockResolvedValue([
+        {
+          unitName: 'UNIT',
+          unitId: 'UNIT',
+          variables: [
+            {
+              id: 'BOOL_MULTI',
+              alias: 'BOOL_MULTI',
+              type: 'boolean',
+              multiple: true,
+              hasCodingScheme: false,
+              valuePositionLabels: ['Red', 'Blue']
+            }
+          ]
+        }
+      ])
+    };
+    const processor = new VariableAnalysisProcessor(
+      responseRepository as never,
+      cacheService as unknown as CacheService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService,
+      workspaceFilesService as unknown as WorkspaceFilesService
+    );
+    const job = {
+      id: 'job-1',
+      data: {
+        workspaceId: 1,
+        cacheKey: 'variable-analysis:1:job-1'
+      },
+      progress: jest.fn().mockResolvedValue(undefined)
+    } as unknown as Job<VariableAnalysisJobData>;
+
+    await processor.process(job);
+
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'variable-analysis:1:job-1:frequencies:0',
+      [['1:BOOL_MULTI', [
+        expect.objectContaining({
+          value: '1',
+          label: 'Red',
+          count: 2,
+          percentage: 66.66666666666666
+        }),
+        expect.objectContaining({
+          value: '2',
+          label: 'Blue',
+          count: 1,
+          percentage: 33.33333333333333
+        })
+      ]]],
+      86400
+    );
+  });
+
+  it('maps boolean multiple response arrays to declared values without position labels', async () => {
+    const baseQuery = createQueryBuilder();
+    const variableCombosQuery = createQueryBuilder([
+      { unitId: '1', unitName: 'UNIT', variableId: 'BOOL_MULTI' }
+    ]);
+    const summaryQuery = createQueryBuilder([]);
+    const topValuesQuery = createQueryBuilder();
+    const multipleResponseQuery = createQueryBuilder([
+      {
+        responseId: '1',
+        unitId: '1',
+        unitName: 'UNIT',
+        variableId: 'BOOL_MULTI',
+        value: '[true,false,true]'
+      },
+      {
+        responseId: '2',
+        unitId: '1',
+        unitName: 'UNIT',
+        variableId: 'BOOL_MULTI',
+        value: '[false,true,false]'
+      }
+    ]);
+    const schemaCountQuery = createQueryBuilder([]);
+    const statusQuery = createQueryBuilder([]);
+    baseQuery.clone = jest.fn()
+      .mockReturnValueOnce(variableCombosQuery)
+      .mockReturnValueOnce(summaryQuery)
+      .mockReturnValueOnce(topValuesQuery)
+      .mockReturnValueOnce(multipleResponseQuery)
+      .mockReturnValueOnce(schemaCountQuery)
+      .mockReturnValueOnce(statusQuery);
+
+    const responseRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(baseQuery),
+      query: jest.fn().mockResolvedValue([])
+    };
+    const cacheService = {
+      set: jest.fn().mockResolvedValue(true)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+    const workspaceFilesService = {
+      getUnitVariableDetails: jest.fn().mockResolvedValue([
+        {
+          unitName: 'UNIT',
+          unitId: 'UNIT',
+          variables: [
+            {
+              id: 'BOOL_MULTI',
+              alias: 'BOOL_MULTI',
+              type: 'boolean',
+              multiple: true,
+              hasCodingScheme: false,
+              values: [
+                { value: 'A', label: 'Alpha' },
+                { value: 'B', label: 'Beta' },
+                { value: 'C', label: 'Gamma' }
+              ]
+            }
+          ]
+        }
+      ])
+    };
+    const processor = new VariableAnalysisProcessor(
+      responseRepository as never,
+      cacheService as unknown as CacheService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService,
+      workspaceFilesService as unknown as WorkspaceFilesService
+    );
+    const job = {
+      id: 'job-1',
+      data: {
+        workspaceId: 1,
+        cacheKey: 'variable-analysis:1:job-1'
+      },
+      progress: jest.fn().mockResolvedValue(undefined)
+    } as unknown as Job<VariableAnalysisJobData>;
+
+    await processor.process(job);
+
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'variable-analysis:1:job-1:frequencies:0',
+      [['1:BOOL_MULTI', [
+        expect.objectContaining({
+          value: 'A',
+          label: 'Alpha',
+          count: 1,
+          percentage: 50
+        }),
+        expect.objectContaining({
+          value: 'B',
+          label: 'Beta',
+          count: 1,
+          percentage: 50
+        }),
+        expect.objectContaining({
+          value: 'C',
+          label: 'Gamma',
+          count: 1,
+          percentage: 50
         })
       ]]],
       86400

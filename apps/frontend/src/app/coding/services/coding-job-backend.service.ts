@@ -168,6 +168,19 @@ export interface BulkApplyCodingResultsResponse {
   }>;
 }
 
+export interface ManualCodingScopeSummary {
+  manualVariableCount: number;
+  manualResponseCount: number;
+  coveredSourceVariableCount: number;
+  coveredSourceResponseCount: number;
+  coveredSourceVariables: Array<{
+    unitName: string;
+    variableId: string;
+    responseCount: number;
+    derivedVariableIds: string[];
+  }>;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -395,6 +408,26 @@ export class CodingJobBackendService {
       coderTrainingRequired?: boolean;
     }[]
     >(url, { params, headers: this.authHeader });
+  }
+
+  getManualCodingScopeSummary(
+    workspaceId: number,
+    unitName?: string,
+    trainingRequired?: boolean
+  ): Observable<ManualCodingScopeSummary> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/incomplete-variables/scope-summary`;
+    let params = new HttpParams();
+    if (unitName) {
+      params = params.set('unitName', unitName);
+    }
+    if (trainingRequired !== undefined) {
+      params = params.set('trainingRequired', trainingRequired.toString());
+    }
+    params = params.set('_t', Date.now().toString());
+    return this.http.get<ManualCodingScopeSummary>(
+      url,
+      { params, headers: this.authHeader }
+    );
   }
 
   getAppliedResultsCount(

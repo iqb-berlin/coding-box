@@ -1588,6 +1588,7 @@
     }
   },
   "coding-management-manual": {
+    "manual-scope-note": "Die Rohsumme der Status CODING_INCOMPLETE und INTENDED_INCOMPLETE umfasst {{statusResponseCount}} Fälle. Davon werden {{responseCount}} Fälle aus {{variableCount}} Basisvariablen nicht separat kodiert, weil sie über abgeleitete Variablen in der manuellen Kodierung abgedeckt sind.",
     "coding-progress": {
       "info-tooltip": "Erklärung zur Berechnung der Fortschrittswerte anzeigen",
       "info-total-title": "Gesamt zu kodierende Fälle",
@@ -1882,6 +1883,7 @@
     "validation-file": "Validierungs-Kodierliste"
   },
   "coding-job-definition-dialog": {
+    "manual-scope-note": "{{responseCount}} Fälle aus {{variableCount}} Basisvariablen werden nicht separat angeboten, weil sie über abgeleitete Variablen in der manuellen Kodierung abgedeckt sind.",
     "job-definition": {
       "edit": "Job-Definition bearbeiten",
       "create": "Neue Job-Definition erstellen",

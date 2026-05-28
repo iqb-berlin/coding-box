@@ -396,6 +396,18 @@
             </div>
             }
 
+            @if (!isLoadingVariableAnalysis && manualCodingScopeSummary && manualCodingScopeSummary.coveredSourceResponseCount > 0) {
+            <div class="manual-scope-note">
+              <mat-icon>info</mat-icon>
+              <span>
+                {{ 'coding-job-definition-dialog.manual-scope-note' | translate:{
+                  responseCount: manualCodingScopeSummary.coveredSourceResponseCount,
+                  variableCount: manualCodingScopeSummary.coveredSourceVariableCount
+                } }}
+              </span>
+            </div>
+            }
+
             @if (!isLoadingVariableAnalysis && variables.length > 0) {
             <div class="quick-selection-tools">
               <button mat-stroked-button color="primary" type="button" (click)="masterToggle()"

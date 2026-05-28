@@ -245,6 +245,28 @@
           }
         }
 
+        .manual-scope-note {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          margin: 0 0 14px 0;
+          padding: 10px 12px;
+          background-color: rgba(227, 242, 253, 0.9);
+          border: 1px solid rgba(25, 118, 210, 0.25);
+          border-radius: 6px;
+          color: #17456f;
+          font-size: 13px;
+          line-height: 1.4;
+
+          mat-icon {
+            color: #1976d2;
+            font-size: 18px;
+            height: 18px;
+            width: 18px;
+            flex: 0 0 auto;
+          }
+        }
+
         .coverage-stats {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));

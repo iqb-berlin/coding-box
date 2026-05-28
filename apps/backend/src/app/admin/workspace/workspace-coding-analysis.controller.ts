@@ -261,6 +261,67 @@ export class WorkspaceCodingAnalysisController {
     );
   }
 
+  @Get(':workspace_id/coding/incomplete-variables/scope-summary')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'unitName',
+    required: false,
+    description: 'Filter by unit name',
+    type: String
+  })
+  @ApiQuery({
+    name: 'trainingRequired',
+    required: false,
+    description: 'Filter variables by coder training requirement',
+    type: Boolean
+  })
+  @ApiOkResponse({
+    description: 'Manual coding scope summary retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        manualVariableCount: { type: 'number' },
+        manualResponseCount: { type: 'number' },
+        coveredSourceVariableCount: { type: 'number' },
+        coveredSourceResponseCount: { type: 'number' },
+        coveredSourceVariables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' },
+              responseCount: { type: 'number' },
+              derivedVariableIds: {
+                type: 'array',
+                items: { type: 'string' }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  async getManualCodingScopeSummary(
+    @WorkspaceId() workspace_id: number,
+      @Query('unitName') unitName?: string,
+      @Query('trainingRequired') trainingRequired?: string
+  ): Promise<Awaited<ReturnType<CodingValidationService['getManualCodingScopeSummary']>>> {
+    let trainingRequiredParam: boolean | undefined;
+    if (trainingRequired === 'true') {
+      trainingRequiredParam = true;
+    } else if (trainingRequired === 'false') {
+      trainingRequiredParam = false;
+    }
+    return this.codingValidationService.getManualCodingScopeSummary(
+      workspace_id,
+      unitName,
+      trainingRequiredParam
+    );
+  }
+
   @Post(':workspace_id/coding/applied-results-count')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')

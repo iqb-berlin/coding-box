@@ -10,6 +10,7 @@ import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspacePlayerService } from '../workspace/workspace-player.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
+import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 
 describe('CodingValidationService', () => {
   let service: CodingValidationService;
@@ -110,7 +111,8 @@ describe('CodingValidationService', () => {
       getUnitVariableMap: jest.fn(),
       getIntendedIncompleteSchemeVariableMap: jest.fn(),
       getDerivedVariableMap: jest.fn(),
-      getCoderTrainingRequiredVariableMap: jest.fn()
+      getCoderTrainingRequiredVariableMap: jest.fn(),
+      getDerivedVariablesBySourceMap: jest.fn()
     } as unknown as jest.Mocked<WorkspaceFilesService>;
 
     mockWorkspacePlayerService = {
@@ -515,7 +517,7 @@ describe('CodingValidationService', () => {
 
       expect(result).toEqual(cachedVariables);
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v4:1'
+        'coding_incomplete_variables_v5:1'
       );
     });
 
@@ -544,6 +546,7 @@ describe('CodingValidationService', () => {
       );
       mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
       mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
       mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
 
       const result = await service.getCodingIncompleteVariables(1);
@@ -565,10 +568,71 @@ describe('CodingValidationService', () => {
         })
       ]);
       expect(mockCacheService.set).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v4:1',
+        'coding_incomplete_variables_v5:1',
         result,
         300
       );
+    });
+
+    it('should exclude INTENDED_INCOMPLETE source variables covered by derived manual variables', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'derived-var', responseCount: '3' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'base-var', responseCount: '3' },
+        { unitName: 'unit1', variableId: 'standalone-var', responseCount: '2' }
+      ]);
+      const casesInJobsQb = createQueryBuilderMock([]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(createQueryBuilderMock([
+          { unitName: 'unit1', variableId: 'derived-var', responseCount: '3' }
+        ]))
+        .mockReturnValueOnce(createQueryBuilderMock([
+          { unitName: 'unit1', variableId: 'base-var', responseCount: '3' },
+          { unitName: 'unit1', variableId: 'standalone-var', responseCount: '2' }
+        ]));
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['base-var', 'derived-var', 'standalone-var'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['derived-var'])]])
+      );
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(
+        new Map([
+          [getManualCodingScopeKey('unit1', 'base-var'), new Set(['derived-var'])]
+        ])
+      );
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+
+      const result = await service.getCodingIncompleteVariables(1);
+      const summary = await service.getManualCodingScopeSummary(1);
+
+      expect(result.map(variable => variable.variableId)).toEqual([
+        'derived-var',
+        'standalone-var'
+      ]);
+      expect(summary).toMatchObject({
+        manualVariableCount: 2,
+        manualResponseCount: 5,
+        coveredSourceVariableCount: 1,
+        coveredSourceResponseCount: 3,
+        coveredSourceVariables: [
+          {
+            unitName: 'unit1',
+            variableId: 'base-var',
+            responseCount: 3,
+            derivedVariableIds: ['derived-var']
+          }
+        ]
+      });
     });
 
     it('should not collapse empty responses when counting unique cases after aggregation', async () => {
@@ -590,6 +654,7 @@ describe('CodingValidationService', () => {
       );
       mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
       mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
       mockCodingJobService.getAggregationThreshold.mockResolvedValue(2);
       mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
       mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([
@@ -653,6 +718,7 @@ describe('CodingValidationService', () => {
         new Map([['UNIT1', new Set(['derived-var'])]])
       );
       mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
       mockCodingJobService.getAggregationThreshold.mockResolvedValue(2);
       mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
       mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([]);
@@ -704,6 +770,7 @@ describe('CodingValidationService', () => {
       );
       mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
       mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
       mockCodingJobService.getAggregationThreshold.mockResolvedValue(4);
       mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
       mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([
@@ -839,7 +906,7 @@ describe('CodingValidationService', () => {
     it('should generate correct cache key', () => {
       const cacheKey = service.generateIncompleteVariablesCacheKey(123);
 
-      expect(cacheKey).toBe('coding_incomplete_variables_v4:123');
+      expect(cacheKey).toBe('coding_incomplete_variables_v5:123');
     });
   });
 
@@ -850,7 +917,7 @@ describe('CodingValidationService', () => {
       await service.invalidateIncompleteVariablesCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v4:1'
+        'coding_incomplete_variables_v5:1'
       );
     });
   });
