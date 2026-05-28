@@ -395,6 +395,21 @@ describe('PersonPersistenceService', () => {
   });
 
   it('imports a new person in an existing test group by matching the full person key', async () => {
+    const existingPersonInSameGroup = {
+      id: 40,
+      group: 'existing-group',
+      login: 'existing-login',
+      code: 'existing-code',
+      workspace_id: 1,
+      booklets: [
+        {
+          id: 'BOOKLET_OLD',
+          logs: [],
+          sessions: [],
+          units: []
+        }
+      ]
+    } as unknown as Persons;
     const importedPerson = {
       id: 41,
       group: 'existing-group',
@@ -410,8 +425,11 @@ describe('PersonPersistenceService', () => {
         }
       ]
     } as unknown as Persons;
+    const requestedKeys: Array<{ group: string; login: string; code: string }> = [];
     const bracketQb = {
-      where: jest.fn(),
+      where: jest.fn((_clause: string, params: { g0: string; l0: string; c0: string }) => {
+        requestedKeys.push({ group: params.g0, login: params.l0, code: params.c0 });
+      }),
       orWhere: jest.fn()
     };
     const qb = {
@@ -420,7 +438,13 @@ describe('PersonPersistenceService', () => {
         brackets.whereFactory(bracketQb);
         return qb;
       }),
-      getMany: jest.fn().mockResolvedValue([importedPerson])
+      getMany: jest.fn().mockImplementation(async () => (
+        [existingPersonInSameGroup, importedPerson].filter(person => requestedKeys.some(key => (
+          person.group === key.group &&
+          person.login === key.login &&
+          person.code === key.code
+        )))
+      ))
     };
     jest.spyOn(personsRepository, 'upsert').mockResolvedValue({} as never);
     jest.spyOn(personsRepository, 'createQueryBuilder').mockReturnValue(qb as never);
@@ -462,6 +486,13 @@ describe('PersonPersistenceService', () => {
     expect(processBookletSpy).toHaveBeenCalledWith(
       importedPerson.booklets[0],
       importedPerson,
+      'merge',
+      []
+    );
+    expect(processBookletSpy).toHaveBeenCalledTimes(1);
+    expect(processBookletSpy).not.toHaveBeenCalledWith(
+      existingPersonInSameGroup.booklets[0],
+      existingPersonInSameGroup,
       'merge',
       []
     );
