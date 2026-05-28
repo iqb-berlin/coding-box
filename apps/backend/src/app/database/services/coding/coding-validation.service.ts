@@ -22,6 +22,12 @@ import {
 import { CodingJobService } from './coding-job.service';
 import { buildAggregationGroups } from './aggregation-metrics.util';
 import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import {
+  getCoveredSourceKeysForManualDerivedVariables,
+  isCoveredSourceVariable,
+  ManualCodingExcludedSourceSummary,
+  summarizeCoveredSourceVariables
+} from '../../utils/manual-coding-scope.util';
 
 interface NormalizedExpectedCombination {
   unitKey: string;
@@ -54,6 +60,16 @@ type VariableCaseInfo = {
   casesInJobs: number;
   availableCases: number;
   uniqueCasesAfterAggregation: number;
+};
+
+type ManualCodingScopeFromDb = {
+  variables: ManualCodingVariableCaseCounts[];
+  excludedSourceSummary: ManualCodingExcludedSourceSummary;
+};
+
+export type ManualCodingScopeSummary = ManualCodingExcludedSourceSummary & {
+  manualVariableCount: number;
+  manualResponseCount: number;
 };
 
 @Injectable()
@@ -530,6 +546,37 @@ export class CodingValidationService {
     }
   }
 
+  async getManualCodingScopeSummary(
+    workspaceId: number,
+    unitName?: string,
+    trainingRequired?: boolean
+  ): Promise<ManualCodingScopeSummary> {
+    try {
+      const scope = await this.fetchManualCodingScopeFromDb(
+        workspaceId,
+        unitName,
+        trainingRequired
+      );
+
+      return {
+        manualVariableCount: scope.variables.length,
+        manualResponseCount: scope.variables.reduce(
+          (sum, variable) => sum + variable.responseCount,
+          0
+        ),
+        ...scope.excludedSourceSummary
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting manual coding scope summary: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not get manual coding scope summary. Please check the database connection.'
+      );
+    }
+  }
+
   /**
      * Enrich variables with case information (cases in jobs, available cases, and unique cases after aggregation)
      */
@@ -742,6 +789,19 @@ export class CodingValidationService {
   ): Promise<
     { unitName: string; variableId: string; responseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
     > {
+    const scope = await this.fetchManualCodingScopeFromDb(
+      workspaceId,
+      unitName,
+      trainingRequired
+    );
+    return scope.variables;
+  }
+
+  private async fetchManualCodingScopeFromDb(
+    workspaceId: number,
+    unitName?: string,
+    trainingRequired?: boolean
+  ): Promise<ManualCodingScopeFromDb> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     // Helper to build the base query for a given status
     const buildQuery = (status: number) => {
@@ -785,10 +845,16 @@ export class CodingValidationService {
     );
 
     // Load both lookup maps from the file service
-    const [unitVariableMap, derivedVariableMap, trainingRequiredMap] = await Promise.all([
+    const [
+      unitVariableMap,
+      derivedVariableMap,
+      trainingRequiredMap,
+      derivedVariablesBySourceMap
+    ] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
       this.workspaceFilesService.getDerivedVariableMap(workspaceId),
-      this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId)
+      this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId),
+      this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId)
     ]);
 
     // Build case-insensitive lookup structures
@@ -830,7 +896,21 @@ export class CodingValidationService {
     };
 
     const filteredCodingIncomplete = codingIncompleteRaw.filter(filterFn);
-    const filteredIntendedIncomplete = intendedIncompleteRaw.filter(filterFn);
+    const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
+      filteredCodingIncomplete,
+      derivedVariablesBySourceMap
+    );
+    const filteredIntendedIncompleteBeforeSourceExclusion =
+      intendedIncompleteRaw.filter(filterFn);
+    const filteredIntendedIncomplete =
+      filteredIntendedIncompleteBeforeSourceExclusion.filter(
+        row => !isCoveredSourceVariable(row, coveredSourceKeys)
+      );
+    const excludedSourceSummary = summarizeCoveredSourceVariables(
+      filteredIntendedIncompleteBeforeSourceExclusion,
+      coveredSourceKeys,
+      derivedVariablesBySourceMap
+    );
 
     // Merge results, summing response counts for variables that appear in both
     const mergedMap = new Map<string, {
@@ -868,7 +948,10 @@ export class CodingValidationService {
       `filtered to ${result.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`
     );
 
-    return result;
+    return {
+      variables: result,
+      excludedSourceSummary
+    };
   }
 
   generateIncompleteVariablesCacheKey(workspaceId: number): string {

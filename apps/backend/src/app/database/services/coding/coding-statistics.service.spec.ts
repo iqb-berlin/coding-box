@@ -338,7 +338,7 @@ describe('CodingStatisticsService', () => {
       await service.invalidateIncompleteVariablesCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v4:1'
+        'coding_incomplete_variables_v5:1'
       );
     });
 

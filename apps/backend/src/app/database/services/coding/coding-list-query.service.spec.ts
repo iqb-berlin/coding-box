@@ -6,29 +6,58 @@ import { WorkspaceFilesService, WorkspaceCoreService } from '../workspace';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { CodingListQueryService } from './coding-list-query.service';
+import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 
 type QueryBuilderMock = {
+  innerJoin: jest.Mock;
   leftJoinAndSelect: jest.Mock;
+  leftJoin: jest.Mock;
+  select: jest.Mock;
+  addSelect: jest.Mock;
   where: jest.Mock;
   andWhere: jest.Mock;
   orderBy: jest.Mock;
   getManyAndCount: jest.Mock;
+  getRawMany: jest.Mock;
+};
+
+type VariableRow = {
+  unitName: string;
+  variableId: string;
+  statusV1: number;
+};
+
+type CreateServiceOptions = {
+  rawVariableRows?: VariableRow[];
+  unitVariableMap?: Map<string, Set<string>>;
+  trainingRequiredMap?: Map<string, Set<string>>;
+  derivedVariablesBySourceMap?: Map<string, Set<string>>;
 };
 
 describe('CodingListQueryService', () => {
   function createQueryBuilder(
     responses: ResponseEntity[],
-    total: number
+    total: number,
+    rawVariableRows: VariableRow[] = []
   ): QueryBuilderMock {
     const queryBuilder = {
+      innerJoin: jest.fn(),
       leftJoinAndSelect: jest.fn(),
+      leftJoin: jest.fn(),
+      select: jest.fn(),
+      addSelect: jest.fn(),
       where: jest.fn(),
       andWhere: jest.fn(),
       orderBy: jest.fn(),
-      getManyAndCount: jest.fn().mockResolvedValue([responses, total])
+      getManyAndCount: jest.fn().mockResolvedValue([responses, total]),
+      getRawMany: jest.fn().mockResolvedValue(rawVariableRows)
     };
 
+    queryBuilder.innerJoin.mockReturnValue(queryBuilder);
     queryBuilder.leftJoinAndSelect.mockReturnValue(queryBuilder);
+    queryBuilder.leftJoin.mockReturnValue(queryBuilder);
+    queryBuilder.select.mockReturnValue(queryBuilder);
+    queryBuilder.addSelect.mockReturnValue(queryBuilder);
     queryBuilder.where.mockReturnValue(queryBuilder);
     queryBuilder.andWhere.mockReturnValue(queryBuilder);
     queryBuilder.orderBy.mockReturnValue(queryBuilder);
@@ -55,19 +84,30 @@ describe('CodingListQueryService', () => {
 
   function createService(
     responses: ResponseEntity[],
-    fileRepository: Repository<FileUpload>
+    fileRepository: Repository<FileUpload>,
+    options: CreateServiceOptions = {}
   ): CodingListQueryService {
-    const queryBuilder = createQueryBuilder(responses, responses.length);
+    const queryBuilder = createQueryBuilder(
+      responses,
+      responses.length,
+      options.rawVariableRows
+    );
     const responseRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
     } as unknown as Repository<ResponseEntity>;
     const fileCacheService = new CodingFileCacheService(fileRepository);
     const workspaceFilesService = {
       getUnitVariableMap: jest.fn().mockResolvedValue(
-        new Map([['UNIT', new Set(['VAR_WITH_OVERRIDE', 'VAR_ON_ONLY_PAGE'])]])
+        options.unitVariableMap ??
+          new Map([['UNIT', new Set(['VAR_WITH_OVERRIDE', 'VAR_ON_ONLY_PAGE'])]])
       ),
       getIntendedIncompleteSchemeVariableMap: jest.fn().mockResolvedValue(new Map()),
-      getCoderTrainingRequiredVariableMap: jest.fn().mockResolvedValue(new Map())
+      getCoderTrainingRequiredVariableMap: jest.fn().mockResolvedValue(
+        options.trainingRequiredMap ?? new Map()
+      ),
+      getDerivedVariablesBySourceMap: jest.fn().mockResolvedValue(
+        options.derivedVariablesBySourceMap ?? new Map()
+      )
     } as unknown as WorkspaceFilesService;
     const workspaceExclusionService = {
       resolveExclusionsForQueries: jest.fn().mockResolvedValue({
@@ -186,5 +226,51 @@ describe('CodingListQueryService', () => {
       variable_anchor: 'VAR_ON_ONLY_PAGE',
       url: 'https://iqb-kodierbox.de/#/replay/login@code@group@BOOKLET/UNIT/0/VAR_ON_ONLY_PAGE?auth=token'
     });
+  });
+
+  it('excludes intended source variables only when their derived variable remains in the same manual scope', async () => {
+    const unitVariableMap = new Map([[
+      'UNIT',
+      new Set(['BASE_VAR', 'DERIVED_VAR', 'STANDALONE_VAR'])
+    ]]);
+    const trainingRequiredMap = new Map([[
+      'UNIT',
+      new Set(['BASE_VAR', 'STANDALONE_VAR'])
+    ]]);
+    const derivedVariablesBySourceMap = new Map([
+      [getManualCodingScopeKey('UNIT', 'BASE_VAR'), new Set(['DERIVED_VAR'])]
+    ]);
+    const rawVariableRows = [
+      {
+        unitName: 'UNIT',
+        variableId: 'DERIVED_VAR',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE')
+      },
+      {
+        unitName: 'UNIT',
+        variableId: 'BASE_VAR',
+        statusV1: statusStringToNumber('INTENDED_INCOMPLETE')
+      },
+      {
+        unitName: 'UNIT',
+        variableId: 'STANDALONE_VAR',
+        statusV1: statusStringToNumber('INTENDED_INCOMPLETE')
+      }
+    ];
+    const service = createService([], createFileRepository({}), {
+      rawVariableRows,
+      unitVariableMap,
+      trainingRequiredMap,
+      derivedVariablesBySourceMap
+    });
+
+    await expect(service.getCodingListVariables(1)).resolves.toEqual([
+      { unitName: 'UNIT', variableId: 'DERIVED_VAR' },
+      { unitName: 'UNIT', variableId: 'STANDALONE_VAR' }
+    ]);
+    await expect(service.getCodingListVariables(1, true)).resolves.toEqual([
+      { unitName: 'UNIT', variableId: 'BASE_VAR' },
+      { unitName: 'UNIT', variableId: 'STANDALONE_VAR' }
+    ]);
   });
 });

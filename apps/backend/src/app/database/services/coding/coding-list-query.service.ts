@@ -12,6 +12,10 @@ import {
 } from '../workspace/workspace-exclusion.service';
 import { CodingItem } from './coding-item-builder.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
+import {
+  getCoveredSourceKeysForManualDerivedVariables,
+  isCoveredSourceVariable
+} from '../../utils/manual-coding-scope.util';
 
 const PAGE_MAP_LOOKUP_BATCH_SIZE = 8;
 
@@ -83,22 +87,16 @@ export class CodingListQueryService {
 
       // 2) Load variable maps from WorkspaceFilesService
       //    unitVariableMap: unitName → Set of valid variable aliases (includes derived vars, excludes BASE/BASE_NO_VALUE)
-      //    intendedIncompleteSchemeMap: unitName → Set of variable aliases that have INTENDED_INCOMPLETE code type in scheme
       //    trainingRequiredMap: unitName → Set of variable aliases that have CODER_TRAINING_REQUIRED property
-      const [unitVariableMap, intendedIncompleteSchemeMap, trainingRequiredMap] = await Promise.all([
+      const [unitVariableMap, trainingRequiredMap, derivedVariablesBySourceMap] = await Promise.all([
         this.workspaceFilesService.getUnitVariableMap(workspace_id),
-        this.workspaceFilesService.getIntendedIncompleteSchemeVariableMap(workspace_id),
-        this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspace_id)
+        this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspace_id),
+        this.workspaceFilesService.getDerivedVariablesBySourceMap(workspace_id)
       ]);
 
       const validVariableSets = new Map<string, Set<string>>();
       unitVariableMap.forEach((variables: Set<string>, unitNameKey: string) => {
         validVariableSets.set(unitNameKey.toUpperCase(), variables);
-      });
-
-      const intendedIncompleteSchemeVars = new Map<string, Set<string>>();
-      intendedIncompleteSchemeMap.forEach((variables: Set<string>, unitNameKey: string) => {
-        intendedIncompleteSchemeVars.set(unitNameKey.toUpperCase(), variables);
       });
 
       const trainingRequiredSets = new Map<string, Set<string>>();
@@ -110,10 +108,10 @@ export class CodingListQueryService {
 
       // 3) Filter responses:
       //    - Variable must exist in unitVariableMap (valid, non-BASE/BASE_NO_VALUE)
-      //    - For INTENDED_INCOMPLETE: exclude if coding scheme already has INTENDED_INCOMPLETE code type
+      //    - For INTENDED_INCOMPLETE: exclude source variables already represented by a manual derived variable
       //    - Also exclude variables matching media substrings and empty values
       //    - Apply trainingRequired filter if provided
-      const filtered = responses.filter(r => {
+      const baseFiltered = responses.filter(r => {
         const unitKey = r.unit?.name || '';
         const variableId = r.variableid || '';
         const hasValue = r.value != null && r.value.trim() !== '';
@@ -126,12 +124,6 @@ export class CodingListQueryService {
         const validVars = validVariableSets.get(unitKey.toUpperCase());
         if (!validVars?.has(variableId)) return false;
 
-        // For INTENDED_INCOMPLETE responses: exclude if scheme has INTENDED_INCOMPLETE code type
-        if (r.status_v1 !== codingIncompleteStatus) {
-          const schemeVars = intendedIncompleteSchemeVars.get(unitKey.toUpperCase());
-          if (schemeVars?.has(variableId)) return false;
-        }
-
         // Apply trainingRequired filter
         if (trainingRequired !== undefined) {
           const isTrainingRequired = trainingRequiredSets.get(unitKey.toUpperCase())?.has(variableId) || false;
@@ -142,6 +134,25 @@ export class CodingListQueryService {
 
         return true;
       });
+      const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
+        baseFiltered
+          .filter(response => response.status_v1 === codingIncompleteStatus)
+          .map(response => ({
+            unitName: response.unit?.name || '',
+            variableId: response.variableid || ''
+          })),
+        derivedVariablesBySourceMap
+      );
+      const filtered = baseFiltered.filter(response => (
+        response.status_v1 === codingIncompleteStatus ||
+        !isCoveredSourceVariable(
+          {
+            unitName: response.unit?.name || '',
+            variableId: response.variableid || ''
+          },
+          coveredSourceKeys
+        )
+      ));
 
       const unitKeys = Array.from(
         new Set(
@@ -278,22 +289,16 @@ export class CodingListQueryService {
 
     // Load variable maps from WorkspaceFilesService:
     //   unitVariableMap: includes all valid variables (derived + base, excluding BASE/BASE_NO_VALUE)
-    //   intendedIncompleteSchemeMap: variables that have INTENDED_INCOMPLETE code type in scheme (should be excluded for INTENDED_INCOMPLETE rows)
     //   trainingRequiredMap: variables with CODER_TRAINING_REQUIRED property
-    const [unitVariableMap, intendedIncompleteSchemeMap, trainingRequiredMap] = await Promise.all([
+    const [unitVariableMap, trainingRequiredMap, derivedVariablesBySourceMap] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
-      this.workspaceFilesService.getIntendedIncompleteSchemeVariableMap(workspaceId),
-      this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId)
+      this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId),
+      this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId)
     ]);
 
     const validVariableSets = new Map<string, Set<string>>();
     unitVariableMap.forEach((variables: Set<string>, unitName: string) => {
       validVariableSets.set(unitName.toUpperCase(), variables);
-    });
-
-    const intendedIncompleteSchemeVars = new Map<string, Set<string>>();
-    intendedIncompleteSchemeMap.forEach((variables: Set<string>, unitName: string) => {
-      intendedIncompleteSchemeVars.set(unitName.toUpperCase(), variables);
     });
 
     const trainingRequiredSets = new Map<string, Set<string>>();
@@ -303,29 +308,43 @@ export class CodingListQueryService {
 
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
 
-    // Deduplicate while applying filters
-    const seen = new Set<string>();
-    const filteredResults: { unitName: string; variableId: string }[] = [];
-
-    for (const row of rawResults) {
+    const baseFilteredResults = rawResults.filter(row => {
       const unitNameUpper = row.unitName?.toUpperCase();
       const variableId: string = row.variableId;
-      const statusV1: number = Number(row.statusV1);
 
-      // Must be in valid variable map (derived vars are included here)
       const validVars = validVariableSets.get(unitNameUpper);
-      if (!validVars?.has(variableId)) continue;
+      if (!validVars?.has(variableId)) return false;
 
-      // For INTENDED_INCOMPLETE rows: skip if scheme has INTENDED_INCOMPLETE code type
-      if (statusV1 !== codingIncompleteStatus) {
-        const schemeVars = intendedIncompleteSchemeVars.get(unitNameUpper);
-        if (schemeVars?.has(variableId)) continue;
-      }
-
-      // Apply trainingRequired filter
       if (trainingRequired !== undefined) {
         const isTrainingRequired = trainingRequiredSets.get(unitNameUpper)?.has(variableId) || false;
         if (isTrainingRequired !== trainingRequired) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+    const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
+      baseFilteredResults
+        .filter(row => Number(row.statusV1) === codingIncompleteStatus)
+        .map(row => ({
+          unitName: row.unitName,
+          variableId: row.variableId
+        })),
+      derivedVariablesBySourceMap
+    );
+
+    // Deduplicate while applying source-variable filters
+    const seen = new Set<string>();
+    const filteredResults: { unitName: string; variableId: string }[] = [];
+
+    for (const row of baseFilteredResults) {
+      const variableId: string = row.variableId;
+      const statusV1: number = Number(row.statusV1);
+
+      // For INTENDED_INCOMPLETE rows: skip source variables already covered by derived variables
+      if (statusV1 !== codingIncompleteStatus) {
+        if (isCoveredSourceVariable(row, coveredSourceKeys)) {
           continue;
         }
       }
