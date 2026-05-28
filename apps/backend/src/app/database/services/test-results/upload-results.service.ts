@@ -131,7 +131,8 @@ export class UploadResultsService {
     try {
       await Promise.all([
         this.codingAnalysisService?.invalidateCache(workspaceId),
-        this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
+        this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId),
+        this.workspaceTestResultsService.invalidateCodingAvailabilityCache(workspaceId)
       ]);
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown error';
@@ -140,7 +141,7 @@ export class UploadResultsService {
         level: 'warning',
         category: 'other',
         message:
-          'Die Ergebnisdaten wurden verarbeitet, aber Kodierstatistiken oder Antwort-Analyse konnten nicht zuverlässig aktualisiert werden. Die Werte können sich nach Aktualisierung noch ändern.'
+          'Die Ergebnisdaten wurden verarbeitet, aber Kodierstatistiken, Antwort-Analyse oder verfügbare Fälle konnten nicht zuverlässig aktualisiert werden. Die Werte können sich nach Aktualisierung noch ändern.'
       });
     }
   }

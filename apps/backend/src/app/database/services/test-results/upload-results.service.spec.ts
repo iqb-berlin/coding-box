@@ -65,7 +65,8 @@ describe('UploadResultsService', () => {
           provide: WorkspaceTestResultsService,
           useValue: createMock<WorkspaceTestResultsService>({
             invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
-            invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined)
+            invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined),
+            invalidateCodingAvailabilityCache: jest.fn().mockResolvedValue(undefined)
           })
         },
         {
@@ -835,6 +836,7 @@ existing-group;new-login;new-code;booklet1;unit1;"[{""subForm"":"""",""content""
       );
       expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
       expect(workspaceTestResultsService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
+      expect(workspaceTestResultsService.invalidateCodingAvailabilityCache).toHaveBeenCalledWith(1);
       expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
     });
 
@@ -955,6 +957,7 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
       );
       expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
       expect(workspaceTestResultsService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
+      expect(workspaceTestResultsService.invalidateCodingAvailabilityCache).toHaveBeenCalledWith(1);
       expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
     });
 
@@ -971,7 +974,8 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
       const unitLogRepository = createMock<Repository<UnitLog>>();
       const realWorkspaceService = createMock<WorkspaceTestResultsService>({
         invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
-        invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined)
+        invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined),
+        invalidateCodingAvailabilityCache: jest.fn().mockResolvedValue(undefined)
       });
       const realCodingFreshnessService = createMock<CodingFreshnessService>({
         markUnitsPendingAfterImport: jest.fn().mockResolvedValue(undefined),
@@ -1165,9 +1169,10 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
       );
       expect(realCodingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
       expect(realWorkspaceService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
+      expect(realWorkspaceService.invalidateCodingAvailabilityCache).toHaveBeenCalledWith(1);
     });
 
-    it('should mark freshness and invalidate response-analysis and coding-statistics caches after importing responses', async () => {
+    it('should mark freshness and invalidate response-analysis, coding-statistics, and availability caches after importing responses', async () => {
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;[];""`;
 
@@ -1252,6 +1257,7 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       );
       expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
       expect(workspaceTestResultsService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
+      expect(workspaceTestResultsService.invalidateCodingAvailabilityCache).toHaveBeenCalledWith(1);
       expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
     });
 
@@ -1352,9 +1358,10 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       });
       expect(codingAnalysisService.invalidateCache).not.toHaveBeenCalled();
       expect(workspaceTestResultsService.invalidateCodingStatisticsCache).not.toHaveBeenCalled();
+      expect(workspaceTestResultsService.invalidateCodingAvailabilityCache).not.toHaveBeenCalled();
     });
 
-    it('should invalidate response-analysis and coding-statistics caches after a post-write freshness failure', async () => {
+    it('should invalidate response-analysis, coding-statistics, and availability caches after a post-write freshness failure', async () => {
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;[];""`;
 
@@ -1434,6 +1441,7 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       expect(codingFreshnessService.markUnitsPendingAfterImport).toHaveBeenCalledWith(1, [101], 1);
       expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
       expect(workspaceTestResultsService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
+      expect(workspaceTestResultsService.invalidateCodingAvailabilityCache).toHaveBeenCalledWith(1);
       expect(result.issues?.some(issue => issue.message.includes('freshness failed'))).toBe(true);
     });
   });
