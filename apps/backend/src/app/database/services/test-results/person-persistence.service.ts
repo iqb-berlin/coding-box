@@ -26,8 +26,12 @@ import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/te
 export interface TestResultsMutationSummary {
   addedUnitIds: number[];
   changedUnitIds: number[];
+  skippedExistingUnitIds?: number[];
   addedResponseCount: number;
   changedResponseCount: number;
+  savedResponseCount?: number;
+  deletedResponseCount?: number;
+  skippedExistingResponseCount?: number;
 }
 
 /**
@@ -253,8 +257,7 @@ export class PersonPersistenceService {
       this.logger.error(`Failed to process person booklets: ${error.message}`);
     }
 
-    mutationSummary.addedUnitIds = Array.from(new Set(mutationSummary.addedUnitIds));
-    mutationSummary.changedUnitIds = Array.from(new Set(mutationSummary.changedUnitIds));
+    this.dedupeMutationSummaryUnitIds(mutationSummary);
     return mutationSummary;
   }
 
@@ -322,6 +325,10 @@ export class PersonPersistenceService {
               });
 
               if (existingUnit && overwriteMode === 'skip') {
+                mutationSummary.skippedExistingUnitIds?.push(existingUnit.id);
+                mutationSummary.skippedExistingResponseCount =
+                  (mutationSummary.skippedExistingResponseCount || 0) +
+                  this.countUnitResponses(unit);
                 return;
               }
 
@@ -340,6 +347,12 @@ export class PersonPersistenceService {
                   this.processChunks(unit, targetUnit, booklet)
                 ]);
                 const responseResult = await this.processSubforms(unit, targetUnit, overwriteMode);
+                mutationSummary.savedResponseCount =
+                  (mutationSummary.savedResponseCount || 0) + responseResult.saved;
+                mutationSummary.deletedResponseCount =
+                  (mutationSummary.deletedResponseCount || 0) + responseResult.deleted;
+                mutationSummary.skippedExistingResponseCount =
+                  (mutationSummary.skippedExistingResponseCount || 0) + responseResult.skipped;
                 if (isNewUnit) {
                   mutationSummary.addedUnitIds.push(targetUnit.id);
                   mutationSummary.addedResponseCount += responseResult.saved;
@@ -363,8 +376,7 @@ export class PersonPersistenceService {
       }
     }
 
-    mutationSummary.addedUnitIds = Array.from(new Set(mutationSummary.addedUnitIds));
-    mutationSummary.changedUnitIds = Array.from(new Set(mutationSummary.changedUnitIds));
+    this.dedupeMutationSummaryUnitIds(mutationSummary);
     return mutationSummary;
   }
 
@@ -599,8 +611,12 @@ export class PersonPersistenceService {
     return {
       addedUnitIds: [],
       changedUnitIds: [],
+      skippedExistingUnitIds: [],
       addedResponseCount: 0,
-      changedResponseCount: 0
+      changedResponseCount: 0,
+      savedResponseCount: 0,
+      deletedResponseCount: 0,
+      skippedExistingResponseCount: 0
     };
   }
 
@@ -610,8 +626,29 @@ export class PersonPersistenceService {
   ): void {
     target.addedUnitIds.push(...source.addedUnitIds);
     target.changedUnitIds.push(...source.changedUnitIds);
+    target.skippedExistingUnitIds?.push(...(source.skippedExistingUnitIds || []));
     target.addedResponseCount += source.addedResponseCount;
     target.changedResponseCount += source.changedResponseCount;
+    target.savedResponseCount =
+      (target.savedResponseCount || 0) + (source.savedResponseCount || 0);
+    target.deletedResponseCount =
+      (target.deletedResponseCount || 0) + (source.deletedResponseCount || 0);
+    target.skippedExistingResponseCount =
+      (target.skippedExistingResponseCount || 0) +
+      (source.skippedExistingResponseCount || 0);
+  }
+
+  private dedupeMutationSummaryUnitIds(summary: TestResultsMutationSummary): void {
+    summary.addedUnitIds = Array.from(new Set(summary.addedUnitIds));
+    summary.changedUnitIds = Array.from(new Set(summary.changedUnitIds));
+    summary.skippedExistingUnitIds = Array.from(new Set(summary.skippedExistingUnitIds || []));
+  }
+
+  private countUnitResponses(unit: TcMergeUnit): number {
+    return (unit.subforms || []).reduce(
+      (count, subform) => count + (subform.responses?.length || 0),
+      0
+    );
   }
 
   /**

@@ -900,6 +900,105 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
     });
 
+    it('should report response skip mode counts without treating skipped units as mutations', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
+test-group;test-user;code;booklet1;unit1;[];""`;
+
+      const filePath = path.join(os.tmpdir(), 'test-response-skip-summary.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      const person = {
+        workspace_id: 1,
+        group: 'test-group',
+        login: 'test-user',
+        code: 'code',
+        booklets: []
+      };
+      const personWithBooklets = {
+        ...person,
+        booklets: [
+          {
+            id: 'booklet1',
+            logs: [],
+            units: [],
+            sessions: []
+          }
+        ]
+      };
+      const personWithUnits = {
+        ...personWithBooklets,
+        booklets: [
+          {
+            id: 'booklet1',
+            logs: [],
+            sessions: [],
+            units: [
+              {
+                id: 'unit1',
+                alias: 'unit1',
+                laststate: [],
+                chunks: [],
+                subforms: [],
+                logs: []
+              }
+            ]
+          }
+        ]
+      };
+      jest.spyOn(personService, 'createPersonList').mockResolvedValue([person]);
+      jest.spyOn(personService, 'assignBookletsToPerson').mockResolvedValue(personWithBooklets);
+      jest.spyOn(personService, 'assignUnitsToBookletAndPerson').mockResolvedValue(personWithUnits);
+      jest.spyOn(personService, 'processPersonBooklets').mockResolvedValue({
+        addedUnitIds: [],
+        changedUnitIds: [],
+        skippedExistingUnitIds: [40],
+        addedResponseCount: 0,
+        changedResponseCount: 0,
+        savedResponseCount: 0,
+        deletedResponseCount: 0,
+        skippedExistingResponseCount: 2
+      });
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'responses',
+          overwriteMode: 'skip',
+          scope: 'person'
+        }
+      }));
+
+      expect(personService.processPersonBooklets).toHaveBeenCalledWith(
+        [personWithUnits],
+        1,
+        'skip',
+        'person'
+      );
+      expect(result.importSummary).toMatchObject({
+        totalRows: 1,
+        responseRows: 1,
+        overwriteMode: 'skip',
+        scope: 'person',
+        savedResponses: 0,
+        skippedExistingUnits: 1,
+        skippedExistingResponses: 2
+      });
+      expect(codingAnalysisService.invalidateCache).not.toHaveBeenCalled();
+      expect(workspaceTestResultsService.invalidateCodingStatisticsCache).not.toHaveBeenCalled();
+    });
+
     it('should invalidate response-analysis and coding-statistics caches after a post-write freshness failure', async () => {
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;[];""`;
