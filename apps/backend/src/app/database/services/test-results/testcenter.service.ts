@@ -962,6 +962,7 @@ export class TestcenterService {
     return {
       addedUnitIds: [],
       changedUnitIds: [],
+      addedResponseIds: [],
       addedResponseCount: 0,
       changedResponseCount: 0
     };
@@ -976,6 +977,7 @@ export class TestcenterService {
     }
     target.addedUnitIds.push(...(source.addedUnitIds || []));
     target.changedUnitIds.push(...(source.changedUnitIds || []));
+    target.addedResponseIds?.push(...(source.addedResponseIds || []));
     target.addedResponseCount += source.addedResponseCount || 0;
     target.changedResponseCount += source.changedResponseCount || 0;
   }
@@ -991,7 +993,8 @@ export class TestcenterService {
 
     const addedUnitIds = this.uniquePositiveIds(mutationSummary.addedUnitIds);
     const changedUnitIds = this.uniquePositiveIds(mutationSummary.changedUnitIds);
-    if (addedUnitIds.length === 0 && changedUnitIds.length === 0) {
+    const addedResponseIds = this.uniquePositiveIds(mutationSummary.addedResponseIds || []);
+    if (addedUnitIds.length === 0 && changedUnitIds.length === 0 && addedResponseIds.length === 0) {
       return;
     }
 
@@ -1001,6 +1004,12 @@ export class TestcenterService {
         addedUnitIds,
         mutationSummary.addedResponseCount
       );
+      if (addedResponseIds.length > 0) {
+        await this.codingFreshnessService.markResponsesPendingAfterImport(
+          workspaceId,
+          addedResponseIds
+        );
+      }
       await this.codingFreshnessService.markUnitsStaleAfterResultChange(
         workspaceId,
         changedUnitIds,
