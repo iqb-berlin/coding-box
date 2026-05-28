@@ -24,6 +24,7 @@ import {
   CodingIssueDto,
   VariableCoding
 } from '../../../models/coding-interfaces';
+import { hasManualInstruction } from '../../utils/manual-coding.util';
 
 @Component({
   selector: 'app-code-selector',
@@ -110,14 +111,16 @@ export class CodeSelectorComponent implements OnChanges {
     );
     if (variableCoding) {
       this.variableManualInstruction = variableCoding.manualInstruction || null;
-      const codeItems: SelectableItem[] = variableCoding.codes.map((code: Code) => ({
-        id: code.id,
-        label: code.label,
-        type: code.type,
-        score: code.score,
-        manualInstruction: code.manualInstruction,
-        originalCode: code
-      }));
+      const codeItems: SelectableItem[] = variableCoding.codes
+        .filter((code: Code) => hasManualInstruction(code))
+        .map((code: Code) => ({
+          id: code.id,
+          label: code.label,
+          type: code.type,
+          score: code.score,
+          manualInstruction: code.manualInstruction,
+          originalCode: code
+        }));
 
       const codingIssueOptions: SelectableItem[] = [
         {
