@@ -13,7 +13,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
-import { MatSortModule } from '@angular/material/sort';
+import { MatSortModule, Sort } from '@angular/material/sort';
 import {
   MatPaginatorModule,
   MatPaginatorIntl,
@@ -33,7 +33,10 @@ import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import {
   VariableAnalysisService,
   JobCancelResult,
-  VariableAnalysisResultPageDto
+  VariableAnalysisResultPageDto,
+  VariableAnalysisSortBy,
+  VariableAnalysisSortDirection,
+  VariableAnalysisTableRowDto
 } from '../../../shared/services/response/variable-analysis.service';
 import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
@@ -86,6 +89,11 @@ export interface VariableAnalysisData {
     };
     total: number;
     unfilteredTotal?: number;
+    rows?: VariableAnalysisTableRowDto[];
+    rowTotal?: number;
+    pageableRowTotal?: number;
+    unfilteredRowTotal?: number;
+    maxPage?: number;
     page?: number;
     pageSize?: number;
     totalPages?: number;
@@ -172,7 +180,23 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   isLoading = false;
   variableFrequencies: { [key: string]: VariableFrequency[] } = {};
-  displayedColumns: string[] = ['value', 'count', 'percentage'];
+  displayedColumns: string[] = [
+    'unitName',
+    'variableId',
+    'value',
+    'label',
+    'score',
+    'count',
+    'percentage',
+    'totalCount',
+    'emptyCount',
+    'statusSummary',
+    'metric'
+  ];
+
+  analysisRows: VariableAnalysisTableRowDto[] = [];
+
+  private serverAnalysisRows: VariableAnalysisTableRowDto[] = [];
 
   allVariableCombos: VariableCombo[] = [];
 
@@ -188,6 +212,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   pageSize = 50;
   pageSizeOptions = [25, 50, 100, 200];
   totalFilteredVariables = 0;
+  sortBy: VariableAnalysisSortBy = 'unitName';
+  sortDirection: VariableAnalysisSortDirection = 'asc';
   private currentAnalysisJobId: number | string | undefined;
   private isUsingServerSideResults = false;
   private latestResultsRequestId = 0;
@@ -348,6 +374,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   analyzeVariables(): void {
     this.isLoading = true;
     this.variableFrequencies = {};
+    this.serverAnalysisRows = [];
 
     if (this.data.analysisResults) {
       Object.keys(this.data.analysisResults!.frequencies).forEach(
@@ -374,8 +401,12 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       this.allVariableCombos = this.data.analysisResults!.variableCombos.map(
         combo => this.withDerivedSummary(combo)
       );
+      this.serverAnalysisRows = this.data.analysisResults!.rows ||
+        this.createRowsFromCombos(this.allVariableCombos);
       this.totalFilteredVariables = this.isUsingServerSideResults ?
-        this.data.analysisResults!.total :
+        this.data.analysisResults!.pageableRowTotal ??
+          this.data.analysisResults!.rowTotal ??
+          this.serverAnalysisRows.length :
         this.allVariableCombos.length;
     } else if (this.data.responses && this.data.responses.length > 0) {
       const responsesByVariable: { [key: string]: { [key: string]: number } } =
@@ -481,6 +512,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       this.totalFilteredVariables = this.allVariableCombos.length;
     } else {
       this.allVariableCombos = [];
+      this.analysisRows = [];
       this.totalFilteredVariables = 0;
     }
     this.allVariableCombos.sort((a, b) => {
@@ -606,13 +638,15 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   filterVariables(): void {
     if (this.isUsingServerSideResults) {
       this.variableCombos = this.allVariableCombos;
+      this.analysisRows = this.serverAnalysisRows;
       return;
     }
 
-    const filteredCombos = this.getFilteredCombos();
+    const filteredRows = this.getFilteredRows();
     const startIndex = this.currentPage * this.pageSize;
     const endIndex = startIndex + this.pageSize;
-    this.variableCombos = filteredCombos.slice(startIndex, endIndex);
+    this.analysisRows = filteredRows.slice(startIndex, endIndex);
+    this.variableCombos = this.getCombosForRows(this.analysisRows);
   }
 
   onSearchChange(event: Event): void {
@@ -658,11 +692,62 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.filterVariables();
   }
 
+  onSortChange(sort: Sort): void {
+    this.sortBy = this.isSupportedSortBy(sort.active) ?
+      sort.active :
+      'unitName';
+    this.sortDirection = sort.direction === 'desc' ? 'desc' : 'asc';
+    this.currentPage = 0;
+
+    if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
+      this.loadAnalysisResultsPage(this.currentAnalysisJobId);
+      return;
+    }
+
+    this.filterVariables();
+  }
+
   getTotalFilteredVariables(): number {
     if (this.isUsingServerSideResults) {
       return this.totalFilteredVariables;
     }
-    return this.getFilteredCombos().length;
+    return this.getFilteredRows().length;
+  }
+
+  hasLimitedPageableRows(): boolean {
+    const rowTotal = this.data.analysisResults?.rowTotal;
+    const pageableRowTotal = this.data.analysisResults?.pageableRowTotal;
+    return Boolean(
+      this.isUsingServerSideResults &&
+        rowTotal !== undefined &&
+        pageableRowTotal !== undefined &&
+        rowTotal > pageableRowTotal
+    );
+  }
+
+  getPageableRowLimitInfoParams(): {
+    pageable: number;
+    total: number;
+    maxPage: number;
+  } {
+    return {
+      pageable: this.data.analysisResults?.pageableRowTotal ?? 0,
+      total: this.data.analysisResults?.rowTotal ?? 0,
+      maxPage: this.data.analysisResults?.maxPage ?? 0
+    };
+  }
+
+  getMetricValue(row: VariableAnalysisTableRowDto): number | null {
+    return row.pointBiserial ?? row.codePbc ?? row.categoryPbc ?? null;
+  }
+
+  formatMetric(row: VariableAnalysisTableRowDto): string {
+    const metric = this.getMetricValue(row);
+    return metric === null ? '-' : metric.toFixed(3);
+  }
+
+  formatOptionalNumber(value: number | null | undefined): string {
+    return value === null || value === undefined ? '-' : value.toString();
   }
 
   getEmptyStateMessageKey(): string {
@@ -1010,7 +1095,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         pageSize: this.pageSize,
         search: this.searchText,
         onlyEmpty: this.onlyWithEmptyValues,
-        includeSchemaCodes: this.includeSchemaCodes
+        includeSchemaCodes: this.includeSchemaCodes,
+        sortBy: this.sortBy,
+        sortDirection: this.sortDirection
       })
       .subscribe({
         next: (results: VariableAnalysisResultPageDto) => {
@@ -1054,6 +1141,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.variableFrequencies = {};
     this.allVariableCombos = [];
     this.variableCombos = [];
+    this.analysisRows = [];
+    this.serverAnalysisRows = [];
     this.totalFilteredVariables = 0;
     this.currentPage = 0;
   }
@@ -1085,5 +1174,164 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   getTranslatedStatus(status: string): string {
     const translationKey = `variable-analysis.status-${status}`;
     return this.translate.instant(translationKey);
+  }
+
+  private getFilteredRows(): VariableAnalysisTableRowDto[] {
+    return this.sortRows(this.createRowsFromCombos(this.getFilteredCombos()));
+  }
+
+  private createRowsFromCombos(
+    combos: VariableCombo[]
+  ): VariableAnalysisTableRowDto[] {
+    return combos.flatMap(combo => {
+      const comboKey = this.getComboKey(combo);
+      const frequencies = this.variableFrequencies[comboKey] || [];
+      const summary = this.getComboSummary(combo);
+      const distinctValueCount = combo.distinctValueCount ?? frequencies.length;
+      const displayedObservedValueCount = frequencies.filter(
+        item => !item.isSchemaOnly
+      ).length;
+      const hiddenValueCount = Math.max(
+        0,
+        distinctValueCount - displayedObservedValueCount
+      );
+
+      return frequencies.map(frequency => ({
+        unitId: combo.unitId,
+        unitName: combo.unitName,
+        variableId: combo.variableId,
+        value: frequency.value,
+        label: frequency.label,
+        score: frequency.score,
+        schemaOrder: frequency.schemaOrder,
+        isSchemaOnly: frequency.isSchemaOnly,
+        isSchemaSupplemental: frequency.isSchemaSupplemental,
+        count: frequency.count,
+        percentage: frequency.percentage,
+        totalCount: summary.totalCount,
+        emptyCount: summary.emptyCount,
+        emptyPercentage: summary.emptyPercentage,
+        distinctValueCount,
+        hiddenValueCount,
+        statusCounts: combo.statusCounts,
+        statusSummary: summary.statusSummary
+      }));
+    });
+  }
+
+  private sortRows(
+    rows: VariableAnalysisTableRowDto[]
+  ): VariableAnalysisTableRowDto[] {
+    return [...rows].sort((a, b) => this.compareRows(a, b));
+  }
+
+  private compareRows(
+    a: VariableAnalysisTableRowDto,
+    b: VariableAnalysisTableRowDto
+  ): number {
+    return this.compareSortValues(
+      this.getSortValue(a, this.sortBy),
+      this.getSortValue(b, this.sortBy)
+    ) ||
+      this.compareValues(a.unitName, b.unitName) ||
+      this.compareValues(a.unitId, b.unitId) ||
+      this.compareValues(a.variableId, b.variableId) ||
+      this.compareValues(a.schemaOrder, b.schemaOrder) ||
+      this.compareValues(a.value, b.value) ||
+      this.compareValues(a.label, b.label);
+  }
+
+  private getSortValue(
+    row: VariableAnalysisTableRowDto,
+    sortBy: VariableAnalysisSortBy
+  ): string | number | null | undefined {
+    return row[sortBy];
+  }
+
+  private compareSortValues(
+    a: string | number | null | undefined,
+    b: string | number | null | undefined
+  ): number {
+    if (a === b) {
+      return 0;
+    }
+    if (a === null || a === undefined) {
+      return 1;
+    }
+    if (b === null || b === undefined) {
+      return -1;
+    }
+
+    const result = this.compareDefinedValues(a, b);
+    return this.sortDirection === 'desc' ? -result : result;
+  }
+
+  private compareValues(
+    a: string | number | null | undefined,
+    b: string | number | null | undefined
+  ): number {
+    if (a === b) {
+      return 0;
+    }
+    if (a === null || a === undefined) {
+      return 1;
+    }
+    if (b === null || b === undefined) {
+      return -1;
+    }
+    return this.compareDefinedValues(a, b);
+  }
+
+  private compareDefinedValues(
+    a: string | number,
+    b: string | number
+  ): number {
+    if (typeof a === 'number' && typeof b === 'number') {
+      return a - b;
+    }
+    return String(a).localeCompare(String(b), 'de', {
+      numeric: true,
+      sensitivity: 'base'
+    });
+  }
+
+  private getCombosForRows(
+    rows: VariableAnalysisTableRowDto[]
+  ): VariableCombo[] {
+    const comboByKey = new Map(
+      this.allVariableCombos.map(combo => [this.getComboKey(combo), combo])
+    );
+    const seenKeys = new Set<string>();
+    const combos: VariableCombo[] = [];
+
+    rows.forEach(row => {
+      const comboKey = this.getComboKey(row);
+      if (seenKeys.has(comboKey)) {
+        return;
+      }
+      const combo = comboByKey.get(comboKey);
+      if (combo) {
+        combos.push(combo);
+        seenKeys.add(comboKey);
+      }
+    });
+
+    return combos;
+  }
+
+  private isSupportedSortBy(sortBy: string): sortBy is VariableAnalysisSortBy {
+    return [
+      'unitName',
+      'variableId',
+      'value',
+      'label',
+      'score',
+      'count',
+      'percentage',
+      'totalCount',
+      'emptyCount',
+      'emptyPercentage',
+      'statusSummary'
+    ].includes(sortBy);
   }
 }

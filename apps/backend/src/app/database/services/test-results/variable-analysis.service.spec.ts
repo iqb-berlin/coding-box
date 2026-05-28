@@ -268,17 +268,332 @@ describe('VariableAnalysisService', () => {
         search: 'UNIT',
         onlyEmpty: true
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       variableCombos: [expect.objectContaining({ unitName: 'UNIT_A' })],
       frequencies: {
         '1:VAR_EMPTY': [expect.objectContaining({ value: '' })]
       },
       total: 1,
+      rowTotal: 1,
+      rows: [expect.objectContaining({ unitName: 'UNIT_A', value: '' })],
       unfilteredTotal: 3,
       page: 1,
       pageSize: 1,
       totalPages: 1
     });
+  });
+
+  it('sorts flattened result rows before paginating', async () => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(
+      createJob({
+        data: { workspaceId: 1 },
+        returnvalue: {
+          variableCombos: [
+            {
+              unitId: 1,
+              unitName: 'UNIT',
+              variableId: 'VAR',
+              totalCount: 10,
+              emptyCount: 0,
+              emptyPercentage: 0,
+              distinctValueCount: 2,
+              statusCounts: []
+            }
+          ],
+          frequencies: {
+            '1:VAR': [
+              {
+                unitId: 1,
+                unitName: 'UNIT',
+                variableId: 'VAR',
+                value: 'low',
+                count: 2,
+                percentage: 20
+              },
+              {
+                unitId: 1,
+                unitName: 'UNIT',
+                variableId: 'VAR',
+                value: 'high',
+                count: 8,
+                percentage: 80
+              }
+            ]
+          },
+          total: 1
+        }
+      })
+    );
+
+    await expect(
+      service.getAnalysisResultsPage('job-1', 1, {
+        page: 1,
+        pageSize: 1,
+        sortBy: 'count',
+        sortDirection: 'desc'
+      })
+    ).resolves.toMatchObject({
+      rows: [expect.objectContaining({ value: 'high', count: 8 })],
+      rowTotal: 2,
+      totalPages: 2
+    });
+  });
+
+  it('keeps missing sort values last when sorting rows descending', async () => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(
+      createJob({
+        data: { workspaceId: 1 },
+        returnvalue: {
+          variableCombos: [
+            {
+              unitId: 1,
+              unitName: 'UNIT',
+              variableId: 'VAR',
+              totalCount: 3,
+              emptyCount: 0,
+              emptyPercentage: 0,
+              distinctValueCount: 3,
+              statusCounts: []
+            }
+          ],
+          frequencies: {
+            '1:VAR': [
+              {
+                unitId: 1,
+                unitName: 'UNIT',
+                variableId: 'VAR',
+                value: 'missing',
+                count: 1,
+                percentage: 33.3
+              },
+              {
+                unitId: 1,
+                unitName: 'UNIT',
+                variableId: 'VAR',
+                value: 'alpha',
+                label: 'Alpha',
+                count: 1,
+                percentage: 33.3
+              },
+              {
+                unitId: 1,
+                unitName: 'UNIT',
+                variableId: 'VAR',
+                value: 'beta',
+                label: 'Beta',
+                count: 1,
+                percentage: 33.3
+              }
+            ]
+          },
+          total: 1
+        }
+      })
+    );
+
+    const page = await service.getAnalysisResultsPage('job-1', 1, {
+      sortBy: 'label',
+      sortDirection: 'desc'
+    });
+
+    expect(page.rows?.map(row => row.value)).toEqual([
+      'beta',
+      'alpha',
+      'missing'
+    ]);
+  });
+
+  it('sorts chunked rows before returning a bounded result page', async () => {
+    const manifest = {
+      storage: 'chunked',
+      workspaceId: 1,
+      total: 2,
+      variableComboChunks: 1,
+      frequencyChunks: 1,
+      storedAt: '2026-05-26T00:00:00.000Z'
+    };
+    const variableCombos = [
+      {
+        unitId: 1,
+        unitName: 'UNIT_A',
+        variableId: 'VAR_A',
+        totalCount: 10,
+        emptyCount: 0,
+        emptyPercentage: 0,
+        distinctValueCount: 2,
+        statusCounts: []
+      },
+      {
+        unitId: 2,
+        unitName: 'UNIT_B',
+        variableId: 'VAR_B',
+        totalCount: 10,
+        emptyCount: 0,
+        emptyPercentage: 0,
+        distinctValueCount: 2,
+        statusCounts: []
+      }
+    ];
+    const frequencyChunks = [
+      [
+        '1:VAR_A',
+        [
+          {
+            unitId: 1,
+            unitName: 'UNIT_A',
+            variableId: 'VAR_A',
+            value: 'middle',
+            count: 5,
+            percentage: 50
+          },
+          {
+            unitId: 1,
+            unitName: 'UNIT_A',
+            variableId: 'VAR_A',
+            value: 'low',
+            count: 1,
+            percentage: 10
+          }
+        ]
+      ],
+      [
+        '2:VAR_B',
+        [
+          {
+            unitId: 2,
+            unitName: 'UNIT_B',
+            variableId: 'VAR_B',
+            value: 'high',
+            count: 8,
+            percentage: 80
+          },
+          {
+            unitId: 2,
+            unitName: 'UNIT_B',
+            variableId: 'VAR_B',
+            value: 'lowest',
+            count: 0,
+            percentage: 0
+          }
+        ]
+      ]
+    ];
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob());
+    cacheService.get
+      .mockResolvedValueOnce(manifest)
+      .mockResolvedValueOnce(variableCombos)
+      .mockResolvedValueOnce(frequencyChunks);
+
+    const page = await service.getAnalysisResultsPage('job-1', 1, {
+      page: 1,
+      pageSize: 2,
+      sortBy: 'count',
+      sortDirection: 'desc'
+    });
+
+    expect(page.rows?.map(row => row.value)).toEqual(['high', 'middle']);
+    expect(page.rowTotal).toBe(4);
+    expect(page.totalPages).toBe(2);
+    expect(Object.values(page.frequencies).flat()).toHaveLength(2);
+  });
+
+  it('caps the pageable chunked row window for deep sorted pages', async () => {
+    Object.defineProperty(service, 'MAX_SORTED_PAGE_WINDOW_ROWS', {
+      value: 2
+    });
+    const manifest = {
+      storage: 'chunked',
+      workspaceId: 1,
+      total: 2,
+      variableComboChunks: 1,
+      frequencyChunks: 1,
+      storedAt: '2026-05-26T00:00:00.000Z'
+    };
+    const variableCombos = [
+      {
+        unitId: 1,
+        unitName: 'UNIT_A',
+        variableId: 'VAR_A',
+        totalCount: 10,
+        emptyCount: 0,
+        emptyPercentage: 0,
+        distinctValueCount: 2,
+        statusCounts: []
+      },
+      {
+        unitId: 2,
+        unitName: 'UNIT_B',
+        variableId: 'VAR_B',
+        totalCount: 10,
+        emptyCount: 0,
+        emptyPercentage: 0,
+        distinctValueCount: 2,
+        statusCounts: []
+      }
+    ];
+    const frequencyChunks = [
+      [
+        '1:VAR_A',
+        [
+          {
+            unitId: 1,
+            unitName: 'UNIT_A',
+            variableId: 'VAR_A',
+            value: 'middle',
+            count: 5,
+            percentage: 50
+          },
+          {
+            unitId: 1,
+            unitName: 'UNIT_A',
+            variableId: 'VAR_A',
+            value: 'low',
+            count: 1,
+            percentage: 10
+          }
+        ]
+      ],
+      [
+        '2:VAR_B',
+        [
+          {
+            unitId: 2,
+            unitName: 'UNIT_B',
+            variableId: 'VAR_B',
+            value: 'high',
+            count: 8,
+            percentage: 80
+          },
+          {
+            unitId: 2,
+            unitName: 'UNIT_B',
+            variableId: 'VAR_B',
+            value: 'lowest',
+            count: 0,
+            percentage: 0
+          }
+        ]
+      ]
+    ];
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob());
+    cacheService.get
+      .mockResolvedValueOnce(manifest)
+      .mockResolvedValueOnce(variableCombos)
+      .mockResolvedValueOnce(frequencyChunks);
+
+    const page = await service.getAnalysisResultsPage('job-1', 1, {
+      page: 3,
+      pageSize: 2,
+      sortBy: 'count',
+      sortDirection: 'desc'
+    });
+
+    expect(page.page).toBe(1);
+    expect(page.maxPage).toBe(1);
+    expect(page.rowTotal).toBe(4);
+    expect(page.pageableRowTotal).toBe(2);
+    expect(page.totalPages).toBe(1);
+    expect(page.rows?.map(row => row.value)).toEqual(['high', 'middle']);
   });
 
   it('applies schema code visibility to chunked cached result pages', async () => {
@@ -360,8 +675,8 @@ describe('VariableAnalysisService', () => {
     ).resolves.toMatchObject({
       frequencies: {
         '1:VAR': [
-          { value: 'Z' },
-          { value: 'A' }
+          { value: 'A' },
+          { value: 'Z' }
         ]
       }
     });
@@ -593,8 +908,8 @@ describe('VariableAnalysisService', () => {
     ).resolves.toMatchObject({
       frequencies: {
         '1:VAR': [
-          { value: 'Z' },
-          { value: 'A' }
+          { value: 'A' },
+          { value: 'Z' }
         ]
       }
     });

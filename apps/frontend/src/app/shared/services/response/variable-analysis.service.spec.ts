@@ -81,7 +81,9 @@ describe('VariableAnalysisService', () => {
           pageSize: 100,
           search: 'VAR',
           onlyEmpty: true,
-          includeSchemaCodes: true
+          includeSchemaCodes: true,
+          sortBy: 'count',
+          sortDirection: 'desc'
         })
         .subscribe();
 
@@ -92,7 +94,9 @@ describe('VariableAnalysisService', () => {
           r.params.get('pageSize') === '100' &&
           r.params.get('search') === 'VAR' &&
           r.params.get('onlyEmpty') === 'true' &&
-          r.params.get('includeSchemaCodes') === 'true'
+          r.params.get('includeSchemaCodes') === 'true' &&
+          r.params.get('sortBy') === 'count' &&
+          r.params.get('sortDirection') === 'desc'
       );
       expect(req.request.method).toBe('GET');
       req.flush({});
