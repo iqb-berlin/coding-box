@@ -88,6 +88,41 @@ describe('CodeSelectorComponent', () => {
     ]
   };
 
+  const issueOnlyCodingScheme: CodingScheme = {
+    version: '1.0',
+    variableCodings: [
+      {
+        id: 'VAR2',
+        alias: 'VAR2',
+        label: 'Variable 2',
+        sourceType: 'BASE',
+        processing: [],
+        codeModel: 'MANUAL_AND_RULES',
+        manualInstruction: '<p>Only general instruction</p>',
+        codes: [
+          {
+            id: 4,
+            type: 'RESIDUAL',
+            label: 'Auto code',
+            score: 0,
+            ruleSetOperatorAnd: false,
+            ruleSets: [],
+            manualInstruction: ''
+          },
+          {
+            id: 5,
+            type: 'RESIDUAL',
+            label: 'Whitespace code',
+            score: 0,
+            ruleSetOperatorAnd: false,
+            ruleSets: [],
+            manualInstruction: '   '
+          }
+        ]
+      }
+    ]
+  };
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [FormsModule, TranslateModule.forRoot(), CodeSelectorComponent]
@@ -114,6 +149,39 @@ describe('CodeSelectorComponent', () => {
 
     expect(component.regularCodes.map(code => code.id)).toEqual([1]);
     expect(component.codingIssueOptionCodes).toHaveLength(4);
+  });
+
+  it('keeps coding issue options and general instructions visible without regular manual codes', () => {
+    component.codingScheme = issueOnlyCodingScheme;
+    component.variableId = 'VAR2';
+    const emitSpy = jest.spyOn(component.codeSelected, 'emit');
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, issueOnlyCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR2', false)
+    });
+    fixture.detectChanges();
+
+    expect(component.regularCodes).toEqual([]);
+    expect(component.codingIssueOptionCodes.map(code => code.id)).toEqual([-1, -3, -4, -2]);
+    expect(fixture.nativeElement.querySelector('.general-instruction-row').textContent).toContain(
+      'Only general instruction'
+    );
+    expect(fixture.nativeElement.querySelectorAll('.uncertain-codes-section .code-row')).toHaveLength(4);
+
+    component.onSelect(-1);
+    expect(emitSpy).toHaveBeenLastCalledWith({
+      variableId: 'VAR2',
+      code: null,
+      codingIssueOption: expect.objectContaining({ code: -1 })
+    });
+
+    component.onSelect(-2);
+    expect(emitSpy).toHaveBeenLastCalledWith({
+      variableId: 'VAR2',
+      code: null,
+      codingIssueOption: expect.objectContaining({ code: -2 })
+    });
   });
 
   it('keeps manual codes selectable when mixed with empty manual instructions', () => {
