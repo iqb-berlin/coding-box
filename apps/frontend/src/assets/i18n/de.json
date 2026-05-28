@@ -36,6 +36,11 @@
   "status-processing": "Wird bearbeitet",
   "status-completed": "Abgeschlossen",
   "status-failed": "Fehlgeschlagen",
+  "response-status": {
+    "tooltips": {
+      "DERIVE_ERROR": "DERIVE_ERROR bedeutet: Ableitung/Solver fehlgeschlagen, z. B. Typkonflikt im Kodierschema. Keine inhaltlich falsche Antwort."
+    }
+  },
   "xml-viewer": {
     "format-error": "XML konnte nicht formatiert werden",
     "enable-line-wrap": "Zeilen umbrechen",

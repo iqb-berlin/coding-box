@@ -24,7 +24,6 @@ import { PageEvent } from '@angular/material/paginator';
 import { Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
@@ -82,6 +81,7 @@ import {
   isCodingFreshnessOpenWarning,
   isSecondAutocodingWaitingForManualCoding
 } from '../../../shared/utils/coding-freshness-text.util';
+import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
 import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
 
 @Component({
@@ -1010,7 +1010,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.isLoading = false;
 
         if (this.data.length === 0) {
-          const statusName = responseStatesNumericMap.find(entry => entry.key.toString() === status)?.value || status;
+          const statusName = getResponseStatusLabel(status);
           this.snackBar.open(
             this.translateService.instant('coding-management.descriptions.no-results', { status: statusName === 'null' ? this.translateService.instant('coding-management.statistics.uncoded-responses-title') : statusName }),
             this.translateService.instant('close'),

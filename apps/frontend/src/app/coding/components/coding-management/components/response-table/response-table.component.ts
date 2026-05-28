@@ -31,9 +31,9 @@ import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDivider } from '@angular/material/divider';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { Success } from '../../../../models/success.model';
 import { extractGeoGebraBase64 } from '../../../../utils/geogebra-value.util';
+import { getResponseStatusLabel } from '../../../../../shared/utils/response-status-metadata.util';
 
 @Component({
   selector: 'app-response-table',
@@ -90,10 +90,6 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
 
   dataSource = new MatTableDataSource<Success>([]);
 
-  private responseStatusMap = new Map(
-    responseStatesNumericMap.map(entry => [entry.key, entry.value])
-  );
-
   constructor(private translateService: TranslateService) { }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -135,12 +131,11 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
 
   getStatusString(status: string): string {
     if (!status) return '';
-    const num = parseInt(status, 10);
-    return Number.isNaN(num) ? status : this.mapStatusToString(num);
+    return this.mapStatusToString(status);
   }
 
-  mapStatusToString(status: number): string {
-    return this.responseStatusMap.get(status) || 'UNKNOWN';
+  mapStatusToString(status: string | number): string {
+    return getResponseStatusLabel(status) || 'UNKNOWN';
   }
 
   onPageChange(event: PageEvent): void {
@@ -195,8 +190,7 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
     if (!this.currentStatusFilter || this.currentStatusFilter === 'null') {
       return '';
     }
-    const num = parseInt(this.currentStatusFilter, 10);
-    return Number.isNaN(num) ? this.currentStatusFilter : this.mapStatusToString(num);
+    return this.mapStatusToString(this.currentStatusFilter);
   }
 
   private toSafeFileName(value: string): string {
