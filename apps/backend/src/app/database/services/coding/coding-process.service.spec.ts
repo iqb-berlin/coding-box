@@ -840,6 +840,76 @@ describe('CodingProcessService', () => {
         );
     });
 
+    it('should persist DERIVE_ERROR autocoder outputs without false-code completion', async () => {
+      (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([
+        {
+          id: 'derived_var',
+          value: null,
+          status: 'DERIVE_ERROR',
+          code: undefined,
+          score: undefined,
+          subform: ''
+        }
+      ]);
+
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([mockResponses[0]]);
+
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([
+          ['TEST_UNIT_1', new Set(['var1'])]
+        ])
+      );
+
+      await service.processTestPersonsBatch(workspaceId, ['1'], 1);
+
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          expect.arrayContaining([
+            expect.objectContaining({
+              isNew: true,
+              isAutocoderGenerated: true,
+              variableid: 'derived_var',
+              code_v1: null,
+              score_v1: null,
+              status_v1: 'DERIVE_ERROR',
+              code_v2: null,
+              score_v2: null,
+              status_v2: null
+            })
+          ]),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.objectContaining({
+            unitIds: [1],
+            autoCoderRun: 1,
+            markCurrentVersion: 'v1'
+          })
+        );
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .not.toHaveBeenCalledWith(
+          workspaceId,
+          expect.arrayContaining([
+            expect.objectContaining({
+              variableid: 'derived_var',
+              code_v1: 0,
+              status_v1: 'CODING_COMPLETE'
+            })
+          ]),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.any(Object)
+        );
+    });
+
     it('should call progress callback at appropriate intervals', async () => {
       mockQueryBuilder.getMany
         .mockResolvedValueOnce(mockUnits)

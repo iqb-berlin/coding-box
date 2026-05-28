@@ -8,6 +8,7 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { statusStringToNumber } from '../../utils/response-status-converter';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -52,6 +53,19 @@ const createQueryBuilder = (result: unknown = []) => {
   qb.getCount = jest.fn().mockResolvedValue(typeof result === 'number' ? result : 0);
   qb.execute = jest.fn().mockResolvedValue(result);
   return qb;
+};
+
+const expectManualCodingCandidateStatusFilter = (qb: Record<string, jest.Mock>) => {
+  const statusFilterCall = qb.andWhere.mock.calls.find(
+    ([condition]) => condition === 'response.status_v1 IN (:...statuses)'
+  );
+  const statuses = statusFilterCall?.[1]?.statuses;
+
+  expect(statuses).toEqual([
+    statusStringToNumber('CODING_INCOMPLETE'),
+    statusStringToNumber('INTENDED_INCOMPLETE')
+  ]);
+  expect(statuses).not.toContain(statusStringToNumber('DERIVE_ERROR'));
 };
 
 describe('CodingJobService', () => {
@@ -1038,6 +1052,40 @@ describe('CodingJobService', () => {
     await expect(service.getResponsesForCodingJob(1)).resolves.toEqual([{ id: 1 }]);
     expect(qb.where).toHaveBeenCalled();
     expect(qb.andWhere).toHaveBeenCalledWith('(response.code_v2 IS NULL OR response.code_v2 != -111)');
+  });
+
+  it('does not include DERIVE_ERROR responses in coding-job variable selection', async () => {
+    const qb = createQueryBuilder([]);
+    responseRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await expect(service.getResponsesForVariables(3, [{ unitName: 'UNIT', variableId: 'VAR' }])).resolves.toEqual([]);
+
+    expectManualCodingCandidateStatusFilter(qb);
+  });
+
+  it('does not include DERIVE_ERROR responses in slim variable selection', async () => {
+    const qb = createQueryBuilder([]);
+    responseRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await expect(service.getSlimResponsesForVariables(3, [{ unitName: 'UNIT', variableId: 'VAR' }])).resolves.toEqual([]);
+
+    expectManualCodingCandidateStatusFilter(qb);
+  });
+
+  it('does not include DERIVE_ERROR responses when saving coding-job units', async () => {
+    const qb = createQueryBuilder([]);
+    responseRepository.createQueryBuilder.mockReturnValue(qb);
+    codingJobRepository.save.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobVariableRepository.find.mockResolvedValue([{ unit_name: 'UNIT', variable_id: 'VAR' }]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+
+    await service.createCodingJob(3, {
+      name: 'Direct job',
+      variables: [{ unitName: 'UNIT', variableId: 'VAR' }]
+    } as never);
+
+    expectManualCodingCandidateStatusFilter(qb);
   });
 
   it('returns no coding-job responses when no variables are assigned', async () => {
