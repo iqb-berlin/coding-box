@@ -18,7 +18,6 @@ import * as domUtils from '../../utils/dom-utils';
 import { CodingJob } from '../../../coding/models/coding-job.model';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
-import { CodingScheme } from '../../../models/coding-interfaces';
 
 // Beispielhafte Mocks für Services, die im Component per inject() genutzt werden
 class FileServiceMock {
@@ -602,41 +601,6 @@ describe('ReplayComponent', () => {
     expect(component.player).toBe('');
   });
   describe('onKeyDown', () => {
-    const digitShortcutCodingScheme: CodingScheme = {
-      version: '1.0',
-      variableCodings: [
-        {
-          id: 'V1',
-          alias: 'V1',
-          label: 'Variable 1',
-          sourceType: 'BASE',
-          processing: [],
-          codeModel: 'MANUAL_AND_RULES',
-          manualInstruction: '',
-          codes: [
-            {
-              id: 1,
-              type: 'RESIDUAL',
-              label: 'Auto-only code',
-              score: 0,
-              ruleSetOperatorAnd: false,
-              ruleSets: [],
-              manualInstruction: ''
-            },
-            {
-              id: 2,
-              type: 'FULL_CREDIT',
-              label: 'Manual code',
-              score: 1,
-              ruleSetOperatorAnd: false,
-              ruleSets: [],
-              manualInstruction: '<p>Manual instruction</p>'
-            }
-          ]
-        }
-      ]
-    };
-
     it('should ignore shortcuts when an input is focused', () => {
       const input = document.createElement('input');
       document.body.appendChild(input);
@@ -714,71 +678,6 @@ describe('ReplayComponent', () => {
       component.onKeyDown(event);
 
       expect(handleUnitChangedSpy).toHaveBeenCalledWith(unitsData.units[1]);
-    });
-
-    it('should ignore digit shortcuts for regular codes without manual instructions', () => {
-      component.isCodingMode = true;
-      const unitsData = {
-        id: 123,
-        name: 'job',
-        currentUnitIndex: 0,
-        units: [
-          {
-            id: 1,
-            name: 'UNIT1',
-            alias: 'UNIT1',
-            bookletId: 0,
-            testPerson: 'tp1@code1@grp@booklet',
-            variableId: 'V1',
-            variableAnchor: 'V1'
-          }
-        ]
-      };
-      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
-      replayComponent.unitsData = unitsData;
-      component.codingService.currentVariableId = 'V1';
-      component.codingService.codingScheme = digitShortcutCodingScheme;
-      const onCodeSelectedSpy = jest.spyOn(component, 'onCodeSelected').mockResolvedValue();
-      const event = new KeyboardEvent('keydown', { key: '1', code: 'Digit1' });
-      const preventDefaultSpy = jest.spyOn(event, 'preventDefault');
-
-      component.onKeyDown(event);
-
-      expect(preventDefaultSpy).toHaveBeenCalled();
-      expect(onCodeSelectedSpy).not.toHaveBeenCalled();
-    });
-
-    it('should keep digit shortcuts for regular codes with manual instructions', () => {
-      component.isCodingMode = true;
-      const unitsData = {
-        id: 123,
-        name: 'job',
-        currentUnitIndex: 0,
-        units: [
-          {
-            id: 1,
-            name: 'UNIT1',
-            alias: 'UNIT1',
-            bookletId: 0,
-            testPerson: 'tp1@code1@grp@booklet',
-            variableId: 'V1',
-            variableAnchor: 'V1'
-          }
-        ]
-      };
-      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
-      replayComponent.unitsData = unitsData;
-      component.codingService.currentVariableId = 'V1';
-      component.codingService.codingScheme = digitShortcutCodingScheme;
-      const onCodeSelectedSpy = jest.spyOn(component, 'onCodeSelected').mockResolvedValue();
-      const event = new KeyboardEvent('keydown', { key: '2', code: 'Digit2' });
-
-      component.onKeyDown(event);
-
-      expect(onCodeSelectedSpy).toHaveBeenCalledWith({
-        variableId: 'V1',
-        code: digitShortcutCodingScheme.variableCodings[0].codes[1]
-      });
     });
   });
 

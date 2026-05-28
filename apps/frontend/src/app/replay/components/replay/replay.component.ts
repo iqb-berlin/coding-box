@@ -38,7 +38,6 @@ import { NavigateCodingCasesDialogComponent, NavigateCodingCasesDialogData } fro
 import { ReplayCodingService } from '../../services/replay-coding.service';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
-import { hasManualInstruction } from '../../../coding/utils/manual-coding.util';
 
 @Component({
   providers: [ReplayCodingService],
@@ -1008,7 +1007,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             (v: any) => v.alias === this.codingService.currentVariableId || v.id === this.codingService.currentVariableId
           );
           if (variableCoding) {
-            const code = variableCoding.codes.find((c: any) => c.id === codeId && hasManualInstruction(c));
+            const code = variableCoding.codes.find((c: any) => c.id === codeId);
             if (code) {
               this.onCodeSelected({
                 variableId: this.codingService.currentVariableId,
