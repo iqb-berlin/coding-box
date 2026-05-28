@@ -261,6 +261,27 @@ export class TestResultsUploadResultDialogComponent {
       );
     }
 
+    if (this.result.importedResponses && this.result.importSummary) {
+      if (this.result.importSummary.savedResponses !== undefined) {
+        metrics.push({
+          label: 'gespeicherte Antwortwerte',
+          value: this.result.importSummary.savedResponses
+        });
+      }
+      if (this.result.importSummary.skippedExistingUnits !== undefined) {
+        metrics.push({
+          label: 'übersprungene vorhandene Units',
+          value: this.result.importSummary.skippedExistingUnits
+        });
+      }
+      if (this.result.importSummary.skippedExistingResponses !== undefined) {
+        metrics.push({
+          label: 'nicht gemergte Antwortwerte',
+          value: this.result.importSummary.skippedExistingResponses
+        });
+      }
+    }
+
     if (this.result.importedLogs && this.result.importSummary) {
       metrics.push(
         { label: 'Log-Zeilen', value: this.result.importSummary.logRows ?? 0 },
@@ -277,6 +298,33 @@ export class TestResultsUploadResultDialogComponent {
     return !!this.result.importedResponses &&
       responseRows !== undefined &&
       responseRows !== this.result.expected.uniqueResponses;
+  }
+
+  get responseImportModeSummary(): string | null {
+    const summary = this.result.importSummary;
+    if (!this.result.importedResponses || !summary?.overwriteMode) {
+      return null;
+    }
+
+    if (summary.overwriteMode === 'skip') {
+      const skippedUnits = summary.skippedExistingUnits ?? 0;
+      const skippedResponses = summary.skippedExistingResponses ?? 0;
+      const savedResponses = summary.savedResponses ?? 0;
+
+      if (skippedUnits > 0 || skippedResponses > 0) {
+        return `Skip-Modus: ${this.formatCount(skippedUnits, 'vorhandene Unit wurde', 'vorhandene Units wurden')} vollständig übersprungen. ` +
+          `${this.formatCount(skippedResponses, 'Antwortwert daraus wurde', 'Antwortwerte daraus wurden')} nicht in diese Unit gemerged. ` +
+          `${this.formatCount(savedResponses, 'neuer Antwortwert wurde', 'neue Antwortwerte wurden')} gespeichert.`;
+      }
+
+      return 'Skip-Modus: Vorhandene Units bleiben vollständig unverändert. In diesem Import wurde keine vorhandene Unit getroffen.';
+    }
+
+    if (summary.overwriteMode === 'merge') {
+      return 'Merge-Modus: Fehlende Antwortwerte wurden ergänzt; vorhandene Antwortwerte blieben unverändert.';
+    }
+
+    return 'Replace-Modus: Bestehende Antwortwerte im betroffenen Bereich wurden ersetzt.';
   }
 
   get statusCounts(): Array<{ status: string; count: number }> {

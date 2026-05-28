@@ -35,6 +35,12 @@ type UploadSummaryAccumulator = {
   logRows: number;
   bookletLogRows: number;
   unitLogRows: number;
+  savedResponses: number;
+  deletedResponses: number;
+  skippedExistingUnitIds: Set<number>;
+  skippedExistingResponses: number;
+  addedUnitIds: Set<number>;
+  changedUnitIds: Set<number>;
   savedLogs: number;
   skippedRows: number;
   skippedLogs: number;
@@ -158,6 +164,12 @@ export class UploadResultsService {
       logRows: 0,
       bookletLogRows: 0,
       unitLogRows: 0,
+      savedResponses: 0,
+      deletedResponses: 0,
+      skippedExistingUnitIds: new Set<number>(),
+      skippedExistingResponses: 0,
+      addedUnitIds: new Set<number>(),
+      changedUnitIds: new Set<number>(),
       savedLogs: 0,
       skippedRows: 0,
       skippedLogs: 0
@@ -315,11 +327,22 @@ export class UploadResultsService {
   private buildImportSummary(
     resultType: 'logs' | 'responses',
     summary: UploadSummaryAccumulator,
-    issues: TestResultsUploadIssueDto[]
+    issues: TestResultsUploadIssueDto[],
+    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
+    scope: 'person' | 'workspace' | 'group' | 'booklet' | 'unit' | 'response' = 'person'
   ): TestResultsUploadSummaryDto | undefined {
     const issueCounts = this.countIssues(issues);
+    const hasResponseSummary = resultType === 'responses' && (
+      summary.responseRows > 0 ||
+      summary.savedResponses > 0 ||
+      summary.deletedResponses > 0 ||
+      summary.skippedExistingUnitIds.size > 0 ||
+      summary.skippedExistingResponses > 0 ||
+      summary.addedUnitIds.size > 0 ||
+      summary.changedUnitIds.size > 0
+    );
 
-    if (summary.totalRows === 0 && !issueCounts) {
+    if (summary.totalRows === 0 && !issueCounts && !hasResponseSummary) {
       return undefined;
     }
 
@@ -342,7 +365,17 @@ export class UploadResultsService {
 
     return {
       ...baseSummary,
-      responseRows: summary.responseRows
+      overwriteMode,
+      scope,
+      responseRows: summary.responseRows,
+      savedResponses: summary.savedResponses,
+      deletedResponses: summary.deletedResponses || undefined,
+      skippedExistingUnits: overwriteMode === 'skip' ?
+        summary.skippedExistingUnitIds.size :
+        undefined,
+      skippedExistingResponses: summary.skippedExistingResponses || undefined,
+      addedUnits: summary.addedUnitIds.size || undefined,
+      changedUnits: summary.changedUnitIds.size || undefined
     };
   }
 
@@ -692,9 +725,23 @@ export class UploadResultsService {
                   workspaceId,
                   overwriteMode,
                   scope === 'workspace' ? 'workspace' : 'person'
-                );
+                ) || {
+                  addedUnitIds: [],
+                  changedUnitIds: [],
+                  addedResponseCount: 0,
+                  changedResponseCount: 0
+                };
                 responsesImportMutatedData = responsesImportMutatedData ||
                   this.responseImportMutatedTestResults(mutationSummary);
+                importSummaryAgg.savedResponses += mutationSummary.savedResponseCount || 0;
+                importSummaryAgg.deletedResponses += mutationSummary.deletedResponseCount || 0;
+                importSummaryAgg.skippedExistingResponses += mutationSummary.skippedExistingResponseCount || 0;
+                (mutationSummary.skippedExistingUnitIds || [])
+                  .forEach(unitId => importSummaryAgg.skippedExistingUnitIds.add(unitId));
+                (mutationSummary.addedUnitIds || [])
+                  .forEach(unitId => importSummaryAgg.addedUnitIds.add(unitId));
+                (mutationSummary.changedUnitIds || [])
+                  .forEach(unitId => importSummaryAgg.changedUnitIds.add(unitId));
                 await this.codingFreshnessService?.markUnitsPendingAfterImport(
                   workspaceId,
                   mutationSummary.addedUnitIds,
@@ -792,7 +839,7 @@ export class UploadResultsService {
       delta,
       responseStatusCounts: Object.keys(statusCounts).length ? statusCounts : undefined,
       issues: issues.length ? issues : undefined,
-      importSummary: this.buildImportSummary(resultType, importSummaryAgg, issues),
+      importSummary: this.buildImportSummary(resultType, importSummaryAgg, issues, overwriteMode, scope),
       logMetrics,
       importedLogs: resultType === 'logs',
       importedResponses: resultType === 'responses',

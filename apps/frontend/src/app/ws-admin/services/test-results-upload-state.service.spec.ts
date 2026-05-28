@@ -767,4 +767,47 @@ describe('TestResultsUploadStateService', () => {
 
     discardPeriodicTasks();
   }));
+
+  it('should merge response import mode counters across completed jobs', () => {
+    service = TestBed.inject(TestResultsUploadStateService);
+
+    const result = (service as unknown as {
+      mergeImportSummaries: (
+        results: Array<{ importSummary?: unknown }>
+      ) => unknown;
+    }).mergeImportSummaries([
+      {
+        importSummary: {
+          totalRows: 1,
+          responseRows: 1,
+          overwriteMode: 'skip',
+          scope: 'person',
+          savedResponses: 0,
+          skippedExistingUnits: 1,
+          skippedExistingResponses: 2
+        }
+      },
+      {
+        importSummary: {
+          totalRows: 2,
+          responseRows: 2,
+          overwriteMode: 'skip',
+          scope: 'person',
+          savedResponses: 1,
+          skippedExistingUnits: 2,
+          skippedExistingResponses: 3
+        }
+      }
+    ]);
+
+    expect(result).toMatchObject({
+      totalRows: 3,
+      responseRows: 3,
+      overwriteMode: 'skip',
+      scope: 'person',
+      savedResponses: 1,
+      skippedExistingUnits: 3,
+      skippedExistingResponses: 5
+    });
+  });
 });

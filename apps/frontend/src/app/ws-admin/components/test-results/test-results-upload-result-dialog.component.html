@@ -74,6 +74,22 @@
         <div class="k">Antwort-Zeilen in der Datei</div>
         <div class="v">{{ result.importSummary.responseRows | number:'1.0-0' }}</div>
         }
+        @if (result.importSummary.savedResponses !== undefined) {
+        <div class="k">Antwortwerte gespeichert</div>
+        <div class="v">{{ result.importSummary.savedResponses | number:'1.0-0' }}</div>
+        }
+        @if (result.importSummary.skippedExistingUnits !== undefined) {
+        <div class="k">Vorhandene Units übersprungen</div>
+        <div class="v">{{ result.importSummary.skippedExistingUnits | number:'1.0-0' }}</div>
+        }
+        @if (result.importSummary.skippedExistingResponses !== undefined) {
+        <div class="k">Antwortwerte wegen bestehender Daten nicht gemerged</div>
+        <div class="v">{{ result.importSummary.skippedExistingResponses | number:'1.0-0' }}</div>
+        }
+        @if (result.importSummary.deletedResponses !== undefined) {
+        <div class="k">Antwortwerte ersetzt/gelöscht</div>
+        <div class="v">{{ result.importSummary.deletedResponses | number:'1.0-0' }}</div>
+        }
         @if (result.importSummary.bookletLogRows !== undefined) {
         <div class="k">Testheft-Log-Zeilen in der Datei</div>
         <div class="v">{{ result.importSummary.bookletLogRows | number:'1.0-0' }}</div>
@@ -99,6 +115,11 @@
       <div class="summary-note">
         Antwort-Zeilen und Antwortwerte zählen unterschiedliche Dinge: Eine Antwort-Zeile kann mehrere
         Antwortwerte enthalten.
+      </div>
+      }
+      @if (responseImportModeSummary) {
+      <div class="summary-note">
+        {{ responseImportModeSummary }}
       </div>
       }
       @if (issueSummaryEntries.length > 0) {

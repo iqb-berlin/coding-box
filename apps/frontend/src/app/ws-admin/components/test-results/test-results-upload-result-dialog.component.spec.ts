@@ -235,6 +235,41 @@ describe('TestResultsUploadResultDialogComponent', () => {
     );
   });
 
+  it('explains response skip mode and exposes skipped unit counts', () => {
+    component.data = {
+      ...data,
+      result: {
+        ...data.result,
+        issues: undefined,
+        codingFreshness: undefined,
+        importSummary: {
+          totalRows: 1,
+          responseRows: 1,
+          overwriteMode: 'skip',
+          scope: 'person',
+          savedResponses: 0,
+          skippedExistingUnits: 1,
+          skippedExistingResponses: 2
+        }
+      } as never
+    };
+
+    expect(component.importOutcomeMetrics).toEqual([
+      { label: 'Testpersonen', value: 1 },
+      { label: 'Testhefte', value: 1 },
+      { label: 'Aufgaben-IDs', value: 1 },
+      { label: 'Antwortwerte', value: 3 },
+      { label: 'gespeicherte Antwortwerte', value: 0 },
+      { label: 'übersprungene vorhandene Units', value: 1 },
+      { label: 'nicht gemergte Antwortwerte', value: 2 }
+    ]);
+    expect(component.responseImportModeSummary).toBe(
+      'Skip-Modus: 1 vorhandene Unit wurde vollständig übersprungen. ' +
+      '2 Antwortwerte daraus wurden nicht in diese Unit gemerged. ' +
+      '0 neue Antwortwerte wurden gespeichert.'
+    );
+  });
+
   it('ignores zero-count coding freshness rows', () => {
     component.data = {
       resultType: 'responses',
