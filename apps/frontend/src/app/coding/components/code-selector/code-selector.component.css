@@ -34,6 +34,32 @@
   color: #1976d2;
 }
 
+.code-row.legacy-code-row {
+  cursor: default;
+  background-color: #fff8e1;
+  border-color: #ffb300;
+}
+
+.code-row.legacy-code-row:hover {
+  background-color: #fff8e1;
+  border-color: #ffb300;
+}
+
+.code-row.legacy-code-row.selected .code-id {
+  color: #8a5a00;
+}
+
+.legacy-code-prefix {
+  color: rgba(0, 0, 0, 0.72);
+}
+
+.legacy-code-note {
+  margin-left: 24px;
+  margin-top: 4px;
+  color: rgba(0, 0, 0, 0.7);
+  font-style: italic;
+}
+
 .code-row.selected .uncertain-text {
   color: #1976d2;
   font-weight: 600;
