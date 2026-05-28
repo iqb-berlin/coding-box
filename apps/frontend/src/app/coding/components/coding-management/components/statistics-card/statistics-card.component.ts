@@ -15,8 +15,11 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule } from '@ngx-translate/core';
-import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { CodingStatistics } from '../../../../../../../../../api-dto/coding/coding-statistics';
+import {
+  getResponseStatusLabel,
+  getResponseStatusTooltipKey
+} from '../../../../../shared/utils/response-status-metadata.util';
 import { StatisticsVersion } from '../../../../services/coding-management.service';
 
 @Component({
@@ -59,10 +62,6 @@ export class StatisticsCardComponent {
   @Output() statusClick = new EventEmitter<string>();
   @Output() derivedClick = new EventEmitter<void>();
 
-  private responseStatusMap = new Map(
-    responseStatesNumericMap.map(entry => [entry.key, entry.value])
-  );
-
   private readonly ignoredStatuses = [
     '0', '1', '2', '3', '10',
     'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
@@ -74,8 +73,12 @@ export class StatisticsCardComponent {
     { value: 'v3' as const, label: 'coding-management.statistics.second-autocode-run' }
   ];
 
-  mapStatusToString(status: number): string {
-    return this.responseStatusMap.get(status) || 'UNKNOWN';
+  mapStatusToString(status: string | number): string {
+    return getResponseStatusLabel(status) || 'UNKNOWN';
+  }
+
+  getStatusTooltipKey(status: string): string {
+    return getResponseStatusTooltipKey(status);
   }
 
   get effectiveTotalResponses(): number {
