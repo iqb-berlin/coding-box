@@ -559,7 +559,9 @@ describe('PersonPersistenceService', () => {
       addedUnitIds: [99],
       changedUnitIds: [],
       addedResponseCount: 1,
-      changedResponseCount: 0
+      changedResponseCount: 0,
+      savedResponseCount: 1,
+      skippedExistingResponseCount: 0
     });
   });
 
@@ -626,7 +628,9 @@ describe('PersonPersistenceService', () => {
       addedUnitIds: [],
       changedUnitIds: [40],
       addedResponseCount: 0,
-      changedResponseCount: 1
+      changedResponseCount: 1,
+      savedResponseCount: 1,
+      skippedExistingResponseCount: 1
     });
   });
 
@@ -638,6 +642,8 @@ describe('PersonPersistenceService', () => {
     } as Unit);
     const responseSaveSpy = jest.spyOn(responseRepository, 'save');
     const chunkDeleteSpy = jest.spyOn(chunkRepository, 'delete');
+    const lastStateSpy = jest.spyOn(service, 'saveUnitLastState');
+    const processSubformsSpy = jest.spyOn(service, 'processSubforms');
 
     const result = await service.processBookletWithTransaction(
       {
@@ -674,11 +680,16 @@ describe('PersonPersistenceService', () => {
 
     expect(responseSaveSpy).not.toHaveBeenCalled();
     expect(chunkDeleteSpy).not.toHaveBeenCalled();
+    expect(lastStateSpy).not.toHaveBeenCalled();
+    expect(processSubformsSpy).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       addedUnitIds: [],
       changedUnitIds: [],
+      skippedExistingUnitIds: [40],
       addedResponseCount: 0,
-      changedResponseCount: 0
+      changedResponseCount: 0,
+      savedResponseCount: 0,
+      skippedExistingResponseCount: 1
     });
   });
 });

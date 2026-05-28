@@ -57,6 +57,12 @@ type ImportSummaryNumberKey =
   | 'logRows'
   | 'bookletLogRows'
   | 'unitLogRows'
+  | 'savedResponses'
+  | 'deletedResponses'
+  | 'skippedExistingUnits'
+  | 'skippedExistingResponses'
+  | 'addedUnits'
+  | 'changedUnits'
   | 'savedLogs'
   | 'skippedRows'
   | 'skippedLogs';
@@ -897,10 +903,18 @@ export class TestResultsUploadStateService {
 
     return {
       totalRows: summaries.reduce((sum, summary) => sum + Number(summary.totalRows || 0), 0),
+      overwriteMode: this.mergeSingleValue(summaries, 'overwriteMode'),
+      scope: this.mergeSingleValue(summaries, 'scope'),
       responseRows: this.sumOptional(summaries, 'responseRows'),
       logRows: this.sumOptional(summaries, 'logRows'),
       bookletLogRows: this.sumOptional(summaries, 'bookletLogRows'),
       unitLogRows: this.sumOptional(summaries, 'unitLogRows'),
+      savedResponses: this.sumOptional(summaries, 'savedResponses'),
+      deletedResponses: this.sumOptional(summaries, 'deletedResponses'),
+      skippedExistingUnits: this.sumOptional(summaries, 'skippedExistingUnits'),
+      skippedExistingResponses: this.sumOptional(summaries, 'skippedExistingResponses'),
+      addedUnits: this.sumOptional(summaries, 'addedUnits'),
+      changedUnits: this.sumOptional(summaries, 'changedUnits'),
       savedLogs: this.sumOptional(summaries, 'savedLogs'),
       skippedRows: this.sumOptional(summaries, 'skippedRows'),
       skippedLogs: this.sumOptional(summaries, 'skippedLogs'),
@@ -917,6 +931,21 @@ export class TestResultsUploadStateService {
     const hasValue = summaries.some(summary => summary[key] !== undefined);
     if (!hasValue) return undefined;
     return summaries.reduce((sum, summary) => sum + Number(summary[key] || 0), 0);
+  }
+
+  private mergeSingleValue<
+    K extends 'overwriteMode' | 'scope'
+  >(
+    summaries: NonNullable<TestResultsUploadResultDto['importSummary']>[],
+    key: K
+  ): NonNullable<TestResultsUploadResultDto['importSummary']>[K] | undefined {
+    const values = Array.from(new Set(
+      summaries
+        .map(summary => summary[key])
+        .filter((value): value is NonNullable<NonNullable<TestResultsUploadResultDto['importSummary']>[K]> => !!value)
+    ));
+
+    return values.length === 1 ? values[0] : undefined;
   }
 
   private mergeLogMetrics(
