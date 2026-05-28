@@ -279,6 +279,10 @@ export class CodeSelectorComponent implements OnChanges {
     return this.selectableItems.filter(item => item.type === 'codingIssueOption');
   }
 
+  get hasVariableManualInstruction(): boolean {
+    return !this.suppressGeneralInstructions && !!this.variableManualInstruction?.trim();
+  }
+
   get isRegularSelectionDisabled(): boolean {
     return this.selectedCodingIssueOption === -3 || this.selectedCodingIssueOption === -4;
   }
