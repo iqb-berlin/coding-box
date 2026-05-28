@@ -214,9 +214,16 @@ describe('CodingManagementComponent', () => {
 
     const translateService = TestBed.inject(TranslateService);
     translateService.setTranslation('de', {
+      close: 'Schließen',
       'coding-management': {
         actions: {
           close: 'Schließen'
+        },
+        descriptions: {
+          'no-results': 'Keine Ergebnisse für {{status}}'
+        },
+        statistics: {
+          'uncoded-responses-title': 'Unkodierte Antworten'
         },
         readiness: {
           'title-load-failed': 'Auto-Coding-Prüfung nicht verfügbar',
@@ -895,6 +902,20 @@ describe('CodingManagementComponent', () => {
       const statuses = component.getAvailableStatuses();
 
       expect(statuses).toEqual(['200', '300']);
+    });
+
+    it('should use centralized status labels in empty result snackbars', () => {
+      const componentWithPrivate = component as unknown as {
+        fetchResponsesByStatus(status: string): void;
+      };
+
+      componentWithPrivate.fetchResponsesByStatus('4');
+
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        'Keine Ergebnisse für DERIVE_ERROR',
+        'Schließen',
+        { duration: 5000 }
+      );
     });
   });
 

@@ -301,6 +301,14 @@ describe('VariableAnalysisDialogComponent', () => {
     });
   });
 
+  describe('status labels', () => {
+    it('should use centralized response status labels', () => {
+      expect(component.getStatusLabel(8)).toBe('CODING_INCOMPLETE');
+      expect(component.getStatusLabel('4')).toBe('DERIVE_ERROR');
+      expect(component.getStatusLabel('4abc')).toBe('4abc');
+    });
+  });
+
   describe('refreshJobs', () => {
     it('should load jobs from service', () => {
       component.refreshJobs();

@@ -44,6 +44,7 @@ import {
   ConfirmDialogComponent,
   ConfirmDialogData
 } from '../../../shared/dialogs/confirm-dialog.component';
+import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
 
 export interface VariableAnalysisData {
   unitId: number;
@@ -180,16 +181,6 @@ type VariableAnalysisExportFormat = 'csv' | 'xlsx';
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
-  private readonly responseStatusLabels: Record<number, string> = {
-    0: 'UNSET',
-    1: 'NOT_REACHED',
-    2: 'DISPLAYED',
-    3: 'VALUE_CHANGED',
-    4: 'DERIVE_ERROR',
-    5: 'CODING_COMPLETE',
-    6: 'NO_CODING'
-  };
-
   isLoading = false;
   variableFrequencies: { [key: string]: VariableFrequency[] } = {};
   displayedColumns: string[] = [
@@ -609,9 +600,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   getStatusLabel(status: number | string): string {
-    return typeof status === 'number' ?
-      this.responseStatusLabels[status] || status.toString() :
-      status;
+    return getResponseStatusLabel(status);
   }
 
   getVisibleStatusCounts(combo: VariableCombo): VariableStatusCount[] {
