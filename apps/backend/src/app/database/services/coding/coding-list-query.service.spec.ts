@@ -228,6 +228,66 @@ describe('CodingListQueryService', () => {
     });
   });
 
+  it('does not include DERIVE_ERROR responses in the default coding list selection', async () => {
+    const unitVariableMap = new Map([[
+      'UNIT',
+      new Set(['DERIVE_VAR', 'INCOMPLETE_VAR'])
+    ]]);
+    const responses = [
+      {
+        id: 1,
+        variableid: 'DERIVE_VAR',
+        value: 'O',
+        status_v1: statusStringToNumber('DERIVE_ERROR'),
+        unit: {
+          name: 'UNIT',
+          alias: 'Unit Alias',
+          booklet: {
+            person: {
+              login: 'login',
+              code: 'code',
+              group: 'group'
+            },
+            bookletinfo: {
+              name: 'BOOKLET'
+            }
+          }
+        }
+      },
+      {
+        id: 2,
+        variableid: 'INCOMPLETE_VAR',
+        value: 'Antwort',
+        status_v1: statusStringToNumber('CODING_INCOMPLETE'),
+        unit: {
+          name: 'UNIT',
+          alias: 'Unit Alias',
+          booklet: {
+            person: {
+              login: 'login',
+              code: 'code',
+              group: 'group'
+            },
+            bookletinfo: {
+              name: 'BOOKLET'
+            }
+          }
+        }
+      }
+    ] as unknown as ResponseEntity[];
+    const service = createService(responses, createFileRepository({}), {
+      unitVariableMap
+    });
+
+    const result = await service.getCodingList(
+      1,
+      'token',
+      'https://iqb-kodierbox.de'
+    );
+
+    expect(result.items.map(item => item.variable_id)).toEqual(['INCOMPLETE_VAR']);
+  });
+
   it('excludes intended source variables only when their derived variable remains in the same manual scope', async () => {
     const unitVariableMap = new Map([[
       'UNIT',
@@ -271,6 +331,33 @@ describe('CodingListQueryService', () => {
     await expect(service.getCodingListVariables(1, true)).resolves.toEqual([
       { unitName: 'UNIT', variableId: 'BASE_VAR' },
       { unitName: 'UNIT', variableId: 'STANDALONE_VAR' }
+    ]);
+  });
+
+  it('does not include DERIVE_ERROR variables in default coding-list variable selection', async () => {
+    const unitVariableMap = new Map([[
+      'UNIT',
+      new Set(['DERIVE_VAR', 'INCOMPLETE_VAR'])
+    ]]);
+    const rawVariableRows = [
+      {
+        unitName: 'UNIT',
+        variableId: 'DERIVE_VAR',
+        statusV1: statusStringToNumber('DERIVE_ERROR')
+      },
+      {
+        unitName: 'UNIT',
+        variableId: 'INCOMPLETE_VAR',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE')
+      }
+    ];
+    const service = createService([], createFileRepository({}), {
+      rawVariableRows,
+      unitVariableMap
+    });
+
+    await expect(service.getCodingListVariables(1)).resolves.toEqual([
+      { unitName: 'UNIT', variableId: 'INCOMPLETE_VAR' }
     ]);
   });
 });

@@ -21,6 +21,7 @@ import { CoderTrainingDiscussionResult } from '../../entities/coder-training-dis
 import User from '../../entities/user.entity';
 import { MissingsProfilesService } from './missings-profiles.service';
 import type { CaseSelectionMode, ReferenceMode } from '../../entities/coder-training.entity';
+import { statusStringToNumber } from '../../utils/response-status-converter';
 
 describe('CoderTrainingService', () => {
   let service: CoderTrainingService;
@@ -967,6 +968,27 @@ describe('CoderTrainingService', () => {
           responses: []
         }
       ]);
+    });
+
+    it('does not include DERIVE_ERROR responses in training package sampling', async () => {
+      const responseQb = mockResponseRepository([]);
+
+      await service.generateCoderTrainingPackages(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [{ unitId: 'Alias Unit', variableId: 'var1', sampleCount: 5 }]
+      );
+
+      const statusFilterCall = responseQb.andWhere.mock.calls.find(
+        ([condition]) => condition === 'response.status_v1 IN (:...statuses)'
+      );
+      const statuses = statusFilterCall?.[1]?.statuses;
+
+      expect(statuses).toEqual([
+        statusStringToNumber('CODING_INCOMPLETE'),
+        statusStringToNumber('INTENDED_INCOMPLETE')
+      ]);
+      expect(statuses).not.toContain(statusStringToNumber('DERIVE_ERROR'));
     });
 
     it('should keep the same referenced cases when the training uses a unit alias', async () => {
