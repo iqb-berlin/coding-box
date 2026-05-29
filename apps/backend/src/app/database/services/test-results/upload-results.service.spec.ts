@@ -14,6 +14,8 @@ import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
+import { CodingStatisticsService } from '../coding/coding-statistics.service';
+import { getCodingStatisticsCacheKey } from '../coding/coding-statistics-cache-key.util';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -1227,6 +1229,56 @@ test-group;test-user;code;booklet1;unit1;[];""`;
         addedResponseCount: 1,
         changedResponseCount: 1
       });
+      const codingStatisticsCache = new Map<string, unknown>([
+        [getCodingStatisticsCacheKey(1, 'v1'), {
+          totalResponses: 1,
+          baseResponseCount: 1,
+          derivedResponseCount: 0,
+          derivedVariableCount: 0,
+          derivedStatusCounts: {},
+          statusCounts: { 5: 1 }
+        }]
+      ]);
+      const statisticsCacheService = {
+        get: jest.fn(async (key: string) => codingStatisticsCache.get(key)),
+        set: jest.fn(async (key: string, value: unknown) => {
+          codingStatisticsCache.set(key, value);
+          return true;
+        }),
+        delete: jest.fn(async (key: string) => {
+          codingStatisticsCache.delete(key);
+          return true;
+        })
+      };
+      const statisticsRepository = {
+        query: jest.fn().mockResolvedValue([
+          { statusValue: 5, isDerived: false, count: '2' }
+        ])
+      };
+      const codingStatisticsAfterImportService = new CodingStatisticsService(
+        statisticsRepository as never,
+        statisticsCacheService as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {
+          resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+            globalIgnoredUnits: [],
+            ignoredBooklets: [],
+            testletIgnoredUnits: []
+          })
+        } as never,
+        {
+          getUnitVariableMap: jest.fn().mockResolvedValue(
+            new Map([['unit1', new Set(['VAR_1'])]])
+          ),
+          getDerivedVariableMap: jest.fn().mockResolvedValue(new Map())
+        } as never
+      );
+      jest.spyOn(workspaceTestResultsService, 'invalidateCodingStatisticsCache')
+        .mockImplementation(async workspaceId => {
+          await codingStatisticsAfterImportService.invalidateCache(workspaceId);
+        });
 
       const file: FileIo = {
         buffer: Buffer.from(fileContent),
@@ -1247,6 +1299,8 @@ test-group;test-user;code;booklet1;unit1;[];""`;
           overwriteMode: 'merge'
         }
       }));
+      const statisticsAfterMerge =
+        await codingStatisticsAfterImportService.getCodingStatistics(1);
 
       expect(codingFreshnessService.markUnitsPendingAfterImport).toHaveBeenCalledWith(1, [101], 1);
       expect(codingFreshnessService.markResponsesPendingAfterImport).toHaveBeenCalledWith(1, [303]);
@@ -1259,6 +1313,12 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       expect(workspaceTestResultsService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
       expect(workspaceTestResultsService.invalidateCodingAvailabilityCache).toHaveBeenCalledWith(1);
       expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+      expect(statisticsAfterMerge.totalResponses).toBe(2);
+      expect(statisticsRepository.query).toHaveBeenCalledTimes(1);
+      expect(
+        (workspaceTestResultsService.invalidateCodingStatisticsCache as jest.Mock)
+          .mock.invocationCallOrder[0]
+      ).toBeLessThan(statisticsRepository.query.mock.invocationCallOrder[0]);
     });
 
     it('should report response skip mode counts without treating skipped units as mutations', async () => {

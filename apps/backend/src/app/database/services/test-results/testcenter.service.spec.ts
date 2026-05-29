@@ -13,6 +13,7 @@ import { Person, Response, Log } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import { CodingAnalysisService } from '../coding/coding-analysis.service';
 
 describe('TestCenterService', () => {
   let service: TestcenterService;
@@ -20,6 +21,7 @@ describe('TestCenterService', () => {
   let personService: DeepMocked<PersonService>;
   let workspaceTestResultsService: DeepMocked<WorkspaceTestResultsService>;
   let codingFreshnessService: DeepMocked<CodingFreshnessService>;
+  let codingAnalysisService: DeepMocked<CodingAnalysisService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -52,7 +54,9 @@ describe('TestCenterService', () => {
         {
           provide: WorkspaceTestResultsService,
           useValue: createMock<WorkspaceTestResultsService>({
-            invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+            invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
+            invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined),
+            invalidateCodingAvailabilityCache: jest.fn().mockResolvedValue(undefined)
           })
         },
         {
@@ -77,6 +81,12 @@ describe('TestCenterService', () => {
               items: []
             })
           })
+        },
+        {
+          provide: CodingAnalysisService,
+          useValue: createMock<CodingAnalysisService>({
+            invalidateCache: jest.fn().mockResolvedValue(undefined)
+          })
         }
       ]
     }).compile();
@@ -86,6 +96,7 @@ describe('TestCenterService', () => {
     personService = module.get(PersonService);
     workspaceTestResultsService = module.get(WorkspaceTestResultsService);
     codingFreshnessService = module.get(CodingFreshnessService);
+    codingAnalysisService = module.get(CodingAnalysisService);
     personService.filterLogRowsForPerson.mockImplementation((rows, person) => (
       (rows || []).filter(row => row.groupname === person.group &&
         row.loginname === person.login &&
@@ -316,6 +327,13 @@ describe('TestCenterService', () => {
       expect(
         workspaceTestResultsService.invalidateWorkspaceStatsCache
       ).toHaveBeenCalledWith(123);
+      expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(123);
+      expect(
+        workspaceTestResultsService.invalidateCodingStatisticsCache
+      ).toHaveBeenCalledWith(123);
+      expect(
+        workspaceTestResultsService.invalidateCodingAvailabilityCache
+      ).toHaveBeenCalledWith(123);
       expect(
         codingFreshnessService.markUnitsPendingAfterImport
       ).toHaveBeenCalledWith(123, [10], 2);
@@ -328,6 +346,70 @@ describe('TestCenterService', () => {
         currentRevision: 1,
         items: []
       });
+    });
+
+    it('should keep Testcenter response imports successful when coding cache invalidation fails', async () => {
+      const mockResponses: Response[] = [
+        {
+          groupname: 'group1',
+          loginname: 'user1',
+          code: 'code1',
+          bookletname: 'booklet1',
+          unitname: 'unit1',
+          originalUnitId: 'unit-1-id',
+          responses: '[]',
+          laststate: '{}'
+        }
+      ];
+      httpService.axiosRef.get.mockResolvedValue({
+        data: mockResponses
+      } as AxiosResponse);
+      const mockPersons: Person[] = [
+        {
+          workspace_id: 123,
+          group: 'group1',
+          login: 'user1',
+          code: 'code1',
+          booklets: []
+        }
+      ];
+      personService.createPersonList.mockResolvedValue(mockPersons);
+      personService.assignBookletsToPerson.mockResolvedValue(mockPersons[0]);
+      personService.assignUnitsToBookletAndPerson.mockResolvedValue(
+        mockPersons[0]
+      );
+      personService.processPersonBooklets.mockResolvedValue({
+        addedUnitIds: [10],
+        changedUnitIds: [],
+        addedResponseCount: 1,
+        changedResponseCount: 0
+      });
+      personService.getImportStatistics.mockResolvedValue({
+        persons: 1,
+        booklets: 1,
+        units: 1
+      });
+      workspaceTestResultsService.invalidateCodingStatisticsCache
+        .mockRejectedValueOnce(new Error('statistics cache failed'));
+
+      const result = await service.importWorkspaceFiles(
+        '123',
+        'ws-456',
+        'demo',
+        '',
+        'token',
+        mockImportOptions,
+        'group1'
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          level: 'warning',
+          category: 'other',
+          message: expect.stringContaining('Kodierstatistiken')
+        })
+      ]);
     });
   });
 
@@ -629,6 +711,13 @@ describe('TestCenterService', () => {
       );
       expect(result.persons).toBe(1);
       expect(result.units).toBe(2);
+      expect(codingAnalysisService.invalidateCache).not.toHaveBeenCalled();
+      expect(
+        workspaceTestResultsService.invalidateCodingStatisticsCache
+      ).not.toHaveBeenCalled();
+      expect(
+        workspaceTestResultsService.invalidateCodingAvailabilityCache
+      ).not.toHaveBeenCalled();
     });
   });
 
