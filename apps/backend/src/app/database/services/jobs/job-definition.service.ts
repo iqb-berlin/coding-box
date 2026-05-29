@@ -90,26 +90,23 @@ interface VariableConflictCheckRequest {
 type PlannedVariableUsageBatchRequest = {
   key: string | number;
   selectedVariables: JobDefinitionVariable[];
-  selectedVariableBundles: {
-    id: number;
-    name: string;
-    caseOrderingMode?: CaseOrderingMode;
-    variables: JobDefinitionVariable[];
-  }[];
+  selectedVariableBundles: JobDefinitionDistributionVariableBundle[];
   maxCodingCases?: number;
   caseOrderingMode?: CaseOrderingMode;
   jobDefinitionId?: number;
   distributionSeed?: string;
 };
 
+type JobDefinitionDistributionVariableBundle = {
+  id: number;
+  name: string;
+  caseOrderingMode?: CaseOrderingMode;
+  variables: JobDefinitionVariable[];
+};
+
 type DefinitionDistributionRequest = {
   selectedVariables: JobDefinitionVariable[];
-  selectedVariableBundles: {
-    id: number;
-    name: string;
-    caseOrderingMode?: CaseOrderingMode;
-    variables: JobDefinitionVariable[];
-  }[];
+  selectedVariableBundles: JobDefinitionDistributionVariableBundle[];
   selectedCoders: {
     id: number;
     name: string;
@@ -235,6 +232,58 @@ export class JobDefinitionService {
     return `${unitName}::${variableId}`;
   }
 
+  private buildDistributionVariableSelection(
+    assignedVariables: JobDefinitionVariable[] = [],
+    assignedVariableBundles: JobDefinitionBundleForUsage[] = []
+  ): {
+      selectedVariables: JobDefinitionVariable[];
+      selectedVariableBundles: JobDefinitionDistributionVariableBundle[];
+    } {
+    const assignedVariableOptionsByKey = assignedVariables.reduce(
+      (variablesByKey, variable) => {
+        const key = this.makeVariableKey(variable.unitName, variable.variableId);
+        const existing = variablesByKey.get(key);
+        variablesByKey.set(key, {
+          ...variable,
+          ...(existing?.includeDeriveError === true || variable.includeDeriveError === true ?
+            { includeDeriveError: true } :
+            {})
+        });
+        return variablesByKey;
+      },
+      new Map<string, JobDefinitionVariable>()
+    );
+    const selectedVariableBundles = assignedVariableBundles.map(bundle => ({
+      id: bundle.id,
+      name: bundle.name,
+      caseOrderingMode: bundle.caseOrderingMode,
+      variables: (bundle.variables || []).map(variable => {
+        const assignedVariable = assignedVariableOptionsByKey.get(
+          this.makeVariableKey(variable.unitName, variable.variableId)
+        );
+
+        return {
+          ...variable,
+          ...(variable.includeDeriveError === true || assignedVariable?.includeDeriveError === true ?
+            { includeDeriveError: true } :
+            {})
+        };
+      })
+    }));
+    const bundleVariableKeys = new Set(
+      selectedVariableBundles
+        .flatMap(bundle => bundle.variables)
+        .map(variable => this.makeVariableKey(variable.unitName, variable.variableId))
+    );
+
+    return {
+      selectedVariables: Array.from(assignedVariableOptionsByKey.values()).filter(
+        variable => !bundleVariableKeys.has(this.makeVariableKey(variable.unitName, variable.variableId))
+      ),
+      selectedVariableBundles
+    };
+  }
+
   private createDistributionSeed(workspaceId: number): string {
     return `job-definition:${workspaceId}:${randomUUID()}`;
   }
@@ -257,15 +306,15 @@ export class JobDefinitionService {
     key: string | number,
     definition: JobDefinitionForUsage
   ): PlannedVariableUsageBatchRequest {
+    const variableSelection = this.buildDistributionVariableSelection(
+      definition.assigned_variables || [],
+      definition.assigned_variable_bundles || []
+    );
+
     return {
       key,
-      selectedVariables: definition.assigned_variables || [],
-      selectedVariableBundles: (definition.assigned_variable_bundles || []).map(bundle => ({
-        id: bundle.id,
-        name: bundle.name,
-        caseOrderingMode: bundle.caseOrderingMode,
-        variables: bundle.variables || []
-      })),
+      selectedVariables: variableSelection.selectedVariables,
+      selectedVariableBundles: variableSelection.selectedVariableBundles,
       caseOrderingMode: definition.case_ordering_mode,
       maxCodingCases: definition.max_coding_cases,
       jobDefinitionId: definition.id,
@@ -679,20 +728,14 @@ export class JobDefinitionService {
               definition.assigned_variable_bundles || []
             );
 
-            return {
-              key: definition.id,
-              selectedVariables: definition.assigned_variables || [],
-              selectedVariableBundles: hydratedBundles.map(bundle => ({
-                id: bundle.id,
-                name: bundle.name,
-                caseOrderingMode: bundle.caseOrderingMode,
-                variables: bundle.variables || []
-              })),
-              maxCodingCases: definition.max_coding_cases,
-              caseOrderingMode: definition.case_ordering_mode,
-              jobDefinitionId: definition.id,
-              distributionSeed: this.getDefinitionDistributionSeed(definition)
-            };
+            return this.buildPlannedVariableUsageBatchRequest(definition.id, {
+              id: definition.id,
+              assigned_variables: definition.assigned_variables || [],
+              assigned_variable_bundles: hydratedBundles,
+              max_coding_cases: definition.max_coding_cases,
+              case_ordering_mode: definition.case_ordering_mode,
+              distribution_seed: this.getDefinitionDistributionSeed(definition)
+            });
           });
         const usageRequests = (await Promise.all(usageRequestPromises))
           .filter((request): request is PlannedVariableUsageBatchRequest => request !== undefined);
@@ -1041,27 +1084,15 @@ export class JobDefinitionService {
       (jobDefinition.assigned_variable_bundles || [])
         .map(bundle => [bundle.id, bundle.caseOrderingMode])
     );
-    const assignedVariableOptionsByKey = new Map(
-      (jobDefinition.assigned_variables || []).map(variable => [
-        `${variable.unitName}-${variable.variableId}`,
-        variable
-      ])
-    );
-    const selectedVariableBundles = fullVariableBundles.map(bundle => ({
+    const hydratedBundles = fullVariableBundles.map(bundle => ({
       id: bundle.id,
       name: bundle.name,
-      variables: (bundle.variables || []).map(variable => ({
-        ...variable,
-        ...(assignedVariableOptionsByKey.get(`${variable.unitName}-${variable.variableId}`)?.includeDeriveError === true ?
-          { includeDeriveError: true } :
-          {})
-      })),
+      variables: bundle.variables || [],
       caseOrderingMode: savedBundleModes.get(bundle.id)
     }));
-    const bundleVariables = selectedVariableBundles.flatMap(bundle => bundle.variables || []);
-    const bundleVariableKeys = new Set(bundleVariables.map(v => `${v.unitName}-${v.variableId}`));
-
-    const filteredVariables = (jobDefinition.assigned_variables || []).filter(v => !bundleVariableKeys.has(`${v.unitName}-${v.variableId}`)
+    const variableSelection = this.buildDistributionVariableSelection(
+      jobDefinition.assigned_variables || [],
+      hydratedBundles
     );
     const coderAssignments = this.getStoredCoderAssignments(jobDefinition);
     const capacityByCoderId = new Map(
@@ -1083,8 +1114,8 @@ export class JobDefinitionService {
     });
 
     return {
-      selectedVariables: filteredVariables,
-      selectedVariableBundles,
+      selectedVariables: variableSelection.selectedVariables,
+      selectedVariableBundles: variableSelection.selectedVariableBundles,
       selectedCoders,
       doubleCodingAbsolute: jobDefinition.double_coding_absolute,
       doubleCodingPercentage: this.toOptionalNumber(jobDefinition.double_coding_percentage),
@@ -1101,6 +1132,17 @@ export class JobDefinitionService {
   async createCodingJobFromDefinition(jobDefinitionId: number, workspaceId: number) {
     const request = await this.buildDistributionRequestFromDefinition(jobDefinitionId, workspaceId);
     return this.codingJobService.createDistributedCodingJobs(workspaceId, request);
+  }
+
+  async previewCodingJobFromDefinition(jobDefinitionId: number, workspaceId: number) {
+    const request = await this.buildDistributionRequestFromDefinition(jobDefinitionId, workspaceId);
+    const preview = await this.codingJobService.calculateDistribution(workspaceId, request);
+    return {
+      ...preview,
+      selectedVariables: request.selectedVariables,
+      selectedVariableBundles: request.selectedVariableBundles,
+      selectedCoders: request.selectedCoders
+    };
   }
 
   async previewJobDefinitionRefresh(
