@@ -3,13 +3,13 @@
     <div
       class="decision-status"
       [ngClass]="getDecisionStatusClass(element)"
-      [matTooltip]="element.isResolved ? ('double-coded-review.applied' | translate) : (getCodedCount(element) + '/' + element.coderResults.length + ' ' + ('double-coded-review.coders-done' | translate))">
+      [matTooltip]="getDecisionStatusTooltip(element)">
       <mat-icon>{{ getDecisionStatusIcon(element) }}</mat-icon>
       <span class="status-label">{{ getDecisionStatusLabel(element) }}</span>
       @if (!element.isResolved) {
         <span class="progress-dots">
-          @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
-            <span class="dot" [ngClass]="result.code !== null ? 'filled' : 'empty'"></span>
+          @for (isCoderDone of getCoderCompletionStates(element); track $index) {
+            <span class="dot" [ngClass]="isCoderDone ? 'filled' : 'empty'"></span>
           }
         </span>
       }
@@ -30,7 +30,9 @@
                 @if (selectedResult.score !== null) {
                   <span class="decision-score-value">({{ selectedResult.score }})</span>
                 }
-                <span class="decision-source">{{ selectedResult.coderName }}</span>
+                <span class="decision-source">
+                  {{ getDecisionResultSourceLabel(element, selectedResult) }}
+                </span>
               </span>
             } @else {
               <span class="pending-coder">{{ 'double-coded-review.decision.no-selection' | translate }}</span>
@@ -40,7 +42,9 @@
           @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
             <mat-option [value]="result.jobId.toString()" [disabled]="result.code === null">
               <span class="decision-option" [matTooltip]="result.jobName || ''">
-                <span class="decision-option-source">{{ result.coderName }}</span>
+                <span class="decision-option-source">
+                  {{ getDecisionResultSourceLabel(element, result) }}
+                </span>
                 <span class="decision-option-code">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
                 @if (result.score !== null) {
                   <span class="decision-option-score">({{ result.score }})</span>
@@ -268,23 +272,36 @@
                         {{ getCoderColumnHeader(columnId) }}
                       </th>
                       <td mat-cell *matCellDef="let element">
-                        @if (getCoderResultForColumn(element, columnId); as result) {
-                          <div class="coder-column-cell" [ngClass]="{'pending': result.code === null}">
-                            <div class="coder-code-row">
-                              <span class="coder-code-value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
-                              @if (result.score !== null) {
-                                <span class="coder-score-value">({{ result.score }})</span>
+                        @if (getCoderResultsForColumn(element, columnId); as results) {
+                          @if (results.length > 0) {
+                            <div class="coder-column-results" [class.multiple]="results.length > 1">
+                              @for (result of results; track result.jobId) {
+                                <div class="coder-column-cell" [ngClass]="{'pending': result.code === null}">
+                                  @if (results.length > 1) {
+                                    <div class="coder-result-source" [matTooltip]="getCoderResultSourceLabel(result)">
+                                      {{ getCoderResultSourceLabel(result) }}
+                                    </div>
+                                  }
+                                  <div class="coder-result-content">
+                                    <div class="coder-code-row">
+                                      <span class="coder-code-value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
+                                      @if (result.score !== null) {
+                                        <span class="coder-score-value">({{ result.score }})</span>
+                                      }
+                                    </div>
+                                    @if (result.notes) {
+                                      <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
+                                    }
+                                    @if (result.supervisorComment) {
+                                      <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="result.supervisorComment">rate_review</mat-icon>
+                                    }
+                                  </div>
+                                </div>
                               }
                             </div>
-                            @if (result.notes) {
-                              <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
-                            }
-                            @if (result.supervisorComment) {
-                              <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="result.supervisorComment">rate_review</mat-icon>
-                            }
-                          </div>
-                        } @else {
-                          <span class="missing-value">-</span>
+                          } @else {
+                            <span class="missing-value">-</span>
+                          }
                         }
                       </td>
                     </ng-container>
@@ -519,23 +536,36 @@
                       {{ getCoderColumnHeader(columnId) }}
                     </th>
                     <td mat-cell *matCellDef="let element">
-                      @if (getCoderResultForColumn(element, columnId); as result) {
-                        <div class="coder-column-cell" [ngClass]="{'pending': result.code === null}">
-                          <div class="coder-code-row">
-                            <span class="coder-code-value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
-                            @if (result.score !== null) {
-                              <span class="coder-score-value">({{ result.score }})</span>
+                      @if (getCoderResultsForColumn(element, columnId); as results) {
+                        @if (results.length > 0) {
+                          <div class="coder-column-results" [class.multiple]="results.length > 1">
+                            @for (result of results; track result.jobId) {
+                              <div class="coder-column-cell" [ngClass]="{'pending': result.code === null}">
+                                @if (results.length > 1) {
+                                  <div class="coder-result-source" [matTooltip]="getCoderResultSourceLabel(result)">
+                                    {{ getCoderResultSourceLabel(result) }}
+                                  </div>
+                                }
+                                <div class="coder-result-content">
+                                  <div class="coder-code-row">
+                                    <span class="coder-code-value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
+                                    @if (result.score !== null) {
+                                      <span class="coder-score-value">({{ result.score }})</span>
+                                    }
+                                  </div>
+                                  @if (result.notes) {
+                                    <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
+                                  }
+                                  @if (result.supervisorComment) {
+                                    <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="result.supervisorComment">rate_review</mat-icon>
+                                  }
+                                </div>
+                              </div>
                             }
                           </div>
-                          @if (result.notes) {
-                            <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
-                          }
-                          @if (result.supervisorComment) {
-                            <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="result.supervisorComment">rate_review</mat-icon>
-                          }
-                        </div>
-                      } @else {
-                        <span class="missing-value">-</span>
+                        } @else {
+                          <span class="missing-value">-</span>
+                        }
                       }
                     </td>
                   </ng-container>

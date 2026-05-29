@@ -503,7 +503,7 @@ describe('high coverage component method smoke tests', () => {
     expect(instance.getSelectedDecisionResult(sampleReviewItem)?.coderName).toBe('Coder B');
     expect(instance.getDecisionStatusClass(sampleReviewItem)).toBe('conflict');
     expect(instance.getDecisionStatusIcon(sampleReviewItem)).toBe('warning');
-    expect(instance.getDecisionStatusLabel(sampleReviewItem)).toBe('double-coded-review.decision.status-conflict');
+    expect(instance.getDecisionStatusLabel(sampleReviewItem)).toBe('double-coded-review.decision.status-inter-coder-conflict');
     expect(instance.getDecisionStatusClass({
       ...sampleReviewItem,
       coderResults: [
