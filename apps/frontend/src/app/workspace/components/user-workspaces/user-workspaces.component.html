@@ -1,11 +1,44 @@
 <div class="workspaces">
   @if(this.authService.isLoggedIn()){
-    @if (workspaces.length === 0) {
+    @if (showLoading) {
+      <div class="workspace-state" role="status">
+        <mat-spinner diameter="28"></mat-spinner>
+        <p>{{ 'home.loading-user-workspaces' | translate }}</p>
+      </div>
+    } @else if (showSessionExpired) {
+      <div class="workspace-state workspace-state-error" role="alert">
+        <mat-icon>lock</mat-icon>
+        <p>{{ 'error.reauthentication_message' | translate }}</p>
+        <button mat-raised-button color="primary" type="button" (click)="login()">
+          <mat-icon>login</mat-icon>
+          <span>{{ 'home.login' | translate }}</span>
+        </button>
+      </div>
+    } @else if (showAuthDataError) {
+      <div class="workspace-state workspace-state-error" role="alert">
+        <mat-icon>sync_problem</mat-icon>
+        <p>{{ 'home.auth-data-load-error' | translate }}</p>
+        <div class="workspace-state-actions">
+          <button
+            mat-raised-button
+            color="primary"
+            type="button"
+            [disabled]="authDataReloadRunning"
+            (click)="reloadAuthData()">
+            <mat-icon>refresh</mat-icon>
+            <span>{{ 'home.retry-auth-data' | translate }}</span>
+          </button>
+          <button mat-stroked-button color="primary" type="button" (click)="login()">
+            <mat-icon>login</mat-icon>
+            <span>{{ 'home.relogin' | translate }}</span>
+          </button>
+        </div>
+      </div>
+    } @else if (showEmptyWorkspaces) {
       <div>
         <p>{{'home.no-user-workspaces' | translate}}</p>
       </div>
-    }
-    @if (workspaces.length > 0) {
+    } @else if (workspaces.length > 0) {
       <div class="fx-column-start-stretch workspace-gap">
         <h1>Arbeitsbereiche</h1>
         @for (ws of workspaces; track ws.id) {

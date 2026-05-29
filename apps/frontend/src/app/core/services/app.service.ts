@@ -7,7 +7,10 @@ import {
   catchError,
   map,
   of,
-  switchMap
+  retry,
+  switchMap,
+  throwError,
+  timer
 } from 'rxjs';
 import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
@@ -20,6 +23,7 @@ import {
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
+import { suppressGlobalHttpErrorContext } from '../interceptors/http-error-context';
 
 export type AuthBootstrapStatus =
   'checking'
@@ -27,6 +31,9 @@ export type AuthBootstrapStatus =
   | 'ready'
   | 'session-expired'
   | 'auth-data-failed';
+
+const AUTH_BOOTSTRAP_RETRY_DELAYS_MS = [500, 1000, 2000];
+const RETRYABLE_AUTH_BOOTSTRAP_ERROR_STATUSES = new Set([0, 408, 429, 500, 502, 503, 504]);
 
 @Injectable({
   providedIn: 'root'
@@ -82,12 +89,12 @@ export class AppService {
   keycloakLogin(user: CreateUserDto): Observable<boolean> {
     this.setAuthBootstrapStatus('backend-login-running');
 
-    return this.http.post<string>(`${this.serverUrl}keycloak-login`, user)
+    return this.getKeycloakLoginTokenWithRetry(user)
       .pipe(
         switchMap(loginToken => {
           if (typeof loginToken === 'string') {
             localStorage.setItem('id_token', loginToken);
-            return this.getAuthData(user.identity || '')
+            return this.getAuthDataWithRetry(user.identity || '')
               .pipe(
                 map(authData => {
                   this.updateAuthData(authData);
@@ -115,6 +122,36 @@ export class AppService {
     );
   }
 
+  retryAuthDataLoad(): Observable<boolean> {
+    const identity = this.loggedUser?.sub || this.kcUser?.identity || '';
+    if (!identity) {
+      this.markAuthDataFailed();
+      return of(false);
+    }
+
+    if (!this.hasStoredAuthToken()) {
+      if (this.kcUser) {
+        return this.keycloakLogin(this.kcUser);
+      }
+      this.markAuthDataFailed();
+      return of(false);
+    }
+
+    this.setAuthBootstrapStatus('backend-login-running');
+    return this.getAuthDataWithRetry(identity)
+      .pipe(
+        map(authData => {
+          this.updateAuthData(authData);
+          this.completeBackendLogin();
+          return true;
+        }),
+        catchError(() => {
+          this.markAuthDataFailed();
+          return of(false);
+        })
+      );
+  }
+
   refreshAuthData(): void {
     if (this.authBootstrapStatus !== 'ready') {
       return;
@@ -125,6 +162,43 @@ export class AppService {
         this.updateAuthData(authData);
       });
     }
+  }
+
+  private getAuthDataWithRetry(id: string): Observable<AuthDataDto> {
+    return this.withAuthBootstrapRetry(
+      this.http.get<AuthDataDto>(
+        `${this.serverUrl}auth-data?identity=${id}`,
+        { context: suppressGlobalHttpErrorContext() }
+      )
+    );
+  }
+
+  private getKeycloakLoginTokenWithRetry(user: CreateUserDto): Observable<string> {
+    return this.withAuthBootstrapRetry(
+      this.http.post<string>(
+        `${this.serverUrl}keycloak-login`,
+        user,
+        { context: suppressGlobalHttpErrorContext() }
+      )
+    );
+  }
+
+  private withAuthBootstrapRetry<T>(request$: Observable<T>): Observable<T> {
+    return request$.pipe(
+      retry({
+        count: AUTH_BOOTSTRAP_RETRY_DELAYS_MS.length,
+        delay: (error: { status?: number }, retryCount: number) => {
+          if (!this.isRetryableAuthBootstrapError(error)) {
+            return throwError(() => error);
+          }
+          return timer(AUTH_BOOTSTRAP_RETRY_DELAYS_MS[retryCount - 1]);
+        }
+      })
+    );
+  }
+
+  private isRetryableAuthBootstrapError(error: { status?: number }): boolean {
+    return RETRYABLE_AUTH_BOOTSTRAP_ERROR_STATUSES.has(error.status ?? -1);
   }
 
   private loadLogoSettings(): void {
