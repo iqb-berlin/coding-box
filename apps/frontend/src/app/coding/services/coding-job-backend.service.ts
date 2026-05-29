@@ -4,7 +4,10 @@ import { Observable } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
 import { SERVER_URL } from '../../injection-tokens';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
-import type { DistributedCodingJobsResponse } from './distributed-coding.service';
+import type {
+  DistributedCodingJobsResponse,
+  JobDefinitionDistributionPreviewResponse
+} from './distributed-coding.service';
 import type {
   CodingJobFreshnessImpactDto,
   JobDefinitionRefreshApplyResultDto,
@@ -715,6 +718,14 @@ export class CodingJobBackendService {
   ): Observable<DistributedCodingJobsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/create-job`;
     return this.http.post<DistributedCodingJobsResponse>(url, {}, { headers: this.authHeader });
+  }
+
+  previewCodingJobFromDefinition(
+    workspaceId: number,
+    jobDefinitionId: number
+  ): Observable<JobDefinitionDistributionPreviewResponse> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/create-job-preview`;
+    return this.http.get<JobDefinitionDistributionPreviewResponse>(url, { headers: this.authHeader });
   }
 
   previewJobDefinitionRefresh(
