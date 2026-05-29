@@ -47,6 +47,7 @@ import { AppService } from '../../../core/services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { MissingsProfileService } from '../../services/missings-profile.service';
 import { CodingJobBulkCreationDialogComponent, BulkCreationData, BulkCreationResult } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
 
 export interface CodingJobDefinitionDialogData {
@@ -65,6 +66,7 @@ export interface JobDefinition {
   assignedVariableBundles?: VariableBundle[];
   assignedCoders?: number[];
   assignedCoderConfigs?: JobDefinitionCoderConfig[];
+  missingsProfileId?: number | null;
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
   durationSeconds?: number;
@@ -140,6 +142,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private codingJobService = inject(CodingJobService);
   private testPersonCodingService = inject(TestPersonCodingService);
+  private missingsProfileService = inject(MissingsProfileService);
   private matDialog = inject(MatDialog);
   private translateService = inject(TranslateService);
   private destroy$ = new Subject<void>();
@@ -181,6 +184,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   isLoadingVariableAnalysis = false;
   totalVariableAnalysisRecords = 0;
 
+  // Missing profiles
+  missingsProfiles: { label: string; id: number }[] = [{ id: 0, label: 'IQB-Standard' }];
+  isLoadingMissingsProfiles = false;
+
   // Filters
   unitNameFilter = '';
   variableIdFilter = '';
@@ -217,6 +224,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     if (this.data.mode === 'definition') {
       this.loadExistingJobDefinitions();
+      this.loadMissingsProfiles();
     }
 
     this.dataSource.filterPredicate = (row, filter: string): boolean => {
@@ -399,6 +407,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       suppressGeneralInstructions: [this.data.codingJob?.suppressGeneralInstructions ?? false, []]
     };
 
+    if (this.data.mode === 'definition') {
+      formFields.missingsProfileId = [
+        this.data.codingJob?.missingsProfileId ?? this.data.codingJob?.missings_profile_id ?? 0,
+        [Validators.min(0)]
+      ];
+    }
+
     if (this.data.mode === 'job') {
       formFields.suppressGeneralInstructions = [this.data.codingJob?.suppressGeneralInstructions ?? false, []];
     }
@@ -419,6 +434,37 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     if (originallyAssigned && originallyAssigned.length > 0) {
       this.selectedVariables = new SelectionModel<Variable>(true, [...originallyAssigned]);
     }
+  }
+
+  private loadMissingsProfiles(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.isLoadingMissingsProfiles = true;
+    this.missingsProfileService.getMissingsProfiles(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: profiles => {
+          this.missingsProfiles = profiles.length > 0 ? profiles : [{ id: 0, label: 'IQB-Standard' }];
+          this.isLoadingMissingsProfiles = false;
+
+          const control = this.codingJobForm.get('missingsProfileId');
+          const currentValue = control?.value;
+          if (
+            control &&
+            (currentValue === null || currentValue === undefined || currentValue === 0) &&
+            profiles.length > 0
+          ) {
+            const defaultProfile = profiles.find(profile => profile.label === 'IQB-Standard') ?? profiles[0];
+            control.setValue(defaultProfile.id, { emitEvent: false });
+          }
+        },
+        error: () => {
+          this.isLoadingMissingsProfiles = false;
+        }
+      });
   }
 
   loadCodingIncompleteVariables(unitNameFilter?: string, forceReload: boolean = false): void {
@@ -1425,6 +1471,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      missingsProfileId: this.sanitizeNumber(this.codingJobForm.value.missingsProfileId),
       showScore: this.codingJobForm.value.showScore,
       allowComments: this.codingJobForm.value.allowComments,
       suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
@@ -1467,6 +1514,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      missingsProfileId: this.sanitizeNumber(this.codingJobForm.value.missingsProfileId),
       showScore: this.codingJobForm.value.showScore,
       allowComments: this.codingJobForm.value.allowComments,
       suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
@@ -1548,6 +1596,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      missingsProfileId: this.sanitizeNumber(this.codingJobForm.value.missingsProfileId),
       showScore: this.codingJobForm.value.showScore,
       allowComments: this.codingJobForm.value.allowComments,
       suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions

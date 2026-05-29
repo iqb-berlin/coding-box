@@ -729,6 +729,11 @@ export class DatabaseExportService {
             WHERE cj.missings_profile_id = mp.id
               AND cj.workspace_id = $1
           )
+          OR EXISTS (
+            SELECT 1 FROM job_definitions jd
+            WHERE jd.missings_profile_id = mp.id
+              AND jd.workspace_id = $1
+          )
         `
       },
       {

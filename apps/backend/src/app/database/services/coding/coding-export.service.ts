@@ -530,7 +530,8 @@ export class CodingExportService {
         unitVariableResultsQuery,
         jobDefinitionIds,
         coderTrainingIds,
-        coderIds
+        coderIds,
+        'cju'
       );
     }
 
@@ -680,7 +681,8 @@ export class CodingExportService {
       variableRecordsQuery,
       normalizedJobDefinitionIds,
       normalizedCoderTrainingIds,
-      normalizedCoderIds
+      normalizedCoderIds,
+      'cju'
     );
     if (normalizedCoderTrainingIds.length === 0) {
       variableRecordsQuery.andWhere('cj.training_id IS NULL');
@@ -751,7 +753,8 @@ export class CodingExportService {
         personResultsQuery,
         normalizedJobDefinitionIds,
         normalizedCoderTrainingIds,
-        normalizedCoderIds
+        normalizedCoderIds,
+        'cju'
       );
     }
 
@@ -825,7 +828,8 @@ export class CodingExportService {
         manualCodingQuery,
         normalizedJobDefinitionIds,
         normalizedCoderTrainingIds,
-        normalizedCoderIds
+        normalizedCoderIds,
+        'cju'
       );
       if (normalizedCoderTrainingIds.length === 0) {
         manualCodingQuery.andWhere('cj.training_id IS NULL');
@@ -1023,7 +1027,7 @@ export class CodingExportService {
       bookletNameExpression: 'cju.booklet_name'
     });
 
-    this.applyJobFilters(variableRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+    this.applyJobFilters(variableRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
 
     const variableRecords = await variableRecordsQuery
       .groupBy('cju.unit_name')
@@ -1115,7 +1119,7 @@ export class CodingExportService {
     if (jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length) {
       personResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
         .innerJoin('cju.coding_job', 'cj');
-      this.applyJobFilters(personResultsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+      this.applyJobFilters(personResultsQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
     }
 
     const personResults = await personResultsQuery
@@ -1193,7 +1197,7 @@ export class CodingExportService {
         .addSelect('cju.response_id', 'responseId')
         .where('person.id IN (:...ids)', { ids: batchPersonIds });
 
-      this.applyJobFilters(manualCodingQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+      this.applyJobFilters(manualCodingQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
 
       const manualCoding = await manualCodingQuery.getRawMany();
       if ((coderTrainingIds?.length || 0) > 0 && manualCoding.length > 0) {
@@ -1435,7 +1439,7 @@ export class CodingExportService {
       bookletNameExpression: 'cju.booklet_name'
     });
 
-    this.applyJobFilters(variableCoderPairsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+    this.applyJobFilters(variableCoderPairsQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
 
     const variableCoderPairs = await variableCoderPairsQuery
       .groupBy('cju.unit_name')
@@ -1538,7 +1542,7 @@ export class CodingExportService {
     if (jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length) {
       personResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
         .innerJoin('cju.coding_job', 'cj');
-      this.applyJobFilters(personResultsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+      this.applyJobFilters(personResultsQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
     }
 
     const personResults = await personResultsQuery
@@ -1602,7 +1606,7 @@ export class CodingExportService {
         .addSelect('cju.response_id', 'responseId')
         .where('person.id IN (:...ids)', { ids: batchPersonIds });
 
-      this.applyJobFilters(manualCodingQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+      this.applyJobFilters(manualCodingQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
 
       const manualCoding = await manualCodingQuery.getRawMany();
       if ((coderTrainingIds?.length || 0) > 0 && manualCoding.length > 0) {
@@ -2216,7 +2220,8 @@ export class CodingExportService {
         coderQueryBuilder,
         normalizedJobDefinitionIds,
         normalizedCoderTrainingIds,
-        normalizedCoderIds
+        normalizedCoderIds,
+        'cju'
       );
 
       const coderQuery = await coderQueryBuilder
@@ -2322,7 +2327,8 @@ export class CodingExportService {
           dataQueryBuilder,
           normalizedJobDefinitionIds,
           normalizedCoderTrainingIds,
-          normalizedCoderIds
+          normalizedCoderIds,
+          'cju'
         );
 
         const dataQuery = await dataQueryBuilder.getRawMany();
@@ -2624,7 +2630,8 @@ export class CodingExportService {
         dataQueryBuilder,
         normalizedJobDefinitionIds,
         normalizedCoderTrainingIds,
-        normalizedCoderIds
+        normalizedCoderIds,
+        'cju'
       );
       this.applySelectedCoderJoinFilter(dataQueryBuilder, normalizedCoderIds);
 
@@ -3020,7 +3027,8 @@ export class CodingExportService {
         totalCountQuery,
         normalizedJobDefinitionIds,
         normalizedCoderTrainingIds,
-        normalizedCoderIds
+        normalizedCoderIds,
+        'cju'
       );
       if (normalizedCoderTrainingIds.length === 0) {
         totalCountQuery.andWhere('cj.training_id IS NULL');
@@ -3063,7 +3071,8 @@ export class CodingExportService {
           unitsBatchQuery,
           normalizedJobDefinitionIds,
           normalizedCoderTrainingIds,
-          normalizedCoderIds
+          normalizedCoderIds,
+          'cju'
         );
         if (normalizedCoderTrainingIds.length === 0) {
           unitsBatchQuery.andWhere('cj.training_id IS NULL');
@@ -3315,7 +3324,8 @@ export class CodingExportService {
       codingJobUnitsQuery,
       normalizedJobDefinitionIds,
       normalizedCoderTrainingIds,
-      normalizedCoderIds
+      normalizedCoderIds,
+      'cju'
     );
     const codingJobUnitsRaw = await codingJobUnitsQuery.getMany();
 
@@ -3646,7 +3656,8 @@ export class CodingExportService {
     query: SelectQueryBuilder<unknown>,
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
-    coderIds?: number[]
+    coderIds?: number[],
+    codingJobUnitAlias?: string
   ): void {
     const normalizedJobDefinitionIds = this.normalizeFilterIds(jobDefinitionIds);
     const normalizedCoderTrainingIds = this.normalizeFilterIds(coderTrainingIds);
@@ -3656,7 +3667,7 @@ export class CodingExportService {
     const scopeParams: Record<string, number[]> = {};
 
     if (normalizedJobDefinitionIds.length > 0) {
-      scopeClauses.push('cj.job_definition_id IN (:...jobDefinitionIds)');
+      scopeClauses.push(this.getJobDefinitionScopeClause('cj', 'jobDefinitionIds', codingJobUnitAlias));
       scopeParams.jobDefinitionIds = normalizedJobDefinitionIds;
     }
 
@@ -3677,6 +3688,36 @@ export class CodingExportService {
         AND filter_cjc.user_id IN (:...coderIds)
       )`, { coderIds: normalizedCoderIds });
     }
+  }
+
+  private getJobDefinitionScopeClause(
+    codingJobAlias: string,
+    jobDefinitionParamName: string,
+    codingJobUnitAlias?: string
+  ): string {
+    const variableBundleJoin = codingJobUnitAlias ?
+      `INNER JOIN variable_bundle scope_vb
+        ON scope_vb.id = scope_cjvb.variable_bundle_id
+        AND scope_vb.workspace_id = ${codingJobAlias}.workspace_id` :
+      '';
+    const bundleScopeClause = codingJobUnitAlias ?
+      `AND COALESCE(scope_jd.assigned_variable_bundles, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('id', scope_cjvb.variable_bundle_id))
+      AND COALESCE(scope_vb.variables, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object(
+          'unitName', ${codingJobUnitAlias}.unit_name,
+          'variableId', ${codingJobUnitAlias}.variable_id
+        ))` :
+      "AND COALESCE(scope_jd.assigned_variable_bundles, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('id', scope_cjvb.variable_bundle_id))";
+
+    return `(${codingJobAlias}.job_definition_id IN (:...${jobDefinitionParamName}) OR (${codingJobAlias}.job_definition_id IS NULL AND EXISTS (
+      SELECT 1
+      FROM coding_job_variable_bundle scope_cjvb
+      INNER JOIN job_definitions scope_jd
+        ON scope_jd.id IN (:...${jobDefinitionParamName})
+        AND scope_jd.workspace_id = ${codingJobAlias}.workspace_id
+      ${variableBundleJoin}
+      WHERE scope_cjvb.coding_job_id = ${codingJobAlias}.id
+      ${bundleScopeClause}
+    )))`;
   }
 
   private applySelectedCoderJoinFilter(

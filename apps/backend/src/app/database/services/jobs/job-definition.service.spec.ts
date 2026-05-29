@@ -33,6 +33,7 @@ describe('JobDefinitionService', () => {
     assertCodersCanCodeInWorkspace: jest.Mock;
   };
   let codingValidationService: { getCodingIncompleteVariables: jest.Mock };
+  let missingsProfilesService: { resolveMissingsProfileId: jest.Mock };
   let service: JobDefinitionService;
 
   beforeEach(() => {
@@ -82,6 +83,9 @@ describe('JobDefinitionService', () => {
         { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 5 },
         { unitName: 'Unit 2', variableId: 'Var 2', availableCases: 4 }
       ])
+    };
+    missingsProfilesService = {
+      resolveMissingsProfileId: jest.fn(async (_workspaceId, profileId?: number | null) => profileId || 55)
     };
 
     jobDefinitionRepository.find.mockResolvedValue([]);
@@ -203,7 +207,8 @@ describe('JobDefinitionService', () => {
       variableBundleRepository as never,
       usersRepository as never,
       codingJobService as never,
-      codingValidationService as never
+      codingValidationService as never,
+      missingsProfilesService as never
     );
   });
 
@@ -709,6 +714,26 @@ describe('JobDefinitionService', () => {
       allow_comments: false,
       suppress_general_instructions: true
     });
+  });
+
+  it('normalizes missing profiles on job definitions', async () => {
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1]
+    }, 7)).resolves.toMatchObject({
+      missings_profile_id: 55
+    });
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      missingsProfileId: 77
+    }, 7)).resolves.toMatchObject({
+      missings_profile_id: 77
+    });
+
+    expect(missingsProfilesService.resolveMissingsProfileId).toHaveBeenCalledWith(7, undefined);
+    expect(missingsProfilesService.resolveMissingsProfileId).toHaveBeenCalledWith(7, 77);
   });
 
   it('persists coder capacity configs and derives assigned coder ids from them', async () => {
@@ -1242,6 +1267,7 @@ describe('JobDefinitionService', () => {
       double_coding_absolute: 2,
       double_coding_percentage: null,
       case_ordering_mode: 'continuous',
+      missings_profile_id: 88,
       assigned_coder_configs: [
         { coderId: 3, capacityPercent: 50 },
         { coderId: 1, capacityPercent: 150 }
@@ -1295,6 +1321,7 @@ describe('JobDefinitionService', () => {
       caseOrderingMode: 'continuous',
       maxCodingCases: 7,
       jobDefinitionId: 12,
+      missingsProfileId: 88,
       distributionSeed: 'seed-12',
       showScore: true,
       allowComments: false,

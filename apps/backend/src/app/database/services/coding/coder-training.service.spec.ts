@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CoderTrainingService, TrainingResponseIdsMap } from './coder-training.service';
@@ -31,6 +32,13 @@ describe('CoderTrainingService', () => {
   let coderTrainingBundleRepository: Repository<CoderTrainingBundle>;
   let coderTrainingCoderRepository: Repository<CoderTrainingCoder>;
   let codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>;
+  let coderTrainingDiscussionResultRepository: Repository<CoderTrainingDiscussionResult>;
+  let missingsProfilesService: {
+    getMissingsProfileDetails: jest.Mock;
+    ensureDefaultMissingsProfile: jest.Mock;
+    getNegativeMissingCodesForProfileOrDefault: jest.Mock;
+    resolveMissingsProfileId: jest.Mock;
+  };
 
   const mockRepository = {
     find: jest.fn(),
@@ -46,7 +54,8 @@ describe('CoderTrainingService', () => {
     getResponseMatchingMode: jest.fn().mockResolvedValue([ResponseMatchingFlag.IGNORE_WHITESPACE]),
     aggregateResponsesByValue: jest.fn().mockReturnValue([]),
     normalizeValue: jest.fn().mockReturnValue('normalized'),
-    assertCodersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined)
+    assertCodersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined),
+    getCodingSchemeScoreForUnitCode: jest.fn().mockResolvedValue(null)
   };
 
   const mockWorkspaceFilesService = {
@@ -56,6 +65,18 @@ describe('CoderTrainingService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     mockRepository.count.mockResolvedValue(0);
+    missingsProfilesService = {
+      getMissingsProfileDetails: jest.fn(),
+      ensureDefaultMissingsProfile: jest.fn().mockResolvedValue({
+        parseMissings: () => [
+          { id: 'mci', label: 'missing coding impossible', code: -97 },
+          { id: 'mir', label: 'missing invalid response', code: -98 },
+          { id: 'mbi_mbo', label: 'mbi / mbo', code: -99 }
+        ]
+      }),
+      getNegativeMissingCodesForProfileOrDefault: jest.fn().mockResolvedValue(new Set([-97, -98, -99])),
+      resolveMissingsProfileId: jest.fn(async (_workspaceId, profileId?: number | null) => profileId || 1)
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -76,7 +97,7 @@ describe('CoderTrainingService', () => {
         { provide: getRepositoryToken(ChunkEntity), useValue: mockRepository },
         { provide: CodingJobService, useValue: mockCodingJobService },
         { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
-        { provide: MissingsProfilesService, useValue: { getMissingsProfileDetails: jest.fn() } },
+        { provide: MissingsProfilesService, useValue: missingsProfilesService },
         {
           provide: WorkspaceExclusionService,
           useValue: {
@@ -97,6 +118,7 @@ describe('CoderTrainingService', () => {
     coderTrainingBundleRepository = module.get<Repository<CoderTrainingBundle>>(getRepositoryToken(CoderTrainingBundle));
     coderTrainingCoderRepository = module.get<Repository<CoderTrainingCoder>>(getRepositoryToken(CoderTrainingCoder));
     codingJobVariableBundleRepository = module.get<Repository<CodingJobVariableBundle>>(getRepositoryToken(CodingJobVariableBundle));
+    coderTrainingDiscussionResultRepository = module.get<Repository<CoderTrainingDiscussionResult>>(getRepositoryToken(CoderTrainingDiscussionResult));
   });
 
   it('should be defined', () => {
@@ -403,6 +425,88 @@ describe('CoderTrainingService', () => {
       }));
     });
 
+    it('should treat legacy default and explicit default profile as the same training profile', async () => {
+      const existingTraining = {
+        id: 1,
+        workspace_id: 1,
+        label: 'Old Label',
+        coders: [{ user_id: 10 }],
+        variables: [],
+        bundles: [],
+        codingJobs: [
+          { id: 100, missings_profile_id: null },
+          { id: 101, missings_profile_id: 1 }
+        ]
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.count.mockRejectedValue(new Error('Equivalent profiles must not trigger recreation'));
+
+      const result = await service.updateCoderTraining(
+        1,
+        1,
+        'Updated Label',
+        [{ id: 10, name: 'Coder 1' }],
+        [],
+        undefined,
+        [],
+        []
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockRepository.count).not.toHaveBeenCalled();
+      expect(coderTrainingCoderRepository.delete).not.toHaveBeenCalled();
+    });
+
+    it('should normalize mixed training job profiles when an explicit target profile is selected', async () => {
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages')
+        .mockResolvedValue([]);
+      const existingTraining = {
+        id: 1,
+        workspace_id: 1,
+        label: 'Old Label',
+        coders: [{ user_id: 10 }],
+        variables: [],
+        bundles: [],
+        codingJobs: [
+          { id: 100, missings_profile_id: null },
+          { id: 101, missings_profile_id: 77 }
+        ]
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.delete.mockClear();
+
+      const result = await service.updateCoderTraining(
+        1,
+        1,
+        'Updated Label',
+        [{ id: 10, name: 'Coder 1' }],
+        [],
+        1,
+        [],
+        []
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockRepository.delete).toHaveBeenCalledWith({ coding_job_id: 100 });
+      expect(mockRepository.delete).toHaveBeenCalledWith({ coding_job_id: 101 });
+      expect(mockRepository.delete).toHaveBeenCalledWith(100);
+      expect(mockRepository.delete).toHaveBeenCalledWith(101);
+      expect(generatePackagesSpy).toHaveBeenCalledWith(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [],
+        {
+          caseSelectionMode: 'oldest_first',
+          referenceTrainingIds: [],
+          referenceMode: undefined
+        }
+      );
+
+      generatePackagesSpy.mockRestore();
+    });
+
     it('should recreate jobs when only the case selection mode changes', async () => {
       const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages')
         .mockResolvedValue([]);
@@ -493,6 +597,55 @@ describe('CoderTrainingService', () => {
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('bereits bearbeitet');
+      expect(coderTrainingRepository.save).not.toHaveBeenCalled();
+      expect(mockRepository.delete).not.toHaveBeenCalled();
+      expect(generatePackagesSpy).not.toHaveBeenCalled();
+
+      generatePackagesSpy.mockRestore();
+    });
+
+    it('should reject destructive updates when discussion results already exist', async () => {
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages')
+        .mockResolvedValue([]);
+      const existingTraining = {
+        id: 1,
+        workspace_id: 1,
+        label: 'Old Label',
+        case_selection_mode: 'oldest_first',
+        coders: [{ user_id: 10 }],
+        variables: [{ variable_id: 'v1', unit_name: 'u1', sample_count: 5 }],
+        bundles: [],
+        codingJobs: [{ id: 100 }]
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.count
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(1);
+      mockRepository.delete.mockClear();
+      (coderTrainingRepository.save as jest.Mock).mockClear();
+
+      const result = await service.updateCoderTraining(
+        1,
+        1,
+        'Updated Label',
+        [{ id: 10, name: 'Coder 1' }],
+        [{ variableId: 'v1', unitId: 'u1', sampleCount: 5 }],
+        undefined,
+        [{ variableId: 'v1', unitName: 'u1', sampleCount: 5 }],
+        [],
+        undefined,
+        'newest_first'
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('bereits bearbeitet');
+      expect(mockRepository.count).toHaveBeenCalledWith({
+        where: {
+          workspace_id: 1,
+          training_id: 1
+        }
+      });
       expect(coderTrainingRepository.save).not.toHaveBeenCalled();
       expect(mockRepository.delete).not.toHaveBeenCalled();
       expect(generatePackagesSpy).not.toHaveBeenCalled();
@@ -1279,6 +1432,62 @@ describe('CoderTrainingService', () => {
       codingIssueOption: null
     });
 
+    const exclusions = {
+      globalIgnoredUnits: [],
+      ignoredBooklets: [],
+      testletIgnoredUnits: []
+    };
+
+    const createTrainingWithResponseJobs = (profileIds: Array<number | null>) => ({
+      id: 5,
+      workspace_id: 1,
+      codingJobs: profileIds.map((profileId, index) => ({
+        id: 11 + index,
+        missings_profile_id: profileId,
+        codingJobUnits: [{
+          response_id: 101,
+          unit_name: 'UNIT',
+          booklet_name: 'BOOKLET'
+        }]
+      }))
+    } as CoderTraining);
+
+    type DeriveAutomaticDiscussionResultForResponseFn = (
+      workspaceId: number,
+      training: CoderTraining,
+      responseId: number,
+      coders: Array<{
+        jobId: number;
+        coderName: string;
+        code: string | null;
+        score: number | null;
+        notes: string | null;
+        codingIssueOption: number | null;
+      }>,
+      resolvedExclusions: typeof exclusions
+    ) => Promise<{ code: number; score: number | null } | null>;
+
+    const getAutomaticDiscussionResultForResponse = (
+      svc: CoderTrainingService
+    ): DeriveAutomaticDiscussionResultForResponseFn => {
+      const serviceWithPrivateMethod = svc as unknown as {
+        deriveAutomaticDiscussionResultForResponse: DeriveAutomaticDiscussionResultForResponseFn
+      };
+      return serviceWithPrivateMethod.deriveAutomaticDiscussionResultForResponse.bind(svc);
+    };
+
+    type MapDisplayCodeAndScoreFn = (
+      code: number | null,
+      score: number | null,
+      codingIssueOption: number | null,
+      missingCodes: { mirCode: number; mciCode: number; negativeCodes: Set<number> }
+    ) => { code: string | null; score: number | null };
+
+    const getMapDisplayCodeAndScore = (svc: CoderTrainingService): MapDisplayCodeAndScoreFn => {
+      const serviceWithPrivateMethod = svc as unknown as { mapDisplayCodeAndScore: MapDisplayCodeAndScoreFn };
+      return serviceWithPrivateMethod.mapDisplayCodeAndScore.bind(svc);
+    };
+
     it('should derive a discussion result only when all coders fully agree', () => {
       const result = getAutomaticDiscussionResult(service)([
         coderResult(1, '7', 2),
@@ -1304,6 +1513,295 @@ describe('CoderTrainingService', () => {
         coderResult(1, '7', 2),
         coderResult(2, null, null)
       ])).toBeNull();
+    });
+
+    it('should normalize configured negative missing scores before automatic agreement', async () => {
+      const mapDisplay = getMapDisplayCodeAndScore(service);
+      const result = mapDisplay(-99, null, null, {
+        mirCode: -98,
+        mciCode: -97,
+        negativeCodes: new Set([-97, -98, -99])
+      });
+
+      expect(result).toEqual({ code: '-99', score: 0 });
+      await expect(getAutomaticDiscussionResultForResponse(service)(
+        1,
+        createTrainingWithResponseJobs([77, 77]),
+        101,
+        [
+          coderResult(1, '-99', 0),
+          coderResult(2, '-99', 0)
+        ],
+        exclusions
+      )).resolves.toEqual({ code: -99, score: 0 });
+    });
+
+    it('should reject automatic missing agreement when response jobs use different missing profiles', async () => {
+      await expect(getAutomaticDiscussionResultForResponse(service)(
+        1,
+        createTrainingWithResponseJobs([77, 78]),
+        101,
+        [
+          coderResult(1, '-99', 0),
+          coderResult(2, '-99', 0)
+        ],
+        exclusions
+      )).rejects.toThrow('Conflicting missing profiles for response 101 in training 5');
+    });
+  });
+
+  describe('saveDiscussionResult', () => {
+    const createTrainingWithUnit = (unitOverrides: Partial<CodingJobUnit> = {}) => {
+      const unit = {
+        response_id: 101,
+        unit_name: 'UNIT',
+        unit_alias: 'UNIT_FILE',
+        variable_id: 'VAR',
+        booklet_name: 'booklet',
+        person_login: 'login',
+        person_code: 'person-code',
+        person_group: 'group',
+        code: null,
+        score: null,
+        coding_issue_option: null,
+        response: null,
+        ...unitOverrides
+      } as CodingJobUnit;
+
+      return {
+        unit,
+        training: {
+          id: 5,
+          workspace_id: 1,
+          codingJobs: [{
+            id: 11,
+            missings_profile_id: null,
+            codingJobUnits: [unit]
+          }]
+        } as CoderTraining
+      };
+    };
+
+    const mockDiscussionSave = () => {
+      (coderTrainingDiscussionResultRepository.create as jest.Mock).mockImplementationOnce(value => value);
+      (coderTrainingDiscussionResultRepository.save as jest.Mock).mockImplementationOnce(async value => value);
+    };
+
+    it('should derive positive discussion scores from the coding scheme', async () => {
+      const { training, unit } = createTrainingWithUnit();
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+      mockCodingJobService.getCodingSchemeScoreForUnitCode.mockResolvedValueOnce(2);
+      mockDiscussionSave();
+
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', 7);
+
+      expect(mockCodingJobService.getCodingSchemeScoreForUnitCode).toHaveBeenCalledWith(unit, 1, 7);
+      expect(coderTrainingDiscussionResultRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        workspace_id: 1,
+        training_id: 5,
+        response_id: 101,
+        code: 7,
+        score: 2,
+        manager_user_id: 99,
+        manager_name: 'Manager'
+      }));
+      expect(result.score).toBe(2);
+    });
+
+    it('should score negative discussion codes as missing results without coding scheme lookup', async () => {
+      const { training } = createTrainingWithUnit();
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+      mockDiscussionSave();
+
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', -99);
+
+      expect(mockCodingJobService.getCodingSchemeScoreForUnitCode).not.toHaveBeenCalled();
+      expect(missingsProfilesService.getNegativeMissingCodesForProfileOrDefault).toHaveBeenCalledWith(1, 1);
+      expect(coderTrainingDiscussionResultRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        code: -99,
+        score: 0
+      }));
+      expect(result.score).toBe(0);
+    });
+
+    it('should reject negative discussion codes that are not configured as missings', async () => {
+      const { training } = createTrainingWithUnit();
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+
+      await expect(service.saveDiscussionResult(1, 5, 101, 99, 'Manager', -96))
+        .rejects.toThrow('Unsupported missing code: -96');
+
+      expect(mockCodingJobService.getCodingSchemeScoreForUnitCode).not.toHaveBeenCalled();
+      expect(coderTrainingDiscussionResultRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should accept all negative codes from the response job missing profile', async () => {
+      const { training } = createTrainingWithUnit();
+      training.codingJobs[0].missings_profile_id = 77;
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+      missingsProfilesService.getNegativeMissingCodesForProfileOrDefault.mockResolvedValueOnce(new Set([-96, -98]));
+      mockDiscussionSave();
+
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', -96);
+
+      expect(missingsProfilesService.getNegativeMissingCodesForProfileOrDefault).toHaveBeenCalledWith(1, 77);
+      expect(coderTrainingDiscussionResultRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        code: -96,
+        score: 0
+      }));
+      expect(result.score).toBe(0);
+    });
+
+    it('should reject negative codes that are not part of the response job missing profile', async () => {
+      const { training } = createTrainingWithUnit();
+      training.codingJobs[0].missings_profile_id = 77;
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+      missingsProfilesService.getNegativeMissingCodesForProfileOrDefault.mockResolvedValueOnce(new Set([-96]));
+
+      await expect(service.saveDiscussionResult(1, 5, 101, 99, 'Manager', -98))
+        .rejects.toThrow('Unsupported missing code: -98');
+
+      expect(coderTrainingDiscussionResultRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should reject discussion missing codes when response jobs use different missing profiles with identical codes', async () => {
+      const { training, unit } = createTrainingWithUnit();
+      const secondUnit = {
+        ...unit,
+        coding_job_id: 12
+      } as CodingJobUnit;
+      training.codingJobs = [
+        {
+          id: 11,
+          missings_profile_id: 77,
+          codingJobUnits: [unit]
+        } as CodingJob,
+        {
+          id: 12,
+          missings_profile_id: 78,
+          codingJobUnits: [secondUnit]
+        } as CodingJob
+      ];
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+
+      await expect(service.saveDiscussionResult(1, 5, 101, 99, 'Manager', -96))
+        .rejects.toThrow('Conflicting missing profiles for response 101 in training 5');
+
+      expect(missingsProfilesService.getMissingsProfileDetails).not.toHaveBeenCalled();
+      expect(missingsProfilesService.getNegativeMissingCodesForProfileOrDefault).not.toHaveBeenCalled();
+      expect(coderTrainingDiscussionResultRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should accept discussion missing codes when legacy default and explicit default profiles are mixed', async () => {
+      const { training, unit } = createTrainingWithUnit();
+      const secondUnit = {
+        ...unit,
+        coding_job_id: 12
+      } as CodingJobUnit;
+      training.codingJobs = [
+        {
+          id: 11,
+          missings_profile_id: null,
+          codingJobUnits: [unit]
+        } as CodingJob,
+        {
+          id: 12,
+          missings_profile_id: 1,
+          codingJobUnits: [secondUnit]
+        } as CodingJob
+      ];
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+      mockDiscussionSave();
+
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', -99);
+
+      expect(missingsProfilesService.getNegativeMissingCodesForProfileOrDefault).toHaveBeenCalledWith(1, 1);
+      expect(coderTrainingDiscussionResultRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        code: -99,
+        score: 0
+      }));
+      expect(result.score).toBe(0);
+    });
+
+    it('should reject discussion missing codes when default and explicit missing profiles are mixed', async () => {
+      const { training, unit } = createTrainingWithUnit();
+      const secondUnit = {
+        ...unit,
+        coding_job_id: 12
+      } as CodingJobUnit;
+      training.codingJobs = [
+        {
+          id: 11,
+          missings_profile_id: null,
+          codingJobUnits: [unit]
+        } as CodingJob,
+        {
+          id: 12,
+          missings_profile_id: 77,
+          codingJobUnits: [secondUnit]
+        } as CodingJob
+      ];
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+
+      await expect(service.saveDiscussionResult(1, 5, 101, 99, 'Manager', -99))
+        .rejects.toThrow('Conflicting missing profiles for response 101 in training 5');
+
+      expect(missingsProfilesService.getMissingsProfileDetails).not.toHaveBeenCalled();
+      expect(missingsProfilesService.getNegativeMissingCodesForProfileOrDefault).not.toHaveBeenCalled();
+      expect(coderTrainingDiscussionResultRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to an existing coder score when no coding scheme score can be resolved', async () => {
+      const { training } = createTrainingWithUnit({
+        code: 7,
+        score: 3
+      });
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+      mockCodingJobService.getCodingSchemeScoreForUnitCode.mockRejectedValueOnce(
+        new BadRequestException('Coding scheme not found for coding job unit')
+      );
+      mockDiscussionSave();
+
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', 7);
+
+      expect(coderTrainingDiscussionResultRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        code: 7,
+        score: 3
+      }));
+      expect(result.score).toBe(3);
+    });
+
+    it('should reject unknown positive discussion codes without a stored fallback', async () => {
+      const { training } = createTrainingWithUnit();
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+      mockCodingJobService.getCodingSchemeScoreForUnitCode.mockRejectedValueOnce(
+        new BadRequestException('Unsupported code for variable VAR: 999')
+      );
+
+      await expect(service.saveDiscussionResult(1, 5, 101, 99, 'Manager', 999))
+        .rejects.toThrow('Unsupported code for variable VAR: 999');
+
+      expect(coderTrainingDiscussionResultRepository.save).not.toHaveBeenCalled();
     });
   });
 

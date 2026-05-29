@@ -71,6 +71,8 @@ interface JobDefinitionApiResponse {
   assigned_coders?: number[];
   assigned_coder_configs?: JobDefinitionCoderConfig[];
   assignedCoderConfigs?: JobDefinitionCoderConfig[];
+  missings_profile_id?: number | null;
+  missingsProfileId?: number | null;
   distribution_seed?: string;
   distributionSeed?: string;
   planned_variable_usage?: Record<string, number>;
@@ -103,6 +105,7 @@ export interface JobDefinition {
   assignedVariableBundles?: import('../models/coding-job.model').VariableBundle[];
   assignedCoders?: number[];
   assignedCoderConfigs?: JobDefinitionCoderConfig[];
+  missingsProfileId?: number | null;
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
   durationSeconds?: number;
@@ -682,6 +685,7 @@ export class CodingJobBackendService {
         assignedVariableBundles: def.assigned_variable_bundles,
         assignedCoders: def.assigned_coders,
         assignedCoderConfigs: def.assignedCoderConfigs ?? def.assigned_coder_configs,
+        missingsProfileId: def.missingsProfileId ?? def.missings_profile_id,
         distributionSeed: def.distributionSeed ?? def.distribution_seed,
         plannedVariableUsage: def.plannedVariableUsage ?? def.planned_variable_usage,
         durationSeconds: def.duration_seconds,

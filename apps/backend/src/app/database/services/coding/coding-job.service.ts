@@ -15,6 +15,7 @@ import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from '../../entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import { CreateCodingJobDto } from '../../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../../admin/coding-job/dto/update-coding-job.dto';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
@@ -44,6 +45,7 @@ import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspa
 import { CodingFreshnessService } from './coding-freshness.service';
 import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
+import { MissingsProfilesService } from './missings-profiles.service';
 import {
   DERIVE_ERROR_STATUS,
   getDeriveErrorManualCodingPairKeys,
@@ -137,6 +139,7 @@ type DistributionPlanRequest = {
   showScore?: boolean;
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
+  missingsProfileId?: number;
 };
 
 type DistributionVariableUsageRequest = {
@@ -315,8 +318,90 @@ export class CodingJobService {
     @Optional()
     private codingFreshnessService?: CodingFreshnessService,
     @Optional()
-    private codingFileCacheService?: CodingFileCacheService
+    private codingFileCacheService?: CodingFileCacheService,
+    @Optional()
+    private missingsProfilesService?: MissingsProfilesService,
+    @Optional()
+    @InjectRepository(CoderTrainingDiscussionResult)
+    private coderTrainingDiscussionResultRepository?: Repository<CoderTrainingDiscussionResult>
   ) { }
+
+  private async resolveMissingsProfileId(
+    workspaceId: number,
+    profileId?: number | null
+  ): Promise<number | undefined> {
+    if (this.missingsProfilesService) {
+      return this.missingsProfilesService.resolveMissingsProfileId(workspaceId, profileId);
+    }
+
+    if (profileId === undefined || profileId === null || profileId === 0) {
+      return undefined;
+    }
+
+    if (!Number.isInteger(profileId) || profileId < 1) {
+      throw new BadRequestException(`Invalid missings profile id: ${profileId}`);
+    }
+
+    return profileId;
+  }
+
+  private async codingJobHasCodingWork(codingJobId: number): Promise<boolean> {
+    const count = await this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .where('cju.coding_job_id = :codingJobId', { codingJobId })
+      .andWhere(
+        `(cju.code IS NOT NULL
+          OR cju.score IS NOT NULL
+          OR cju.is_open = true
+          OR cju.notes IS NOT NULL
+          OR cju.supervisor_comment IS NOT NULL
+          OR cju.coding_issue_option IS NOT NULL)`
+      )
+      .getCount();
+
+    return count > 0;
+  }
+
+  private async codingJobHasTrainingDiscussions(codingJob: CodingJob): Promise<boolean> {
+    if (!codingJob.training_id || !this.coderTrainingDiscussionResultRepository) {
+      return false;
+    }
+
+    const count = await this.coderTrainingDiscussionResultRepository.count({
+      where: {
+        workspace_id: codingJob.workspace_id,
+        training_id: codingJob.training_id
+      }
+    });
+
+    return count > 0;
+  }
+
+  private async assertMissingsProfileCanChange(
+    codingJob: CodingJob,
+    nextMissingsProfileId: number | undefined
+  ): Promise<void> {
+    const currentMissingsProfileId = await this.resolveMissingsProfileId(
+      codingJob.workspace_id,
+      codingJob.missings_profile_id
+    );
+
+    if (currentMissingsProfileId === nextMissingsProfileId) {
+      return;
+    }
+
+    if (['completed', 'results_applied'].includes(codingJob.status)) {
+      throw new BadRequestException(`Cannot change missings profile for coding job ${codingJob.id} because it is ${codingJob.status}`);
+    }
+
+    if (await this.codingJobHasCodingWork(codingJob.id)) {
+      throw new BadRequestException(`Cannot change missings profile for coding job ${codingJob.id} because coding work already exists`);
+    }
+
+    if (await this.codingJobHasTrainingDiscussions(codingJob)) {
+      throw new BadRequestException(`Cannot change missings profile for coding job ${codingJob.id} because training discussions already exist`);
+    }
+  }
 
   private applyManualCodingCandidateStatusFilter(
     queryBuilder: SelectQueryBuilder<ResponseEntity>,
@@ -1196,18 +1281,27 @@ export class CodingJobService {
     workspaceId: number,
     createCodingJobDto: CreateCodingJobDto
   ): Promise<CodingJob> {
+    const missingsProfileId = await this.resolveMissingsProfileId(
+      workspaceId,
+      createCodingJobDto.missings_profile_id
+    );
+    const normalizedCreateCodingJobDto = {
+      ...createCodingJobDto,
+      missings_profile_id: missingsProfileId
+    };
+
     const createdCodingJob = await this.connection.transaction(async manager => {
       const codingJobRepo = manager.getRepository(CodingJob);
       const aggregationSettings = await this.getCurrentAggregationSettingsSnapshot(workspaceId);
       const codingJob = codingJobRepo.create({
         workspace_id: workspaceId,
-        name: createCodingJobDto.name,
-        description: createCodingJobDto.description,
-        status: createCodingJobDto.status || 'pending',
-        showScore: createCodingJobDto.showScore ?? false,
-        allowComments: createCodingJobDto.allowComments ?? true,
-        suppressGeneralInstructions: createCodingJobDto.suppressGeneralInstructions ?? false,
-        missings_profile_id: createCodingJobDto.missings_profile_id,
+        name: normalizedCreateCodingJobDto.name,
+        description: normalizedCreateCodingJobDto.description,
+        status: normalizedCreateCodingJobDto.status || 'pending',
+        showScore: normalizedCreateCodingJobDto.showScore ?? false,
+        allowComments: normalizedCreateCodingJobDto.allowComments ?? true,
+        suppressGeneralInstructions: normalizedCreateCodingJobDto.suppressGeneralInstructions ?? false,
+        missings_profile_id: normalizedCreateCodingJobDto.missings_profile_id,
         aggregation_enabled: aggregationSettings.aggregationEnabled,
         aggregation_threshold: aggregationSettings.aggregationThreshold,
         response_matching_flags: aggregationSettings.responseMatchingFlags,
@@ -1216,19 +1310,19 @@ export class CodingJobService {
 
       const savedCodingJob = await codingJobRepo.save(codingJob);
 
-      if (createCodingJobDto.assignedCoders && createCodingJobDto.assignedCoders.length > 0) {
-        await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders, manager, workspaceId);
+      if (normalizedCreateCodingJobDto.assignedCoders && normalizedCreateCodingJobDto.assignedCoders.length > 0) {
+        await this.assignCoders(savedCodingJob.id, normalizedCreateCodingJobDto.assignedCoders, manager, workspaceId);
       }
 
-      if (createCodingJobDto.variables && createCodingJobDto.variables.length > 0) {
-        await this.assignVariables(savedCodingJob.id, createCodingJobDto.variables, manager);
+      if (normalizedCreateCodingJobDto.variables && normalizedCreateCodingJobDto.variables.length > 0) {
+        await this.assignVariables(savedCodingJob.id, normalizedCreateCodingJobDto.variables, manager);
       }
 
-      if (createCodingJobDto.variableBundleIds && createCodingJobDto.variableBundleIds.length > 0) {
-        await this.assignVariableBundles(savedCodingJob.id, createCodingJobDto.variableBundleIds, manager);
-      } else if (createCodingJobDto.variableBundles && createCodingJobDto.variableBundles.length > 0) {
-        if (createCodingJobDto.variableBundles[0].id) {
-          const bundleIds = createCodingJobDto.variableBundles
+      if (normalizedCreateCodingJobDto.variableBundleIds && normalizedCreateCodingJobDto.variableBundleIds.length > 0) {
+        await this.assignVariableBundles(savedCodingJob.id, normalizedCreateCodingJobDto.variableBundleIds, manager);
+      } else if (normalizedCreateCodingJobDto.variableBundles && normalizedCreateCodingJobDto.variableBundles.length > 0) {
+        if (normalizedCreateCodingJobDto.variableBundles[0].id) {
+          const bundleIds = normalizedCreateCodingJobDto.variableBundles
             .filter(bundle => bundle.id)
             .map(bundle => bundle.id);
 
@@ -1236,13 +1330,13 @@ export class CodingJobService {
             await this.assignVariableBundles(savedCodingJob.id, bundleIds, manager);
           }
         } else {
-          const variables = createCodingJobDto.variableBundles.flatMap(bundle => bundle.variables || []);
+          const variables = normalizedCreateCodingJobDto.variableBundles.flatMap(bundle => bundle.variables || []);
           if (variables.length > 0) {
             await this.assignVariables(savedCodingJob.id, variables, manager);
           }
         }
       }
-      await this.saveCodingJobUnits(savedCodingJob.id, createCodingJobDto.maxCodingCases, manager);
+      await this.saveCodingJobUnits(savedCodingJob.id, normalizedCreateCodingJobDto.maxCodingCases, manager);
 
       return savedCodingJob;
     });
@@ -1284,7 +1378,12 @@ export class CodingJobService {
       codingJob.codingJob.comment = updateCodingJobDto.comment;
     }
     if (updateCodingJobDto.missingsProfileId !== undefined) {
-      codingJob.codingJob.missings_profile_id = updateCodingJobDto.missingsProfileId;
+      const nextMissingsProfileId = await this.resolveMissingsProfileId(
+        workspaceId,
+        updateCodingJobDto.missingsProfileId
+      );
+      await this.assertMissingsProfileCanChange(codingJob.codingJob, nextMissingsProfileId);
+      codingJob.codingJob.missings_profile_id = nextMissingsProfileId;
     }
     if (updateCodingJobDto.showScore !== undefined) {
       codingJob.codingJob.showScore = updateCodingJobDto.showScore;
@@ -1422,6 +1521,7 @@ export class CodingJobService {
     manager?: EntityManager,
     workspaceId?: number
   ): Promise<CodingJobCoder[]> {
+    this.assertAssignedCoderIdsAreUnique(userIds);
     await this.assertCodingJobCodersCanCode(codingJobId, userIds, manager, workspaceId);
     const repo = manager ? manager.getRepository(CodingJobCoder) : this.codingJobCoderRepository;
     await repo.delete({ coding_job_id: codingJobId });
@@ -1431,6 +1531,23 @@ export class CodingJobService {
     }));
 
     return repo.save(coders);
+  }
+
+  private assertAssignedCoderIdsAreUnique(userIds: number[]): void {
+    const seenIds = new Set<number>();
+    const duplicateIds = new Set<number>();
+
+    userIds.forEach(userId => {
+      if (seenIds.has(userId)) {
+        duplicateIds.add(userId);
+        return;
+      }
+      seenIds.add(userId);
+    });
+
+    if (duplicateIds.size > 0) {
+      throw new BadRequestException(`Assigned coder IDs must be unique: ${Array.from(duplicateIds).join(', ')}`);
+    }
   }
 
   async transferCodingCases(
@@ -1829,6 +1946,19 @@ export class CodingJobService {
     }
 
     return selectedCode;
+  }
+
+  async getCodingSchemeScoreForUnitCode(
+    codingJobUnit: CodingJobUnit,
+    workspaceId: number,
+    codeId: number
+  ): Promise<number | null> {
+    if (!Number.isInteger(codeId) || codeId < 0) {
+      throw new BadRequestException(`Unsupported coding scheme code: ${codeId}`);
+    }
+
+    const schemeCode = await this.getCodingSchemeCodeForUnit(codingJobUnit, workspaceId, codeId);
+    return schemeCode.score ?? null;
   }
 
   private async getCodingSchemeCodeForUnit(
@@ -2604,6 +2734,10 @@ export class CodingJobService {
   ): Promise<CodingJob> {
     const codingJobRepo = manager.getRepository(CodingJob);
     const aggregationSettings = await this.getCurrentAggregationSettingsSnapshot(workspaceId);
+    const missingsProfileId = await this.resolveMissingsProfileId(
+      workspaceId,
+      createCodingJobDto.missings_profile_id
+    );
     const codingJob = codingJobRepo.create({
       workspace_id: workspaceId,
       name: createCodingJobDto.name,
@@ -2612,7 +2746,7 @@ export class CodingJobService {
       showScore: createCodingJobDto.showScore ?? false,
       allowComments: createCodingJobDto.allowComments ?? true,
       suppressGeneralInstructions: createCodingJobDto.suppressGeneralInstructions ?? false,
-      missings_profile_id: createCodingJobDto.missings_profile_id,
+      missings_profile_id: missingsProfileId,
       job_definition_id: createCodingJobDto.jobDefinitionId,
       case_ordering_mode: createCodingJobDto.caseOrderingMode || 'continuous',
       aggregation_enabled: aggregationSettings.aggregationEnabled,
@@ -2650,9 +2784,84 @@ export class CodingJobService {
       }
     }
 
-    await this.saveCodingJobUnitsSubset(savedCodingJob.id, workspaceId, unitSubset, manager);
+    const unitSubsetWithBundleIds = await this.attachVariableBundleIdsToResponses(
+      createCodingJobDto,
+      unitSubset,
+      manager
+    );
+
+    await this.saveCodingJobUnitsSubset(savedCodingJob.id, workspaceId, unitSubsetWithBundleIds, manager);
 
     return savedCodingJob;
+  }
+
+  private async attachVariableBundleIdsToResponses(
+    createCodingJobDto: InternalCreateCodingJobDto,
+    responses: SlimResponse[],
+    manager: EntityManager
+  ): Promise<SlimResponse[]> {
+    if (responses.length === 0) {
+      return responses;
+    }
+
+    const variableBundleIdByVariable = await this.getVariableBundleIdByVariable(createCodingJobDto, manager);
+    if (variableBundleIdByVariable.size === 0) {
+      return responses;
+    }
+
+    return responses.map(response => {
+      if (response.variableBundleId) {
+        return response;
+      }
+
+      const variableBundleId = variableBundleIdByVariable.get(`${response.unitName}::${response.variableid}`);
+      return variableBundleId ? { ...response, variableBundleId } : response;
+    });
+  }
+
+  private async getVariableBundleIdByVariable(
+    createCodingJobDto: InternalCreateCodingJobDto,
+    manager: EntityManager
+  ): Promise<Map<string, number>> {
+    const bundleVariablesById = new Map<number, Array<{ unitName: string; variableId: string }>>();
+    const bundleIds = new Set<number>();
+
+    createCodingJobDto.variableBundleIds?.forEach(id => bundleIds.add(id));
+    createCodingJobDto.variableBundles?.forEach(bundle => {
+      if (!bundle.id) {
+        return;
+      }
+
+      bundleIds.add(bundle.id);
+      if (bundle.variables?.length) {
+        bundleVariablesById.set(bundle.id, bundle.variables);
+      }
+    });
+
+    if (bundleIds.size === 0) {
+      return new Map();
+    }
+
+    const missingBundleIds = Array.from(bundleIds).filter(id => !bundleVariablesById.has(id));
+    if (missingBundleIds.length > 0) {
+      const variableBundleRepo = manager.getRepository(VariableBundle);
+      const variableBundles = await variableBundleRepo.find({
+        where: { id: In(missingBundleIds) }
+      });
+
+      variableBundles.forEach(bundle => {
+        bundleVariablesById.set(bundle.id, bundle.variables || []);
+      });
+    }
+
+    const variableBundleIdByVariable = new Map<string, number>();
+    bundleVariablesById.forEach((variables, bundleId) => {
+      variables.forEach(variable => {
+        variableBundleIdByVariable.set(`${variable.unitName}::${variable.variableId}`, bundleId);
+      });
+    });
+
+    return variableBundleIdByVariable;
   }
 
   private async saveCodingJobUnitsSubset(
@@ -4135,6 +4344,7 @@ export class CodingJobService {
         showScore: request.showScore,
         allowComments: request.allowComments,
         suppressGeneralInstructions: request.suppressGeneralInstructions,
+        missings_profile_id: request.missingsProfileId,
         ...(job.item.type === 'bundle' ?
           { variableBundleIds: [(job.item.item as BundleItem).id] } :
           { variables: job.item.itemVariables }

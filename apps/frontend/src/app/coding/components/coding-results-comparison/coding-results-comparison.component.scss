@@ -526,6 +526,33 @@
                 tbody tr:hover {
                   background-color: #f8f9fa;
                 }
+
+                .variable-summary-row td {
+                  background: #f8fbfd;
+                  padding: 8px 12px;
+                }
+
+                .variable-summary-box {
+                  display: flex;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  gap: 8px 16px;
+                  border: 1px solid #d9e2ec;
+                  border-radius: 4px;
+                  background: #ffffff;
+                  color: #37474f;
+                  padding: 8px 10px;
+                  line-height: 1.35;
+
+                  .variable-summary-label {
+                    color: #263238;
+                    font-weight: 700;
+                  }
+
+                  strong {
+                    margin-left: 4px;
+                  }
+                }
               }
             }
 
@@ -811,6 +838,12 @@
             .discussion-saving {
               font-size: 11px;
               color: #1976d2;
+            }
+
+            .discussion-error {
+              color: #b71c1c;
+              font-size: 11px;
+              line-height: 1.3;
             }
 
             .discussion-source {

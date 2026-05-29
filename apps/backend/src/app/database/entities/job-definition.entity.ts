@@ -12,6 +12,7 @@ import {
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
 import Workspace from './workspace.entity';
+import { MissingsProfile } from './missings-profile.entity';
 
 export type JobDefinitionStatus = 'draft' | 'pending_review' | 'approved';
 export type CaseOrderingMode = 'continuous' | 'alternating';
@@ -26,6 +27,7 @@ export interface JobDefinitionVariable {
 export interface JobDefinitionVariableBundle {
   id: number;
   name: string;
+  variables?: JobDefinitionVariable[];
   sampleCount?: number;
   caseOrderingMode?: CaseOrderingMode;
 }
@@ -50,6 +52,13 @@ export class JobDefinition {
 
   @OneToMany(() => CodingJob, codingJob => codingJob.jobDefinition, { cascade: false })
     codingJobs: CodingJob[];
+
+  @Column({ name: 'missings_profile_id', nullable: true })
+    missings_profile_id?: number;
+
+  @ManyToOne(() => MissingsProfile)
+  @JoinColumn({ name: 'missings_profile_id' })
+    missingsProfile?: MissingsProfile;
 
   @Column({
     type: 'enum',

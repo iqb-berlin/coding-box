@@ -43,6 +43,20 @@
           }
         </mat-form-field>
 
+        @if (data.mode === 'definition') {
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>{{ 'coding-job-definition-dialog.form-fields.missings-profile-label' | translate }}</mat-label>
+          <mat-select formControlName="missingsProfileId">
+            @for (profile of missingsProfiles; track profile.id) {
+            <mat-option [value]="profile.id">{{ profile.label }}</mat-option>
+            }
+          </mat-select>
+          @if (isLoadingMissingsProfiles) {
+          <mat-hint>{{ 'coding-job-definition-dialog.form-fields.missings-profile-loading' | translate }}</mat-hint>
+          }
+        </mat-form-field>
+        }
+
         <div class="double-coding-section">
           <h4>{{ 'coding-job-definition-dialog.sections.double-coding.title' | translate }}</h4>
           <p class="section-description">{{ 'coding-job-definition-dialog.sections.double-coding.description' |

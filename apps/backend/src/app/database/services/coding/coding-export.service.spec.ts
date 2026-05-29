@@ -362,9 +362,11 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
 
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
       1,
-      '(cj.job_definition_id IN (:...jobDefinitionIds) OR cj.training_id IN (:...coderTrainingIds))',
+      expect.stringContaining('cj.job_definition_id IN (:...jobDefinitionIds)'),
       { jobDefinitionIds: [1], coderTrainingIds: [3] }
     );
+    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('coding_job_variable_bundle');
+    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cj.training_id IN (:...coderTrainingIds)');
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining('EXISTS'),
@@ -384,9 +386,34 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
 
     expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      '(cj.job_definition_id IN (:...jobDefinitionIds))',
+      expect.stringContaining('coding_job_variable_bundle'),
       { jobDefinitionIds: [11] }
     );
+  });
+
+  it('narrows legacy bundle job-definition filters to the current coding-job unit when an alias is provided', () => {
+    const { service } = createServiceWithDetailedMocks(1);
+    const queryBuilder = {
+      andWhere: jest.fn().mockReturnThis()
+    };
+
+    (service as unknown as {
+      applyJobFilters: (
+        query: unknown,
+        jobDefinitionIds?: number[],
+        coderTrainingIds?: number[],
+        coderIds?: number[],
+        codingJobUnitAlias?: string
+      ) => void
+    }).applyJobFilters(queryBuilder, [11], undefined, undefined, 'cju');
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('scope_vb.variables'),
+      { jobDefinitionIds: [11] }
+    );
+    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('variable_bundle scope_vb');
+    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cju.unit_name');
+    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cju.variable_id');
   });
 
   it('applies only training filter when only training ids are selected', () => {
@@ -928,9 +955,11 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     expect(queryBuilder.andWhere).toHaveBeenCalledTimes(2);
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
       1,
-      '(cj.job_definition_id IN (:...jobDefinitionIds) OR cj.training_id IN (:...coderTrainingIds))',
+      expect.stringContaining('cj.job_definition_id IN (:...jobDefinitionIds)'),
       { jobDefinitionIds: [44], coderTrainingIds: [55] }
     );
+    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('coding_job_variable_bundle');
+    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cj.training_id IN (:...coderTrainingIds)');
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining('EXISTS'),
