@@ -79,6 +79,15 @@ export type TrainingResponseIdsMap = Record<string, number[]>;
 
 type DiscussionSource = 'manual' | 'auto_agreement' | null;
 
+type SaveDiscussionResultResponse = {
+  success: boolean;
+  code: number | null;
+  score: number | null;
+  source: DiscussionSource;
+  managerUserId: number | null;
+  managerName: string | null;
+};
+
 type WithinTrainingCoderResult = {
   jobId: number;
   coderName: string;
@@ -477,6 +486,54 @@ export class CoderTrainingService {
     });
   }
 
+  private buildCoderResultsForResponse(
+    training: CoderTraining,
+    responseId: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>,
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>
+  ): WithinTrainingCoderResult[] {
+    return (training.codingJobs || []).map(job => {
+      let code: number | null = null;
+      let score: number | null = null;
+      let notes: string | null = null;
+      let codingIssueOption: number | null = null;
+
+      const coderName = job.codingJobCoders && job.codingJobCoders.length > 0 && job.codingJobCoders[0].user ?
+        `${job.codingJobCoders[0].user.username || 'Unknown'}` :
+        `Coder ${job.name}`;
+
+      job.codingJobUnits?.forEach(unit => {
+        if (
+          unit.response_id === responseId &&
+          !isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)
+        ) {
+          code = unit.code;
+          if (unit.score !== null) {
+            score = unit.score;
+          }
+          notes = unit.notes;
+          codingIssueOption = unit.coding_issue_option;
+        }
+      });
+
+      const mappedDisplay = this.mapDisplayCodeAndScore(
+        code,
+        score,
+        codingIssueOption,
+        missingCodesByJobId.get(job.id) ?? DEFAULT_MISSING_CODE_CONTEXT
+      );
+
+      return {
+        jobId: job.id,
+        coderName,
+        code: mappedDisplay.code,
+        score: mappedDisplay.score,
+        notes,
+        codingIssueOption
+      };
+    });
+  }
+
   private toNullableScore(score: number | string | null | undefined): number | null {
     if (score === null || score === undefined) {
       return null;
@@ -616,7 +673,7 @@ export class CoderTrainingService {
     managerUserId: number | null,
     managerName: string | null,
     code: number | null | undefined
-  ): Promise<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }> {
+  ): Promise<SaveDiscussionResultResponse> {
     const training = await this.coderTrainingRepository.findOne({
       where: {
         id: trainingId,
@@ -645,13 +702,29 @@ export class CoderTrainingService {
     });
 
     if (code === null || code === undefined) {
+      const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, training.codingJobs || []);
+      const codersData = this.buildCoderResultsForResponse(
+        training,
+        responseId,
+        exclusions,
+        missingCodesByJobId
+      );
+      const automaticDiscussionResult = await this.deriveAutomaticDiscussionResultForResponse(
+        workspaceId,
+        training,
+        responseId,
+        codersData,
+        exclusions
+      );
+
       if (existing) {
         await this.coderTrainingDiscussionResultRepository.delete(existing.id);
       }
       return {
         success: true,
-        code: null,
-        score: null,
+        code: automaticDiscussionResult?.code ?? null,
+        score: automaticDiscussionResult?.score ?? null,
+        source: automaticDiscussionResult ? 'auto_agreement' : null,
         managerUserId: null,
         managerName: null
       };
@@ -686,6 +759,7 @@ export class CoderTrainingService {
       success: true,
       code: saved.code,
       score: saved.score,
+      source: 'manual',
       managerUserId: saved.manager_user_id,
       managerName: saved.manager_name
     };
