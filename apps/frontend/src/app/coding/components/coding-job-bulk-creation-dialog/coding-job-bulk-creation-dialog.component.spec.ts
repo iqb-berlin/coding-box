@@ -92,6 +92,88 @@ describe('CodingJobBulkCreationDialogComponent', () => {
     });
   });
 
+  it('uses warnings supplied with a precomputed backend preview', () => {
+    createComponent({
+      selectedVariables: [selectedVariable],
+      selectedVariableBundles: [],
+      selectedCoders,
+      distribution: {
+        'Unit 1::Var 1': { Ada: 4, Bea: 0 }
+      },
+      distributionByCoderId: {
+        'Unit 1::Var 1': { 1: 4, 2: 0 }
+      },
+      doubleCodingInfo: {
+        'Unit 1::Var 1': {
+          totalCases: 4,
+          distinctCases: 4,
+          codingTasksTotal: 4,
+          doubleCodedCases: 0,
+          singleCodedCasesAssigned: 4,
+          doubleCodedCasesPerCoder: { Ada: 0, Bea: 0 }
+        }
+      },
+      warnings: [{
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        message: 'Already assigned',
+        casesInJobs: 1,
+        availableCases: 4
+      }]
+    });
+
+    expect(component.warnings).toEqual([expect.objectContaining({
+      unitName: 'Unit 1',
+      variableId: 'Var 1'
+    })]);
+    expect(component.showWarningsPanel).toBe(true);
+    expect(mockDistributedCodingService.calculateDistribution).not.toHaveBeenCalled();
+  });
+
+  it('preserves warnings returned by backend distribution calculation', async () => {
+    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockReturnValue(of({
+      distribution: {
+        'Unit 1::Var 1': { Ada: 4, Bea: 0 }
+      },
+      distributionByCoderId: {
+        'Unit 1::Var 1': { 1: 4, 2: 0 }
+      },
+      doubleCodingInfo: {
+        'Unit 1::Var 1': {
+          totalCases: 4,
+          distinctCases: 4,
+          codingTasksTotal: 4,
+          doubleCodedCases: 0,
+          singleCodedCasesAssigned: 4,
+          doubleCodedCasesPerCoder: { Ada: 0, Bea: 0 }
+        }
+      },
+      aggregationInfo: {},
+      matchingFlags: [],
+      warnings: [{
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        message: 'Already assigned',
+        casesInJobs: 1,
+        availableCases: 4
+      }]
+    }));
+
+    createComponent({
+      selectedVariables: [selectedVariable],
+      selectedVariableBundles: [],
+      selectedCoders
+    });
+    await fixture.whenStable();
+
+    expect(component.warnings).toEqual([expect.objectContaining({
+      unitName: 'Unit 1',
+      variableId: 'Var 1'
+    })]);
+    expect(component.showWarningsPanel).toBe(true);
+    expect(component.jobPreviews).toHaveLength(1);
+  });
+
   it('uses backend-created job names and counts in the results view', () => {
     createComponent({
       selectedVariables: [selectedVariable],
