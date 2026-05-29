@@ -609,7 +609,14 @@ export class WorkspaceCoderTrainingController {
       @Param('trainingId') trainingId: number,
       @Body() body: { responseId: number; code: number | null; score: number | null },
       @Req() req: Request
-  ): Promise<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }> {
+  ): Promise<{
+        success: boolean;
+        code: number | null;
+        score: number | null;
+        source: 'manual' | 'auto_agreement' | null;
+        managerUserId: number | null;
+        managerName: string | null;
+      }> {
     const reqUser = (req as Request & {
       user?: { id?: string | number; username?: string; preferred_username?: string; name?: string };
     }).user;
