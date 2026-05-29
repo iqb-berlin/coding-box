@@ -1930,7 +1930,9 @@
       "max-cases-label": "Maximale Anzahl Kodierfälle",
       "max-cases-placeholder": "z.B. 100",
       "max-cases-hint": "Optionale Angabe der maximalen Anzahl von Kodierfällen. Bei mehr verfügbaren Fällen wird zufällig ausgewählt.",
-      "max-cases-error": "Die maximale Anzahl muss mindestens 1 betragen"
+      "max-cases-error": "Die maximale Anzahl muss mindestens 1 betragen",
+      "missings-profile-label": "Missing-Profil",
+      "missings-profile-loading": "Lade Missing-Profile..."
     },
     "double-coding": {
       "modes": {

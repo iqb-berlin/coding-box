@@ -25,6 +25,7 @@ export interface CodingJob {
   totalUnits?: number;
   openUnits?: number;
   missings_profile_id?: number;
+  missingsProfileId?: number | null;
   missings_profile?: MissingsProfilesDto;
   training_id?: number;
   training?: CoderTraining;

@@ -595,7 +595,11 @@ export class WorkspaceCoderTrainingController {
       properties: {
         responseId: { type: 'number' },
         code: { type: 'number', nullable: true },
-        score: { type: 'number', nullable: true }
+        score: {
+          type: 'number',
+          nullable: true,
+          description: 'Deprecated input; score is derived on the server from coding scheme, missings, or stored results.'
+        }
       },
       required: ['responseId']
     }
@@ -618,8 +622,7 @@ export class WorkspaceCoderTrainingController {
       Number(body.responseId),
       Number.isNaN(managerUserId) ? null : managerUserId,
       managerName,
-      body.code,
-      body.score
+      body.code
     );
   }
 
