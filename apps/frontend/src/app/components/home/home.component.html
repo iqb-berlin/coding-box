@@ -1,7 +1,9 @@
 <div class="home-body app-container">
   <coding-box-user-workspaces-area
     class="home-panel"
-    [workspaces]="workspaces">
+    [workspaces]="workspaces"
+    [authBootstrapStatus]="authBootstrapStatus"
+    [authDataLoaded]="Number(authData.userId) > 0">
   </coding-box-user-workspaces-area>
 
   <coding-box-app-info
