@@ -16,13 +16,16 @@ import {
 } from '../workspace/workspace-exclusion.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES } from '../../utils/manual-coding-candidate.util';
 
 export interface ResponseFilterOptions {
   status?: string;
+  statuses?: number[];
   version?: 'v1' | 'v2' | 'v3';
   considerOnly?: boolean;
   validCodingVariablesOnly?: boolean;
   givenResponsesOnly?: boolean;
+  manualCodingCandidatesOnly?: boolean;
 }
 
 /**
@@ -124,6 +127,14 @@ export class CodingResponseFilterService {
           `${effectiveStatusExpression} NOT IN (:...statisticsIgnoredStatuses)`,
           { statisticsIgnoredStatuses: STATISTICS_IGNORED_STATUSES }
         );
+    } else if (options.manualCodingCandidatesOnly) {
+      queryBuilder.where('response.status_v1 IN (:...statuses)', {
+        statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+      });
+    } else if (options.statuses?.length) {
+      queryBuilder.where('response.status_v1 IN (:...statuses)', {
+        statuses: options.statuses
+      });
     } else {
       queryBuilder.where('response.status_v1 = :status', {
         status: statusStringToNumber(status)

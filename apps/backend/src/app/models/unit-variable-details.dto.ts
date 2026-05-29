@@ -11,6 +11,8 @@ export interface CodeInfo {
   id: string | number;
   label: string;
   score?: number;
+  manualInstruction?: string;
+  type?: string;
 }
 
 export interface VariableValueInfo {

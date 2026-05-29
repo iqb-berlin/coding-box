@@ -7,5 +7,6 @@ export interface CodingListItem {
   variable_id: string;
   variable_page: string;
   variable_anchor: string;
+  status_v1?: string;
   url: string;
 }

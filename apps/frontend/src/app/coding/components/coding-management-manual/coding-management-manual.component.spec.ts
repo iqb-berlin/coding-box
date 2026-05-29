@@ -422,6 +422,42 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getPlanningStatusTitle()).toBe('Manuelle Kodierung abgeschlossen');
   });
 
+  it('should warn when manual variables have no regular selectable codes', () => {
+    setCompletePlanningState();
+    setCodingProgress(10, 4);
+    setAppliedResults(10, 0, 10);
+    component.manualCodeAvailabilityWarnings = [
+      {
+        unitName: 'UNIT1',
+        variableId: 'VAR1',
+        responseCount: 5,
+        casesInJobs: 0,
+        availableCases: 5,
+        uniqueCasesAfterAggregation: 5,
+        regularCodeCount: 2,
+        selectableRegularCodeCount: 0,
+        onlySpecialOptionsAvailable: true,
+        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
+      }
+    ];
+
+    expect(component.hasManualCodeAvailabilityWarnings).toBe(true);
+    expect(component.hasPlanningWarnings()).toBe(true);
+    expect(component.getPlanningStatusClass()).toBe('status-warning');
+    expect(component.getPlanningStatusIcon()).toBe('warning');
+    expect(component.getPlanningStatusTitle()).toBe('Codes für manuelle Kodierung prüfen');
+    expect(component.getPlanningNextStepTitle()).toBe('Kodierschema prüfen');
+    expect(component.getPlanningNextStepActionLabel()).toBe('Zur Variablenauswahl');
+
+    fixture.detectChanges();
+
+    const banner = fixture.nativeElement.querySelector(
+      '.manual-code-availability-banner'
+    ) as HTMLElement | null;
+    expect(banner?.textContent).toContain('UNIT1 / VAR1');
+    expect(banner?.textContent).toContain('Variablen ohne reguläre auswählbare Codes');
+  });
+
   it('should hide second auto-coding work while manual coding is still open', () => {
     component.codingFreshnessSummary = {
       workspaceId: 1,
