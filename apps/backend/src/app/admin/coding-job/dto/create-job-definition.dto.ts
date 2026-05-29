@@ -77,6 +77,17 @@ export class CreateJobDefinitionDto {
     assignedCoderConfigs?: JobDefinitionCoderConfigDto[];
 
   @ApiProperty({
+    description: 'ID of the missings profile to assign to the job definition. If omitted, IQB-Standard is used.',
+    example: 1,
+    required: false
+  })
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  @IsOptional()
+    missingsProfileId?: number;
+
+  @ApiProperty({
     description: 'Duration in seconds for one coding task',
     example: 300,
     required: false

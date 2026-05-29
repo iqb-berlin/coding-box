@@ -46,6 +46,7 @@ interface JobDefinition {
   assignedVariableBundles?: VariableBundle[];
   assignedCoders?: number[];
   assignedCoderConfigs?: { coderId: number; capacityPercent: number }[];
+  missingsProfileId?: number | null;
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
   durationSeconds?: number;
@@ -528,6 +529,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         assignedVariableBundles: definition.assignedVariableBundles,
         assignedCoders: definition.assignedCoders!,
         assignedCoderConfigs: definition.assignedCoderConfigs,
+        missings_profile_id: definition.missingsProfileId ?? undefined,
         durationSeconds: definition.durationSeconds,
         maxCodingCases: definition.maxCodingCases,
         doubleCodingAbsolute: definition.doubleCodingAbsolute,

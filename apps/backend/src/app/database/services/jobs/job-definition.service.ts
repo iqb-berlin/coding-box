@@ -15,6 +15,7 @@ import { VariableBundle } from '../../entities/variable-bundle.entity';
 import User from '../../entities/user.entity';
 import { CodingJobService } from '../coding/coding-job.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
+import { MissingsProfilesService } from '../coding/missings-profiles.service';
 import { CreateJobDefinitionDto } from '../../../admin/coding-job/dto/create-job-definition.dto';
 import { UpdateJobDefinitionDto } from '../../../admin/coding-job/dto/update-job-definition.dto';
 import { ApproveJobDefinitionDto } from '../../../admin/coding-job/dto/approve-job-definition.dto';
@@ -122,6 +123,7 @@ type DefinitionDistributionRequest = {
   showScore: boolean;
   allowComments: boolean;
   suppressGeneralInstructions: boolean;
+  missingsProfileId: number;
 };
 
 const DEFAULT_CODER_CAPACITY_PERCENT = 100;
@@ -138,7 +140,8 @@ export class JobDefinitionService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private codingJobService: CodingJobService,
-    private codingValidationService: CodingValidationService
+    private codingValidationService: CodingValidationService,
+    private missingsProfilesService: MissingsProfilesService
   ) { }
 
   private async checkVariableConflicts(
@@ -601,6 +604,10 @@ export class JobDefinitionService {
   async createJobDefinition(createDto: CreateJobDefinitionDto, workspaceId: number): Promise<JobDefinition> {
     const coderAssignments = this.resolveCoderAssignments(createDto);
     const distributionSeed = this.createDistributionSeed(workspaceId);
+    const missingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
+      workspaceId,
+      createDto.missingsProfileId
+    );
 
     this.validateDefinitionState({
       status: createDto.status ?? 'draft',
@@ -647,6 +654,7 @@ export class JobDefinitionService {
       })),
       assigned_coders: coderAssignments.assignedCoders,
       assigned_coder_configs: coderAssignments.assignedCoderConfigs,
+      missings_profile_id: missingsProfileId,
       distribution_seed: distributionSeed,
       duration_seconds: createDto.durationSeconds,
       max_coding_cases: createDto.maxCodingCases,
@@ -850,6 +858,15 @@ export class JobDefinitionService {
     const existingCoderAssignments = this.getStoredCoderAssignments(jobDefinition);
     const nextCoderAssignments = this.resolveCoderAssignments(updateDto, existingCoderAssignments);
     const distributionSeed = this.getDefinitionDistributionSeed(jobDefinition);
+    const nextMissingsProfileId = updateDto.missingsProfileId !== undefined ?
+      await this.missingsProfilesService.resolveMissingsProfileId(
+        jobDefinition.workspace_id,
+        updateDto.missingsProfileId
+      ) :
+      await this.missingsProfilesService.resolveMissingsProfileId(
+        jobDefinition.workspace_id,
+        jobDefinition.missings_profile_id
+      );
     const nextState: JobDefinitionValidationState = {
       status: updateDto.status ?? jobDefinition.status,
       assignedVariables: updateDto.assignedVariables ?? jobDefinition.assigned_variables ?? [],
@@ -934,6 +951,7 @@ export class JobDefinitionService {
       jobDefinition.assigned_coders = nextCoderAssignments.assignedCoders;
       jobDefinition.assigned_coder_configs = nextCoderAssignments.assignedCoderConfigs;
     }
+    jobDefinition.missings_profile_id = nextMissingsProfileId;
     if (updateDto.durationSeconds !== undefined) {
       jobDefinition.duration_seconds = updateDto.durationSeconds;
     }
@@ -997,6 +1015,11 @@ export class JobDefinitionService {
     } else {
       throw new BadRequestException(`Invalid status transition from ${jobDefinition.status} to ${approveDto.status}`);
     }
+
+    jobDefinition.missings_profile_id = await this.missingsProfilesService.resolveMissingsProfileId(
+      jobDefinition.workspace_id,
+      jobDefinition.missings_profile_id
+    );
 
     const savedDefinition = await this.jobDefinitionRepository.save(jobDefinition);
     return savedDefinition;
@@ -1103,6 +1126,10 @@ export class JobDefinitionService {
       await this.usersRepository.find({ where: { id: In(assignedCoderIds) } }) :
       [];
     const assignedUsersById = new Map(assignedUsers.map(user => [user.id, user]));
+    const missingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
+      workspaceId,
+      jobDefinition.missings_profile_id
+    );
     const selectedCoders = assignedCoderIds.map(coderId => {
       const username = assignedUsersById.get(coderId)?.username || `Coder ${coderId}`;
       return {
@@ -1125,7 +1152,8 @@ export class JobDefinitionService {
       distributionSeed: this.getDefinitionDistributionSeed(jobDefinition),
       showScore: jobDefinition.show_score,
       allowComments: jobDefinition.allow_comments,
-      suppressGeneralInstructions: jobDefinition.suppress_general_instructions
+      suppressGeneralInstructions: jobDefinition.suppress_general_instructions,
+      missingsProfileId
     };
   }
 
