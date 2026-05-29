@@ -715,9 +715,9 @@
             <td mat-cell *matCellDef="let element">
               <div class="code-cell">
                 <ng-container *ngIf="comparisonMode === 'between-trainings'">
-                  <span
+                  <ng-container
                     *ngIf="
-                      hasCoderFromTrainingCodeOrScore(
+                      hasCoderFromTrainingDisplayData(
                         element,
                         col.substring(6)
                       );
@@ -729,34 +729,53 @@
                         getCoderFromTraining(element, col.substring(6)) as coder
                       "
                     >
-                      Code:
-                      <strong>{{
-                        getDisplayCodeAndIssueText(
-                          coder.code,
-                          coder.codingIssueOption
-                        )
-                      }}</strong>
-                      <mat-icon
-                        *ngIf="coder.notes"
-                        class="note-icon"
-                        [matTooltip]="coder.notes"
-                        >comment</mat-icon
-                      ><br />
-                      <ng-container
-                        *ngIf="coder.code !== '-1' && coder.code !== '-2'"
-                      >
-                        Score: {{ coder.score ?? '-' }}
-                      </ng-container>
+                      <div class="coder-result">
+                        <div class="code-line">
+                          <span class="code-label">Code:</span>
+                          <strong class="code-value">{{
+                            getDisplayCodeText(
+                              coder.code,
+                              coder.codingIssueOption
+                            )
+                          }}</strong>
+                          <span
+                            *ngIf="hasCodingIssue(coder)"
+                            class="coding-issue-badge"
+                            [ngClass]="getCodingIssueClass(coder)"
+                            [matTooltip]="getCodingIssueTooltip(coder)"
+                          >
+                            <mat-icon
+                              class="coding-issue-icon"
+                              [ngClass]="getCodingIssueClass(coder)"
+                              aria-hidden="true"
+                            >
+                              flag
+                            </mat-icon>
+                            {{ getCodingIssueShortLabel(coder.codingIssueOption) }}
+                          </span>
+                          <mat-icon
+                            *ngIf="hasCoderNote(coder)"
+                            class="note-icon"
+                            [matTooltip]="getCoderNoteTooltip(coder)"
+                            aria-label="Kodierer-Notiz"
+                          >
+                            comment
+                          </mat-icon>
+                        </div>
+                        <div class="score-line" *ngIf="shouldShowScore(coder)">
+                          Score: {{ coder.score ?? '-' }}
+                        </div>
+                      </div>
                     </ng-container>
-                  </span>
+                  </ng-container>
                   <ng-template #noBetweenCoderData
                     ><span class="no-data">-</span></ng-template
                   >
                 </ng-container>
                 <ng-container *ngIf="comparisonMode === 'within-training'">
-                  <span
+                  <ng-container
                     *ngIf="
-                      hasCoderCodeOrScore(element, +col.substring(6));
+                      hasCoderDisplayDataForWithin(element, +col.substring(6));
                       else noWithinCoderData
                     "
                   >
@@ -765,26 +784,45 @@
                         getCoderForWithin(element, +col.substring(6)) as coder
                       "
                     >
-                      Code:
-                      <strong>{{
-                        getDisplayCodeAndIssueText(
-                          coder.code,
-                          coder.codingIssueOption
-                        )
-                      }}</strong>
-                      <mat-icon
-                        *ngIf="coder.notes"
-                        class="note-icon"
-                        [matTooltip]="coder.notes"
-                        >comment</mat-icon
-                      ><br />
-                      <ng-container
-                        *ngIf="coder.code !== '-1' && coder.code !== '-2'"
-                      >
-                        Score: {{ coder.score ?? '-' }}
-                      </ng-container>
+                      <div class="coder-result">
+                        <div class="code-line">
+                          <span class="code-label">Code:</span>
+                          <strong class="code-value">{{
+                            getDisplayCodeText(
+                              coder.code,
+                              coder.codingIssueOption
+                            )
+                          }}</strong>
+                          <span
+                            *ngIf="hasCodingIssue(coder)"
+                            class="coding-issue-badge"
+                            [ngClass]="getCodingIssueClass(coder)"
+                            [matTooltip]="getCodingIssueTooltip(coder)"
+                          >
+                            <mat-icon
+                              class="coding-issue-icon"
+                              [ngClass]="getCodingIssueClass(coder)"
+                              aria-hidden="true"
+                            >
+                              flag
+                            </mat-icon>
+                            {{ getCodingIssueShortLabel(coder.codingIssueOption) }}
+                          </span>
+                          <mat-icon
+                            *ngIf="hasCoderNote(coder)"
+                            class="note-icon"
+                            [matTooltip]="getCoderNoteTooltip(coder)"
+                            aria-label="Kodierer-Notiz"
+                          >
+                            comment
+                          </mat-icon>
+                        </div>
+                        <div class="score-line" *ngIf="shouldShowScore(coder)">
+                          Score: {{ coder.score ?? '-' }}
+                        </div>
+                      </div>
                     </ng-container>
-                  </span>
+                  </ng-container>
                   <ng-template #noWithinCoderData
                     ><span class="no-data">-</span></ng-template
                   >
