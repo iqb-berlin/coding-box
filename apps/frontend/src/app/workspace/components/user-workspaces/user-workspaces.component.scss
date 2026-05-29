@@ -29,6 +29,39 @@
   height: 100%;
 }
 
+.workspace-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+
+  p {
+    margin: 0;
+  }
+
+  button mat-icon {
+    margin-right: 8px;
+  }
+}
+
+.workspace-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.workspace-state-error {
+  padding: 14px 16px;
+  border-left: 4px solid #dc3545;
+  border-radius: 4px;
+  background: #f8d7da;
+  color: #721c24;
+
+  > mat-icon {
+    flex: 0 0 auto;
+  }
+}
+
 .login-panel {
   display: flex;
   flex-direction: column;
