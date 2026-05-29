@@ -432,6 +432,106 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([10]);
   });
 
+  it('should render compact coding issue badges and only real note icons in coder cells', () => {
+    component.comparisonMode = 'between-trainings';
+    component.availableCodersFromTrainings = [
+      {
+        trainingId: 1,
+        trainingLabel: 'Training A',
+        coderId: 101,
+        coderName: 'Ada'
+      },
+      {
+        trainingId: 2,
+        trainingLabel: 'Training B',
+        coderId: 201,
+        coderName: 'Ben'
+      }
+    ];
+    component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
+    component.selectedCodersFromTrainings = new Set(['1_101', '2_201']);
+    component.comparisonData = [
+      {
+        responseId: 12,
+        unitName: 'Unit A',
+        variableId: 'VAR_1',
+        testPerson: 'Test1',
+        personLogin: 'login-1',
+        personCode: 'Code1',
+        personGroup: 'Group A',
+        coders: [
+          {
+            trainingId: 1,
+            trainingLabel: 'Training A',
+            coderId: 101,
+            coderName: 'Ada',
+            code: '7',
+            score: 2,
+            notes: ' Bitte prüfen ',
+            codingIssueOption: -1
+          },
+          {
+            trainingId: 2,
+            trainingLabel: 'Training B',
+            coderId: 201,
+            coderName: 'Ben',
+            code: '-2',
+            score: null,
+            notes: '   ',
+            codingIssueOption: -2
+          }
+        ]
+      }
+    ];
+    component.dataSource.data = component.comparisonData;
+
+    (component as unknown as { updateDisplayedColumns: () => void }).updateDisplayedColumns();
+    fixture.detectChanges();
+
+    const tableText = ((fixture.nativeElement as HTMLElement).textContent || '').replace(/\s+/g, ' ');
+    const issueIcons = fixture.nativeElement.querySelectorAll('.coding-issue-icon');
+    const issueBadges = fixture.nativeElement.querySelectorAll('.coding-issue-badge');
+    const noteIcons = fixture.nativeElement.querySelectorAll('.note-icon');
+    const adaResult = component.comparisonData[0].coders[0];
+    const benResult = component.comparisonData[0].coders[1];
+
+    expect(tableText).toContain('Code:7');
+    expect(tableText).toContain('Score: 2');
+    expect(tableText).toContain('Code:Neuer Code nötig');
+    expect(tableText).toContain('Unsicher');
+    expect(tableText).toContain('Neuer Code');
+    expect(issueIcons).toHaveLength(2);
+    expect(issueBadges).toHaveLength(2);
+    expect(noteIcons).toHaveLength(1);
+    expect(component.getDisplayCodeText('7', -1)).toBe('7');
+    expect(component.getDisplayCodeText('-2', -2)).toBe('Neuer Code nötig');
+    expect(component.getCodingIssueShortLabel(-1)).toBe('Unsicher');
+    expect(component.getCodingIssueShortLabel(-2)).toBe('Neuer Code');
+    expect(component.getCoderNoteTooltip(adaResult)).toBe('Training A - Ada: Bitte prüfen');
+    expect(component.getCodingIssueTooltip(adaResult)).toBe('Training A - Ada: Code-Vergabe unsicher');
+    expect(component.shouldShowScore(adaResult)).toBe(true);
+    expect(component.shouldShowScore(benResult)).toBe(false);
+  });
+
+  it('should include coder names in note tooltips so multiple notes stay distinguishable', () => {
+    expect(component.getCoderNoteTooltip({
+      jobId: 1,
+      coderName: 'Ada',
+      code: '1',
+      score: 1,
+      notes: 'erste Notiz',
+      codingIssueOption: null
+    })).toBe('Ada: erste Notiz');
+    expect(component.getCoderNoteTooltip({
+      jobId: 2,
+      coderName: 'Ben',
+      code: '2',
+      score: 0,
+      notes: 'zweite Notiz',
+      codingIssueOption: null
+    })).toBe('Ben: zweite Notiz');
+  });
+
   it('should initialize discussion values from automatic agreement but not from replay code fallback', () => {
     (component as unknown as {
       initDiscussionValues: (data: Array<{

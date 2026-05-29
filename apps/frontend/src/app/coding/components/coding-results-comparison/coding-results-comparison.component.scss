@@ -714,13 +714,83 @@
             color: #999;
           }
 
+          .code-cell {
+            min-width: 130px;
+          }
+
+          .coder-result {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+          }
+
+          .code-line {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: wrap;
+            line-height: 1.35;
+          }
+
+          .code-label {
+            color: #424242;
+          }
+
+          .code-value {
+            color: #333;
+            overflow-wrap: anywhere;
+          }
+
+          .score-line {
+            color: #424242;
+          }
+
+          .coding-issue-icon {
+            font-size: 16px;
+            width: 16px;
+            height: 16px;
+            vertical-align: text-bottom;
+          }
+
+          .coding-issue-icon.coding-issue-review {
+            color: #b26a00;
+          }
+
+          .coding-issue-icon.coding-issue-info {
+            color: #5d6f7b;
+          }
+
+          .coding-issue-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            min-height: 20px;
+            padding: 2px 6px 2px 4px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.2;
+            white-space: nowrap;
+
+            &.coding-issue-review {
+              border: 1px solid #ffe082;
+              background: #fff8e1;
+              color: #7a4d00;
+            }
+
+            &.coding-issue-info {
+              border: 1px solid #cfd8dc;
+              background: #eceff1;
+              color: #455a64;
+            }
+          }
+
           .note-icon {
             font-size: 16px;
             width: 16px;
             height: 16px;
             color: #607d8b;
             vertical-align: text-bottom;
-            margin-left: 4px;
           }
 
           .discussion-cell {
