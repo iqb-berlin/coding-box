@@ -110,6 +110,7 @@ describe('CodingValidationService', () => {
     mockWorkspaceFilesService = {
       getUnitVariableMap: jest.fn(),
       getIntendedIncompleteSchemeVariableMap: jest.fn(),
+      getUnitVariableDetails: jest.fn(),
       getDerivedVariableMap: jest.fn(),
       getCoderTrainingRequiredVariableMap: jest.fn(),
       getDerivedVariablesBySourceMap: jest.fn()
@@ -875,6 +876,120 @@ describe('CodingValidationService', () => {
       await expect(service.getCodingIncompleteVariables(1)).rejects.toThrow(
         'Could not get manual coding variables'
       );
+    });
+  });
+
+  describe('validateManualCodeAvailability', () => {
+    const mockManualScopeQueries = (): void => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '5' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const casesInJobsQb = createQueryBuilderMock([]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(casesInJobsQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+    };
+
+    it('should warn when a manual variable has no selectable regular codes', async () => {
+      mockManualScopeQueries();
+      mockWorkspaceFilesService.getUnitVariableDetails.mockResolvedValue([
+        {
+          unitName: 'unit1',
+          unitId: 'unit1',
+          variables: [
+            {
+              id: 'var1',
+              alias: 'var1',
+              type: 'string',
+              hasCodingScheme: true,
+              codes: [
+                {
+                  id: 1,
+                  label: 'Auto',
+                  manualInstruction: ''
+                },
+                {
+                  id: 2,
+                  label: 'Whitespace',
+                  manualInstruction: '   '
+                }
+              ]
+            }
+          ]
+        }
+      ]);
+
+      const result = await service.validateManualCodeAvailability(1);
+
+      expect(result).toEqual({
+        checkedVariables: 1,
+        warningCount: 1,
+        warnings: [
+          expect.objectContaining({
+            unitName: 'unit1',
+            variableId: 'var1',
+            responseCount: 5,
+            casesInJobs: 0,
+            availableCases: 5,
+            uniqueCasesAfterAggregation: 5,
+            regularCodeCount: 2,
+            selectableRegularCodeCount: 0,
+            onlySpecialOptionsAvailable: true
+          })
+        ]
+      });
+    });
+
+    it('should not warn when at least one regular code has a manual instruction', async () => {
+      mockManualScopeQueries();
+      mockWorkspaceFilesService.getUnitVariableDetails.mockResolvedValue([
+        {
+          unitName: 'unit1',
+          unitId: 'unit1',
+          variables: [
+            {
+              id: 'coding-var',
+              alias: 'var1',
+              type: 'string',
+              hasCodingScheme: true,
+              codes: [
+                {
+                  id: 1,
+                  label: 'Hidden',
+                  manualInstruction: ''
+                },
+                {
+                  id: 2,
+                  label: 'Manual',
+                  manualInstruction: '<p>Manuell auswählbar</p>'
+                }
+              ]
+            }
+          ]
+        }
+      ]);
+
+      const result = await service.validateManualCodeAvailability(1);
+
+      expect(result).toEqual({
+        checkedVariables: 1,
+        warningCount: 0,
+        warnings: []
+      });
     });
   });
 

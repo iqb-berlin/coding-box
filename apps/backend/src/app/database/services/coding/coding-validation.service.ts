@@ -11,9 +11,14 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ValidationResultDto } from '../../../../../../../api-dto/coding/validation-result.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
+import {
+  ManualCodeAvailabilityValidationDto,
+  ManualCodeAvailabilityWarningDto
+} from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 import { generateExpectedCombinationsHash } from '../../../utils/coding-utils';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { VariableDetailDto } from '../../../models/unit-variable-details.dto';
 import { WorkspacePlayerService } from '../workspace/workspace-player.service';
 import {
   applyResolvedExclusionsToQuery,
@@ -70,6 +75,17 @@ type ManualCodingScopeFromDb = {
 export type ManualCodingScopeSummary = ManualCodingExcludedSourceSummary & {
   manualVariableCount: number;
   manualResponseCount: number;
+};
+
+type ManualCodingVariableWithCaseInfo = {
+  unitName: string;
+  variableId: string;
+  responseCount: number;
+  casesInJobs: number;
+  availableCases: number;
+  uniqueCasesAfterAggregation: number;
+  isDerived: boolean;
+  coderTrainingRequired: boolean;
 };
 
 @Injectable()
@@ -577,24 +593,77 @@ export class CodingValidationService {
     }
   }
 
+  async validateManualCodeAvailability(
+    workspaceId: number,
+    unitName?: string,
+    trainingRequired?: boolean
+  ): Promise<ManualCodeAvailabilityValidationDto> {
+    try {
+      const [variables, variableDetailsByKey] = await Promise.all([
+        this.getCodingIncompleteVariables(
+          workspaceId,
+          unitName,
+          trainingRequired
+        ),
+        this.getManualCodeAvailabilityDetailsByKey(workspaceId)
+      ]);
+
+      const warnings = variables.reduce<ManualCodeAvailabilityWarningDto[]>(
+        (items, variable) => {
+          const detail = variableDetailsByKey.get(
+            this.getManualCodeAvailabilityKey(
+              variable.unitName,
+              variable.variableId
+            )
+          );
+          const counts = this.getManualCodeAvailabilityCounts(detail);
+
+          if (counts.selectableRegularCodeCount > 0) {
+            return items;
+          }
+
+          items.push({
+            unitName: variable.unitName,
+            variableId: variable.variableId,
+            responseCount: variable.responseCount,
+            casesInJobs: variable.casesInJobs,
+            availableCases: variable.availableCases,
+            uniqueCasesAfterAggregation:
+              variable.uniqueCasesAfterAggregation,
+            regularCodeCount: counts.regularCodeCount,
+            selectableRegularCodeCount: counts.selectableRegularCodeCount,
+            onlySpecialOptionsAvailable: true,
+            message:
+              'Variable hat keine regulaeren Codes mit manueller Instruktion. In der Kodierung bleiben nur Sonderoptionen wie "Code-Vergabe unsicher" oder "Neuer Code noetig" verfuegbar.'
+          });
+          return items;
+        },
+        []
+      );
+
+      return {
+        checkedVariables: variables.length,
+        warningCount: warnings.length,
+        warnings
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error validating manual code availability: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not validate manual code availability. Please check the coding schemes.'
+      );
+    }
+  }
+
   /**
      * Enrich variables with case information (cases in jobs, available cases, and unique cases after aggregation)
      */
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
     variables: ManualCodingVariableCaseCounts[]
-  ): Promise<
-    {
-      unitName: string;
-      variableId: string;
-      responseCount: number;
-      casesInJobs: number;
-      availableCases: number;
-      uniqueCasesAfterAggregation: number;
-      isDerived: boolean;
-      coderTrainingRequired: boolean;
-    }[]
-    > {
+  ): Promise<ManualCodingVariableWithCaseInfo[]> {
     const caseInfoMap = await this.computeVariableCaseInfo(workspaceId, variables);
 
     return variables.map(variable => {
@@ -725,6 +794,70 @@ export class CodingValidationService {
     );
 
     return result;
+  }
+
+  private async getManualCodeAvailabilityDetailsByKey(
+    workspaceId: number
+  ): Promise<Map<string, VariableDetailDto>> {
+    const unitVariableDetails =
+      await this.workspaceFilesService.getUnitVariableDetails(workspaceId);
+    const variableDetailsByKey = new Map<string, VariableDetailDto>();
+
+    unitVariableDetails.forEach(unitDetails => {
+      const unitKeys = [
+        unitDetails.unitName,
+        unitDetails.unitId
+      ].filter(Boolean);
+
+      unitDetails.variables.forEach(variable => {
+        const variableIds = [
+          variable.alias,
+          variable.id
+        ].filter(Boolean);
+
+        unitKeys.forEach(unitKey => {
+          variableIds.forEach(variableId => {
+            const key = this.getManualCodeAvailabilityKey(
+              unitKey,
+              variableId
+            );
+            if (!variableDetailsByKey.has(key)) {
+              variableDetailsByKey.set(key, variable);
+            }
+          });
+        });
+      });
+    });
+
+    return variableDetailsByKey;
+  }
+
+  private getManualCodeAvailabilityCounts(
+    variable: VariableDetailDto | undefined
+  ): { regularCodeCount: number; selectableRegularCodeCount: number } {
+    const regularCodes = (variable?.codes || []).filter(
+      code => code.id !== undefined && code.id !== null
+    );
+
+    return {
+      regularCodeCount: regularCodes.length,
+      selectableRegularCodeCount: regularCodes.filter(
+        code => this.hasManualInstruction(code)
+      ).length
+    };
+  }
+
+  private hasManualInstruction(
+    code: { manualInstruction?: string | null }
+  ): boolean {
+    return !!code.manualInstruction?.trim();
+  }
+
+  private getManualCodeAvailabilityKey(
+    unitName: string | null | undefined,
+    variableId: string | null | undefined
+  ): string {
+    return `${String(unitName || '').trim().toUpperCase()}::${String(variableId || '').trim()}`;
   }
 
   private async getAssignedResponseIdsByVariable(

@@ -3,10 +3,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Repository, In, Not, Connection, EntityManager, SelectQueryBuilder
+  Repository, In, Not, Connection, EntityManager, SelectQueryBuilder, Brackets
 } from 'typeorm';
 import * as cheerio from 'cheerio';
-import { statusStringToNumber } from '../../utils/response-status-converter';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
 import { SaveCodingNotesDto } from '../../../admin/coding-job/dto/save-coding-notes.dto';
 import { sortUnitsContinuous, sortUnitsAlternating } from '../../../utils/coding-utils';
@@ -45,6 +44,12 @@ import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspa
 import { CodingFreshnessService } from './coding-freshness.service';
 import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
+import {
+  DERIVE_ERROR_STATUS,
+  getDeriveErrorManualCodingPairKeys,
+  ManualCodingVariableReference,
+  MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+} from '../../utils/manual-coding-candidate.util';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -90,7 +95,7 @@ export interface TransferCodingCasesResult {
   transferredCases: number;
 }
 
-type VariableReference = { unitName: string; variableId: string };
+type VariableReference = ManualCodingVariableReference;
 type BundleItem = { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: VariableReference[] };
 type DistributionItem = { type: 'bundle' | 'variable'; item: BundleItem | VariableReference };
 type DistributionCoderInput = {
@@ -233,6 +238,7 @@ interface SlimResponse {
   id: number;
   variableid: string;
   value: string | null;
+  statusV1?: number | null;
   unitName: string;
   unitAlias: string | null;
   bookletName: string;
@@ -311,6 +317,44 @@ export class CodingJobService {
     @Optional()
     private codingFileCacheService?: CodingFileCacheService
   ) { }
+
+  private applyManualCodingCandidateStatusFilter(
+    queryBuilder: SelectQueryBuilder<ResponseEntity>,
+    variables: VariableReference[] = []
+  ): void {
+    const deriveErrorManualCodingPairKeys = getDeriveErrorManualCodingPairKeys(variables);
+
+    if (deriveErrorManualCodingPairKeys.length === 0) {
+      queryBuilder.andWhere('response.status_v1 IN (:...statuses)', {
+        statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+      });
+      return;
+    }
+
+    queryBuilder.andWhere(new Brackets(qb => {
+      qb.where('response.status_v1 IN (:...statuses)', {
+        statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+      }).orWhere(
+        `response.status_v1 = :deriveErrorStatus
+          AND CONCAT(unit.name, CHR(31), response.variableid) IN (:...deriveErrorManualCodingPairKeys)`,
+        {
+          deriveErrorStatus: DERIVE_ERROR_STATUS,
+          deriveErrorManualCodingPairKeys
+        }
+      );
+    }));
+  }
+
+  private responseMatchesVariableReference(
+    response: SlimResponse,
+    variable: VariableReference
+  ): boolean {
+    if (response.unitName !== variable.unitName || response.variableid !== variable.variableId) {
+      return false;
+    }
+
+    return response.statusV1 !== DERIVE_ERROR_STATUS || variable.includeDeriveError === true;
+  }
 
   async assertUserCanAccessCodingJob(
     codingJobId: number,
@@ -2359,6 +2403,7 @@ export class CodingJobService {
       .select('response.id', 'id')
       .addSelect('response.variableid', 'variableid')
       .addSelect('response.value', 'value')
+      .addSelect('response.status_v1', 'statusV1')
       .addSelect('unit.name', 'unitName')
       .addSelect('unit.alias', 'unitAlias')
       .addSelect('COALESCE(bookletinfo.name, \'\')', 'bookletName')
@@ -2370,13 +2415,8 @@ export class CodingJobService {
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      });
+      .andWhere('person.consider = :consider', { consider: true });
+    this.applyManualCodingCandidateStatusFilter(queryBuilder);
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};
@@ -2403,6 +2443,7 @@ export class CodingJobService {
         id: Number(r.id),
         variableid: variableid,
         value: r.value ?? null,
+        statusV1: r.statusV1 !== undefined && r.statusV1 !== null ? Number(r.statusV1) : null,
         unitName: unitName,
         unitAlias: r.unitAlias ?? null,
         bookletName: r.bookletName ?? '',
@@ -2858,7 +2899,7 @@ export class CodingJobService {
     return filteredResponses;
   }
 
-  async getResponsesForVariables(workspaceId: number, variables: { unitName: string; variableId: string }[]): Promise<ResponseEntity[]> {
+  async getResponsesForVariables(workspaceId: number, variables: VariableReference[]): Promise<ResponseEntity[]> {
     if (variables.length === 0) {
       return [];
     }
@@ -2870,13 +2911,8 @@ export class CodingJobService {
       .leftJoinAndSelect('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
       .andWhere('(response.code_v2 IS NULL OR response.code_v2 != -111)');
+    this.applyManualCodingCandidateStatusFilter(queryBuilder, variables);
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
@@ -2902,7 +2938,7 @@ export class CodingJobService {
 
   async getSlimResponsesForVariables(
     workspaceId: number,
-    variables: { unitName: string; variableId: string }[],
+    variables: VariableReference[],
     manager?: EntityManager
   ): Promise<SlimResponse[]> {
     if (variables.length === 0) {
@@ -2914,6 +2950,7 @@ export class CodingJobService {
       .select('response.id', 'id')
       .addSelect('response.variableid', 'variableid')
       .addSelect('response.value', 'value')
+      .addSelect('response.status_v1', 'statusV1')
       .addSelect('unit.name', 'unitName')
       .addSelect('unit.alias', 'unitAlias')
       .addSelect('COALESCE(bookletinfo.name, \'\')', 'bookletName')
@@ -2926,13 +2963,8 @@ export class CodingJobService {
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
       .andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))');
+    this.applyManualCodingCandidateStatusFilter(queryBuilder, variables);
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
@@ -2959,6 +2991,7 @@ export class CodingJobService {
       id: Number(r.id),
       variableid: r.variableid,
       value: r.value ?? null,
+      statusV1: r.statusV1 !== undefined && r.statusV1 !== null ? Number(r.statusV1) : null,
       unitName: r.unitName ?? '',
       unitAlias: r.unitAlias ?? null,
       bookletName: r.bookletName ?? '',
@@ -2970,7 +3003,7 @@ export class CodingJobService {
 
   private async getAssignedResponseIdsForVariables(
     workspaceId: number,
-    variables: { unitName: string; variableId: string }[],
+    variables: VariableReference[],
     excludeJobDefinitionId?: number,
     manager?: EntityManager
   ): Promise<Set<number>> {
@@ -3355,7 +3388,14 @@ export class CodingJobService {
     const uniqueVariables = new Map<string, VariableReference>();
 
     variables.forEach(variable => {
-      uniqueVariables.set(`${variable.unitName}::${variable.variableId}`, variable);
+      const key = `${variable.unitName}::${variable.variableId}`;
+      const existing = uniqueVariables.get(key);
+      uniqueVariables.set(key, {
+        ...variable,
+        includeDeriveError: existing?.includeDeriveError === true || variable.includeDeriveError === true ?
+          true :
+          undefined
+      });
     });
 
     return Array.from(uniqueVariables.values());
@@ -3591,8 +3631,10 @@ export class CodingJobService {
       variableId
     );
 
-    const allVariables = items.flatMap(
-      itemObj => this.getItemDetails(itemObj, caseOrderingMode, bundleNameCounts).itemVariables
+    const allVariables = this.deduplicateVariableReferences(
+      items.flatMap(
+        itemObj => this.getItemDetails(itemObj, caseOrderingMode, bundleNameCounts).itemVariables
+      )
     );
     const allResponses = await this.getSlimResponsesForVariables(workspaceId, allVariables, manager);
     const assignedResponseIds = await this.getAssignedResponseIdsForVariables(
@@ -3611,7 +3653,7 @@ export class CodingJobService {
       }
 
       warnedVariables.add(variableKey);
-      const variableResponses = allResponses.filter(r => r.unitName === variable.unitName && r.variableid === variable.variableId);
+      const variableResponses = allResponses.filter(r => this.responseMatchesVariableReference(r, variable));
       const warning = this.buildAvailabilityWarning(
         variable,
         variableResponses,
@@ -3644,7 +3686,9 @@ export class CodingJobService {
         continue;
       }
 
-      const allItemResponses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unitName && v.variableId === response.variableid)
+      const allItemResponses = allResponses.filter(response => itemVariables.some(
+        variable => this.responseMatchesVariableReference(response, variable)
+      )
       );
       const { filteredResponses, uniqueCases, totalResponses } = this.getDistributableResponses(
         allItemResponses,
@@ -3916,10 +3960,9 @@ export class CodingJobService {
         continue;
       }
 
-      const allItemResponses = context.allResponses.filter(response => itemVariables.some(v => (
-        v.unitName === response.unitName &&
-        v.variableId === response.variableid
-      )));
+      const allItemResponses = context.allResponses.filter(response => itemVariables.some(
+        variable => this.responseMatchesVariableReference(response, variable)
+      ));
       const { filteredResponses, uniqueCases, totalResponses } = this.getDistributableResponses(
         allItemResponses,
         context.assignedResponseIds,
@@ -3962,7 +4005,7 @@ export class CodingJobService {
   async calculateDistribution(
     workspaceId: number,
     request: {
-      selectedVariables: { unitName: string; variableId: string }[];
+      selectedVariables: VariableReference[];
       selectedVariableBundles?: BundleItem[];
       selectedCoders: DistributionCoderInput[];
       doubleCodingAbsolute?: number;

@@ -63,6 +63,7 @@ export interface Variable {
   uniqueCasesAfterAggregation?: number;
   isDerived?: boolean;
   coderTrainingRequired?: boolean;
+  includeDeriveError?: boolean;
 }
 
 export interface VariableBundle {

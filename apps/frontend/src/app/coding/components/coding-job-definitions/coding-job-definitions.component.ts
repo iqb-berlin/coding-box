@@ -213,7 +213,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return '-';
     }
     return definition.assignedVariables
-      .map(variable => `${variable.unitName}.${variable.variableId}`)
+      .map(variable => this.getVariableDisplayName(variable))
       .join(', ');
   }
 
@@ -222,8 +222,13 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return [];
     }
     return definition.assignedVariables.map(
-      variable => `${variable.unitName}.${variable.variableId}`
+      variable => this.getVariableDisplayName(variable)
     );
+  }
+
+  private getVariableDisplayName(variable: Variable): string {
+    const displayName = `${variable.unitName}.${variable.variableId}`;
+    return variable.includeDeriveError ? `${displayName} (DERIVE_ERROR)` : displayName;
   }
 
   getVisibleVariableItems(definition: JobDefinition): string[] {

@@ -1738,7 +1738,8 @@ export class WorkspaceCodingStatisticsController {
             type: 'object',
             properties: {
               unitName: { type: 'string' },
-              variableId: { type: 'string' }
+              variableId: { type: 'string' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -1756,7 +1757,8 @@ export class WorkspaceCodingStatisticsController {
                   type: 'object',
                   properties: {
                     unitName: { type: 'string' },
-                    variableId: { type: 'string' }
+                    variableId: { type: 'string' },
+                    includeDeriveError: { type: 'boolean' }
                   }
                 }
               }
@@ -1859,12 +1861,12 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number,
       @Body()
                    body: {
-                     selectedVariables: { unitName: string; variableId: string }[];
+                     selectedVariables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
                      selectedVariableBundles?: {
                        id: number;
                        name: string;
                        caseOrderingMode?: 'continuous' | 'alternating';
-                       variables: { unitName: string; variableId: string }[];
+                       variables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
                      }[];
                      selectedCoders: {
                        id: number;
@@ -1898,7 +1900,8 @@ export class WorkspaceCodingStatisticsController {
             type: 'object',
             properties: {
               unitName: { type: 'string' },
-              variableId: { type: 'string' }
+              variableId: { type: 'string' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -1916,7 +1919,8 @@ export class WorkspaceCodingStatisticsController {
                   type: 'object',
                   properties: {
                     unitName: { type: 'string' },
-                    variableId: { type: 'string' }
+                    variableId: { type: 'string' },
+                    includeDeriveError: { type: 'boolean' }
                   }
                 }
               }
@@ -2046,12 +2050,12 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number,
       @Body()
                    body: {
-                     selectedVariables: { unitName: string; variableId: string }[];
+                     selectedVariables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
                      selectedVariableBundles?: {
                        id: number;
                        name: string;
                        caseOrderingMode?: 'continuous' | 'alternating';
-                       variables: { unitName: string; variableId: string }[];
+                       variables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
                      }[];
                      selectedCoders: {
                        id: number;

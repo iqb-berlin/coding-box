@@ -25,6 +25,7 @@ import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variab
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
+import { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
 import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
 
 @ApiTags('Admin Workspace Coding')
@@ -316,6 +317,70 @@ export class WorkspaceCodingAnalysisController {
       trainingRequiredParam = false;
     }
     return this.codingValidationService.getManualCodingScopeSummary(
+      workspace_id,
+      unitName,
+      trainingRequiredParam
+    );
+  }
+
+  @Get(':workspace_id/coding/incomplete-variables/code-availability')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'unitName',
+    required: false,
+    description: 'Filter by unit name',
+    type: String
+  })
+  @ApiQuery({
+    name: 'trainingRequired',
+    required: false,
+    description: 'Filter variables by coder training requirement',
+    type: Boolean
+  })
+  @ApiOkResponse({
+    description:
+      'Manual coding variables without selectable regular codes retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        checkedVariables: { type: 'number' },
+        warningCount: { type: 'number' },
+        warnings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' },
+              responseCount: { type: 'number' },
+              casesInJobs: { type: 'number' },
+              availableCases: { type: 'number' },
+              uniqueCasesAfterAggregation: { type: 'number' },
+              regularCodeCount: { type: 'number' },
+              selectableRegularCodeCount: { type: 'number' },
+              onlySpecialOptionsAvailable: { type: 'boolean' },
+              message: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  })
+  async validateManualCodeAvailability(
+    @WorkspaceId() workspace_id: number,
+      @Query('unitName') unitName?: string,
+      @Query('trainingRequired') trainingRequired?: string
+  ): Promise<ManualCodeAvailabilityValidationDto> {
+    let trainingRequiredParam: boolean | undefined;
+    if (trainingRequired === 'true') {
+      trainingRequiredParam = true;
+    } else if (trainingRequired === 'false') {
+      trainingRequiredParam = false;
+    }
+
+    return this.codingValidationService.validateManualCodeAvailability(
       workspace_id,
       unitName,
       trainingRequiredParam

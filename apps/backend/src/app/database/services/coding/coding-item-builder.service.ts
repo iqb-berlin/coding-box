@@ -17,6 +17,7 @@ export interface CodingItem {
   variable_id: string;
   variable_page: string;
   variable_anchor: string;
+  status_v1?: string;
   value?: string;
   url?: string;
 }
@@ -96,6 +97,7 @@ export class CodingItemBuilderService {
         variable_id: variableId,
         variable_page: variablePage,
         variable_anchor: variableAnchor,
+        status_v1: this.formatStatus(response.status_v1),
         url
       };
     } catch (error) {

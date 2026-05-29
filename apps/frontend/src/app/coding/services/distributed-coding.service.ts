@@ -3,6 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, throwError } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 
+type DistributionVariable = { unitName: string; variableId: string; includeDeriveError?: boolean };
+
 export interface DistributedCodingJobsResponse {
   success: boolean;
   jobsCreated: number;
@@ -60,11 +62,11 @@ export class DistributedCodingService {
 
   createDistributedCodingJobs(
     workspaceId: number,
-    selectedVariables: { unitName: string; variableId: string }[],
+    selectedVariables: DistributionVariable[],
     selectedCoders: { id: number; name: string; username: string; weight?: number; capacityPercent?: number }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
-    selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[],
+    selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: DistributionVariable[] }[],
     caseOrderingMode?: 'continuous' | 'alternating',
     maxCodingCases?: number,
     displayOptions?: {
@@ -99,11 +101,11 @@ export class DistributedCodingService {
 
   calculateDistribution(
     workspaceId: number,
-    selectedVariables: { unitName: string; variableId: string }[],
+    selectedVariables: DistributionVariable[],
     selectedCoders: { id: number; name: string; username: string; weight?: number; capacityPercent?: number }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
-    selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[],
+    selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: DistributionVariable[] }[],
     caseOrderingMode?: 'continuous' | 'alternating',
     maxCodingCases?: number,
     distributionSeed?: string
@@ -119,8 +121,8 @@ export class DistributedCodingService {
       warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
     }> {
     const body: {
-      selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[];
+      selectedVariables: DistributionVariable[];
+      selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: DistributionVariable[] }[];
       selectedCoders: { id: number; name: string; username: string; weight?: number; capacityPercent?: number }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;

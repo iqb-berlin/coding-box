@@ -427,6 +427,25 @@ describe('CodingJobDefinitionDialogComponent', () => {
     }));
   });
 
+  it('should include DERIVE_ERROR opt-in only for selected definition variables', async () => {
+    createComponent();
+    (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedVariables.select(mockVariables[0]);
+    component.setDeriveErrorIncluded(mockVariables[0], true);
+
+    await component.onSubmit();
+
+    expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledWith(1, expect.objectContaining({
+      assignedVariables: [{
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        includeDeriveError: true
+      }]
+    }));
+  });
+
   describe('Mode: Job (Create/Edit)', () => {
     it('should submit create calling createCodingJob and assignCoder when 1 variable selected', fakeAsync(() => {
       createComponent({ mode: 'job', isEdit: false });
@@ -568,6 +587,30 @@ describe('CodingJobDefinitionDialogComponent', () => {
       assignedCoderConfigs: [{ coderId: 1, capacityPercent: 150 }]
     }));
   }));
+
+  it('should restore the DERIVE_ERROR opt-in when editing a definition', () => {
+    const definitionAsCodingJob = {
+      id: 555,
+      assignedVariables: [{
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        includeDeriveError: true
+      }]
+    } as Partial<CodingJob>;
+
+    createComponent({
+      mode: 'definition',
+      isEdit: true,
+      jobDefinitionId: 555,
+      codingJob: definitionAsCodingJob as CodingJob
+    });
+
+    const restoredVariable = component.variables.find(variable => variable.unitName === 'Unit 1' && variable.variableId === 'Var 1');
+
+    expect(restoredVariable).toBeDefined();
+    expect(component.selectedVariables.selected).toContain(restoredVariable);
+    expect(restoredVariable?.includeDeriveError).toBe(true);
+  });
 
   it('should open locked definitions read-only without submitting changes', async () => {
     const definitionAsCodingJob = {
