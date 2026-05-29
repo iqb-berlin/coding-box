@@ -249,6 +249,13 @@ export class CodingResultsComparisonComponent implements OnInit {
     [-4]: 'Technische Probleme'
   };
 
+  readonly codingIssueShortLabelMap: Record<number, string> = {
+    [-1]: 'Unsicher',
+    [-2]: 'Neuer Code',
+    [-3]: 'Spaßantwort',
+    [-4]: 'Technisch'
+  };
+
   tableFilters: ComparisonFilters = {
     unitName: '',
     variableId: '',
@@ -520,6 +527,45 @@ export class CodingResultsComparisonComponent implements OnInit {
     return this.codingIssueLabelMap[codingIssueOption] || `Hinweis ${codingIssueOption}`;
   }
 
+  getCodingIssueShortLabel(codingIssueOption: number | null | undefined): string {
+    if (codingIssueOption === null || codingIssueOption === undefined) {
+      return '';
+    }
+    return this.codingIssueShortLabelMap[codingIssueOption] || `Hinweis ${codingIssueOption}`;
+  }
+
+  private getCoderSourceLabel(coder: ComparisonCoderResult): string {
+    if ('trainingLabel' in coder) {
+      return `${coder.trainingLabel} - ${coder.coderName}`;
+    }
+
+    return coder.coderName;
+  }
+
+  hasCoderNote(coder: Pick<ComparisonCoderResult, 'notes'> | null | undefined): boolean {
+    return !!coder?.notes?.trim();
+  }
+
+  getCoderNoteTooltip(coder: ComparisonCoderResult): string {
+    const note = coder.notes?.trim() || '';
+    return note ? `${this.getCoderSourceLabel(coder)}: ${note}` : '';
+  }
+
+  hasCodingIssue(coder: Pick<ComparisonCoderResult, 'codingIssueOption'> | null | undefined): boolean {
+    return !!this.getCodingIssueLabel(coder?.codingIssueOption);
+  }
+
+  getCodingIssueTooltip(coder: ComparisonCoderResult): string {
+    const issue = this.getCodingIssueLabel(coder.codingIssueOption);
+    return issue ? `${this.getCoderSourceLabel(coder)}: ${issue}` : '';
+  }
+
+  getCodingIssueClass(coder: Pick<ComparisonCoderResult, 'codingIssueOption'>): string {
+    return coder.codingIssueOption === -1 || coder.codingIssueOption === -2 ?
+      'coding-issue-review' :
+      'coding-issue-info';
+  }
+
   getCoderFromTraining(comparison: TrainingComparison, key: string) {
     const parts = key.split('_');
     if (parts.length !== 2) return undefined;
@@ -618,15 +664,38 @@ export class CodingResultsComparisonComponent implements OnInit {
     }
   }
 
-  getDisplayCodeAndIssueText(code: string | null, issueOption?: number | null): string {
-    if (code === null) {
-      return '-';
-    }
+  getDisplayCodeText(code: string | null, issueOption?: number | null): string {
     const issue = this.getCodingIssueLabel(issueOption);
+    if (code === null) {
+      return issue || '-';
+    }
+
     if (code === '-1' || code === '-2') {
       return issue || code;
     }
-    return issue ? `${code} (${issue})` : code;
+
+    return code;
+  }
+
+  shouldShowScore(coder: Pick<ComparisonCoderResult, 'code' | 'score' | 'codingIssueOption'>): boolean {
+    if (coder.code === '-1' || coder.code === '-2') {
+      return false;
+    }
+
+    if (coder.code === null && (coder.codingIssueOption === -1 || coder.codingIssueOption === -2)) {
+      return false;
+    }
+
+    return coder.code !== null || coder.score !== null;
+  }
+
+  private hasCoderDisplayData(coder: ComparisonCoderResult | undefined): boolean {
+    return !!coder && (
+      coder.code !== null ||
+      coder.score !== null ||
+      this.hasCodingIssue(coder) ||
+      this.hasCoderNote(coder)
+    );
   }
 
   /**
@@ -1014,13 +1083,13 @@ export class CodingResultsComparisonComponent implements OnInit {
     return coder ? coder.score : null;
   }
 
-  hasCoderFromTrainingCodeOrScore(comparison: TrainingComparison, key: string): boolean {
+  hasCoderFromTrainingDisplayData(comparison: TrainingComparison, key: string): boolean {
     const parts = key.split('_');
     if (parts.length !== 2) return false;
     const trainingId = parseInt(parts[0], 10);
     const coderId = parseInt(parts[1], 10);
     const coder = comparison.coders.find(c => c.trainingId === trainingId && c.coderId === coderId);
-    return !!(coder && (coder.code !== null || coder.score !== null));
+    return this.hasCoderDisplayData(coder);
   }
 
   calculateStatistics(): void {
@@ -1199,9 +1268,9 @@ export class CodingResultsComparisonComponent implements OnInit {
     return coder ? coder.score : null;
   }
 
-  hasCoderCodeOrScore(comparison: WithinTrainingComparison, jobId: number): boolean {
+  hasCoderDisplayDataForWithin(comparison: WithinTrainingComparison, jobId: number): boolean {
     const coder = comparison.coders.find(c => c.jobId === jobId);
-    return !!(coder && (coder.code !== null || coder.score !== null));
+    return this.hasCoderDisplayData(coder);
   }
 
   applyFilter(event: Event): void {
