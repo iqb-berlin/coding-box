@@ -23,6 +23,7 @@ import {
 import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import { CodingAnalysisService } from '../coding/coding-analysis.service';
 import { TestResultsMutationSummary } from './person-persistence.service';
 import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
@@ -65,7 +66,9 @@ export class TestcenterService {
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
     private readonly connection: DataSource,
     @Optional()
-    private readonly codingFreshnessService?: CodingFreshnessService
+    private readonly codingFreshnessService?: CodingFreshnessService,
+    @Optional()
+    private readonly codingAnalysisService?: CodingAnalysisService
   ) {}
 
   persons: Person[] = [];
@@ -251,6 +254,7 @@ export class TestcenterService {
 
             if (personBatches.length === 0) continue;
 
+            let responseImportMutatedData = false;
             await withWorkspaceTestResultsMutationLock(this.connection, Number(workspace_id), async () => {
               const mutationSummary = this.createMutationSummary();
               for (const personBatch of personBatches) {
@@ -264,12 +268,21 @@ export class TestcenterService {
                 this.mergeMutationSummary(mutationSummary, batchSummary);
               }
 
+              responseImportMutatedData =
+                this.responseImportMutatedTestResults(mutationSummary);
               await this.updateCodingFreshnessAfterResponseImport(
                 Number(workspace_id),
                 mutationSummary,
                 issues
               );
             });
+
+            if (responseImportMutatedData) {
+              await this.invalidateCodingCachesAfterResponsesImport(
+                Number(workspace_id),
+                issues
+              );
+            }
           }
 
           return { issues };
@@ -958,13 +971,50 @@ export class TestcenterService {
     }
   }
 
+  private async invalidateCodingCachesAfterResponsesImport(
+    workspaceId: number,
+    issues: TestResultsUploadIssueDto[]
+  ): Promise<void> {
+    try {
+      await Promise.all([
+        this.codingAnalysisService?.invalidateCache(workspaceId),
+        this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId),
+        this.workspaceTestResultsService.invalidateCodingAvailabilityCache(workspaceId)
+      ]);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Could not invalidate coding caches after Testcenter response import: ${detail}`);
+      issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Der Testcenter-Import wurde verarbeitet, aber Kodierstatistiken, Antwort-Analyse oder verfügbare Fälle konnten nicht zuverlässig aktualisiert werden. Die Werte können sich nach Aktualisierung noch ändern.'
+      });
+    }
+  }
+
+  private responseImportMutatedTestResults(
+    mutationSummary: Partial<TestResultsMutationSummary>
+  ): boolean {
+    return (mutationSummary.addedUnitIds?.length || 0) > 0 ||
+      (mutationSummary.changedUnitIds?.length || 0) > 0 ||
+      (mutationSummary.addedResponseIds?.length || 0) > 0 ||
+      (mutationSummary.addedResponseCount || 0) > 0 ||
+      (mutationSummary.changedResponseCount || 0) > 0 ||
+      (mutationSummary.savedResponseCount || 0) > 0 ||
+      (mutationSummary.deletedResponseCount || 0) > 0;
+  }
+
   private createMutationSummary(): TestResultsMutationSummary {
     return {
       addedUnitIds: [],
       changedUnitIds: [],
       addedResponseIds: [],
       addedResponseCount: 0,
-      changedResponseCount: 0
+      changedResponseCount: 0,
+      savedResponseCount: 0,
+      deletedResponseCount: 0,
+      skippedExistingResponseCount: 0
     };
   }
 
@@ -980,6 +1030,13 @@ export class TestcenterService {
     target.addedResponseIds?.push(...(source.addedResponseIds || []));
     target.addedResponseCount += source.addedResponseCount || 0;
     target.changedResponseCount += source.changedResponseCount || 0;
+    target.savedResponseCount =
+      (target.savedResponseCount || 0) + (source.savedResponseCount || 0);
+    target.deletedResponseCount =
+      (target.deletedResponseCount || 0) + (source.deletedResponseCount || 0);
+    target.skippedExistingResponseCount =
+      (target.skippedExistingResponseCount || 0) +
+      (source.skippedExistingResponseCount || 0);
   }
 
   private async updateCodingFreshnessAfterResponseImport(
