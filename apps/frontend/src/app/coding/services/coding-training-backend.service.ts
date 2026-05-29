@@ -203,9 +203,23 @@ export class CodingTrainingBackendService {
     responseId: number,
     code: number | null,
     score: number | null
-  ): Observable<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }> {
+  ): Observable<{
+      success: boolean;
+      code: number | null;
+      score: number | null;
+      source: 'manual' | 'auto_agreement' | null;
+      managerUserId: number | null;
+      managerName: string | null;
+    }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/discussion-result`;
-    return this.http.post<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }>(
+    return this.http.post<{
+      success: boolean;
+      code: number | null;
+      score: number | null;
+      source: 'manual' | 'auto_agreement' | null;
+      managerUserId: number | null;
+      managerName: string | null;
+    }>(
       url,
       { responseId, code, score },
       { headers: this.authHeader }
