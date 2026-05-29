@@ -92,9 +92,77 @@ describe('DoubleCodedReviewComponent', () => {
                       codedAt: '2026-05-20T09:10:00.000Z'
                     }
                   ]
+                },
+                {
+                  responseId: 502,
+                  unitName: 'Unit B',
+                  variableId: 'VAR_2',
+                  personLogin: 'person-2',
+                  personCode: 'P002',
+                  bookletName: 'Booklet 1',
+                  givenAnswer: 'second answer',
+                  isResolved: false,
+                  coderResults: [
+                    {
+                      coderId: 10,
+                      coderName: 'Coder A',
+                      jobId: 2001,
+                      jobName: 'Definition 100 / A',
+                      code: 1,
+                      score: 0,
+                      notes: null,
+                      supervisorComment: null,
+                      codedAt: '2026-05-20T10:00:00.000Z'
+                    },
+                    {
+                      coderId: 20,
+                      coderName: 'Coder B',
+                      jobId: 2002,
+                      jobName: 'Definition 100 / B',
+                      code: 1,
+                      score: 0,
+                      notes: null,
+                      supervisorComment: null,
+                      codedAt: '2026-05-20T10:10:00.000Z'
+                    }
+                  ]
+                },
+                {
+                  responseId: 503,
+                  unitName: 'Unit C',
+                  variableId: 'VAR_3',
+                  personLogin: 'person-3',
+                  personCode: 'P003',
+                  bookletName: 'Booklet 2',
+                  givenAnswer: 'third answer',
+                  isResolved: false,
+                  coderResults: [
+                    {
+                      coderId: 10,
+                      coderName: 'Coder A',
+                      jobId: 3001,
+                      jobName: 'Definition 101 / A',
+                      code: 1,
+                      score: 0,
+                      notes: null,
+                      supervisorComment: null,
+                      codedAt: '2026-05-20T11:00:00.000Z'
+                    },
+                    {
+                      coderId: 10,
+                      coderName: 'Coder A renamed',
+                      jobId: 3002,
+                      jobName: 'Definition 102 / A',
+                      code: 2,
+                      score: 1,
+                      notes: null,
+                      supervisorComment: null,
+                      codedAt: '2026-05-20T11:10:00.000Z'
+                    }
+                  ]
                 }
               ],
-              total: 1,
+              total: 3,
               page: 1,
               limit: 50
             })),
@@ -145,7 +213,7 @@ describe('DoubleCodedReviewComponent', () => {
 
     expect(selectionCell).toBeTruthy();
     expect(selectionCell.querySelector('.decision-status.conflict')?.textContent)
-      .toContain('double-coded-review.decision.status-conflict');
+      .toContain('double-coded-review.decision.status-inter-coder-conflict');
     expect(selectionCell.querySelector('.decision-code-value')?.textContent?.trim()).toBe('1');
     expect(selectionCell.querySelector('.decision-source')?.textContent).toContain('Coder A');
     expect(selectionCell.querySelector('.comment-field')).toBeTruthy();
@@ -170,5 +238,126 @@ describe('DoubleCodedReviewComponent', () => {
     expect(component.selectionForm.get(component.getItemControlName(reviewItem))?.value).toBe('1002');
     expect(selectionCell.querySelector('.decision-code-value')?.textContent?.trim()).toBe('2');
     expect(selectionCell.querySelector('.decision-source')?.textContent).toContain('Coder B');
+  });
+
+  it('creates one dynamic column per coder and exposes alternate coder names in the tooltip', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.dynamicCoderColumns).toEqual(['coder_10', 'coder_20']);
+
+    const nativeElement = fixture.nativeElement as HTMLElement;
+    const coderHeaders = Array.from(
+      nativeElement.querySelectorAll('th.mat-column-coder_10, th.mat-column-coder_20')
+    ) as HTMLElement[];
+
+    expect(coderHeaders).toHaveLength(2);
+    expect(coderHeaders.map(header => header.textContent?.trim())).toEqual(['Coder A', 'Coder B']);
+    expect(component.coderColumnMeta.coder_10.coderNames).toEqual(['Coder A', 'Coder A renamed']);
+    expect(component.getCoderColumnTooltip('coder_10')).toContain('Weitere Namen: Coder A renamed');
+  });
+
+  it('shows multiple results from the same coder in one coder column cell', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const nativeElement = fixture.nativeElement as HTMLElement;
+    const rows = Array.from(nativeElement.querySelectorAll('tbody tr')) as HTMLElement[];
+    const duplicateCoderRow = rows[2];
+    const coderACell = duplicateCoderRow.querySelector('td.mat-column-coder_10') as HTMLElement;
+    const coderBCell = duplicateCoderRow.querySelector('td.mat-column-coder_20') as HTMLElement;
+
+    expect(coderACell.querySelectorAll('.coder-column-cell')).toHaveLength(2);
+    expect(coderACell.textContent).toContain('Definition 101 / A');
+    expect(coderACell.textContent).toContain('#3001');
+    expect(coderACell.textContent).toContain('Definition 102 / A');
+    expect(coderACell.textContent).toContain('#3002');
+    expect(coderBCell.textContent).toContain('-');
+  });
+
+  it('labels duplicate coder decisions with job source and counts progress by unique coders', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const regularItem = component.dataSource.data[0];
+    const duplicateCoderItem = component.dataSource.data[2];
+
+    expect(component.getDecisionResultSourceLabel(regularItem, regularItem.coderResults[0]))
+      .toBe('Coder A');
+    expect(component.getDecisionResultSourceLabel(duplicateCoderItem, duplicateCoderItem.coderResults[0]))
+      .toBe('Coder A - Definition 101 / A (#3001)');
+    expect(component.getDecisionResultSourceLabel(duplicateCoderItem, duplicateCoderItem.coderResults[1]))
+      .toBe('Coder A renamed - Definition 102 / A (#3002)');
+
+    expect(component.getCoderCount(duplicateCoderItem)).toBe(1);
+    expect(component.getCodedCount(duplicateCoderItem)).toBe(1);
+    expect(component.getCoderCompletionStates(duplicateCoderItem)).toEqual([true]);
+
+    const partiallyPendingDuplicateCoderItem = {
+      ...duplicateCoderItem,
+      coderResults: [
+        duplicateCoderItem.coderResults[0],
+        {
+          ...duplicateCoderItem.coderResults[1],
+          code: null
+        }
+      ]
+    };
+
+    expect(component.getCoderCount(partiallyPendingDuplicateCoderItem)).toBe(1);
+    expect(component.getCodedCount(partiallyPendingDuplicateCoderItem)).toBe(0);
+    expect(component.getCoderCompletionStates(partiallyPendingDuplicateCoderItem)).toEqual([false]);
+  });
+
+  it('keeps same-coder deviations actionable while classifying conflict types', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const interCoderConflictItem = component.dataSource.data[0];
+    const matchItem = component.dataSource.data[1];
+    const sameCoderConflictItem = component.dataSource.data[2];
+    const sameCoderMatchItem = {
+      ...sameCoderConflictItem,
+      coderResults: [
+        sameCoderConflictItem.coderResults[0],
+        {
+          ...sameCoderConflictItem.coderResults[1],
+          code: sameCoderConflictItem.coderResults[0].code,
+          score: sameCoderConflictItem.coderResults[0].score
+        }
+      ]
+    };
+    const mixedConflictItem = {
+      ...sameCoderConflictItem,
+      coderResults: [
+        ...sameCoderConflictItem.coderResults,
+        {
+          ...interCoderConflictItem.coderResults[1],
+          jobId: 3003,
+          jobName: 'Definition 103 / B',
+          code: 3,
+          score: 2
+        }
+      ]
+    };
+
+    expect(component.getConflictType(matchItem)).toBe('none');
+    expect(component.getConflictType(sameCoderMatchItem)).toBe('none');
+    expect(component.getConflictType(sameCoderConflictItem)).toBe('same-coder');
+    expect(component.getConflictType(interCoderConflictItem)).toBe('inter-coder');
+    expect(component.getConflictType(mixedConflictItem)).toBe('mixed');
+    expect(component.hasConflict(sameCoderMatchItem)).toBe(false);
+    expect(component.hasConflict(sameCoderConflictItem)).toBe(true);
+
+    expect(component.getDecisionStatusLabel(sameCoderConflictItem))
+      .toBe('double-coded-review.decision.status-same-coder-conflict');
+    expect(component.getDecisionStatusLabel(interCoderConflictItem))
+      .toBe('double-coded-review.decision.status-inter-coder-conflict');
+    expect(component.getDecisionStatusLabel(mixedConflictItem))
+      .toBe('double-coded-review.decision.status-mixed-conflict');
   });
 });
