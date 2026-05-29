@@ -333,7 +333,7 @@ describe('WorkspaceTestFilesValidationService', () => {
     ]));
   });
 
-  it('should validate coding schemes with CODER_TRAINING_REQUIRED processing from the current IQB specification', async () => {
+  it('should validate coding schemes with current IQB processing properties', async () => {
     const scheme = {
       version: '3.4',
       variableCodings: [

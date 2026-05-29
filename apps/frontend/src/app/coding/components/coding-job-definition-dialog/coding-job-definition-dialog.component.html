@@ -231,6 +231,9 @@
                   variable.variableId) {
                   <span class="selection-chip">
                     {{ variable.unitName }}: {{ variable.variableId }}
+                    @if (variable.includeDeriveError) {
+                    <span class="selection-chip-suffix">DERIVE_ERROR</span>
+                    }
                   </span>
                   }
                   @if (selectedVariables.selected.length > 10) {
@@ -443,8 +446,8 @@
                           matTooltipPosition="above">block</mat-icon>
                         }
                       </div>
-                      @if (variable.coderTrainingRequired || variable.isDerived) {
-                      <div class="variable-badges">
+	                      @if (variable.coderTrainingRequired || variable.isDerived) {
+	                      <div class="variable-badges">
                         @if (variable.coderTrainingRequired) {
                         <mat-chip class="training-required-chip" matTooltip="Erhöhter Schulungsaufwand" matTooltipPosition="above">
                           <mat-icon>school</mat-icon>
@@ -457,10 +460,20 @@
                           Abgeleitet
                         </mat-chip>
                         }
-                      </div>
-                      }
-                    </div>
-                  </div>
+	                      </div>
+	                      }
+                        @if (data.mode === 'definition') {
+                        <div class="derive-error-option" (click)="$event.stopPropagation()">
+                          <mat-checkbox
+                            [checked]="isDeriveErrorIncluded(variable)"
+                            [disabled]="isReadOnly || isVariableDisabled(variable) || !selectedVariables.isSelected(variable)"
+                            (change)="setDeriveErrorIncluded(variable, $event.checked)">
+                            DERIVE_ERROR einbeziehen
+                          </mat-checkbox>
+                        </div>
+                        }
+	                    </div>
+	                  </div>
                 </div>
                 }
               </div>

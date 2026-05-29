@@ -103,6 +103,29 @@
         </div>
       </div>
 
+      <div *ngIf="hasManualCodeAvailabilityWarnings" class="manual-code-availability-banner">
+        <mat-icon>warning</mat-icon>
+        <div class="manual-code-availability-copy">
+          <strong>{{ manualCodeAvailabilityWarningCount }} Variablen ohne reguläre auswählbare Codes</strong>
+          <span>
+            In diesen Variablen bleiben in der Kodierung nur Sonderoptionen wie
+            „Code-Vergabe unsicher“ oder „Neuer Code nötig“ verfügbar.
+          </span>
+          <div class="manual-code-availability-list">
+            <span
+              *ngFor="let warning of getManualCodeAvailabilityPreview()"
+              class="manual-code-availability-chip">
+              {{ warning.unitName }} / {{ warning.variableId }}
+            </span>
+            <span
+              *ngIf="manualCodeAvailabilityWarningCount > getManualCodeAvailabilityPreview().length"
+              class="manual-code-availability-chip">
+              +{{ manualCodeAvailabilityWarningCount - getManualCodeAvailabilityPreview().length }} weitere
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div class="planning-overview-grid" aria-label="Übersicht zur manuellen Kodierungsplanung">
         <div class="overview-metric">
           <span class="metric-label">Offene Arbeitsfälle</span>

@@ -10,6 +10,9 @@ import type {
   JobDefinitionRefreshApplyResultDto,
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../api-dto/coding/job-refresh.dto';
+import type {
+  ManualCodeAvailabilityValidationDto
+} from '../../../../../../api-dto/coding/manual-code-availability.dto';
 import {
   CodingJob,
   JobDefinitionCoderConfig,
@@ -425,6 +428,26 @@ export class CodingJobBackendService {
     }
     params = params.set('_t', Date.now().toString());
     return this.http.get<ManualCodingScopeSummary>(
+      url,
+      { params, headers: this.authHeader }
+    );
+  }
+
+  getManualCodeAvailabilityWarnings(
+    workspaceId: number,
+    unitName?: string,
+    trainingRequired?: boolean
+  ): Observable<ManualCodeAvailabilityValidationDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/incomplete-variables/code-availability`;
+    let params = new HttpParams();
+    if (unitName) {
+      params = params.set('unitName', unitName);
+    }
+    if (trainingRequired !== undefined) {
+      params = params.set('trainingRequired', trainingRequired.toString());
+    }
+    params = params.set('_t', Date.now().toString());
+    return this.http.get<ManualCodeAvailabilityValidationDto>(
       url,
       { params, headers: this.authHeader }
     );

@@ -2,7 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 // eslint-disable-next-line import/no-cycle
-import { CodingResponseFilterService } from './coding-response-filter.service';
+import {
+  CodingResponseFilterService,
+  ResponseFilterOptions
+} from './coding-response-filter.service';
 import { CodingItemBuilderService, CodingItem } from './coding-item-builder.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
 // eslint-disable-next-line import/no-cycle
@@ -35,6 +38,27 @@ export class CodingListStreamService {
     private readonly workspaceFilesService: WorkspaceFilesService
   ) { }
 
+  private async getCodingListFilterContext(
+    workspaceId: number,
+    trainingRequired?: boolean
+  ): Promise<{
+      filterOptions: ResponseFilterOptions;
+      trainingRequiredMap: Map<string, Set<string>> | null;
+    }> {
+    const trainingRequiredMap = await (
+      trainingRequired !== undefined ?
+        this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId) :
+        Promise.resolve(null)
+    );
+
+    return {
+      filterOptions: {
+        manualCodingCandidatesOnly: true
+      },
+      trainingRequiredMap
+    };
+  }
+
   /**
    * Stream coding list as CSV with memory-efficient batching.
    */
@@ -53,21 +77,22 @@ export class CodingListStreamService {
 
     (async () => {
       try {
-        const totalRows = await this.responseFilterService.countResponses(workspace_id);
+        const { filterOptions, trainingRequiredMap } =
+          await this.getCodingListFilterContext(workspace_id, trainingRequired);
+        const totalRows = await this.responseFilterService.countResponses(
+          workspace_id,
+          filterOptions
+        );
         const batchSize = 500;
         let lastId = 0;
         let totalWritten = 0;
-
-        // Load training required map if filtering is requested
-        const trainingRequiredMap = trainingRequired !== undefined ?
-          await this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspace_id) :
-          null;
 
         for (; ;) {
           const responses = await this.responseFilterService.getResponsesBatch(
             workspace_id,
             lastId,
-            batchSize
+            batchSize,
+            filterOptions
           );
 
           if (!responses.length) break;
@@ -184,25 +209,27 @@ export class CodingListStreamService {
       { header: 'variable_id', key: 'variable_id', width: 30 },
       { header: 'variable_page', key: 'variable_page', width: 15 },
       { header: 'variable_anchor', key: 'variable_anchor', width: 30 },
+      { header: 'status_v1', key: 'status_v1', width: 20 },
       { header: 'url', key: 'url', width: 60 }
     ];
 
     try {
-      const totalRows = await this.responseFilterService.countResponses(workspace_id);
+      const { filterOptions, trainingRequiredMap } =
+        await this.getCodingListFilterContext(workspace_id, trainingRequired);
+      const totalRows = await this.responseFilterService.countResponses(
+        workspace_id,
+        filterOptions
+      );
       const batchSize = 1000; // Reduced batch size for streaming
       let lastId = 0;
       let totalWritten = 0;
-
-      // Load training required map if filtering is requested
-      const trainingRequiredMap = trainingRequired !== undefined ?
-        await this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspace_id) :
-        null;
 
       for (; ;) {
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
           lastId,
-          batchSize
+          batchSize,
+          filterOptions
         );
 
         if (!responses.length) break;
@@ -332,21 +359,22 @@ export class CodingListStreamService {
     trainingRequired?: boolean
   ) {
     try {
-      const totalRows = await this.responseFilterService.countResponses(workspace_id);
+      const { filterOptions, trainingRequiredMap } =
+        await this.getCodingListFilterContext(workspace_id, trainingRequired);
+      const totalRows = await this.responseFilterService.countResponses(
+        workspace_id,
+        filterOptions
+      );
       const batchSize = 5000;
       let lastId = 0;
-      const totalWritten = 0;
-
-      // Load training required map if filtering is requested
-      const trainingRequiredMap = trainingRequired !== undefined ?
-        await this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspace_id) :
-        null;
+      let totalWritten = 0;
 
       for (; ;) {
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
           lastId,
-          batchSize
+          batchSize,
+          filterOptions
         );
 
         if (!responses.length) break;
@@ -370,6 +398,7 @@ export class CodingListStreamService {
           );
           if (item) {
             dataListener(item);
+            totalWritten += 1;
           }
         }
 

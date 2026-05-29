@@ -83,6 +83,9 @@ import {
   CodingFreshnessSummaryDto,
   CodingFreshnessSummaryItemDto
 } from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import type {
+  ManualCodeAvailabilityWarningDto
+} from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 import {
   CODING_FRESHNESS_TASK_RESULT_HELP,
   formatCodingFreshnessResponseCount,
@@ -169,6 +172,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isLoadingVariableCoverage = false;
   isLoadingCaseCoverage = false;
   isLoadingCodingProgress = false;
+  isLoadingManualCodeAvailability = false;
   isLoadingKappaSummary = false;
 
   // Response matching mode configuration
@@ -281,6 +285,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }[] = [];
 
   manualCodingScopeSummary: ManualCodingScopeSummary | null = null;
+  manualCodeAvailabilityWarnings: ManualCodeAvailabilityWarningDto[] = [];
 
   statusDistribution: { [status: string]: number } = {};
   statusDistributionV2: { [status: string]: number } = {};
@@ -980,6 +985,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.isLoadingCodingProgress ||
       this.isLoadingVariableCoverage ||
       this.isLoadingCaseCoverage ||
+      this.isLoadingManualCodeAvailability ||
       this.isLoadingMatchingMode;
   }
 
@@ -1066,7 +1072,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   hasPlanningWarnings(): boolean {
-    return (this.variableCoverageOverview?.conflictedVariables || 0) > 0 ||
+    return this.hasManualCodeAvailabilityWarnings ||
+      (this.variableCoverageOverview?.conflictedVariables || 0) > 0 ||
       (this.variableCoverageOverview?.missingVariables || 0) > 0 ||
       (this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0;
   }
@@ -1308,6 +1315,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return 'loading';
     }
 
+    if (this.hasManualCodeAvailabilityWarnings) {
+      return 'warning';
+    }
+
     if ((this.variableCoverageOverview?.conflictedVariables || 0) > 0) {
       return 'warning';
     }
@@ -1367,7 +1378,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'loading':
         return 'Status wird aktualisiert';
       case 'warning':
-        return 'Konflikte prüfen';
+        return this.hasManualCodeAvailabilityWarnings ?
+          'Codes für manuelle Kodierung prüfen' :
+          'Konflikte prüfen';
       case 'planning-incomplete':
         return 'Planung noch unvollständig';
       case 'execution-ready':
@@ -1392,6 +1405,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     if (planningStatusState === 'progress-unavailable') {
       return 'Die Planung ist vollständig, der aktuelle Kodierfortschritt konnte aber nicht ermittelt werden. Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs.';
+    }
+
+    if (this.hasManualCodeAvailabilityWarnings) {
+      return `${this.manualCodeAvailabilityWarningCount} Variablen haben keine regulären auswählbaren Codes. In der Kodierung wären dort nur Sonderoptionen verfügbar.`;
     }
 
     if ((this.variableCoverageOverview?.conflictedVariables || 0) > 0) {
@@ -1431,7 +1448,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'loading':
         return 'Planungsstand wird geladen';
       case 'warning':
-        return 'Konflikte zuerst klären';
+        return this.hasManualCodeAvailabilityWarnings ?
+          'Kodierschema prüfen' :
+          'Konflikte zuerst klären';
       case 'planning-incomplete':
         return 'Kodierfälle in Jobs verteilen';
       case 'execution-ready':
@@ -1455,6 +1474,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'loading':
         return 'Warten Sie kurz, bis die Planungsdaten aktualisiert sind.';
       case 'warning':
+        if (this.hasManualCodeAvailabilityWarnings) {
+          return 'Ergänzen Sie bei mindestens einem regulären Code eine manuelle Instruktion oder prüfen Sie, ob die betroffenen Variablen manuell kodiert werden sollen.';
+        }
         return 'Prüfen Sie Variablen, die von mehreren Definitionen mit überlappenden Fällen verwendet werden.';
       case 'planning-incomplete':
         if ((this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
@@ -1479,6 +1501,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningNextStepActionLabel(): string {
     switch (this.getPlanningStatusState()) {
+      case 'warning':
+        return this.hasManualCodeAvailabilityWarnings ?
+          'Zur Variablenauswahl' :
+          'Zu den Jobdefinitionen';
       case 'execution-ready':
         return 'Zu den Kodierjobs';
       case 'completion-ready':
@@ -1552,6 +1578,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   get hasCodingFreshnessWarnings(): boolean {
     return this.codingFreshnessWarnings.length > 0;
+  }
+
+  get manualCodeAvailabilityWarningCount(): number {
+    return this.manualCodeAvailabilityWarnings.length;
+  }
+
+  get hasManualCodeAvailabilityWarnings(): boolean {
+    return this.manualCodeAvailabilityWarningCount > 0;
+  }
+
+  getManualCodeAvailabilityPreview(): ManualCodeAvailabilityWarningDto[] {
+    return this.manualCodeAvailabilityWarnings.slice(0, 5);
   }
 
   get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -1858,6 +1896,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private loadCodingIncompleteVariables(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      this.codingIncompleteVariables = [];
+      this.manualCodingScopeSummary = null;
+      this.manualCodeAvailabilityWarnings = [];
+      this.isLoadingManualCodeAvailability = false;
       return;
     }
 
@@ -1892,6 +1934,24 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.manualCodingScopeSummary = null;
+        }
+      });
+
+    this.isLoadingManualCodeAvailability = true;
+    this.codingJobBackendService
+      .getManualCodeAvailabilityWarnings(workspaceId)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingManualCodeAvailability = false;
+        })
+      )
+      .subscribe({
+        next: result => {
+          this.manualCodeAvailabilityWarnings = result.warnings || [];
+        },
+        error: () => {
+          this.manualCodeAvailabilityWarnings = [];
         }
       });
   }

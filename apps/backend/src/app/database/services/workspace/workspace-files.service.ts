@@ -2987,7 +2987,13 @@ ${bookletRefs}
       string,
       Map<
       string,
-      Array<{ id: string | number; label: string; score?: number }>
+      Array<{
+        id: string | number;
+        label: string;
+        score?: number;
+        manualInstruction?: string;
+        type?: string;
+      }>
       >
       >();
       const codingSchemeManualInstructionsMap = new Map<
@@ -3034,7 +3040,13 @@ ${bookletRefs}
             const variableTypes = new Map<string, UnitVariableType>();
             const variableCodes = new Map<
             string,
-            Array<{ id: string | number; label: string; score?: number }>
+            Array<{
+              id: string | number;
+              label: string;
+              score?: number;
+              manualInstruction?: string;
+              type?: string;
+            }>
             >();
             const variableManualInstructions = new Map<string, boolean>();
             const variableClosedCoding = new Map<string, boolean>();
@@ -3063,7 +3075,9 @@ ${bookletRefs}
                   .map(code => ({
                     id: code.id,
                     label: code.label || String(code.id),
-                    score: code.score
+                    score: code.score,
+                    manualInstruction: code.manualInstruction,
+                    type: code.type
                   }));
                 if (codes.length > 0) {
                   variableCodes.set(vc.id, codes);

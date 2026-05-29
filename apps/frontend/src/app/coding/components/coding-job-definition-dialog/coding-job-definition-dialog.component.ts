@@ -506,13 +506,22 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       };
 
       const assignedKeySet = new Set(originallyAssigned.map(toKey));
+      const assignedByKey = new Map(originallyAssigned.map(variable => [
+        toKey(variable),
+        variable
+      ]));
 
       this.selectedVariables.clear();
       this.variables.forEach(rowVar => {
         const rowKey = makeKey(rowVar.unitName ?? '', rowVar.variableId ?? '');
+        rowVar.includeDeriveError = assignedByKey.get(rowKey)?.includeDeriveError === true;
         if (assignedKeySet.has(rowKey)) {
           this.selectedVariables.select(rowVar);
         }
+      });
+    } else {
+      this.variables.forEach(rowVar => {
+        rowVar.includeDeriveError = false;
       });
     }
   }
@@ -981,6 +990,32 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
   }
 
+  isDeriveErrorIncluded(variable: Variable): boolean {
+    return variable.includeDeriveError === true;
+  }
+
+  setDeriveErrorIncluded(variable: Variable, includeDeriveError: boolean): void {
+    if (this.isReadOnly || this.data.mode !== 'definition') {
+      return;
+    }
+
+    variable.includeDeriveError = includeDeriveError;
+    const selectedVariable = this.selectedVariables.selected.find(
+      selected => selected.unitName === variable.unitName && selected.variableId === variable.variableId
+    );
+    if (selectedVariable) {
+      selectedVariable.includeDeriveError = includeDeriveError;
+    }
+  }
+
+  private getSelectedDefinitionVariables(): Variable[] {
+    return this.selectedVariables.selected.map(variable => ({
+      unitName: variable.unitName,
+      variableId: variable.variableId,
+      ...(variable.includeDeriveError === true ? { includeDeriveError: true } : {})
+    }));
+  }
+
   isAllCodersSelected(): boolean {
     const numSelected = this.selectedCoders.selected.length;
     const numRows = this.availableCoders.length;
@@ -1381,7 +1416,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     const jobDefinition: JobDefinition = {
       status: 'draft',
-      assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
+      assignedVariables: this.getSelectedDefinitionVariables(),
       assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
       assignedCoderConfigs: selectedCoderConfigs,
@@ -1423,7 +1458,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: Partial<JobDefinition> = {
-      assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
+      assignedVariables: this.getSelectedDefinitionVariables(),
       assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
       assignedCoderConfigs: selectedCoderConfigs,
@@ -1504,7 +1539,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     const jobDefinition: JobDefinition = {
       status: 'pending_review', // Submit for review
-      assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
+      assignedVariables: this.getSelectedDefinitionVariables(),
       assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
       assignedCoderConfigs: selectedCoderConfigs,

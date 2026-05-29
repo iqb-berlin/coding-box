@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
-import { statusStringToNumber } from '../../utils/response-status-converter';
+import { statusNumberToString } from '../../utils/response-status-converter';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
@@ -16,12 +16,13 @@ import {
   getCoveredSourceKeysForManualDerivedVariables,
   isCoveredSourceVariable
 } from '../../utils/manual-coding-scope.util';
+import {
+  CODING_INCOMPLETE_STATUS,
+  INTENDED_INCOMPLETE_STATUS,
+  MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+} from '../../utils/manual-coding-candidate.util';
 
 const PAGE_MAP_LOOKUP_BATCH_SIZE = 8;
-const MANUAL_CODING_CANDIDATE_STATUSES = [
-  statusStringToNumber('CODING_INCOMPLETE'),
-  statusStringToNumber('INTENDED_INCOMPLETE')
-].filter((status): status is number => status !== null);
 
 /**
  * Service responsible for querying coding lists and variables.
@@ -74,11 +75,11 @@ export class CodingListQueryService {
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status_v1 IN (:...statuses)', {
-          statuses: MANUAL_CODING_CANDIDATE_STATUSES
-        })
-        .andWhere('person.workspace_id = :workspace_id', { workspace_id })
+        .where('person.workspace_id = :workspace_id', { workspace_id })
         .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.status_v1 IN (:...statuses)', {
+          statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+        })
         .orderBy('response.id', 'ASC');
 
       const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
@@ -105,8 +106,6 @@ export class CodingListQueryService {
         trainingRequiredSets.set(unitNameKey.toUpperCase(), variables);
       });
 
-      const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
-
       // 3) Filter responses:
       //    - Variable must exist in unitVariableMap (valid, non-BASE/BASE_NO_VALUE)
       //    - For INTENDED_INCOMPLETE: exclude source variables already represented by a manual derived variable
@@ -117,7 +116,7 @@ export class CodingListQueryService {
         const variableId = r.variableid || '';
         const hasValue = r.value != null && r.value.trim() !== '';
 
-        if (!this.isManualCodingCandidateStatus(r.status_v1)) return false;
+        if (!MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES.includes(Number(r.status_v1))) return false;
         if (!hasValue) return false;
 
         const hasExcludedSubstring = /image|text|audio|frame|video|_0/i.test(variableId);
@@ -138,7 +137,7 @@ export class CodingListQueryService {
       });
       const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
         baseFiltered
-          .filter(response => response.status_v1 === codingIncompleteStatus)
+          .filter(response => response.status_v1 === CODING_INCOMPLETE_STATUS)
           .map(response => ({
             unitName: response.unit?.name || '',
             variableId: response.variableid || ''
@@ -146,7 +145,7 @@ export class CodingListQueryService {
         derivedVariablesBySourceMap
       );
       const filtered = baseFiltered.filter(response => (
-        response.status_v1 === codingIncompleteStatus ||
+        response.status_v1 !== INTENDED_INCOMPLETE_STATUS ||
         !isCoveredSourceVariable(
           {
             unitName: response.unit?.name || '',
@@ -196,6 +195,7 @@ export class CodingListQueryService {
           variable_id: variableId,
           variable_page: variablePage,
           variable_anchor: variableAnchor,
+          status_v1: statusNumberToString(Number(response.status_v1)) || '',
           url
         };
       });
@@ -210,7 +210,7 @@ export class CodingListQueryService {
       });
 
       this.logger.log(
-        `Found ${sortedResult.length} coding items (CODING_INCOMPLETE + INTENDED_INCOMPLETE) after filtering, total raw ${total}`
+        `Found ${sortedResult.length} coding items after manual-coding candidate filtering, total raw ${total}`
       );
       return { items: sortedResult, total };
     } catch (error) {
@@ -266,10 +266,10 @@ export class CodingListQueryService {
       .addSelect('response.status_v1', 'statusV1')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
+      .andWhere("(response.value IS NOT NULL AND response.value != '')")
       .andWhere('response.status_v1 IN (:...statuses)', {
-        statuses: MANUAL_CODING_CANDIDATE_STATUSES
-      })
-      .andWhere("(response.value IS NOT NULL AND response.value != '')");
+        statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+      });
 
     // Exclude media variables
     queryBuilder.andWhere(
@@ -305,13 +305,11 @@ export class CodingListQueryService {
       trainingRequiredSets.set(unitName.toUpperCase(), variables);
     });
 
-    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
-
     const baseFilteredResults = rawResults.filter(row => {
       const unitNameUpper = row.unitName?.toUpperCase();
       const variableId: string = row.variableId;
 
-      if (!this.isManualCodingCandidateStatus(row.statusV1)) return false;
+      if (!MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES.includes(Number(row.statusV1))) return false;
 
       const validVars = validVariableSets.get(unitNameUpper);
       if (!validVars?.has(variableId)) return false;
@@ -327,7 +325,7 @@ export class CodingListQueryService {
     });
     const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
       baseFilteredResults
-        .filter(row => Number(row.statusV1) === codingIncompleteStatus)
+        .filter(row => Number(row.statusV1) === CODING_INCOMPLETE_STATUS)
         .map(row => ({
           unitName: row.unitName,
           variableId: row.variableId
@@ -344,7 +342,7 @@ export class CodingListQueryService {
       const statusV1: number = Number(row.statusV1);
 
       // For INTENDED_INCOMPLETE rows: skip source variables already covered by derived variables
-      if (statusV1 !== codingIncompleteStatus) {
+      if (statusV1 === INTENDED_INCOMPLETE_STATUS) {
         if (isCoveredSourceVariable(row, coveredSourceKeys)) {
           continue;
         }
@@ -358,13 +356,9 @@ export class CodingListQueryService {
     }
 
     this.logger.log(
-      `Found ${rawResults.length} CODING_INCOMPLETE + INTENDED_INCOMPLETE variable rows, filtered to ${filteredResults.length} valid distinct variables`
+      `Found ${rawResults.length} manual-coding candidate variable rows, filtered to ${filteredResults.length} valid distinct variables`
     );
 
     return filteredResults;
-  }
-
-  private isManualCodingCandidateStatus(status: unknown): boolean {
-    return MANUAL_CODING_CANDIDATE_STATUSES.includes(Number(status));
   }
 }
