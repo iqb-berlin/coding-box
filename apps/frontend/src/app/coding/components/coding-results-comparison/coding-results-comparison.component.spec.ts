@@ -47,6 +47,7 @@ describe('CodingResultsComparisonComponent', () => {
         success: true,
         code: 7,
         score: 2,
+        source: 'manual',
         managerUserId: 2,
         managerName: 'Test User'
       })),
@@ -610,6 +611,43 @@ describe('CodingResultsComparisonComponent', () => {
     expect(discussionSource?.textContent).toContain('Auto-Konsens');
   });
 
+  it('should not persist an unchanged automatic agreement on blur', () => {
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: 7,
+      discussionScore: 2,
+      discussionSource: 'auto_agreement' as 'manual' | 'auto_agreement' | null,
+      coders: [
+        {
+          jobId: 1,
+          coderName: 'Coder1',
+          code: '7',
+          score: 2
+        },
+        {
+          jobId: 2,
+          coderName: 'Coder2',
+          code: '7',
+          score: 2
+        }
+      ]
+    };
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.discussionCodeByResponseId[1] = '7';
+    component.discussionScoreByResponseId[1] = 2;
+
+    component.onDiscussionCodeBlur(row);
+
+    expect(codingTrainingBackendService.saveDiscussionResult).not.toHaveBeenCalled();
+    expect(component.discussionCodeByResponseId[1]).toBe('7');
+    expect(component.discussionScoreByResponseId[1]).toBe(2);
+    expect(row.discussionSource).toBe('auto_agreement');
+  });
+
   it('should save an active replay selection with its score as manual discussion result', () => {
     const row = {
       responseId: 1,
@@ -934,11 +972,12 @@ describe('CodingResultsComparisonComponent', () => {
     });
   });
 
-  it('should clear manual discussion result without restoring local automatic agreement', () => {
+  it('should restore backend-authoritative automatic agreement when clearing a manual discussion result', () => {
     codingTrainingBackendService.saveDiscussionResult.mockReturnValueOnce(of({
       success: true,
-      code: null,
-      score: null,
+      code: 7,
+      score: 2,
+      source: 'auto_agreement',
       managerUserId: null,
       managerName: null
     }));
@@ -972,11 +1011,11 @@ describe('CodingResultsComparisonComponent', () => {
     component.onDiscussionCodeBlur(row);
 
     expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, null, null);
-    expect(component.discussionCodeByResponseId[1]).toBe('');
-    expect(component.discussionScoreByResponseId[1]).toBeNull();
-    expect(row.discussionCode).toBeNull();
-    expect(row.discussionScore).toBeNull();
-    expect(row.discussionSource).toBeNull();
+    expect(component.discussionCodeByResponseId[1]).toBe('7');
+    expect(component.discussionScoreByResponseId[1]).toBe(2);
+    expect(row.discussionCode).toBe(7);
+    expect(row.discussionScore).toBe(2);
+    expect(row.discussionSource).toBe('auto_agreement');
   });
 
   it('should clear stale kappa values when changing comparison mode', () => {
