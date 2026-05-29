@@ -20,6 +20,7 @@ export interface JobDefinitionVariable {
   unitName: string;
   variableId: string;
   sampleCount?: number;
+  includeDeriveError?: boolean;
 }
 
 export interface JobDefinitionVariableBundle {

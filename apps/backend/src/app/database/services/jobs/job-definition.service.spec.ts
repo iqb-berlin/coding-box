@@ -77,9 +77,9 @@ describe('JobDefinitionService', () => {
     usersRepository.find.mockResolvedValue([]);
     const calculateUsageForRequest = async (request: {
       selectedVariableBundles?: {
-        variables?: { unitName: string; variableId: string }[];
+        variables?: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
       }[];
-      selectedVariables?: { unitName: string; variableId: string }[];
+      selectedVariables?: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
       maxCodingCases?: number;
     }) => {
       const incompleteVariables = await codingValidationService.getCodingIncompleteVariables() as Array<{
@@ -95,7 +95,7 @@ describe('JobDefinitionService', () => {
       );
       const addUsage = (
         usageByVariable: Map<string, number>,
-        variable: { unitName: string; variableId: string },
+        variable: { unitName: string; variableId: string; includeDeriveError?: boolean },
         usage: number
       ) => {
         const key = `${variable.unitName}::${variable.variableId}`;
@@ -103,7 +103,7 @@ describe('JobDefinitionService', () => {
       };
       const reserveAcrossVariables = (
         usageByVariable: Map<string, number>,
-        variables: { unitName: string; variableId: string }[],
+        variables: { unitName: string; variableId: string; includeDeriveError?: boolean }[],
         selectedCases: number
       ) => {
         const entries = variables
@@ -587,7 +587,7 @@ describe('JobDefinitionService', () => {
       {
         id: 1,
         assigned_variables: [
-          { unitName: 'Unit 1', variableId: 'Var 1' },
+          { unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true },
           { unitName: 'Unit 2', variableId: 'Var 2' }
         ],
         assigned_variable_bundles: [],
@@ -1091,7 +1091,7 @@ describe('JobDefinitionService', () => {
       workspace_id: 7,
       status: 'approved',
       assigned_variables: [
-        { unitName: 'Unit 1', variableId: 'Var 1' },
+        { unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true },
         { unitName: 'Unit 2', variableId: 'Var 2' }
       ],
       assigned_variable_bundles: [{ id: 9, name: 'Saved Bundle', caseOrderingMode: 'alternating' }],
@@ -1134,7 +1134,7 @@ describe('JobDefinitionService', () => {
 
     expect(codingJobService.createCodingJob).not.toHaveBeenCalled();
     expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(7, {
-      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
       selectedVariableBundles: [{
         id: 9,
         name: 'Hydrated Bundle',

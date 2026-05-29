@@ -1037,22 +1037,32 @@ export class JobDefinitionService {
       }) :
       [];
 
-    const bundleVariables = fullVariableBundles.flatMap(bundle => bundle.variables || []);
-    const bundleVariableKeys = new Set(bundleVariables.map(v => `${v.unitName}-${v.variableId}`));
-
-    const filteredVariables = (jobDefinition.assigned_variables || []).filter(v => !bundleVariableKeys.has(`${v.unitName}-${v.variableId}`)
-    );
-
     const savedBundleModes = new Map(
       (jobDefinition.assigned_variable_bundles || [])
         .map(bundle => [bundle.id, bundle.caseOrderingMode])
     );
+    const assignedVariableOptionsByKey = new Map(
+      (jobDefinition.assigned_variables || []).map(variable => [
+        `${variable.unitName}-${variable.variableId}`,
+        variable
+      ])
+    );
     const selectedVariableBundles = fullVariableBundles.map(bundle => ({
       id: bundle.id,
       name: bundle.name,
-      variables: bundle.variables || [],
+      variables: (bundle.variables || []).map(variable => ({
+        ...variable,
+        ...(assignedVariableOptionsByKey.get(`${variable.unitName}-${variable.variableId}`)?.includeDeriveError === true ?
+          { includeDeriveError: true } :
+          {})
+      })),
       caseOrderingMode: savedBundleModes.get(bundle.id)
     }));
+    const bundleVariables = selectedVariableBundles.flatMap(bundle => bundle.variables || []);
+    const bundleVariableKeys = new Set(bundleVariables.map(v => `${v.unitName}-${v.variableId}`));
+
+    const filteredVariables = (jobDefinition.assigned_variables || []).filter(v => !bundleVariableKeys.has(`${v.unitName}-${v.variableId}`)
+    );
     const coderAssignments = this.getStoredCoderAssignments(jobDefinition);
     const capacityByCoderId = new Map(
       coderAssignments.assignedCoderConfigs.map(config => [config.coderId, config.capacityPercent])

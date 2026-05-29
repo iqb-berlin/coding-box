@@ -469,6 +469,45 @@ describe('CodingProgressService variable coverage conflicts', () => {
     expect(result.fullyAbgedeckteVariablen).toBe(1);
   });
 
+  it('classifies fully, partially, and missing variable coverage separately', async () => {
+    responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([
+      { unitName: 'FULL_UNIT', variableId: '01', caseCount: '3' },
+      { unitName: 'PARTIAL_UNIT', variableId: '01', caseCount: '3' },
+      { unitName: 'MISSING_UNIT', variableId: '01', caseCount: '2' }
+    ]));
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 30,
+        status: 'approved',
+        assigned_variables: [{ unitName: 'FULL_UNIT', variableId: '01' }]
+      },
+      {
+        id: 31,
+        status: 'pending_review',
+        assigned_variables: [{ unitName: 'PARTIAL_UNIT', variableId: '01' }]
+      }
+    ]);
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder([
+        { unitName: 'FULL_UNIT', variableId: '01', casesInJobs: '3' },
+        { unitName: 'PARTIAL_UNIT', variableId: '01', casesInJobs: '1' }
+      ]))
+      .mockReturnValueOnce(createQueryBuilder([]));
+
+    const result = await service.getVariableCoverageOverview(5);
+
+    expect(result.totalVariables).toBe(3);
+    expect(result.coveredVariables).toBe(2);
+    expect(result.missingVariables).toBe(1);
+    expect(result.fullyAbgedeckteVariablen).toBe(1);
+    expect(result.partiallyAbgedeckteVariablen).toBe(1);
+    expect(result.conflictedVariables).toBe(0);
+    expect(result.coveragePercentage).toBeCloseTo(66.67, 2);
+    expect(result.coverageByStatus.approved).toEqual(['FULL_UNIT:01']);
+    expect(result.coverageByStatus.pending_review).toEqual(['PARTIAL_UNIT:01']);
+    expect(result.coverageByStatus.conflicted).toEqual([]);
+  });
+
   it('flags variables when the same response is assigned through multiple job definitions', async () => {
     responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([
       { unitName: 'MDB091', variableId: '01', caseCount: '2' }

@@ -684,6 +684,59 @@
     }
   }
 
+  .manual-code-availability-banner {
+    align-items: flex-start;
+    background: rgba(245, 124, 0, 0.08);
+    border: 1px solid rgba(245, 124, 0, 0.28);
+    border-radius: 8px;
+    color: #5f4217;
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 14px 16px;
+
+    > mat-icon {
+      color: #ef6c00;
+      flex: 0 0 auto;
+    }
+
+    .manual-code-availability-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    strong {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    span {
+      font-size: 13px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .manual-code-availability-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .manual-code-availability-chip {
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(245, 124, 0, 0.24);
+      border-radius: 999px;
+      color: rgba(0, 0, 0, 0.76);
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.2;
+      padding: 5px 8px;
+    }
+  }
+
   .planning-overview-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));

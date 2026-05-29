@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Brackets } from 'typeorm';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -84,6 +85,9 @@ describe('CodingJobService', () => {
   let cacheService: { delete: jest.Mock };
   let codingFreshnessService: { reconcileAppliedManualCodingJobs: jest.Mock };
   let codingFileCacheService: { getVariablePageMap: jest.Mock };
+  let workspaceFilesService: {
+    getDerivedVariableMap: jest.Mock;
+  };
   let usersService: {
     getUserIsAdmin: jest.Mock;
     getUserAccessLevel: jest.Mock;
@@ -177,7 +181,7 @@ describe('CodingJobService', () => {
         testletIgnoredUnits: []
       })
     };
-    const workspaceFilesService = {
+    workspaceFilesService = {
       getDerivedVariableMap: jest.fn().mockResolvedValue(new Map())
     };
     usersService = {
@@ -1072,6 +1076,45 @@ describe('CodingJobService', () => {
     expectManualCodingCandidateStatusFilter(qb);
   });
 
+  it('includes DERIVE_ERROR responses for job-definition variables that opt into manual coding', async () => {
+    const qb = createQueryBuilder([]);
+    responseRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await expect(service.getResponsesForVariables(3, [{
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      includeDeriveError: true
+    }])).resolves.toEqual([]);
+
+    const bracketCall = qb.andWhere.mock.calls.find(
+      ([condition]) => condition instanceof Brackets
+    );
+    expect(bracketCall).toBeDefined();
+
+    const bracketBuilder: Record<string, jest.Mock> = {
+      where: jest.fn().mockReturnThis(),
+      orWhere: jest.fn().mockReturnThis()
+    };
+    (bracketCall?.[0] as Brackets).whereFactory(bracketBuilder as never);
+
+    expect(bracketBuilder.where).toHaveBeenCalledWith(
+      'response.status_v1 IN (:...statuses)',
+      {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      }
+    );
+    expect(bracketBuilder.orWhere).toHaveBeenCalledWith(
+      expect.stringContaining('response.status_v1 = :deriveErrorStatus'),
+      {
+        deriveErrorStatus: statusStringToNumber('DERIVE_ERROR'),
+        deriveErrorManualCodingPairKeys: ['UNIT\u001FVAR']
+      }
+    );
+  });
+
   it('does not include DERIVE_ERROR responses when saving coding-job units', async () => {
     const qb = createQueryBuilder([]);
     responseRepository.createQueryBuilder.mockReturnValue(qb);
@@ -1086,6 +1129,62 @@ describe('CodingJobService', () => {
     } as never);
 
     expectManualCodingCandidateStatusFilter(qb);
+  });
+
+  it('counts DERIVE_ERROR distribution cases only for variables with job-definition opt-in', () => {
+    const calculateFromContext = (
+      service as unknown as {
+        calculateDistributionVariableUsageFromContext: (
+          workspaceId: number,
+          request: {
+            selectedVariables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
+            selectedVariableBundles?: [];
+          },
+          context: unknown
+        ) => Map<string, number>;
+      }
+    ).calculateDistributionVariableUsageFromContext.bind(service);
+    const context = {
+      matchingFlags: [ResponseMatchingFlag.NO_AGGREGATION],
+      aggregationThreshold: null,
+      derivedVariableSets: new Map(),
+      assignedResponseIds: new Set(),
+      allResponses: [
+        {
+          id: 1,
+          variableid: 'VAR',
+          value: 'A',
+          statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+          unitName: 'UNIT',
+          unitAlias: null,
+          bookletName: 'BOOKLET',
+          personLogin: 'LOGIN',
+          personCode: 'CODE',
+          personGroup: 'GROUP'
+        },
+        {
+          id: 2,
+          variableid: 'VAR',
+          value: 'B',
+          statusV1: statusStringToNumber('DERIVE_ERROR'),
+          unitName: 'UNIT',
+          unitAlias: null,
+          bookletName: 'BOOKLET',
+          personLogin: 'LOGIN2',
+          personCode: 'CODE2',
+          personGroup: 'GROUP'
+        }
+      ]
+    };
+
+    expect(calculateFromContext(3, {
+      selectedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      selectedVariableBundles: []
+    }, context).get('UNIT::VAR')).toBe(1);
+    expect(calculateFromContext(3, {
+      selectedVariables: [{ unitName: 'UNIT', variableId: 'VAR', includeDeriveError: true }],
+      selectedVariableBundles: []
+    }, context).get('UNIT::VAR')).toBe(2);
   });
 
   it('returns no coding-job responses when no variables are assigned', async () => {
