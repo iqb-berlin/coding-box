@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -88,6 +88,25 @@ type WithinTrainingCoderResult = {
   codingIssueOption: number | null;
 };
 
+type DiscussionScoreFallback = {
+  found: boolean;
+  score: number | null;
+};
+
+type TrainingResponseJobUnit = {
+  job: Pick<CodingJob, 'id' | 'missings_profile_id'>;
+  unit: CodingJobUnit;
+};
+
+type MissingCodePair = { mirCode: number; mciCode: number };
+type MissingCodeDisplayContext = MissingCodePair & { negativeCodes: Set<number> };
+
+const DEFAULT_MISSING_CODE_CONTEXT: MissingCodeDisplayContext = {
+  mirCode: -98,
+  mciCode: -97,
+  negativeCodes: new Set([-97, -98, -99])
+};
+
 @Injectable()
 export class CoderTrainingService {
   private readonly logger = new Logger(CoderTrainingService.name);
@@ -130,40 +149,104 @@ export class CoderTrainingService {
   private async buildMissingCodesByJobId(
     workspaceId: number,
     jobs: Array<Pick<CodingJob, 'id' | 'missings_profile_id'>>
-  ): Promise<Map<number, { mirCode: number; mciCode: number }>> {
+  ): Promise<Map<number, MissingCodeDisplayContext>> {
+    if (!Array.isArray(jobs)) {
+      return new Map();
+    }
+
+    const defaultMissingCodes = await this.getDefaultMissingCodeDisplayContext(workspaceId);
     const profileIds = [...new Set(jobs
       .map(job => job.missings_profile_id)
       .filter((id): id is number => id !== null && id !== undefined))];
 
-    const missingCodesByProfileId = new Map<number, { mirCode: number; mciCode: number }>();
+    const missingCodesByProfileId = new Map<number, MissingCodeDisplayContext>();
 
     for (const profileId of profileIds) {
-      const profile = await this.missingsProfilesService.getMissingsProfileDetails(workspaceId, profileId);
-      const missings = profile?.parseMissings() || [];
+      if (!this.missingsProfilesService?.getMissingsProfileDetails ||
+          !this.missingsProfilesService?.getNegativeMissingCodesForProfileOrDefault) {
+        missingCodesByProfileId.set(profileId, defaultMissingCodes);
+        continue;
+      }
 
-      const mirMissing = missings.find(m => m.id === 'mir' ||
-        m.label?.toLowerCase().includes('invalid') ||
-        m.label?.toLowerCase().includes('spa')
+      const [profile, negativeCodes] = await Promise.all([
+        this.missingsProfilesService.getMissingsProfileDetails(workspaceId, profileId),
+        this.missingsProfilesService.getNegativeMissingCodesForProfileOrDefault(workspaceId, profileId)
+      ]);
+      if (!profile) {
+        throw new BadRequestException(`Missing profile ${profileId} not found`);
+      }
+
+      missingCodesByProfileId.set(
+        profileId,
+        {
+          ...this.getMirMciCodesFromMissings(profile.parseMissings(), defaultMissingCodes),
+          negativeCodes
+        }
       );
-
-      const mciMissing = missings.find(m => m.id === 'mci' ||
-        m.label?.toLowerCase().includes('coding impossible') ||
-        m.label?.toLowerCase().includes('techn')
-      );
-
-      missingCodesByProfileId.set(profileId, {
-        mirCode: mirMissing?.code ?? -98,
-        mciCode: mciMissing?.code ?? -97
-      });
     }
 
-    const missingCodesByJobId = new Map<number, { mirCode: number; mciCode: number }>();
+    const missingCodesByJobId = new Map<number, MissingCodeDisplayContext>();
     jobs.forEach(job => {
       const profileCodes = job.missings_profile_id ? missingCodesByProfileId.get(job.missings_profile_id) : undefined;
-      missingCodesByJobId.set(job.id, profileCodes ?? { mirCode: -98, mciCode: -97 });
+      missingCodesByJobId.set(job.id, profileCodes ?? defaultMissingCodes);
     });
 
     return missingCodesByJobId;
+  }
+
+  private async getDefaultMirMciCodes(workspaceId: number): Promise<MissingCodePair> {
+    if (!this.missingsProfilesService?.ensureDefaultMissingsProfile) {
+      return {
+        mirCode: DEFAULT_MISSING_CODE_CONTEXT.mirCode,
+        mciCode: DEFAULT_MISSING_CODE_CONTEXT.mciCode
+      };
+    }
+
+    const defaultProfile = await this.missingsProfilesService.ensureDefaultMissingsProfile(workspaceId);
+    return this.getMirMciCodesFromMissings(defaultProfile.parseMissings());
+  }
+
+  private async getDefaultMissingCodeDisplayContext(workspaceId: number): Promise<MissingCodeDisplayContext> {
+    if (!this.missingsProfilesService?.getNegativeMissingCodesForProfileOrDefault) {
+      return {
+        ...DEFAULT_MISSING_CODE_CONTEXT,
+        negativeCodes: new Set(DEFAULT_MISSING_CODE_CONTEXT.negativeCodes)
+      };
+    }
+
+    const [defaultCodes, negativeCodes] = await Promise.all([
+      this.getDefaultMirMciCodes(workspaceId),
+      this.missingsProfilesService.getNegativeMissingCodesForProfileOrDefault(workspaceId, null)
+    ]);
+
+    return {
+      ...defaultCodes,
+      negativeCodes
+    };
+  }
+
+  private getMirMciCodesFromMissings(
+    missings: Array<{ id?: string; label?: string; code: number }>,
+    fallback?: MissingCodePair
+  ): MissingCodePair {
+    const mirMissing = missings.find(m => m.id === 'mir' ||
+      m.label?.toLowerCase().includes('invalid') ||
+      m.label?.toLowerCase().includes('spa')
+    );
+
+    const mciMissing = missings.find(m => m.id === 'mci' ||
+      m.label?.toLowerCase().includes('coding impossible') ||
+      m.label?.toLowerCase().includes('techn')
+    );
+
+    const mirCode = mirMissing?.code ?? fallback?.mirCode;
+    const mciCode = mciMissing?.code ?? fallback?.mciCode;
+
+    if (!Number.isInteger(mirCode) || !Number.isInteger(mciCode)) {
+      throw new BadRequestException('Missing profile must define MIR and MCI codes');
+    }
+
+    return { mirCode, mciCode };
   }
 
   /**
@@ -267,11 +350,22 @@ export class CoderTrainingService {
     return codedUnits > 0;
   }
 
+  private async hasDiscussionResultsForTraining(workspaceId: number, trainingId: number): Promise<boolean> {
+    const discussionResults = await this.coderTrainingDiscussionResultRepository.count({
+      where: {
+        workspace_id: workspaceId,
+        training_id: trainingId
+      }
+    });
+
+    return discussionResults > 0;
+  }
+
   private mapDisplayCodeAndScore(
     code: number | null,
     score: number | null,
     codingIssueOption: number | null,
-    missingCodes: { mirCode: number; mciCode: number }
+    missingCodes: MissingCodeDisplayContext
   ): { code: string | null; score: number | null } {
     if (code === null && codingIssueOption === null) {
       return { code: null, score };
@@ -287,7 +381,14 @@ export class CoderTrainingService {
     if (code === -4 || codingIssueOption === -4) {
       return {
         code: missingCodes.mciCode.toString(),
-        score
+        score: 0
+      };
+    }
+
+    if (code !== null && code < 0 && missingCodes.negativeCodes.has(code)) {
+      return {
+        code: code.toString(),
+        score: 0
       };
     }
 
@@ -325,36 +426,214 @@ export class CoderTrainingService {
     };
   }
 
+  private async deriveAutomaticDiscussionResultForResponse(
+    workspaceId: number,
+    training: CoderTraining,
+    responseId: number,
+    coders: WithinTrainingCoderResult[],
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<{ code: number; score: number | null } | null> {
+    const result = this.deriveAutomaticDiscussionResult(coders);
+    if (!result || result.code >= 0) {
+      return result;
+    }
+
+    const allowedMissingCodes = await this.getAllowedMissingCodesForResponse(
+      workspaceId,
+      training,
+      responseId,
+      exclusions
+    );
+    if (!allowedMissingCodes.has(result.code)) {
+      throw new BadRequestException(`Unsupported missing code: ${result.code}`);
+    }
+
+    return {
+      code: result.code,
+      score: 0
+    };
+  }
+
+  private findTrainingUnitForResponse(
+    training: CoderTraining,
+    responseId: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): CodingJobUnit | null {
+    return this.findTrainingJobUnitsForResponse(training, responseId, exclusions)[0]?.unit ?? null;
+  }
+
+  private findTrainingJobUnitsForResponse(
+    training: CoderTraining,
+    responseId: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): TrainingResponseJobUnit[] {
+    return (training.codingJobs || []).flatMap(job => {
+      const unit = job.codingJobUnits?.find(candidate => (
+        candidate.response_id === responseId &&
+        !isExcludedByResolvedExclusions(exclusions, candidate.booklet_name, candidate.unit_name)
+      ));
+
+      return unit ? [{ job, unit }] : [];
+    });
+  }
+
+  private toNullableScore(score: number | string | null | undefined): number | null {
+    if (score === null || score === undefined) {
+      return null;
+    }
+
+    const numericScore = Number(score);
+    return Number.isFinite(numericScore) ? numericScore : null;
+  }
+
+  private findReplayScoreFallback(response: ResponseEntity | null | undefined, code: number): DiscussionScoreFallback {
+    const versionedResults = [
+      { code: response?.code_v3, score: response?.score_v3 },
+      { code: response?.code_v2, score: response?.score_v2 },
+      { code: response?.code_v1, score: response?.score_v1 }
+    ];
+
+    const replayResult = versionedResults.find(result => (
+      result.code !== null &&
+      result.code !== undefined &&
+      Number(result.code) === code
+    ));
+
+    if (!replayResult) {
+      return { found: false, score: null };
+    }
+
+    return {
+      found: true,
+      score: this.toNullableScore(replayResult.score)
+    };
+  }
+
+  private findExistingDiscussionScoreFallback(
+    training: CoderTraining,
+    responseId: number,
+    code: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): DiscussionScoreFallback {
+    for (const job of training.codingJobs || []) {
+      const unit = job.codingJobUnits?.find(candidate => (
+        candidate.response_id === responseId &&
+        !isExcludedByResolvedExclusions(exclusions, candidate.booklet_name, candidate.unit_name)
+      ));
+
+      if (!unit) {
+        continue;
+      }
+
+      if (unit.code !== null && unit.code !== undefined && Number(unit.code) === code) {
+        return {
+          found: true,
+          score: this.toNullableScore(unit.score)
+        };
+      }
+
+      const replayFallback = this.findReplayScoreFallback(unit.response, code);
+      if (replayFallback.found) {
+        return replayFallback;
+      }
+    }
+
+    return { found: false, score: null };
+  }
+
+  private async getAllowedMissingCodesForResponse(
+    workspaceId: number,
+    training: CoderTraining,
+    responseId: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<Set<number>> {
+    const jobUnits = this.findTrainingJobUnitsForResponse(training, responseId, exclusions);
+
+    if (jobUnits.length === 0) {
+      return this.missingsProfilesService.getNegativeMissingCodesForProfileOrDefault(workspaceId, null);
+    }
+
+    const resolvedProfileIds = await Promise.all(jobUnits.map(({ job }) => (
+      this.missingsProfilesService.resolveMissingsProfileId(workspaceId, job.missings_profile_id)
+    )));
+    const profileKeys = new Set(resolvedProfileIds);
+    if (profileKeys.size > 1) {
+      throw new BadRequestException(`Conflicting missing profiles for response ${responseId} in training ${training.id}`);
+    }
+
+    return this.missingsProfilesService.getNegativeMissingCodesForProfileOrDefault(
+      workspaceId,
+      resolvedProfileIds[0]
+    );
+  }
+
+  private async deriveDiscussionScore(
+    workspaceId: number,
+    training: CoderTraining,
+    responseId: number,
+    code: number,
+    representativeUnit: CodingJobUnit,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<number | null> {
+    if (code < 0) {
+      const allowedMissingCodes = await this.getAllowedMissingCodesForResponse(
+        workspaceId,
+        training,
+        responseId,
+        exclusions
+      );
+      if (!allowedMissingCodes.has(code)) {
+        throw new BadRequestException(`Unsupported missing code: ${code}`);
+      }
+
+      return 0;
+    }
+
+    try {
+      return await this.codingJobService.getCodingSchemeScoreForUnitCode(
+        representativeUnit,
+        workspaceId,
+        code
+      );
+    } catch (error) {
+      if (!(error instanceof BadRequestException)) {
+        throw error;
+      }
+
+      const fallback = this.findExistingDiscussionScoreFallback(training, responseId, code, exclusions);
+      if (fallback.found) {
+        return fallback.score;
+      }
+
+      throw error;
+    }
+  }
+
   async saveDiscussionResult(
     workspaceId: number,
     trainingId: number,
     responseId: number,
     managerUserId: number | null,
     managerName: string | null,
-    code: number | null,
-    score: number | null
+    code: number | null | undefined
   ): Promise<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }> {
     const training = await this.coderTrainingRepository.findOne({
       where: {
         id: trainingId,
         workspace_id: workspaceId
       },
-      relations: ['codingJobs', 'codingJobs.codingJobUnits']
+      relations: ['codingJobs', 'codingJobs.codingJobUnits', 'codingJobs.codingJobUnits.response']
     });
 
     if (!training) {
-      throw new Error(`Training ${trainingId} not found in workspace ${workspaceId}`);
+      throw new BadRequestException(`Training ${trainingId} not found in workspace ${workspaceId}`);
     }
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const hasResponseInTraining = (training.codingJobs || []).some(job => (job.codingJobUnits || []).some(unit => (
-      unit.response_id === responseId &&
-      !isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)
-    ))
-    );
+    const representativeUnit = this.findTrainingUnitForResponse(training, responseId, exclusions);
 
-    if (!hasResponseInTraining) {
-      throw new Error(`Response ${responseId} is not part of training ${trainingId}`);
+    if (!representativeUnit) {
+      throw new BadRequestException(`Response ${responseId} is not part of training ${trainingId}`);
     }
 
     const existing = await this.coderTrainingDiscussionResultRepository.findOne({
@@ -365,7 +644,7 @@ export class CoderTrainingService {
       }
     });
 
-    if (code === null) {
+    if (code === null || code === undefined) {
       if (existing) {
         await this.coderTrainingDiscussionResultRepository.delete(existing.id);
       }
@@ -378,6 +657,19 @@ export class CoderTrainingService {
       };
     }
 
+    if (!Number.isInteger(code)) {
+      throw new BadRequestException('Discussion code must be an integer');
+    }
+
+    const derivedScore = await this.deriveDiscussionScore(
+      workspaceId,
+      training,
+      responseId,
+      code,
+      representativeUnit,
+      exclusions
+    );
+
     const discussionResult = existing || this.coderTrainingDiscussionResultRepository.create({
       workspace_id: workspaceId,
       training_id: trainingId,
@@ -385,7 +677,7 @@ export class CoderTrainingService {
     });
 
     discussionResult.code = code;
-    discussionResult.score = score;
+    discussionResult.score = derivedScore;
     discussionResult.manager_user_id = managerUserId;
     discussionResult.manager_name = managerName;
 
@@ -773,6 +1065,10 @@ export class CoderTrainingService {
         selectedCoders.map(coder => coder.id),
         workspaceId
       );
+      const resolvedMissingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
+        workspaceId,
+        missingsProfileId
+      );
 
       const coderTraining = new CoderTraining();
       coderTraining.workspace_id = workspaceId;
@@ -869,7 +1165,7 @@ export class CoderTrainingService {
         codingJob.workspace_id = workspaceId;
         codingJob.description = '';
         codingJob.training_id = trainingId;
-        codingJob.missings_profile_id = missingsProfileId;
+        codingJob.missings_profile_id = resolvedMissingsProfileId;
         codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
         codingJob.suppressGeneralInstructions = suppressGeneralInstructions ?? false;
         codingJob.created_at = new Date();
@@ -1075,6 +1371,7 @@ export class CoderTrainingService {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const allTrainingJobs = trainings.flatMap(training => training.codingJobs || []);
     const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, allTrainingJobs);
+    const defaultMissingCodeContext = await this.getDefaultMissingCodeDisplayContext(workspaceId);
 
     const responseMap = new Map<number, {
       unitName: string;
@@ -1165,7 +1462,7 @@ export class CoderTrainingService {
                 unit.code,
                 unit.score,
                 unit.coding_issue_option,
-                missingCodesByJobId.get(job.id) ?? { mirCode: -98, mciCode: -97 }
+                missingCodesByJobId.get(job.id) ?? defaultMissingCodeContext
               );
 
               codersData.push({
@@ -1246,6 +1543,7 @@ export class CoderTrainingService {
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, training.codingJobs);
+    const defaultMissingCodeContext = await this.getDefaultMissingCodeDisplayContext(workspaceId);
 
     const unitVariableMap = new Map<string, {
       responseId: number;
@@ -1347,7 +1645,7 @@ export class CoderTrainingService {
           code,
           score,
           codingIssueOption,
-          missingCodesByJobId.get(job.id) ?? { mirCode: -98, mciCode: -97 }
+          missingCodesByJobId.get(job.id) ?? defaultMissingCodeContext
         );
 
         codersData.push({
@@ -1364,7 +1662,13 @@ export class CoderTrainingService {
       const hasManualDiscussionResult = discussionResult?.code !== null && discussionResult?.code !== undefined;
       const automaticDiscussionResult = hasManualDiscussionResult ?
         null :
-        this.deriveAutomaticDiscussionResult(codersData);
+        await this.deriveAutomaticDiscussionResultForResponse(
+          workspaceId,
+          training,
+          unitVar.responseId,
+          codersData,
+          exclusions
+        );
       let discussionCode = automaticDiscussionResult?.code ?? null;
       let discussionScore = automaticDiscussionResult?.score ?? null;
       let discussionManagerUserId: number | null = null;
@@ -1437,6 +1741,27 @@ export class CoderTrainingService {
         return { success: false, message: 'Training nicht gefunden' };
       }
 
+      const resolvedCurrentProfileIds = await Promise.all((training.codingJobs || [])
+        .map(job => this.missingsProfilesService.resolveMissingsProfileId(
+          workspaceId,
+          job.missings_profile_id
+        )));
+      const currentProfileKeys = new Set(resolvedCurrentProfileIds);
+      const hasConflictingCurrentMissingsProfiles = currentProfileKeys.size > 1;
+      if (hasConflictingCurrentMissingsProfiles && missingsProfileId === undefined) {
+        throw new BadRequestException(`Conflicting missing profiles for training ${trainingId}`);
+      }
+      const currentMissingsProfileId = currentProfileKeys.size === 1 ?
+        Array.from(currentProfileKeys)[0] :
+        null;
+      const resolvedCurrentMissingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
+        workspaceId,
+        currentMissingsProfileId
+      );
+      const resolvedMissingsProfileId = missingsProfileId !== undefined ?
+        await this.missingsProfilesService.resolveMissingsProfileId(workspaceId, missingsProfileId) :
+        resolvedCurrentMissingsProfileId;
+
       // Check if critical configuration changed (coders or variables)
       const currentCoderIds = training.coders?.map(c => c.user_id).sort() || [];
       const newCoderIds = selectedCoders.map(c => c.id).sort();
@@ -1501,21 +1826,27 @@ export class CoderTrainingService {
       const caseSelectionChanged = currentCaseSelectionMode !== newCaseSelectionMode;
       const referenceSelectionChanged = JSON.stringify(currentReferenceTrainingIds) !== JSON.stringify(newReferenceTrainingIds) ||
         currentReferenceMode !== newReferenceMode;
+      const missingsProfileChanged = hasConflictingCurrentMissingsProfiles ||
+        resolvedCurrentMissingsProfileId !== resolvedMissingsProfileId;
       const shouldRecreateJobs =
         codersChanged ||
         variablesChanged ||
         bundlesChanged ||
         caseOrderingChanged ||
         caseSelectionChanged ||
-        referenceSelectionChanged;
+        referenceSelectionChanged ||
+        missingsProfileChanged;
 
       if (shouldRecreateJobs) {
         const jobIds = (training.codingJobs || []).map(job => job.id);
-        const hasCodingProgress = await this.hasCodingProgressForJobs(jobIds);
-        if (hasCodingProgress) {
+        const [hasCodingProgress, hasDiscussionResults] = await Promise.all([
+          this.hasCodingProgressForJobs(jobIds),
+          this.hasDiscussionResultsForTraining(workspaceId, trainingId)
+        ]);
+        if (hasCodingProgress || hasDiscussionResults) {
           return {
             success: false,
-            message: 'Die Schulung wurde bereits bearbeitet. Änderungen an Fallauswahl, Fallreihenfolge, Referenzen, Kodierern oder Variablen würden bestehende Kodierungen löschen.'
+            message: 'Die Schulung wurde bereits bearbeitet. Änderungen an Fallauswahl, Fallreihenfolge, Referenzen, Missing-Profil, Kodierern oder Variablen würden bestehende Kodierungen löschen.'
           };
         }
       }
@@ -1622,7 +1953,7 @@ export class CoderTrainingService {
           codingJob.name = `${trainingLabel}-${coderName}`;
           codingJob.workspace_id = workspaceId;
           codingJob.training_id = trainingId;
-          codingJob.missings_profile_id = missingsProfileId;
+          codingJob.missings_profile_id = resolvedMissingsProfileId;
           codingJob.case_ordering_mode = newCaseOrderingMode;
           codingJob.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
           codingJob.created_at = new Date();

@@ -5,9 +5,10 @@ import {
   MAT_DIALOG_DATA
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { HttpErrorResponse } from '@angular/common/http';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -659,6 +660,35 @@ describe('CodingResultsComparisonComponent', () => {
     expect(row.discussionSource).toBe('manual');
   });
 
+  it('should show a validation message when a discussion code is not supported by the coding scheme', () => {
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: null,
+      discussionScore: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: []
+    };
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValue(throwError(() => new HttpErrorResponse({
+      status: 400,
+      error: { message: 'Unsupported code for variable Var1: 999' }
+    })));
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.discussionCodeByResponseId[1] = '999';
+
+    component.onDiscussionCodeBlur(row);
+
+    expect(component.discussionErrorByResponseId[1]).toBe('Der Code ist im Kodierschema dieser Variable nicht vorhanden.');
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'Der Code ist im Kodierschema dieser Variable nicht vorhanden.',
+      'common.close',
+      { duration: 4000 }
+    );
+  });
+
   describe('calculateStatistics', () => {
     it('should calculate statistics correctly for between trainings mode', () => {
       component.comparisonMode = 'between-trainings';
@@ -904,7 +934,7 @@ describe('CodingResultsComparisonComponent', () => {
     });
   });
 
-  it('should restore automatic agreement immediately when clearing a manual discussion result', () => {
+  it('should clear manual discussion result without restoring local automatic agreement', () => {
     codingTrainingBackendService.saveDiscussionResult.mockReturnValueOnce(of({
       success: true,
       code: null,
@@ -942,11 +972,11 @@ describe('CodingResultsComparisonComponent', () => {
     component.onDiscussionCodeBlur(row);
 
     expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, null, null);
-    expect(component.discussionCodeByResponseId[1]).toBe('7');
-    expect(component.discussionScoreByResponseId[1]).toBe(2);
-    expect(row.discussionCode).toBe(7);
-    expect(row.discussionScore).toBe(2);
-    expect(row.discussionSource).toBe('auto_agreement');
+    expect(component.discussionCodeByResponseId[1]).toBe('');
+    expect(component.discussionScoreByResponseId[1]).toBeNull();
+    expect(row.discussionCode).toBeNull();
+    expect(row.discussionScore).toBeNull();
+    expect(row.discussionSource).toBeNull();
   });
 
   it('should clear stale kappa values when changing comparison mode', () => {
@@ -1031,6 +1061,112 @@ describe('CodingResultsComparisonComponent', () => {
       workspaceSummary: {
         totalDoubleCodedResponses: 1,
         totalCoderPairs: 2,
+        averageKappa: 0.84,
+        variablesIncluded: 1,
+        codersIncluded: 3,
+        weightingMethod: 'weighted'
+      }
+    };
+
+    component.useWeightedMean = true;
+    component.filterKappaStatistics();
+    fixture.detectChanges();
+
+    const summaryTable: HTMLElement | null = fixture.nativeElement.querySelector('.variable-mean-table');
+    const inlineSummary: HTMLElement | null = fixture.nativeElement.querySelector('.variable-summary-box');
+    const tableText = summaryTable?.textContent?.replace(/\s+/g, ' ');
+    const inlineSummaryText = inlineSummary?.textContent?.replace(/\s+/g, ' ');
+
+    expect(component.variableKappaSummaries).toHaveLength(1);
+    expect(component.variableKappaSummaries[0]).toMatchObject({
+      key: 'U1::V1',
+      unitName: 'U1',
+      variableId: 'V1',
+      caseCount: 1,
+      validPairCount: 15
+    });
+    expect(component.variableKappaSummaries[0].meanKappa).toBeCloseTo(0.84, 10);
+    expect(component.variableKappaSummaries[0].meanAgreement).toBeCloseTo(0.866666, 5);
+    expect(tableText).toContain('Mittelwerte je Variable');
+    expect(tableText).toContain('Gültige Paarwerte');
+    expect(tableText).toContain('U1 - V1');
+    expect(tableText).toContain('0.840');
+    expect(tableText).toContain('86.7%');
+    expect(tableText).toContain('15');
+    expect(inlineSummaryText).toContain('Mittelwert U1 - V1');
+    expect(inlineSummaryText).toContain('Kappa 0.840');
+    expect(inlineSummaryText).toContain('Übereinstimmung 86.7%');
+    expect(inlineSummaryText).toContain('Fälle 1');
+    expect(inlineSummaryText).toContain('Gültige Paarwerte 15');
+  });
+
+  it('should render unweighted mean kappa summaries when weighting is disabled', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.showKappaStatistics = true;
+    component.useWeightedMean = false;
+    component.codersFormControl.setValue([1, 2, 3]);
+    component.withinTrainingData = [
+      {
+        responseId: 1,
+        unitName: 'U1',
+        variableId: 'V1',
+        testperson: 'P1',
+        discussionCode: null,
+        discussionScore: null,
+        discussionSource: null,
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'C1',
+            code: '1',
+            score: 1,
+            notes: null,
+            codingIssueOption: null
+          },
+          {
+            jobId: 2,
+            coderName: 'C2',
+            code: '1',
+            score: 1,
+            notes: null,
+            codingIssueOption: null
+          }
+        ]
+      }
+    ];
+    component.originalKappaStatistics = {
+      variables: [{
+        unitName: 'U1',
+        variableId: 'V1',
+        coderPairs: [
+          {
+            coder1Id: 1,
+            coder1Name: 'C1',
+            coder2Id: 2,
+            coder2Name: 'C2',
+            kappa: 0.82,
+            agreement: 0.9,
+            totalItems: 10,
+            validPairs: 10,
+            interpretation: 'kappa.good'
+          },
+          {
+            coder1Id: 1,
+            coder1Name: 'C1',
+            coder2Id: 3,
+            coder2Name: 'C3',
+            kappa: 0.88,
+            agreement: 0.8,
+            totalItems: 5,
+            validPairs: 5,
+            interpretation: 'kappa.good'
+          }
+        ]
+      }],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 1,
+        totalCoderPairs: 2,
         averageKappa: 0.85,
         variablesIncluded: 1,
         codersIncluded: 3,
@@ -1039,27 +1175,59 @@ describe('CodingResultsComparisonComponent', () => {
     };
 
     component.filterKappaStatistics();
-    fixture.detectChanges();
 
-    const summaryTable: HTMLElement | null = fixture.nativeElement.querySelector('.variable-mean-table');
-    const tableText = summaryTable?.textContent?.replace(/\s+/g, ' ');
-
-    expect(component.variableKappaSummaries).toHaveLength(1);
-    expect(component.variableKappaSummaries[0]).toMatchObject({
-      key: 'U1::V1',
-      unitName: 'U1',
-      variableId: 'V1',
-      meanKappa: 0.85,
-      caseCount: 1,
-      validPairCount: 15
-    });
+    expect(component.variableKappaSummaries[0].meanKappa).toBeCloseTo(0.85, 10);
     expect(component.variableKappaSummaries[0].meanAgreement).toBeCloseTo(0.85, 10);
-    expect(tableText).toContain('Mittelwerte je Variable');
-    expect(tableText).toContain('Gültige Paarwerte');
-    expect(tableText).toContain('U1 - V1');
-    expect(tableText).toContain('0.850');
-    expect(tableText).toContain('85.0%');
-    expect(tableText).toContain('15');
+  });
+
+  it('should exclude null kappa pairs from filtered workspace average kappa denominator', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.useWeightedMean = true;
+    component.codersFormControl.setValue([1, 2, 3]);
+    component.originalKappaStatistics = {
+      variables: [{
+        unitName: 'U1',
+        variableId: 'V1',
+        coderPairs: [
+          {
+            coder1Id: 1,
+            coder1Name: 'C1',
+            coder2Id: 2,
+            coder2Name: 'C2',
+            kappa: 0.8,
+            agreement: 0.9,
+            totalItems: 10,
+            validPairs: 10,
+            interpretation: 'kappa.good'
+          },
+          {
+            coder1Id: 1,
+            coder1Name: 'C1',
+            coder2Id: 3,
+            coder2Name: 'C3',
+            kappa: null,
+            agreement: 0.5,
+            totalItems: 100,
+            validPairs: 100,
+            interpretation: 'kappa.na'
+          }
+        ]
+      }],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 0,
+        totalCoderPairs: 2,
+        averageKappa: 0.8,
+        variablesIncluded: 1,
+        codersIncluded: 3,
+        weightingMethod: 'weighted'
+      }
+    };
+
+    component.filterKappaStatistics();
+
+    expect(component.kappaStatistics?.workspaceSummary.averageKappa).toBeCloseTo(0.8, 10);
+    expect(component.kappaStatistics?.workspaceSummary.totalCoderPairs).toBe(2);
   });
 
   describe('calculateMeanAgreement', () => {

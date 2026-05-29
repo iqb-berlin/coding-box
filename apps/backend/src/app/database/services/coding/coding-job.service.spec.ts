@@ -85,6 +85,8 @@ describe('CodingJobService', () => {
   let cacheService: { delete: jest.Mock };
   let codingFreshnessService: { reconcileAppliedManualCodingJobs: jest.Mock };
   let codingFileCacheService: { getVariablePageMap: jest.Mock };
+  let missingsProfilesService: { resolveMissingsProfileId: jest.Mock };
+  let coderTrainingDiscussionResultRepository: ReturnType<typeof createRepo>;
   let workspaceFilesService: {
     getDerivedVariableMap: jest.Mock;
   };
@@ -147,6 +149,7 @@ describe('CodingJobService', () => {
     responseRepository = createRepo();
     fileUploadRepository = createRepo();
     settingRepository = createRepo();
+    coderTrainingDiscussionResultRepository = createRepo();
     connection = {
       transaction: jest.fn(callback => callback({
         query: jest.fn().mockResolvedValue([]),
@@ -196,6 +199,10 @@ describe('CodingJobService', () => {
     codingFileCacheService = {
       getVariablePageMap: jest.fn().mockResolvedValue(new Map())
     };
+    missingsProfilesService = {
+      resolveMissingsProfileId: jest.fn(async (_workspaceId: number, profileId?: number | null) => profileId || 55)
+    };
+    coderTrainingDiscussionResultRepository.count.mockResolvedValue(0);
 
     service = new CodingJobService(
       codingJobRepository as never,
@@ -213,7 +220,9 @@ describe('CodingJobService', () => {
       workspaceExclusionService as never,
       usersService as never,
       codingFreshnessService as never,
-      codingFileCacheService as never
+      codingFileCacheService as never,
+      missingsProfilesService as never,
+      coderTrainingDiscussionResultRepository as never
     );
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'warn').mockImplementation(jest.fn());
@@ -272,6 +281,241 @@ describe('CodingJobService', () => {
       })
     ]);
     expect(responseRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate assigned coder ids before saving assignments', async () => {
+    await expect(service.assignCoders(12, [5, 5], undefined, 7))
+      .rejects.toThrow(BadRequestException);
+
+    expect(usersService.assertUsersCanCodeInWorkspace).not.toHaveBeenCalled();
+    expect(codingJobCoderRepository.delete).not.toHaveBeenCalled();
+    expect(codingJobCoderRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects missings profile changes after coding work exists', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 12,
+      workspace_id: 7,
+      status: 'active',
+      missings_profile_id: 55
+    });
+    codingJobCoderRepository.find.mockResolvedValue([]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    variableBundleRepository.find.mockResolvedValue([]);
+    codingJobUnitRepository.createQueryBuilder.mockReturnValue(createQueryBuilder(1));
+
+    await expect(service.updateCodingJob(12, 7, { missingsProfileId: 77 }))
+      .rejects.toThrow('coding work already exists');
+
+    expect(missingsProfilesService.resolveMissingsProfileId).toHaveBeenCalledWith(7, 55);
+    expect(missingsProfilesService.resolveMissingsProfileId).toHaveBeenCalledWith(7, 77);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects missings profile changes after training discussion results exist', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 12,
+      workspace_id: 7,
+      training_id: 5,
+      status: 'active',
+      missings_profile_id: 55
+    });
+    codingJobCoderRepository.find.mockResolvedValue([]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    variableBundleRepository.find.mockResolvedValue([]);
+    codingJobUnitRepository.createQueryBuilder.mockReturnValue(createQueryBuilder(0));
+    coderTrainingDiscussionResultRepository.count.mockResolvedValueOnce(1);
+
+    await expect(service.updateCodingJob(12, 7, { missingsProfileId: 77 }))
+      .rejects.toThrow('training discussions already exist');
+
+    expect(coderTrainingDiscussionResultRepository.count).toHaveBeenCalledWith({
+      where: {
+        workspace_id: 7,
+        training_id: 5
+      }
+    });
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('sets variable bundle ids on distributed bundle job units', async () => {
+    codingJobRepository.save.mockImplementation(value => Promise.resolve({ ...value, id: 44 }));
+    jest.spyOn(service, 'getCurrentAggregationSettingsSnapshot').mockResolvedValue({
+      aggregationEnabled: false,
+      aggregationThreshold: null,
+      responseMatchingFlags: [ResponseMatchingFlag.NO_AGGREGATION],
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: false
+    });
+    variableBundleRepository.find.mockResolvedValue([{
+      id: 9,
+      variables: [{ unitName: 'UNIT', variableId: 'VAR' }]
+    }]);
+
+    await (service as unknown as {
+      createCodingJobWithUnitSubsetInManager: (
+        workspaceId: number,
+        createCodingJobDto: {
+          name: string;
+          assignedCoders: number[];
+          jobDefinitionId: number;
+          variableBundleIds: number[];
+        },
+        unitSubset: Array<{
+          id: number;
+          variableid: string;
+          unitName: string;
+          unitAlias: string | null;
+          bookletName: string;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+        }>,
+        manager: {
+          getRepository: (entity: unknown) => unknown;
+        }
+      ) => Promise<CodingJob>;
+    }).createCodingJobWithUnitSubsetInManager(
+      7,
+      {
+        name: 'Bundle job',
+        assignedCoders: [5],
+        jobDefinitionId: 42,
+        variableBundleIds: [9]
+      },
+      [{
+        id: 123,
+        variableid: 'VAR',
+        unitName: 'UNIT',
+        unitAlias: 'ALIAS',
+        bookletName: 'BOOKLET',
+        personLogin: 'coder-login',
+        personCode: 'P001',
+        personGroup: 'G1'
+      }],
+      {
+        getRepository: (entity: unknown) => {
+          if (entity === CodingJob) return codingJobRepository;
+          if (entity === CodingJobCoder) return codingJobCoderRepository;
+          if (entity === CodingJobVariableBundle) return codingJobVariableBundleRepository;
+          if (entity === CodingJobUnit) return codingJobUnitRepository;
+          if (entity === VariableBundle) return variableBundleRepository;
+          return createRepo();
+        }
+      }
+    );
+
+    expect(codingJobRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+      job_definition_id: 42
+    }));
+    expect(codingJobVariableBundleRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        coding_job_id: 44,
+        variable_bundle_id: 9
+      })
+    ]);
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        response_id: 123,
+        variable_bundle_id: 9
+      })
+    ]);
+  });
+
+  it('passes job-definition missings profiles to distributed coding jobs', async () => {
+    codingJobRepository.save.mockImplementation(value => Promise.resolve({ ...value, id: 45 }));
+    jest.spyOn(service, 'getCurrentAggregationSettingsSnapshot').mockResolvedValue({
+      aggregationEnabled: false,
+      aggregationThreshold: null,
+      responseMatchingFlags: [ResponseMatchingFlag.NO_AGGREGATION],
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: false
+    });
+
+    await (service as unknown as {
+      createDistributedCodingJobsFromPlanInManager: (
+        workspaceId: number,
+        request: {
+          selectedVariables: Array<{ unitName: string; variableId: string }>;
+          selectedCoders: Array<{ id: number; name: string }>;
+          jobDefinitionId: number;
+          missingsProfileId: number;
+        },
+        plan: {
+          jobsToCreate: Array<{
+            coder: { id: number; name: string };
+            item: {
+              type: 'variable';
+              item: { unitName: string; variableId: string };
+              itemKey: string;
+              itemLabel: string;
+              itemVariables: Array<{ unitName: string; variableId: string }>;
+              itemCaseOrderingMode: 'continuous' | 'alternating';
+            };
+            unitSubset: Array<{
+              id: number;
+              variableid: string;
+              unitName: string;
+              unitAlias: string | null;
+              bookletName: string;
+              personLogin: string;
+              personCode: string;
+              personGroup: string;
+            }>;
+          }>;
+        },
+        manager: {
+          getRepository: (entity: unknown) => unknown;
+        }
+      ) => Promise<unknown[]>;
+    }).createDistributedCodingJobsFromPlanInManager(
+      7,
+      {
+        selectedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+        selectedCoders: [{ id: 5, name: 'Coder 5' }],
+        jobDefinitionId: 42,
+        missingsProfileId: 77
+      },
+      {
+        jobsToCreate: [{
+          coder: { id: 5, name: 'Coder 5' },
+          item: {
+            type: 'variable',
+            item: { unitName: 'UNIT', variableId: 'VAR' },
+            itemKey: 'UNIT::VAR',
+            itemLabel: 'UNIT - VAR',
+            itemVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+            itemCaseOrderingMode: 'continuous'
+          },
+          unitSubset: [{
+            id: 123,
+            variableid: 'VAR',
+            unitName: 'UNIT',
+            unitAlias: 'ALIAS',
+            bookletName: 'BOOKLET',
+            personLogin: 'coder-login',
+            personCode: 'P001',
+            personGroup: 'G1'
+          }]
+        }]
+      },
+      {
+        getRepository: (entity: unknown) => {
+          if (entity === CodingJob) return codingJobRepository;
+          if (entity === CodingJobCoder) return codingJobCoderRepository;
+          if (entity === CodingJobVariable) return codingJobVariableRepository;
+          if (entity === CodingJobUnit) return codingJobUnitRepository;
+          return createRepo();
+        }
+      }
+    );
+
+    expect(codingJobRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+      job_definition_id: 42,
+      missings_profile_id: 77
+    }));
   });
 
   it('rejects assigned coder access when coding capability was revoked', async () => {

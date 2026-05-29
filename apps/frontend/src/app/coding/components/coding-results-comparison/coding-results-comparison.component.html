@@ -477,6 +477,46 @@
                           }}</span>
                         </td>
                       </tr>
+                      <tr
+                        class="variable-summary-row"
+                        *ngIf="getVariableSummary(variable) as summary"
+                      >
+                        <td colspan="6">
+                          <div class="variable-summary-box">
+                            <span class="variable-summary-label">
+                              Mittelwert {{ getVariableLabel(variable) }}
+                            </span>
+                            <span>
+                              Kappa
+                              <strong
+                                [class]="
+                                  'kappa-cell ' +
+                                  getKappaCellClass(summary.meanKappa)
+                                "
+                              >
+                                {{
+                                  summary.meanKappa !== null
+                                    ? (summary.meanKappa | number: '1.3-3')
+                                    : 'N/A'
+                                }}
+                              </strong>
+                            </span>
+                            <span>
+                              Übereinstimmung
+                              <strong>
+                                {{
+                                  summary.meanAgreement !== null
+                                    ? (summary.meanAgreement
+                                      | percent: '1.1-1')
+                                    : 'N/A'
+                                }}
+                              </strong>
+                            </span>
+                            <span>Fälle {{ summary.caseCount }}</span>
+                            <span>Gültige Paarwerte {{ summary.validPairCount }}</span>
+                          </div>
+                        </td>
+                      </tr>
                     </ng-container>
                   </tbody>
                 </table>
@@ -684,6 +724,11 @@
                   class="discussion-saving"
                   *ngIf="isSavingDiscussionByResponseId[comparison.responseId]"
                   >Speichert ...</span
+                >
+                <span
+                  class="discussion-error"
+                  *ngIf="discussionErrorByResponseId[comparison.responseId]"
+                  >{{ discussionErrorByResponseId[comparison.responseId] }}</span
                 >
                 <span
                   class="discussion-source discussion-source-auto"
