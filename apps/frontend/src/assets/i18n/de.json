@@ -2272,7 +2272,8 @@
       "person-info": "Personeninformationen",
       "given-answer": "Gegebene Antwort",
       "coder-results": "Kodierergebnisse",
-      "selection": "Auswahl"
+      "selection": "Auswahl",
+      "alternative-coder-names": "Weitere Namen: {{names}}"
     },
     "code-label": "Code",
     "score-label": "Bewertung",
@@ -2287,8 +2288,14 @@
       "select-label": "Endgültiger Code",
       "no-selection": "Kein Code gewählt",
       "status-conflict": "Abweichung",
+      "status-inter-coder-conflict": "Kodierer-Abweichung",
+      "status-same-coder-conflict": "Mehrfach-Abweichung",
+      "status-mixed-conflict": "Mehrere Abweichungen",
       "status-match": "Übereinstimmung",
-      "status-incomplete": "Unvollständig"
+      "status-incomplete": "Unvollständig",
+      "tooltip-inter-coder-conflict": "Unterschiedliche Kodierer haben abweichende Ergebnisse",
+      "tooltip-same-coder-conflict": "Derselbe Kodierer hat mehrere abweichende Ergebnisse",
+      "tooltip-mixed-conflict": "Es gibt Abweichungen innerhalb eines Kodierers und zwischen Kodierern"
     },
     "filter": {
       "show-only-conflicts": "Nur Konflikte anzeigen",
