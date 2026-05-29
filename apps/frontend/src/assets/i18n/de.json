@@ -2190,6 +2190,8 @@
         "delete-failed": "Fehler beim Löschen: {{error}}",
         "jobs-created": "{{count}} Kodier-Jobs wurden erfolgreich erstellt",
         "jobs-created-partial": "{{successCount}} Jobs erstellt, {{errorCount}} fehlgeschlagen",
+        "create-preview-failed": "Vorschau konnte nicht berechnet werden: {{error}}",
+        "create-preview-no-coders": "Keine Kodierer in der Vorschau",
         "refresh-preview-failed": "Neuverteilung konnte nicht vorbereitet werden: {{error}}",
         "refresh-applied": "Kodierjobs neu verteilt: {{count}} Kodierjobs erstellt.",
         "refresh-apply-failed": "Neuverteilung fehlgeschlagen: {{error}}",

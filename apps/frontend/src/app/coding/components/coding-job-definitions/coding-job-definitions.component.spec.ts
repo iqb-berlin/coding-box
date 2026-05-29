@@ -5,7 +5,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { CodingJobDefinitionsComponent } from './coding-job-definitions.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -37,6 +37,20 @@ describe('CodingJobDefinitionsComponent', () => {
             approveJobDefinition: jest.fn().mockReturnValue(of({})),
             deleteJobDefinition: jest.fn().mockReturnValue(of({})),
             createCodingJobFromDefinition: jest.fn().mockReturnValue(of({ success: true, jobsCreated: 1, jobs: [] })),
+            previewCodingJobFromDefinition: jest.fn().mockReturnValue(of({
+              distribution: {},
+              distributionByCoderId: {},
+              doubleCodingInfo: {},
+              aggregationInfo: {},
+              matchingFlags: [],
+              warnings: [],
+              pairDistribution: {},
+              tasksPerCoder: {},
+              coderWeights: {},
+              selectedVariables: [],
+              selectedVariableBundles: [],
+              selectedCoders: []
+            })),
             previewJobDefinitionRefresh: jest.fn().mockReturnValue(of({
               jobDefinitionId: 42,
               existingJobsCount: 1,
@@ -332,10 +346,12 @@ describe('CodingJobDefinitionsComponent', () => {
     const coderService = TestBed.inject(CoderService) as unknown as { getCoders: jest.Mock };
     const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
       createCodingJobFromDefinition: jest.Mock;
+      previewCodingJobFromDefinition: jest.Mock;
       updateCodingJob: jest.Mock;
     };
     const matDialog = TestBed.inject(MatDialog);
     const assignedVariables = [{ unitName: 'Unit 1', variableId: 'Var 1' }];
+    const previewVariables = [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }];
     const assignedVariableBundles = [{
       id: 9,
       name: 'Bundle A',
@@ -345,16 +361,54 @@ describe('CodingJobDefinitionsComponent', () => {
       updatedAt: new Date('2026-01-02T00:00:00.000Z')
     }];
 
-    coderService.getCoders.mockReturnValue(of([
-      { id: 1, name: 'Ada' },
-      { id: 2, name: 'Bea' },
-      { id: 3, name: 'Chris' }
-    ]));
+    coderService.getCoders.mockClear();
+    coderService.getCoders.mockReturnValue(throwError(() => new Error('coder loading failed')));
     codingJobBackendService.createCodingJobFromDefinition.mockReturnValue(of({
       success: true,
       jobsCreated: 1,
       message: 'created',
       jobs: [{ jobId: 111 }]
+    }));
+    codingJobBackendService.previewCodingJobFromDefinition.mockReturnValue(of({
+      distribution: { 'bundle:9': { Ada: 4, Bea: 3 } },
+      distributionByCoderId: { 'bundle:9': { 1: 4, 2: 3 } },
+      doubleCodingInfo: {
+        'bundle:9': {
+          totalCases: 7,
+          distinctCases: 7,
+          codingTasksTotal: 7,
+          doubleCodedCases: 0,
+          singleCodedCasesAssigned: 7,
+          doubleCodedCasesPerCoder: { Ada: 0, Bea: 0 }
+        }
+      },
+      aggregationInfo: {},
+      matchingFlags: [],
+      warnings: [],
+      pairDistribution: {},
+      tasksPerCoder: { 1: 4, 2: 3 },
+      coderWeights: { 1: 1.5, 2: 0.5 },
+      selectedVariables: previewVariables,
+      selectedVariableBundles: [{
+        id: 9,
+        name: 'Bundle A',
+        caseOrderingMode: 'alternating' as const,
+        variables: [{ unitName: 'Unit 2', variableId: 'Var 2', includeDeriveError: true }]
+      }],
+      selectedCoders: [
+        {
+          id: 2,
+          name: 'Bea',
+          username: 'Bea',
+          capacityPercent: 50
+        },
+        {
+          id: 1,
+          name: 'Ada',
+          username: 'Ada',
+          capacityPercent: 150
+        }
+      ]
     }));
     const dialogRefMock = {
       afterClosed: () => of({
@@ -388,8 +442,13 @@ describe('CodingJobDefinitionsComponent', () => {
 
     expect(matDialog.open).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({
       data: expect.objectContaining({
-        selectedVariables: assignedVariables,
-        selectedVariableBundles: assignedVariableBundles,
+        selectedVariables: previewVariables,
+        selectedVariableBundles: [{
+          id: 9,
+          name: 'Bundle A',
+          caseOrderingMode: 'alternating',
+          variables: [{ unitName: 'Unit 2', variableId: 'Var 2', includeDeriveError: true }]
+        }],
         selectedCoders: [
           { id: 1, name: 'Ada', capacityPercent: 150 },
           { id: 2, name: 'Bea', capacityPercent: 50 }
@@ -398,6 +457,19 @@ describe('CodingJobDefinitionsComponent', () => {
         caseOrderingMode: 'continuous',
         maxCodingCases: 7,
         distributionSeed: 'seed-42',
+        distribution: { 'bundle:9': { Ada: 4, Bea: 3 } },
+        distributionByCoderId: { 'bundle:9': { 1: 4, 2: 3 } },
+        doubleCodingInfo: {
+          'bundle:9': {
+            totalCases: 7,
+            distinctCases: 7,
+            codingTasksTotal: 7,
+            doubleCodedCases: 0,
+            singleCodedCasesAssigned: 7,
+            doubleCodedCasesPerCoder: { Ada: 0, Bea: 0 }
+          }
+        },
+        warnings: [],
         displayOptions: {
           showScore: false,
           allowComments: false,
@@ -406,11 +478,49 @@ describe('CodingJobDefinitionsComponent', () => {
         displayOptionsLocked: true
       })
     }));
+    expect(codingJobBackendService.previewCodingJobFromDefinition).toHaveBeenCalledWith(
+      1,
+      42
+    );
+    expect(coderService.getCoders).not.toHaveBeenCalled();
     expect(codingJobBackendService.createCodingJobFromDefinition).toHaveBeenCalledWith(
       1,
       42
     );
     expect(codingJobBackendService.updateCodingJob).not.toHaveBeenCalled();
+  });
+
+  it('shows a preview error without opening the bulk creation dialog', async () => {
+    const coderService = TestBed.inject(CoderService) as unknown as { getCoders: jest.Mock };
+    const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
+      createCodingJobFromDefinition: jest.Mock;
+      previewCodingJobFromDefinition: jest.Mock;
+    };
+    const matDialog = TestBed.inject(MatDialog);
+    const snackBar = TestBed.inject(MatSnackBar) as unknown as { open: jest.Mock };
+    jest.spyOn(matDialog, 'open');
+
+    coderService.getCoders.mockReturnValue(of([{ id: 1, name: 'Ada' }]));
+    codingJobBackendService.previewCodingJobFromDefinition.mockReturnValue(
+      throwError(() => new Error('preview failed'))
+    );
+
+    await component.createCodingJobFromDefinition({
+      id: 42,
+      status: 'approved',
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      createdJobsCount: 0
+    });
+
+    expect(codingJobBackendService.previewCodingJobFromDefinition).toHaveBeenCalledWith(1, 42);
+    expect(matDialog.open).not.toHaveBeenCalled();
+    expect(codingJobBackendService.createCodingJobFromDefinition).not.toHaveBeenCalled();
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'coding-job-definitions.messages.snackbar.create-preview-failed',
+      'common.close',
+      { duration: 5000 }
+    );
   });
 
   it('passes saved display options into the edit dialog', () => {

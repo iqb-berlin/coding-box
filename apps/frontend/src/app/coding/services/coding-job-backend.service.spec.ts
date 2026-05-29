@@ -161,6 +161,50 @@ describe('CodingJobBackendService', () => {
       });
     });
 
+    it('should preview coding jobs through the dedicated job definition endpoint', () => {
+      service.previewCodingJobFromDefinition(1, 42).subscribe(response => {
+        expect(response.distribution).toEqual({ 'Unit::Var': { Ada: 1 } });
+        expect(response.warnings).toEqual([]);
+        expect(response.selectedVariables).toEqual([
+          { unitName: 'Unit', variableId: 'Var', includeDeriveError: true }
+        ]);
+        expect(response.selectedVariableBundles).toEqual([]);
+        expect(response.selectedCoders).toEqual([
+          {
+            id: 1,
+            name: 'Ada',
+            username: 'Ada',
+            capacityPercent: 100
+          }
+        ]);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/job-definitions/42/create-job-preview`);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
+      req.flush({
+        distribution: { 'Unit::Var': { Ada: 1 } },
+        distributionByCoderId: { 'Unit::Var': { 1: 1 } },
+        doubleCodingInfo: {},
+        aggregationInfo: {},
+        matchingFlags: [],
+        warnings: [],
+        pairDistribution: {},
+        tasksPerCoder: {},
+        coderWeights: {},
+        selectedVariables: [{ unitName: 'Unit', variableId: 'Var', includeDeriveError: true }],
+        selectedVariableBundles: [],
+        selectedCoders: [
+          {
+            id: 1,
+            name: 'Ada',
+            username: 'Ada',
+            capacityPercent: 100
+          }
+        ]
+      });
+    });
+
     it('should preview a job definition refresh', () => {
       service.previewJobDefinitionRefresh(1, 42).subscribe(response => {
         expect(response.addedCases).toBe(2);

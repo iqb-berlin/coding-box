@@ -26,9 +26,12 @@ interface JobCreationWarning {
   availableCases: number;
 }
 
+type PreviewVariableBundle = Pick<VariableBundle, 'id' | 'name' | 'variables' | 'caseOrderingMode'> &
+Partial<Pick<VariableBundle, 'description' | 'createdAt' | 'updatedAt'>>;
+
 export interface BulkCreationData {
   selectedVariables: Variable[];
-  selectedVariableBundles: VariableBundle[];
+  selectedVariableBundles: PreviewVariableBundle[];
   selectedCoders: Coder[];
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
@@ -88,7 +91,7 @@ interface DoubleCodingPreview {
 export interface JobPreview {
   name: string;
   variable?: Variable;
-  bundle?: VariableBundle;
+  bundle?: PreviewVariableBundle;
   caseCount?: number;
   coderName?: string;
   jobId?: number;
@@ -103,7 +106,7 @@ export interface BulkCreationResult {
 
 interface DistributionMatrixRow {
   variable?: { unitName: string; variableId: string };
-  bundle?: VariableBundle;
+  bundle?: PreviewVariableBundle;
   variableKey: string;
   totalCases: number;
   coderCases: Record<string, number>;
@@ -192,8 +195,7 @@ export class CodingJobBulkCreationDialogComponent {
       this.data.distribution = result?.distribution || {};
       this.data.distributionByCoderId = result?.distributionByCoderId || {};
       this.data.doubleCodingInfo = result?.doubleCodingInfo || {};
-      this.warnings = result?.warnings || [];
-      this.showWarningsPanel = this.warnings.length > 0;
+      this.data.warnings = result?.warnings || [];
 
       this.initializeFromData();
 
@@ -225,6 +227,8 @@ export class CodingJobBulkCreationDialogComponent {
   private initializeFromData(): void {
     if (!this.data.distribution || !this.data.doubleCodingInfo) return;
 
+    this.warnings = this.data.warnings || [];
+    this.showWarningsPanel = this.warnings.length > 0;
     this.distributionMatrix = [];
     for (const [variableKey, coderCases] of Object.entries(this.data.distribution)) {
       const coderCasesById = this.data.distributionByCoderId?.[variableKey];
@@ -312,7 +316,7 @@ export class CodingJobBulkCreationDialogComponent {
     // Sort coders alphabetically for deterministic job naming
     const sortedCoders = [...this.data.selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
 
-    const items: (Variable | VariableBundle)[] = [];
+    const items: (Variable | PreviewVariableBundle)[] = [];
     if (this.data.selectedVariableBundles) {
       items.push(...this.data.selectedVariableBundles);
     }
@@ -355,7 +359,7 @@ export class CodingJobBulkCreationDialogComponent {
     return `Job ${unitName} (${coderName})`;
   }
 
-  private getBundleItemKey(bundle: Pick<VariableBundle, 'id'>): string {
+  private getBundleItemKey(bundle: Pick<PreviewVariableBundle, 'id'>): string {
     return `bundle:${bundle.id}`;
   }
 
@@ -363,7 +367,7 @@ export class CodingJobBulkCreationDialogComponent {
     return !itemKey.startsWith('bundle:') && itemKey.includes('::');
   }
 
-  private findBundleForItemKey(itemKey: string): VariableBundle | undefined {
+  private findBundleForItemKey(itemKey: string): PreviewVariableBundle | undefined {
     if (itemKey.startsWith('bundle:')) {
       const bundleId = Number(itemKey.slice('bundle:'.length));
       return this.data.selectedVariableBundles?.find(bundle => bundle.id === bundleId);
@@ -372,7 +376,7 @@ export class CodingJobBulkCreationDialogComponent {
     return this.data.selectedVariableBundles?.find(bundle => bundle.name === itemKey);
   }
 
-  getBundleDisplayName(bundle: VariableBundle): string {
+  getBundleDisplayName(bundle: PreviewVariableBundle): string {
     const sameNameCount = (this.data.selectedVariableBundles || [])
       .filter(selectedBundle => selectedBundle.name === bundle.name)
       .length;
@@ -380,7 +384,7 @@ export class CodingJobBulkCreationDialogComponent {
     return sameNameCount > 1 ? `${bundle.name} (#${bundle.id})` : bundle.name;
   }
 
-  private getCaseCountForCoder(item: Variable | VariableBundle, coder: Coder): number {
+  private getCaseCountForCoder(item: Variable | PreviewVariableBundle, coder: Coder): number {
     let itemKey;
     let totalCases;
 
