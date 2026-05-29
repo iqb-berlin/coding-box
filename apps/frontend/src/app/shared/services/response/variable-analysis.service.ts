@@ -20,7 +20,10 @@ export interface VariableFrequencyDto {
   isSchemaOnly?: boolean;
   isSchemaSupplemental?: boolean;
   count: number;
+  validOccurrenceCount?: number;
   percentage: number;
+  percentageTotal?: number;
+  percentageValid?: number | null;
 }
 
 export type VariableAnalysisSortBy =
@@ -30,8 +33,12 @@ export type VariableAnalysisSortBy =
   | 'label'
   | 'score'
   | 'count'
+  | 'validOccurrenceCount'
   | 'percentage'
+  | 'percentageTotal'
+  | 'percentageValid'
   | 'totalCount'
+  | 'validCount'
   | 'emptyCount'
   | 'emptyPercentage'
   | 'statusSummary';
@@ -49,6 +56,8 @@ export interface VariableCombo {
   isDerived?: boolean;
   hasCodingScheme?: boolean;
   totalCount?: number;
+  validCount?: number;
+  invalidCount?: number;
   emptyCount?: number;
   emptyPercentage?: number;
   distinctValueCount?: number;
@@ -78,6 +87,8 @@ export interface VariableAnalysisTableRowDto extends VariableFrequencyDto {
   isDerived?: boolean;
   hasCodingScheme?: boolean;
   totalCount: number;
+  validCount?: number;
+  invalidCount?: number;
   emptyCount: number;
   emptyPercentage: number;
   distinctValueCount: number;

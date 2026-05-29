@@ -37,6 +37,7 @@ interface SchemaValueCountRow {
   variableId: string;
   value: string | null;
   count: string | number;
+  validCount: string | number;
 }
 
 interface MultipleResponseRow {
@@ -44,6 +45,10 @@ interface MultipleResponseRow {
   unitName: string;
   variableId: string;
   value: string | null;
+  status: string | number | null;
+  statusV1: string | number | null;
+  codeV1: string | number | null;
+  scoreV1: string | number | null;
 }
 
 interface AnalyzedVariableScopeEntry {
@@ -74,9 +79,21 @@ interface ParsedMultipleCategory {
 
 interface MultipleResponseSummary {
   totalCount: number;
+  validCount: number;
   emptyCount: number;
   counts: Map<string, number>;
+  validCounts: Map<string, number>;
   categories: Map<string, ParsedMultipleCategory>;
+}
+
+interface FrequencyCounts {
+  count: number;
+  validCount: number;
+}
+
+interface MultipleResponseObservedCounts {
+  countsByComboKey: Map<string, Map<string, number>>;
+  validCountsByComboKey: Map<string, Map<string, number>>;
 }
 
 @Processor('variable-analysis')
@@ -89,6 +106,15 @@ export class VariableAnalysisProcessor {
   private readonly RESULT_CACHE_CHUNK_SIZE = 100;
   private readonly MULTIPLE_RESPONSE_COMBO_CHUNK_SIZE = 100;
   private readonly MULTIPLE_RESPONSE_ROW_BATCH_SIZE = 5000;
+  private readonly INVALID_OR_MISSING_VALID_DENOMINATOR_STATUSES = [
+    0, // UNSET
+    1, // NOT_REACHED
+    2, // DISPLAYED
+    4, // DERIVE_ERROR
+    7, // INVALID
+    9, // CODING_ERROR
+    10 // PARTLY_DISPLAYED
+  ];
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -172,6 +198,7 @@ export class VariableAnalysisProcessor {
             analysis_rows."unitName" AS "unitName",
             analysis_rows."variableId" AS "variableId",
             COUNT(*) AS "totalCount",
+            SUM(CASE WHEN ${this.getValidResponseSql()} THEN 1 ELSE 0 END) AS "validCount",
             SUM(CASE WHEN analysis_rows."value" IS NULL OR analysis_rows."value" = '' THEN 1 ELSE 0 END) AS "emptyCount",
             COUNT(DISTINCT COALESCE(analysis_rows."value", '')) AS "distinctValueCount"
           FROM (${analysisSql.sql}) analysis_rows
@@ -189,9 +216,11 @@ export class VariableAnalysisProcessor {
         const combo = scopeEntry ? comboByKey.get(scopeEntry.comboKey) : undefined;
 
         if (combo) {
-          combo.totalCount = parseInt(String(row.totalCount), 10);
-          combo.emptyCount = parseInt(String(row.emptyCount), 10);
-          combo.distinctValueCount = parseInt(String(row.distinctValueCount), 10);
+          combo.totalCount = this.parseCount(row.totalCount);
+          combo.validCount = this.parseCount(row.validCount);
+          combo.invalidCount = Math.max(0, combo.totalCount - combo.validCount);
+          combo.emptyCount = this.parseCount(row.emptyCount);
+          combo.distinctValueCount = this.parseCount(row.distinctValueCount);
         }
       }
 
@@ -208,6 +237,7 @@ export class VariableAnalysisProcessor {
             LENGTH(ranked_values."value") AS "valueLength",
             md5(ranked_values."value") AS "valueHash",
             ranked_values."count",
+            ranked_values."validCount",
             ranked_values."rank"
           FROM (
             SELECT
@@ -221,7 +251,8 @@ export class VariableAnalysisProcessor {
                 analysis_rows."unitName" AS "unitName",
                 analysis_rows."variableId" AS "variableId",
                 COALESCE(analysis_rows."value", '') AS "value",
-                COUNT(*) AS "count"
+                COUNT(*) AS "count",
+                SUM(CASE WHEN ${this.getValidResponseSql()} THEN 1 ELSE 0 END) AS "validCount"
               FROM (${analysisSql.sql}) analysis_rows
               GROUP BY
                 analysis_rows."unitName",
@@ -244,23 +275,25 @@ export class VariableAnalysisProcessor {
         const combo = scopeEntry ? comboByKey.get(scopeEntry.comboKey) : undefined;
 
         if (combo && scopeEntry) {
-          const count = parseInt(String(row.count), 10);
+          const count = this.parseCount(row.count);
+          const validOccurrenceCount = this.parseCount(row.validCount);
           frequencies[scopeEntry.comboKey].push({
             unitId: combo.unitId,
             unitName: row.unitName,
             variableId: row.variableId,
             value: this.formatValuePreview(
               row.value || '',
-              parseInt(String(row.valueLength), 10),
+              this.parseCount(row.valueLength),
               row.valueHash
             ),
             count,
+            validOccurrenceCount,
             percentage: 0
           });
         }
       }
 
-      const multipleObservedCountsByComboKey =
+      const multipleObservedCounts =
         await this.recalculateMultipleVariableFrequencies(
           query,
           scopeEntries,
@@ -268,23 +301,15 @@ export class VariableAnalysisProcessor {
           metadataByComboKey
         );
 
-      variableCombos.forEach(combo => {
-        const comboKey = `${combo.unitId}:${combo.variableId}`;
-        const totalResponses = combo.totalCount || 0;
-        combo.emptyPercentage = totalResponses > 0 ? ((combo.emptyCount || 0) / totalResponses) * 100 : 0;
-        frequencies[comboKey] = frequencies[comboKey].map(item => ({
-          ...item,
-          percentage: totalResponses > 0 ? (item.count / totalResponses) * 100 : 0
-        }));
-      });
-
       await this.addSchemaCodeFrequencies(
         query,
         scopeEntries,
         frequencies,
         categoryDefinitionsByComboKey,
-        multipleObservedCountsByComboKey
+        multipleObservedCounts
       );
+
+      this.applyFrequencyPercentages(variableCombos, frequencies);
 
       await job.progress(70);
 
@@ -317,7 +342,7 @@ export class VariableAnalysisProcessor {
         const combo = scopeEntry ? comboByKey.get(scopeEntry.comboKey) : undefined;
 
         if (combo) {
-          const count = parseInt(String(row.count), 10);
+          const count = this.parseCount(row.count);
           const totalResponses = combo.totalCount || 0;
           combo.statusCounts = [
             ...(combo.statusCounts || []),
@@ -464,6 +489,99 @@ export class VariableAnalysisProcessor {
     }
 
     return `${value}... [truncated ${valueLength} chars, md5:${valueHash || 'unknown'}]`;
+  }
+
+  private parseCount(value: unknown): number {
+    const parsed = parseInt(String(value), 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private getValidResponseSql(alias = 'analysis_rows'): string {
+    const ignoredStatuses =
+      this.INVALID_OR_MISSING_VALID_DENOMINATOR_STATUSES.join(', ');
+
+    return `(
+      (
+        (
+          ${alias}."statusV1" IS NOT NULL
+          OR ${alias}."codeV1" IS NOT NULL
+          OR ${alias}."scoreV1" IS NOT NULL
+        )
+        AND COALESCE(${alias}."statusV1", 0) NOT IN (${ignoredStatuses})
+      )
+      OR (
+        ${alias}."statusV1" IS NULL
+        AND ${alias}."codeV1" IS NULL
+        AND ${alias}."scoreV1" IS NULL
+        AND ${alias}."value" IS NOT NULL
+        AND ${alias}."value" <> ''
+        AND COALESCE(${alias}."status", 0) NOT IN (${ignoredStatuses})
+      )
+    )`;
+  }
+
+  private isValidAnalysisRow(row: {
+    value: string | null;
+    status: string | number | null;
+    statusV1: string | number | null;
+    codeV1: string | number | null;
+    scoreV1: string | number | null;
+  }): boolean {
+    const hasCodingInfo =
+      (row.statusV1 !== null && row.statusV1 !== undefined) ||
+      (row.codeV1 !== null && row.codeV1 !== undefined) ||
+      (row.scoreV1 !== null && row.scoreV1 !== undefined);
+
+    if (hasCodingInfo) {
+      return this.isValidStatus(row.statusV1);
+    }
+
+    const value = String(row.value || '').trim();
+    if (this.isEmptyStoredValue(value)) {
+      return false;
+    }
+
+    return this.isValidStatus(row.status);
+  }
+
+  private isValidStatus(status: string | number | null): boolean {
+    const numericStatus = Number(status ?? 0);
+    return !this.INVALID_OR_MISSING_VALID_DENOMINATOR_STATUSES.includes(
+      numericStatus
+    );
+  }
+
+  private applyFrequencyPercentages(
+    variableCombos: VariableCombo[],
+    frequencies: Record<string, VariableFrequencyDto[]>
+  ): void {
+    variableCombos.forEach(combo => {
+      const comboKey = `${combo.unitId}:${combo.variableId}`;
+      const totalResponses = combo.totalCount || 0;
+      const validResponses = combo.validCount || 0;
+      combo.invalidCount = Math.max(0, totalResponses - validResponses);
+      combo.emptyPercentage = totalResponses > 0 ?
+        ((combo.emptyCount || 0) / totalResponses) * 100 :
+        0;
+
+      frequencies[comboKey] = (frequencies[comboKey] || []).map(item => {
+        const validOccurrenceCount = item.validOccurrenceCount ?? item.count;
+        const percentageTotal = totalResponses > 0 ?
+          (item.count / totalResponses) * 100 :
+          0;
+        const percentageValid = validResponses > 0 ?
+          (validOccurrenceCount / validResponses) * 100 :
+          null;
+
+        return {
+          ...item,
+          validOccurrenceCount,
+          percentage: percentageTotal,
+          percentageTotal,
+          percentageValid
+        };
+      });
+    });
   }
 
   private async getAnalysisScope(
@@ -733,6 +851,9 @@ export class VariableAnalysisProcessor {
       .addSelect('response.variableid', 'variableId')
       .addSelect('response.value', 'value')
       .addSelect('response.status', 'status')
+      .addSelect('response.status_v1', 'statusV1')
+      .addSelect('response.code_v1', 'codeV1')
+      .addSelect('response.score_v1', 'scoreV1')
       .addSelect(
         `
           ROW_NUMBER() OVER (
@@ -821,14 +942,17 @@ export class VariableAnalysisProcessor {
     scopeEntries: AnalyzedVariableScopeEntry[],
     frequencies: Record<string, VariableFrequencyDto[]>,
     metadataByComboKey: Map<string, VariableAnalysisMetadata>
-  ): Promise<Map<string, Map<string, number>>> {
+  ): Promise<MultipleResponseObservedCounts> {
     const multipleEntries = scopeEntries.filter(entry => (
       Boolean(metadataByComboKey.get(entry.comboKey)?.multiple)
     ));
-    const observedCountsByComboKey = new Map<string, Map<string, number>>();
+    const observedCounts: MultipleResponseObservedCounts = {
+      countsByComboKey: new Map<string, Map<string, number>>(),
+      validCountsByComboKey: new Map<string, Map<string, number>>()
+    };
 
     if (multipleEntries.length === 0) {
-      return observedCountsByComboKey;
+      return observedCounts;
     }
 
     const summariesByComboKey = new Map<string, MultipleResponseSummary>();
@@ -839,8 +963,10 @@ export class VariableAnalysisProcessor {
     multipleEntries.forEach(entry => {
       summariesByComboKey.set(entry.comboKey, {
         totalCount: 0,
+        validCount: 0,
         emptyCount: 0,
         counts: new Map<string, number>(),
+        validCounts: new Map<string, number>(),
         categories: new Map<string, ParsedMultipleCategory>()
       });
     });
@@ -872,7 +998,11 @@ export class VariableAnalysisProcessor {
                 analysis_rows."responseId" AS "responseId",
                 analysis_rows."unitName" AS "unitName",
                 analysis_rows."variableId" AS "variableId",
-                analysis_rows."value" AS "value"
+                analysis_rows."value" AS "value",
+                analysis_rows."status" AS "status",
+                analysis_rows."statusV1" AS "statusV1",
+                analysis_rows."codeV1" AS "codeV1",
+                analysis_rows."scoreV1" AS "scoreV1"
               FROM (${analysisSql.sql}) analysis_rows
               WHERE analysis_rows."responseId" > ${lastResponseIdParameter}
               ORDER BY analysis_rows."responseId" ASC
@@ -916,9 +1046,15 @@ export class VariableAnalysisProcessor {
       }
 
       combo.totalCount = summary.totalCount;
+      combo.validCount = summary.validCount;
+      combo.invalidCount = Math.max(0, summary.totalCount - summary.validCount);
       combo.emptyCount = summary.emptyCount;
       combo.distinctValueCount = summary.counts.size;
-      observedCountsByComboKey.set(entry.comboKey, summary.counts);
+      observedCounts.countsByComboKey.set(entry.comboKey, summary.counts);
+      observedCounts.validCountsByComboKey.set(
+        entry.comboKey,
+        summary.validCounts
+      );
 
       const sortedValues = Array.from(summary.counts.entries())
         .sort(([valueA, countA], [valueB, countB]) => {
@@ -940,12 +1076,13 @@ export class VariableAnalysisProcessor {
           score: category?.score,
           schemaOrder: category?.schemaOrder,
           count,
+          validOccurrenceCount: summary.validCounts.get(value) || 0,
           percentage: 0
         };
       });
     });
 
-    return observedCountsByComboKey;
+    return observedCounts;
   }
 
   private addMultipleResponseRowToSummary(
@@ -969,6 +1106,10 @@ export class VariableAnalysisProcessor {
     }
 
     summary.totalCount += 1;
+    const isValidResponse = this.isValidAnalysisRow(row);
+    if (isValidResponse) {
+      summary.validCount += 1;
+    }
     const categories = this.parseMultipleResponseCategories(
       row.value,
       metadata
@@ -991,6 +1132,12 @@ export class VariableAnalysisProcessor {
         category.value,
         (summary.counts.get(category.value) || 0) + 1
       );
+      if (isValidResponse) {
+        summary.validCounts.set(
+          category.value,
+          (summary.validCounts.get(category.value) || 0) + 1
+        );
+      }
       summary.categories.set(category.value, category);
     });
   }
@@ -1108,7 +1255,10 @@ export class VariableAnalysisProcessor {
     scopeEntries: AnalyzedVariableScopeEntry[],
     frequencies: Record<string, VariableFrequencyDto[]>,
     schemaCodesByComboKey: Map<string, SchemaCodeInfo[]>,
-    observedCountsOverrideByComboKey = new Map<string, Map<string, number>>()
+    observedCountsOverride: MultipleResponseObservedCounts = {
+      countsByComboKey: new Map<string, Map<string, number>>(),
+      validCountsByComboKey: new Map<string, Map<string, number>>()
+    }
   ): Promise<void> {
     if (schemaCodesByComboKey.size === 0) {
       return;
@@ -1129,23 +1279,36 @@ export class VariableAnalysisProcessor {
 
       const rows = frequencies[entry.comboKey] || [];
       const rowsByValue = new Map(rows.map(row => [row.value, row]));
-      const observedCountsForCombo =
-        observedCountsOverrideByComboKey.get(entry.comboKey) ||
+      const observedCountsForCombo = observedCountsOverride.countsByComboKey
+        .get(entry.comboKey) ||
         observedSchemaCounts.get(entry.comboKey) ||
-        new Map<string, number>();
-      const totalResponses = combo.totalCount || 0;
+        new Map<string, FrequencyCounts>();
+      const observedValidCountsForCombo =
+        observedCountsOverride.validCountsByComboKey.get(entry.comboKey);
 
       schemaCodes.forEach(schemaCode => {
         const existingRow = rowsByValue.get(schemaCode.value);
+        const observedCounts = observedCountsForCombo.get(schemaCode.value);
+        const count = typeof observedCounts === 'number' ?
+          observedCounts :
+          observedCounts?.count || 0;
+        let validOccurrenceCount = 0;
+        if (observedValidCountsForCombo) {
+          validOccurrenceCount =
+            observedValidCountsForCombo.get(schemaCode.value) || 0;
+        } else if (typeof observedCounts !== 'number') {
+          validOccurrenceCount = observedCounts?.validCount || 0;
+        }
 
         if (existingRow) {
           existingRow.label = schemaCode.label;
           existingRow.score = schemaCode.score;
           existingRow.schemaOrder = schemaCode.order;
+          existingRow.validOccurrenceCount =
+            existingRow.validOccurrenceCount ?? validOccurrenceCount;
           return;
         }
 
-        const count = observedCountsForCombo.get(schemaCode.value) || 0;
         rows.push({
           unitId: combo.unitId,
           unitName: combo.unitName,
@@ -1157,7 +1320,8 @@ export class VariableAnalysisProcessor {
           isSchemaOnly: count === 0,
           isSchemaSupplemental: true,
           count,
-          percentage: totalResponses > 0 ? (count / totalResponses) * 100 : 0
+          validOccurrenceCount,
+          percentage: 0
         });
       });
 
@@ -1169,8 +1333,9 @@ export class VariableAnalysisProcessor {
     query: SelectQueryBuilder<ResponseEntity>,
     scopeEntries: AnalyzedVariableScopeEntry[],
     schemaCodesByComboKey: Map<string, SchemaCodeInfo[]>
-  ): Promise<Map<string, Map<string, number>>> {
-    const countsByComboKey = new Map<string, Map<string, number>>();
+  ): Promise<Map<string, Map<string, FrequencyCounts>>> {
+    const countsByComboKey =
+      new Map<string, Map<string, FrequencyCounts>>();
     const entriesWithSchemaCodes = scopeEntries.filter(entry => (
       (schemaCodesByComboKey.get(entry.comboKey)?.length || 0) > 0
     ));
@@ -1199,7 +1364,8 @@ export class VariableAnalysisProcessor {
             analysis_rows."unitName" AS "unitName",
             analysis_rows."variableId" AS "variableId",
             COALESCE(analysis_rows."value", '') AS "value",
-            COUNT(*) AS "count"
+            COUNT(*) AS "count",
+            SUM(CASE WHEN ${this.getValidResponseSql()} THEN 1 ELSE 0 END) AS "validCount"
           FROM (${analysisSql.sql}) analysis_rows
           INNER JOIN jsonb_to_recordset(${schemaValueFiltersParameter}::jsonb)
             AS schema_filter("logicalKey" text, "value" text)
@@ -1235,8 +1401,12 @@ export class VariableAnalysisProcessor {
         if (!schemaValues.has(value)) {
           return;
         }
-        const valueCounts = countsByComboKey.get(entry.comboKey) || new Map<string, number>();
-        valueCounts.set(value, parseInt(String(row.count), 10));
+        const valueCounts = countsByComboKey.get(entry.comboKey) ||
+          new Map<string, FrequencyCounts>();
+        valueCounts.set(value, {
+          count: this.parseCount(row.count),
+          validCount: this.parseCount(row.validCount)
+        });
         countsByComboKey.set(entry.comboKey, valueCounts);
       });
     }

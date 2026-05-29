@@ -931,7 +931,16 @@ describe('VariableAnalysisService', () => {
 
     expect(dataLine).toBeDefined();
     expect(dataLine).toContain('1;UNIT;MISSING;');
-    expect(dataLine).toContain(';ja;0;0;0;0;0;0;0;');
+    expect(dataLine?.split(';').slice(5, 13)).toEqual([
+      'ja',
+      '0',
+      '0',
+      '0',
+      '',
+      '0',
+      '0',
+      '0'
+    ]);
   });
 
   it('exports direct cached results as XLSX with typed numeric columns', async () => {
@@ -945,8 +954,10 @@ describe('VariableAnalysisService', () => {
               unitName: 'UNIT',
               variableId: 'VAR',
               totalCount: 10,
-              emptyCount: 1,
-              emptyPercentage: 10,
+              validCount: 10,
+              invalidCount: 0,
+              emptyCount: 0,
+              emptyPercentage: 0,
               distinctValueCount: 1,
               statusCounts: [{ status: 5, count: 10, percentage: 100 }]
             }
@@ -959,7 +970,10 @@ describe('VariableAnalysisService', () => {
                 variableId: 'VAR',
                 value: '=kept-as-text',
                 count: 10,
-                percentage: 100
+                validOccurrenceCount: 10,
+                percentage: 100,
+                percentageTotal: 100,
+                percentageValid: 100
               }
             ]
           },
@@ -978,8 +992,14 @@ describe('VariableAnalysisService', () => {
     expect(worksheet?.getRow(2).getCell(2).value).toBe('UNIT');
     expect(worksheet?.getRow(2).getCell(4).value).toBe('=kept-as-text');
     expect(worksheet?.getRow(2).getCell(7).value).toBe(10);
-    expect(worksheet?.getRow(2).getCell(8).value).toBe(100);
-    expect(worksheet?.getColumn(8).numFmt).toBe('0.0');
+    expect(worksheet?.getRow(2).getCell(8).value).toBe(10);
+    expect(worksheet?.getRow(2).getCell(9).value).toBe(100);
+    expect(worksheet?.getRow(2).getCell(10).value).toBe(100);
+    expect(worksheet?.getRow(2).getCell(11).value).toBe(10);
+    expect(worksheet?.getRow(2).getCell(12).value).toBe(10);
+    expect(worksheet?.getRow(2).getCell(13).value).toBe(0);
+    expect(worksheet?.getColumn(9).numFmt).toBe('0.0');
+    expect(worksheet?.getColumn(10).numFmt).toBe('0.0');
   });
 
   it('hides supplemental schema code rows by default and includes them on request', async () => {
