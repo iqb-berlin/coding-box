@@ -1608,6 +1608,7 @@ describe('CoderTrainingService', () => {
         manager_name: 'Manager'
       }));
       expect(result.score).toBe(2);
+      expect(result.source).toBe('manual');
     });
 
     it('should score negative discussion codes as missing results without coding scheme lookup', async () => {
@@ -1626,6 +1627,7 @@ describe('CoderTrainingService', () => {
         score: 0
       }));
       expect(result.score).toBe(0);
+      expect(result.source).toBe('manual');
     });
 
     it('should reject negative discussion codes that are not configured as missings', async () => {
@@ -1658,6 +1660,7 @@ describe('CoderTrainingService', () => {
         score: 0
       }));
       expect(result.score).toBe(0);
+      expect(result.source).toBe('manual');
     });
 
     it('should reject negative codes that are not part of the response job missing profile', async () => {
@@ -1735,6 +1738,45 @@ describe('CoderTrainingService', () => {
         score: 0
       }));
       expect(result.score).toBe(0);
+      expect(result.source).toBe('manual');
+    });
+
+    it('should return authoritative automatic agreement when clearing a manual discussion result', async () => {
+      const { training, unit } = createTrainingWithUnit({
+        code: 7,
+        score: 2
+      });
+      const secondUnit = {
+        ...unit,
+        coding_job_id: 12
+      } as CodingJobUnit;
+      training.codingJobs = [
+        {
+          id: 11,
+          missings_profile_id: null,
+          codingJobUnits: [unit]
+        } as CodingJob,
+        {
+          id: 12,
+          missings_profile_id: null,
+          codingJobUnits: [secondUnit]
+        } as CodingJob
+      ];
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce({ id: 44 });
+
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', null);
+
+      expect(coderTrainingDiscussionResultRepository.delete).toHaveBeenCalledWith(44);
+      expect(result).toEqual({
+        success: true,
+        code: 7,
+        score: 2,
+        source: 'auto_agreement',
+        managerUserId: null,
+        managerName: null
+      });
     });
 
     it('should reject discussion missing codes when default and explicit missing profiles are mixed', async () => {

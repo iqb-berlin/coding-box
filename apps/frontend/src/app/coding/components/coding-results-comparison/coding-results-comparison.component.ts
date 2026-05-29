@@ -781,6 +781,20 @@ export class CodingResultsComparisonComponent implements OnInit {
     return parseInt(normalized, 10);
   }
 
+  private isUnchangedDiscussionValue(
+    comparison: WithinTrainingComparison,
+    parsedCode: number | null,
+    score: number | null,
+    scoreOverride?: number | null
+  ): boolean {
+    if (scoreOverride !== undefined) {
+      return false;
+    }
+
+    return parsedCode === (comparison.discussionCode ?? null) &&
+      score === (comparison.discussionScore ?? null);
+  }
+
   onDiscussionCodeBlur(
     comparison: TrainingComparison | WithinTrainingComparison,
     scoreOverride?: number | null
@@ -807,6 +821,13 @@ export class CodingResultsComparisonComponent implements OnInit {
         this.getDiscussionScoreFromKnownCodes(withinComparison, parsedCode);
     }
     this.discussionErrorByResponseId[responseId] = '';
+
+    if (this.isUnchangedDiscussionValue(withinComparison, parsedCode, score, scoreOverride)) {
+      this.discussionCodeByResponseId[responseId] = parsedCode !== null ? parsedCode.toString() : '';
+      this.discussionScoreByResponseId[responseId] = withinComparison.discussionScore ?? null;
+      return;
+    }
+
     this.isSavingDiscussionByResponseId[responseId] = true;
 
     this.codingTrainingBackendService.saveDiscussionResult(
@@ -817,23 +838,13 @@ export class CodingResultsComparisonComponent implements OnInit {
       score
     ).subscribe({
       next: result => {
-        if (result.code === null) {
-          this.discussionCodeByResponseId[responseId] = '';
-          this.discussionScoreByResponseId[responseId] = null;
-          withinComparison.discussionCode = null;
-          withinComparison.discussionScore = null;
-          withinComparison.discussionManagerUserId = null;
-          withinComparison.discussionManagerName = null;
-          withinComparison.discussionSource = null;
-        } else {
-          this.discussionCodeByResponseId[responseId] = result.code.toString();
-          this.discussionScoreByResponseId[responseId] = result.score;
-          withinComparison.discussionCode = result.code;
-          withinComparison.discussionScore = result.score;
-          withinComparison.discussionManagerUserId = result.managerUserId;
-          withinComparison.discussionManagerName = result.managerName;
-          withinComparison.discussionSource = 'manual';
-        }
+        this.discussionCodeByResponseId[responseId] = result.code !== null ? result.code.toString() : '';
+        this.discussionScoreByResponseId[responseId] = result.score;
+        withinComparison.discussionCode = result.code;
+        withinComparison.discussionScore = result.score;
+        withinComparison.discussionManagerUserId = result.managerUserId;
+        withinComparison.discussionManagerName = result.managerName;
+        withinComparison.discussionSource = result.source;
         this.discussionErrorByResponseId[responseId] = '';
         if (result.managerName) {
           this.discussionManagerLabel = result.managerName;
