@@ -1,4 +1,5 @@
 import { CodingReviewService } from './coding-review.service';
+import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 
 jest.mock('./coding-statistics.service', () => ({
   CodingStatisticsService: jest.fn()
@@ -12,7 +13,6 @@ jest.mock('../workspace/workspace-exclusion.service', () => ({
 
 describe('CodingReviewService', () => {
   const workspaceId = 123;
-  const codingResultSignatureSql = "COUNT(DISTINCT (cju.code::text || ':' || COALESCE(cju.score::text, 'NULL')))";
   const emptyExclusions = {
     globalIgnoredUnits: [],
     ignoredBooklets: [],
@@ -39,6 +39,12 @@ describe('CodingReviewService', () => {
   let codingJobUnitRepository: {
     createQueryBuilder: jest.Mock;
     query: jest.Mock;
+    find: jest.Mock;
+  };
+  let jobDefinitionRepository: {
+    find: jest.Mock;
+  };
+  let variableBundleRepository: {
     find: jest.Mock;
   };
   let service: CodingReviewService;
@@ -152,10 +158,18 @@ describe('CodingReviewService', () => {
         })
       ])
     };
+    jobDefinitionRepository = {
+      find: jest.fn().mockResolvedValue([])
+    };
+    variableBundleRepository = {
+      find: jest.fn().mockResolvedValue([])
+    };
 
     service = new CodingReviewService(
       {} as never,
       codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
       {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
@@ -231,8 +245,8 @@ describe('CodingReviewService', () => {
       undefined
     );
 
-    expect(queryBuilder.andHaving).toHaveBeenCalledWith('COUNT(cju.code) > 1');
-    expect(queryBuilder.andHaving).toHaveBeenCalledWith(`${codingResultSignatureSql} > 1`);
+    expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('deduped_review_results.code IS NOT NULL'));
+    expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('COUNT(DISTINCT deduped_review_results.signature)'));
     expect(queryBuilder.andWhere).not.toHaveBeenCalledWith(
       '(resp.status_v2 IS NULL OR resp.status_v2 != :completeStatus)',
       { completeStatus: 5 }
@@ -241,11 +255,18 @@ describe('CodingReviewService', () => {
       '(cj.job_definition_id IN (:...jobDefinitionIds))',
       { jobDefinitionIds: [11] }
     );
+    expect(queryBuilder.innerJoin).toHaveBeenCalledWith(
+      expect.any(Function),
+      'review_coder',
+      'review_coder.coding_job_id = cj.id'
+    );
+    expect(queryBuilder.having).toHaveBeenCalledWith('COUNT(DISTINCT review_coder.user_id) > 1');
     expect(codingJobUnitRepository.find).toHaveBeenCalledWith({
       where: { response_id: expect.any(Object) },
       relations: [
         'coding_job',
         'coding_job.training',
+        'coding_job.codingJobVariableBundles',
         'coding_job.codingJobCoders',
         'coding_job.codingJobCoders.user',
         'response',
@@ -271,6 +292,28 @@ describe('CodingReviewService', () => {
     });
   });
 
+  it('builds the review scope from jobs with one distinct coder', async () => {
+    await service.getDoubleCodedVariablesForReview(workspaceId);
+    const singleCoderJoinFactory = queryBuilder.innerJoin.mock.calls[0][0] as (subQuery: {
+      select: jest.Mock;
+      addSelect: jest.Mock;
+      from: jest.Mock;
+      groupBy: jest.Mock;
+      having: jest.Mock;
+    }) => unknown;
+    const singleCoderSubQuery = {
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      from: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      having: jest.fn().mockReturnThis()
+    };
+
+    singleCoderJoinFactory(singleCoderSubQuery);
+
+    expect(singleCoderSubQuery.having).toHaveBeenCalledWith('COUNT(DISTINCT single_cjc.user_id) = 1');
+  });
+
   it('applies the match agreement filter', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
@@ -285,8 +328,9 @@ describe('CodingReviewService', () => {
       'match'
     );
 
-    expect(queryBuilder.andHaving).toHaveBeenCalledWith(`${codingResultSignatureSql} <= 1`);
-    expect(queryBuilder.andHaving).not.toHaveBeenCalledWith('COUNT(cju.code) > 1');
+    expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('COUNT(DISTINCT deduped_review_results.signature)'));
+    expect(queryBuilder.andHaving.mock.calls[0][0]).toContain('<= 1');
+    expect(queryBuilder.andHaving.mock.calls[0][0]).not.toContain('COUNT(DISTINCT CASE WHEN cju.code IS NOT NULL THEN cjc.user_id END)');
   });
 
   it('keeps legacy only-conflicts behavior for older clients', async () => {
@@ -297,8 +341,8 @@ describe('CodingReviewService', () => {
       true
     );
 
-    expect(queryBuilder.andHaving).toHaveBeenCalledWith('COUNT(cju.code) > 1');
-    expect(queryBuilder.andHaving).toHaveBeenCalledWith(`${codingResultSignatureSql} > 1`);
+    expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('deduped_review_results.code IS NOT NULL'));
+    expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('COUNT(DISTINCT deduped_review_results.signature)'));
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       '(resp.status_v2 IS NULL OR resp.status_v2 != :completeStatus)',
       { completeStatus: 5 }
@@ -446,7 +490,9 @@ describe('CodingReviewService', () => {
       'resp.status_v2 = :completeStatus',
       { completeStatus: 5 }
     );
-    expect(queryBuilder.andHaving).toHaveBeenCalledWith('COUNT(cju.code) = COUNT(cju.coding_job_id)');
+    expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('deduped_review_results.code IS NOT NULL'));
+    const lastHavingCall = queryBuilder.andHaving.mock.calls[queryBuilder.andHaving.mock.calls.length - 1][0];
+    expect(lastHavingCall).toContain(') = (SELECT COUNT(*) FROM');
   });
 
   it('combines job-definition and coder-training scopes with OR', async () => {
@@ -472,6 +518,302 @@ describe('CodingReviewService', () => {
         coderTrainingIds: [21]
       }
     );
+  });
+
+  it('deduplicates multiple jobs for the same coder in one review row', async () => {
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      makeCodingJobUnit({
+        coding_job_id: 100,
+        code: 1,
+        created_at: new Date('2026-05-18T00:00:00.000Z'),
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: null,
+          training_id: 60,
+          name: 'Training duplicate',
+          codingJobCoders: [{
+            user_id: 1,
+            user: { username: 'Coder 1' }
+          }]
+        }
+      }),
+      makeCodingJobUnit({
+        coding_job_id: 101,
+        code: 2,
+        created_at: new Date('2026-05-19T00:00:00.000Z'),
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: 11,
+          training_id: null,
+          name: 'Regular job',
+          codingJobCoders: [{
+            user_id: 1,
+            user: { username: 'Coder 1' }
+          }]
+        }
+      }),
+      makeCodingJobUnit({
+        coding_job_id: 102,
+        code: 3,
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: 11,
+          training_id: null,
+          name: 'Other coder job',
+          codingJobCoders: [{
+            user_id: 2,
+            user: { username: 'Coder 2' }
+          }]
+        }
+      })
+    ]);
+
+    const result = await service.getDoubleCodedVariablesForReview(workspaceId);
+
+    expect(result.data[0].coderResults).toEqual([
+      expect.objectContaining({ coderId: 1, jobId: 101, code: 2 }),
+      expect.objectContaining({ coderId: 2, jobId: 102, code: 3 })
+    ]);
+  });
+
+  it('does not treat multiple coders on the same job as independent review decisions', async () => {
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      makeCodingJobUnit({
+        coding_job_id: 100,
+        code: 1,
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: 11,
+          training_id: null,
+          name: 'Shared multi-coder job',
+          codingJobCoders: [
+            {
+              user_id: 1,
+              user: { username: 'Coder 1' }
+            },
+            {
+              user_id: 2,
+              user: { username: 'Coder 2' }
+            }
+          ]
+        }
+      }),
+      makeCodingJobUnit({
+        coding_job_id: 101,
+        code: 1,
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: 11,
+          training_id: null,
+          name: 'Single-coder job',
+          codingJobCoders: [{
+            user_id: 3,
+            user: { username: 'Coder 3' }
+          }]
+        }
+      })
+    ]);
+
+    const result = await service.getDoubleCodedVariablesForReview(workspaceId);
+
+    expect(result.data).toEqual([]);
+  });
+
+  it('treats duplicate rows for the same coder on one job as one review decision', async () => {
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      makeCodingJobUnit({
+        coding_job_id: 100,
+        code: 1,
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: 11,
+          training_id: null,
+          name: 'Duplicated assignment job',
+          codingJobCoders: [
+            {
+              user_id: 1,
+              user: { username: 'Coder 1' }
+            },
+            {
+              user_id: 1,
+              user: { username: 'Coder 1 duplicate' }
+            }
+          ]
+        }
+      }),
+      makeCodingJobUnit({
+        coding_job_id: 101,
+        code: 2,
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: 11,
+          training_id: null,
+          name: 'Other single-coder job',
+          codingJobCoders: [{
+            user_id: 2,
+            user: { username: 'Coder 2' }
+          }]
+        }
+      })
+    ]);
+
+    const result = await service.getDoubleCodedVariablesForReview(workspaceId);
+
+    expect(result.data[0].coderResults).toEqual([
+      expect.objectContaining({ coderId: 1, jobId: 100, code: 1 }),
+      expect.objectContaining({ coderId: 2, jobId: 101, code: 2 })
+    ]);
+  });
+
+  it('applies coder filters only through single-distinct-coder jobs', async () => {
+    await service.getDoubleCodedVariablesForReview(
+      workspaceId,
+      1,
+      50,
+      false,
+      false,
+      undefined,
+      1
+    );
+
+    const coderFilterFactory = queryBuilder.andWhere.mock.calls
+      .map(([condition]) => condition)
+      .find(condition => typeof condition === 'function') as (subQuery: {
+      subQuery: jest.Mock;
+      select: jest.Mock;
+      from: jest.Mock;
+      innerJoin: jest.Mock;
+      where: jest.Mock;
+      andWhere: jest.Mock;
+      getQuery: jest.Mock;
+    }) => string;
+    const coderFilterSubQuery = {
+      subQuery: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      from: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getQuery: jest.fn().mockReturnValue('(coder filter query)')
+    };
+
+    const condition = coderFilterFactory(coderFilterSubQuery);
+
+    expect(condition).toBe('cju.response_id IN (coder filter query)');
+    expect(coderFilterSubQuery.innerJoin).toHaveBeenCalledWith(
+      CodingJobCoder,
+      'cjc2',
+      'cjc2.coding_job_id = cj2.id'
+    );
+    expect(coderFilterSubQuery.andWhere).toHaveBeenCalledWith(expect.stringContaining('COUNT(DISTINCT cjc2_distinct.user_id)'));
+  });
+
+  it('keeps legacy bundle jobs in job-definition scoped double-coding review rows', async () => {
+    jobDefinitionRepository.find.mockResolvedValueOnce([{
+      assigned_variable_bundles: [{
+        id: 9,
+        name: 'Bundle'
+      }]
+    }]);
+    variableBundleRepository.find.mockResolvedValueOnce([{
+      id: 9,
+      variables: [{ unitName: 'UNIT_1', variableId: 'VAR_1' }]
+    }]);
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      makeCodingJobUnit({
+        coding_job_id: 100,
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: null,
+          training_id: null,
+          name: 'Legacy Bundle Job A',
+          codingJobVariableBundles: [{ variable_bundle_id: 9 }],
+          codingJobCoders: [{
+            user_id: 1,
+            user: { username: 'Coder 1' }
+          }]
+        }
+      }),
+      makeCodingJobUnit({
+        coding_job_id: 101,
+        code: 2,
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: null,
+          training_id: null,
+          name: 'Legacy Bundle Job B',
+          codingJobVariableBundles: [{ variable_bundle_id: 9 }],
+          codingJobCoders: [{
+            user_id: 2,
+            user: { username: 'Coder 2' }
+          }]
+        }
+      }),
+      makeCodingJobUnit({
+        coding_job_id: 103,
+        code: 4,
+        variable_id: 'OTHER_VAR',
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: null,
+          training_id: null,
+          name: 'Same Bundle Other Variable',
+          codingJobVariableBundles: [{ variable_bundle_id: 9 }],
+          codingJobCoders: [{
+            user_id: 4,
+            user: { username: 'Coder 4' }
+          }]
+        }
+      }),
+      makeCodingJobUnit({
+        coding_job_id: 102,
+        code: 3,
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: null,
+          training_id: null,
+          name: 'Different Bundle Job',
+          codingJobVariableBundles: [{ variable_bundle_id: 10 }],
+          codingJobCoders: [{
+            user_id: 3,
+            user: { username: 'Coder 3' }
+          }]
+        }
+      })
+    ]);
+
+    const result = await service.getDoubleCodedVariablesForReview(
+      workspaceId,
+      1,
+      50,
+      false,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'all',
+      [11]
+    );
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('scope_cjvb.variable_bundle_id IN (:...jobDefinitionBundleIds)'),
+      { jobDefinitionIds: [11], jobDefinitionBundleIds: [9] }
+    );
+    expect(variableBundleRepository.find).toHaveBeenCalledWith({
+      where: {
+        id: expect.any(Object),
+        workspace_id: workspaceId
+      },
+      select: ['id', 'variables']
+    });
+    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('variable_bundle scope_vb');
+    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('scope_vb.variables');
+    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cju.unit_name');
+    expect(result.data[0].coderResults).toEqual([
+      expect.objectContaining({ coderId: 1, jobId: 100 }),
+      expect.objectContaining({ coderId: 2, jobId: 101 })
+    ]);
   });
 
   it('returns an empty page without loading relations when no double-coded rows match', async () => {

@@ -18,6 +18,7 @@ import { AppService } from '../../../core/services/app.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
+import { MissingsProfileService } from '../../services/missings-profile.service';
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 
@@ -29,6 +30,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
   let mockAppService: Partial<AppService>;
   let mockCoderService: Partial<CoderService>;
   let mockCodingJobService: Partial<CodingJobService>;
+  let mockMissingsProfileService: Partial<MissingsProfileService>;
   let mockDialogRef: Partial<MatDialogRef<CodingJobDefinitionDialogComponent>>;
   let mockSnackBar: Partial<MatSnackBar>;
   let mockTranslateService: Partial<TranslateService>;
@@ -124,6 +126,13 @@ describe('CodingJobDefinitionDialogComponent', () => {
       jobsCreatedEvent: new EventEmitter<void>()
     } as Partial<CodingJobService>;
 
+    mockMissingsProfileService = {
+      getMissingsProfiles: jest.fn().mockReturnValue(of([
+        { id: 7, label: 'IQB-Standard' },
+        { id: 9, label: 'Custom' }
+      ]))
+    } as Partial<MissingsProfileService>;
+
     mockDialogRef = {
       close: jest.fn()
     };
@@ -158,6 +167,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
         { provide: AppService, useValue: mockAppService },
         { provide: CoderService, useValue: mockCoderService },
         { provide: CodingJobService, useValue: mockCodingJobService },
+        { provide: MissingsProfileService, useValue: mockMissingsProfileService },
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: mockData },
         { provide: MatSnackBar, useValue: mockSnackBar },
@@ -200,8 +210,22 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.codingJobForm).toBeDefined();
     expect(component.codingJobForm.get('durationSeconds')?.value).toBe(1);
     expect(component.codingJobForm.get('caseOrderingMode')?.value).toBe('continuous');
+    expect(component.codingJobForm.get('missingsProfileId')?.value).toBe(7);
     expect(component.codingJobForm.get('showScore')?.value).toBe(false);
     expect(component.codingJobForm.get('allowComments')?.value).toBe(true);
+  });
+
+  it('should initialize an edited definition with its camel-case missings profile id', () => {
+    createComponent({
+      mode: 'definition',
+      isEdit: true,
+      codingJob: {
+        id: 555,
+        missingsProfileId: 9
+      } as CodingJob
+    });
+
+    expect(component.codingJobForm.get('missingsProfileId')?.value).toBe(9);
   });
 
   it('should load variables and coders on init', () => {
@@ -446,6 +470,21 @@ describe('CodingJobDefinitionDialogComponent', () => {
     }));
   });
 
+  it('should send the selected missings profile when creating a definition', async () => {
+    createComponent();
+    (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedVariables.select(mockVariables[0]);
+    component.codingJobForm.patchValue({ missingsProfileId: 9 });
+
+    await component.onSubmit();
+
+    expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledWith(1, expect.objectContaining({
+      missingsProfileId: 9
+    }));
+  });
+
   describe('Mode: Job (Create/Edit)', () => {
     it('should submit create calling createCodingJob and assignCoder when 1 variable selected', fakeAsync(() => {
       createComponent({ mode: 'job', isEdit: false });
@@ -536,7 +575,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
       expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.objectContaining({
         showScore: true,
         allowComments: false,
-        suppressGeneralInstructions: true
+        suppressGeneralInstructions: true,
+        missingsProfileId: 7
       }));
       expect(mockDialogRef.close).toHaveBeenCalled();
     }));
