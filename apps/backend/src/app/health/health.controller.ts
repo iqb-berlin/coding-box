@@ -2,12 +2,47 @@ import { Controller, Get, Logger } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { JobQueueService, RedisConnectionStatus } from '../job-queue/job-queue.service';
 
+export interface ApplicationHealthStatus {
+  status: 'ok';
+  uptime: number;
+  timestamp: string;
+}
+
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
   private readonly logger = new Logger(HealthController.name);
 
   constructor(private readonly jobQueueService: JobQueueService) {}
+
+  @Get()
+  @ApiOkResponse({
+    description: 'Application health status',
+    type: Object,
+    schema: {
+      properties: {
+        status: {
+          type: 'string',
+          example: 'ok'
+        },
+        uptime: {
+          type: 'number',
+          description: 'Node.js process uptime in seconds'
+        },
+        timestamp: {
+          type: 'string',
+          format: 'date-time'
+        }
+      }
+    }
+  })
+  checkApplication(): ApplicationHealthStatus {
+    return {
+      status: 'ok',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString()
+    };
+  }
 
   /**
    * Check if Redis is connected and jobs can be managed

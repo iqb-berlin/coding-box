@@ -68,6 +68,16 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
       <<: [ *env-redis, *env-postgres, *env-keycloak ]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"const http=require('http');const req=http.get('http://backend:3333/api/health',res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.setTimeout(2000,()=>{req.destroy();process.exit(1);});\""
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
     networks:
       - application-network
 
@@ -78,7 +88,7 @@ services:
       liquibase:
         condition: service_completed_successfully
       backend:
-        condition: service_started
+        condition: service_healthy
     networks:
       - application-network
 
