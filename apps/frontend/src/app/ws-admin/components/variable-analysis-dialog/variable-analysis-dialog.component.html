@@ -182,11 +182,25 @@
                 <td mat-cell *matCellDef="let row">{{ row.count }}</td>
               </ng-container>
 
-              <ng-container matColumnDef="percentage">
+              <ng-container matColumnDef="validOccurrenceCount">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                  {{ 'variable-analysis.percentage-column' | translate }}
+                  {{ 'variable-analysis.valid-count-column' | translate }}
                 </th>
-                <td mat-cell *matCellDef="let row">{{ row.percentage | number:'1.1-1' }}%</td>
+                <td mat-cell *matCellDef="let row">{{ row.validOccurrenceCount ?? 0 }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="percentageTotal">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.percentage-total-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ row.percentageTotal | number:'1.1-1' }}%</td>
+              </ng-container>
+
+              <ng-container matColumnDef="percentageValid">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.percentage-valid-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ formatOptionalPercentage(row.percentageValid) }}</td>
               </ng-container>
 
               <ng-container matColumnDef="totalCount">
@@ -194,6 +208,13 @@
                   {{ 'variable-analysis.total-cases' | translate }}
                 </th>
                 <td mat-cell *matCellDef="let row">{{ row.totalCount }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="validCount">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.valid-responses-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ row.validCount ?? 0 }}</td>
               </ng-container>
 
               <ng-container matColumnDef="emptyCount">

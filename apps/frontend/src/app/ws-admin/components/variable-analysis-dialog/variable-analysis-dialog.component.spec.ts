@@ -158,6 +158,16 @@ describe('VariableAnalysisDialogComponent', () => {
       expect(component.variableFrequencies[comboKey][0].percentage).toBe(
         (2 / 2) * 100
       );
+      expect(component.variableFrequencies[comboKey][0].percentageValid).toBe(
+        100
+      );
+      expect(
+        component.allVariableCombos.find(combo => combo.variableId === 'VAR1')
+      ).toEqual(expect.objectContaining({
+        totalCount: 2,
+        validCount: 2,
+        invalidCount: 0
+      }));
     });
 
     it('should use analysisResults if provided', () => {

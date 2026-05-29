@@ -53,8 +53,12 @@ type VariableAnalysisSortBy =
   | 'label'
   | 'score'
   | 'count'
+  | 'validOccurrenceCount'
   | 'percentage'
+  | 'percentageTotal'
+  | 'percentageValid'
   | 'totalCount'
+  | 'validCount'
   | 'emptyCount'
   | 'emptyPercentage'
   | 'statusSummary';
@@ -67,8 +71,12 @@ const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
   { header: 'Label', key: 'label', width: 36 },
   { header: 'Wert ist leer', key: 'isEmptyValue', width: 14 },
   { header: 'Anzahl', key: 'count', width: 12 },
-  { header: 'Anteil (%)', key: 'percentage', width: 14 },
+  { header: 'Gültige Anzahl', key: 'validOccurrenceCount', width: 16 },
+  { header: 'Anteil gesamt (%)', key: 'percentageTotal', width: 18 },
+  { header: 'Anteil gültig (%)', key: 'percentageValid', width: 18 },
   { header: 'Antworten gesamt', key: 'totalCount', width: 18 },
+  { header: 'Antworten gültig', key: 'validCount', width: 18 },
+  { header: 'Fehlend/ungültig', key: 'invalidCount', width: 18 },
   { header: 'Leere Werte', key: 'emptyCount', width: 14 },
   { header: 'Leere Werte (%)', key: 'emptyPercentage', width: 18 },
   { header: 'Unterschiedliche Werte', key: 'distinctValueCount', width: 22 },
@@ -105,8 +113,12 @@ export class VariableAnalysisService {
     'label',
     'score',
     'count',
+    'validOccurrenceCount',
     'percentage',
+    'percentageTotal',
+    'percentageValid',
     'totalCount',
+    'validCount',
     'emptyCount',
     'emptyPercentage',
     'statusSummary'
@@ -333,13 +345,16 @@ export class VariableAnalysisService {
     };
 
     rows.forEach(row => worksheet.addRow(row));
-    ['percentage', 'emptyPercentage'].forEach(columnKey => {
+    ['percentageTotal', 'percentageValid', 'emptyPercentage'].forEach(columnKey => {
       worksheet.getColumn(columnKey).numFmt = '0.0';
     });
     [
       'unitId',
       'count',
+      'validOccurrenceCount',
       'totalCount',
+      'validCount',
+      'invalidCount',
       'emptyCount',
       'distinctValueCount',
       'hiddenValueCount'
@@ -974,6 +989,12 @@ export class VariableAnalysisService {
     rows: VariableFrequencyDto[]
   ): VariableAnalysisTableRowDto[] {
     const totalCount = combo.totalCount ?? this.sumCounts(rows);
+    const validCount = combo.validCount ??
+      Math.max(0, totalCount - (combo.emptyCount ?? this.sumCounts(
+        rows.filter(frequency => frequency.value === '')
+      )));
+    const invalidCount = combo.invalidCount ??
+      Math.max(0, totalCount - validCount);
     const emptyCount = combo.emptyCount ?? this.sumCounts(
       rows.filter(frequency => frequency.value === '')
     );
@@ -991,32 +1012,49 @@ export class VariableAnalysisService {
 
     const toTableRow = (
       row: VariableFrequencyDto
-    ): VariableAnalysisTableRowDto => ({
-      unitId: combo.unitId,
-      unitName: combo.unitName,
-      variableId: combo.variableId,
-      sourceVariableId: combo.sourceVariableId,
-      variableAlias: combo.variableAlias,
-      selectionSource: combo.selectionSource,
-      sourceType: combo.sourceType,
-      isDerived: combo.isDerived,
-      hasCodingScheme: combo.hasCodingScheme,
-      value: row.value,
-      label: row.label,
-      score: row.score,
-      schemaOrder: row.schemaOrder,
-      isSchemaOnly: row.isSchemaOnly,
-      isSchemaSupplemental: row.isSchemaSupplemental,
-      count: row.count,
-      percentage: row.percentage,
-      totalCount,
-      emptyCount,
-      emptyPercentage,
-      distinctValueCount,
-      hiddenValueCount,
-      statusCounts: combo.statusCounts || [],
-      statusSummary
-    });
+    ): VariableAnalysisTableRowDto => {
+      const validOccurrenceCount = row.validOccurrenceCount ??
+        (row.value === '' ? 0 : row.count);
+      const percentageTotal = row.percentageTotal ??
+        row.percentage ??
+        this.calculatePercentage(row.count, totalCount);
+      const percentageValid = row.percentageValid ??
+        (validCount > 0 ?
+          this.calculatePercentage(validOccurrenceCount, validCount) :
+          null);
+
+      return {
+        unitId: combo.unitId,
+        unitName: combo.unitName,
+        variableId: combo.variableId,
+        sourceVariableId: combo.sourceVariableId,
+        variableAlias: combo.variableAlias,
+        selectionSource: combo.selectionSource,
+        sourceType: combo.sourceType,
+        isDerived: combo.isDerived,
+        hasCodingScheme: combo.hasCodingScheme,
+        value: row.value,
+        label: row.label,
+        score: row.score,
+        schemaOrder: row.schemaOrder,
+        isSchemaOnly: row.isSchemaOnly,
+        isSchemaSupplemental: row.isSchemaSupplemental,
+        count: row.count,
+        validOccurrenceCount,
+        percentage: percentageTotal,
+        percentageTotal,
+        percentageValid,
+        totalCount,
+        validCount,
+        invalidCount,
+        emptyCount,
+        emptyPercentage,
+        distinctValueCount,
+        hiddenValueCount,
+        statusCounts: combo.statusCounts || [],
+        statusSummary
+      };
+    };
 
     if (rows.length === 0) {
       return [toTableRow({
@@ -1025,7 +1063,10 @@ export class VariableAnalysisService {
         variableId: combo.variableId,
         value: '',
         count: 0,
+        validOccurrenceCount: 0,
         percentage: 0,
+        percentageTotal: 0,
+        percentageValid: validCount > 0 ? 0 : null,
         isSchemaOnly: true
       })];
     }
@@ -1165,7 +1206,10 @@ export class VariableAnalysisService {
         isSchemaOnly: row.isSchemaOnly,
         isSchemaSupplemental: row.isSchemaSupplemental,
         count: row.count,
-        percentage: row.percentage
+        validOccurrenceCount: row.validOccurrenceCount,
+        percentage: row.percentage,
+        percentageTotal: row.percentageTotal,
+        percentageValid: row.percentageValid
       });
     });
 
@@ -1209,6 +1253,10 @@ export class VariableAnalysisService {
       const emptyCount = combo.emptyCount ?? this.sumCounts(
         frequencies.filter(frequency => frequency.value === '')
       );
+      const validCount = combo.validCount ??
+        Math.max(0, totalCount - emptyCount);
+      const invalidCount = combo.invalidCount ??
+        Math.max(0, totalCount - validCount);
       const emptyPercentage = combo.emptyPercentage ??
         this.calculatePercentage(emptyCount, totalCount);
       const distinctValueCount =
@@ -1230,11 +1278,24 @@ export class VariableAnalysisService {
           variableId: combo.variableId,
           value: '',
           count: 0,
+          validOccurrenceCount: 0,
           percentage: 0,
+          percentageTotal: 0,
+          percentageValid: validCount > 0 ? 0 : null,
           isSchemaOnly: true
         }];
 
       visibleFrequencies.forEach(frequency => {
+        const validOccurrenceCount = frequency.validOccurrenceCount ??
+          (frequency.value === '' ? 0 : frequency.count);
+        const percentageTotal = frequency.percentageTotal ??
+          frequency.percentage ??
+          this.calculatePercentage(frequency.count, totalCount);
+        const percentageValid = frequency.percentageValid ??
+          (validCount > 0 ?
+            this.calculatePercentage(validOccurrenceCount, validCount) :
+            null);
+
         rows.push({
           unitId: combo.unitId,
           unitName: combo.unitName,
@@ -1243,8 +1304,14 @@ export class VariableAnalysisService {
           label: frequency.label || '',
           isEmptyValue: frequency.value === '' ? 'ja' : 'nein',
           count: frequency.count,
-          percentage: this.roundPercentage(frequency.percentage),
+          validOccurrenceCount,
+          percentageTotal: this.roundPercentage(percentageTotal),
+          percentageValid: percentageValid === null ?
+            '' :
+            this.roundPercentage(percentageValid),
           totalCount,
+          validCount,
+          invalidCount,
           emptyCount,
           emptyPercentage: this.roundPercentage(emptyPercentage),
           distinctValueCount,
