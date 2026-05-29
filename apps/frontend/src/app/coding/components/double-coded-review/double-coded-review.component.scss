@@ -339,50 +339,73 @@
         }
       }
 
-      .coder-column-cell {
+      .coder-column-results {
         display: flex;
-        align-items: center;
+        flex-direction: column;
         gap: 6px;
-        padding: 8px;
-        border: 1px solid #e0e4e8;
-        border-radius: 8px;
-        background-color: #fff;
-        min-height: 40px;
 
-        &.pending {
-          opacity: 0.75;
-          border-style: dashed;
-          background-color: #fafbfc;
-        }
-
-        .coder-code-row {
+        .coder-column-cell {
           display: flex;
-          align-items: baseline;
+          flex-direction: column;
           gap: 4px;
-          min-width: 0;
+          padding: 8px;
+          border: 1px solid #e0e4e8;
+          border-radius: 8px;
+          background-color: #fff;
+          min-height: 40px;
 
-          .coder-code-value {
-            font-weight: 700;
-            color: #1e293b;
+          &.pending {
+            opacity: 0.75;
+            border-style: dashed;
+            background-color: #fafbfc;
           }
 
-          .coder-score-value {
+          .coder-result-source {
+            min-width: 0;
+            overflow: hidden;
             color: #64748b;
-            font-size: 12px;
+            font-size: 11px;
+            line-height: 1.2;
+            text-overflow: ellipsis;
+            white-space: nowrap;
           }
-        }
 
-        .note-icon,
-        .supervisor-comment-icon {
-          font-size: 16px;
-          width: 16px;
-          height: 16px;
-          cursor: help;
-          flex-shrink: 0;
-        }
+          .coder-result-content {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+          }
 
-        .note-icon {
-          color: #f59e0b;
+          .coder-code-row {
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+            min-width: 0;
+
+            .coder-code-value {
+              font-weight: 700;
+              color: #1e293b;
+            }
+
+            .coder-score-value {
+              color: #64748b;
+              font-size: 12px;
+            }
+          }
+
+          .note-icon,
+          .supervisor-comment-icon {
+            font-size: 16px;
+            width: 16px;
+            height: 16px;
+            cursor: help;
+            flex-shrink: 0;
+          }
+
+          .note-icon {
+            color: #f59e0b;
+          }
         }
       }
 
