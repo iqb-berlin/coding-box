@@ -246,6 +246,155 @@ export class WorkspaceCodingJobDefinitionController {
     );
   }
 
+  @Get(':workspace_id/coding/job-definitions/:id/create-job-preview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiOkResponse({
+    description: 'Preview distributed coding jobs from a job definition.',
+    schema: {
+      type: 'object',
+      properties: {
+        distribution: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          }
+        },
+        distributionByCoderId: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          }
+        },
+        doubleCodingInfo: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            properties: {
+              totalCases: { type: 'number' },
+              distinctCases: { type: 'number' },
+              codingTasksTotal: { type: 'number' },
+              doubleCodedCases: { type: 'number' },
+              singleCodedCasesAssigned: { type: 'number' },
+              doubleCodedCasesPerCoder: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
+              }
+            }
+          }
+        },
+        aggregationInfo: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            properties: {
+              uniqueCases: { type: 'number' },
+              totalResponses: { type: 'number' }
+            }
+          }
+        },
+        matchingFlags: {
+          type: 'array',
+          items: { type: 'string' }
+        },
+        warnings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' },
+              message: { type: 'string' },
+              casesInJobs: { type: 'number' },
+              availableCases: { type: 'number' }
+            }
+          }
+        },
+        pairDistribution: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        tasksPerCoder: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        coderWeights: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        selectedVariables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' },
+              includeDeriveError: { type: 'boolean' }
+            }
+          }
+        },
+        selectedVariableBundles: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' },
+              caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] },
+              variables: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    unitName: { type: 'string' },
+                    variableId: { type: 'string' },
+                    includeDeriveError: { type: 'boolean' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        selectedCoders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' },
+              username: { type: 'string' },
+              capacityPercent: { type: 'number' }
+            }
+          }
+        }
+      },
+      required: [
+        'distribution',
+        'doubleCodingInfo',
+        'aggregationInfo',
+        'matchingFlags',
+        'warnings',
+        'selectedVariables',
+        'selectedVariableBundles',
+        'selectedCoders'
+      ]
+    }
+  })
+  async previewCodingJobFromDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number
+  ): Promise<Awaited<ReturnType<JobDefinitionService['previewCodingJobFromDefinition']>>> {
+    return this.jobDefinitionService.previewCodingJobFromDefinition(
+      id,
+      workspace_id
+    );
+  }
+
   @Get(':workspace_id/coding/job-definitions/:id/refresh-preview')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
