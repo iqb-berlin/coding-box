@@ -104,4 +104,65 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
     expect(component.canConfirm).toBe(true);
     expect(component.confirmButtonLabel).toBe('Logs entfernen');
   });
+
+  it('shows response cleanup details and requires confirmation', () => {
+    component.data.preview = {
+      targetType: 'responses',
+      scope: 'units',
+      label: 'Aufgabe(n): U1 vor 01.01.2026',
+      persons: 2,
+      booklets: 2,
+      units: 1,
+      responses: 3,
+      groups: [],
+      bookletNames: [],
+      unitNames: ['U1'],
+      warnings: [],
+      responseCleanup: {
+        answeredBefore: 1767222000000,
+        variableIds: ['V1'],
+        subforms: [],
+        timestampSourceCounts: {
+          chunk: 3,
+          unknown: 1
+        },
+        unknownTimestampResponses: 1,
+        samples: [
+          {
+            responseId: 11,
+            personId: 1,
+            personCode: 'P1',
+            personLogin: 'login',
+            personGroup: 'G1',
+            bookletId: 2,
+            bookletName: 'B1',
+            unitId: 3,
+            unitName: 'U1',
+            variableId: 'V1',
+            subform: null,
+            value: 'A',
+            answeredAt: 1767135600000,
+            timestampSource: 'chunk'
+          }
+        ]
+      }
+    };
+
+    expect(component.dialogTitle).toBe('Antworten unwiderruflich löschen');
+    expect(component.metrics).toEqual([
+      { label: 'Antworten', value: 3, hint: 'mit Chunk-Zeitstempel' },
+      { label: 'Aufgaben', value: 1, hint: 'betroffen' },
+      { label: 'Testhefte', value: 2, hint: 'betroffen' },
+      { label: 'Testpersonen', value: 2, hint: 'betroffen' }
+    ]);
+    expect(component.responseCleanupVariableText).toBe('V1');
+    expect(component.responseCleanupSubformText).toBe('Alle Subforms');
+    expect(component.responseCleanupUnknownTimestampResponses).toBe(1);
+    expect(component.requiresAcknowledgement).toBe(true);
+    expect(component.canConfirm).toBe(false);
+
+    component.onAcknowledgementChange({ checked: true } as never);
+    expect(component.canConfirm).toBe(true);
+    expect(component.confirmButtonLabel).toBe('Antworten löschen');
+  });
 });
