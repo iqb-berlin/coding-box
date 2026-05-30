@@ -38,7 +38,8 @@ import { ValidationTaskService } from '../../database/services/validation';
 import { ValidationTaskDto } from './dto/validation-task.dto';
 import {
   TestResultsDeletePreviewDto,
-  TestResultsDeleteRequestDto
+  TestResultsDeleteRequestDto,
+  TestResultsResponseCleanupRequestDto
 } from '../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 @ApiTags('Admin Workspace Test Results')
@@ -233,6 +234,54 @@ export class WorkspaceTestResultsManagementController {
     const task = await this.validationTaskService.createValidationTask(
       workspaceId,
       'deleteTestResults',
+      undefined,
+      undefined,
+      {
+        ...request,
+        userId: req.user.id
+      }
+    );
+    return ValidationTaskDto.fromEntity(task);
+  }
+
+  @Post(':workspace_id/test-results/responses/delete-preview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Preview response cleanup by unit and answer timestamp',
+    description:
+            'Calculates affected response rows before starting a long-running response cleanup.'
+  })
+  async previewDeleteTestResultResponses(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Body() request: TestResultsResponseCleanupRequestDto
+  ): Promise<TestResultsDeletePreviewDto> {
+    return this.workspaceTestResultsService.previewDeleteTestResultResponses(
+      workspaceId,
+      request
+    );
+  }
+
+  @Post(':workspace_id/test-results/responses/delete-jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Start response cleanup by unit and answer timestamp',
+    description:
+            'Starts an asynchronous deletion task for selected response rows.'
+  })
+  async createDeleteTestResultResponsesJob(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Body() request: TestResultsResponseCleanupRequestDto,
+      @Req() req: RequestWithUser
+  ): Promise<ValidationTaskDto> {
+    await this.jobQueueService.assertNoDependencyConflicts(
+      'validation-task',
+      workspaceId
+    );
+    const task = await this.validationTaskService.createValidationTask(
+      workspaceId,
+      'deleteTestResultResponses',
       undefined,
       undefined,
       {

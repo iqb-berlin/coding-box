@@ -465,6 +465,135 @@ describe('WorkspaceTestResultsService', () => {
       assertSpy.mockRestore();
     });
 
+    it('deletes response rows and direct coding dependents for response cleanup jobs', async () => {
+      const deletedFrom: unknown[] = [];
+      const manager = {
+        createQueryBuilder: jest.fn(() => {
+          const qb = {} as {
+            delete: jest.Mock;
+            from: jest.Mock;
+            where: jest.Mock;
+            execute: jest.Mock;
+          };
+          qb.delete = jest.fn(() => qb);
+          qb.from = jest.fn((entity: unknown) => {
+            deletedFrom.push(entity);
+            return qb;
+          });
+          qb.where = jest.fn(() => qb);
+          qb.execute = jest.fn().mockResolvedValue({ affected: 2 });
+          return qb;
+        })
+      };
+      const preview = {
+        targetType: 'responses',
+        scope: 'units',
+        label: 'Aufgabe(n): UNIT_1 vor 01.01.2026',
+        persons: 1,
+        booklets: 1,
+        units: 1,
+        responses: 2,
+        groups: [],
+        bookletNames: ['BOOKLET_1'],
+        unitNames: ['UNIT_1'],
+        warnings: [],
+        responseCleanup: {
+          answeredBefore: 1767222000000,
+          variableIds: [],
+          subforms: [],
+          timestampSourceCounts: {
+            chunk: 2,
+            unknown: 0
+          },
+          unknownTimestampResponses: 0,
+          samples: []
+        }
+      };
+      const privateService = service as unknown as {
+        resolveResponseCleanupTargets: jest.Mock;
+        assertResponseCleanupCompleted: jest.Mock;
+      };
+      const resolveSpy = jest
+        .spyOn(privateService, 'resolveResponseCleanupTargets')
+        .mockResolvedValue({
+          responseIds: [501, 502],
+          unitIds: [301],
+          preview
+        });
+      const assertSpy = jest
+        .spyOn(privateService, 'assertResponseCleanupCompleted')
+        .mockResolvedValue(undefined);
+
+      (dataSource.transaction as jest.Mock).mockImplementation(cb => cb(manager));
+
+      const result = await service.deleteTestResultResponsesByRequest(
+        1,
+        {
+          unitNames: ['UNIT_1'],
+          answeredBefore: 1767222000000
+        },
+        'user-1'
+      );
+
+      expect(deletedFrom).toEqual([
+        CodingJobUnit,
+        CoderTrainingDiscussionResult,
+        ResponseEntity
+      ]);
+      expect(deletedFrom).not.toContain(Unit);
+      expect(deletedFrom).not.toContain(Booklet);
+      expect(deletedFrom).not.toContain(Persons);
+      expect(assertSpy).toHaveBeenCalledWith([501, 502]);
+      expect(result).toMatchObject({
+        targetType: 'responses',
+        deletedTargetCount: 2
+      });
+      expect(cacheService.delete).toHaveBeenCalledWith(
+        'workspace-overview-stats-1'
+      );
+      expect(journalService.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: 1,
+          actorUserId: 'user-1',
+          eventType: 'TEST_RESULT_RESPONSES_DELETED',
+          entityType: 'responses',
+          entityId: null,
+          result: 'success',
+          summary: 'Test result responses deleted by cleanup job',
+          details: expect.objectContaining({
+            deletedTargetCount: 2,
+            preview
+          })
+        })
+      );
+
+      resolveSpy.mockRestore();
+      assertSpy.mockRestore();
+    });
+
+    it('matches response cleanup chunks by exact variable list before using the subform fallback', () => {
+      const privateClass = WorkspaceTestResultsService as unknown as {
+        responseMatchesChunkCondition: (
+          chunkAlias: string,
+          responseAlias: string
+        ) => string;
+      };
+
+      const condition = privateClass.responseMatchesChunkCondition(
+        'cleanup_chunk',
+        'response'
+      );
+
+      expect(condition).toContain(
+        "response.variableid = ANY(string_to_array(COALESCE(cleanup_chunk.variables, ''), ','))"
+      );
+      expect(condition).toContain("COALESCE(cleanup_chunk.variables, '') = ''");
+      expect(condition).toContain(
+        "COALESCE(cleanup_chunk.key, '') = COALESCE(response.subform, '')"
+      );
+      expect(condition).not.toContain('LIKE');
+    });
+
     it('explicitly deletes known unit dependents before removing unit targets', async () => {
       const deletedFrom: unknown[] = [];
       const manager = {

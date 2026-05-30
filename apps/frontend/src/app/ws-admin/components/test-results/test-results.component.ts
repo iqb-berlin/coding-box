@@ -168,6 +168,7 @@ import {
   TestResultsImportProgressState
 } from './test-results-import-progress-dialog.component';
 import { TestResultsDeletePreviewDialogComponent } from './test-results-delete-preview-dialog.component';
+import { TestResultsResponseCleanupDialogComponent } from './test-results-response-cleanup-dialog.component';
 import {
   PendingUploadBatch,
   TestResultsUploadStateService
@@ -185,7 +186,8 @@ import {
 import {
   TestResultsDeletePreviewDto,
   TestResultsDeleteRequestDto,
-  TestResultsDeleteResultDto
+  TestResultsDeleteResultDto,
+  TestResultsResponseCleanupRequestDto
 } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
@@ -2414,6 +2416,28 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
+  openResponseCleanupDialog(): void {
+    if (this.isDeleteJobRunning()) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open(TestResultsResponseCleanupDialogComponent, {
+      width: '640px',
+      maxWidth: '95vw',
+      data: {
+        workspaceId: this.appService.selectedWorkspaceId
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(
+      (request: TestResultsResponseCleanupRequestDto | false | undefined) => {
+        if (request) {
+          this.confirmAndStartResponseCleanup(request);
+        }
+      }
+    );
+  }
+
   isDeleteJobRunning(): boolean {
     return this.activeDeleteTask?.status === 'pending' ||
       this.activeDeleteTask?.status === 'processing' ||
@@ -2454,6 +2478,45 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
+  private confirmAndStartResponseCleanup(
+    request: TestResultsResponseCleanupRequestDto
+  ): void {
+    if (this.isDeleteJobRunning()) {
+      return;
+    }
+
+    this.isDeletingTestPersons = true;
+
+    this.testResultService
+      .previewDeleteTestResultResponses(
+        this.appService.selectedWorkspaceId,
+        request
+      )
+      .subscribe({
+        next: preview => {
+          this.isDeletingTestPersons = false;
+          if (!preview) {
+            this.snackBar.open(
+              'Die Löschvorschau konnte nicht berechnet werden.',
+              'Fehler',
+              { duration: 4000 }
+            );
+            return;
+          }
+
+          this.openResponseCleanupPreviewDialog(request, preview);
+        },
+        error: () => {
+          this.isDeletingTestPersons = false;
+          this.snackBar.open(
+            'Die Löschvorschau konnte nicht berechnet werden.',
+            'Fehler',
+            { duration: 4000 }
+          );
+        }
+      });
+  }
+
   private openDeletePreviewDialog(
     request: TestResultsDeleteRequestDto,
     preview: TestResultsDeletePreviewDto
@@ -2473,6 +2536,25 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
+  private openResponseCleanupPreviewDialog(
+    request: TestResultsResponseCleanupRequestDto,
+    preview: TestResultsDeletePreviewDto
+  ): void {
+    const dialogRef = this.dialog.open(TestResultsDeletePreviewDialogComponent, {
+      width: '760px',
+      maxWidth: '95vw',
+      data: {
+        preview
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (confirmed) {
+        this.startResponseCleanupJob(request);
+      }
+    });
+  }
+
   private startDeleteJob(request: TestResultsDeleteRequestDto): void {
     this.resetSelectedResultDetails();
     this.isDeletingTestPersons = true;
@@ -2481,6 +2563,36 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     this.testResultService
       .createDeleteTestResultsJob(this.appService.selectedWorkspaceId, request)
+      .subscribe({
+        next: task => {
+          this.activeDeleteTask = task;
+          this.pollDeleteTask(task.id);
+        },
+        error: () => {
+          this.isDeletingTestPersons = false;
+          this.activeDeleteTask = null;
+          this.snackBar.open(
+            'Die Löschung konnte nicht gestartet werden.',
+            'Fehler',
+            { duration: 4000 }
+          );
+        }
+      });
+  }
+
+  private startResponseCleanupJob(
+    request: TestResultsResponseCleanupRequestDto
+  ): void {
+    this.resetSelectedResultDetails();
+    this.isDeletingTestPersons = true;
+    this.deleteProgress = 0;
+    this.deleteProgressMessage = 'Antwort-Löschung wird gestartet...';
+
+    this.testResultService
+      .createDeleteTestResultResponsesJob(
+        this.appService.selectedWorkspaceId,
+        request
+      )
       .subscribe({
         next: task => {
           this.activeDeleteTask = task;
