@@ -87,6 +87,62 @@
   margin: -6px 0 0;
 }
 
+.response-cleanup-section {
+  background: rgba(15, 92, 98, 0.06);
+  border: 1px solid rgba(15, 92, 98, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.response-cleanup-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detail-value {
+  color: rgba(0, 0, 0, 0.82);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.response-samples {
+  display: grid;
+  gap: 8px;
+}
+
+.response-sample-list {
+  border: 1px solid rgba(15, 92, 98, 0.14);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.response-sample {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr 120px minmax(0, 1.5fr);
+  min-width: 0;
+  padding: 8px 10px;
+
+  & + & {
+    border-top: 1px solid rgba(15, 92, 98, 0.1);
+  }
+
+  span {
+    color: rgba(0, 0, 0, 0.76);
+    font-size: 12px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
 .coding-impact-section {
   background: rgba(245, 124, 0, 0.08);
   border: 1px solid rgba(245, 124, 0, 0.26);
@@ -211,7 +267,12 @@ button mat-icon {
 
 @media (max-width: 720px) {
   .metrics-grid,
-  .coding-impact-grid {
+  .coding-impact-grid,
+  .response-cleanup-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .response-sample {
+    grid-template-columns: 1fr;
   }
 }

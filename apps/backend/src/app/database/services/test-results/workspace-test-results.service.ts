@@ -66,7 +66,10 @@ import {
   TestResultsDeletePreviewDto,
   TestResultsDeleteRequestDto,
   TestResultsDeleteResultDto,
-  TestResultsDeleteScope
+  TestResultsDeleteScope,
+  TestResultsResponseCleanupRequestDto,
+  TestResultsResponseCleanupSampleDto,
+  TestResultsTimestampSource
 } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 interface PersonWhere {
@@ -209,6 +212,37 @@ interface TestResultsDeleteTargets {
   kind: TestResultsDeleteTargetKind;
   ids: number[];
   preview: TestResultsDeletePreviewDto;
+}
+
+interface ResponseCleanupTargetRow {
+  responseId: number;
+  unitId: number;
+  personId: number;
+  personCode: string;
+  personLogin: string;
+  personGroup: string;
+  bookletId: number;
+  bookletName: string;
+  unitName: string;
+  variableId: string;
+  subform: string | null;
+  value: string | null;
+  answeredAt: number | null;
+  timestampSource: TestResultsTimestampSource;
+}
+
+interface ResponseCleanupTargets {
+  responseIds: number[];
+  unitIds: number[];
+  preview: TestResultsDeletePreviewDto;
+}
+
+interface NormalizedResponseCleanupRequest {
+  unitNames: string[];
+  answeredBefore: number | null;
+  answeredFrom: number | null;
+  variableIds: string[];
+  subforms: string[];
 }
 
 interface DeleteDependencySnapshot {
@@ -4674,6 +4708,465 @@ export class WorkspaceTestResultsService {
     );
   }
 
+  async previewDeleteTestResultResponses(
+    workspaceId: number,
+    request: TestResultsResponseCleanupRequestDto
+  ): Promise<TestResultsDeletePreviewDto> {
+    return (await this.resolveResponseCleanupTargets(workspaceId, request))
+      .preview;
+  }
+
+  async deleteTestResultResponsesByRequest(
+    workspaceId: number,
+    request: TestResultsResponseCleanupRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => this.deleteTestResultResponsesByRequestLocked(
+        workspaceId,
+        request,
+        userId,
+        onProgress
+      )
+    );
+  }
+
+  private async deleteTestResultResponsesByRequestLocked(
+    workspaceId: number,
+    request: TestResultsResponseCleanupRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    const targets = await this.resolveResponseCleanupTargets(
+      workspaceId,
+      request
+    );
+    const totalResponses = targets.responseIds.length;
+
+    if (totalResponses === 0) {
+      return {
+        ...targets.preview,
+        deletedTargetCount: 0
+      };
+    }
+
+    await onProgress?.(
+      5,
+      `Lösche ${totalResponses} Antwort(en) aus dem Ergebnisbrowser...`
+    );
+
+    const chunks = WorkspaceTestResultsService.chunkArray(
+      targets.responseIds,
+      1000
+    );
+    let deletedTargetCount = 0;
+
+    for (const [index, responseIds] of chunks.entries()) {
+      const deleteResult = await this.connection.transaction(async manager => {
+        await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
+          workspaceId,
+          responseIds,
+          'RESULT_DELETED',
+          'stale_source',
+          manager
+        );
+
+        await this.deleteRowsByIds(
+          manager,
+          CodingJobUnit,
+          'response_id',
+          responseIds
+        );
+        await this.deleteRowsByIds(
+          manager,
+          CoderTrainingDiscussionResult,
+          'response_id',
+          responseIds
+        );
+        return manager
+          .createQueryBuilder()
+          .delete()
+          .from(ResponseEntity)
+          .where('id IN (:...responseIds)', { responseIds })
+          .execute();
+      });
+
+      deletedTargetCount += deleteResult.affected || responseIds.length;
+      const progress = Math.min(
+        90,
+        10 + Math.round((deletedTargetCount / totalResponses) * 80)
+      );
+      await onProgress?.(
+        progress,
+        `Antwort-Löschung läuft: ${deletedTargetCount}/${totalResponses} Antwort(en) verarbeitet (${index + 1}/${chunks.length} Stapel).`
+      );
+    }
+
+    await onProgress?.(92, 'Kodierstatus wird aktualisiert...');
+    await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+      workspaceId,
+      targets.unitIds,
+      'RESULT_DELETED'
+    );
+
+    await onProgress?.(95, 'Antwort-Löschung wird abschließend geprüft...');
+    await this.assertResponseCleanupCompleted(targets.responseIds);
+
+    await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
+    await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+
+    await this.tryRecordAuditEvent({
+      workspaceId,
+      actorUserId: userId,
+      eventType: 'TEST_RESULT_RESPONSES_DELETED',
+      entityType: 'responses',
+      entityId: null,
+      result: 'success',
+      summary: 'Test result responses deleted by cleanup job',
+      details: {
+        deletedTargetCount,
+        request,
+        preview: targets.preview
+      }
+    }, 'Failed to create journal entry for response cleanup deletion');
+
+    return {
+      ...targets.preview,
+      deletedTargetCount
+    };
+  }
+
+  private async resolveResponseCleanupTargets(
+    workspaceId: number,
+    request: TestResultsResponseCleanupRequestDto
+  ): Promise<ResponseCleanupTargets> {
+    const normalized =
+      WorkspaceTestResultsService.normalizeResponseCleanupRequest(request);
+    const warnings: string[] = [];
+    const isValidRequest =
+      normalized.unitNames.length > 0 &&
+      normalized.answeredBefore !== null &&
+      (
+        normalized.answeredFrom === null ||
+        normalized.answeredFrom < normalized.answeredBefore
+      );
+
+    if (normalized.unitNames.length === 0) {
+      warnings.push('Es wurde keine Aufgabe ausgewählt.');
+    }
+
+    if (normalized.answeredBefore === null) {
+      warnings.push('Es wurde kein gültiger Stichtag angegeben.');
+    }
+
+    if (
+      normalized.answeredFrom !== null &&
+      normalized.answeredBefore !== null &&
+      normalized.answeredFrom >= normalized.answeredBefore
+    ) {
+      warnings.push('Der Beginn des Zeitraums muss vor dem Stichtag liegen.');
+    }
+
+    const rows = isValidRequest ?
+      await this.getResponseCleanupRows(workspaceId, normalized) :
+      [];
+    const unknownTimestampResponses = isValidRequest ?
+      await this.countResponseCleanupUnknownTimestamps(workspaceId, normalized) :
+      0;
+
+    if (rows.length === 0 && isValidRequest) {
+      warnings.push(
+        'Keine passenden Antworten mit auswertbarem Chunk-Zeitstempel gefunden.'
+      );
+    }
+
+    if (unknownTimestampResponses > 0) {
+      warnings.push(
+        `${unknownTimestampResponses} Antwort(en) in der Auswahl haben keinen auswertbaren Chunk-Zeitstempel und werden nicht gelöscht.`
+      );
+    }
+
+    const responseIds = WorkspaceTestResultsService.uniqueIds(
+      rows.map(row => row.responseId)
+    );
+    const unitIds = WorkspaceTestResultsService.uniqueIds(
+      rows.map(row => row.unitId)
+    );
+    const codingImpact = await this.getResponseCleanupCodingImpact(
+      responseIds,
+      unitIds
+    );
+    const groups = WorkspaceTestResultsService.limitPreviewStrings(
+      rows.map(row => row.personGroup)
+    );
+    const bookletNames = WorkspaceTestResultsService.limitPreviewStrings(
+      rows.map(row => row.bookletName)
+    );
+    const unitNames = WorkspaceTestResultsService.limitPreviewStrings(
+      rows.map(row => row.unitName)
+    );
+
+    const preview: TestResultsDeletePreviewDto = {
+      targetType: 'responses',
+      scope: 'units',
+      label: WorkspaceTestResultsService.getResponseCleanupLabel(normalized),
+      persons: new Set(rows.map(row => row.personId)).size,
+      booklets: new Set(rows.map(row => row.bookletId)).size,
+      units: unitIds.length,
+      responses: responseIds.length,
+      groups,
+      bookletNames,
+      unitNames,
+      codingImpact,
+      warnings,
+      responseCleanup: {
+        answeredFrom: normalized.answeredFrom || undefined,
+        answeredBefore: normalized.answeredBefore || undefined,
+        variableIds: normalized.variableIds,
+        subforms: normalized.subforms,
+        timestampSourceCounts: {
+          chunk: responseIds.length,
+          unknown: unknownTimestampResponses
+        },
+        unknownTimestampResponses,
+        samples: rows
+          .slice(0, 10)
+          .map(WorkspaceTestResultsService.toResponseCleanupSample)
+      }
+    };
+
+    return {
+      responseIds,
+      unitIds,
+      preview
+    };
+  }
+
+  private async getResponseCleanupRows(
+    workspaceId: number,
+    request: NormalizedResponseCleanupRequest
+  ): Promise<ResponseCleanupTargetRow[]> {
+    const query = this.createResponseCleanupBaseQuery(workspaceId, request)
+      .select('response.id', 'responseId')
+      .addSelect('unit.id', 'unitId')
+      .addSelect('person.id', 'personId')
+      .addSelect('person.code', 'personCode')
+      .addSelect('person.login', 'personLogin')
+      .addSelect('person.group', 'personGroup')
+      .addSelect('booklet.id', 'bookletId')
+      .addSelect('bookletinfo.name', 'bookletName')
+      .addSelect('COALESCE(unit.alias, unit.name)', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .addSelect('response.subform', 'subform')
+      .addSelect('response.value', 'value')
+      .addSelect('MAX(chunk.ts)', 'answeredAt')
+      .groupBy('response.id')
+      .addGroupBy('unit.id')
+      .addGroupBy('person.id')
+      .addGroupBy('person.code')
+      .addGroupBy('person.login')
+      .addGroupBy('person.group')
+      .addGroupBy('booklet.id')
+      .addGroupBy('bookletinfo.name')
+      .addGroupBy('unit.alias')
+      .addGroupBy('unit.name')
+      .addGroupBy('response.variableid')
+      .addGroupBy('response.subform')
+      .addGroupBy('response.value')
+      .having('MAX(chunk.ts) < :answeredBefore', {
+        answeredBefore: request.answeredBefore
+      });
+
+    if (request.answeredFrom !== null) {
+      query.andHaving('MAX(chunk.ts) >= :answeredFrom', {
+        answeredFrom: request.answeredFrom
+      });
+    }
+
+    const rows = await query.getRawMany<Record<string, unknown>>();
+    return rows
+      .map(row => ({
+        responseId: Number(row.responseId),
+        unitId: Number(row.unitId),
+        personId: Number(row.personId),
+        personCode: String(row.personCode || ''),
+        personLogin: String(row.personLogin || ''),
+        personGroup: String(row.personGroup || ''),
+        bookletId: Number(row.bookletId),
+        bookletName: String(row.bookletName || ''),
+        unitName: String(row.unitName || ''),
+        variableId: String(row.variableId || ''),
+        subform: row.subform === null || row.subform === undefined ?
+          null :
+          String(row.subform),
+        value: row.value === null || row.value === undefined ?
+          null :
+          String(row.value),
+        answeredAt: row.answeredAt === null || row.answeredAt === undefined ?
+          null :
+          Number(row.answeredAt),
+        timestampSource: 'chunk' as const
+      }))
+      .filter(row => Number.isInteger(row.responseId) && row.responseId > 0);
+  }
+
+  private createResponseCleanupBaseQuery(
+    workspaceId: number,
+    request: NormalizedResponseCleanupRequest
+  ): SelectQueryBuilder<unknown> {
+    const query = this.connection
+      .createQueryBuilder()
+      .from(ResponseEntity, 'response')
+      .innerJoin(Unit, 'unit', 'unit.id = response.unitid')
+      .innerJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+      .innerJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+      .innerJoin(Persons, 'person', 'person.id = booklet.personid')
+      .innerJoin(
+        ChunkEntity,
+        'chunk',
+        `chunk.unitid = unit.id
+          AND chunk.ts IS NOT NULL
+          AND ${WorkspaceTestResultsService.responseMatchesChunkCondition('chunk', 'response')}`
+      )
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere(
+        `(REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') IN (:...unitNames)
+          OR REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') IN (:...unitNames))`,
+        { unitNames: request.unitNames }
+      );
+
+    if (request.variableIds.length > 0) {
+      query.andWhere('response.variableid IN (:...variableIds)', {
+        variableIds: request.variableIds
+      });
+    }
+
+    if (request.subforms.length > 0) {
+      query.andWhere("COALESCE(response.subform, '') IN (:...subforms)", {
+        subforms: request.subforms
+      });
+    }
+
+    return query;
+  }
+
+  private async countResponseCleanupUnknownTimestamps(
+    workspaceId: number,
+    request: NormalizedResponseCleanupRequest
+  ): Promise<number> {
+    const query = this.connection
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT response.id)', 'count')
+      .from(ResponseEntity, 'response')
+      .innerJoin(Unit, 'unit', 'unit.id = response.unitid')
+      .innerJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+      .innerJoin(Persons, 'person', 'person.id = booklet.personid')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere(
+        `(REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') IN (:...unitNames)
+          OR REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') IN (:...unitNames))`,
+        { unitNames: request.unitNames }
+      )
+      .andWhere(
+        `NOT EXISTS (
+          SELECT 1
+          FROM chunk cleanup_chunk
+          WHERE cleanup_chunk.unitid = unit.id
+            AND cleanup_chunk.ts IS NOT NULL
+            AND ${WorkspaceTestResultsService.responseMatchesChunkCondition('cleanup_chunk', 'response')}
+        )`
+      );
+
+    if (request.variableIds.length > 0) {
+      query.andWhere('response.variableid IN (:...variableIds)', {
+        variableIds: request.variableIds
+      });
+    }
+
+    if (request.subforms.length > 0) {
+      query.andWhere("COALESCE(response.subform, '') IN (:...subforms)", {
+        subforms: request.subforms
+      });
+    }
+
+    const raw = await query.getRawOne<{ count: string }>();
+    return Number(raw?.count || 0);
+  }
+
+  private async getResponseCleanupCodingImpact(
+    responseIds: number[],
+    unitIds: number[]
+  ): Promise<NonNullable<TestResultsDeletePreviewDto['codingImpact']>> {
+    const impact = {
+      autoCodingV1: 0,
+      manualCodingV2: 0,
+      autoCodingV3: 0,
+      affectedUnits: unitIds.length
+    };
+
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      responseIds,
+      1000
+    )) {
+      const raw = await this.connection
+        .createQueryBuilder()
+        .select(
+          'SUM(CASE WHEN response.status_v1 IS NOT NULL OR response.code_v1 IS NOT NULL OR response.score_v1 IS NOT NULL THEN 1 ELSE 0 END)',
+          'autoCodingV1'
+        )
+        .addSelect(
+          'SUM(CASE WHEN response.status_v2 IS NOT NULL OR response.code_v2 IS NOT NULL OR response.score_v2 IS NOT NULL THEN 1 ELSE 0 END)',
+          'manualCodingV2'
+        )
+        .addSelect(
+          'SUM(CASE WHEN response.status_v3 IS NOT NULL OR response.code_v3 IS NOT NULL OR response.score_v3 IS NOT NULL THEN 1 ELSE 0 END)',
+          'autoCodingV3'
+        )
+        .from(ResponseEntity, 'response')
+        .where('response.id IN (:...responseIds)', { responseIds: chunk })
+        .getRawOne<Record<string, string | null>>();
+
+      impact.autoCodingV1 += Number(raw?.autoCodingV1 || 0);
+      impact.manualCodingV2 += Number(raw?.manualCodingV2 || 0);
+      impact.autoCodingV3 += Number(raw?.autoCodingV3 || 0);
+    }
+
+    return impact;
+  }
+
+  private async assertResponseCleanupCompleted(
+    responseIds: number[]
+  ): Promise<void> {
+    const remaining = await this.countRowsByIds(
+      ResponseEntity,
+      'id',
+      responseIds
+    );
+    if (remaining > 0) {
+      throw new Error(
+        `Die Antwort-Löschung wurde nicht vollständig bestätigt. Verblieben: ${remaining} Antwort(en).`
+      );
+    }
+  }
+
+  private static responseMatchesChunkCondition(
+    chunkAlias: string,
+    responseAlias: string
+  ): string {
+    return `(
+      ${responseAlias}.variableid = ANY(string_to_array(COALESCE(${chunkAlias}.variables, ''), ','))
+      OR (
+        COALESCE(${chunkAlias}.variables, '') = ''
+        AND COALESCE(${chunkAlias}.key, '') = COALESCE(${responseAlias}.subform, '')
+      )
+    )`;
+  }
+
   private async deleteTestLogsByRequestLocked(
     workspaceId: number,
     request: TestResultsDeleteRequestDto,
@@ -5589,6 +6082,54 @@ export class WorkspaceTestResultsService {
     };
   }
 
+  private static normalizeResponseCleanupRequest(
+    request: TestResultsResponseCleanupRequestDto
+  ): NormalizedResponseCleanupRequest {
+    return {
+      unitNames: WorkspaceTestResultsService
+        .normalizeStringList(request.unitNames)
+        .map(WorkspaceTestResultsService.normalizeUnitKey),
+      answeredBefore:
+        WorkspaceTestResultsService.normalizeCleanupTimestamp(
+          request.answeredBefore
+        ),
+      answeredFrom:
+        WorkspaceTestResultsService.normalizeCleanupTimestamp(
+          request.answeredFrom
+        ),
+      variableIds:
+        WorkspaceTestResultsService.normalizeStringList(request.variableIds),
+      subforms: WorkspaceTestResultsService.normalizeStringList(
+        request.subforms
+      )
+    };
+  }
+
+  private static normalizeCleanupTimestamp(
+    value?: string | number
+  ): number | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (typeof value === 'number') {
+      return Number.isFinite(value) && value > 0 ? Math.round(value) : null;
+    }
+
+    const trimmed = String(value || '').trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const numericValue = Number(trimmed);
+    if (Number.isFinite(numericValue) && numericValue > 0) {
+      return Math.round(numericValue);
+    }
+
+    const parsed = Date.parse(trimmed);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
   private static normalizeNumberList(value?: number[] | string): number[] {
     if (!value) return [];
     const values = Array.isArray(value) ? value : String(value).split(',');
@@ -5629,6 +6170,37 @@ export class WorkspaceTestResultsService {
       .slice(0, 30);
   }
 
+  private static limitPreviewStrings(values: string[]): string[] {
+    return Array.from(
+      new Set(
+        values
+          .map(value => String(value || '').trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 30);
+  }
+
+  private static toResponseCleanupSample(
+    row: ResponseCleanupTargetRow
+  ): TestResultsResponseCleanupSampleDto {
+    return {
+      responseId: row.responseId,
+      personId: row.personId,
+      personCode: row.personCode,
+      personLogin: row.personLogin,
+      personGroup: row.personGroup,
+      bookletId: row.bookletId,
+      bookletName: row.bookletName,
+      unitId: row.unitId,
+      unitName: row.unitName,
+      variableId: row.variableId,
+      subform: row.subform,
+      value: row.value,
+      answeredAt: row.answeredAt,
+      timestampSource: row.timestampSource
+    };
+  }
+
   private static getDeleteLabel(
     request: Required<TestResultsDeleteRequestDto>
   ): string {
@@ -5648,6 +6220,28 @@ export class WorkspaceTestResultsService {
       default:
         return 'Testergebnisdaten';
     }
+  }
+
+  private static getResponseCleanupLabel(
+    request: NormalizedResponseCleanupRequest
+  ): string {
+    const unitLabel = request.unitNames.length > 0 ?
+      `Aufgabe(n): ${request.unitNames.join(', ')}` :
+      'Antworten';
+    const beforeLabel = request.answeredBefore ?
+      `vor ${new Date(request.answeredBefore).toLocaleString('de-DE')}` :
+      'ohne gültigen Stichtag';
+    const fromLabel = request.answeredFrom ?
+      `ab ${new Date(request.answeredFrom).toLocaleString('de-DE')}` :
+      '';
+    const variableLabel = request.variableIds.length > 0 ?
+      `, Variable(n): ${request.variableIds.join(', ')}` :
+      ', alle Variablen';
+    const subformLabel = request.subforms.length > 0 ?
+      `, Subform(s): ${request.subforms.join(', ')}` :
+      '';
+
+    return `${unitLabel} ${fromLabel} ${beforeLabel}${variableLabel}${subformLabel}`.replace(/\s+/g, ' ').trim();
   }
 
   private static chunkArray<T>(values: T[], size: number): T[][] {

@@ -26,6 +26,45 @@
     {{ countNote }}
   </p>
 
+  @if (hasResponseCleanupDetails) {
+  <section class="response-cleanup-section">
+    <div class="response-cleanup-grid">
+      <div>
+        <div class="detail-label">Zeitfenster</div>
+        <div class="detail-value">{{ responseCleanupTimeText }}</div>
+      </div>
+      <div>
+        <div class="detail-label">Variablen</div>
+        <div class="detail-value">{{ responseCleanupVariableText }}</div>
+      </div>
+      <div>
+        <div class="detail-label">Subforms</div>
+        <div class="detail-value">{{ responseCleanupSubformText }}</div>
+      </div>
+      <div>
+        <div class="detail-label">Ohne Zeitstempel</div>
+        <div class="detail-value">{{ responseCleanupUnknownTimestampResponses }}</div>
+      </div>
+    </div>
+
+    @if (responseCleanupSamples.length > 0) {
+    <div class="response-samples">
+      <div class="detail-label">Beispiele</div>
+      <div class="response-sample-list">
+        @for (sample of responseCleanupSamples; track sample.responseId) {
+        <div class="response-sample">
+          <span>{{ sample.unitName }}</span>
+          <span>{{ sample.variableId }}</span>
+          <span>{{ formatTimestamp(sample.answeredAt) }}</span>
+          <span>{{ sample.value }}</span>
+        </div>
+        }
+      </div>
+    </div>
+    }
+  </section>
+  }
+
   @if (hasCodingImpact) {
   <section class="coding-impact-section">
     <div class="coding-impact-header">
