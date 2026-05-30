@@ -9,7 +9,8 @@ import { ValidationTaskStateService } from '../validation/validation-task-state.
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import {
   TestResultsDeletePreviewDto,
-  TestResultsDeleteRequestDto
+  TestResultsDeleteRequestDto,
+  TestResultsResponseCleanupRequestDto
 } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 export interface TestResultsResponse {
@@ -399,6 +400,39 @@ export class TestResultService {
     return this.http
       .post<ValidationTaskDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/delete-jobs`,
+      request,
+      {}
+    )
+      .pipe(
+        tap(() => {
+          this.invalidateCache(workspaceId);
+          this.validationTaskStateService.invalidateWorkspace(workspaceId);
+        })
+      );
+  }
+
+  previewDeleteTestResultResponses(
+    workspaceId: number,
+    request: TestResultsResponseCleanupRequestDto
+  ): Observable<TestResultsDeletePreviewDto | null> {
+    return this.http
+      .post<TestResultsDeletePreviewDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/responses/delete-preview`,
+      request,
+      {}
+    )
+      .pipe(
+        catchError(() => of(null))
+      );
+  }
+
+  createDeleteTestResultResponsesJob(
+    workspaceId: number,
+    request: TestResultsResponseCleanupRequestDto
+  ): Observable<ValidationTaskDto> {
+    return this.http
+      .post<ValidationTaskDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/responses/delete-jobs`,
       request,
       {}
     )

@@ -61,6 +61,16 @@
         Antwortwertanalyse
       </button>
 
+      <button
+        mat-raised-button
+        color="primary"
+        [disabled]="isDeleteJobRunning()"
+        (click)="openResponseCleanupDialog()"
+      >
+        <mat-icon>cleaning_services</mat-icon>
+        Antworten bereinigen
+      </button>
+
       <button mat-raised-button color="primary" (click)="toggleTableView()">
         <mat-icon>table_chart</mat-icon>
         @if (!isTableView) {
