@@ -81,6 +81,7 @@ interface WithinTrainingComparison {
   discussionManagerUserId?: number | null;
   discussionManagerName?: string | null;
   discussionSource?: 'manual' | 'auto_agreement' | null;
+  modalValueDisplay?: ModalValueDisplay;
   coders: Array<{
     jobId: number;
     coderName: string;
@@ -161,6 +162,19 @@ interface SelectedCodeSlot {
   code: string | null;
   hasEntry: boolean;
   trainingId?: number;
+}
+
+interface ModalValueSummary {
+  modalValue: string | null;
+  deviationCount: number | null;
+  validCount: number;
+  isTie: boolean;
+}
+
+interface ModalValueDisplay {
+  valueText: string;
+  deviationText: string;
+  tooltip: string;
 }
 
 @Component({
@@ -271,6 +285,11 @@ export class CodingResultsComparisonComponent implements OnInit {
   discussionScoreByResponseId: Record<number, number | null> = {};
   discussionErrorByResponseId: Record<number, string> = {};
   isSavingDiscussionByResponseId: Record<number, boolean> = {};
+  readonly emptyModalValueDisplay: ModalValueDisplay = {
+    valueText: '-',
+    deviationText: '-',
+    tooltip: ''
+  };
 
   constructor(
     public dialogRef: MatDialogRef<CodingResultsComparisonComponent>,
@@ -664,6 +683,104 @@ export class CodingResultsComparisonComponent implements OnInit {
       default:
         return 'Für einen Vergleich müssen mindestens zwei Kodierer ausgewählt sein.';
     }
+  }
+
+  private sortCodeValues(values: string[]): string[] {
+    return [...values].sort((a, b) => {
+      const aNumber = Number(a);
+      const bNumber = Number(b);
+      const bothNumeric = Number.isFinite(aNumber) && Number.isFinite(bNumber);
+      return bothNumeric ? aNumber - bNumber : a.localeCompare(b);
+    });
+  }
+
+  private getModalValueSummary(comparison: TrainingComparison | WithinTrainingComparison): ModalValueSummary {
+    const values = this.getSelectedCoderResults(comparison)
+      .map(coder => coder.code)
+      .filter((code): code is string => code !== null);
+
+    if (values.length === 0) {
+      return {
+        modalValue: null,
+        deviationCount: null,
+        validCount: 0,
+        isTie: false
+      };
+    }
+
+    const counts = new Map<string, number>();
+    values.forEach(value => counts.set(value, (counts.get(value) || 0) + 1));
+
+    const maxCount = Math.max(...counts.values());
+    const modalCandidates = this.sortCodeValues(
+      Array.from(counts.entries())
+        .filter(([, count]) => count === maxCount)
+        .map(([value]) => value)
+    );
+    const modalValue = modalCandidates[0] ?? null;
+
+    return {
+      modalValue,
+      deviationCount: modalValue === null ? null : values.length - maxCount,
+      validCount: values.length,
+      isTie: modalCandidates.length > 1
+    };
+  }
+
+  private getModalValueText(summary: ModalValueSummary): string {
+    if (summary.modalValue === null) {
+      return '-';
+    }
+
+    return summary.isTie ? `${summary.modalValue}*` : summary.modalValue;
+  }
+
+  private getModalDeviationText(summary: ModalValueSummary): string {
+    return summary.deviationCount === null ? '-' : summary.deviationCount.toString();
+  }
+
+  private getModalValueTooltip(summary: ModalValueSummary): string {
+    if (summary.validCount === 0) {
+      return this.translate.instant('coding.trainings.compare.modal-no-value-tooltip');
+    }
+
+    if (summary.isTie) {
+      return this.translate.instant('coding.trainings.compare.modal-tie-tooltip');
+    }
+
+    return this.translate.instant('coding.trainings.compare.modal-value-tooltip');
+  }
+
+  private getModalValueDisplay(comparison: TrainingComparison | WithinTrainingComparison): ModalValueDisplay {
+    const summary = this.getModalValueSummary(comparison);
+    return {
+      valueText: this.getModalValueText(summary),
+      deviationText: this.getModalDeviationText(summary),
+      tooltip: this.getModalValueTooltip(summary)
+    };
+  }
+
+  private updateModalValueDisplays(): void {
+    if (this.comparisonMode !== 'within-training') {
+      return;
+    }
+
+    this.withinTrainingData.forEach(comparison => {
+      comparison.modalValueDisplay = this.getModalValueDisplay(comparison);
+    });
+  }
+
+  getDeviationComparisons(): number {
+    return Math.max(this.totalComparisons - this.matchingComparisons, 0);
+  }
+
+  getVisibleCompletionRate(): number {
+    const visibleRows = this.getFilteredRowsCount();
+    if (visibleRows === 0) {
+      return 0;
+    }
+
+    return Math.round((this.totalComparisons / visibleRows) * 100);
   }
 
   getDisplayCodeText(code: string | null, issueOption?: number | null): string {
@@ -1072,9 +1189,9 @@ export class CodingResultsComparisonComponent implements OnInit {
         // Filter columns based on selected coders
         const selectedCoderIds = this.codersFormControl.value || [];
         this.dynamicCoderColumns = selectedCoderIds.map(jobId => `coder_${jobId}`);
-        this.displayedColumns = [...baseColumns, 'match', ...this.dynamicCoderColumns, 'discussion'];
+        this.displayedColumns = [...baseColumns, 'match', 'modalValue', ...this.dynamicCoderColumns, 'discussion'];
       } else {
-        this.displayedColumns = [...baseColumns, 'match', 'discussion'];
+        this.displayedColumns = [...baseColumns, 'match', 'modalValue', 'discussion'];
       }
     }
   }
@@ -1153,6 +1270,8 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   private refreshDisplayedRows(): void {
+    this.updateModalValueDisplays();
+
     if (this.getSelectedComparisonSourceCount() === 0) {
       this.dataSource.data = [];
     } else if (this.comparisonMode === 'between-trainings') {
