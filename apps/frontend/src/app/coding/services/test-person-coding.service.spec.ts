@@ -592,6 +592,12 @@ describe('TestPersonCodingService', () => {
             unitName: 'UNIT',
             variableId: 'VAR',
             meanKappa: 0.667,
+            meanAgreement: 0.8,
+            caseCount: 12,
+            doubleCodedCount: 10,
+            doubleCodedRate: 0.833,
+            validPairCount: 8,
+            coderPairCount: 1,
             coderPairs: [
               {
                 coder1Id: 1,
@@ -608,9 +614,11 @@ describe('TestPersonCodingService', () => {
           }
         ],
         workspaceSummary: {
+          totalCodedResponses: 12,
           totalDoubleCodedResponses: 10,
           totalCoderPairs: 1,
           averageKappa: 0.667,
+          meanAgreement: 0.8,
           variablesIncluded: 1,
           codersIncluded: 2,
           weightingMethod: 'weighted' as const
@@ -637,6 +645,48 @@ describe('TestPersonCodingService', () => {
   });
 
   describe('exportCohensKappaStatisticsAsCsv', () => {
+    it('should request kappa summary export as CSV with current options', () => {
+      const mockBlob = new Blob(['subunit;nCases'], { type: 'text/csv' });
+
+      service
+        .exportCohensKappaSummaryAsCsv(mockWorkspaceId, false, false, 'UNIT', 'VAR')
+        .subscribe(response => {
+          expect(response).toEqual(mockBlob);
+        });
+
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/summary/csv` &&
+        request.params.get('weightedMean') === 'false' &&
+        request.params.get('excludeTrainings') === 'false' &&
+        request.params.get('unitName') === 'UNIT' &&
+        request.params.get('variableId') === 'VAR'
+      ));
+      expect(req.request.method).toBe('GET');
+      expect(req.request.responseType).toBe('blob');
+      req.flush(mockBlob);
+    });
+
+    it('should request kappa statistics export as XLSX with current options', () => {
+      const mockBlob = new Blob(['xlsx'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+
+      service
+        .exportCohensKappaStatisticsAsXlsx(mockWorkspaceId, true, true)
+        .subscribe(response => {
+          expect(response).toEqual(mockBlob);
+        });
+
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/xlsx` &&
+        request.params.get('weightedMean') === 'true' &&
+        request.params.get('excludeTrainings') === 'true'
+      ));
+      expect(req.request.method).toBe('GET');
+      expect(req.request.responseType).toBe('blob');
+      req.flush(mockBlob);
+    });
+
     it('should request kappa detail export as CSV with current options', () => {
       const mockBlob = new Blob(['Variable;Kappa-Wert'], { type: 'text/csv' });
 
