@@ -1,7 +1,7 @@
 <div *ngIf="dialogRef">
   <h1 mat-dialog-title>
     <mat-icon>analytics</mat-icon>
-    Cohen's Kappa Statistiken
+    {{ 'cohens-kappa-statistics.dialog-title' | translate }}
   </h1>
 
   <mat-dialog-content class="cohens-kappa-container">
@@ -9,28 +9,27 @@
       @if (isLoading) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
-        <p>Statistiken werden geladen...</p>
+        <p>{{ 'cohens-kappa-statistics.loading' | translate }}</p>
       </div>
       } @else {
-      <!-- Workspace-wide Cohen's Kappa Statistics -->
       <mat-card class="workspace-kappa-card" *ngIf="workspaceKappaSummary">
         <mat-card-header>
           <mat-card-title>
             <mat-icon>analytics</mat-icon>
-            Inter-Rater Zuverlässigkeit (Cohen's Kappa)
+            {{ 'cohens-kappa-statistics.workspace-title' | translate }}
           </mat-card-title>
-          <mat-card-subtitle>Arbeitsbereichsübergreifende Analyse der Übereinstimmung zwischen Kodierern bei doppelt
-            kodierten Variablen.</mat-card-subtitle>
+          <mat-card-subtitle>
+            {{ 'cohens-kappa-statistics.workspace-subtitle' | translate }}
+          </mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
-          <!-- Toggles -->
           <div class="toggles-container">
             <div class="toggle-item">
               <mat-slide-toggle [(ngModel)]="excludeTrainings" (change)="toggleExcludeTrainings()" color="primary">
-                Kodierer-Trainings ausschließen
+                {{ 'cohens-kappa-statistics.exclude-trainings' | translate }}
               </mat-slide-toggle>
               <mat-icon class="info-icon"
-                matTooltip="Zuklappen: Schließt alle Kodieraufträge aus, die mit einem Kodiertraining verknüpft sind. Aufklappen: Bezieht auch Trainingsdaten in die Cohen's Kappa Statistik ein."
+                [matTooltip]="'cohens-kappa-statistics.exclude-trainings-tooltip' | translate"
                 matTooltipPosition="right">
                 info
               </mat-icon>
@@ -38,181 +37,225 @@
 
             <div class="toggle-item">
               <mat-slide-toggle [(ngModel)]="useWeightedMean" (change)="toggleWeightingMethod()" color="primary">
-                Gewichteter Mittelwert
+                {{ 'cohens-kappa-statistics.weighted-mean' | translate }}
               </mat-slide-toggle>
               <mat-icon class="info-icon"
-                matTooltip="Gewichteter Mittelwert (Standard): Gewichtet jedes Kodierer-Paar-Kappa nach der Anzahl der kodierten Elemente. Dies entspricht der R eatPrep-Implementierung (weighted.mean). Ungewichteter Mittelwert: Einfacher arithmetischer Durchschnitt aller Kappa-Werte."
+                [matTooltip]="'cohens-kappa-statistics.weighted-mean-tooltip' | translate"
                 matTooltipPosition="right">
                 info
               </mat-icon>
               <span class="weighting-method-label">
-                ({{ workspaceKappaSummary.workspaceSummary.weightingMethod === 'weighted' ? 'Gewichtet' : 'Ungewichtet' }})
+                ({{ (workspaceKappaSummary.workspaceSummary.weightingMethod === 'weighted' ?
+                  'cohens-kappa-statistics.weighted' :
+                  'cohens-kappa-statistics.unweighted') | translate }})
               </span>
             </div>
           </div>
 
           <div class="kappa-stats">
             <div class="stat-item">
-              <span class="stat-label">Durchschnittliches Kappa:</span>
-              <span class="stat-value kappa"
-                [class.kappa-excellent]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa > 0.95"
-                [class.kappa-good]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.81 && workspaceKappaSummary.workspaceSummary.averageKappa <= 0.95"
-                [class.kappa-substantial]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.6 && workspaceKappaSummary.workspaceSummary.averageKappa < 0.81"
-                [class.kappa-fair]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.4 && workspaceKappaSummary.workspaceSummary.averageKappa < 0.6"
-                [class.kappa-poor]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa < 0.4">
-                {{workspaceKappaSummary.workspaceSummary.averageKappa != null ?
-                (workspaceKappaSummary.workspaceSummary.averageKappa | number:'1.0-3') : 'N/A'}}
+              <span class="stat-label">{{ 'cohens-kappa-statistics.average-kappa' | translate }}</span>
+              <span class="stat-value kappa" [ngClass]="getKappaClass(workspaceKappaSummary.workspaceSummary.averageKappa)">
+                {{ workspaceKappaSummary.workspaceSummary.averageKappa !== null ?
+                  (workspaceKappaSummary.workspaceSummary.averageKappa | number:'1.3-3') : 'N/A' }}
               </span>
             </div>
             <div class="stat-item">
-              <span class="stat-label">Kodierer-Paare analysiert:</span>
-              <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.totalCoderPairs}}</span>
+              <span class="stat-label">{{ 'cohens-kappa-statistics.coder-pairs-analyzed' | translate }}</span>
+              <span class="stat-value">{{ workspaceKappaSummary.workspaceSummary.totalCoderPairs }}</span>
             </div>
             <div class="stat-item">
-              <span class="stat-label">Doppelt kodierte Antworten:</span>
-              <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.totalDoubleCodedResponses}}</span>
+              <span class="stat-label">{{ 'cohens-kappa-statistics.average-agreement' | translate }}</span>
+              <span class="stat-value">
+                {{ workspaceKappaSummary.workspaceSummary.meanAgreement !== null ?
+                  (workspaceKappaSummary.workspaceSummary.meanAgreement | percent:'1.1-1') : 'N/A' }}
+              </span>
             </div>
             <div class="stat-item">
-              <span class="stat-label">Kodierer einbezogen:</span>
-              <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.codersIncluded}}</span>
+              <span class="stat-label">{{ 'cohens-kappa-statistics.total-coded-responses' | translate }}</span>
+              <span class="stat-value">{{ workspaceKappaSummary.workspaceSummary.totalCodedResponses }}</span>
             </div>
             <div class="stat-item">
-              <span class="stat-label">Variablen einbezogen:</span>
-              <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.variablesIncluded}}</span>
+              <span class="stat-label">{{ 'cohens-kappa-statistics.double-coded-responses' | translate }}</span>
+              <span class="stat-value">{{ workspaceKappaSummary.workspaceSummary.totalDoubleCodedResponses }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">{{ 'cohens-kappa-statistics.coders-included' | translate }}</span>
+              <span class="stat-value">{{ workspaceKappaSummary.workspaceSummary.codersIncluded }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">{{ 'cohens-kappa-statistics.variables-included' | translate }}</span>
+              <span class="stat-value">{{ workspaceKappaSummary.workspaceSummary.variablesIncluded }}</span>
             </div>
           </div>
           <div class="kappa-interpretation" *ngIf="workspaceKappaSummary.workspaceSummary.averageKappa !== null">
             <div class="interpretation-text">
-              <strong>Interpretation:</strong>
+              <strong>{{ 'cohens-kappa-statistics.interpretation' | translate }}</strong>
               <span [class]="getKappaInterpretationClass(workspaceKappaSummary.workspaceSummary.averageKappa)">
-                {{getKappaInterpretationText(workspaceKappaSummary.workspaceSummary.averageKappa)}}
+                {{ getKappaInterpretationText(workspaceKappaSummary.workspaceSummary.averageKappa) }}
               </span>
             </div>
           </div>
         </mat-card-content>
       </mat-card>
 
-      <!-- Cohen's Kappa Statistics Section -->
       <mat-card class="kappa-card">
         <mat-card-header>
           <mat-card-title>
-            <mat-icon>analytics</mat-icon>
-            Detaillierte Cohen's Kappa Statistiken
+            <mat-icon>table_chart</mat-icon>
+            {{ 'cohens-kappa-statistics.variable-agreement-title' | translate }}
           </mat-card-title>
-          <mat-card-subtitle>Variablenspezifische Analyse der Übereinstimmung zwischen
-            Kodierer-Paaren.</mat-card-subtitle>
+          <mat-card-subtitle>
+            {{ 'cohens-kappa-statistics.variable-agreement-subtitle' | translate }}
+          </mat-card-subtitle>
         </mat-card-header>
 
         <div class="kappa-detail-actions">
-          <button mat-stroked-button color="primary" (click)="exportKappaDetails()"
-            [disabled]="isExporting || isLoading || kappaStatistics.length === 0"
-            matTooltip="Kappa-Details als CSV exportieren">
-            <mat-icon>{{ isExporting ? 'hourglass_empty' : 'download' }}</mat-icon>
-            <span>{{ isExporting ? 'Export läuft...' : 'CSV exportieren' }}</span>
+          <button mat-stroked-button color="primary" (click)="exportKappaWorkbook()"
+            [disabled]="!!exportInProgress || isLoading || kappaStatistics.length === 0"
+            [matTooltip]="'cohens-kappa-statistics.export-xlsx-tooltip' | translate">
+            <mat-icon>{{ exportInProgress === 'xlsx' ? 'hourglass_empty' : 'download' }}</mat-icon>
+            <span>{{ (exportInProgress === 'xlsx' ?
+              'cohens-kappa-statistics.export-running' :
+              'cohens-kappa-statistics.export-xlsx') | translate }}</span>
+          </button>
+          <button mat-stroked-button color="primary" (click)="exportKappaSummaryCsv()"
+            [disabled]="!!exportInProgress || isLoading || kappaStatistics.length === 0"
+            [matTooltip]="'cohens-kappa-statistics.export-summary-tooltip' | translate">
+            <mat-icon>{{ exportInProgress === 'summary' ? 'hourglass_empty' : 'table_view' }}</mat-icon>
+            <span>{{ (exportInProgress === 'summary' ?
+              'cohens-kappa-statistics.export-running' :
+              'cohens-kappa-statistics.export-summary') | translate }}</span>
+          </button>
+          <button mat-stroked-button (click)="exportKappaDetails()"
+            [disabled]="!!exportInProgress || isLoading || kappaStatistics.length === 0"
+            [matTooltip]="'cohens-kappa-statistics.export-details-tooltip' | translate">
+            <mat-icon>{{ exportInProgress === 'details' ? 'hourglass_empty' : 'dataset' }}</mat-icon>
+            <span>{{ (exportInProgress === 'details' ?
+              'cohens-kappa-statistics.export-running' :
+              'cohens-kappa-statistics.export-details') | translate }}</span>
           </button>
         </div>
 
-        <!-- Collapsible Interpretation Scale -->
         <div class="interpretation-scale-container">
           <button mat-button class="scale-toggle-btn" (click)="toggleInterpretationScale()"
             [attr.aria-expanded]="showInterpretationScale">
             <mat-icon>{{ showInterpretationScale ? 'expand_less' : 'expand_more' }}</mat-icon>
-            <span>Interpretationsskala {{ showInterpretationScale ? 'ausblenden' : 'einblenden' }}</span>
+            <span>
+              {{ 'cohens-kappa-statistics.interpretation-scale' | translate }}
+              {{ (showInterpretationScale ?
+                'cohens-kappa-statistics.hide' :
+                'cohens-kappa-statistics.show') | translate }}
+            </span>
           </button>
 
           <div class="interpretation-scale" *ngIf="showInterpretationScale">
             <div class="scale-header">
-              <mat-icon class="scale-icon">📊</mat-icon>
-              <span class="scale-title">Cohen's Kappa Interpretationsskala</span>
+              <mat-icon class="scale-icon">analytics</mat-icon>
+              <span class="scale-title">{{ 'cohens-kappa-statistics.interpretation-scale-title' | translate }}</span>
             </div>
             <div class="scale-items">
               <div class="scale-item">
-                <span class="scale-range" style="color: #d32f2f; font-weight: bold;">⬤ < 0.20:</span>
-                    <span class="scale-label">Schlechte Übereinstimmung</span>
+                <span class="scale-range kappa-poor">0.00 - 0.39:</span>
+                <span class="scale-label">{{ 'cohens-kappa-statistics.scale-poor' | translate }}</span>
               </div>
               <div class="scale-item">
-                <span class="scale-range" style="color: #f57c00; font-weight: bold;">⬤ 0.21 - 0.40:</span>
-                <span class="scale-label">Schwache Übereinstimmung</span>
+                <span class="scale-range kappa-moderate">0.40 - 0.60:</span>
+                <span class="scale-label">{{ 'cohens-kappa-statistics.scale-moderate' | translate }}</span>
               </div>
               <div class="scale-item">
-                <span class="scale-range" style="color: #fbc02d; font-weight: bold;">⬤ 0.41 - 0.60:</span>
-                <span class="scale-label">Mäßige Übereinstimmung</span>
+                <span class="scale-range kappa-substantial">0.61 - 0.80:</span>
+                <span class="scale-label">{{ 'cohens-kappa-statistics.scale-substantial' | translate }}</span>
               </div>
               <div class="scale-item">
-                <span class="scale-range" style="color: #388e3c; font-weight: bold;">⬤ 0.61 - 0.80:</span>
-                <span class="scale-label">Substantielle Übereinstimmung</span>
+                <span class="scale-range kappa-good">0.81 - 0.95:</span>
+                <span class="scale-label">{{ 'cohens-kappa-statistics.scale-good' | translate }}</span>
               </div>
               <div class="scale-item">
-                <span class="scale-range" style="color: #20c997; font-weight: bold;">⬤ 0.81 - 0.95:</span>
-                <span class="scale-label">Gute Übereinstimmung</span>
-              </div>
-              <div class="scale-item">
-                <span class="scale-range" style="color: #1976d2; font-weight: bold;">⬤ > 0.95:</span>
-                <span class="scale-label">Nahezu perfekte Übereinstimmung</span>
+                <span class="scale-range kappa-perfect">&gt; 0.95:</span>
+                <span class="scale-label">{{ 'cohens-kappa-statistics.scale-perfect' | translate }}</span>
               </div>
             </div>
           </div>
         </div>
-        <mat-card-content>
-          <div class="kappa-info">
-            <p>Diese Statistiken zeigen die Cohen's Kappa Werte für jede Variable und jedes Kodierer-Paar, das diese
-              Variable bearbeitet hat.</p>
 
-            @if (kappaStatistics.length === 0) {
-            <div class="no-kappa-data">
-              <mat-icon>info</mat-icon>
-              <p>Keine Cohen's Kappa Statistiken verfügbar</p>
+        <mat-card-content>
+          @if (kappaStatistics.length === 0) {
+          <div class="no-kappa-data">
+            <mat-icon>info</mat-icon>
+            <p>{{ 'cohens-kappa-statistics.no-data' | translate }}</p>
+          </div>
+          } @else {
+          <section class="kappa-table-section">
+            <h3>{{ 'cohens-kappa-statistics.variable-means' | translate }}</h3>
+            <div class="kappa-table-container">
+              <table class="kappa-summary-table">
+                <thead>
+                  <tr>
+                    <th>{{ 'cohens-kappa-statistics.variable' | translate }}</th>
+                    <th>{{ 'cohens-kappa-statistics.total-coded' | translate }}</th>
+                    <th>{{ 'cohens-kappa-statistics.double-coded-count' | translate }}</th>
+                    <th>{{ 'cohens-kappa-statistics.double-coded-rate' | translate }}</th>
+                    <th>{{ 'cohens-kappa-statistics.mean-kappa' | translate }}</th>
+                    <th>{{ 'cohens-kappa-statistics.mean-agreement' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (stat of kappaStatistics; track stat.unitName + '-' + stat.variableId) {
+                  <tr>
+                    <td>{{ getVariableLabel(stat) }}</td>
+                    <td>{{ stat.caseCount }}</td>
+                    <td>{{ stat.doubleCodedCount }}</td>
+                    <td>{{ stat.doubleCodedRate !== null ? (stat.doubleCodedRate | percent:'1.1-1') : 'N/A' }}</td>
+                    <td>
+                      <span class="kappa-cell" [ngClass]="getKappaClass(stat.meanKappa)">
+                        {{ stat.meanKappa !== null ? (stat.meanKappa | number:'1.3-3') : 'N/A' }}
+                      </span>
+                    </td>
+                    <td>{{ stat.meanAgreement !== null ? (stat.meanAgreement | percent:'1.1-1') : 'N/A' }}</td>
+                  </tr>
+                  }
+                </tbody>
+              </table>
             </div>
-            } @else {
-            <div class="kappa-results">
-              @for (stat of kappaStatistics; track stat.unitName + stat.variableId) {
-              <div class="kappa-unit-variable">
-                <div class="kappa-variable-header">
-                  <h4>{{ stat.unitName }} - {{ stat.variableId }}</h4>
-                  <div class="variable-mean-kappa"
-                    matTooltip="Gewichtet: Mittelwert der paarweisen Kappa-Werte nach gültigen Paaren. Ungewichtet: arithmetischer Mittelwert der gültigen Kappa-Werte."
-                    matTooltipPosition="left">
-                    <span class="label">Mittleres Kappa:</span>
-                    <span class="value" [ngClass]="getKappaClass(stat.meanKappa)">
-                      {{ stat.meanKappa !== null ? (stat.meanKappa | number:'1.3-3') : 'N/A' }}
-                    </span>
-                  </div>
-                </div>
-                <div class="kappa-pairs">
-                  @for (pair of stat.coderPairs; track pair.coder1Id + '-' + pair.coder2Id) {
-                  <div class="kappa-pair">
-                    <div class="coder-names">
-                      <span class="coder1">{{ pair.coder1Name }}</span>
-                      <span class="vs">vs</span>
-                      <span class="coder2">{{ pair.coder2Name }}</span>
-                    </div>
-                    <div class="kappa-values">
-                      <div class="kappa-value">
-                        <span class="label">Kappa:</span>
-                        <span class="value" [ngClass]="getKappaClass(pair.kappa)">
+          </section>
+
+          <section class="kappa-table-section">
+            <h3>{{ 'cohens-kappa-statistics.coder-pair-details' | translate }}</h3>
+            <div class="kappa-table-container">
+              <table class="kappa-summary-table">
+                <thead>
+                  <tr>
+                    <th>{{ 'cohens-kappa-statistics.variable' | translate }}</th>
+                    <th>{{ 'cohens-kappa-statistics.coder-pair' | translate }}</th>
+                    <th>Kappa</th>
+                    <th>{{ 'cohens-kappa-statistics.agreement' | translate }}</th>
+                    <th>{{ 'cohens-kappa-statistics.valid-pairs' | translate }}</th>
+                    <th>{{ 'cohens-kappa-statistics.interpretation-label' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (stat of kappaStatistics; track stat.unitName + '-' + stat.variableId) {
+                    @for (pair of stat.coderPairs; track pair.coder1Id + '-' + pair.coder2Id) {
+                    <tr>
+                      <td>{{ getVariableLabel(stat) }}</td>
+                      <td>{{ getCoderPairLabel(pair) }}</td>
+                      <td>
+                        <span class="kappa-cell" [ngClass]="getKappaClass(pair.kappa)">
                           {{ pair.kappa !== null ? (pair.kappa | number:'1.3-3') : 'N/A' }}
                         </span>
-                      </div>
-                      <div class="agreement-value">
-                        <span class="label">Übereinstimmung:</span>
-                        <span class="value">{{ (pair.agreement * 100) | number:'1.1-1' }}%</span>
-                      </div>
-                      <div class="valid-pairs-value">
-                        <span class="label">Gültige Paare:</span>
-                        <span class="value">{{ pair.validPairs }} / {{ pair.totalItems }}</span>
-                      </div>
-                      <div class="interpretation">
-                        <span class="interpretation-text">{{ getTranslatedInterpretation(pair.interpretation) }}</span>
-                      </div>
-                    </div>
-                  </div>
+                      </td>
+                      <td>{{ pair.agreement | percent:'1.1-1' }}</td>
+                      <td>{{ pair.validPairs }} / {{ pair.totalItems }}</td>
+                      <td>{{ getTranslatedInterpretation(pair.interpretation) }}</td>
+                    </tr>
+                    }
                   }
-                </div>
-              </div>
-              }
+                </tbody>
+              </table>
             </div>
-            }
-          </div>
+          </section>
+          }
         </mat-card-content>
       </mat-card>
       }
@@ -220,6 +263,6 @@
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">
-    <button mat-button (click)="dialogRef.close()">Schließen</button>
+    <button mat-button (click)="dialogRef.close()">{{ 'cohens-kappa-statistics.close' | translate }}</button>
   </mat-dialog-actions>
 </div>
