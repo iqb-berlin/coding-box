@@ -6,6 +6,7 @@ import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingAnalysisService } from './coding-analysis.service';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingValidationService } from './coding-validation.service';
+import { MissingsProfilesService } from './missings-profiles.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 
 jest.mock('../workspace/workspace-files.service', () => ({
@@ -30,6 +31,7 @@ describe('CodingResultsService', () => {
   let codingStatisticsService: jest.Mocked<CodingStatisticsService>;
   let codingValidationService: jest.Mocked<Pick<CodingValidationService, 'invalidateIncompleteVariablesCache'>>;
   let codingAnalysisService: jest.Mocked<Pick<CodingAnalysisService, 'invalidateCache'>>;
+  let missingsProfilesService: jest.Mocked<Pick<MissingsProfilesService, 'getMissingByIdForProfileOrDefault'>>;
   let codingFreshnessService: jest.Mocked<Pick<CodingFreshnessService, 'markManualCodingCurrent'>>;
 
   const createQueryBuilderMock = (rows: unknown[]) => ({
@@ -106,6 +108,19 @@ describe('CodingResultsService', () => {
       invalidateCache: jest.fn().mockResolvedValue(undefined)
     };
 
+    missingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn(async (_workspaceId, _profileId, missingId) => {
+        if (missingId === 'mci') {
+          return {
+            id: 'mci', label: 'missing coding impossible', code: -97, score: 0
+          };
+        }
+        return {
+          id: 'mir', label: 'missing invalid response', code: -98, score: 0
+        };
+      })
+    };
+
     codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
@@ -116,6 +131,7 @@ describe('CodingResultsService', () => {
       codingJobService,
       codingValidationService as unknown as CodingValidationService,
       codingAnalysisService as unknown as CodingAnalysisService,
+      missingsProfilesService as unknown as MissingsProfilesService,
       codingFreshnessService as unknown as CodingFreshnessService
     );
   });
@@ -154,6 +170,88 @@ describe('CodingResultsService', () => {
     );
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
+  });
+
+  it('resolves manually selected MIR missing from the coding job profile', async () => {
+    codingJobService.getCodingJobById.mockResolvedValueOnce({
+      id: 10,
+      status: 'completed',
+      missings_profile_id: 77
+    } as never);
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'person@code@booklet::booklet::UNIT::VAR': {
+        id: -3
+      }
+    });
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(
+      17,
+      77,
+      'mir'
+    );
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      99,
+      {
+        code_v2: -98,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
+  });
+
+  it('resolves manually selected MCI missing from the coding job profile', async () => {
+    codingJobService.getCodingJobById.mockResolvedValueOnce({
+      id: 10,
+      status: 'completed',
+      missings_profile_id: 77
+    } as never);
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'person@code@booklet::booklet::UNIT::VAR': {
+        id: -4
+      }
+    });
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(
+      17,
+      77,
+      'mci'
+    );
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      99,
+      {
+        code_v2: -97,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
+  });
+
+  it('does not silently apply a manual missing when its profile score is absent', async () => {
+    codingJobService.getCodingJobById.mockResolvedValueOnce({
+      id: 10,
+      status: 'completed',
+      missings_profile_id: 77
+    } as never);
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'person@code@booklet::booklet::UNIT::VAR': {
+        id: -3
+      }
+    });
+    missingsProfilesService.getMissingByIdForProfileOrDefault.mockRejectedValueOnce(
+      new Error("Missing 'mir' must define a score")
+    );
+
+    await expect(service.applyCodingResults(17, 10)).rejects.toThrow('score');
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
   });
 
   it('rolls back response updates when manual freshness cannot be finalized', async () => {
@@ -612,6 +710,11 @@ describe('CodingResultsService', () => {
         score_v2: 0,
         status_v2: 5
       }
+    );
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(
+      17,
+      null,
+      'mir'
     );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       'response.status_v1 IN (:...statuses)',

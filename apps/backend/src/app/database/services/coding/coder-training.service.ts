@@ -108,12 +108,20 @@ type TrainingResponseJobUnit = {
 };
 
 type MissingCodePair = { mirCode: number; mciCode: number };
-type MissingCodeDisplayContext = MissingCodePair & { negativeCodes: Set<number> };
+type MissingCodeDisplayContext = MissingCodePair & {
+  negativeCodes: Set<number>;
+  scoresByCode: Map<number, number>;
+};
 
 const DEFAULT_MISSING_CODE_CONTEXT: MissingCodeDisplayContext = {
   mirCode: -98,
   mciCode: -97,
-  negativeCodes: new Set([-97, -98, -99])
+  negativeCodes: new Set([-97, -98, -99]),
+  scoresByCode: new Map([
+    [-97, 0],
+    [-98, 0],
+    [-99, 0]
+  ])
 };
 
 @Injectable()
@@ -189,7 +197,11 @@ export class CoderTrainingService {
         profileId,
         {
           ...this.getMirMciCodesFromMissings(profile.parseMissings(), defaultMissingCodes),
-          negativeCodes
+          negativeCodes,
+          scoresByCode: this.getMissingScoresByCodeFromMissings(
+            profile.parseMissings(),
+            defaultMissingCodes.scoresByCode
+          )
         }
       );
     }
@@ -203,35 +215,75 @@ export class CoderTrainingService {
     return missingCodesByJobId;
   }
 
-  private async getDefaultMirMciCodes(workspaceId: number): Promise<MissingCodePair> {
-    if (!this.missingsProfilesService?.ensureDefaultMissingsProfile) {
-      return {
-        mirCode: DEFAULT_MISSING_CODE_CONTEXT.mirCode,
-        mciCode: DEFAULT_MISSING_CODE_CONTEXT.mciCode
-      };
-    }
-
-    const defaultProfile = await this.missingsProfilesService.ensureDefaultMissingsProfile(workspaceId);
-    return this.getMirMciCodesFromMissings(defaultProfile.parseMissings());
-  }
-
   private async getDefaultMissingCodeDisplayContext(workspaceId: number): Promise<MissingCodeDisplayContext> {
-    if (!this.missingsProfilesService?.getNegativeMissingCodesForProfileOrDefault) {
+    if (!this.missingsProfilesService?.getNegativeMissingCodesForProfileOrDefault ||
+        !this.missingsProfilesService?.ensureDefaultMissingsProfile) {
       return {
         ...DEFAULT_MISSING_CODE_CONTEXT,
-        negativeCodes: new Set(DEFAULT_MISSING_CODE_CONTEXT.negativeCodes)
+        negativeCodes: new Set(DEFAULT_MISSING_CODE_CONTEXT.negativeCodes),
+        scoresByCode: new Map(DEFAULT_MISSING_CODE_CONTEXT.scoresByCode)
       };
     }
 
-    const [defaultCodes, negativeCodes] = await Promise.all([
-      this.getDefaultMirMciCodes(workspaceId),
+    const [defaultProfile, negativeCodes] = await Promise.all([
+      this.missingsProfilesService.ensureDefaultMissingsProfile(workspaceId),
       this.missingsProfilesService.getNegativeMissingCodesForProfileOrDefault(workspaceId, null)
     ]);
 
     return {
-      ...defaultCodes,
-      negativeCodes
+      ...this.getMirMciCodesFromMissings(defaultProfile.parseMissings()),
+      negativeCodes,
+      scoresByCode: this.getMissingScoresByCodeFromMissings(
+        defaultProfile.parseMissings()
+      )
     };
+  }
+
+  private getMissingScoresByCodeFromMissings(
+    missings: Array<{ id?: string; code: number; score?: unknown }>,
+    fallbackScoresByCode?: Map<number, number>
+  ): Map<number, number> {
+    const scoresByCode = new Map<number, number>(fallbackScoresByCode);
+
+    missings.forEach(missing => {
+      const code = Number(missing.code);
+      if (!Number.isInteger(code) || code >= 0) {
+        return;
+      }
+
+      if (!this.hasExplicitFiniteScore(missing.score)) {
+        throw new BadRequestException(`Missing profile must define a score for code ${code}`);
+      }
+
+      scoresByCode.set(code, Number(missing.score));
+    });
+
+    return scoresByCode;
+  }
+
+  private hasExplicitFiniteScore(score: unknown): boolean {
+    if (typeof score === 'number') {
+      return Number.isFinite(score);
+    }
+
+    if (typeof score === 'string') {
+      const trimmedScore = score.trim();
+      return trimmedScore !== '' && Number.isFinite(Number(trimmedScore));
+    }
+
+    return false;
+  }
+
+  private getMissingScoreFromContext(
+    missingCodes: MissingCodeDisplayContext,
+    code: number
+  ): number {
+    const score = missingCodes.scoresByCode.get(code);
+    if (score === undefined) {
+      throw new BadRequestException(`Missing profile must define a score for code ${code}`);
+    }
+
+    return score;
   }
 
   private getMirMciCodesFromMissings(
@@ -383,21 +435,21 @@ export class CoderTrainingService {
     if (code === -3 || codingIssueOption === -3) {
       return {
         code: missingCodes.mirCode.toString(),
-        score: score ?? 0
+        score: this.getMissingScoreFromContext(missingCodes, missingCodes.mirCode)
       };
     }
 
     if (code === -4 || codingIssueOption === -4) {
       return {
         code: missingCodes.mciCode.toString(),
-        score: 0
+        score: this.getMissingScoreFromContext(missingCodes, missingCodes.mciCode)
       };
     }
 
     if (code !== null && code < 0 && missingCodes.negativeCodes.has(code)) {
       return {
         code: code.toString(),
-        score: 0
+        score: this.getMissingScoreFromContext(missingCodes, code)
       };
     }
 
@@ -447,19 +499,15 @@ export class CoderTrainingService {
       return result;
     }
 
-    const allowedMissingCodes = await this.getAllowedMissingCodesForResponse(
-      workspaceId,
-      training,
-      responseId,
-      exclusions
-    );
-    if (!allowedMissingCodes.has(result.code)) {
-      throw new BadRequestException(`Unsupported missing code: ${result.code}`);
-    }
-
     return {
       code: result.code,
-      score: 0
+      score: await this.getMissingScoreForResponse(
+        workspaceId,
+        training,
+        responseId,
+        result.code,
+        exclusions
+      )
     };
   }
 
@@ -598,16 +646,20 @@ export class CoderTrainingService {
     return { found: false, score: null };
   }
 
-  private async getAllowedMissingCodesForResponse(
+  private async getMissingScoreForResponse(
     workspaceId: number,
     training: CoderTraining,
     responseId: number,
+    code: number,
     exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
-  ): Promise<Set<number>> {
+  ): Promise<number> {
     const jobUnits = this.findTrainingJobUnitsForResponse(training, responseId, exclusions);
-
     if (jobUnits.length === 0) {
-      return this.missingsProfilesService.getNegativeMissingCodesForProfileOrDefault(workspaceId, null);
+      return (await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
+        workspaceId,
+        null,
+        code
+      )).score;
     }
 
     const resolvedProfileIds = await Promise.all(jobUnits.map(({ job }) => (
@@ -618,10 +670,19 @@ export class CoderTrainingService {
       throw new BadRequestException(`Conflicting missing profiles for response ${responseId} in training ${training.id}`);
     }
 
-    return this.missingsProfilesService.getNegativeMissingCodesForProfileOrDefault(
-      workspaceId,
-      resolvedProfileIds[0]
-    );
+    try {
+      return (await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
+        workspaceId,
+        resolvedProfileIds[0],
+        code
+      )).score;
+    } catch (error) {
+      if (error instanceof BadRequestException && error.message.includes('not found')) {
+        throw new BadRequestException(`Unsupported missing code: ${code}`);
+      }
+
+      throw error;
+    }
   }
 
   private async deriveDiscussionScore(
@@ -633,17 +694,13 @@ export class CoderTrainingService {
     exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
   ): Promise<number | null> {
     if (code < 0) {
-      const allowedMissingCodes = await this.getAllowedMissingCodesForResponse(
+      return this.getMissingScoreForResponse(
         workspaceId,
         training,
         responseId,
+        code,
         exclusions
       );
-      if (!allowedMissingCodes.has(code)) {
-        throw new BadRequestException(`Unsupported missing code: ${code}`);
-      }
-
-      return 0;
     }
 
     try {
