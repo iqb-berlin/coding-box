@@ -51,6 +51,45 @@ export interface CodingStatisticsWithJob extends CodingStatistics {
   message?: string;
 }
 
+export interface CohensKappaCoderPair {
+  coder1Id: number;
+  coder1Name: string;
+  coder2Id: number;
+  coder2Name: string;
+  kappa: number | null;
+  agreement: number;
+  totalItems: number;
+  validPairs: number;
+  interpretation: string;
+}
+
+export interface CohensKappaVariableSummary {
+  unitName: string;
+  variableId: string;
+  meanKappa: number | null;
+  meanAgreement: number | null;
+  caseCount: number;
+  doubleCodedCount: number;
+  doubleCodedRate: number | null;
+  validPairCount: number;
+  coderPairCount: number;
+  coderPairs: CohensKappaCoderPair[];
+}
+
+export interface CohensKappaStatisticsResponse {
+  variables: CohensKappaVariableSummary[];
+  workspaceSummary: {
+    totalCodedResponses: number;
+    totalDoubleCodedResponses: number;
+    totalCoderPairs: number;
+    averageKappa: number | null;
+    meanAgreement: number | null;
+    variablesIncluded: number;
+    codersIncluded: number;
+    weightingMethod: 'weighted' | 'unweighted';
+  };
+}
+
 export interface AggregationSettingsResponse {
   success: boolean;
   threshold: number;
@@ -1131,32 +1170,7 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = true,
     unitName?: string,
     variableId?: string
-  ): Observable<{
-      variables: Array<{
-        unitName: string;
-        variableId: string;
-        meanKappa: number | null;
-        coderPairs: Array<{
-          coder1Id: number;
-          coder1Name: string;
-          coder2Id: number;
-          coder2Name: string;
-          kappa: number | null;
-          agreement: number;
-          totalItems: number;
-          validPairs: number;
-          interpretation: string;
-        }>;
-      }>;
-      workspaceSummary: {
-        totalDoubleCodedResponses: number;
-        totalCoderPairs: number;
-        averageKappa: number | null;
-        variablesIncluded: number;
-        codersIncluded: number;
-        weightingMethod: 'weighted' | 'unweighted';
-      };
-    }> {
+  ): Observable<CohensKappaStatisticsResponse> {
     let params = new HttpParams();
 
     params = params.set('weightedMean', weightedMean.toString());
@@ -1170,32 +1184,7 @@ export class TestPersonCodingService {
     }
 
     return this.http
-      .get<{
-      variables: Array<{
-        unitName: string;
-        variableId: string;
-        meanKappa: number | null;
-        coderPairs: Array<{
-          coder1Id: number;
-          coder1Name: string;
-          coder2Id: number;
-          coder2Name: string;
-          kappa: number | null;
-          agreement: number;
-          totalItems: number;
-          validPairs: number;
-          interpretation: string;
-        }>;
-      }>;
-      workspaceSummary: {
-        totalDoubleCodedResponses: number;
-        totalCoderPairs: number;
-        averageKappa: number | null;
-        variablesIncluded: number;
-        codersIncluded: number;
-        weightingMethod: 'weighted' | 'unweighted';
-      };
-    }>(
+      .get<CohensKappaStatisticsResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa`,
       { headers: this.authHeader, params }
     )
@@ -1203,14 +1192,68 @@ export class TestPersonCodingService {
         catchError(() => of({
           variables: [],
           workspaceSummary: {
+            totalCodedResponses: 0,
             totalDoubleCodedResponses: 0,
             totalCoderPairs: 0,
             averageKappa: null,
+            meanAgreement: null,
             variablesIncluded: 0,
             codersIncluded: 0,
             weightingMethod: 'weighted' as 'weighted' | 'unweighted'
           }
         }))
+      );
+  }
+
+  exportCohensKappaSummaryAsCsv(
+    workspaceId: number,
+    weightedMean: boolean = true,
+    excludeTrainings: boolean = true,
+    unitName?: string,
+    variableId?: string
+  ): Observable<Blob> {
+    const params = this.buildCohensKappaExportParams(
+      weightedMean,
+      excludeTrainings,
+      unitName,
+      variableId
+    );
+
+    return this.http
+      .get(
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/export/summary/csv`,
+        {
+          headers: this.authHeader,
+          params,
+          responseType: 'blob',
+          context: suppressGlobalHttpErrorContext()
+        }
+      );
+  }
+
+  exportCohensKappaStatisticsAsXlsx(
+    workspaceId: number,
+    weightedMean: boolean = true,
+    excludeTrainings: boolean = true,
+    unitName?: string,
+    variableId?: string
+  ): Observable<Blob> {
+    const params = this.buildCohensKappaExportParams(
+      weightedMean,
+      excludeTrainings,
+      unitName,
+      variableId
+    );
+
+    return this.http
+      .get(
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/export/xlsx`,
+        {
+          headers: this.authHeader,
+          params,
+          responseType: 'blob',
+          context: suppressGlobalHttpErrorContext()
+        }
       );
   }
 
@@ -1221,16 +1264,12 @@ export class TestPersonCodingService {
     unitName?: string,
     variableId?: string
   ): Observable<Blob> {
-    let params = new HttpParams()
-      .set('weightedMean', weightedMean.toString())
-      .set('excludeTrainings', excludeTrainings.toString());
-
-    if (unitName) {
-      params = params.set('unitName', unitName);
-    }
-    if (variableId) {
-      params = params.set('variableId', variableId);
-    }
+    const params = this.buildCohensKappaExportParams(
+      weightedMean,
+      excludeTrainings,
+      unitName,
+      variableId
+    );
 
     return this.http
       .get(
@@ -1242,6 +1281,26 @@ export class TestPersonCodingService {
           context: suppressGlobalHttpErrorContext()
         }
       );
+  }
+
+  private buildCohensKappaExportParams(
+    weightedMean: boolean,
+    excludeTrainings: boolean,
+    unitName?: string,
+    variableId?: string
+  ): HttpParams {
+    let params = new HttpParams()
+      .set('weightedMean', weightedMean.toString())
+      .set('excludeTrainings', excludeTrainings.toString());
+
+    if (unitName) {
+      params = params.set('unitName', unitName);
+    }
+    if (variableId) {
+      params = params.set('variableId', variableId);
+    }
+
+    return params;
   }
 
   getWorkspaceCohensKappaSummary(
