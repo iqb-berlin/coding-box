@@ -128,6 +128,98 @@ describe('CodingResultsComparisonComponent', () => {
     ]);
   });
 
+  it('should add modal values to the within-training evaluation table', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [
+      {
+        responseId: 1,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        testperson: 'Test1',
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder1',
+            code: '7',
+            score: 2
+          },
+          {
+            jobId: 2,
+            coderName: 'Coder2',
+            code: '7',
+            score: 2
+          }
+        ]
+      }
+    ];
+    component.codersFormControl.setValue([1, 2]);
+
+    (component as unknown as { updateDisplayedColumns: () => void }).updateDisplayedColumns();
+
+    expect(component.displayedColumns).toEqual([
+      'index',
+      'unitVariable',
+      'personInfo',
+      'replay',
+      'givenAnswer',
+      'match',
+      'modalValue',
+      'coder_1',
+      'coder_2',
+      'discussion'
+    ]);
+  });
+
+  it('should calculate deterministic modal values for selected coders', () => {
+    component.comparisonMode = 'within-training';
+    component.codersFormControl.setValue([1, 2, 3, 4]);
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      coders: [
+        {
+          jobId: 1,
+          coderName: 'Coder1',
+          code: '8',
+          score: 1
+        },
+        {
+          jobId: 2,
+          coderName: 'Coder2',
+          code: '7',
+          score: 1
+        },
+        {
+          jobId: 3,
+          coderName: 'Coder3',
+          code: '8',
+          score: 1
+        },
+        {
+          jobId: 4,
+          coderName: 'Coder4',
+          code: '9',
+          score: 1
+        }
+      ]
+    };
+    component.withinTrainingData = [row];
+
+    (component as unknown as { updateModalValueDisplays: () => void }).updateModalValueDisplays();
+
+    expect(component.withinTrainingData[0].modalValueDisplay?.valueText).toBe('8');
+    expect(component.withinTrainingData[0].modalValueDisplay?.deviationText).toBe('2');
+
+    row.coders[3].code = '7';
+
+    (component as unknown as { updateModalValueDisplays: () => void }).updateModalValueDisplays();
+
+    expect(component.withinTrainingData[0].modalValueDisplay?.valueText).toBe('7*');
+  });
+
   it('should open replay for the row response with coding context', () => {
     const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
     appService.createOwnToken.mockReturnValue(of('token-123'));
