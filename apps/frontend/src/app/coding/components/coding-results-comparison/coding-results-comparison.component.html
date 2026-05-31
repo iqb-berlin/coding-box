@@ -1,10 +1,17 @@
 <div class="dialog-layout">
   <div mat-dialog-title>
     <div class="dialog-header">
-      <h2>Kodierergebnisse vergleichen</h2>
+      <h2>{{
+        (comparisonMode === 'within-training'
+          ? 'coding.trainings.compare.dialog-title-within'
+          : 'coding.trainings.compare.dialog-title-between') | translate
+      }}</h2>
       <span
-        >Ergebnisse verschiedener Kodierer-Schulungen oder innerhalb einer
-        Schulung gegenüberstellen</span
+        >{{
+          (comparisonMode === 'within-training'
+            ? 'coding.trainings.compare.dialog-subtitle-within'
+            : 'coding.trainings.compare.dialog-subtitle-between') | translate
+        }}</span
       >
     </div>
 
@@ -248,43 +255,74 @@
             notComparableComparisons > 0)
         "
       >
-        <h4>Kodierungsübereinstimmung</h4>
-        <div class="statistics-row">
-          <span
-            >Auswertbare Vergleiche:
-            <strong>{{ totalComparisons }}</strong></span
+        <h4>{{
+          (comparisonMode === 'within-training'
+            ? 'coding.trainings.compare.statistics-title-within'
+            : 'coding.trainings.compare.statistics-title-between') | translate
+        }}</h4>
+        <div class="evaluation-metrics">
+          <div class="evaluation-metric">
+            <span class="metric-label">{{ 'coding.trainings.compare.metric-visible-cases' | translate }}</span>
+            <strong>{{ getFilteredRowsCount() }}</strong>
+            <small>{{ 'coding.trainings.compare.metric-completion-rate' | translate:{rate: getVisibleCompletionRate()} }}</small>
+          </div>
+          <div class="evaluation-metric">
+            <span class="metric-label">{{ 'coding.trainings.compare.metric-comparable' | translate }}</span>
+            <strong>{{ totalComparisons }}</strong>
+            <small>{{ 'coding.trainings.compare.metric-incomplete' | translate:{count: incompleteComparisons} }}</small>
+          </div>
+          <div class="evaluation-metric">
+            <span class="metric-label">{{ 'coding.trainings.compare.metric-agreement-rate' | translate }}</span>
+            <strong>{{ totalComparisons > 0 ? matchingPercentage + '%' : '-' }}</strong>
+            <small>{{ 'coding.trainings.compare.metric-agreements' | translate:{count: matchingComparisons} }}</small>
+          </div>
+          <div class="evaluation-metric">
+            <span class="metric-label">{{ 'coding.trainings.compare.metric-deviations' | translate }}</span>
+            <strong>{{ getDeviationComparisons() }}</strong>
+            <small>{{ 'coding.trainings.compare.metric-not-comparable' | translate:{count: notComparableComparisons} }}</small>
+          </div>
+          <div
+            class="evaluation-metric"
+            *ngIf="
+              comparisonMode === 'within-training' &&
+              kappaStatistics?.workspaceSummary?.averageKappa !== null &&
+              kappaStatistics?.workspaceSummary?.averageKappa !== undefined
+            "
           >
-          <span *ngIf="totalComparisons > 0"
-            >Übereinstimmungen: <strong>{{ matchingComparisons }}</strong></span
-          >
-          <span *ngIf="totalComparisons > 0"
-            >Übereinstimmungsrate:
-            <strong>{{ matchingPercentage }}%</strong></span
-          >
-          <span *ngIf="incompleteComparisons > 0"
-            >Unvollständig:
-            <strong>{{ incompleteComparisons }}</strong></span
-          >
-          <span *ngIf="notComparableComparisons > 0"
-            >Nicht vergleichbar:
-            <strong>{{ notComparableComparisons }}</strong></span
-          >
-          <span
+            <span class="metric-label">{{
+              (useCodeLevel
+                ? 'coding.trainings.compare.metric-code-kappa'
+                : 'coding.trainings.compare.metric-score-kappa') | translate
+            }}</span>
+            <strong>{{
+              kappaStatistics!.workspaceSummary.averageKappa!
+                | number: '1.3-3'
+            }}</strong>
+            <small>{{
+              (useWeightedMean
+                ? 'coding.trainings.compare.metric-weighted'
+                : 'coding.trainings.compare.metric-unweighted') | translate
+            }}</small>
+          </div>
+          <div
+            class="evaluation-metric"
             *ngIf="
               comparisonMode === 'within-training' &&
               kappaStatistics?.workspaceSummary?.meanAgreement !== null &&
               kappaStatistics?.workspaceSummary?.meanAgreement !== undefined
             "
           >
-            Durchschnittliche Übereinstimmung:
+            <span class="metric-label">{{ 'coding.trainings.compare.metric-mean-agreement' | translate }}</span>
             <strong>{{
               kappaStatistics!.workspaceSummary.meanAgreement!
                 | percent: '1.1-1'
             }}</strong>
-            <small class="text-muted"
-              >({{ useWeightedMean ? 'gewichtet' : 'ungewichtet' }})</small
-            >
-          </span>
+            <small>{{
+              (useWeightedMean
+                ? 'coding.trainings.compare.metric-weighted'
+                : 'coding.trainings.compare.metric-unweighted') | translate
+            }}</small>
+          </div>
         </div>
       </div>
 
@@ -684,6 +722,18 @@
               [matTooltip]="getComparisonStatusTooltip(comparison)"
             >
               <mat-icon>{{ getComparisonStatusIcon(comparison) }}</mat-icon>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="modalValue">
+            <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.compare.modal-value' | translate }}</th>
+            <td mat-cell *matCellDef="let comparison">
+              <ng-container *ngIf="comparison.modalValueDisplay || emptyModalValueDisplay as modalValueDisplay">
+                <div class="modal-value-cell" [matTooltip]="modalValueDisplay.tooltip">
+                  <strong>{{ modalValueDisplay.valueText }}</strong>
+                  <span>{{ 'coding.trainings.compare.modal-deviations' | translate:{count: modalValueDisplay.deviationText} }}</span>
+                </div>
+              </ng-container>
             </td>
           </ng-container>
 
