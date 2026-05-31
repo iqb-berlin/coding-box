@@ -4,13 +4,25 @@ import { IsNull, Repository } from 'typeorm';
 import { MissingsProfile } from '../../entities/missings-profile.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
-import { MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
+import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
+
+export interface ResolvedMissingValue {
+  id: string;
+  label: string;
+  code: number;
+  score: number;
+}
 
 @Injectable()
 export class MissingsProfilesService {
   private readonly logger = new Logger(MissingsProfilesService.name);
 
   private readonly defaultProfileLabel = 'IQB-Standard';
+  private readonly iqbStandardMissingScores = new Map<string, number>([
+    ['mci', 0],
+    ['mir', 0],
+    ['mbi_mbo', 0]
+  ]);
 
   constructor(
     @InjectRepository(MissingsProfile)
@@ -55,11 +67,27 @@ export class MissingsProfilesService {
         return null;
       }
 
-      return this.toDto(profileEntity);
+      return await this.enrichIqbStandardEntityIfNeeded(profileEntity);
     } catch (error) {
       this.logger.error(`Error getting missings profile by label: ${error.message}`, error.stack);
       return null;
     }
+  }
+
+  private async enrichIqbStandardEntityIfNeeded(profileEntity: MissingsProfile): Promise<MissingsProfilesDto> {
+    const profile = this.toDto(profileEntity);
+    if (profile.label !== this.defaultProfileLabel) {
+      return profile;
+    }
+
+    const enriched = this.addIqbStandardScores(profile);
+    if (!enriched.changed) {
+      return enriched.profile;
+    }
+
+    profileEntity.missings = enriched.profile.missings as string;
+    const savedProfile = await this.missingsProfileRepository.save(profileEntity);
+    return this.toDto(savedProfile);
   }
 
   private async getMissingsProfileById(id: number): Promise<MissingsProfilesDto | null> {
@@ -72,11 +100,128 @@ export class MissingsProfilesService {
         return null;
       }
 
-      return this.toDto(profileEntity);
+      return await this.enrichIqbStandardEntityIfNeeded(profileEntity);
     } catch (error) {
       this.logger.error(`Error getting missings profile by id: ${error.message}`, error.stack);
       return null;
     }
+  }
+
+  private toProfileDto(profile: MissingsProfilesDto): MissingsProfilesDto {
+    if (profile instanceof MissingsProfilesDto) {
+      return profile;
+    }
+
+    return Object.assign(new MissingsProfilesDto(), profile);
+  }
+
+  private hasExplicitFiniteScore(score: unknown): boolean {
+    if (typeof score === 'number') {
+      return Number.isFinite(score);
+    }
+
+    if (typeof score === 'string') {
+      const trimmedScore = score.trim();
+      return trimmedScore !== '' && Number.isFinite(Number(trimmedScore));
+    }
+
+    return false;
+  }
+
+  private normalizeProfileMissings(profile: MissingsProfilesDto): MissingDto[] {
+    const missings = profile.parseMissings();
+    if (!Array.isArray(missings)) {
+      throw new BadRequestException('Missings profile must contain a valid missings array');
+    }
+
+    return missings.map((missing, index) => {
+      const code = Number(missing.code);
+      const score = Number(missing.score);
+
+      if (!missing.id || typeof missing.id !== 'string' || missing.id.trim() === '') {
+        throw new BadRequestException(`Missing entry ${index + 1} must define an id`);
+      }
+
+      if (!missing.label || typeof missing.label !== 'string' || missing.label.trim() === '') {
+        throw new BadRequestException(`Missing entry '${missing.id}' must define a label`);
+      }
+
+      if (missing.description === null || missing.description === undefined) {
+        throw new BadRequestException(`Missing entry '${missing.id}' must define a description`);
+      }
+
+      if (!Number.isInteger(code)) {
+        throw new BadRequestException(`Missing entry '${missing.id}' must define an integer code`);
+      }
+
+      if (!this.hasExplicitFiniteScore(missing.score)) {
+        throw new BadRequestException(`Missing entry '${missing.id}' must define a score`);
+      }
+
+      return {
+        id: missing.id.trim(),
+        label: missing.label.trim(),
+        description: String(missing.description),
+        code,
+        score
+      };
+    });
+  }
+
+  private prepareProfileForStorage(rawProfile: MissingsProfilesDto): MissingsProfilesDto {
+    const profile = this.toProfileDto(rawProfile);
+
+    if (!profile.label || typeof profile.label !== 'string' || profile.label.trim() === '') {
+      throw new BadRequestException('Missings profile must define a label');
+    }
+
+    profile.label = profile.label.trim();
+    profile.setMissings(this.normalizeProfileMissings(profile));
+    return profile;
+  }
+
+  private addIqbStandardScores(profile: MissingsProfilesDto): { profile: MissingsProfilesDto; changed: boolean } {
+    const missings = profile.parseMissings();
+    let changed = false;
+
+    const enrichedMissings = missings.map(missing => {
+      const score = this.iqbStandardMissingScores.get(missing.id);
+      if (score === undefined || this.hasExplicitFiniteScore(missing.score)) {
+        return missing;
+      }
+
+      changed = true;
+      return {
+        ...missing,
+        score
+      };
+    });
+
+    if (changed) {
+      profile.setMissings(enrichedMissings as MissingDto[]);
+    }
+
+    return { profile, changed };
+  }
+
+  private assertMissingHasScore(missing: MissingDto): ResolvedMissingValue {
+    const code = Number(missing.code);
+    const score = Number(missing.score);
+
+    if (!Number.isInteger(code)) {
+      throw new BadRequestException(`Missing '${missing.id}' must define an integer code`);
+    }
+
+    if (!this.hasExplicitFiniteScore(missing.score)) {
+      throw new BadRequestException(`Missing '${missing.id}' must define a score`);
+    }
+
+    return {
+      id: missing.id,
+      label: missing.label,
+      code,
+      score
+    };
   }
 
   private createDefaultMissingsProfile(): MissingsProfilesDto {
@@ -87,19 +232,22 @@ export class MissingsProfilesService {
         id: 'mci',
         label: 'missing coding impossible',
         description: '(1) Item müsste/könnte bearbeitet worden sein, aber (2) Antwort ist aufgrund technischer Probleme (z.B. Scanfehler) nicht auswertbar.',
-        code: -97
+        code: -97,
+        score: 0
       },
       {
         id: 'mir',
         label: 'missing invalid response',
         description: '(1) Item wurde bearbeitet, aber (2a) leere Antwort oder (2b) ungültige (Spaß-)Antwort. Das Item wurde zwar bearbeitet, aber es wurde seitens der Testperson kein ernsthafter Lösungsversuch unternommen. Beispiel: Antworten wie "kein Plan", "egal", oder eine gemalte Sonne.',
-        code: -98
+        code: -98,
+        score: 0
       },
       {
         id: 'mbi_mbo',
         label: 'mbi / mbo',
         description: 'Item wurde nicht bearbeitet aber gesehen oder Item wurde nicht gesehen, aber es gibt nachfolgend gesehene oder bearbeitete Items.',
-        code: -99
+        code: -99,
+        score: 0
       }
     ]);
 
@@ -119,13 +267,19 @@ export class MissingsProfilesService {
       });
 
       if (existingProfile) {
-        return this.toDto(existingProfile);
+        const enriched = this.addIqbStandardScores(this.toDto(existingProfile));
+        if (enriched.changed) {
+          existingProfile.missings = enriched.profile.missings as string;
+          const savedProfile = await this.missingsProfileRepository.save(existingProfile);
+          return this.toDto(savedProfile);
+        }
+        return enriched.profile;
       }
 
-      const defaultProfile = this.createDefaultMissingsProfile();
+      const defaultProfile = this.prepareProfileForStorage(this.createDefaultMissingsProfile());
       const profileEntity = new MissingsProfile();
       profileEntity.label = defaultProfile.label;
-      profileEntity.missings = defaultProfile.missings;
+      profileEntity.missings = defaultProfile.missings as string;
 
       const savedProfile = await this.missingsProfileRepository.save(profileEntity);
       return this.toDto(savedProfile);
@@ -160,6 +314,44 @@ export class MissingsProfilesService {
     }
 
     return this.getNegativeMissingCodesFromProfile(profile);
+  }
+
+  async getMissingByIdForProfileOrDefault(
+    workspaceId: number,
+    profileId: number | null | undefined,
+    missingId: string
+  ): Promise<ResolvedMissingValue> {
+    const resolvedProfileId = await this.resolveMissingsProfileId(workspaceId, profileId);
+    const profile = await this.getMissingsProfileById(resolvedProfileId);
+    if (!profile) {
+      throw new BadRequestException(`Missing profile ${resolvedProfileId} not found`);
+    }
+
+    const missing = profile.parseMissings().find(entry => entry.id === missingId);
+    if (!missing) {
+      throw new BadRequestException(`Missing '${missingId}' not found in profile ${resolvedProfileId}`);
+    }
+
+    return this.assertMissingHasScore(missing);
+  }
+
+  async getMissingByCodeForProfileOrDefault(
+    workspaceId: number,
+    profileId: number | null | undefined,
+    code: number
+  ): Promise<ResolvedMissingValue> {
+    const resolvedProfileId = await this.resolveMissingsProfileId(workspaceId, profileId);
+    const profile = await this.getMissingsProfileById(resolvedProfileId);
+    if (!profile) {
+      throw new BadRequestException(`Missing profile ${resolvedProfileId} not found`);
+    }
+
+    const missing = profile.parseMissings().find(entry => Number(entry.code) === code);
+    if (!missing) {
+      throw new BadRequestException(`Missing code ${code} not found in profile ${resolvedProfileId}`);
+    }
+
+    return this.assertMissingHasScore(missing);
   }
 
   async resolveMissingsProfileId(
@@ -206,19 +398,20 @@ export class MissingsProfilesService {
   async createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Promise<MissingsProfilesDto | null> {
     try {
       this.logger.log(`Creating missings profile for workspace ${workspaceId}`);
+      const normalizedProfile = this.prepareProfileForStorage(profile);
 
       const existingProfile = await this.missingsProfileRepository.findOne({
-        where: { label: profile.label }
+        where: { label: normalizedProfile.label }
       });
 
       if (existingProfile) {
-        this.logger.error(`A missings profile with label '${profile.label}' already exists`);
+        this.logger.error(`A missings profile with label '${normalizedProfile.label}' already exists`);
         return null;
       }
 
       const profileEntity = new MissingsProfile();
-      profileEntity.label = profile.label;
-      profileEntity.missings = profile.missings;
+      profileEntity.label = normalizedProfile.label;
+      profileEntity.missings = normalizedProfile.missings as string;
 
       const savedProfile = await this.missingsProfileRepository.save(profileEntity);
 
@@ -232,6 +425,7 @@ export class MissingsProfilesService {
   async updateMissingsProfile(workspaceId: number, label: string, profile: MissingsProfilesDto): Promise<MissingsProfilesDto | null> {
     try {
       this.logger.log(`Updating missings profile '${label}' for workspace ${workspaceId}`);
+      const normalizedProfile = this.prepareProfileForStorage(profile);
 
       const existingProfile = await this.missingsProfileRepository.findOne({
         where: { label }
@@ -242,20 +436,20 @@ export class MissingsProfilesService {
         return null;
       }
 
-      if (profile.label !== existingProfile.label) {
+      if (normalizedProfile.label !== existingProfile.label) {
         const duplicateProfile = await this.missingsProfileRepository.findOne({
-          where: { label: profile.label }
+          where: { label: normalizedProfile.label }
         });
 
         if (duplicateProfile && duplicateProfile.id !== existingProfile.id) {
-          throw new BadRequestException(`A missings profile with label '${profile.label}' already exists`);
+          throw new BadRequestException(`A missings profile with label '${normalizedProfile.label}' already exists`);
         }
       }
 
       await this.assertProfileIsNotReferenced(existingProfile);
 
-      existingProfile.label = profile.label;
-      existingProfile.missings = profile.missings;
+      existingProfile.label = normalizedProfile.label;
+      existingProfile.missings = normalizedProfile.missings as string;
 
       const savedProfile = await this.missingsProfileRepository.save(existingProfile);
 
