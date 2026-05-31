@@ -34,6 +34,27 @@ type ReviewCoderResult = {
   codedAt: Date;
 };
 
+type KappaCodedVariableRow = {
+  responseId: number | string;
+  unitName: string;
+  variableId: string;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  coderId: number | string;
+  coderName: string | null;
+  jobId: number | string;
+  jobName: string | null;
+  jobDefinitionId: number | string | null;
+  trainingId: number | string | null;
+  trainingLabel: string | null;
+  code: number | string | null;
+  score: number | string | null;
+  notes: string | null;
+  supervisorComment: string | null;
+  codedAt: Date | string;
+};
+
 @Injectable()
 export class CodingReviewService {
   private readonly logger = new Logger(CodingReviewService.name);
@@ -72,6 +93,7 @@ export class CodingReviewService {
         variableId: string;
         personLogin: string;
         personCode: string;
+        personGroup: string;
         bookletName: string;
         givenAnswer: string;
         isResolved: boolean;
@@ -355,6 +377,7 @@ export class CodingReviewService {
         variableId: string;
         personLogin: string;
         personCode: string;
+        personGroup: string;
         bookletName: string;
         givenAnswer: string;
         isResolved: boolean;
@@ -383,11 +406,12 @@ export class CodingReviewService {
           const responseStatus = statusMap.get(responseId);
           responseGroups.set(responseId, {
             responseId: responseId,
-            unitName: unit.response?.unit?.name || '',
+            unitName: unit.unit_name || unit.response?.unit?.name || '',
             variableId: unit.variable_id,
-            personLogin: unit.response?.unit?.booklet?.person?.login || '',
-            personCode: unit.response?.unit?.booklet?.person?.code || '',
-            bookletName: unit.response?.unit?.booklet?.bookletinfo?.name || '',
+            personLogin: unit.person_login || unit.response?.unit?.booklet?.person?.login || '',
+            personCode: unit.person_code || unit.response?.unit?.booklet?.person?.code || '',
+            personGroup: unit.person_group || unit.response?.unit?.booklet?.person?.group || '',
+            bookletName: unit.booklet_name || unit.response?.unit?.booklet?.bookletinfo?.name || '',
             givenAnswer: unit.response?.value || '',
             isResolved: responseStatus === completeStatus,
             coderResults: []
@@ -449,6 +473,172 @@ export class CodingReviewService {
         'Could not get double-coded variables for review. Please check the database connection.'
       );
     }
+  }
+
+  async getCodedVariablesForKappa(
+    workspaceId: number,
+    excludeTrainings: boolean = true
+  ): Promise<Array<{
+      responseId: number;
+      unitName: string;
+      variableId: string;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      coderResults: Array<{
+        coderId: number;
+        coderName: string;
+        jobId: number;
+        jobName: string;
+        jobDefinitionId: number | null;
+        trainingId: number | null;
+        trainingLabel: string | null;
+        code: number | null;
+        score: number | null;
+        notes: string | null;
+        codedAt: Date;
+      }>;
+    }>> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const batchSize = 5000;
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .innerJoin(
+        subQuery => subQuery
+          .select('single_cjc.coding_job_id', 'coding_job_id')
+          .addSelect('MIN(single_cjc.user_id)', 'user_id')
+          .from(CodingJobCoder, 'single_cjc')
+          .groupBy('single_cjc.coding_job_id')
+          .having('COUNT(DISTINCT single_cjc.user_id) = 1'),
+        'single_coder_job',
+        'single_coder_job.coding_job_id = cj.id'
+      )
+      .innerJoin('cj.codingJobCoders', 'cjc')
+      .leftJoin('cjc.user', 'coder_user')
+      .leftJoin('cj.training', 'training')
+      .select('cju.response_id', 'responseId')
+      .addSelect('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect('cju.person_login', 'personLogin')
+      .addSelect('cju.person_code', 'personCode')
+      .addSelect('cju.person_group', 'personGroup')
+      .addSelect('cjc.user_id', 'coderId')
+      .addSelect('coder_user.username', 'coderName')
+      .addSelect('cju.coding_job_id', 'jobId')
+      .addSelect('cj.name', 'jobName')
+      .addSelect('cj.job_definition_id', 'jobDefinitionId')
+      .addSelect('cj.training_id', 'trainingId')
+      .addSelect('training.label', 'trainingLabel')
+      .addSelect('cju.code', 'code')
+      .addSelect('cju.score', 'score')
+      .addSelect('cju.notes', 'notes')
+      .addSelect('cju.supervisor_comment', 'supervisorComment')
+      .addSelect('COALESCE(cju.updated_at, cju.created_at)', 'codedAt')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cju.code IS NOT NULL')
+      .orderBy('cju.unit_name', 'ASC')
+      .addOrderBy('cju.variable_id', 'ASC')
+      .addOrderBy('cju.person_login', 'ASC')
+      .addOrderBy('cju.response_id', 'ASC')
+      .addOrderBy('cjc.user_id', 'ASC')
+      .addOrderBy('cju.id', 'ASC')
+      .addOrderBy('cjc.id', 'ASC');
+
+    if (excludeTrainings) {
+      query.andWhere('cj.training_id IS NULL');
+    }
+
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'kappaCodedVariables'
+    });
+
+    const groups = new Map<string, {
+      responseId: number;
+      unitName: string;
+      variableId: string;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      coderResults: ReviewCoderResult[];
+    }>();
+    const coderResultIndexByItemKey = new Map<string, Map<number, number>>();
+    let offset = 0;
+    let hasMoreRows = true;
+
+    while (hasMoreRows) {
+      const rows = await query
+        .offset(offset)
+        .limit(batchSize)
+        .getRawMany<KappaCodedVariableRow>();
+
+      rows.forEach(row => {
+        const responseId = Number(row.responseId);
+        const coderId = Number(row.coderId);
+        const itemKey = JSON.stringify([responseId, row.unitName, row.variableId]);
+        if (!groups.has(itemKey)) {
+          groups.set(itemKey, {
+            responseId,
+            unitName: row.unitName,
+            variableId: row.variableId,
+            personLogin: row.personLogin,
+            personCode: row.personCode,
+            personGroup: row.personGroup,
+            coderResults: []
+          });
+        }
+
+        const group = groups.get(itemKey)!;
+        const coderResult: ReviewCoderResult = {
+          coderId,
+          coderName: row.coderName || `Coder ${coderId}`,
+          jobId: Number(row.jobId),
+          jobName: row.jobName || '',
+          jobDefinitionId: row.jobDefinitionId === null ? null : Number(row.jobDefinitionId),
+          trainingId: row.trainingId === null ? null : Number(row.trainingId),
+          trainingLabel: row.trainingLabel,
+          code: row.code === null ? null : Number(row.code),
+          score: row.score === null ? null : Number(row.score),
+          notes: row.notes,
+          supervisorComment: row.supervisorComment || null,
+          codedAt: new Date(row.codedAt)
+        };
+
+        const coderResultIndexByCoderId = this.getCoderResultIndexByCoderId(
+          coderResultIndexByItemKey,
+          itemKey
+        );
+        const existingResultIndex = coderResultIndexByCoderId.get(coderId);
+        if (existingResultIndex === undefined) {
+          coderResultIndexByCoderId.set(coderId, group.coderResults.length);
+          group.coderResults.push(coderResult);
+        } else if (this.shouldReplaceCoderResult(group.coderResults[existingResultIndex], coderResult)) {
+          group.coderResults[existingResultIndex] = coderResult;
+        }
+      });
+
+      offset += batchSize;
+      hasMoreRows = rows.length === batchSize;
+    }
+
+    return Array.from(groups.values()).map(group => ({
+      ...group,
+      coderResults: group.coderResults.map(result => ({
+        coderId: result.coderId,
+        coderName: result.coderName,
+        jobId: result.jobId,
+        jobName: result.jobName,
+        jobDefinitionId: result.jobDefinitionId,
+        trainingId: result.trainingId,
+        trainingLabel: result.trainingLabel,
+        code: result.code,
+        score: result.score,
+        notes: result.notes,
+        codedAt: result.codedAt
+      }))
+    }));
   }
 
   private hasScopeFilters(jobDefinitionIds?: number[], coderTrainingIds?: number[]): boolean {
@@ -661,9 +851,9 @@ export class CodingReviewService {
     return matchesJobDefinition || matchesTraining || matchesLegacyBundleJobDefinition;
   }
 
-  private getCoderResultIndexByCoderId(
-    coderResultIndexByResponseId: Map<number, Map<number, number>>,
-    responseId: number
+  private getCoderResultIndexByCoderId<TKey extends number | string>(
+    coderResultIndexByResponseId: Map<TKey, Map<number, number>>,
+    responseId: TKey
   ): Map<number, number> {
     const existing = coderResultIndexByResponseId.get(responseId);
     if (existing) {

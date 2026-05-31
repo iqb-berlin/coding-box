@@ -1,5 +1,6 @@
 import { CodingReviewService } from './coding-review.service';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
+import { applyResolvedExclusionsToQuery } from '../workspace/workspace-exclusion.service';
 
 jest.mock('./coding-statistics.service', () => ({
   CodingStatisticsService: jest.fn()
@@ -22,6 +23,8 @@ describe('CodingReviewService', () => {
   let queryBuilder: {
     leftJoin: jest.Mock;
     innerJoin: jest.Mock;
+    innerJoinAndSelect: jest.Mock;
+    leftJoinAndSelect: jest.Mock;
     select: jest.Mock;
     addSelect: jest.Mock;
     where: jest.Mock;
@@ -31,10 +34,12 @@ describe('CodingReviewService', () => {
     andHaving: jest.Mock;
     andWhere: jest.Mock;
     orderBy: jest.Mock;
+    addOrderBy: jest.Mock;
     offset: jest.Mock;
     limit: jest.Mock;
     getQueryAndParameters: jest.Mock;
     getRawMany: jest.Mock;
+    getMany: jest.Mock;
   };
   let codingJobUnitRepository: {
     createQueryBuilder: jest.Mock;
@@ -60,8 +65,12 @@ describe('CodingReviewService', () => {
     notes: null,
     supervisor_comment: null,
     created_at: new Date('2026-05-18T00:00:00.000Z'),
+    updated_at: new Date('2026-05-18T00:00:00.000Z'),
     booklet_name: 'BOOKLET_1',
     unit_name: 'UNIT_1',
+    person_login: 'person-1',
+    person_code: 'P001',
+    person_group: 'GROUP_1',
     coding_job: {
       workspace_id: workspaceId,
       job_definition_id: 11,
@@ -89,9 +98,12 @@ describe('CodingReviewService', () => {
   });
 
   beforeEach(() => {
+    jest.mocked(applyResolvedExclusionsToQuery).mockClear();
     queryBuilder = {
       leftJoin: jest.fn().mockReturnThis(),
       innerJoin: jest.fn().mockReturnThis(),
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
@@ -101,10 +113,12 @@ describe('CodingReviewService', () => {
       andHaving: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
       offset: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
       getQueryAndParameters: jest.fn().mockReturnValue(['SELECT response ids', []]),
-      getRawMany: jest.fn().mockResolvedValue([{ responseId: 10, responseStatus: null }])
+      getRawMany: jest.fn().mockResolvedValue([{ responseId: 10, responseStatus: null }]),
+      getMany: jest.fn().mockResolvedValue([])
     };
 
     codingJobUnitRepository = {
@@ -828,5 +842,158 @@ describe('CodingReviewService', () => {
       page: 1,
       limit: 50
     });
+  });
+
+  it('loads coded variables for kappa with exclusions, training filter and coder deduplication', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 100,
+        jobName: 'Training duplicate',
+        jobDefinitionId: null,
+        trainingId: 60,
+        trainingLabel: 'Training A',
+        code: 1,
+        score: 1,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      },
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 101,
+        jobName: 'Regular job',
+        jobDefinitionId: 11,
+        trainingId: null,
+        trainingLabel: null,
+        code: 2,
+        score: 1,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-19T00:00:00.000Z')
+      },
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        coderId: 2,
+        coderName: 'Coder 2',
+        jobId: 102,
+        jobName: 'Other coder job',
+        jobDefinitionId: 12,
+        trainingId: null,
+        trainingLabel: null,
+        code: 3,
+        score: 1,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-20T00:00:00.000Z')
+      },
+      {
+        responseId: 11,
+        unitName: 'UNIT:2',
+        variableId: 'VAR:2',
+        personLogin: 'person-2',
+        personCode: 'P002',
+        personGroup: 'GROUP_2',
+        coderId: 3,
+        coderName: 'Coder 3',
+        jobId: 103,
+        jobName: 'Single coded job',
+        jobDefinitionId: 13,
+        trainingId: null,
+        trainingLabel: null,
+        code: 4,
+        score: 1,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-21T00:00:00.000Z')
+      }
+    ]);
+
+    const result = await service.getCodedVariablesForKappa(workspaceId);
+
+    expect(queryBuilder.innerJoin).toHaveBeenCalledWith('cju.coding_job', 'cj');
+    expect(queryBuilder.innerJoin).toHaveBeenCalledWith(
+      expect.any(Function),
+      'single_coder_job',
+      'single_coder_job.coding_job_id = cj.id'
+    );
+    expect(queryBuilder.innerJoin).toHaveBeenCalledWith('cj.codingJobCoders', 'cjc');
+    expect(queryBuilder.leftJoin).toHaveBeenCalledWith('cj.training', 'training');
+    expect(queryBuilder.select).toHaveBeenCalledWith('cju.response_id', 'responseId');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.code IS NOT NULL');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith('cj.training_id IS NULL');
+    expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cju.id', 'ASC');
+    expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cjc.id', 'ASC');
+    expect(queryBuilder.offset).toHaveBeenCalledWith(0);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(5000);
+    expect(applyResolvedExclusionsToQuery).toHaveBeenCalledWith(queryBuilder, emptyExclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'kappaCodedVariables'
+    });
+    expect(result).toMatchObject([
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        coderResults: [
+          {
+            coderId: 1,
+            jobId: 101,
+            jobDefinitionId: 11,
+            trainingId: null,
+            code: 2
+          },
+          {
+            coderId: 2,
+            jobId: 102,
+            code: 3
+          }
+        ]
+      },
+      {
+        responseId: 11,
+        unitName: 'UNIT:2',
+        variableId: 'VAR:2',
+        coderResults: [
+          {
+            coderId: 3,
+            jobId: 103,
+            code: 4
+          }
+        ]
+      }
+    ]);
+  });
+
+  it('keeps coder training rows in kappa data when trainings are included', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([]);
+
+    await service.getCodedVariablesForKappa(workspaceId, false);
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.code IS NOT NULL');
+    expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cj.training_id IS NULL');
   });
 });
