@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Readable, PassThrough } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -25,6 +25,7 @@ import {
   isExcludedByResolvedExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+import { MissingsProfilesService, ResolvedMissingValue } from './missings-profiles.service';
 
 interface ByVariableCombination {
   unitName: string;
@@ -58,6 +59,7 @@ interface CompactByVariableRawRow {
   notes: string | null;
   pId: string | number;
   trainingId: string | number | null;
+  missingsProfileId: string | number | null;
   responseId: string | number | null;
 }
 
@@ -108,8 +110,63 @@ export class CodingExportService {
     private userRepository: Repository<User>,
     private codingListService: CodingListService,
     private workspaceCoreService: WorkspaceCoreService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    @Optional()
+    private missingsProfilesService?: MissingsProfilesService
   ) { }
+
+  private readonly manualMissingExportValueCache = new Map<string, ResolvedMissingValue>();
+
+  private async getManualMissingExportValue(
+    workspaceId: number,
+    code: number | null | undefined,
+    profileId?: number | null
+  ): Promise<ResolvedMissingValue | null> {
+    let missingId: 'mir' | 'mci' | null = null;
+    if (code === -3) {
+      missingId = 'mir';
+    }
+    if (code === -4) {
+      missingId = 'mci';
+    }
+    if (!missingId || !this.missingsProfilesService) {
+      return null;
+    }
+
+    const cacheKey = `${workspaceId}:${profileId ?? 'default'}:${missingId}`;
+    const cached = this.manualMissingExportValueCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+      workspaceId,
+      profileId,
+      missingId
+    );
+    this.manualMissingExportValueCache.set(cacheKey, missing);
+    return missing;
+  }
+
+  private async mapCodeAndScoreForExport(
+    workspaceId: number,
+    code: number | null | undefined,
+    score: number | null | undefined,
+    profileId?: number | null
+  ): Promise<{ code: number | null; score: number | null }> {
+    const manualMissing = await this.getManualMissingExportValue(workspaceId, code, profileId);
+    if (manualMissing) {
+      return {
+        code: manualMissing.code,
+        score: manualMissing.score
+      };
+    }
+
+    return {
+      code: mapCodeForExport(code),
+      score: score ?? null
+    };
+  }
 
   private async getExclusionChecker(workspaceId: number): Promise<(bookletName: string, unitName: string) => boolean> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
@@ -821,6 +878,7 @@ export class CodingExportService {
         .addSelect('user.username', 'username')
         .addSelect('cj.id', 'jobId')
         .addSelect('cj.training_id', 'trainingId')
+        .addSelect('cj.missings_profile_id', 'missingsProfileId')
         .addSelect('cju.response_id', 'responseId')
         .where('person.id IN (:...ids)', { ids: batchPersonIds });
 
@@ -891,7 +949,7 @@ export class CodingExportService {
       // Group data by person and variable
       const personData = new Map<number, Map<string, AggregatedMostFrequentVariableData>>();
 
-      manualCoding.forEach(row => {
+      for (const row of manualCoding) {
         const pid = parseInt(row.personId, 10);
         const compositeKey = `${row.unitName}_${row.variableId}`;
         if (!personData.has(pid)) personData.set(pid, new Map());
@@ -899,7 +957,13 @@ export class CodingExportService {
         if (!varData.has(compositeKey)) varData.set(compositeKey, { codings: [], comments: [] });
         const d = varData.get(compositeKey)!;
         const rawCode = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
-        const code = mapCodeForExport(rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null);
+        const mapped = await this.mapCodeAndScoreForExport(
+          workspaceId,
+          rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null,
+          null,
+          this.toIntegerOrNull(row.missingsProfileId)
+        );
+        const code = mapped.code;
         if (code !== null) {
           d.codings.push({
             code,
@@ -912,7 +976,7 @@ export class CodingExportService {
           const coderName = row.username || `Job ${row.jobId}`;
           d.comments.push(`${coderName}: ${row.notes}`);
         }
-      });
+      }
 
       autoCoding.forEach(row => {
         const pid = parseInt(row.personId, 10);
@@ -1194,6 +1258,7 @@ export class CodingExportService {
         .addSelect('user.username', 'username')
         .addSelect('cj.id', 'jobId')
         .addSelect('cj.training_id', 'trainingId')
+        .addSelect('cj.missings_profile_id', 'missingsProfileId')
         .addSelect('cju.response_id', 'responseId')
         .where('person.id IN (:...ids)', { ids: batchPersonIds });
 
@@ -1258,7 +1323,7 @@ export class CodingExportService {
         codingIssueOption: number | null
       }>>>();
 
-      manualCoding.forEach(row => {
+      for (const row of manualCoding) {
         const pid = parseInt(row.personId, 10);
         const compositeKey = `${row.unitName}_${row.variableId}`;
         const coderName = row.username || `Job ${row.jobId}`;
@@ -1268,17 +1333,22 @@ export class CodingExportService {
         const coderMap = varMap.get(compositeKey)!;
 
         const rawCode = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
-        const code = mapCodeForExport(rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null);
-        const score = row.cju_score ?? row.score_v3 ?? row.score_v2 ?? row.score_v1;
+        const rawScore = row.cju_score ?? row.score_v3 ?? row.score_v2 ?? row.score_v1;
+        const mapped = await this.mapCodeAndScoreForExport(
+          workspaceId,
+          rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null,
+          rawScore !== null && rawScore !== undefined ? parseInt(rawScore, 10) : null,
+          this.toIntegerOrNull(row.missingsProfileId)
+        );
         coderMap.set(coderName, {
-          code,
-          score: score !== null && score !== undefined ? parseInt(score, 10) : null,
+          code: mapped.code,
+          score: mapped.score,
           comment: row.notes,
           codingIssueOption: row.coding_issue_option !== null && row.coding_issue_option !== undefined ?
             parseInt(row.coding_issue_option, 10) :
             null
         });
-      });
+      }
 
       autoCoding.forEach(row => {
         const pid = parseInt(row.personId, 10);
@@ -1323,16 +1393,14 @@ export class CodingExportService {
               this.formatCodeWithIssueSuffix(data?.code ?? null, data?.codingIssueOption ?? null);
             row[`${displayName} Score`] = outputCommentsInsteadOfCodes ? '' : (data?.score ?? '');
             if (includeComments) row[`${displayName} Note`] = data?.comment ?? '';
-            const mappedCode = mapCodeForExport(data?.code ?? null);
-            if (mappedCode !== null && mappedCode !== undefined) codes.push(mappedCode);
+            if (data?.code !== null && data?.code !== undefined) codes.push(data.code);
             if (data?.comment) comments.push(`${displayName}: ${data.comment}`);
           });
 
           // Add AUTO if present
           if (coderDataMap?.has('AUTO')) {
             const data = coderDataMap.get('AUTO')!;
-            const mappedCode = mapCodeForExport(data.code);
-            if (mappedCode !== null && mappedCode !== undefined) codes.push(mappedCode);
+            if (data.code !== null && data.code !== undefined) codes.push(data.code);
           }
 
           if (includeModalValue && codes.length > 0) {
@@ -1603,6 +1671,7 @@ export class CodingExportService {
         .addSelect('user.username', 'username')
         .addSelect('cj.id', 'jobId')
         .addSelect('cj.training_id', 'trainingId')
+        .addSelect('cj.missings_profile_id', 'missingsProfileId')
         .addSelect('cju.response_id', 'responseId')
         .where('person.id IN (:...ids)', { ids: batchPersonIds });
 
@@ -1663,7 +1732,7 @@ export class CodingExportService {
         codingIssueOption: number | null
       }>>();
 
-      manualCoding.forEach(row => {
+      for (const row of manualCoding) {
         const pid = parseInt(row.personId, 10);
         const coderName = row.username || `Job ${row.jobId}`;
         const displayName = anonymizeCoders ? coderMapping.get(coderName)! : coderName;
@@ -1673,15 +1742,20 @@ export class CodingExportService {
         const dataMapForPerson = personData.get(pid)!;
 
         const rawCode = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
-        const code = mapCodeForExport(rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null);
+        const mapped = await this.mapCodeAndScoreForExport(
+          workspaceId,
+          rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null,
+          null,
+          this.toIntegerOrNull(row.missingsProfileId)
+        );
         dataMapForPerson.set(columnKey, {
-          code,
+          code: mapped.code,
           comment: row.notes,
           codingIssueOption: row.coding_issue_option !== null && row.coding_issue_option !== undefined ?
             parseInt(row.coding_issue_option, 10) :
             null
         });
-      });
+      }
 
       autoCoding.forEach(row => {
         const pid = parseInt(row.personId, 10);
@@ -1712,8 +1786,7 @@ export class CodingExportService {
           row[col] = outputCommentsInsteadOfCodes ?
             data?.comment || '' :
             this.formatCodeWithIssueSuffix(data?.code ?? null, data?.codingIssueOption ?? null);
-          const mappedCode = mapCodeForExport(data?.code ?? null);
-          if (mappedCode !== null && mappedCode !== undefined) codes.push(mappedCode);
+          if (data?.code !== null && data?.code !== undefined) codes.push(data.code);
           if (data?.comment) {
             const coderName = col.split('_').pop();
             comments.push(`${coderName}: ${data.comment}`);
@@ -2011,6 +2084,7 @@ export class CodingExportService {
             .leftJoin('booklet.bookletinfo', 'bookletinfo')
             .innerJoin('booklet.person', 'person')
             .innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+            .innerJoin('cju.coding_job', 'cj')
             .select('resp.variableid', 'variableId')
             .addSelect('unit.name', 'unitName')
             .addSelect('cju.code', 'cju_code')
@@ -2020,6 +2094,7 @@ export class CodingExportService {
             .addSelect('cju.notes', 'notes')
             .addSelect('person.id', 'pId')
             .addSelect('bookletinfo.name', 'bookletName')
+            .addSelect('cj.missings_profile_id', 'missingsProfileId')
             .where('person.id IN (:...ids)', { ids: batchIds })
             .andWhere('cju.coding_job_id IN (:...jobIds)', { jobIds });
           applyResolvedExclusionsToQuery(responses, exclusions, {
@@ -2036,7 +2111,12 @@ export class CodingExportService {
             const pData = personDataMap.get(pid)!;
             const latest = getLatestCode(resp);
             const rawCode = resp.cju_code ?? latest.code;
-            const code = mapCodeForExport(rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null);
+            const mapped = await this.mapCodeAndScoreForExport(
+              workspaceId,
+              rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null,
+              null,
+              this.toIntegerOrNull(resp.missingsProfileId)
+            );
 
             if (!resp.unitName || !resp.variableId) {
               continue;
@@ -2047,7 +2127,7 @@ export class CodingExportService {
             }
 
             const variableKey = JSON.stringify([resp.unitName, resp.variableId]);
-            pData[variableKey] = outputCommentsInsteadOfCodes ? resp.notes || '' : code ?? '';
+            pData[variableKey] = outputCommentsInsteadOfCodes ? resp.notes || '' : mapped.code ?? '';
             pData[`_metadata_${variableKey}`] = {
               unitName: resp.unitName,
               variableId: resp.variableId,
@@ -2311,6 +2391,7 @@ export class CodingExportService {
           .addSelect('cju.notes', 'notes')
           .addSelect('person.id', 'pId')
           .addSelect('cj.training_id', 'trainingId')
+          .addSelect('cj.missings_profile_id', 'missingsProfileId')
           .addSelect('cju.response_id', 'responseId')
           .where('person.id IN (:...batchIds)', { batchIds })
           .andWhere('unit.name = :unitName', { unitName })
@@ -2352,9 +2433,14 @@ export class CodingExportService {
           if (d.username) {
             const latest = getLatestCode(d);
             const rawCode = d.cju_code ?? latest.code;
-            const code = mapCodeForExport(rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null);
+            const mapped = await this.mapCodeAndScoreForExport(
+              workspaceId,
+              rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null,
+              null,
+              this.toIntegerOrNull(d.missingsProfileId)
+            );
             p.codings[d.username] = {
-              code,
+              code: mapped.code,
               notes: d.notes,
               status: d.status_v1,
               codingIssueOption: d.coding_issue_option !== null && d.coding_issue_option !== undefined ?
@@ -2398,11 +2484,8 @@ export class CodingExportService {
             row[dName] = outputCommentsInsteadOfCodes ?
               cData?.notes || '' :
               this.formatCodeWithIssueSuffix(cData?.code ?? null, cData?.codingIssueOption ?? null);
-            if (cData) {
-              const mappedCode = mapCodeForExport(cData.code);
-              if (mappedCode !== null && mappedCode !== undefined) {
-                codes.push(mappedCode);
-              }
+            if (cData?.code !== null && cData?.code !== undefined) {
+              codes.push(cData.code);
             }
           }
 
@@ -2609,6 +2692,7 @@ export class CodingExportService {
         .addSelect('cju.notes', 'notes')
         .addSelect('person.id', 'pId')
         .addSelect('cj.training_id', 'trainingId')
+        .addSelect('cj.missings_profile_id', 'missingsProfileId')
         .addSelect('cju.response_id', 'responseId')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
@@ -2689,7 +2773,7 @@ export class CodingExportService {
           currentGroup = this.createCompactByVariableGroup(row, groupKey);
         }
 
-        this.addCompactCodingToGroup(currentGroup, row);
+        await this.addCompactCodingToGroup(currentGroup, row, workspaceId);
         this.addCompactDiscussionToGroup(currentGroup, row, discussionResultMap);
       }
 
@@ -2810,17 +2894,24 @@ export class CodingExportService {
     };
   }
 
-  private addCompactCodingToGroup(
+  private async addCompactCodingToGroup(
     group: CompactByVariableGroup,
-    row: CompactByVariableRawRow
-  ): void {
+    row: CompactByVariableRawRow,
+    workspaceId: number
+  ): Promise<void> {
     if (!row.username) return;
 
     const latest = getLatestCode(row as unknown as ResponseEntity);
     const rawCode = row.cju_code ?? latest.code;
     const parsedCode = this.toIntegerOrNull(rawCode);
+    const mapped = await this.mapCodeAndScoreForExport(
+      workspaceId,
+      parsedCode,
+      null,
+      this.toIntegerOrNull(row.missingsProfileId)
+    );
     const coding = {
-      code: mapCodeForExport(parsedCode),
+      code: mapped.code,
       notes: row.notes || null,
       codingIssueOption: this.toIntegerOrNull(row.coding_issue_option),
       updatedAt: row.updatedAt || null
@@ -2873,7 +2964,7 @@ export class CodingExportService {
     }
 
     const codes = codingEntries
-      .map(([, coding]) => mapCodeForExport(coding.code))
+      .map(([, coding]) => coding.code)
       .filter((code): code is number => code !== null && code !== undefined);
     const modal = includeModalValue ? calculateModalValue(codes) : null;
     const pseudoCoderMapping = anonymizeCoders && usePseudoCoders ?
@@ -3212,8 +3303,13 @@ export class CodingExportService {
           }
 
           const timestamp = unit.updated_at ? new Date(unit.updated_at).toLocaleString('de-DE').replace(',', '') : '';
-          const mappedCode = mapCodeForExport(unit.code);
-          const codeValue = mappedCode === null ? '' : mappedCode.toString();
+          const mapped = await this.mapCodeAndScoreForExport(
+            workspaceId,
+            unit.code,
+            null,
+            unit.coding_job?.missings_profile_id
+          );
+          const codeValue = mapped.code === null ? '' : mapped.code.toString();
 
           let commentValue = unit.notes || '';
           if (!outputCommentsInsteadOfCodes && unit.coding_issue_option) {
