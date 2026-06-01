@@ -30,6 +30,134 @@ import {
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../api-dto/coding/job-refresh.dto';
 
+const NUMBER_RECORD_SCHEMA = {
+  type: 'object',
+  additionalProperties: { type: 'number' }
+};
+
+const DISTRIBUTION_SNAPSHOT_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      version: { type: 'number', enum: [1] },
+      source: { type: 'string', enum: ['initial_creation', 'refresh'] },
+      createdAt: { type: 'string', format: 'date-time' },
+      distributionSeed: { type: 'string' },
+      selectedVariables: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            unitName: { type: 'string' },
+            variableId: { type: 'string' },
+            includeDeriveError: { type: 'boolean' }
+          }
+        }
+      },
+      selectedVariableBundles: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'number' },
+            name: { type: 'string' },
+            variables: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  unitName: { type: 'string' },
+                  variableId: { type: 'string' },
+                  includeDeriveError: { type: 'boolean' }
+                }
+              }
+            },
+            sampleCount: { type: 'number' },
+            caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] }
+          }
+        }
+      },
+      selectedCoders: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            coderId: { type: 'number' },
+            capacityPercent: { type: 'number' }
+          }
+        }
+      },
+      settings: {
+        type: 'object',
+        properties: {
+          maxCodingCases: { type: 'number' },
+          doubleCodingAbsolute: { type: 'number' },
+          doubleCodingPercentage: { type: 'number' },
+          caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] }
+        }
+      },
+      distributionByCoderId: {
+        type: 'object',
+        additionalProperties: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        }
+      },
+      doubleCodingInfo: {
+        type: 'object',
+        additionalProperties: {
+          type: 'object',
+          properties: {
+            totalCases: { type: 'number' },
+            distinctCases: { type: 'number' },
+            codingTasksTotal: { type: 'number' },
+            doubleCodedCases: { type: 'number' },
+            singleCodedCasesAssigned: { type: 'number' },
+            doubleCodedCasesPerCoderId: NUMBER_RECORD_SCHEMA
+          }
+        }
+      },
+      aggregationInfo: {
+        type: 'object',
+        additionalProperties: {
+          type: 'object',
+          properties: {
+            uniqueCases: { type: 'number' },
+            totalResponses: { type: 'number' }
+          }
+        }
+      },
+      matchingFlags: {
+        type: 'array',
+        items: { type: 'string' }
+      },
+      pairDistribution: NUMBER_RECORD_SCHEMA,
+      tasksPerCoder: NUMBER_RECORD_SCHEMA,
+      coderWeights: NUMBER_RECORD_SCHEMA,
+      jobs: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            itemKey: { type: 'string' },
+            coderId: { type: 'number' },
+            variable: {
+              type: 'object',
+              properties: {
+                unitName: { type: 'string' },
+                variableId: { type: 'string' }
+              }
+            },
+            jobId: { type: 'number' },
+            caseCount: { type: 'number' }
+          }
+        }
+      }
+    }
+  }
+};
+
 @ApiTags('Admin Workspace Job Definition')
 @Controller('admin/workspace')
 export class WorkspaceCodingJobDefinitionController {
@@ -76,6 +204,7 @@ export class WorkspaceCodingJobDefinitionController {
           assigned_variable_bundles: { type: 'array' },
           assigned_coders: { type: 'array' },
           assigned_coder_configs: { type: 'array' },
+          distribution_snapshots: DISTRIBUTION_SNAPSHOT_SCHEMA,
           missings_profile_id: { type: 'number', nullable: true },
           distribution_seed: { type: 'string' },
           duration_seconds: { type: 'number' },
@@ -127,6 +256,7 @@ export class WorkspaceCodingJobDefinitionController {
           assigned_variable_bundles: { type: 'array' },
           assigned_coders: { type: 'array' },
           assigned_coder_configs: { type: 'array' },
+          distribution_snapshots: DISTRIBUTION_SNAPSHOT_SCHEMA,
           missings_profile_id: { type: 'number', nullable: true },
           distribution_seed: { type: 'string' },
           duration_seconds: { type: 'number' },
@@ -160,7 +290,7 @@ export class WorkspaceCodingJobDefinitionController {
     @WorkspaceId() workspace_id: number,
       @Param('id') id: number
   ): Promise<JobDefinition> {
-    return this.jobDefinitionService.getJobDefinition(id);
+    return this.jobDefinitionService.getJobDefinition(id, workspace_id);
   }
 
   @Put(':workspace_id/coding/job-definitions/:id')
@@ -181,7 +311,7 @@ export class WorkspaceCodingJobDefinitionController {
       @Param('id') id: number,
       @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto
   ): Promise<JobDefinition> {
-    return this.jobDefinitionService.updateJobDefinition(id, updateDto);
+    return this.jobDefinitionService.updateJobDefinition(id, workspace_id, updateDto);
   }
 
   @Put(':workspace_id/coding/job-definitions/:id/approve')
@@ -202,7 +332,7 @@ export class WorkspaceCodingJobDefinitionController {
       @Param('id') id: number,
       @Body(new ValidationPipe({ transform: true, whitelist: true })) approveDto: ApproveJobDefinitionDto
   ): Promise<JobDefinition> {
-    return this.jobDefinitionService.approveJobDefinition(id, approveDto);
+    return this.jobDefinitionService.approveJobDefinition(id, workspace_id, approveDto);
   }
 
   @Delete(':workspace_id/coding/job-definitions/:id')
@@ -225,7 +355,7 @@ export class WorkspaceCodingJobDefinitionController {
     @WorkspaceId() workspace_id: number,
       @Param('id') id: number
   ): Promise<{ success: boolean; message: string }> {
-    await this.jobDefinitionService.deleteJobDefinition(id);
+    await this.jobDefinitionService.deleteJobDefinition(id, workspace_id);
     return { success: true, message: 'Job definition deleted successfully' };
   }
 
@@ -284,6 +414,10 @@ export class WorkspaceCodingJobDefinitionController {
               doubleCodedCases: { type: 'number' },
               singleCodedCasesAssigned: { type: 'number' },
               doubleCodedCasesPerCoder: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
+              },
+              doubleCodedCasesPerCoderId: {
                 type: 'object',
                 additionalProperties: { type: 'number' }
               }

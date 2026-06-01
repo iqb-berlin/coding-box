@@ -71,6 +71,8 @@ interface JobDefinitionApiResponse {
   assigned_coders?: number[];
   assigned_coder_configs?: JobDefinitionCoderConfig[];
   assignedCoderConfigs?: JobDefinitionCoderConfig[];
+  distribution_snapshots?: JobDefinitionDistributionSnapshot[];
+  distributionSnapshots?: JobDefinitionDistributionSnapshot[];
   missings_profile_id?: number | null;
   missingsProfileId?: number | null;
   distribution_seed?: string;
@@ -98,6 +100,49 @@ interface JobDefinitionApiResponse {
   updated_at?: Date;
 }
 
+export interface JobDefinitionDistributionSnapshot {
+  version: 1;
+  source: 'initial_creation' | 'refresh';
+  createdAt: string;
+  distributionSeed: string;
+  selectedVariables: Variable[];
+  selectedVariableBundles: Array<{
+    id: number;
+    name: string;
+    variables?: Variable[];
+    sampleCount?: number;
+    caseOrderingMode?: 'continuous' | 'alternating';
+  }>;
+  selectedCoders: { coderId: number; capacityPercent: number }[];
+  settings: {
+    maxCodingCases?: number;
+    doubleCodingAbsolute?: number;
+    doubleCodingPercentage?: number;
+    caseOrderingMode?: 'continuous' | 'alternating';
+  };
+  distributionByCoderId: Record<string, Record<string, number>>;
+  doubleCodingInfo: Record<string, {
+    totalCases: number;
+    distinctCases?: number;
+    codingTasksTotal?: number;
+    doubleCodedCases: number;
+    singleCodedCasesAssigned: number;
+    doubleCodedCasesPerCoderId: Record<string, number>;
+  }>;
+  aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+  matchingFlags: string[];
+  pairDistribution: Record<string, number>;
+  tasksPerCoder: Record<string, number>;
+  coderWeights: Record<string, number>;
+  jobs: Array<{
+    itemKey?: string;
+    coderId: number;
+    variable: { unitName: string; variableId: string };
+    jobId: number;
+    caseCount: number;
+  }>;
+}
+
 export interface JobDefinition {
   id?: number;
   status?: 'draft' | 'pending_review' | 'approved';
@@ -105,6 +150,7 @@ export interface JobDefinition {
   assignedVariableBundles?: import('../models/coding-job.model').VariableBundle[];
   assignedCoders?: number[];
   assignedCoderConfigs?: JobDefinitionCoderConfig[];
+  distributionSnapshots?: JobDefinitionDistributionSnapshot[];
   missingsProfileId?: number | null;
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
@@ -685,6 +731,7 @@ export class CodingJobBackendService {
         assignedVariableBundles: def.assigned_variable_bundles,
         assignedCoders: def.assigned_coders,
         assignedCoderConfigs: def.assignedCoderConfigs ?? def.assigned_coder_configs,
+        distributionSnapshots: def.distributionSnapshots ?? def.distribution_snapshots,
         missingsProfileId: def.missingsProfileId ?? def.missings_profile_id,
         distributionSeed: def.distributionSeed ?? def.distribution_seed,
         plannedVariableUsage: def.plannedVariableUsage ?? def.planned_variable_usage,
