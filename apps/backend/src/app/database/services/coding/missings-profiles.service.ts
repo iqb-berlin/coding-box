@@ -13,16 +13,28 @@ export interface ResolvedMissingValue {
   score: number;
 }
 
+export type IqbStandardMissingId = 'mci' | 'mir' | 'mbi_mbo';
+
+export const IQB_STANDARD_MISSING_CODES: Record<IqbStandardMissingId, number> = {
+  mci: -97,
+  mir: -98,
+  mbi_mbo: -99
+};
+
+export const IQB_STANDARD_MISSING_SCORES: Record<IqbStandardMissingId, number> = {
+  mci: 0,
+  mir: 0,
+  mbi_mbo: 0
+};
+
 @Injectable()
 export class MissingsProfilesService {
   private readonly logger = new Logger(MissingsProfilesService.name);
 
   private readonly defaultProfileLabel = 'IQB-Standard';
-  private readonly iqbStandardMissingScores = new Map<string, number>([
-    ['mci', 0],
-    ['mir', 0],
-    ['mbi_mbo', 0]
-  ]);
+  private readonly iqbStandardMissingScores = new Map<string, number>(
+    Object.entries(IQB_STANDARD_MISSING_SCORES)
+  );
 
   constructor(
     @InjectRepository(MissingsProfile)
@@ -232,22 +244,22 @@ export class MissingsProfilesService {
         id: 'mci',
         label: 'missing coding impossible',
         description: '(1) Item müsste/könnte bearbeitet worden sein, aber (2) Antwort ist aufgrund technischer Probleme (z.B. Scanfehler) nicht auswertbar.',
-        code: -97,
-        score: 0
+        code: IQB_STANDARD_MISSING_CODES.mci,
+        score: IQB_STANDARD_MISSING_SCORES.mci
       },
       {
         id: 'mir',
         label: 'missing invalid response',
         description: '(1) Item wurde bearbeitet, aber (2a) leere Antwort oder (2b) ungültige (Spaß-)Antwort. Das Item wurde zwar bearbeitet, aber es wurde seitens der Testperson kein ernsthafter Lösungsversuch unternommen. Beispiel: Antworten wie "kein Plan", "egal", oder eine gemalte Sonne.',
-        code: -98,
-        score: 0
+        code: IQB_STANDARD_MISSING_CODES.mir,
+        score: IQB_STANDARD_MISSING_SCORES.mir
       },
       {
         id: 'mbi_mbo',
         label: 'mbi / mbo',
         description: 'Item wurde nicht bearbeitet aber gesehen oder Item wurde nicht gesehen, aber es gibt nachfolgend gesehene oder bearbeitete Items.',
-        code: -99,
-        score: 0
+        code: IQB_STANDARD_MISSING_CODES.mbi_mbo,
+        score: IQB_STANDARD_MISSING_SCORES.mbi_mbo
       }
     ]);
 

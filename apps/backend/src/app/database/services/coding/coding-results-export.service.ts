@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Readable } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -21,6 +21,7 @@ import {
   isExcludedByResolvedExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+import { MissingsProfilesService, ResolvedMissingValue } from './missings-profiles.service';
 
 @Injectable()
 export class CodingResultsExportService {
@@ -40,8 +41,63 @@ export class CodingResultsExportService {
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     private codingListService: CodingListService,
     private workspaceCoreService: WorkspaceCoreService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    @Optional()
+    private missingsProfilesService?: MissingsProfilesService
   ) { }
+
+  private readonly manualMissingExportValueCache = new Map<string, ResolvedMissingValue>();
+
+  private async getManualMissingExportValue(
+    workspaceId: number,
+    code: number | null | undefined,
+    profileId?: number | null
+  ): Promise<ResolvedMissingValue | null> {
+    let missingId: 'mir' | 'mci' | null = null;
+    if (code === -3) {
+      missingId = 'mir';
+    }
+    if (code === -4) {
+      missingId = 'mci';
+    }
+    if (!missingId || !this.missingsProfilesService) {
+      return null;
+    }
+
+    const cacheKey = `${workspaceId}:${profileId ?? 'default'}:${missingId}`;
+    const cached = this.manualMissingExportValueCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+      workspaceId,
+      profileId,
+      missingId
+    );
+    this.manualMissingExportValueCache.set(cacheKey, missing);
+    return missing;
+  }
+
+  private async mapCodeAndScoreForExport(
+    workspaceId: number,
+    code: number | null | undefined,
+    score: number | null | undefined,
+    profileId?: number | null
+  ): Promise<{ code: number | null; score: number | null }> {
+    const manualMissing = await this.getManualMissingExportValue(workspaceId, code, profileId);
+    if (manualMissing) {
+      return {
+        code: manualMissing.code,
+        score: manualMissing.score
+      };
+    }
+
+    return {
+      code: mapCodeForExport(code),
+      score: score ?? null
+    };
+  }
 
   private async getExclusionChecker(workspaceId: number): Promise<(bookletName: string, unitName: string) => boolean> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
@@ -284,7 +340,13 @@ export class CodingResultsExportService {
         const compositeVariableKey = `${unitName}_${variableId}`;
 
         const rawCode = unit.code ?? unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
-        const code = mapCodeForExport(rawCode);
+        const mapped = await this.mapCodeAndScoreForExport(
+          workspaceId,
+          rawCode,
+          null,
+          unit.coding_job?.missings_profile_id
+        );
+        const code = mapped.code;
         const comment = unit.notes || null;
 
         if (!testPersonVariableCodes.has(testPersonKey)) {
@@ -604,13 +666,18 @@ export class CodingResultsExportService {
         }
 
         const rawCode = unit.code ?? unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
-        const code = mapCodeForExport(rawCode);
-        const score = unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
+        const rawScore = unit.score ?? unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
+        const mapped = await this.mapCodeAndScoreForExport(
+          workspaceId,
+          rawCode,
+          rawScore,
+          unit.coding_job?.missings_profile_id
+        );
         const comment = unit.notes || null;
 
         dataMap.get(rowKey)!.set(coderName, {
-          code,
-          score,
+          code: mapped.code,
+          score: mapped.score,
           comment,
           codingIssueOption: unit.coding_issue_option ?? null
         });
@@ -921,13 +988,18 @@ export class CodingResultsExportService {
         }
 
         const rawCode = unit.code ?? unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
-        const code = mapCodeForExport(rawCode);
-        const score = unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
+        const rawScore = unit.score ?? unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
+        const mapped = await this.mapCodeAndScoreForExport(
+          workspaceId,
+          rawCode,
+          rawScore,
+          unit.coding_job?.missings_profile_id
+        );
         const comment = unit.notes || null;
 
         dataMap.get(testPersonKey)!.set(columnKey, {
-          code,
-          score,
+          code: mapped.code,
+          score: mapped.score,
           comment,
           codingIssueOption: unit.coding_issue_option ?? null
         });
@@ -1838,8 +1910,13 @@ export class CodingResultsExportService {
             commentValue = this.getCodingIssueText(unit.coding_issue_option) || commentValue;
           }
 
-          const mappedCode = mapCodeForExport(unit.code);
-          const codeValue = mappedCode === null ? '' : mappedCode.toString();
+          const mapped = await this.mapCodeAndScoreForExport(
+            workspaceId,
+            unit.code,
+            null,
+            unit.coding_job?.missings_profile_id
+          );
+          const codeValue = mapped.code === null ? '' : mapped.code.toString();
           const codeIssueValue = this.getCodingIssueText(unit.coding_issue_option);
 
           const rowFields = [
