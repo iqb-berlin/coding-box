@@ -34,4 +34,12 @@ export class GithubReleasesController {
   ): Promise<boolean> {
     return this.githubReleasesService.downloadAndInstall(workspaceId, body.url);
   }
+
+  @Post(':workspace_id/github/install-compatible-aspect-player')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async installCompatibleAspectPlayer(
+    @WorkspaceId() workspaceId: number
+  ): Promise<boolean> {
+    return this.githubReleasesService.installCompatibleAspectPlayer(workspaceId);
+  }
 }
