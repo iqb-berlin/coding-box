@@ -58,6 +58,7 @@ import {
   ImportWorkspaceFilesProgressDto,
   ImportWorkspaceOptionKey
 } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
+import { TestGroupsLoadProgressDto } from '../../../../../../../api-dto/files/test-groups-load-progress.dto';
 
 export type WorkspaceAdmin = {
   label: string;
@@ -175,6 +176,7 @@ export class TestCenterImportComponent {
   testGroupsLoadError: string | null = null;
   uploadError: string | null = null;
   authenticated: boolean = false;
+  isLoadingTestGroups: boolean = false;
   isUploadingTestFiles: boolean = false;
   isUploadingTestResults: boolean = false;
   uploadData: Result | null = null;
@@ -187,7 +189,11 @@ export class TestCenterImportComponent {
   completedUploads: number = 0;
   importRunId: string | null = null;
   uploadProgressDetails: ImportWorkspaceFilesProgressDto | null = null;
+  testGroupsLoadProgress: TestGroupsLoadProgressDto | null = null;
+  testGroupsLoadElapsedSeconds: number = 0;
   private progressPollingSub?: Subscription;
+  private testGroupsProgressPollingSub?: Subscription;
+  private testGroupsLoadStartedAt: number | null = null;
 
   constructor() {
     this.loginForm = this.fb.group({
@@ -284,6 +290,7 @@ export class TestCenterImportComponent {
 
   ngOnDestroy(): void {
     this.stopUploadProgressPolling();
+    this.stopTestGroupsProgressPolling();
   }
 
   toggleRow(group: TestGroupsInfoDto): void {
@@ -380,28 +387,35 @@ export class TestCenterImportComponent {
       this.workspaceAdminService.getLastUrl() ||
       formValues.testCenterIndividual;
 
-    this.isUploadingTestResults = true;
+    const importRunId = this.createImportRunId();
+    this.isLoadingTestGroups = true;
     this.importProgressPercent = 0;
+    this.testGroupsLoadProgress = null;
+    this.testGroupsLoadElapsedSeconds = 0;
     this.testGroupsLoadError = null;
     this.uploadError = null;
+    this.startTestGroupsProgressPolling(importRunId);
     this.importService
       .importTestcenterGroups(
         this.appService.selectedWorkspaceId,
         formValues.workspace,
         server,
         url,
-        this.authToken
+        this.authToken,
+        importRunId
       )
       .subscribe({
         next: (response: TestGroupsInfoDto[]) => {
-          this.isUploadingTestResults = false;
+          this.isLoadingTestGroups = false;
+          this.stopTestGroupsProgressPolling();
           this.workspaceAdminService.setTestGroups(response);
           this.testGroups = response;
           this.selectedRows = [];
           this.showTestGroups = true;
         },
         error: error => {
-          this.isUploadingTestResults = false;
+          this.isLoadingTestGroups = false;
+          this.stopTestGroupsProgressPolling();
           this.testGroups = [];
           this.selectedRows = [];
           this.showTestGroups = false;
@@ -805,6 +819,32 @@ export class TestCenterImportComponent {
     return Math.round((this.completedUploads / this.totalUploadsExpected) * 100);
   }
 
+  get testGroupsLoadPercent(): number {
+    const totalGroups = this.testGroupsLoadProgress?.totalGroups || 0;
+    if (totalGroups <= 0) return 0;
+    if (this.testGroupsLoadProgress?.status === 'completed') return 100;
+    return Math.round(
+      ((this.testGroupsLoadProgress?.processedGroups || 0) / totalGroups) * 100
+    );
+  }
+
+  get testGroupsLoadMessage(): string {
+    if (this.testGroupsLoadProgress?.status === 'unknown') {
+      return 'Verbindung zum Testcenter wird hergestellt.';
+    }
+    return this.testGroupsLoadProgress?.message ||
+      'Testgruppen werden vom Testcenter abgerufen.';
+  }
+
+  get testGroupsLoadElapsedText(): string {
+    if (this.testGroupsLoadElapsedSeconds < 60) {
+      return `${this.testGroupsLoadElapsedSeconds} s`;
+    }
+    const minutes = Math.floor(this.testGroupsLoadElapsedSeconds / 60);
+    const seconds = this.testGroupsLoadElapsedSeconds % 60;
+    return `${minutes} min ${seconds} s`;
+  }
+
   private initializeUploadProgress(selectedGroupCount: number): void {
     if (this.data.importType === 'testResults') {
       this.totalUploadsExpected = selectedGroupCount;
@@ -836,6 +876,43 @@ export class TestCenterImportComponent {
 
   private createImportRunId(): string {
     return `tc-import-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  private startTestGroupsProgressPolling(importRunId: string): void {
+    this.stopTestGroupsProgressPolling();
+    this.testGroupsLoadStartedAt = Date.now();
+    this.testGroupsProgressPollingSub = interval(700).pipe(
+      startWith(0),
+      switchMap(() => this.importService.getTestGroupsLoadProgress(
+        this.appService.selectedWorkspaceId,
+        importRunId
+      ))
+    ).subscribe(progress => {
+      this.updateTestGroupsLoadElapsedSeconds();
+      if (!progress) return;
+
+      this.testGroupsLoadProgress = progress;
+
+      if (progress.status === 'completed' || progress.status === 'failed') {
+        this.stopTestGroupsProgressPolling();
+      }
+    });
+  }
+
+  private stopTestGroupsProgressPolling(): void {
+    this.testGroupsProgressPollingSub?.unsubscribe();
+    this.testGroupsProgressPollingSub = undefined;
+  }
+
+  private updateTestGroupsLoadElapsedSeconds(): void {
+    if (!this.testGroupsLoadStartedAt) {
+      this.testGroupsLoadElapsedSeconds = 0;
+      return;
+    }
+
+    this.testGroupsLoadElapsedSeconds = Math.floor(
+      (Date.now() - this.testGroupsLoadStartedAt) / 1000
+    );
   }
 
   private startUploadProgressPolling(importRunId: string): void {
