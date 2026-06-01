@@ -328,6 +328,75 @@ describe('CodingReviewService', () => {
     expect(singleCoderSubQuery.having).toHaveBeenCalledWith('COUNT(DISTINCT single_cjc.user_id) = 1');
   });
 
+  it('resolves manual missing issue codes through the coding job profile for review results', async () => {
+    const missingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn()
+        .mockImplementation(async (_workspaceId: number, _profileId: number | null, missingId: string) => (
+          missingId === 'mir' ?
+            {
+              id: 'mir', label: 'Missing interpreted response', code: -123, score: 0
+            } :
+            {
+              id: 'mci', label: 'Missing coding impossible', code: -124, score: 0
+            }
+        ))
+    };
+    service = new CodingReviewService(
+      {} as never,
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      {} as never,
+      {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
+      } as never,
+      missingsProfilesService as never
+    );
+
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      makeCodingJobUnit({
+        code: -3,
+        score: null,
+        coding_job: {
+          workspace_id: workspaceId,
+          missings_profile_id: 77,
+          job_definition_id: 11,
+          training_id: null,
+          name: 'Job A',
+          codingJobCoders: [{
+            user_id: 1,
+            user: { username: 'Coder 1' }
+          }]
+        }
+      }),
+      makeCodingJobUnit({
+        coding_job_id: 101,
+        code: -4,
+        score: null,
+        coding_job: {
+          workspace_id: workspaceId,
+          missings_profile_id: 77,
+          job_definition_id: 11,
+          training_id: null,
+          name: 'Job B',
+          codingJobCoders: [{
+            user_id: 2,
+            user: { username: 'Coder 2' }
+          }]
+        }
+      })
+    ]);
+
+    const result = await service.getDoubleCodedVariablesForReview(workspaceId);
+
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(workspaceId, 77, 'mir');
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(workspaceId, 77, 'mci');
+    expect(result.data[0].coderResults).toMatchObject([
+      { coderId: 1, code: -123, score: 0 },
+      { coderId: 2, code: -124, score: 0 }
+    ]);
+  });
+
   it('applies the match agreement filter', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
