@@ -124,6 +124,7 @@ type DistributionDoubleCodingInfo = {
   doubleCodedCases: number;
   singleCodedCasesAssigned: number;
   doubleCodedCasesPerCoder: Record<string, number>;
+  doubleCodedCasesPerCoderId: Record<string, number>;
 };
 
 type DistributionPlanRequest = {
@@ -228,6 +229,16 @@ type DistributedCodingJobsResult = {
   coderWeights: Record<string, number>;
   jobs: DistributionCreatedJob[];
 };
+
+type DistributedCodingJobsTransactionHook = (
+  manager: EntityManager,
+  result: DistributedCodingJobsResult
+) => Promise<void>;
+
+type RefreshDistributedCodingJobsTransactionHook = (
+  manager: EntityManager,
+  result: JobDefinitionRefreshCodingJobsResult
+) => Promise<void>;
 
 type JobDefinitionRefreshCodingJobsResult = DistributedCodingJobsResult & {
   preview: JobDefinitionRefreshPreviewDto;
@@ -3802,11 +3813,13 @@ export class CodingJobService {
 
   private buildEmptyDoubleCodingInfo(coders: NormalizedDistributionCoder[]): DistributionDoubleCodingInfo {
     const doubleCodedCasesPerCoder: Record<string, number> = {};
+    const doubleCodedCasesPerCoderId: Record<string, number> = {};
 
     coders.forEach(coder => {
       if (isSafeKey(coder.displayKey)) {
         doubleCodedCasesPerCoder[coder.displayKey] = 0;
       }
+      doubleCodedCasesPerCoderId[String(coder.id)] = 0;
     });
 
     return {
@@ -3815,7 +3828,8 @@ export class CodingJobService {
       codingTasksTotal: 0,
       doubleCodedCases: 0,
       singleCodedCasesAssigned: 0,
-      doubleCodedCasesPerCoder
+      doubleCodedCasesPerCoder,
+      doubleCodedCasesPerCoderId
     };
   }
 
@@ -4013,6 +4027,9 @@ export class CodingJobService {
         distributionByCoderId[selectedCase.item.itemKey][String(coder.id)] += 1;
         if (isDoubleCoded && isSafeKey(coder.displayKey)) {
           doubleCodingInfo[selectedCase.item.itemKey].doubleCodedCasesPerCoder[coder.displayKey] += 1;
+        }
+        if (isDoubleCoded) {
+          doubleCodingInfo[selectedCase.item.itemKey].doubleCodedCasesPerCoderId[String(coder.id)] += 1;
         }
 
         const itemJobs = jobsByItemAndCoder.get(selectedCase.item.itemKey) || new Map<number, SlimResponse[]>();
@@ -4269,7 +4286,8 @@ export class CodingJobService {
 
   async refreshDistributedCodingJobs(
     workspaceId: number,
-    request: DistributionPlanRequest
+    request: DistributionPlanRequest,
+    afterRefreshInTransaction?: RefreshDistributedCodingJobsTransactionHook
   ): Promise<JobDefinitionRefreshCodingJobsResult> {
     const jobDefinitionId = Number(request.jobDefinitionId);
     if (!Number.isInteger(jobDefinitionId) || jobDefinitionId < 1) {
@@ -4330,6 +4348,13 @@ export class CodingJobService {
         transactionPlan,
         manager
       ));
+
+      if (afterRefreshInTransaction) {
+        await afterRefreshInTransaction(manager, {
+          ...this.buildDistributedCodingJobsResult(transactionPlan, createdJobs),
+          preview
+        });
+      }
     });
 
     await this.invalidateIncompleteVariablesCache(workspaceId);
@@ -4415,7 +4440,8 @@ export class CodingJobService {
 
   async createDistributedCodingJobs(
     workspaceId: number,
-    request: DistributionPlanRequest
+    request: DistributionPlanRequest,
+    afterCreateInTransaction?: DistributedCodingJobsTransactionHook
   ): Promise<DistributedCodingJobsResult> {
     this.logger.log(`Creating distributed coding jobs for workspace ${workspaceId}`);
 
@@ -4438,6 +4464,13 @@ export class CodingJobService {
             plan,
             manager
           ));
+
+          if (afterCreateInTransaction) {
+            await afterCreateInTransaction(
+              manager,
+              this.buildDistributedCodingJobsResult(plan, createdJobs)
+            );
+          }
         });
       }
 

@@ -3,10 +3,13 @@ import {
   Injectable, NotFoundException, BadRequestException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { EntityManager, Repository, In } from 'typeorm';
 import {
   JobDefinition,
   JobDefinitionCoderConfig,
+  JobDefinitionDistributionSnapshot,
+  JobDefinitionDistributionSnapshotDoubleCodingInfo,
+  JobDefinitionDistributionSnapshotSource,
   JobDefinitionVariable,
   JobDefinitionVariableBundle,
   CaseOrderingMode
@@ -124,6 +127,35 @@ type DefinitionDistributionRequest = {
   allowComments: boolean;
   suppressGeneralInstructions: boolean;
   missingsProfileId: number;
+};
+
+type DistributionResultDoubleCodingInfo = {
+  totalCases: number;
+  distinctCases?: number;
+  codingTasksTotal?: number;
+  doubleCodedCases: number;
+  singleCodedCasesAssigned: number;
+  doubleCodedCasesPerCoder?: Record<string, number>;
+  doubleCodedCasesPerCoderId?: Record<string, number>;
+};
+
+type DistributionResultForSnapshot = {
+  success: boolean;
+  distribution: Record<string, Record<string, number>>;
+  distributionByCoderId?: Record<string, Record<string, number>>;
+  doubleCodingInfo: Record<string, DistributionResultDoubleCodingInfo>;
+  aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+  matchingFlags: string[];
+  pairDistribution?: Record<string, number>;
+  tasksPerCoder?: Record<string, number>;
+  coderWeights?: Record<string, number>;
+  jobs: {
+    itemKey?: string;
+    coderId: number;
+    variable: { unitName: string; variableId: string };
+    jobId: number;
+    caseCount: number;
+  }[];
 };
 
 const DEFAULT_CODER_CAPACITY_PERCENT = 100;
@@ -601,6 +633,90 @@ export class JobDefinitionService {
     return Object.fromEntries(usage.entries());
   }
 
+  private buildSnapshotDoubleCodingInfo(
+    doubleCodingInfo: Record<string, DistributionResultDoubleCodingInfo>
+  ): Record<string, JobDefinitionDistributionSnapshotDoubleCodingInfo> {
+    return Object.fromEntries(
+      Object.entries(doubleCodingInfo).map(([itemKey, info]) => [
+        itemKey,
+        {
+          totalCases: info.totalCases,
+          distinctCases: info.distinctCases,
+          codingTasksTotal: info.codingTasksTotal,
+          doubleCodedCases: info.doubleCodedCases,
+          singleCodedCasesAssigned: info.singleCodedCasesAssigned,
+          doubleCodedCasesPerCoderId: info.doubleCodedCasesPerCoderId || {}
+        }
+      ])
+    );
+  }
+
+  private buildDistributionSnapshot(
+    source: JobDefinitionDistributionSnapshotSource,
+    request: DefinitionDistributionRequest,
+    result: DistributionResultForSnapshot
+  ): JobDefinitionDistributionSnapshot {
+    return {
+      version: 1,
+      source,
+      createdAt: new Date().toISOString(),
+      distributionSeed: request.distributionSeed,
+      selectedVariables: request.selectedVariables,
+      selectedVariableBundles: request.selectedVariableBundles,
+      selectedCoders: request.selectedCoders.map(coder => ({
+        coderId: coder.id,
+        capacityPercent: coder.capacityPercent
+      })),
+      settings: {
+        maxCodingCases: request.maxCodingCases,
+        doubleCodingAbsolute: request.doubleCodingAbsolute,
+        doubleCodingPercentage: request.doubleCodingPercentage,
+        caseOrderingMode: request.caseOrderingMode
+      },
+      distributionByCoderId: result.distributionByCoderId || {},
+      doubleCodingInfo: this.buildSnapshotDoubleCodingInfo(result.doubleCodingInfo || {}),
+      aggregationInfo: result.aggregationInfo || {},
+      matchingFlags: result.matchingFlags || [],
+      pairDistribution: result.pairDistribution || {},
+      tasksPerCoder: result.tasksPerCoder || {},
+      coderWeights: result.coderWeights || {},
+      jobs: (result.jobs || []).map(job => ({
+        itemKey: job.itemKey,
+        coderId: job.coderId,
+        variable: job.variable,
+        jobId: job.jobId,
+        caseCount: job.caseCount
+      }))
+    };
+  }
+
+  private async appendDistributionSnapshot(
+    jobDefinitionId: number,
+    source: JobDefinitionDistributionSnapshotSource,
+    request: DefinitionDistributionRequest,
+    result: DistributionResultForSnapshot,
+    manager?: EntityManager
+  ): Promise<void> {
+    const repository = manager?.getRepository(JobDefinition) || this.jobDefinitionRepository;
+    const jobDefinition = await repository.findOne({
+      where: { id: jobDefinitionId }
+    });
+
+    if (!jobDefinition) {
+      throw new NotFoundException(`Job definition with ID ${jobDefinitionId} not found`);
+    }
+
+    const snapshots = Array.isArray(jobDefinition.distribution_snapshots) ?
+      jobDefinition.distribution_snapshots :
+      [];
+    jobDefinition.distribution_snapshots = [
+      ...snapshots,
+      this.buildDistributionSnapshot(source, request, result)
+    ];
+
+    await repository.save(jobDefinition);
+  }
+
   async createJobDefinition(createDto: CreateJobDefinitionDto, workspaceId: number): Promise<JobDefinition> {
     const coderAssignments = this.resolveCoderAssignments(createDto);
     const distributionSeed = this.createDistributionSeed(workspaceId);
@@ -669,9 +785,12 @@ export class JobDefinitionService {
     return this.jobDefinitionRepository.save(jobDefinition);
   }
 
-  async getJobDefinition(id: number): Promise<JobDefinition> {
+  async getJobDefinition(id: number, workspaceId: number): Promise<JobDefinition> {
     const jobDefinition = await this.jobDefinitionRepository.findOne({
-      where: { id }
+      where: {
+        id,
+        workspace_id: workspaceId
+      }
     });
 
     if (!jobDefinition) {
@@ -852,8 +971,8 @@ export class JobDefinitionService {
     }
   }
 
-  async updateJobDefinition(id: number, updateDto: UpdateJobDefinitionDto): Promise<JobDefinition> {
-    const jobDefinition = await this.getJobDefinition(id);
+  async updateJobDefinition(id: number, workspaceId: number, updateDto: UpdateJobDefinitionDto): Promise<JobDefinition> {
+    const jobDefinition = await this.getJobDefinition(id, workspaceId);
     await this.assertJobDefinitionHasNoCreatedJobs(jobDefinition);
     const existingCoderAssignments = this.getStoredCoderAssignments(jobDefinition);
     const nextCoderAssignments = this.resolveCoderAssignments(updateDto, existingCoderAssignments);
@@ -981,8 +1100,8 @@ export class JobDefinitionService {
     return savedDefinition;
   }
 
-  async approveJobDefinition(id: number, approveDto: ApproveJobDefinitionDto): Promise<JobDefinition> {
-    const jobDefinition = await this.getJobDefinition(id);
+  async approveJobDefinition(id: number, workspaceId: number, approveDto: ApproveJobDefinitionDto): Promise<JobDefinition> {
+    const jobDefinition = await this.getJobDefinition(id, workspaceId);
     const coderAssignments = this.getStoredCoderAssignments(jobDefinition);
 
     this.validateStatusTransition(jobDefinition.status, approveDto.status);
@@ -1049,8 +1168,8 @@ export class JobDefinitionService {
     }
   }
 
-  async deleteJobDefinition(id: number): Promise<void> {
-    const jobDefinition = await this.getJobDefinition(id);
+  async deleteJobDefinition(id: number, workspaceId: number): Promise<void> {
+    const jobDefinition = await this.getJobDefinition(id, workspaceId);
     await this.assertJobDefinitionHasNoBlockingCreatedJobs(jobDefinition);
     await this.jobDefinitionRepository.remove(jobDefinition);
   }
@@ -1086,14 +1205,10 @@ export class JobDefinitionService {
     jobDefinitionId: number,
     workspaceId: number
   ): Promise<DefinitionDistributionRequest> {
-    const jobDefinition = await this.getJobDefinition(jobDefinitionId);
+    const jobDefinition = await this.getJobDefinition(jobDefinitionId, workspaceId);
 
     if (jobDefinition.status !== 'approved') {
       throw new BadRequestException('Only approved job definitions can be used to create coding jobs');
-    }
-
-    if (jobDefinition.workspace_id !== workspaceId) {
-      throw new NotFoundException(`Job definition with ID ${jobDefinitionId} not found`);
     }
 
     const variableBundleIds = jobDefinition.assigned_variable_bundles?.map(bundle => bundle.id) || [];
@@ -1159,7 +1274,19 @@ export class JobDefinitionService {
 
   async createCodingJobFromDefinition(jobDefinitionId: number, workspaceId: number) {
     const request = await this.buildDistributionRequestFromDefinition(jobDefinitionId, workspaceId);
-    return this.codingJobService.createDistributedCodingJobs(workspaceId, request);
+    return this.codingJobService.createDistributedCodingJobs(
+      workspaceId,
+      request,
+      async (manager, result) => {
+        await this.appendDistributionSnapshot(
+          jobDefinitionId,
+          'initial_creation',
+          request,
+          result,
+          manager
+        );
+      }
+    );
   }
 
   async previewCodingJobFromDefinition(jobDefinitionId: number, workspaceId: number) {
@@ -1186,7 +1313,19 @@ export class JobDefinitionService {
     workspaceId: number
   ): Promise<JobDefinitionRefreshApplyResultDto> {
     const request = await this.buildDistributionRequestFromDefinition(jobDefinitionId, workspaceId);
-    const result = await this.codingJobService.refreshDistributedCodingJobs(workspaceId, request);
+    const result = await this.codingJobService.refreshDistributedCodingJobs(
+      workspaceId,
+      request,
+      async (manager, transactionResult) => {
+        await this.appendDistributionSnapshot(
+          jobDefinitionId,
+          'refresh',
+          request,
+          transactionResult,
+          manager
+        );
+      }
+    );
     if (!result.success) {
       throw new BadRequestException(result.message);
     }

@@ -49,3 +49,11 @@ SET "missings_profile_id" = (
 WHERE "missings_profile_id" IS NULL;
 
 -- rollback -- Cannot safely restore implicit default profile references after backfill.
+
+-- changeset jurei733:4
+-- comment: Store stable distribution snapshots on job definitions
+
+ALTER TABLE "public"."job_definitions"
+  ADD COLUMN "distribution_snapshots" JSONB NULL;
+
+-- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "distribution_snapshots";
