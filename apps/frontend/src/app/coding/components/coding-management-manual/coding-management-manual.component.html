@@ -428,8 +428,8 @@
                 </mat-paginator>
                 <div class="analysis-actions">
                   <button mat-stroked-button color="primary" (click)="onApplyEmptyResponseCoding()"
-                    [disabled]="isApplyingEmptyCoding || responseAnalysis.isCalculating || !hasUncodedEmptyResponses()"
-                    [matTooltip]="'coding-management-manual.response-analysis.apply-empty-coding-tooltip' | translate">
+                    [disabled]="isApplyingEmptyCoding || responseAnalysis.isCalculating || !hasUncodedEmptyResponses() || !emptyResponseMissing"
+                    [matTooltip]="getApplyEmptyResponseCodingTooltip()">
                     <mat-icon *ngIf="!isApplyingEmptyCoding">flash_on</mat-icon>
                     <mat-spinner *ngIf="isApplyingEmptyCoding" diameter="20"></mat-spinner>
                     {{ 'coding-management-manual.response-analysis.apply-empty-coding-button' | translate }}
