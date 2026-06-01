@@ -44,6 +44,7 @@ export interface DistributionCalculationResponse {
     doubleCodedCases: number;
     singleCodedCasesAssigned: number;
     doubleCodedCasesPerCoder: Record<string, number>;
+    doubleCodedCasesPerCoderId?: Record<string, number>;
   }>;
   aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
   matchingFlags: string[];

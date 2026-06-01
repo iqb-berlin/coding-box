@@ -59,6 +59,7 @@ type DistributionDoubleCodingInfoResponse = {
   doubleCodedCases: number;
   singleCodedCasesAssigned: number;
   doubleCodedCasesPerCoder: Record<string, number>;
+  doubleCodedCasesPerCoderId?: Record<string, number>;
 };
 
 type DistributionCalculationResponse = {
@@ -2300,6 +2301,10 @@ export class WorkspaceCodingStatisticsController {
               doubleCodedCasesPerCoder: {
                 type: 'object',
                 additionalProperties: { type: 'number' }
+              },
+              doubleCodedCasesPerCoderId: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
               }
             }
           }
@@ -2466,6 +2471,10 @@ export class WorkspaceCodingStatisticsController {
               doubleCodedCases: { type: 'number' },
               singleCodedCasesAssigned: { type: 'number' },
               doubleCodedCasesPerCoder: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
+              },
+              doubleCodedCasesPerCoderId: {
                 type: 'object',
                 additionalProperties: { type: 'number' }
               }

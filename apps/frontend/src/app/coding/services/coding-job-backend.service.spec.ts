@@ -99,6 +99,13 @@ describe('CodingJobBackendService', () => {
             suppressGeneralInstructions: true,
             assignedCoderConfigs: [{ coderId: 1, capacityPercent: 50 }],
             distributionSeed: 'seed-7',
+            distributionSnapshots: [
+              expect.objectContaining({
+                version: 1,
+                source: 'initial_creation',
+                distributionSeed: 'seed-7'
+              })
+            ],
             plannedVariableUsage: { 'Unit 1::Var 1': 2 }
           }),
           expect.objectContaining({
@@ -122,6 +129,24 @@ describe('CodingJobBackendService', () => {
           blocking_created_jobs_count: 1,
           assigned_coder_configs: [{ coderId: 1, capacityPercent: 50 }],
           distribution_seed: 'seed-7',
+          distribution_snapshots: [{
+            version: 1,
+            source: 'initial_creation',
+            createdAt: '2026-06-01T00:00:00.000Z',
+            distributionSeed: 'seed-7',
+            selectedVariables: [],
+            selectedVariableBundles: [],
+            selectedCoders: [{ coderId: 1, capacityPercent: 50 }],
+            settings: {},
+            distributionByCoderId: {},
+            doubleCodingInfo: {},
+            aggregationInfo: {},
+            matchingFlags: [],
+            pairDistribution: {},
+            tasksPerCoder: {},
+            coderWeights: {},
+            jobs: []
+          }],
           planned_variable_usage: { 'Unit 1::Var 1': 2 },
           show_score: true,
           allow_comments: false,
