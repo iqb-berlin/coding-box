@@ -569,4 +569,12 @@ export class FileService {
       { headers: this.authHeader }
     );
   }
+
+  installCompatibleAspectPlayer(workspaceId: number): Observable<boolean> {
+    return this.http.post<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/github/install-compatible-aspect-player`,
+      {},
+      { headers: this.authHeader }
+    );
+  }
 }
