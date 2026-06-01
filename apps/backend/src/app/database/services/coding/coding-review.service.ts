@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -13,6 +13,7 @@ import {
   isExcludedByResolvedExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+import { MissingsProfilesService, ResolvedMissingValue } from './missings-profiles.service';
 
 type JobDefinitionBundleScope = {
   bundleIds: number[];
@@ -58,6 +59,10 @@ type KappaCodedVariableRow = {
 @Injectable()
 export class CodingReviewService {
   private readonly logger = new Logger(CodingReviewService.name);
+  private readonly manualMissingIdsByIssueOptionId = new Map<number, string>([
+    [-3, 'mir'],
+    [-4, 'mci']
+  ]);
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -69,8 +74,42 @@ export class CodingReviewService {
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
     private codingStatisticsService: CodingStatisticsService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    @Optional()
+    private missingsProfilesService?: MissingsProfilesService
   ) { }
+
+  private async resolveManualMissingForReview(
+    workspaceId: number,
+    unit: CodingJobUnit,
+    cache: Map<string, ResolvedMissingValue>
+  ): Promise<{ code: number | null; score: number | null }> {
+    const missingId = this.manualMissingIdsByIssueOptionId.get(unit.code ?? 0) ??
+      this.manualMissingIdsByIssueOptionId.get(unit.coding_issue_option ?? 0);
+    if (!missingId || !this.missingsProfilesService) {
+      return {
+        code: unit.code,
+        score: unit.score
+      };
+    }
+
+    const profileId = unit.coding_job?.missings_profile_id ?? null;
+    const cacheKey = `${profileId ?? 'default'}:${missingId}`;
+    let missing = cache.get(cacheKey);
+    if (!missing) {
+      missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+        workspaceId,
+        profileId,
+        missingId
+      );
+      cache.set(cacheKey, missing);
+    }
+
+    return {
+      code: missing.code,
+      score: missing.score
+    };
+  }
 
   async getDoubleCodedVariablesForReview(
     workspaceId: number,
@@ -398,6 +437,7 @@ export class CodingReviewService {
       }
       >();
       const coderResultIndexByResponseId = new Map<number, Map<number, number>>();
+      const manualMissingCache = new Map<string, ResolvedMissingValue>();
 
       for (const unit of finalCodingJobUnits) {
         const responseId = unit.response_id;
@@ -422,6 +462,11 @@ export class CodingReviewService {
 
         const coder = this.getDistinctCodingJobCoders(unit.coding_job?.codingJobCoders || [])[0];
         if (coder) {
+          const resolvedCodeAndScore = await this.resolveManualMissingForReview(
+            workspaceId,
+            unit,
+            manualMissingCache
+          );
           const coderResult = {
             coderId: coder.user_id,
             coderName: coder.user?.username || `Coder ${coder.user_id}`,
@@ -430,8 +475,8 @@ export class CodingReviewService {
             jobDefinitionId: unit.coding_job?.job_definition_id ?? null,
             trainingId: unit.coding_job?.training_id ?? null,
             trainingLabel: unit.coding_job?.training?.label ?? null,
-            code: unit.code,
-            score: unit.score,
+            code: resolvedCodeAndScore.code,
+            score: resolvedCodeAndScore.score,
             notes: unit.notes,
             supervisorComment: unit.supervisor_comment || null,
             codedAt: unit.created_at

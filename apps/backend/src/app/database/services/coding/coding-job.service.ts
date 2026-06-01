@@ -45,7 +45,7 @@ import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspa
 import { CodingFreshnessService } from './coding-freshness.service';
 import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
-import { MissingsProfilesService } from './missings-profiles.service';
+import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
 import {
   DERIVE_ERROR_STATUS,
   getDeriveErrorManualCodingPairKeys,
@@ -343,6 +343,19 @@ export class CodingJobService {
     }
 
     return profileId;
+  }
+
+  private async getDefaultMirCode(workspaceId: number): Promise<number> {
+    if (!this.missingsProfilesService) {
+      return IQB_STANDARD_MISSING_CODES.mir;
+    }
+
+    const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+      workspaceId,
+      null,
+      'mir'
+    );
+    return missing.code;
   }
 
   private async codingJobHasCodingWork(codingJobId: number): Promise<boolean> {
@@ -2560,7 +2573,10 @@ export class CodingJobService {
     });
 
     queryBuilder.andWhere(`(${conditions.join(' OR ')})`, parameters);
-    queryBuilder.andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))');
+    queryBuilder.andWhere(
+      '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
+      { aggregatedCode: -111, defaultMirCode: await this.getDefaultMirCode(workspaceId) }
+    );
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
@@ -3172,7 +3188,10 @@ export class CodingJobService {
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))');
+      .andWhere(
+        '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
+        { aggregatedCode: -111, defaultMirCode: await this.getDefaultMirCode(workspaceId) }
+      );
     this.applyManualCodingCandidateStatusFilter(queryBuilder, variables);
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     applyResolvedExclusionsToQuery(queryBuilder, exclusions);

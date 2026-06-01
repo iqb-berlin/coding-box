@@ -22,7 +22,12 @@ import { ChunkEntity } from '../../entities/chunk.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingJobService } from './coding-job.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
-import { MissingsProfilesService } from './missings-profiles.service';
+import {
+  IQB_STANDARD_MISSING_CODES,
+  IQB_STANDARD_MISSING_SCORES,
+  IqbStandardMissingId,
+  MissingsProfilesService
+} from './missings-profiles.service';
 import {
   applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
@@ -114,14 +119,13 @@ type MissingCodeDisplayContext = MissingCodePair & {
 };
 
 const DEFAULT_MISSING_CODE_CONTEXT: MissingCodeDisplayContext = {
-  mirCode: -98,
-  mciCode: -97,
-  negativeCodes: new Set([-97, -98, -99]),
-  scoresByCode: new Map([
-    [-97, 0],
-    [-98, 0],
-    [-99, 0]
-  ])
+  mirCode: IQB_STANDARD_MISSING_CODES.mir,
+  mciCode: IQB_STANDARD_MISSING_CODES.mci,
+  negativeCodes: new Set(Object.values(IQB_STANDARD_MISSING_CODES)),
+  scoresByCode: new Map(
+    (Object.entries(IQB_STANDARD_MISSING_SCORES) as Array<[IqbStandardMissingId, number]>)
+      .map(([missingId, score]) => [IQB_STANDARD_MISSING_CODES[missingId], score])
+  )
 };
 
 @Injectable()

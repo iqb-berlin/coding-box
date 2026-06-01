@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository
@@ -18,6 +18,7 @@ import {
   buildAggregationGroups,
   summarizeAggregationGroups
 } from './aggregation-metrics.util';
+import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
 import {
   getCoveredSourceKeysForManualDerivedVariables,
   isCoveredSourceVariable,
@@ -92,8 +93,23 @@ export class CodingProgressService {
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
     private workspaceFilesService: WorkspaceFilesService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    @Optional()
+    private missingsProfilesService?: MissingsProfilesService
   ) { }
+
+  private async getDefaultMirCode(workspaceId: number): Promise<number> {
+    if (!this.missingsProfilesService) {
+      return IQB_STANDARD_MISSING_CODES.mir;
+    }
+
+    const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+      workspaceId,
+      null,
+      'mir'
+    );
+    return missing.code;
+  }
 
   async getCodingProgressOverview(workspaceId: number): Promise<{
     totalCasesToCode: number;
@@ -444,7 +460,10 @@ export class CodingProgressService {
           });
       }));
     } else {
-      query.andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))');
+      query.andWhere(
+        '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
+        { aggregatedCode: -111, defaultMirCode: await this.getDefaultMirCode(workspaceId) }
+      );
     }
 
     applyResolvedExclusionsToQuery(

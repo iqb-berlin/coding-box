@@ -5,9 +5,11 @@ describe('coding utils', () => {
     expect(mapCodeForExport(-111)).toBeNull();
   });
 
-  it('keeps existing special export mappings', () => {
-    expect(mapCodeForExport(-3)).toBe(-98);
-    expect(mapCodeForExport(-4)).toBe(-97);
+  it('maps manual missing issue options only with profile context', () => {
+    expect(mapCodeForExport(-3)).toBeNull();
+    expect(mapCodeForExport(-4)).toBeNull();
+    expect(mapCodeForExport(-3, { mirCode: -123, mciCode: -124 })).toBe(-123);
+    expect(mapCodeForExport(-4, { mirCode: -123, mciCode: -124 })).toBe(-124);
     expect(mapCodeForExport(-1)).toBeNull();
     expect(mapCodeForExport(7)).toBe(7);
   });

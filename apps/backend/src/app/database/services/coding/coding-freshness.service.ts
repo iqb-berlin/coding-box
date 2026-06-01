@@ -31,6 +31,7 @@ import {
 } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 import { CodingJobFreshnessStatus } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
 
 type UnitCodingPresence = Record<CodingFreshnessVersion, boolean>;
 
@@ -104,8 +105,23 @@ export class CodingFreshnessService {
     private readonly responseRepository: Repository<ResponseEntity>,
     private readonly connection: DataSource,
     @Optional()
-    private readonly workspaceExclusionService?: WorkspaceExclusionService
+    private readonly workspaceExclusionService?: WorkspaceExclusionService,
+    @Optional()
+    private readonly missingsProfilesService?: MissingsProfilesService
   ) { }
+
+  private async getDefaultMirCode(workspaceId: number): Promise<number> {
+    if (!this.missingsProfilesService) {
+      return IQB_STANDARD_MISSING_CODES.mir;
+    }
+
+    const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+      workspaceId,
+      null,
+      'mir'
+    );
+    return missing.code;
+  }
 
   async getSummary(workspaceId: number): Promise<CodingFreshnessSummaryDto> {
     const query = this.freshnessRepository
@@ -1788,7 +1804,10 @@ export class CodingFreshnessService {
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('response.status_v1 IN (:...manualSourceStatuses)', { manualSourceStatuses })
-      .andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))')
+      .andWhere(
+        '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
+        { aggregatedCode: -111, defaultMirCode: await this.getDefaultMirCode(workspaceId) }
+      )
       .andWhere(new Brackets(qb => {
         qb.where('response.status_v2 IS NULL')
           .orWhere('response.status_v2 NOT IN (:...appliedStatuses)', { appliedStatuses })
