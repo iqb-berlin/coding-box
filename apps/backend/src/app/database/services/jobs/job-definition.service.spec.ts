@@ -736,6 +736,24 @@ describe('JobDefinitionService', () => {
     expect(missingsProfilesService.resolveMissingsProfileId).toHaveBeenCalledWith(7, 77);
   });
 
+  it('scopes single job definition lookup to the workspace', async () => {
+    const definition = {
+      id: 2,
+      workspace_id: 7,
+      assigned_variable_bundles: []
+    };
+    jobDefinitionRepository.findOne.mockResolvedValue(definition);
+
+    await expect(service.getJobDefinition(2, 7)).resolves.toBe(definition);
+
+    expect(jobDefinitionRepository.findOne).toHaveBeenCalledWith({
+      where: {
+        id: 2,
+        workspace_id: 7
+      }
+    });
+  });
+
   it('persists coder capacity configs and derives assigned coder ids from them', async () => {
     await expect(service.createJobDefinition({
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
@@ -774,7 +792,7 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
     jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       assignedCoders: [2, 3]
     })).resolves.toMatchObject({
       id: 2,
@@ -806,7 +824,7 @@ describe('JobDefinitionService', () => {
     codingJobService.calculateDistributionVariableUsageBatch.mockClear();
     codingJobService.assertCodersCanCodeInWorkspace.mockClear();
 
-    await service.updateJobDefinition(2, {
+    await service.updateJobDefinition(2, 7, {
       caseOrderingMode: 'alternating'
     });
 
@@ -849,7 +867,7 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
     jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       showScore: true,
       allowComments: false,
       suppressGeneralInstructions: true
@@ -877,7 +895,7 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
     jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       maxCodingCases: 5
     })).resolves.toMatchObject({ id: 2, max_coding_cases: 5 });
   });
@@ -904,7 +922,7 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue(editedDefinition);
     jobDefinitionRepository.find.mockResolvedValue([editedDefinition, competingDefinition]);
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       status: 'approved'
     })).rejects.toBeInstanceOf(BadRequestException);
     expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7);
@@ -928,7 +946,7 @@ describe('JobDefinitionService', () => {
       new BadRequestException('Coder is not enabled')
     );
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       status: 'approved'
     })).rejects.toBeInstanceOf(BadRequestException);
 
@@ -1129,7 +1147,7 @@ describe('JobDefinitionService', () => {
     });
     codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       assignedVariables: [{ unitName: 'Unit 2', variableId: 'Var 2' }]
     })).rejects.toBeInstanceOf(BadRequestException);
 
@@ -1149,7 +1167,7 @@ describe('JobDefinitionService', () => {
     });
     codingJobService.getBlockingCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
 
-    await expect(service.deleteJobDefinition(2)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.deleteJobDefinition(2, 7)).rejects.toBeInstanceOf(BadRequestException);
 
     expect(jobDefinitionRepository.remove).not.toHaveBeenCalled();
   });
@@ -1168,7 +1186,7 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue(definition);
     codingJobService.getBlockingCodingJobCountsByDefinitionIds.mockResolvedValue(new Map());
 
-    await expect(service.deleteJobDefinition(2)).resolves.toBeUndefined();
+    await expect(service.deleteJobDefinition(2, 7)).resolves.toBeUndefined();
 
     expect(jobDefinitionRepository.remove).toHaveBeenCalledWith(definition);
   });
@@ -1222,7 +1240,7 @@ describe('JobDefinitionService', () => {
       case_ordering_mode: 'continuous'
     });
 
-    await expect(service.approveJobDefinition(4, {
+    await expect(service.approveJobDefinition(4, 7, {
       status: 'pending_review'
     })).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -1243,7 +1261,7 @@ describe('JobDefinitionService', () => {
       new BadRequestException('Coder is not enabled')
     );
 
-    await expect(service.approveJobDefinition(4, {
+    await expect(service.approveJobDefinition(4, 7, {
       status: 'approved'
     })).rejects.toBeInstanceOf(BadRequestException);
 
@@ -1288,11 +1306,74 @@ describe('JobDefinitionService', () => {
       { id: 1, username: 'Ada' },
       { id: 3, username: 'Chris' }
     ]);
-    codingJobService.createDistributedCodingJobs.mockResolvedValue({
+    const creationResult = {
       success: true,
       jobsCreated: 2,
-      jobs: [{ jobId: 100 }, { jobId: 101 }]
-    });
+      distribution: {
+        'Unit 1::Var 1': { Chris: 1, Ada: 0 },
+        'bundle:9': { Chris: 0, Ada: 1 }
+      },
+      distributionByCoderId: {
+        'Unit 1::Var 1': { 3: 1, 1: 0 },
+        'bundle:9': { 3: 0, 1: 1 }
+      },
+      doubleCodingInfo: {
+        'Unit 1::Var 1': {
+          totalCases: 1,
+          distinctCases: 1,
+          codingTasksTotal: 1,
+          doubleCodedCases: 0,
+          singleCodedCasesAssigned: 1,
+          doubleCodedCasesPerCoder: { Chris: 0, Ada: 0 },
+          doubleCodedCasesPerCoderId: { 3: 0, 1: 0 }
+        },
+        'bundle:9': {
+          totalCases: 2,
+          distinctCases: 1,
+          codingTasksTotal: 2,
+          doubleCodedCases: 1,
+          singleCodedCasesAssigned: 0,
+          doubleCodedCasesPerCoder: { Chris: 1, Ada: 1 },
+          doubleCodedCasesPerCoderId: { 3: 1, 1: 1 }
+        }
+      },
+      aggregationInfo: {
+        'Unit 1::Var 1': { uniqueCases: 1, totalResponses: 1 },
+        'bundle:9': { uniqueCases: 1, totalResponses: 1 }
+      },
+      matchingFlags: ['NO_AGGREGATION'],
+      pairDistribution: { '1-3': 1 },
+      tasksPerCoder: { 3: 2, 1: 1 },
+      coderWeights: { 3: 0.5, 1: 1.5 },
+      jobs: [
+        {
+          itemKey: 'Unit 1::Var 1',
+          coderId: 3,
+          variable: { unitName: 'Unit 1', variableId: 'Var 1' },
+          jobId: 100,
+          caseCount: 1
+        },
+        {
+          itemKey: 'bundle:9',
+          coderId: 1,
+          variable: { unitName: 'Hydrated Bundle', variableId: '' },
+          jobId: 101,
+          caseCount: 1
+        }
+      ]
+    };
+    codingJobService.createDistributedCodingJobs.mockImplementation(
+      async (_workspaceId, _request, afterCreateInTransaction) => {
+        if (afterCreateInTransaction) {
+          await afterCreateInTransaction(
+            { getRepository: () => jobDefinitionRepository } as never,
+            creationResult
+          );
+        }
+
+        return creationResult;
+      }
+    );
 
     await expect(service.createCodingJobFromDefinition(12, 7)).resolves.toMatchObject({
       success: true,
@@ -1300,33 +1381,216 @@ describe('JobDefinitionService', () => {
     });
 
     expect(codingJobService.createCodingJob).not.toHaveBeenCalled();
-    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(7, {
-      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
-      selectedVariableBundles: [{
-        id: 9,
-        name: 'Hydrated Bundle',
-        variables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
-        caseOrderingMode: 'alternating'
-      }],
-      selectedCoders: [
-        {
-          id: 3, name: 'Chris', username: 'Chris', capacityPercent: 50
-        },
-        {
-          id: 1, name: 'Ada', username: 'Ada', capacityPercent: 150
-        }
-      ],
-      doubleCodingAbsolute: 2,
-      doubleCodingPercentage: undefined,
-      caseOrderingMode: 'continuous',
-      maxCodingCases: 7,
-      jobDefinitionId: 12,
-      missingsProfileId: 88,
-      distributionSeed: 'seed-12',
-      showScore: true,
-      allowComments: false,
-      suppressGeneralInstructions: true
+    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(
+      7,
+      {
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+        selectedVariableBundles: [{
+          id: 9,
+          name: 'Hydrated Bundle',
+          variables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
+          caseOrderingMode: 'alternating'
+        }],
+        selectedCoders: [
+          {
+            id: 3, name: 'Chris', username: 'Chris', capacityPercent: 50
+          },
+          {
+            id: 1, name: 'Ada', username: 'Ada', capacityPercent: 150
+          }
+        ],
+        doubleCodingAbsolute: 2,
+        doubleCodingPercentage: undefined,
+        caseOrderingMode: 'continuous',
+        maxCodingCases: 7,
+        jobDefinitionId: 12,
+        missingsProfileId: 88,
+        distributionSeed: 'seed-12',
+        showScore: true,
+        allowComments: false,
+        suppressGeneralInstructions: true
+      },
+      expect.any(Function)
+    );
+    expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      distribution_snapshots: [
+        expect.objectContaining({
+          version: 1,
+          source: 'initial_creation',
+          distributionSeed: 'seed-12',
+          selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+          selectedVariableBundles: [expect.objectContaining({ id: 9 })],
+          selectedCoders: [
+            { coderId: 3, capacityPercent: 50 },
+            { coderId: 1, capacityPercent: 150 }
+          ],
+          settings: {
+            maxCodingCases: 7,
+            doubleCodingAbsolute: 2,
+            doubleCodingPercentage: undefined,
+            caseOrderingMode: 'continuous'
+          },
+          distributionByCoderId: {
+            'Unit 1::Var 1': { 3: 1, 1: 0 },
+            'bundle:9': { 3: 0, 1: 1 }
+          },
+          doubleCodingInfo: {
+            'Unit 1::Var 1': expect.objectContaining({
+              doubleCodedCases: 0,
+              doubleCodedCasesPerCoderId: { 3: 0, 1: 0 }
+            }),
+            'bundle:9': expect.objectContaining({
+              doubleCodedCases: 1,
+              doubleCodedCasesPerCoderId: { 3: 1, 1: 1 }
+            })
+          },
+          jobs: [
+            {
+              itemKey: 'Unit 1::Var 1',
+              coderId: 3,
+              variable: { unitName: 'Unit 1', variableId: 'Var 1' },
+              jobId: 100,
+              caseCount: 1
+            },
+            {
+              itemKey: 'bundle:9',
+              coderId: 1,
+              variable: { unitName: 'Hydrated Bundle', variableId: '' },
+              jobId: 101,
+              caseCount: 1
+            }
+          ]
+        })
+      ]
+    }));
+  });
+
+  it('does not store a distribution snapshot when distributed job creation fails', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 15,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      assigned_coder_configs: [{ coderId: 1, capacityPercent: 100 }],
+      distribution_seed: 'seed-15',
+      case_ordering_mode: 'continuous',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
     });
+    usersRepository.find.mockResolvedValue([{ id: 1, username: 'Ada' }]);
+    codingJobService.createDistributedCodingJobs.mockResolvedValue({
+      success: false,
+      jobsCreated: 0,
+      message: 'Failed',
+      jobs: []
+    });
+
+    await expect(service.createCodingJobFromDefinition(15, 7)).resolves.toMatchObject({
+      success: false,
+      message: 'Failed'
+    });
+
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('appends a refresh distribution snapshot without replacing earlier snapshots', async () => {
+    const existingSnapshot = {
+      version: 1,
+      source: 'initial_creation',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    };
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 16,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      assigned_coder_configs: [{ coderId: 1, capacityPercent: 100 }],
+      distribution_seed: 'seed-16',
+      distribution_snapshots: [existingSnapshot],
+      case_ordering_mode: 'continuous',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    });
+    usersRepository.find.mockResolvedValue([{ id: 1, username: 'Ada' }]);
+    const refreshResult = {
+      success: true,
+      jobsCreated: 1,
+      message: 'Updated',
+      distribution: { 'Unit 1::Var 1': { Ada: 1 } },
+      distributionByCoderId: { 'Unit 1::Var 1': { 1: 1 } },
+      doubleCodingInfo: {
+        'Unit 1::Var 1': {
+          totalCases: 1,
+          distinctCases: 1,
+          codingTasksTotal: 1,
+          doubleCodedCases: 0,
+          singleCodedCasesAssigned: 1,
+          doubleCodedCasesPerCoder: { Ada: 0 },
+          doubleCodedCasesPerCoderId: { 1: 0 }
+        }
+      },
+      aggregationInfo: { 'Unit 1::Var 1': { uniqueCases: 1, totalResponses: 1 } },
+      matchingFlags: [],
+      pairDistribution: {},
+      tasksPerCoder: { 1: 1 },
+      coderWeights: { 1: 1 },
+      jobs: [{
+        itemKey: 'Unit 1::Var 1',
+        coderId: 1,
+        variable: { unitName: 'Unit 1', variableId: 'Var 1' },
+        jobId: 200,
+        caseCount: 1
+      }],
+      preview: {
+        jobDefinitionId: 16,
+        existingJobsCount: 1,
+        staleJobsCount: 1,
+        existingCases: 0,
+        plannedCases: 1,
+        retainedCases: 0,
+        addedCases: 1,
+        removedCases: 0,
+        addedCodingTasks: 1,
+        removedCodingTasks: 0,
+        canApply: true
+      }
+    };
+    codingJobService.refreshDistributedCodingJobs.mockImplementation(
+      async (_workspaceId, _request, afterRefreshInTransaction) => {
+        if (afterRefreshInTransaction) {
+          await afterRefreshInTransaction(
+            { getRepository: () => jobDefinitionRepository } as never,
+            refreshResult
+          );
+        }
+
+        return refreshResult;
+      }
+    );
+
+    await expect(service.refreshCodingJobFromDefinition(16, 7)).resolves.toMatchObject({
+      success: true,
+      jobsCreated: 1
+    });
+
+    expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      distribution_snapshots: [
+        existingSnapshot,
+        expect.objectContaining({
+          version: 1,
+          source: 'refresh',
+          distributionSeed: 'seed-16',
+          selectedCoders: [{ coderId: 1, capacityPercent: 100 }],
+          jobs: [expect.objectContaining({ jobId: 200, coderId: 1, caseCount: 1 })]
+        })
+      ]
+    }));
   });
 
   it('does not collide hyphenated variable keys when creating jobs from definitions', async () => {
@@ -1364,15 +1628,19 @@ describe('JobDefinitionService', () => {
       success: true
     });
 
-    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(7, expect.objectContaining({
-      selectedVariables: [{ unitName: 'Unit-A', variableId: 'B', includeDeriveError: true }],
-      selectedVariableBundles: [{
-        id: 10,
-        name: 'Hyphen Bundle',
-        variables: [{ unitName: 'Unit', variableId: 'A-B' }],
-        caseOrderingMode: undefined
-      }]
-    }));
+    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        selectedVariables: [{ unitName: 'Unit-A', variableId: 'B', includeDeriveError: true }],
+        selectedVariableBundles: [{
+          id: 10,
+          name: 'Hyphen Bundle',
+          variables: [{ unitName: 'Unit', variableId: 'A-B' }],
+          caseOrderingMode: undefined
+        }]
+      }),
+      expect.any(Function)
+    );
   });
 
   it('previews jobs from definitions with the same normalized variable selection', async () => {
