@@ -38,7 +38,8 @@ function createServiceWithDetailedMocks(
     unit?: Record<string, unknown>,
     discussionResults?: Record<string, unknown>[],
     users?: Record<string, unknown>[],
-    totalCount?: number
+    totalCount?: number,
+    missingsProfilesService?: { getMissingByIdForProfileOrDefault: jest.Mock }
   } = {}
 ) {
   const totalCountQueryBuilder = {
@@ -121,7 +122,8 @@ function createServiceWithDetailedMocks(
     userRepository as unknown as Repository<User>,
     {} as CodingListService,
     {} as WorkspaceCoreService,
-    workspaceExclusionService
+    workspaceExclusionService,
+    overrides.missingsProfilesService as never
   );
 
   return { service, totalCountQueryBuilder, unitsBatchQueryBuilder };
@@ -145,6 +147,52 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       '(resp.status_v1 IS NULL OR resp.status_v1 NOT IN (:...excludedStatuses))',
       { excludedStatuses: [0, 1, 2, 10] }
     );
+  });
+
+  it('does not resolve manual missing profiles for regular detailed export codes', async () => {
+    const missingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn().mockRejectedValue(new Error('unexpected missing lookup'))
+    };
+    const { service } = createServiceWithDetailedMocks(1, {
+      missingsProfilesService,
+      unit: {
+        code: 7,
+        score: 2,
+        coding_issue_option: 1,
+        notes: '',
+        updated_at: new Date('2026-04-14T10:00:00.000Z'),
+        response_id: 123,
+        unit_name: 'U1',
+        variable_id: 'V1',
+        coding_job: {
+          training_id: null,
+          missings_profile_id: 77,
+          codingJobCoders: [{ user: { username: 'coder1' } }]
+        },
+        response: {
+          status_v1: 8,
+          unit: {
+            name: 'U1',
+            booklet: {
+              person: {
+                login: 'p-login',
+                code: 'p-code',
+                group: 'G1'
+              },
+              bookletinfo: {
+                name: 'B1'
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const buffer = await service.exportCodingResultsDetailed(1, false, false, false, false);
+    const csv = buffer.toString('utf-8');
+
+    expect(csv).toContain('"7";"Code-Vergabe unsicher"');
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).not.toHaveBeenCalled();
   });
 
   it('skips detailed coding rows with excluded response statuses defensively', async () => {
@@ -579,6 +627,122 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       'cju.coding_issue_option',
       'coding_issue_option'
     );
+  });
+
+  it('exports profile-specific manual missing scores in score-bearing aggregated export', async () => {
+    const createQueryBuilder = (rawRows: unknown[] = []) => {
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(rawRows)
+      };
+      return qb;
+    };
+
+    const variableRecordsQuery = createQueryBuilder([{
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      bookletName: 'BOOKLET-A'
+    }]);
+    const manualCodingQuery = createQueryBuilder([{
+      personId: '10',
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      cju_code: '-3',
+      cju_score: null,
+      coding_issue_option: null,
+      code_v1: null,
+      score_v1: null,
+      code_v2: null,
+      score_v2: null,
+      code_v3: null,
+      score_v3: null,
+      notes: null,
+      username: 'Coder A',
+      jobId: '1',
+      trainingId: null,
+      missingsProfileId: '77',
+      responseId: '100'
+    }]);
+    const coderRecordsQuery = createQueryBuilder([{ userName: 'Coder A' }]);
+    const autoVariablesQuery = createQueryBuilder([]);
+    const personResultsQuery = createQueryBuilder([{
+      id: '10',
+      login: 'login-a',
+      code: 'code-a',
+      group: 'group-a',
+      bookletName: 'BOOKLET-A'
+    }]);
+    const autoCodingQuery = createQueryBuilder([]);
+    const responseRepository = {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(autoVariablesQuery)
+        .mockReturnValueOnce(personResultsQuery)
+        .mockReturnValueOnce(autoCodingQuery)
+    };
+    const codingJobRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(coderRecordsQuery)
+    };
+    const codingJobUnitRepository = {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(variableRecordsQuery)
+        .mockReturnValueOnce(manualCodingQuery)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+    const missingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn().mockResolvedValue({
+        id: 'mir',
+        label: 'MIR',
+        code: -97,
+        score: 0
+      })
+    };
+
+    const service = new CodingExportService(
+      responseRepository as unknown as Repository<ResponseEntity>,
+      codingJobRepository as unknown as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
+      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn() } as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService,
+      missingsProfilesService as never
+    );
+
+    const buffer = await service.exportCodingResultsAggregated(
+      7,
+      false,
+      false,
+      false,
+      false,
+      'new-row-per-variable'
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.getWorksheet('Coding Results')!;
+    const headerValues = worksheet.getRow(1).values as unknown[];
+    const codeColumn = headerValues.findIndex(value => value === 'Coder A Code');
+    const scoreColumn = headerValues.findIndex(value => value === 'Coder A Score');
+
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(7, 77, 'mir');
+    expect(worksheet.getRow(2).getCell(codeColumn).value).toBe('-97');
+    expect(worksheet.getRow(2).getCell(scoreColumn).value).toBe(0);
   });
 
   it('keeps stored discussion manager names when manager users cannot be resolved', async () => {

@@ -32,6 +32,7 @@ type TestCodingJobUnit = {
   person_group?: string;
   coding_job?: {
     training_id?: number | null;
+    missings_profile_id?: number | null;
     codingJobCoders?: Array<{
       user?: {
         id?: number;
@@ -147,6 +148,7 @@ function createService(overrides: {
     ignoredBooklets: string[];
     testletIgnoredUnits: Array<{ bookletId: string; unitId: string }>;
   };
+  missingsProfilesService?: { getMissingByIdForProfileOrDefault: jest.Mock };
 } = {}) {
   const responseRepository: MockedRepo<ResponseEntity> = {
     createQueryBuilder: jest.fn()
@@ -189,7 +191,8 @@ function createService(overrides: {
     codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
     codingListService,
     {} as WorkspaceCoreService,
-    workspaceExclusionService
+    workspaceExclusionService,
+    overrides.missingsProfilesService as never
   );
 
   return {
@@ -245,6 +248,29 @@ describe('CodingResultsExportService', () => {
     expect(csv).toContain('"0";""');
     expect(csv).toContain('"zero-code note"');
     expect(csv).not.toContain('skipped');
+  });
+
+  it('does not resolve manual missing profiles for regular detailed export codes', async () => {
+    const missingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn().mockRejectedValue(new Error('unexpected missing lookup'))
+    };
+    const { service } = createService({
+      missingsProfilesService,
+      codingJobUnits: [{
+        ...baseUnit,
+        code: 7,
+        score: 2,
+        coding_job: {
+          ...baseUnit.coding_job,
+          missings_profile_id: 77
+        }
+      }]
+    });
+
+    const csv = (await service.exportCodingResultsDetailed(1)).toString('utf-8');
+
+    expect(csv).toContain('"7";"Code-Vergabe unsicher"');
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).not.toHaveBeenCalled();
   });
 
   it('uses comments, replay URLs and pseudo coder names when requested', async () => {
