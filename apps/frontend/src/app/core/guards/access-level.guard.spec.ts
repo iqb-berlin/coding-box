@@ -9,18 +9,6 @@ import { AppService, AuthBootstrapStatus } from '../services/app.service';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
 
-jest.mock('keycloak-angular', () => ({
-  createAuthGuard: jest.fn((
-    isAccessAllowed: (
-      route: ActivatedRouteSnapshot,
-      state: RouterStateSnapshot,
-      authData: { authenticated: boolean }
-    ) => Promise<boolean | UrlTree>
-  ) => (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => isAccessAllowed(route, state, {
-    authenticated: true
-  }))
-}));
-
 describe('Access Level Guard', () => {
   let mockAuthService: jest.Mocked<AuthService>;
   let mockUserService: jest.Mocked<UserService>;
@@ -43,6 +31,7 @@ describe('Access Level Guard', () => {
     authDataSubject = new BehaviorSubject(defaultAuthData);
 
     mockAuthService = {
+      isLoggedIn: jest.fn().mockReturnValue(true),
       getRoles: jest.fn()
     } as unknown as jest.Mocked<AuthService>;
 
@@ -459,23 +448,16 @@ describe('Access Level Guard', () => {
     });
   });
 
-  describe('Integration with Keycloak', () => {
-    it('should use keycloak-angular createAuthGuard', async () => {
-      // The guard is created using keycloak-angular's createAuthGuard
-      // which handles authentication validation
+  describe('Integration with backend OIDC auth', () => {
+    it('should create the access-level guard', async () => {
       const { canActivateAccessLevel } = await import('./access-level.guard');
       const guard = canActivateAccessLevel(1);
       expect(guard).toBeDefined();
     });
 
     it('should validate authentication status before checking access level', () => {
-      // The guard checks the authenticated property from AuthGuardData
-      // This is handled by keycloak-angular internally
-      const mockAuthData = { authenticated: true };
-      expect(mockAuthData.authenticated).toBe(true);
-
-      const mockUnauthData = { authenticated: false };
-      expect(mockUnauthData.authenticated).toBe(false);
+      mockAuthService.isLoggedIn.mockReturnValue(false);
+      expect(mockAuthService.isLoggedIn()).toBe(false);
     });
   });
 });

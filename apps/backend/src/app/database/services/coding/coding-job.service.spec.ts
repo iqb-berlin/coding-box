@@ -232,12 +232,8 @@ describe('CodingJobService', () => {
       getVariablePageMap: jest.fn().mockResolvedValue(new Map())
     };
     missingsProfilesService = {
-      resolveMissingsProfileId: jest.fn(
-        async (_workspaceId: number, profileId?: number | null) => profileId || 55
-      ),
-      getMissingByIdForProfileOrDefault: jest
-        .fn()
-        .mockResolvedValue({ code: 99 })
+      resolveMissingsProfileId: jest.fn(async (_workspaceId: number, profileId?: number | null) => profileId || 55),
+      getMissingByIdForProfileOrDefault: jest.fn().mockResolvedValue({ code: -99 })
     };
     coderTrainingDiscussionResultRepository.count.mockResolvedValue(0);
 
