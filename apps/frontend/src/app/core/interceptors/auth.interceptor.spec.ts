@@ -16,7 +16,6 @@ import {
 } from './http-error-context';
 import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
-import { SERVER_URL } from '../../injection-tokens';
 
 describe('authInterceptor', () => {
   let http: HttpClient;
@@ -41,13 +40,23 @@ describe('authInterceptor', () => {
       open: jest.fn()
     };
 
+    authService = {
+      getToken: jest.fn().mockReturnValue('backend-token')
+    } as unknown as jest.Mocked<AuthService>;
+
+    Object.defineProperty(window, 'localStorage', {
+      value: {
+        getItem: jest.fn().mockReturnValue('backend-token')
+      },
+      writable: true
+    });
+
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withInterceptors([authInterceptor])),
         provideHttpClientTesting(),
         { provide: AppService, useValue: appService },
         { provide: AuthService, useValue: authService },
-        { provide: SERVER_URL, useValue: 'api/' },
         { provide: MatSnackBar, useValue: snackBar },
         { provide: Router, useValue: { url: '/home' } }
       ]
