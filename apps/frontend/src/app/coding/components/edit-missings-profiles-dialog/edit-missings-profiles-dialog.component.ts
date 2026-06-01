@@ -49,7 +49,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   loading = false;
   saving = false;
   editMissings: MissingDto[] = [];
-  displayedColumns: string[] = ['id', 'label', 'description', 'code', 'actions'];
+  displayedColumns: string[] = ['id', 'label', 'description', 'code', 'score', 'actions'];
 
   constructor(
     public dialogRef: MatDialogRef<EditMissingsProfilesDialogComponent>,
@@ -232,7 +232,8 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       id: `missing-${Date.now()}`,
       label: 'New Missing',
       description: 'Description',
-      code: highestCode > 900 ? highestCode - 1 : 998
+      code: highestCode > 900 ? highestCode - 1 : 998,
+      score: 0
     });
 
     if (this.editMode) {
@@ -267,11 +268,25 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       return missings.filter(missing => missing.id !== undefined && missing.id !== null &&
         missing.id.trim() !== '' && missing.label !== undefined && missing.label !== null &&
         missing.label.trim() !== '' && missing.description !== undefined && missing.description !== null &&
-        missing.code !== undefined && missing.code !== null && !Number.isNaN(missing.code));
+        this.hasExplicitFiniteNumber(missing.code) &&
+        this.hasExplicitFiniteNumber(missing.score));
     } catch (error) {
       // Error occurred while parsing missings
       return [];
     }
+  }
+
+  private hasExplicitFiniteNumber(value: unknown): boolean {
+    if (typeof value === 'number') {
+      return Number.isFinite(value);
+    }
+
+    if (typeof value === 'string') {
+      const trimmedValue = value.trim();
+      return trimmedValue !== '' && Number.isFinite(Number(trimmedValue));
+    }
+
+    return false;
   }
 
   close(): void {
@@ -282,6 +297,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     return missings.every(missing => missing.id !== undefined && missing.id !== null &&
       missing.id.trim() !== '' && missing.label !== undefined && missing.label !== null &&
       missing.label.trim() !== '' && missing.description !== undefined && missing.description !== null &&
-      missing.code !== undefined && missing.code !== null && !Number.isNaN(missing.code));
+      this.hasExplicitFiniteNumber(missing.code) &&
+      this.hasExplicitFiniteNumber(missing.score));
   }
 }
