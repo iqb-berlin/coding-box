@@ -1,5 +1,5 @@
 import { Processor, Process } from '@nestjs/bull';
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import { Job } from 'bull';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets } from 'typeorm';
@@ -25,6 +25,10 @@ import {
   normalizeAggregationValue
 } from '../../database/services/coding/aggregation-metrics.util';
 import { getCodingAnalysisRunMarkerKey } from '../../database/services/coding/coding-analysis-cache-key.util';
+import {
+  IQB_STANDARD_MISSING_CODES,
+  MissingsProfilesService
+} from '../../database/services/coding/missings-profiles.service';
 
 @Processor('response-analysis')
 export class CodingAnalysisProcessor {
@@ -35,8 +39,23 @@ export class CodingAnalysisProcessor {
     private responseRepository: Repository<ResponseEntity>,
     private cacheService: CacheService,
     private workspaceExclusionService: WorkspaceExclusionService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    @Optional()
+    private missingsProfilesService?: MissingsProfilesService
   ) { }
+
+  private async getDefaultMirCode(workspaceId: number): Promise<number> {
+    if (!this.missingsProfilesService) {
+      return IQB_STANDARD_MISSING_CODES.mir;
+    }
+
+    const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+      workspaceId,
+      null,
+      'mir'
+    );
+    return missing.code;
+  }
 
   @Process()
   async handleResponseAnalysis(job: Job<CodingAnalysisJobData>) {
@@ -78,6 +97,7 @@ export class CodingAnalysisProcessor {
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const defaultMirCode = await this.getDefaultMirCode(workspaceId);
     const derivedVariableMap = await this.getDerivedVariableMap(workspaceId);
 
     // 1. Identify relevant Unit+Variable combinations
@@ -139,7 +159,7 @@ export class CodingAnalysisProcessor {
         // Exclude already-aggregated responses (non-master duplicates) so they don't reappear after aggregation
         .andWhere(
           '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :emptyCode))',
-          { aggregatedCode: -111, emptyCode: -98 }
+          { aggregatedCode: -111, emptyCode: defaultMirCode }
         );
       applyResolvedExclusionsToQuery(qb, exclusions);
 

@@ -950,7 +950,7 @@ export class CodingValidationService {
         .where('response.status_v1 = :status', { status })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
-        // Exclude special/auto codes (any negative code_v2, e.g. -111 for duplicates, -98 for empty)
+        // Exclude special/auto codes represented as negative code_v2 values.
         .andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)')
         .groupBy('unit.name')
         .addGroupBy('response.variableid');

@@ -69,6 +69,7 @@ import {
   CodingJobBackendService,
   ManualCodingScopeSummary
 } from '../../services/coding-job-backend.service';
+import { MissingsProfileService } from '../../services/missings-profile.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import {
   ValidationProgress,
@@ -86,6 +87,7 @@ import {
 import type {
   ManualCodeAvailabilityWarningDto
 } from '../../../../../../../api-dto/coding/manual-code-availability.dto';
+import { MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 import {
   CODING_FRESHNESS_TASK_RESULT_HELP,
   formatCodingFreshnessResponseCount,
@@ -155,6 +157,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private testPersonCodingService = inject(TestPersonCodingService);
   private codingJobBackendService = inject(CodingJobBackendService);
+  private missingsProfileService = inject(MissingsProfileService);
   private statisticsService = inject(CodingStatisticsService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
@@ -309,6 +312,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isApplyingCodingResults = false;
 
   private applyingCodingResultJobIds = new Set<number>();
+  emptyResponseMissing: { code: number; score: number } | null = null;
 
   showCoderTraining = false;
   editTraining: CoderTraining | null = null;
@@ -1684,6 +1688,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.loadDefaultEmptyResponseMissing(workspaceId);
     this.isLoadingMatchingMode = true;
     this.isLoadingResponseAnalysis = true;
 
@@ -1711,6 +1716,65 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.loadResponseAnalysis();
         }
       });
+  }
+
+  private loadDefaultEmptyResponseMissing(workspaceId: number): void {
+    this.emptyResponseMissing = null;
+    this.missingsProfileService
+      .getMissingsProfileDetails(workspaceId, 'IQB-Standard')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: profile => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) {
+            return;
+          }
+
+          const missing = this.toMissingProfileDto(profile)?.parseMissings()
+            .find(entry => entry.id === 'mir');
+          if (!missing || !Number.isInteger(Number(missing.code)) || !this.hasExplicitFiniteScore(missing.score)) {
+            this.emptyResponseMissing = null;
+            return;
+          }
+
+          this.emptyResponseMissing = {
+            code: Number(missing.code),
+            score: Number(missing.score)
+          };
+        },
+        error: () => {
+          this.emptyResponseMissing = null;
+        }
+      });
+  }
+
+  private toMissingProfileDto(profile: MissingsProfilesDto | null): MissingsProfilesDto | null {
+    return profile ? Object.assign(new MissingsProfilesDto(), profile) : null;
+  }
+
+  private hasExplicitFiniteScore(score: unknown): boolean {
+    if (typeof score === 'number') {
+      return Number.isFinite(score);
+    }
+
+    if (typeof score === 'string') {
+      const trimmedScore = score.trim();
+      return trimmedScore !== '' && Number.isFinite(Number(trimmedScore));
+    }
+
+    return false;
+  }
+
+  getApplyEmptyResponseCodingTooltip(): string {
+    if (!this.emptyResponseMissing) {
+      return this.translateService.instant(
+        'coding-management-manual.response-analysis.apply-empty-coding-tooltip-loading'
+      );
+    }
+
+    return this.translateService.instant(
+      'coding-management-manual.response-analysis.apply-empty-coding-tooltip',
+      this.emptyResponseMissing
+    );
   }
 
   private loadCodingFreshness(): void {
@@ -2577,7 +2641,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   onApplyEmptyResponseCoding(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId || !this.responseAnalysis) {
+    if (!workspaceId || !this.responseAnalysis || !this.emptyResponseMissing) {
       return;
     }
 
@@ -2586,10 +2650,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const emptyResponseMissing = this.emptyResponseMissing;
+
     // Show Material Dialog confirmation
     const dialogRef = this.dialog.open(ApplyEmptyCodingDialogComponent, {
       width: '550px',
-      data: { count: uncodedCount }
+      data: {
+        count: uncodedCount,
+        code: emptyResponseMissing.code,
+        score: emptyResponseMissing.score
+      }
     });
 
     dialogRef.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((confirmed: unknown) => {

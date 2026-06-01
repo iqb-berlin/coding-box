@@ -102,19 +102,27 @@ export function getLatestCode(response: ResponseEntity): { code: number | null; 
   return { code: response.code_v1, score: response.score_v1, version: 'v1' };
 }
 
+export interface ManualMissingCodeMapping {
+  mirCode?: number | null;
+  mciCode?: number | null;
+}
+
 /**
  * Maps internal code values to export representation.
  *
  * Rules:
- * -3 -> -98
- * -4 -> -97
+ * -3 -> profile-specific MIR code when provided
+ * -4 -> profile-specific MCI code when provided
  * -1/-2 -> empty (null)
  * -111 -> empty (legacy duplicate-aggregation marker)
  */
-export function mapCodeForExport(code: number | null | undefined): number | null {
+export function mapCodeForExport(
+  code: number | null | undefined,
+  manualMissingCodes?: ManualMissingCodeMapping
+): number | null {
   if (code === null || code === undefined) return null;
-  if (code === -3) return -98;
-  if (code === -4) return -97;
+  if (code === -3) return manualMissingCodes?.mirCode ?? null;
+  if (code === -4) return manualMissingCodes?.mciCode ?? null;
   if (code === -1 || code === -2 || code === -111) return null;
   return code;
 }

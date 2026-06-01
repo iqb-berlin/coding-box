@@ -817,12 +817,6 @@ export class CodingResultsComparisonComponent implements OnInit {
     );
   }
 
-  /**
-   * Maps auto-coder codes for display in the coding manager UI.
-   * - Code -4 (technical problems) → -97
-   * - Code -3 (invalid/fun response) → -98
-   * - Codes -1 and -2 → null (empty)
-   */
   mapCodeForDisplay(code: string | number | null | undefined): string {
     if (code === null || code === undefined || code === '') {
       return '';
@@ -831,12 +825,6 @@ export class CodingResultsComparisonComponent implements OnInit {
     if (Number.isNaN(codeNum)) {
       return String(code);
     }
-    if (codeNum === -4) {
-      return '-97';
-    }
-    if (codeNum === -3) {
-      return '-98';
-    }
     if (codeNum === -1 || codeNum === -2) {
       return '';
     }
@@ -844,11 +832,6 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   private getDiscussionScoreFromKnownCodes(comparison: WithinTrainingComparison, codeAsNumber: number): number | null {
-    // Handle mapped codes: -97 (from -4) and -98 (from -3) should have score 0
-    if (codeAsNumber === -97 || codeAsNumber === -98) {
-      return 0;
-    }
-
     const matchedCoder = comparison.coders.find(c => c.code !== null && parseInt(c.code, 10) === codeAsNumber && c.score !== null);
     if (matchedCoder) {
       return matchedCoder.score;

@@ -994,10 +994,6 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       case -1:
       case -2:
         return '';
-      case -3:
-        return '-98';
-      case -4:
-        return '-97';
       default:
         return code.toString();
     }
