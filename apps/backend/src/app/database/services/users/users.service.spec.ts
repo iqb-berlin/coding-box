@@ -324,12 +324,12 @@ describe('UsersService', () => {
     } as never)).resolves.toBe(77);
   });
 
-  it('does not demote existing database admins during keycloak login', async () => {
+  it('does not demote existing database admins during OIDC login', async () => {
     usersRepository.findOne.mockResolvedValueOnce({
       id: 10, username: 'u', identity: 'old', issuer: 'iss', isAdmin: true
     });
 
-    await expect(service.createKeycloakUser({
+    await expect(service.createOidcProviderUser({
       username: 'u', identity: 'new', issuer: 'iss', isAdmin: false
     } as never)).resolves.toBe(10);
 

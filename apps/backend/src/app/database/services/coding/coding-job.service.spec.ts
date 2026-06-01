@@ -85,7 +85,10 @@ describe('CodingJobService', () => {
   let cacheService: { delete: jest.Mock };
   let codingFreshnessService: { reconcileAppliedManualCodingJobs: jest.Mock };
   let codingFileCacheService: { getVariablePageMap: jest.Mock };
-  let missingsProfilesService: { resolveMissingsProfileId: jest.Mock };
+  let missingsProfilesService: {
+    resolveMissingsProfileId: jest.Mock;
+    getMissingByIdForProfileOrDefault: jest.Mock;
+  };
   let coderTrainingDiscussionResultRepository: ReturnType<typeof createRepo>;
   let workspaceFilesService: {
     getDerivedVariableMap: jest.Mock;
@@ -200,7 +203,8 @@ describe('CodingJobService', () => {
       getVariablePageMap: jest.fn().mockResolvedValue(new Map())
     };
     missingsProfilesService = {
-      resolveMissingsProfileId: jest.fn(async (_workspaceId: number, profileId?: number | null) => profileId || 55)
+      resolveMissingsProfileId: jest.fn(async (_workspaceId: number, profileId?: number | null) => profileId || 55),
+      getMissingByIdForProfileOrDefault: jest.fn().mockResolvedValue({ code: -99 })
     };
     coderTrainingDiscussionResultRepository.count.mockResolvedValue(0);
 
