@@ -259,32 +259,50 @@ describe('PersonQueryService', () => {
         { group: 'Group B' },
         { group: 'Group C' }
       ]);
-
-      (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(groupsQb);
-
-      const logsQbA = mockQueryBuilder();
-      logsQbA.getCount.mockResolvedValue(2);
-      const logsQbB = mockQueryBuilder();
-      logsQbB.getCount.mockResolvedValue(0);
-      const logsQbC = mockQueryBuilder();
-      logsQbC.getCount.mockResolvedValue(5);
-
+      const logsQb = mockQueryBuilder();
+      logsQb.getRawMany.mockResolvedValue([
+        { group: 'Group A', logCount: '2' },
+        { group: 'Group C', logCount: '5' }
+      ]);
+      (personsRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(groupsQb);
       (bookletLogRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(logsQbA)
-        .mockReturnValueOnce(logsQbB)
-        .mockReturnValueOnce(logsQbC);
+        .mockReturnValue(logsQb);
 
       const result = await service.getGroupsWithBookletLogs(1);
 
       expect(result.get('Group A')).toBe(true);
       expect(result.get('Group B')).toBe(false);
       expect(result.get('Group C')).toBe(true);
+      expect(bookletLogRepository.createQueryBuilder)
+        .toHaveBeenCalledWith('bookletlog');
+      expect(logsQb.groupBy).toHaveBeenCalledWith('person.group');
+    });
+
+    it('should reuse supplied workspace groups when available', async () => {
+      const logsQb = mockQueryBuilder();
+      logsQb.getRawMany.mockResolvedValue([
+        { group: 'Group A', logCount: '1' }
+      ]);
+      (bookletLogRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(logsQb);
+
+      const result = await service.getGroupsWithBookletLogs(1, [
+        'Group A',
+        'Group B'
+      ]);
+
+      expect(result).toEqual(new Map([
+        ['Group A', true],
+        ['Group B', false]
+      ]));
+      expect(personsRepository.createQueryBuilder).not.toHaveBeenCalled();
     });
 
     it('should return empty map when no groups exist', async () => {
       const qb = mockQueryBuilder();
       qb.getRawMany.mockResolvedValue([]);
-      (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      (bookletLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
 
       const result = await service.getGroupsWithBookletLogs(1);
 
@@ -292,7 +310,7 @@ describe('PersonQueryService', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      (personsRepository.createQueryBuilder as jest.Mock).mockImplementation(() => {
+      (bookletLogRepository.createQueryBuilder as jest.Mock).mockImplementation(() => {
         throw new Error('Database error');
       });
 

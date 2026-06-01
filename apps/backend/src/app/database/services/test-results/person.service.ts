@@ -47,8 +47,14 @@ export class PersonService {
     return this.personQueryService.hasBookletLogsForGroup(workspaceId, groupName);
   }
 
-  async getGroupsWithBookletLogs(workspaceId: number): Promise<Map<string, boolean>> {
-    return this.personQueryService.getGroupsWithBookletLogs(workspaceId);
+  async getGroupsWithBookletLogs(
+    workspaceId: number,
+    workspaceGroups?: string[]
+  ): Promise<Map<string, boolean>> {
+    return this.personQueryService.getGroupsWithBookletLogs(
+      workspaceId,
+      workspaceGroups
+    );
   }
 
   async markPersonsAsNotConsidered(workspaceId: number, logins: string[]): Promise<boolean> {
