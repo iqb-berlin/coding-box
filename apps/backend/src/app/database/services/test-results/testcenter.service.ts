@@ -20,6 +20,7 @@ import {
   ImportWorkspaceFilesProgressDto,
   ImportWorkspaceOptionKey
 } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
+import { TestGroupsLoadProgressDto } from '../../../../../../../api-dto/files/test-groups-load-progress.dto';
 import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
@@ -118,12 +119,23 @@ export class TestcenterService {
     tc_workspace: string,
     server: string,
     url: string,
-    authToken: string
+    authToken: string,
+    importRunId?: string
   ): Promise<TestGroupsInfoDto[]> {
     const headersRequest = {
       Authtoken: authToken
     };
     try {
+      await this.updateTestGroupsLoadProgress(workspace_id, importRunId, {
+        status: 'running',
+        phase: 'fetching-testcenter-groups',
+        totalGroups: 0,
+        processedGroups: 0,
+        existingGroups: 0,
+        groupsWithLogs: 0,
+        message: 'Testgruppen werden vom Testcenter abgerufen.'
+      });
+
       const response = await this.httpService.axiosRef.get<TestGroupsInfoDto[]>(
         url ?
           `${url}/api/workspace/${tc_workspace}/results` :
@@ -133,26 +145,191 @@ export class TestcenterService {
           headers: headersRequest
         }
       );
+      if (!Array.isArray(response.data)) {
+        throw new Error('Unexpected Testcenter response: expected a list of test groups.');
+      }
+      const testGroups = response.data;
+
+      await this.updateTestGroupsLoadProgress(workspace_id, importRunId, {
+        phase: 'checking-workspace-groups',
+        totalGroups: testGroups.length,
+        processedGroups: 0,
+        message: `${testGroups.length} Testgruppen geladen. Vorhandene Gruppen werden geprüft.`
+      });
+
       const existingGroups = await this.personService.getWorkspaceGroups(
         Number(workspace_id)
       );
+
+      await this.updateTestGroupsLoadProgress(workspace_id, importRunId, {
+        phase: 'checking-booklet-logs',
+        existingGroups: existingGroups.length,
+        message: 'Vorhandene Booklet-Logs werden geprüft.'
+      });
+
       const groupsWithLogs = await this.personService.getGroupsWithBookletLogs(
-        Number(workspace_id)
+        Number(workspace_id),
+        existingGroups
+      );
+      const existingGroupsSet = new Set(existingGroups);
+      const groupsWithLogsCount = Array.from(groupsWithLogs.values())
+        .filter(Boolean).length;
+
+      await this.updateTestGroupsLoadProgress(workspace_id, importRunId, {
+        phase: 'annotating-groups',
+        groupsWithLogs: groupsWithLogsCount,
+        message: 'Testgruppen werden für die Auswahl vorbereitet.'
+      });
+
+      const annotatedGroups = await this.annotateTestGroupsWithProgress(
+        workspace_id,
+        importRunId,
+        testGroups,
+        existingGroupsSet,
+        groupsWithLogs
       );
 
-      return response.data.map(group => ({
-        ...group,
-        existsInDatabase: existingGroups.includes(group.groupName),
-        hasBookletLogs: groupsWithLogs.get(group.groupName) || false
-      }));
+      await this.updateTestGroupsLoadProgress(workspace_id, importRunId, {
+        status: 'completed',
+        phase: 'annotating-groups',
+        totalGroups: testGroups.length,
+        processedGroups: testGroups.length,
+        message: `${testGroups.length} Testgruppen wurden abgerufen.`
+      });
+
+      return annotatedGroups;
     } catch (error) {
       this.logger.error(`Error fetching test groups: ${error.message}`);
+      await this.updateTestGroupsLoadProgress(workspace_id, importRunId, {
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: 'Testgruppen konnten nicht abgerufen werden.'
+      });
       throw new Error(
         `Failed to retrieve test groups from Testcenter: ${
           error?.message || 'Unknown error'
         }`
       );
     }
+  }
+
+  private testGroupsLoadProgressKey(
+    workspaceId: string,
+    importRunId: string
+  ): string {
+    return `testcenter_test_groups_progress:${workspaceId}:${importRunId}`;
+  }
+
+  private createInitialTestGroupsLoadProgress(
+    importRunId: string
+  ): TestGroupsLoadProgressDto {
+    return {
+      importRunId,
+      status: 'running',
+      phase: 'fetching-testcenter-groups',
+      totalGroups: 0,
+      processedGroups: 0,
+      existingGroups: 0,
+      groupsWithLogs: 0,
+      message: 'Testgruppen werden vom Testcenter abgerufen.',
+      updatedAt: Date.now()
+    };
+  }
+
+  private async loadTestGroupsLoadProgress(
+    workspaceId: string,
+    importRunId?: string
+  ): Promise<TestGroupsLoadProgressDto | null> {
+    if (!importRunId) return null;
+    return this.cacheService.get<TestGroupsLoadProgressDto>(
+      this.testGroupsLoadProgressKey(workspaceId, importRunId)
+    );
+  }
+
+  private async saveTestGroupsLoadProgress(
+    workspaceId: string,
+    importRunId: string,
+    progress: TestGroupsLoadProgressDto
+  ): Promise<void> {
+    progress.updatedAt = Date.now();
+    await this.cacheService.set(
+      this.testGroupsLoadProgressKey(workspaceId, importRunId),
+      progress,
+      3600
+    );
+  }
+
+  async getTestGroupsLoadProgress(
+    workspaceId: string,
+    importRunId: string
+  ): Promise<TestGroupsLoadProgressDto> {
+    const progress = await this.loadTestGroupsLoadProgress(
+      workspaceId,
+      importRunId
+    );
+    if (progress) return progress;
+
+    return {
+      importRunId,
+      status: 'unknown',
+      totalGroups: 0,
+      processedGroups: 0,
+      existingGroups: 0,
+      groupsWithLogs: 0,
+      updatedAt: Date.now()
+    };
+  }
+
+  private async updateTestGroupsLoadProgress(
+    workspaceId: string,
+    importRunId: string | undefined,
+    patch: Partial<Omit<TestGroupsLoadProgressDto, 'importRunId' | 'updatedAt'>>
+  ): Promise<void> {
+    if (!importRunId) return;
+    const current = await this.loadTestGroupsLoadProgress(
+      workspaceId,
+      importRunId
+    );
+    const progress = {
+      ...this.createInitialTestGroupsLoadProgress(importRunId),
+      ...(current || {}),
+      ...patch,
+      importRunId
+    };
+    await this.saveTestGroupsLoadProgress(workspaceId, importRunId, progress);
+  }
+
+  private async annotateTestGroupsWithProgress(
+    workspaceId: string,
+    importRunId: string | undefined,
+    testGroups: TestGroupsInfoDto[],
+    existingGroups: Set<string>,
+    groupsWithLogs: Map<string, boolean>
+  ): Promise<TestGroupsInfoDto[]> {
+    const annotatedGroups: TestGroupsInfoDto[] = [];
+    const chunkSize = 250;
+
+    for (let index = 0; index < testGroups.length; index += chunkSize) {
+      const chunk = testGroups.slice(index, index + chunkSize);
+      annotatedGroups.push(
+        ...chunk.map(group => ({
+          ...group,
+          existsInDatabase: existingGroups.has(group.groupName),
+          hasBookletLogs: groupsWithLogs.get(group.groupName) || false
+        }))
+      );
+
+      const processedGroups = Math.min(index + chunk.length, testGroups.length);
+      await this.updateTestGroupsLoadProgress(workspaceId, importRunId, {
+        phase: 'annotating-groups',
+        totalGroups: testGroups.length,
+        processedGroups,
+        message:
+          `${processedGroups}/${testGroups.length} Testgruppen vorbereitet.`
+      });
+    }
+
+    return annotatedGroups;
   }
 
   private createChunks<T>(array: T[], size: number): T[][] {

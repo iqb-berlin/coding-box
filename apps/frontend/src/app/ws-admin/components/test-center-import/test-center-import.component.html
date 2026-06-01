@@ -227,10 +227,36 @@
         </div>
       </div>
 
-      @if (isUploadingTestResults || isUploadingTestFiles) {
+      @if (isLoadingTestGroups || isUploadingTestResults || isUploadingTestFiles) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
-        @if (isUploadingTestResults) {
+        @if (isLoadingTestGroups) {
+        <p class="loading-text">
+          Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
+        </p>
+        <div class="test-groups-load-progress">
+          <p class="loading-subtext">{{ testGroupsLoadMessage }}</p>
+          @if ((testGroupsLoadProgress?.totalGroups || 0) > 0) {
+          <p class="loading-subtext">
+            Testgruppen verarbeitet:
+            {{ testGroupsLoadProgress?.processedGroups || 0 }} /
+            {{ testGroupsLoadProgress?.totalGroups || 0 }}
+            ({{ testGroupsLoadPercent }}%)
+          </p>
+          <mat-progress-bar
+            mode="determinate"
+            [value]="testGroupsLoadPercent"
+          ></mat-progress-bar>
+          } @else {
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+          }
+          @if (testGroupsLoadElapsedSeconds > 2) {
+          <p class="loading-subtext">
+            Laufzeit: {{ testGroupsLoadElapsedText }}
+          </p>
+          }
+        </div>
+        } @if (isUploadingTestResults) {
         <p class="loading-text">
           Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
         </p>
@@ -272,7 +298,7 @@
         }
         }
       </div>
-      } @if (!isUploadingTestResults && !isUploadingTestFiles) {
+      } @if (!isLoadingTestGroups && !isUploadingTestResults && !isUploadingTestFiles) {
       <div class="form-actions">
         @if (data.importType === 'testResults') {
         <button

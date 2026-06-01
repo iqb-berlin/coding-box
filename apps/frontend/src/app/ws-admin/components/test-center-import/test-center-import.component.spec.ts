@@ -10,7 +10,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ReactiveFormsModule } from '@angular/forms';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { TestCenterImportComponent } from './test-center-import.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -43,7 +43,8 @@ describe('TestCenterImportComponent', () => {
     const importMock = {
       importTestcenterGroups: jest.fn(),
       importWorkspaceFiles: jest.fn(),
-      getImportWorkspaceFilesProgress: jest.fn().mockReturnValue(of(null))
+      getImportWorkspaceFilesProgress: jest.fn().mockReturnValue(of(null)),
+      getTestGroupsLoadProgress: jest.fn().mockReturnValue(of(null))
     };
     const workspaceAdminMock = {
       getAuthToken: jest.fn().mockReturnValue(''),
@@ -151,6 +152,14 @@ describe('TestCenterImportComponent', () => {
 
     expect(component.showTestGroups).toBe(true);
     expect(component.testGroups).toEqual(mockGroups);
+    expect(importService.importTestcenterGroups).toHaveBeenCalledWith(
+      1,
+      'tc-ws-1',
+      '1',
+      '',
+      'fake-token',
+      expect.stringMatching(/^tc-import-/)
+    );
 
     // 4. Select group and import
     component.toggleRow(mockGroups[0]);
@@ -205,6 +214,61 @@ describe('TestCenterImportComponent', () => {
 
     expect(component.authenticated).toBe(false);
     expect(component.authenticationError).toBe(true);
+  });
+
+  it('should show progress while loading test groups', () => {
+    component.authToken = 'fake-token';
+    component.loginForm.patchValue({ testCenter: 1 });
+    component.importFilesForm.patchValue({
+      workspace: 'tc-ws-1',
+      responses: true
+    });
+
+    const groups$ = new Subject<TestGroupsInfoDto[]>();
+    importService.importTestcenterGroups.mockReturnValue(groups$.asObservable());
+    importService.getTestGroupsLoadProgress.mockReturnValue(of({
+      importRunId: 'run-1',
+      status: 'running',
+      phase: 'annotating-groups',
+      totalGroups: 1000,
+      processedGroups: 250,
+      existingGroups: 20,
+      groupsWithLogs: 5,
+      message: '250/1000 Testgruppen vorbereitet.',
+      updatedAt: Date.now()
+    }));
+
+    component.getTestGroups();
+
+    expect(component.isLoadingTestGroups).toBe(true);
+    expect(component.testGroupsLoadPercent).toBe(25);
+    expect(component.testGroupsLoadMessage).toBe(
+      '250/1000 Testgruppen vorbereitet.'
+    );
+    expect(importService.getTestGroupsLoadProgress).toHaveBeenCalledWith(
+      1,
+      expect.stringMatching(/^tc-import-/)
+    );
+
+    const mockGroups: TestGroupsInfoDto[] = [{
+      groupName: 'group1',
+      groupLabel: 'Group 1',
+      bookletsStarted: 10,
+      numUnitsTotal: 100,
+      numUnitsMin: 1,
+      numUnitsMax: 10,
+      numUnitsAvg: 5,
+      lastChange: Date.now(),
+      existsInDatabase: false,
+      hasBookletLogs: false
+    }];
+
+    groups$.next(mockGroups);
+    groups$.complete();
+
+    expect(component.isLoadingTestGroups).toBe(false);
+    expect(component.showTestGroups).toBe(true);
+    expect(component.testGroups).toEqual(mockGroups);
   });
 
   it('should logout correctly', () => {

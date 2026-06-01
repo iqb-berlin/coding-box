@@ -19,6 +19,7 @@ describe('TestCenterService', () => {
   let service: TestcenterService;
   let httpService: { put: jest.Mock; axiosRef: { get: jest.Mock } };
   let personService: DeepMocked<PersonService>;
+  let cacheService: DeepMocked<CacheService>;
   let workspaceTestResultsService: DeepMocked<WorkspaceTestResultsService>;
   let codingFreshnessService: DeepMocked<CodingFreshnessService>;
   let codingAnalysisService: DeepMocked<CodingAnalysisService>;
@@ -94,6 +95,7 @@ describe('TestCenterService', () => {
     service = module.get<TestcenterService>(TestcenterService);
     httpService = module.get(HttpService);
     personService = module.get(PersonService);
+    cacheService = module.get(CacheService);
     workspaceTestResultsService = module.get(WorkspaceTestResultsService);
     codingFreshnessService = module.get(CodingFreshnessService);
     codingAnalysisService = module.get(CodingAnalysisService);
@@ -211,6 +213,8 @@ describe('TestCenterService', () => {
         expect(result).toHaveLength(1);
         expect(result[0].groupName).toBe('group1');
         expect(result[0].existsInDatabase).toBe(false);
+        expect(personService.getGroupsWithBookletLogs)
+          .toHaveBeenCalledWith(123, []);
       });
 
       it('should mark groups as existing in database', async () => {
@@ -242,6 +246,55 @@ describe('TestCenterService', () => {
         );
 
         expect(result[0].existsInDatabase).toBe(true);
+        expect(personService.getGroupsWithBookletLogs)
+          .toHaveBeenCalledWith(123, ['existing-group']);
+      });
+
+      it('should record progress while fetching and preparing test groups', async () => {
+        const mockGroups: TestGroupsInfoDto[] = [
+          {
+            groupName: 'existing-group',
+            groupLabel: 'Existing Group',
+            bookletsStarted: 5,
+            numUnitsMin: 3,
+            numUnitsMax: 8,
+            numUnitsTotal: 25,
+            numUnitsAvg: 5.5,
+            lastChange: Date.now()
+          }
+        ];
+
+        httpService.axiosRef.get.mockResolvedValue({
+          data: mockGroups
+        } as AxiosResponse);
+        personService.getWorkspaceGroups.mockResolvedValue(['existing-group']);
+        personService.getGroupsWithBookletLogs.mockResolvedValue(
+          new Map([['existing-group', true]])
+        );
+
+        const result = await service.getTestgroups(
+          mockWorkspaceId,
+          mockTcWorkspace,
+          'demo',
+          '',
+          mockAuthToken,
+          'run-1'
+        );
+
+        expect(result[0]).toEqual(expect.objectContaining({
+          existsInDatabase: true,
+          hasBookletLogs: true
+        }));
+        expect(cacheService.set).toHaveBeenCalledWith(
+          'testcenter_test_groups_progress:123:run-1',
+          expect.objectContaining({
+            importRunId: 'run-1',
+            status: 'completed',
+            totalGroups: 1,
+            processedGroups: 1
+          }),
+          3600
+        );
       });
 
       it('should surface API errors when fetching test groups fails', async () => {
@@ -253,6 +306,20 @@ describe('TestCenterService', () => {
           '',
           mockAuthToken
         )).rejects.toThrow('Failed to retrieve test groups from Testcenter');
+      });
+
+      it('should reject malformed test group responses', async () => {
+        httpService.axiosRef.get.mockResolvedValue({
+          data: { groups: [] }
+        } as AxiosResponse);
+
+        await expect(service.getTestgroups(
+          mockWorkspaceId,
+          mockTcWorkspace,
+          'demo',
+          '',
+          mockAuthToken
+        )).rejects.toThrow('Unexpected Testcenter response');
       });
     });
   });
