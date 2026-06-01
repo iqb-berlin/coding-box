@@ -12,6 +12,7 @@ import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { ResourcePackageService } from '../workspace/resource-package.service';
+import { ReplayCompatibilityWarning } from '../../../../../../../api-dto/files/file-validation-result.dto';
 
 describe('WorkspaceTestFilesValidationService', () => {
   let service: WorkspaceTestFilesValidationService;
@@ -105,7 +106,7 @@ describe('WorkspaceTestFilesValidationService', () => {
 
     const expectedHash = crypto.createHash('sha256');
     expectedHash.update(JSON.stringify({
-      cacheVersion: 4,
+      cacheVersion: 5,
       exclusions: {
         ignoredUnits: [],
         ignoredBooklets: [],
@@ -115,8 +116,73 @@ describe('WorkspaceTestFilesValidationService', () => {
     }));
     expectedHash.update('\n');
 
-    expect(TEST_FILES_VALIDATION_CACHE_VERSION).toBe(4);
+    expect(TEST_FILES_VALIDATION_CACHE_VERSION).toBe(5);
     expect(fingerprint).toBe(expectedHash.digest('hex'));
+  });
+
+  describe('replay compatibility warnings', () => {
+    type ReplayCompatibilityDetector = {
+      detectReplayCompatibilityWarnings(
+        validationResults: unknown[],
+        unitMap: Map<string, unknown>,
+        resourceIdsArray: string[]
+      ): ReplayCompatibilityWarning[];
+    };
+
+    const createValidationResults = () => ([{
+      units: {
+        files: [{ filename: 'MV22064', exists: true }]
+      }
+    }]);
+
+    const createUnitMap = (playerRefs: string[]) => new Map<string, unknown>([
+      ['MV22064', { playerRefs }]
+    ]);
+
+    const detectWarnings = (
+      playerRefs: string[],
+      resourceIds: string[]
+    ): ReplayCompatibilityWarning[] => (
+      service as unknown as ReplayCompatibilityDetector
+    ).detectReplayCompatibilityWarnings(
+      createValidationResults(),
+      createUnitMap(playerRefs),
+      resourceIds
+    );
+
+    it('should warn for Aspect players without DOM element aliases', () => {
+      const warnings = detectWarnings(
+        ['IQB-PLAYER-ASPECT-2.9.3'],
+        ['IQB-PLAYER-ASPECT-2.9.3']
+      );
+
+      expect(warnings).toEqual([
+        expect.objectContaining({
+          unit: 'MV22064',
+          requestedPlayer: 'IQB-PLAYER-ASPECT-2.9.3',
+          resolvedPlayer: 'IQB-PLAYER-ASPECT-2.9.3',
+          requiredPlayer: 'IQB-PLAYER-ASPECT-2.9.4'
+        })
+      ]);
+    });
+
+    it('should not warn when a compatible patch version is available', () => {
+      const warnings = detectWarnings(
+        ['IQB-PLAYER-ASPECT-2.9.3'],
+        ['IQB-PLAYER-ASPECT-2.9.3', 'IQB-PLAYER-ASPECT-2.9.4']
+      );
+
+      expect(warnings).toEqual([]);
+    });
+
+    it('should not warn for non-Aspect players', () => {
+      const warnings = detectWarnings(
+        ['OTHER-PLAYER-1.0.0'],
+        ['OTHER-PLAYER-1.0.0']
+      );
+
+      expect(warnings).toEqual([]);
+    });
   });
 
   it('should include ignored test file settings in the validation fingerprint', async () => {

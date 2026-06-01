@@ -12,7 +12,8 @@ import Persons from '../../entities/persons.entity';
 import {
   FileValidationResultDto,
   FilteredTestTaker,
-  GeoGebraValidationResult
+  GeoGebraValidationResult,
+  ReplayCompatibilityWarning
 } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-schema-validation.service';
 // eslint-disable-next-line import/no-cycle
@@ -88,7 +89,23 @@ type ValidationProgressReporter = (
 ) => void | Promise<void>;
 
 // Bump this whenever test-file validation semantics or result shape changes.
-export const TEST_FILES_VALIDATION_CACHE_VERSION = 4;
+export const TEST_FILES_VALIDATION_CACHE_VERSION = 5;
+
+type ParsedPlayerVersion = {
+  id: string;
+  module: string;
+  major: number;
+  minor: number;
+  patch: number;
+};
+
+const ASPECT_PLAYER_MODULE = 'IQB-PLAYER-ASPECT';
+const ASPECT_PLAYER_REPLAY_ALIAS_MIN_VERSION = {
+  major: 2,
+  minor: 9,
+  patch: 4
+};
+const ASPECT_PLAYER_REPLAY_ALIAS_REQUIRED_PLAYER = 'IQB-PLAYER-ASPECT-2.9.4';
 
 @Injectable()
 export class WorkspaceTestFilesValidationService {
@@ -570,6 +587,12 @@ export class WorkspaceTestFilesValidationService {
         unitMap,
         onProgress
       );
+      const replayCompatibilityWarnings =
+        this.detectReplayCompatibilityWarnings(
+          validationResults,
+          unitMap,
+          resourceIdsArray
+        );
 
       await this.reportProgress(
         onProgress,
@@ -587,6 +610,10 @@ export class WorkspaceTestFilesValidationService {
           unusedTestFiles:
             unusedTestFiles.length > 0 ? unusedTestFiles : undefined,
           geogebra,
+          replayCompatibilityWarnings:
+            replayCompatibilityWarnings.length > 0 ?
+              replayCompatibilityWarnings :
+              undefined,
           validationResults
         };
       }
@@ -600,6 +627,10 @@ export class WorkspaceTestFilesValidationService {
         unusedTestFiles:
           unusedTestFiles.length > 0 ? unusedTestFiles : undefined,
         geogebra,
+        replayCompatibilityWarnings:
+          replayCompatibilityWarnings.length > 0 ?
+            replayCompatibilityWarnings :
+            undefined,
         validationResults: this.createEmptyValidationData()
       };
     } catch (error) {
@@ -1112,6 +1143,140 @@ export class WorkspaceTestFilesValidationService {
       units,
       packageStatus
     };
+  }
+
+  private detectReplayCompatibilityWarnings(
+    validationResults: ValidationData[],
+    unitMap: Map<string, UnitRefs>,
+    resourceIdsArray: string[]
+  ): ReplayCompatibilityWarning[] {
+    const usedUnits = new Set<string>();
+
+    validationResults.forEach(result => {
+      result.units.files
+        .filter(file => file.exists && !file.ignored)
+        .forEach(file => usedUnits.add(file.filename.toUpperCase()));
+    });
+
+    const warningsByKey = new Map<string, ReplayCompatibilityWarning>();
+
+    usedUnits.forEach(unitId => {
+      const refs = unitMap.get(unitId);
+      refs?.playerRefs.forEach(playerRef => {
+        const resolvedPlayer = WorkspaceTestFilesValidationService.resolvePlayerRef(
+          playerRef,
+          resourceIdsArray
+        );
+
+        if (!resolvedPlayer) {
+          return;
+        }
+
+        const parsed = WorkspaceTestFilesValidationService.parsePlayerVersion(
+          resolvedPlayer
+        );
+
+        if (
+          parsed?.module !== ASPECT_PLAYER_MODULE ||
+          WorkspaceTestFilesValidationService.isVersionAtLeast(
+            parsed,
+            ASPECT_PLAYER_REPLAY_ALIAS_MIN_VERSION
+          )
+        ) {
+          return;
+        }
+
+        const key = `${unitId}|${playerRef}|${resolvedPlayer}`;
+        warningsByKey.set(key, {
+          unit: unitId,
+          requestedPlayer: playerRef,
+          resolvedPlayer,
+          requiredPlayer: ASPECT_PLAYER_REPLAY_ALIAS_REQUIRED_PLAYER,
+          message:
+            'Elementgenaue Replay-Markierungen benötigen data-element-alias; ' +
+            `${resolvedPlayer} stellt dieses DOM-Merkmal noch nicht bereit.`
+        });
+      });
+    });
+
+    return Array.from(warningsByKey.values()).sort((a, b) => {
+      const unitCompare = a.unit.localeCompare(b.unit);
+      if (unitCompare !== 0) return unitCompare;
+      return a.requestedPlayer.localeCompare(b.requestedPlayer);
+    });
+  }
+
+  private static resolvePlayerRef(
+    ref: string,
+    allResourceIds: string[]
+  ): string | null {
+    const parsedRef = WorkspaceTestFilesValidationService.parsePlayerVersion(ref);
+    if (!parsedRef) {
+      return allResourceIds.includes(ref) ? ref : null;
+    }
+
+    const candidates = allResourceIds
+      .map(id => WorkspaceTestFilesValidationService.parsePlayerVersion(id))
+      .filter((candidate): candidate is ParsedPlayerVersion => !!candidate)
+      .filter(candidate => candidate.module === parsedRef.module &&
+        candidate.major === parsedRef.major);
+
+    const sameMinor = candidates
+      .filter(candidate => candidate.minor === parsedRef.minor)
+      .sort(WorkspaceTestFilesValidationService.comparePlayerVersionsDesc);
+
+    if (sameMinor.length > 0) {
+      return sameMinor[0].id;
+    }
+
+    const sameMajor = candidates
+      .sort(WorkspaceTestFilesValidationService.comparePlayerVersionsDesc);
+
+    return sameMajor[0]?.id || null;
+  }
+
+  private static parsePlayerVersion(
+    value: string | undefined | null
+  ): ParsedPlayerVersion | null {
+    const normalized = (value || '').trim().toUpperCase().replace(/\\/g, '/');
+    const basename = normalized.split('/').pop() || normalized;
+    const withoutExtension = basename.replace(/\.(HTML|HTM)$/, '');
+    const match = withoutExtension.match(/^(.+)-(\d+)\.(\d+)(?:\.(\d+))?$/);
+
+    if (!match) {
+      return null;
+    }
+
+    return {
+      id: withoutExtension,
+      module: match[1],
+      major: Number.parseInt(match[2], 10),
+      minor: Number.parseInt(match[3], 10),
+      patch: match[4] ? Number.parseInt(match[4], 10) : 0
+    };
+  }
+
+  private static comparePlayerVersionsDesc(
+    a: ParsedPlayerVersion,
+    b: ParsedPlayerVersion
+  ): number {
+    if (b.minor !== a.minor) {
+      return b.minor - a.minor;
+    }
+    return b.patch - a.patch;
+  }
+
+  private static isVersionAtLeast(
+    version: Pick<ParsedPlayerVersion, 'major' | 'minor' | 'patch'>,
+    minimum: Pick<ParsedPlayerVersion, 'major' | 'minor' | 'patch'>
+  ): boolean {
+    if (version.major !== minimum.major) {
+      return version.major > minimum.major;
+    }
+    if (version.minor !== minimum.minor) {
+      return version.minor > minimum.minor;
+    }
+    return version.patch >= minimum.patch;
   }
 
   private resourceFileMatchesRef(
