@@ -22,6 +22,10 @@ export interface GithubReleaseShort {
   published_at: string;
 }
 
+const COMPATIBLE_ASPECT_PLAYER_VERSION = '2.9.4';
+const COMPATIBLE_ASPECT_PLAYER_ASSET_NAME =
+  `iqb-player-aspect-${COMPATIBLE_ASPECT_PLAYER_VERSION}.html`;
+
 @Injectable()
 export class GithubReleasesService {
   private readonly logger = new Logger(GithubReleasesService.name);
@@ -68,6 +72,54 @@ export class GithubReleasesService {
       this.logger.error(`Error fetching releases for ${type}: ${error.message}`);
       throw new InternalServerErrorException('Failed to fetch releases from GitHub');
     }
+  }
+
+  async installCompatibleAspectPlayer(workspaceId: number): Promise<boolean> {
+    const release = await this.findCompatibleAspectPlayerRelease();
+    return this.downloadAndInstall(workspaceId, release.url);
+  }
+
+  private async findCompatibleAspectPlayerRelease(): Promise<GithubReleaseShort> {
+    const repo = this.repositories['aspect-player'];
+    let page = 1;
+
+    while (page <= 10) {
+      const response = await firstValueFrom(
+        this.httpService.get<GithubRelease[]>(
+          `https://api.github.com/repos/${repo}/releases`,
+          { params: { per_page: 100, page } }
+        )
+      );
+
+      const release = response.data
+        .map(item => {
+          const asset = item.assets.find(a => a.name.toLowerCase() ===
+            COMPATIBLE_ASPECT_PLAYER_ASSET_NAME);
+
+          if (!asset) return null;
+
+          return {
+            version: item.tag_name,
+            url: asset.browser_download_url,
+            name: asset.name,
+            published_at: item.published_at
+          };
+        })
+        .find((item): item is GithubReleaseShort => item !== null);
+
+      if (release) {
+        return release;
+      }
+
+      if (response.data.length < 100) {
+        break;
+      }
+      page += 1;
+    }
+
+    throw new InternalServerErrorException(
+      `Compatible Aspect player ${COMPATIBLE_ASPECT_PLAYER_VERSION} was not found on GitHub`
+    );
   }
 
   async downloadAndInstall(

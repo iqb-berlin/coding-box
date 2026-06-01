@@ -2474,6 +2474,18 @@
     "invalid": "INVALID:",
     "coding-error": "CODING_ERROR:"
   },
+  "files-validation": {
+    "replay-compatibility": {
+      "title": "Eingeschränkte Replay-Markierung möglich",
+      "task-count": "{{count}} Aufgabe(n)",
+      "message": "Für einige Aufgaben wird ein Aspect-Player verwendet, der keine stabilen Element-Aliase im DOM bereitstellt. Elementgenaue Markierungen im Replay können dadurch fehlen oder ungenau sein. Bitte mindestens IQB-PLAYER-ASPECT 2.9.4 verwenden.",
+      "install-action": "Kompatiblen Aspect-Player installieren",
+      "installing": "Wird installiert...",
+      "install-success": "Kompatibler Aspect-Player wurde installiert.",
+      "install-error": "Kompatibler Aspect-Player konnte nicht installiert werden",
+      "affected-units": "Betroffene Aufgaben"
+    }
+  },
   "coding-validation-results": {
     "title": "Validierungsergebnisse",
     "download-button": "Als Excel herunterladen",
