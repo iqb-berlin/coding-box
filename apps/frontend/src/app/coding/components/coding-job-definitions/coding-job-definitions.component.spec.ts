@@ -17,6 +17,9 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 import { JobDefinitionRefreshPreviewDto } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { JobDefinitionRefreshDialogComponent } from './job-definition-refresh-dialog.component';
+import {
+  JobDefinitionDistributionSummaryDialogComponent
+} from './job-definition-distribution-summary-dialog.component';
 
 describe('CodingJobDefinitionsComponent', () => {
   let component: CodingJobDefinitionsComponent;
@@ -244,6 +247,99 @@ describe('CodingJobDefinitionsComponent', () => {
     expect(component.getCreatedJobsCount(component.jobDefinitions[0])).toBeUndefined();
     expect(component.canCreateCodingJobs(component.jobDefinitions[0])).toBe(false);
     expect(component.getDefinitionsReadyForJobsCount()).toBe(0);
+  });
+
+  it('opens the latest stored distribution snapshot read-only', () => {
+    const matDialog = TestBed.inject(MatDialog);
+    const dialogRefMock = { afterClosed: () => of(false) };
+    jest.spyOn(matDialog, 'open').mockReturnValue(dialogRefMock as never);
+    component.coders = [
+      { id: 1, name: 'Ada' },
+      { id: 2, name: 'Bea' }
+    ];
+    const firstSnapshot = {
+      version: 1 as const,
+      source: 'initial_creation' as const,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      distributionSeed: 'seed-1',
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedVariableBundles: [],
+      selectedCoders: [{ coderId: 1, capacityPercent: 100 }],
+      settings: { caseOrderingMode: 'continuous' as const },
+      distributionByCoderId: { 'Unit 1::Var 1': { 1: 3 } },
+      doubleCodingInfo: {
+        'Unit 1::Var 1': {
+          totalCases: 3,
+          distinctCases: 3,
+          codingTasksTotal: 3,
+          doubleCodedCases: 0,
+          singleCodedCasesAssigned: 3,
+          doubleCodedCasesPerCoderId: { 1: 0 }
+        }
+      },
+      aggregationInfo: {},
+      matchingFlags: [],
+      pairDistribution: {},
+      tasksPerCoder: { 1: 3 },
+      coderWeights: { 1: 1 },
+      jobs: []
+    };
+    const latestSnapshot = {
+      ...firstSnapshot,
+      source: 'refresh' as const,
+      createdAt: '2026-01-02T00:00:00.000Z',
+      distributionByCoderId: { 'Unit 1::Var 1': { 1: 2, 2: 1 } },
+      selectedCoders: [
+        { coderId: 1, capacityPercent: 100 },
+        { coderId: 2, capacityPercent: 100 }
+      ]
+    };
+
+    component.viewDistributionSummary({
+      id: 42,
+      status: 'approved',
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1, 2],
+      createdJobsCount: 2,
+      distributionSnapshots: [firstSnapshot, latestSnapshot]
+    });
+
+    expect(matDialog.open).toHaveBeenCalledWith(
+      JobDefinitionDistributionSummaryDialogComponent,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          definitionId: 42,
+          snapshot: latestSnapshot,
+          coders: component.coders,
+          createdJobsCount: 2
+        })
+      })
+    );
+  });
+
+  it('opens a clear missing-history dialog for old definitions without snapshots', () => {
+    const matDialog = TestBed.inject(MatDialog);
+    const dialogRefMock = { afterClosed: () => of(false) };
+    jest.spyOn(matDialog, 'open').mockReturnValue(dialogRefMock as never);
+
+    component.viewDistributionSummary({
+      id: 43,
+      status: 'approved',
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      createdJobsCount: 1
+    });
+
+    expect(matDialog.open).toHaveBeenCalledWith(
+      JobDefinitionDistributionSummaryDialogComponent,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          definitionId: 43,
+          snapshot: undefined,
+          createdJobsCount: 1
+        })
+      })
+    );
   });
 
   it('opens a redistribution preview and applies it after confirmation', async () => {
