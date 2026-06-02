@@ -208,7 +208,7 @@ export class TestPersonCodingService {
   testResultsChanged$ = this.testResultsChangedSubject.asObservable();
 
   get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   private hasJobId(jobId: string | null | undefined): jobId is string {

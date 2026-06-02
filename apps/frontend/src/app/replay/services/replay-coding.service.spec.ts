@@ -15,6 +15,8 @@ describe('ReplayCodingService', () => {
   beforeEach(() => {
     codingJobBackendServiceMock = {
       updateCodingJob: jest.fn(),
+      updateCodingJobStatus: jest.fn(),
+      updateCodingJobComment: jest.fn(),
       getCodingProgress: jest.fn(),
       getCodingNotes: jest.fn(),
       getCodingJob: jest.fn(),
@@ -49,21 +51,21 @@ describe('ReplayCodingService', () => {
 
   describe('updateCodingJobStatus', () => {
     it('should update status via backend', async () => {
-      codingJobBackendServiceMock.updateCodingJob.mockReturnValue(of({} as CodingJob));
+      codingJobBackendServiceMock.updateCodingJobStatus.mockReturnValue(of({} as CodingJob));
       await service.updateCodingJobStatus(1, 100, 'active');
-      expect(codingJobBackendServiceMock.updateCodingJob).toHaveBeenCalledWith(1, 100, { status: 'active' });
+      expect(codingJobBackendServiceMock.updateCodingJobStatus).toHaveBeenCalledWith(1, 100, 'active');
     });
 
     it('should pass the replay auth token to backend status updates', async () => {
-      codingJobBackendServiceMock.updateCodingJob.mockReturnValue(of({} as CodingJob));
+      codingJobBackendServiceMock.updateCodingJobStatus.mockReturnValue(of({} as CodingJob));
       service.setAuthToken('replay-token');
 
       await service.updateCodingJobStatus(1, 100, 'active');
 
-      expect(codingJobBackendServiceMock.updateCodingJob).toHaveBeenCalledWith(
+      expect(codingJobBackendServiceMock.updateCodingJobStatus).toHaveBeenCalledWith(
         1,
         100,
-        { status: 'active' },
+        'active',
         'replay-token'
       );
     });
@@ -277,7 +279,7 @@ describe('ReplayCodingService', () => {
 
       await service.pauseCodingJob(1, 100);
 
-      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.updateCodingJobStatus).not.toHaveBeenCalled();
     });
 
     it('uses keepalive status update for unload pauses', () => {
@@ -288,7 +290,7 @@ describe('ReplayCodingService', () => {
       expect(codingJobBackendServiceMock.updateCodingJobKeepalive).toHaveBeenCalledWith(
         1,
         100,
-        { status: 'paused' },
+        'paused',
         'replay-token'
       );
     });

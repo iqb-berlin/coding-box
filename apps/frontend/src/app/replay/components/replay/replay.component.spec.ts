@@ -92,6 +92,8 @@ describe('ReplayComponent', () => {
   let codingJobBackendServiceMock: {
     getCodingJobUnits: jest.Mock;
     updateCodingJob: jest.Mock;
+    updateCodingJobStatus: jest.Mock;
+    updateCodingJobComment: jest.Mock;
     getCodingProgress: jest.Mock;
     getCodingNotes: jest.Mock;
     getCodingJob: jest.Mock;
@@ -115,6 +117,8 @@ describe('ReplayComponent', () => {
     codingJobBackendServiceMock = {
       getCodingJobUnits: jest.fn().mockReturnValue(of([])),
       updateCodingJob: jest.fn().mockReturnValue(of({})),
+      updateCodingJobStatus: jest.fn().mockReturnValue(of({})),
+      updateCodingJobComment: jest.fn().mockReturnValue(of({})),
       getCodingProgress: jest.fn().mockReturnValue(of({})),
       getCodingNotes: jest.fn().mockReturnValue(of({})),
       getCodingJob: jest.fn().mockReturnValue(of({})),

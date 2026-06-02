@@ -11,7 +11,7 @@ import {
   throwError,
   timer
 } from 'rxjs';
-import { DecodedToken } from './auth.service';
+import { DecodedToken } from './auth.models';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import {
