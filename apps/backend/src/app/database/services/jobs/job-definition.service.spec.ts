@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { In } from 'typeorm';
 import { JobDefinitionService } from './job-definition.service';
 
 jest.mock('../coding/coding-job.service', () => ({
@@ -752,6 +753,115 @@ describe('JobDefinitionService', () => {
         workspace_id: 7
       }
     });
+  });
+
+  it('exports the latest distribution snapshot as formula-safe CSV', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 42,
+      workspace_id: 7,
+      assigned_variable_bundles: [],
+      distribution_snapshots: [
+        {
+          version: 1,
+          source: 'initial_creation',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          distributionSeed: 'old-seed',
+          selectedVariables: [],
+          selectedVariableBundles: [],
+          selectedCoders: [{ coderId: 1, capacityPercent: 100 }],
+          settings: {},
+          distributionByCoderId: { 'Old::Var': { 1: 1 } },
+          doubleCodingInfo: {},
+          aggregationInfo: {},
+          matchingFlags: [],
+          pairDistribution: {},
+          tasksPerCoder: {},
+          coderWeights: {},
+          jobs: []
+        },
+        {
+          version: 1,
+          source: 'refresh',
+          createdAt: '2026-01-02T00:00:00.000Z',
+          distributionSeed: 'new-seed',
+          selectedVariables: [],
+          selectedVariableBundles: [{ id: 9, name: '@Bundle' }],
+          selectedCoders: [
+            { coderId: 2, capacityPercent: 100 },
+            { coderId: 1, capacityPercent: 100 }
+          ],
+          settings: {},
+          distributionByCoderId: {
+            '=UNIT::+VAR': { 1: 2, 2: 1 },
+            'Legacy::Var': { 1: 2, 2: 1 },
+            'bundle:9': { 1: 0, 2: 3 }
+          },
+          doubleCodingInfo: {
+            '=UNIT::+VAR': {
+              totalCases: 3,
+              distinctCases: 2,
+              codingTasksTotal: 3,
+              doubleCodedCases: 1,
+              singleCodedCasesAssigned: 1,
+              doubleCodedCasesPerCoderId: { 1: 1, 2: 1 }
+            },
+            'Legacy::Var': {
+              totalCases: 3,
+              doubleCodedCases: 1,
+              singleCodedCasesAssigned: 1,
+              doubleCodedCasesPerCoderId: { 1: 1, 2: 1 }
+            },
+            'bundle:9': {
+              totalCases: 3,
+              distinctCases: 3,
+              codingTasksTotal: 3,
+              doubleCodedCases: 0,
+              singleCodedCasesAssigned: 3,
+              doubleCodedCasesPerCoderId: {}
+            }
+          },
+          aggregationInfo: {
+            'Legacy::Var': { uniqueCases: 99, totalResponses: 99 }
+          },
+          matchingFlags: [],
+          pairDistribution: {},
+          tasksPerCoder: {},
+          coderWeights: {},
+          jobs: []
+        }
+      ]
+    });
+    usersRepository.find.mockResolvedValue([
+      { id: 1, username: '=Ada' },
+      { id: 2, username: 'Bob' }
+    ]);
+
+    const csv = await service.exportDistributionSnapshotAsCsv(42, 7);
+
+    expect(jobDefinitionRepository.findOne).toHaveBeenCalledWith({
+      where: {
+        id: 42,
+        workspace_id: 7
+      }
+    });
+    expect(usersRepository.find).toHaveBeenCalledWith({ where: { id: In([1, 2]) } });
+    expect(csv).toContain('Job-Definition-ID;Snapshot-Zeitpunkt;Quelle;Typ;Variable/Buendel;Coder-ID;Coder;Fallzahl');
+    expect(csv).toContain("Neuverteilung;Variable;'=UNIT -> +VAR;1;'=Ada;2;2;1;1;1");
+    expect(csv).toContain("Neuverteilung;Variable;Legacy -> Var;1;'=Ada;2;2;1;1;1");
+    expect(csv).toContain("Neuverteilung;Buendel;'@Bundle;2;Bob;3;3;0;3;0");
+    expect(csv).not.toContain('Old::Var');
+  });
+
+  it('rejects distribution CSV export when no snapshot exists', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 42,
+      workspace_id: 7,
+      assigned_variable_bundles: [],
+      distribution_snapshots: []
+    });
+
+    await expect(service.exportDistributionSnapshotAsCsv(42, 7))
+      .rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('persists coder capacity configs and derives assigned coder ids from them', async () => {
