@@ -2180,6 +2180,8 @@
       "preview-title": "Jobstatus",
       "case-title": "Fälle",
       "task-title": "Kodieraufgaben",
+      "added-items-title": "Neue Fälle nach Variable / Bündel",
+      "added-item-counts": "{{cases}} Fälle · {{tasks}} Aufgaben",
       "stats": {
         "existing-jobs": "Vorhandene Jobs",
         "stale-jobs": "Davon veraltet",
@@ -2200,12 +2202,16 @@
         "initial": "Ersterstellung",
         "refresh": "Neuverteilung"
       },
+      "snapshots-label": "Gespeicherte Verteilungen",
       "missing-history": "Für diese Job-Definition liegt keine gespeicherte Verteilungsübersicht vor. Vermutlich wurden die Kodierjobs vor Einführung der Snapshot-Speicherung erstellt.",
       "coders": "Kodierer",
       "jobs": "Kodierjobs",
       "total-cases": "Kodieraufgaben",
+      "new-cases": "Neue Fälle",
       "item": "Variable / Bündel",
       "total": "Gesamt",
+      "new": "Neue Fälle",
+      "added-tasks-title": "Neue Kodieraufgaben: {{tasks}}",
       "double-coded": "Doppelt kodiert",
       "grand-total": "Gesamt"
     },

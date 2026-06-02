@@ -817,6 +817,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       data: {
         definitionId: definition.id,
         snapshot: this.getLatestDistributionSnapshot(definition),
+        snapshots: definition.distributionSnapshots || [],
         coders: this.coders,
         createdJobsCount: this.getCreatedJobsCount(definition)
       },

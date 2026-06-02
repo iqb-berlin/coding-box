@@ -141,6 +141,7 @@ export interface JobDefinitionDistributionSnapshot {
     jobId: number;
     caseCount: number;
   }>;
+  refreshPreview?: JobDefinitionRefreshPreviewDto;
 }
 
 export interface JobDefinition {
