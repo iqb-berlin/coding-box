@@ -44,6 +44,7 @@ import {
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
 import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
+import { sanitizeCsvText } from '../../utils/csv.util';
 
 type CodingStatisticsJobStatusResponse = {
   status: string;
@@ -423,12 +424,6 @@ export class WorkspaceCodingStatisticsController {
     return parts.length > 0 ? parts.join('; ') : 'Direkte Kodierung';
   }
 
-  private sanitizeCsvText(value: string | null | undefined): string {
-    const text = value ?? '';
-    const normalized = text.replace(/[\r\n\t]+/g, ' ');
-    return /^\s*[=+\-@]/.test(normalized) ? `'${normalized}` : normalized;
-  }
-
   private createCohensKappaExportRows(
     statistics: KappaStatisticsResponse,
     options: {
@@ -444,27 +439,27 @@ export class WorkspaceCodingStatisticsController {
       'ungewichteter Mittelwert';
 
     return statistics.variables.flatMap(variable => variable.coderPairs.map(pair => ({
-      Variable: this.sanitizeCsvText(`${variable.unitName} - ${variable.variableId}`),
-      Unit: this.sanitizeCsvText(variable.unitName),
-      'Variablen-ID': this.sanitizeCsvText(variable.variableId),
-      'Job-Definition / Schulungsbezug': this.sanitizeCsvText(this.formatKappaScope(pair)),
-      'Job-Namen': this.sanitizeCsvText(pair.jobNames.join(', ')),
+      Variable: sanitizeCsvText(`${variable.unitName} - ${variable.variableId}`),
+      Unit: sanitizeCsvText(variable.unitName),
+      'Variablen-ID': sanitizeCsvText(variable.variableId),
+      'Job-Definition / Schulungsbezug': sanitizeCsvText(this.formatKappaScope(pair)),
+      'Job-Namen': sanitizeCsvText(pair.jobNames.join(', ')),
       'Job-Definition-IDs': pair.jobDefinitionIds.join(', '),
       'Training-IDs': pair.trainingIds.join(', '),
-      Trainingslabels: this.sanitizeCsvText(pair.trainingLabels.join(', ')),
+      Trainingslabels: sanitizeCsvText(pair.trainingLabels.join(', ')),
       'Kodierer 1 ID': pair.coder1Id,
-      'Kodierer 1': this.sanitizeCsvText(pair.coder1Name),
+      'Kodierer 1': sanitizeCsvText(pair.coder1Name),
       'Kodierer 2 ID': pair.coder2Id,
-      'Kodierer 2': this.sanitizeCsvText(pair.coder2Name),
+      'Kodierer 2': sanitizeCsvText(pair.coder2Name),
       'Anzahl doppelt kodierter Antworten': pair.totalItems,
       'Gueltige Paare': pair.validPairs,
       'Kappa-Wert': pair.kappa ?? '',
       'Uebereinstimmung in Prozent': Math.round(pair.agreement * 1000) / 10,
-      Interpretation: this.sanitizeCsvText(this.getKappaInterpretationLabel(pair.interpretation)),
+      Interpretation: sanitizeCsvText(this.getKappaInterpretationLabel(pair.interpretation)),
       'Trainings ausgeschlossen': options.excludeTrainings ? 'ja' : 'nein',
-      'Mittelwert-Methode': this.sanitizeCsvText(weightingMethod),
-      'Unit-Filter': this.sanitizeCsvText(options.unitName),
-      'Variablen-Filter': this.sanitizeCsvText(options.variableId),
+      'Mittelwert-Methode': sanitizeCsvText(weightingMethod),
+      'Unit-Filter': sanitizeCsvText(options.unitName),
+      'Variablen-Filter': sanitizeCsvText(options.variableId),
       'Exportiert am': exportedAt
     })));
   }
@@ -473,7 +468,7 @@ export class WorkspaceCodingStatisticsController {
     statistics: KappaStatisticsResponse
   ): Record<string, string | number>[] {
     return statistics.variables.map(variable => ({
-      subunit: this.sanitizeCsvText(this.getSubunit(variable.unitName, variable.variableId)),
+      subunit: sanitizeCsvText(this.getSubunit(variable.unitName, variable.variableId)),
       nCases: variable.caseCount,
       nDop: variable.doubleCodedCount,
       percDop: this.toPercent(variable.doubleCodedRate),
@@ -486,16 +481,16 @@ export class WorkspaceCodingStatisticsController {
     statistics: KappaStatisticsResponse
   ): Record<string, string | number>[] {
     return statistics.variables.flatMap(variable => variable.coderPairs.map(pair => ({
-      subunit: this.sanitizeCsvText(this.getSubunit(variable.unitName, variable.variableId)),
+      subunit: sanitizeCsvText(this.getSubunit(variable.unitName, variable.variableId)),
       nCases: variable.caseCount,
       nDop: variable.doubleCodedCount,
       percDop: this.toPercent(variable.doubleCodedRate),
-      Coder1: this.sanitizeCsvText(pair.coder1Name),
-      Coder2: this.sanitizeCsvText(pair.coder2Name),
+      Coder1: sanitizeCsvText(pair.coder1Name),
+      Coder2: sanitizeCsvText(pair.coder2Name),
       N: pair.validPairs,
       kappa: this.roundDecimal(pair.kappa),
-      'Coder1.1': this.sanitizeCsvText(pair.coder1Name),
-      'Coder2.1': this.sanitizeCsvText(pair.coder2Name),
+      'Coder1.1': sanitizeCsvText(pair.coder1Name),
+      'Coder2.1': sanitizeCsvText(pair.coder2Name),
       'N.1': pair.validPairs,
       agree: this.roundDecimal(pair.agreement)
     })));
@@ -557,11 +552,11 @@ export class WorkspaceCodingStatisticsController {
     ];
     const rows = sourceItems.map(item => {
       const row: Record<string, string | number> = {
-        'Test.Person.Login': this.sanitizeCsvText(item.personLogin),
-        'Test.Person.Group': this.sanitizeCsvText(item.personGroup),
-        Unit: this.sanitizeCsvText(item.unitName),
-        Variable: this.sanitizeCsvText(item.variableId),
-        subunit: this.sanitizeCsvText(this.getSubunit(item.unitName, item.variableId))
+        'Test.Person.Login': sanitizeCsvText(item.personLogin),
+        'Test.Person.Group': sanitizeCsvText(item.personGroup),
+        Unit: sanitizeCsvText(item.unitName),
+        Variable: sanitizeCsvText(item.variableId),
+        subunit: sanitizeCsvText(this.getSubunit(item.unitName, item.variableId))
       };
       const codeCounts = new Map<number, number>();
       const comments: string[] = [];
@@ -593,7 +588,7 @@ export class WorkspaceCodingStatisticsController {
       });
       const codedCount = Array.from(codeCounts.values()).reduce((sum, count) => sum + count, 0);
 
-      row.Kommentare = this.sanitizeCsvText(comments.join(' | '));
+      row.Kommentare = sanitizeCsvText(comments.join(' | '));
       row['Häuf.W'] = modalCode;
       row.Abw = codedCount > 0 ? codedCount - modalCount : '';
 
