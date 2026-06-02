@@ -230,6 +230,20 @@ describe('CodingJobBackendService', () => {
       });
     });
 
+    it('should export a job definition distribution as CSV', () => {
+      const mockBlob = new Blob(['Job-Definition-ID;Coder'], { type: 'text/csv' });
+
+      service.exportJobDefinitionDistributionCsv(1, 42).subscribe(response => {
+        expect(response).toBe(mockBlob);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/job-definitions/42/distribution/csv`);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.responseType).toBe('blob');
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
+      req.flush(mockBlob);
+    });
+
     it('should preview a job definition refresh', () => {
       service.previewJobDefinitionRefresh(1, 42).subscribe(response => {
         expect(response.addedCases).toBe(2);

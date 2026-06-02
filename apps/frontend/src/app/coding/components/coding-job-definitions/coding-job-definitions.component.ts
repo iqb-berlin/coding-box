@@ -20,7 +20,9 @@ import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { Subject, firstValueFrom, takeUntil } from 'rxjs';
+import {
+  Subject, finalize, firstValueFrom, takeUntil
+} from 'rxjs';
 import {
   CodingJobBackendService,
   JobDefinitionDistributionSnapshot
@@ -109,6 +111,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   isLoading = false;
   isBulkCreating = false;
   refreshingDefinitionIds = new Set<number>();
+  exportingDistributionDefinitionIds = new Set<number>();
   coders: Coder[] = [];
   showInfo = false;
   private readonly variablePreviewLimit = 12;
@@ -422,6 +425,10 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       (createdJobsCount !== undefined && createdJobsCount > 0);
   }
 
+  canExportDistributionCsv(definition: JobDefinition): boolean {
+    return !!definition.id && this.hasDistributionSnapshots(definition);
+  }
+
   hasDistributionSnapshots(definition: JobDefinition): boolean {
     return Array.isArray(definition.distributionSnapshots) &&
       definition.distributionSnapshots.length > 0;
@@ -439,6 +446,10 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
   isRefreshingDefinition(definition: JobDefinition): boolean {
     return !!definition.id && this.refreshingDefinitionIds.has(definition.id);
+  }
+
+  isExportingDistribution(definition: JobDefinition): boolean {
+    return !!definition.id && this.exportingDistributionDefinitionIds.has(definition.id);
   }
 
   getEditDefinitionLabel(definition: JobDefinition): string {
@@ -813,6 +824,57 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     });
   }
 
+  exportDistributionCsv(definition: JobDefinition): void {
+    if (!definition.id) {
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.no-workspace'
+        )
+      );
+      return;
+    }
+
+    if (!this.canExportDistributionCsv(definition)) {
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.distribution-export-missing'
+        )
+      );
+      return;
+    }
+
+    this.exportingDistributionDefinitionIds.add(definition.id);
+    this.codingJobBackendService
+      .exportJobDefinitionDistributionCsv(workspaceId, definition.id)
+      .pipe(
+        finalize(() => {
+          this.exportingDistributionDefinitionIds.delete(definition.id!);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({
+        next: blob => {
+          this.saveBlob(
+            blob,
+            `job-definition-distribution-${definition.id}-${this.getDateString()}.csv`
+          );
+        },
+        error: error => {
+          this.showError(
+            this.translateService.instant(
+              'coding-job-definitions.messages.snackbar.distribution-export-failed',
+              { error: this.getErrorMessage(error) }
+            )
+          );
+        }
+      });
+  }
+
   private async applyDefinitionRefresh(
     workspaceId: number,
     jobDefinitionId: number
@@ -1023,6 +1085,21 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     this.snackBar.open(message, this.translateService.instant('common.close'), {
       duration: 5000
     });
+  }
+
+  private saveBlob(blob: Blob, filename: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
+  private getDateString(): string {
+    return new Date().toISOString().slice(0, 10);
   }
 
   private getErrorMessage(error: unknown): string {

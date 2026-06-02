@@ -153,6 +153,16 @@
               <button
                 mat-menu-item
                 type="button"
+                *ngIf="canExportDistributionCsv(definition)"
+                [disabled]="isExportingDistribution(definition)"
+                (click)="exportDistributionCsv(definition)"
+                [attr.aria-label]="getActionAriaLabel('distribution-export', definition)">
+                <mat-icon>download</mat-icon>
+                <span>{{ 'coding-job-definitions.actions.distribution-export' | translate }}</span>
+              </button>
+              <button
+                mat-menu-item
+                type="button"
                 *ngIf="canRefreshDefinition(definition)"
                 [disabled]="isRefreshingDefinition(definition)"
                 (click)="refreshDefinition(definition)"
