@@ -265,16 +265,7 @@ export class TestPersonCodingService {
   testResultsChanged$ = this.testResultsChangedSubject.asObservable();
 
   get authHeader() {
-    return {};
-  }
-
-  private async getValidKeycloakToken(): Promise<string | undefined> {
-    if (!this.keycloak?.authenticated) {
-      return undefined;
-    }
-
-    await this.keycloak.updateToken(30);
-    return this.keycloak.token;
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   private hasJobId(jobId: string | null | undefined): jobId is string {

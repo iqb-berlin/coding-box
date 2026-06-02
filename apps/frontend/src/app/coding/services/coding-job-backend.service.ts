@@ -297,8 +297,8 @@ export class CodingJobBackendService {
   private keycloak = inject(Keycloak, { optional: true });
   private validationTaskStateService = inject(ValidationTaskStateService);
 
-  private getAuthHeader(authToken?: string): Record<string, string> {
-    return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  private getAuthHeader(authToken?: string) {
+    return { Authorization: `Bearer ${authToken || localStorage.getItem('auth_token')}` };
   }
 
   private get authHeader(): Record<string, string> {
@@ -532,6 +532,26 @@ export class CodingJobBackendService {
     return this.http.put<CodingJob>(url, codingJob, {
       headers: this.getAuthHeader(authToken)
     });
+  }
+
+  updateCodingJobStatus(
+    workspaceId: number,
+    codingJobId: number,
+    status: 'active' | 'paused' | 'completed',
+    authToken?: string
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/status`;
+    return this.http.put<CodingJob>(url, { status }, { headers: this.getAuthHeader(authToken) });
+  }
+
+  updateCodingJobComment(
+    workspaceId: number,
+    codingJobId: number,
+    comment: string,
+    authToken?: string
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/comment`;
+    return this.http.put<CodingJob>(url, { comment }, { headers: this.getAuthHeader(authToken) });
   }
 
   deleteCodingJob(
@@ -772,10 +792,10 @@ export class CodingJobBackendService {
   updateCodingJobKeepalive(
     workspaceId: number,
     codingJobId: number,
-    codingJob: Partial<Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>>,
+    status: 'active' | 'paused' | 'completed',
     authToken?: string
   ): void {
-    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/status`;
     fetch(url, {
       method: 'PUT',
       keepalive: true,
@@ -783,7 +803,7 @@ export class CodingJobBackendService {
         ...this.getFetchAuthHeader(authToken),
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(codingJob)
+      body: JSON.stringify({ status })
     }).catch(() => undefined);
   }
 

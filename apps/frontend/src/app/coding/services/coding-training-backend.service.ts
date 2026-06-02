@@ -112,24 +112,7 @@ export class CodingTrainingBackendService {
   private coderTrainingsInFlight = new Map<number, Observable<CoderTraining[]>>();
 
   private get authHeader() {
-    return {};
-  }
-
-  private getWithinTrainingComparisonCacheKey(workspaceId: number, trainingId: number): string {
-    return `${workspaceId}:${trainingId}`;
-  }
-
-  invalidateWithinTrainingComparisonCache(workspaceId: number, trainingId?: number): void {
-    if (trainingId !== undefined) {
-      this.withinTrainingComparisonCache.delete(
-        this.getWithinTrainingComparisonCacheKey(workspaceId, trainingId)
-      );
-      return;
-    }
-
-    Array.from(this.withinTrainingComparisonCache.keys())
-      .filter(key => key.startsWith(`${workspaceId}:`))
-      .forEach(key => this.withinTrainingComparisonCache.delete(key));
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   createCoderTrainingJobs(
