@@ -2146,6 +2146,7 @@
       "jobs-created-short": "{{count}} erstellt",
       "jobs-count-unavailable": "Der Status erzeugter Kodier-Jobs konnte nicht geladen werden.",
       "jobs-count-unavailable-short": "Status unklar",
+      "distribution-summary": "Verteilungsübersicht anzeigen",
       "refresh": "Kodierjobs neu verteilen",
       "refresh-tooltip": "Prüfen, welche bestehenden Kodierjobs ersetzt und anhand der aktuellen Definition neu erzeugt werden können.",
       "more": "Weitere Aktionen",
@@ -2190,6 +2191,22 @@
         "removed-tasks": "Aufgaben entfernt"
       },
       "confirm": "Jobs neu verteilen"
+    },
+    "distribution-summary": {
+      "title": "Verteilungsübersicht",
+      "definition-label": "Definition #{{id}}",
+      "source": {
+        "initial": "Ersterstellung",
+        "refresh": "Neuverteilung"
+      },
+      "missing-history": "Für diese Job-Definition liegt keine gespeicherte Verteilungsübersicht vor. Vermutlich wurden die Kodierjobs vor Einführung der Snapshot-Speicherung erstellt.",
+      "coders": "Kodierer",
+      "jobs": "Kodierjobs",
+      "total-cases": "Kodieraufgaben",
+      "item": "Variable / Bündel",
+      "total": "Gesamt",
+      "double-coded": "Doppelt kodiert",
+      "grand-total": "Gesamt"
     },
     "summary": {
       "total": "Gesamt",
