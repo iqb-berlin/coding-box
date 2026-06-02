@@ -56,10 +56,7 @@ describe('WsgCodingJobController', () => {
       getCodingJobUnits: jest.fn().mockResolvedValue([]),
       getBulkCodingProgress: jest.fn().mockResolvedValue({}),
       createCodingJob: jest.fn().mockResolvedValue({ id: 124 }),
-      updateCodingJob: jest.fn(),
-      pauseCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'paused' }),
-      resumeCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'active' }),
-      submitCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'completed' }),
+      updateCodingJob: jest.fn().mockResolvedValue({ id: 123 }),
       saveCodingProgress: jest.fn().mockResolvedValue({ id: 123 }),
       saveCodingIssueReviewProgress: jest.fn().mockResolvedValue({ id: 123 }),
       saveCodingNotes: jest.fn().mockResolvedValue({ id: 123 }),
@@ -313,28 +310,40 @@ describe('WsgCodingJobController', () => {
     expect(codingJobService.saveCodingNotes).toHaveBeenCalled();
   });
 
-  it('uses manager access for saving coding issue review notes', async () => {
-    await controller.saveCodingNotes(
-      47,
-      123,
-      {
-        testPerson: 'p@c@b',
-        unitId: 'u',
-        variableId: 'v',
-        notes: 'note',
-        issueReview: true
-      } as never,
-      req
-    );
+  it('uses general access for regular coding job updates', async () => {
+    await controller.updateCodingJob(47, 123, { name: 'New name' } as never, req);
 
+    expect(codingJobService.assertUserCanAccessCodingJob).toHaveBeenCalledWith(123, 47, 5);
     expect(codingJobService.assertUserCanCodeCodingJob).not.toHaveBeenCalled();
-    expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(5, 47);
-    expect(codingJobService.saveCodingIssueReviewNotes).toHaveBeenCalledWith(
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(
       123,
-      5,
-      expect.objectContaining({ issueReview: true })
+      47,
+      { name: 'New name' }
     );
-    expect(codingJobService.saveCodingNotes).not.toHaveBeenCalled();
+  });
+
+  it('uses coding access and only forwards status for replay status updates', async () => {
+    await controller.updateCodingJobStatus(47, 123, { status: 'paused' }, req);
+
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(123, 47, 5);
+    expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      { status: 'paused' }
+    );
+  });
+
+  it('uses general access and only forwards comment for replay comment updates', async () => {
+    await controller.updateCodingJobComment(47, 123, { comment: 'review note' }, req);
+
+    expect(codingJobService.assertUserCanAccessCodingJob).toHaveBeenCalledWith(123, 47, 5);
+    expect(codingJobService.assertUserCanCodeCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      { comment: 'review note' }
+    );
   });
 
   it('rejects jobDefinitionId on direct coding job creates', async () => {
