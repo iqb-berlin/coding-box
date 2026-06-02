@@ -19,6 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { CodingStatistics } from '../../database/services/shared';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import {
@@ -214,7 +215,7 @@ export class WorkspaceCodingController {
   }
 
   @Get(':workspace_id/coding-job/:codingJobId/notes')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({

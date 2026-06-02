@@ -29,6 +29,7 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WorkspaceId } from '../../admin/workspace/workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from '../../admin/workspace/access-level.guard';
@@ -36,6 +37,8 @@ import { CodingJobService, CodingReplayService } from '../../database/services/c
 import { CodingJobDto } from '../../admin/coding-job/dto/coding-job.dto';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
+import { UpdateCodingJobCommentDto } from '../../admin/coding-job/dto/update-coding-job-comment.dto';
+import { UpdateCodingJobStatusDto } from '../../admin/coding-job/dto/update-coding-job-status.dto';
 import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-progress.dto';
 import { SaveCodingNotesDto } from '../../admin/coding-job/dto/save-coding-notes.dto';
 import { TransferCodingCasesDto } from '../../admin/coding-job/dto/transfer-coding-cases.dto';
@@ -192,7 +195,7 @@ export class WsgCodingJobController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get a coding job by ID',
@@ -318,6 +321,62 @@ export class WsgCodingJobController {
     );
   }
 
+  @Put(':id/status')
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update a coding job status from replay',
+    description: 'Updates only the replay-safe status field of a coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job status has been successfully updated.',
+    type: CodingJobDto
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data.'
+  })
+  async updateCodingJobStatus(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) updateCodingJobStatusDto: UpdateCodingJobStatusDto,
+      @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
+    return this.codingJobService.updateCodingJob(
+      id,
+      workspaceId,
+      { status: updateCodingJobStatusDto.status }
+    );
+  }
+
+  @Put(':id/comment')
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update a coding job comment from replay',
+    description: 'Updates only the replay-safe comment field of a coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job comment has been successfully updated.',
+    type: CodingJobDto
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data.'
+  })
+  async updateCodingJobComment(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) updateCodingJobCommentDto: UpdateCodingJobCommentDto,
+      @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
+    return this.codingJobService.updateCodingJob(
+      id,
+      workspaceId,
+      { comment: updateCodingJobCommentDto.comment }
+    );
+  }
+
   @Post(':id/start')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
@@ -415,7 +474,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/progress')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Save coding progress',
@@ -456,7 +515,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/notes')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Save coding notes',
@@ -536,7 +595,7 @@ export class WsgCodingJobController {
   }
 
   @Get(':id/progress')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get coding progress',
@@ -629,7 +688,7 @@ export class WsgCodingJobController {
   }
 
   @Get(':id/units')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get coding job units',

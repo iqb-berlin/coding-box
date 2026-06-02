@@ -11,11 +11,13 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { authInterceptor } from './auth.interceptor';
 import { SUPPRESS_GLOBAL_HTTP_ERROR } from './http-error-context';
 import { AppService } from '../services/app.service';
+import { AuthService } from '../services/auth.service';
 
 describe('authInterceptor', () => {
   let http: HttpClient;
   let httpMock: HttpTestingController;
   let appService: jest.Mocked<AppService>;
+  let authService: jest.Mocked<AuthService>;
   let snackBar: { open: jest.Mock };
 
   beforeEach(() => {
@@ -30,6 +32,10 @@ describe('authInterceptor', () => {
       open: jest.fn()
     };
 
+    authService = {
+      getToken: jest.fn().mockReturnValue('backend-token')
+    } as unknown as jest.Mocked<AuthService>;
+
     Object.defineProperty(window, 'localStorage', {
       value: {
         getItem: jest.fn().mockReturnValue('backend-token')
@@ -42,6 +48,7 @@ describe('authInterceptor', () => {
         provideHttpClient(withInterceptors([authInterceptor])),
         provideHttpClientTesting(),
         { provide: AppService, useValue: appService },
+        { provide: AuthService, useValue: authService },
         { provide: MatSnackBar, useValue: snackBar },
         { provide: Router, useValue: { url: '/home' } }
       ]

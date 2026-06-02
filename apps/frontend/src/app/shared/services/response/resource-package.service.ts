@@ -17,7 +17,7 @@ export class ResourcePackageService {
   private http = inject(HttpClient);
 
   get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   getResourcePackages(workspaceId: number): Observable<ResourcePackageDto[]> {

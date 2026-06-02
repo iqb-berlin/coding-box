@@ -136,7 +136,7 @@ export class VariableAnalysisService {
   private http = inject(HttpClient);
 
   get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   createAnalysisJob(

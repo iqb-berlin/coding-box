@@ -87,9 +87,9 @@ export class ReplayCodingService {
     return this.authToken ? [this.authToken] : [];
   }
 
-  async updateCodingJobStatus(workspaceId: number, jobId: number, status: 'active' | 'paused' | 'completed' | 'open') {
+  async updateCodingJobStatus(workspaceId: number, jobId: number, status: 'active' | 'paused' | 'completed') {
     return firstValueFrom(
-      this.codingJobBackendService.updateCodingJob(workspaceId, jobId, { status }, ...this.authTokenArg)
+      this.codingJobBackendService.updateCodingJobStatus(workspaceId, jobId, status, ...this.authTokenArg)
     );
   }
 
@@ -459,7 +459,7 @@ export class ReplayCodingService {
     try {
       this.codingJobComment = comment;
       await firstValueFrom(
-        this.codingJobBackendService.updateCodingJob(workspaceId, this.codingJobId, { comment }, ...this.authTokenArg)
+        this.codingJobBackendService.updateCodingJobComment(workspaceId, this.codingJobId, comment, ...this.authTokenArg)
       );
     } catch (error) {
       // Ignore errors when saving comment
@@ -486,7 +486,7 @@ export class ReplayCodingService {
     this.codingJobBackendService.updateCodingJobKeepalive(
       workspaceId,
       jobId,
-      { status: 'paused' },
+      'paused',
       ...this.authTokenArg
     );
   }

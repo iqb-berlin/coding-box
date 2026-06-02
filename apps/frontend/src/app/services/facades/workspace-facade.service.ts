@@ -101,7 +101,7 @@ export class WorkspaceFacadeService {
     return this.workspaceBackendService.getWorkspaceUsers(workspaceId);
   }
 
-  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<boolean> {
+  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<number | null> {
     return this.workspaceBackendService.addWorkspace(workspaceData);
   }
 

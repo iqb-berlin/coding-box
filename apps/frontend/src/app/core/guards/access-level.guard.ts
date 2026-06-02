@@ -1,13 +1,12 @@
 import {
   ActivatedRouteSnapshot,
-  RouterStateSnapshot,
   CanActivateFn,
-  UrlTree,
-  Router
+  Router,
+  RouterStateSnapshot,
+  UrlTree
 } from '@angular/router';
 import { inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
 import { AuthService } from '../services/auth.service';
 import { UserService } from '../../shared/services/user/user.service';
 import { AppService } from '../services/app.service';
@@ -52,23 +51,20 @@ function createWorkspaceAccessGuard(
   isAllowed: (context: WorkspaceAccessGuardContext) => boolean | Promise<boolean>,
   createDeniedRedirect: (context: WorkspaceAccessGuardContext) => UrlTree | Promise<UrlTree>
 ): CanActivateFn {
-  const isAccessAllowed = async (
+  return async (
     route: ActivatedRouteSnapshot,
-    state: RouterStateSnapshot,
-    authData: AuthGuardData
+    state: RouterStateSnapshot
   ): Promise<boolean | UrlTree> => {
     const appService = inject(AppService);
+    const authService = inject(AuthService);
     const router = inject(Router);
-    const { authenticated } = authData;
-    if (!authenticated) {
+
+    if (!authService.isLoggedIn()) {
       return createReAuthenticationUrlTree(router, state.url);
     }
 
-    const authService = inject(AuthService);
     const userService = inject(UserService);
     const codingJobBackendService = inject(CodingJobBackendService);
-
-    // Check if user is system admin (bypass access level check)
     const userRoles = authService.getRoles() || [];
 
     if (hasAdminBypass(userRoles)) {
@@ -86,20 +82,13 @@ function createWorkspaceAccessGuard(
         return true;
       }
 
-      // Get workspace ID from route params
       const workspaceId = getWorkspaceId(route);
       if (!workspaceId) {
         return createAccessDeniedUrlTree(router, state.url);
       }
 
       const currentUserId = appService.authData.userId;
-
-      // Fetch workspace users with access levels
-      const workspaceUsers = await firstValueFrom(
-        userService.getUsers(Number(workspaceId))
-      );
-
-      // Find current user in workspace users list by ID
+      const workspaceUsers = await firstValueFrom(userService.getUsers(Number(workspaceId)));
       const currentUser = workspaceUsers.find(wu => wu.id === currentUserId);
 
       if (!currentUser) {
@@ -120,12 +109,10 @@ function createWorkspaceAccessGuard(
       }
 
       return await createDeniedRedirect(context);
-    } catch (error) {
+    } catch {
       return createAuthDataFailedUrlTree(router, state.url);
     }
   };
-
-  return createAuthGuard<CanActivateFn>(isAccessAllowed);
 }
 
 async function hasAssignedCodingJobs(context: WorkspaceAccessGuardContext): Promise<boolean> {
@@ -147,11 +134,6 @@ async function hasAssignedCodingJobs(context: WorkspaceAccessGuardContext): Prom
   }
 }
 
-/**
- * Guard factory that creates a route guard checking for minimum access level
- * @param minLevel Minimum access level required (1=Coder, 2=Coding Manager, 3=Study Manager, 4=Admin)
- * @returns CanActivateFn that checks if user has sufficient access level
- */
 export function canActivateAccessLevel(minLevel: number): CanActivateFn {
   return createWorkspaceAccessGuard(
     async context => {
@@ -168,15 +150,12 @@ export function canActivateAccessLevel(minLevel: number): CanActivateFn {
         currentUser, router, state, userAccessLevel, workspaceId
       } = context;
       if (userAccessLevel === 2) {
-        // Coding Manager: redirect to coding section
         return router.createUrlTree([`/workspace-admin/${workspaceId}/coding`]);
       }
       if (getEffectiveCanCode(currentUser) || await hasAssignedCodingJobs(context)) {
-        // Coder: redirect to their jobs
         return router.createUrlTree([`/workspace-admin/${workspaceId}/coding/my-jobs`]);
       }
 
-      // No sufficient access: redirect to home
       return createAccessDeniedUrlTree(router, state.url);
     }
   );

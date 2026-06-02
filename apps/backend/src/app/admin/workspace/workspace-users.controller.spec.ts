@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { WorkspaceUsersController } from './workspace-users.controller';
 import { WorkspaceUsersService } from '../../database/services/workspace/workspace-users.service';
 import { AuthService } from '../../auth/service/auth.service';
@@ -88,5 +88,18 @@ describe('WorkspaceUsersController', () => {
         expect(authService.createToken).not.toHaveBeenCalled();
       }
     );
+  });
+
+  describe('setWorkspaceUsers', () => {
+    it('requires workspace admin access level metadata and uses workspace_id route param', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        WorkspaceUsersController.prototype.setWorkspaceUsers
+      );
+
+      expect(guards).toEqual([JwtAuthGuard, WorkspaceGuard, AccessLevelGuard]);
+      expect(Reflect.getMetadata('accessLevel', WorkspaceUsersController.prototype.setWorkspaceUsers)).toBe(3);
+      expect(Reflect.getMetadata(PATH_METADATA, WorkspaceUsersController.prototype.setWorkspaceUsers)).toBe(':workspace_id/users');
+    });
   });
 });

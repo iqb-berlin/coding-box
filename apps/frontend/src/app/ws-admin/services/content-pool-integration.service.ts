@@ -24,7 +24,7 @@ export class ContentPoolIntegrationService {
   private readonly serverUrl = inject(SERVER_URL);
 
   private get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   getWorkspaceConfig(workspaceId: number): Observable<ContentPoolSettings> {

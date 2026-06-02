@@ -40,6 +40,7 @@ import { CoderTrainingBundle } from './entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from './entities/coder-training-coder.entity';
 import { CoderTrainingDiscussionResult } from './entities/coder-training-discussion-result.entity';
 import { CodingUnitFreshness } from './entities/coding-unit-freshness.entity';
+import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
 
 @Module({
   imports: [
@@ -91,7 +92,8 @@ import { CodingUnitFreshness } from './entities/coding-unit-freshness.entity';
           CoderTrainingCoder,
           CoderTrainingDiscussionResult,
           CodingUnitFreshness,
-          MissingsProfile
+          MissingsProfile,
+          TestPersonCodingJob
         ],
         synchronize: false
       }),

@@ -889,7 +889,7 @@ describe('PersonService', () => {
       const map = new Map([['group1', true]]);
       mockQueryService.getGroupsWithBookletLogs.mockResolvedValue(map);
       const result = await service.getGroupsWithBookletLogs(1);
-      expect(mockQueryService.getGroupsWithBookletLogs).toHaveBeenCalledWith(1);
+      expect(mockQueryService.getGroupsWithBookletLogs).toHaveBeenCalledWith(1, undefined);
       expect(result).toEqual(map);
     });
 

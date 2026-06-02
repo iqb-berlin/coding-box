@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Request,
   UseGuards
 } from '@nestjs/common';
 import {
@@ -25,13 +26,14 @@ import {
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
-import { WorkspaceCoreService } from '../../database/services/workspace';
+import { WorkspaceCoreService, WorkspaceUsersService } from '../../database/services/workspace';
 import { WorkspaceId } from './workspace.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AdminGuard } from '../admin.guard';
 import { AccessRightsMatrixService } from './access-rights-matrix.service';
 import { AccessRightsMatrixDto } from '../../../../../../api-dto/workspaces/access-rights-matrix-dto';
+import { UsersService } from '../../database/services/users';
 
 @ApiTags('Admin Workspace')
 @Controller('admin/workspace')
@@ -40,7 +42,9 @@ export class WorkspaceController {
 
   constructor(
     private workspaceCoreService: WorkspaceCoreService,
-    private accessRightsMatrixService: AccessRightsMatrixService
+    private accessRightsMatrixService: AccessRightsMatrixService,
+    private usersService: UsersService,
+    private workspaceUsersService: WorkspaceUsersService
   ) {}
 
   @Get()
@@ -190,7 +194,20 @@ export class WorkspaceController {
   })
   @ApiBadRequestResponse({ description: 'Invalid workspace data' })
   @ApiTags('admin workspaces')
-  async create(@Body() createWorkspaceDto: CreateWorkspaceDto) {
-    return this.workspaceCoreService.create(createWorkspaceDto);
+  async create(@Body() createWorkspaceDto: CreateWorkspaceDto, @Request() req): Promise<number> {
+    const workspaceId = await this.workspaceCoreService.create(createWorkspaceDto);
+    const userIdentity = req.user?.id;
+
+    if (!userIdentity) {
+      throw new BadRequestException('Missing user identity');
+    }
+
+    const user = await this.usersService.findUserByIdentity(userIdentity);
+    if (!user) {
+      throw new BadRequestException('Creating user not found');
+    }
+
+    await this.workspaceUsersService.setWorkspaceUsers(workspaceId, [user.id]);
+    return workspaceId;
   }
 }

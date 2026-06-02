@@ -74,7 +74,7 @@ import { ValidationTask } from '../database/entities/validation-task.entity';
     }),
     forwardRef(() => CodingModule),
     forwardRef(() => WorkspaceModule),
-    CacheModule
+    forwardRef(() => CacheModule)
   ],
   providers: [
     JobQueueService,
