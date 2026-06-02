@@ -1049,6 +1049,82 @@ describe('CoderTrainingService', () => {
     });
   });
 
+  describe('getTrainingCodingComparison', () => {
+    const createComparisonUnit = (
+      responseId: number,
+      overrides: Partial<CodingJobUnit> = {}
+    ) => ({
+      response_id: responseId,
+      unit_name: 'Unit A',
+      unit_alias: 'Unit A',
+      variable_id: 'VAR',
+      booklet_name: 'Booklet',
+      person_login: `person-${responseId}`,
+      person_code: `code-${responseId}`,
+      person_group: 'group',
+      code: null,
+      score: null,
+      notes: null,
+      coding_issue_option: null,
+      ...overrides
+    } as CodingJobUnit);
+
+    it('should apply missing profile scores to joke answers and technical problems in comparison rows', async () => {
+      missingsProfilesService.getMissingsProfileDetails.mockResolvedValue({
+        parseMissings: () => [
+          {
+            id: 'mci', label: 'technical problem', code: -41, score: 3
+          },
+          {
+            id: 'mir', label: 'invalid joke answer', code: -31, score: 7
+          },
+          {
+            id: 'mbi_mbo', label: 'missing by omission', code: -99, score: 1
+          }
+        ]
+      });
+      missingsProfilesService.getNegativeMissingCodesForProfileOrDefault
+        .mockResolvedValueOnce(new Set([-97, -98, -99]))
+        .mockResolvedValueOnce(new Set([-41, -31, -99]));
+      mockRepository.find.mockResolvedValue([{
+        id: 5,
+        workspace_id: 1,
+        label: 'Training A',
+        codingJobs: [{
+          id: 21,
+          missings_profile_id: 77,
+          codingJobCoders: [{ user: { username: 'Coder A' } }],
+          codingJobUnits: [
+            createComparisonUnit(101, { coding_issue_option: -3 }),
+            createComparisonUnit(102, { coding_issue_option: -4 }),
+            createComparisonUnit(103, { code: -99 })
+          ]
+        }]
+      }]);
+
+      const result = await service.getTrainingCodingComparison(1, [5]);
+
+      const coderResultsByResponseId = new Map(
+        result.map(row => [row.responseId, row.coders[0]])
+      );
+      expect(coderResultsByResponseId.get(101)).toEqual(expect.objectContaining({
+        code: '-31',
+        score: 7,
+        codingIssueOption: -3
+      }));
+      expect(coderResultsByResponseId.get(102)).toEqual(expect.objectContaining({
+        code: '-41',
+        score: 3,
+        codingIssueOption: -4
+      }));
+      expect(coderResultsByResponseId.get(103)).toEqual(expect.objectContaining({
+        code: '-99',
+        score: 1,
+        codingIssueOption: null
+      }));
+    });
+  });
+
   describe('generateCoderTrainingPackages', () => {
     const makeResponseEntity = (responseId: number) => ({
       id: responseId,
