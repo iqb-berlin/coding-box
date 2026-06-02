@@ -13,6 +13,7 @@ import {
 import { CodingJob } from './coding-job.entity';
 import Workspace from './workspace.entity';
 import { MissingsProfile } from './missings-profile.entity';
+import type { JobDefinitionRefreshPreviewDto } from '../../../../../../api-dto/coding/job-refresh.dto';
 
 export type JobDefinitionStatus = 'draft' | 'pending_review' | 'approved';
 export type CaseOrderingMode = 'continuous' | 'alternating';
@@ -86,6 +87,7 @@ export interface JobDefinitionDistributionSnapshot {
   tasksPerCoder: Record<string, number>;
   coderWeights: Record<string, number>;
   jobs: JobDefinitionDistributionSnapshotJob[];
+  refreshPreview?: JobDefinitionRefreshPreviewDto;
 }
 
 @Entity({ name: 'job_definitions' })

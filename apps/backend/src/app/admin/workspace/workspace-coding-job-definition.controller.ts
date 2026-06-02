@@ -156,6 +156,10 @@ const DISTRIBUTION_SNAPSHOT_SCHEMA = {
             caseCount: { type: 'number' }
           }
         }
+      },
+      refreshPreview: {
+        type: 'object',
+        nullable: true
       }
     }
   }

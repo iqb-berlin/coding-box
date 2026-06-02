@@ -1668,6 +1668,32 @@ describe('JobDefinitionService', () => {
         removedCases: 0,
         addedCodingTasks: 1,
         removedCodingTasks: 0,
+        itemDeltas: [
+          {
+            itemKey: 'Unit 1::Var 1',
+            itemLabel: 'Unit 1::Var 1',
+            existingCases: 0,
+            plannedCases: 1,
+            retainedCases: 0,
+            addedCases: 1,
+            removedCases: 0,
+            existingCodingTasks: 0,
+            plannedCodingTasks: 1,
+            retainedCodingTasks: 0,
+            addedCodingTasks: 1,
+            removedCodingTasks: 0,
+            codingTasksByCoderId: {
+              1: {
+                coderId: 1,
+                existingCodingTasks: 0,
+                plannedCodingTasks: 1,
+                retainedCodingTasks: 0,
+                addedCodingTasks: 1,
+                removedCodingTasks: 0
+              }
+            }
+          }
+        ],
         canApply: true
       }
     };
@@ -1697,6 +1723,15 @@ describe('JobDefinitionService', () => {
           source: 'refresh',
           distributionSeed: 'seed-16',
           selectedCoders: [{ coderId: 1, capacityPercent: 100 }],
+          refreshPreview: expect.objectContaining({
+            addedCases: 1,
+            itemDeltas: [
+              expect.objectContaining({
+                itemKey: 'Unit 1::Var 1',
+                addedCases: 1
+              })
+            ]
+          }),
           jobs: [expect.objectContaining({ jobId: 200, coderId: 1, caseCount: 1 })]
         })
       ]
