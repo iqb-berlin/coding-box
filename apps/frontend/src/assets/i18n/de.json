@@ -2147,6 +2147,7 @@
       "jobs-count-unavailable": "Der Status erzeugter Kodier-Jobs konnte nicht geladen werden.",
       "jobs-count-unavailable-short": "Status unklar",
       "distribution-summary": "Verteilungsübersicht anzeigen",
+      "distribution-export": "Verteilung als CSV exportieren",
       "refresh": "Kodierjobs neu verteilen",
       "refresh-tooltip": "Prüfen, welche bestehenden Kodierjobs ersetzt und anhand der aktuellen Definition neu erzeugt werden können.",
       "more": "Weitere Aktionen",
@@ -2244,6 +2245,8 @@
         "refresh-preview-failed": "Neuverteilung konnte nicht vorbereitet werden: {{error}}",
         "refresh-applied": "Kodierjobs neu verteilt: {{count}} Kodierjobs erstellt.",
         "refresh-apply-failed": "Neuverteilung fehlgeschlagen: {{error}}",
+        "distribution-export-missing": "Für diese Job-Definition liegt keine gespeicherte Verteilungsübersicht vor.",
+        "distribution-export-failed": "Verteilung konnte nicht exportiert werden: {{error}}",
         "coders-loading-failed": "Fehler beim Laden der Kodierer: {{error}}",
         "no-workspace": "No workspace selected"
       }

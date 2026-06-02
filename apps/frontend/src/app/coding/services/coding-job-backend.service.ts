@@ -779,6 +779,17 @@ export class CodingJobBackendService {
     return this.http.get<JobDefinitionDistributionPreviewResponse>(url, { headers: this.authHeader });
   }
 
+  exportJobDefinitionDistributionCsv(
+    workspaceId: number,
+    jobDefinitionId: number
+  ): Observable<Blob> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/distribution/csv`;
+    return this.http.get(url, {
+      headers: this.authHeader,
+      responseType: 'blob'
+    });
+  }
+
   previewJobDefinitionRefresh(
     workspaceId: number,
     jobDefinitionId: number

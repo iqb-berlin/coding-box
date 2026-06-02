@@ -54,6 +54,7 @@ describe('CodingJobDefinitionsComponent', () => {
               selectedVariableBundles: [],
               selectedCoders: []
             })),
+            exportJobDefinitionDistributionCsv: jest.fn().mockReturnValue(of(new Blob(['csv'], { type: 'text/csv' }))),
             previewJobDefinitionRefresh: jest.fn().mockReturnValue(of({
               jobDefinitionId: 42,
               existingJobsCount: 1,
@@ -339,6 +340,81 @@ describe('CodingJobDefinitionsComponent', () => {
           createdJobsCount: 1
         })
       })
+    );
+  });
+
+  it('exports the latest distribution snapshot as CSV', () => {
+    const blob = new Blob(['csv'], { type: 'text/csv' });
+    const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
+      exportJobDefinitionDistributionCsv: jest.Mock;
+    };
+    const createObjectUrl = jest.fn().mockReturnValue('blob:distribution');
+    const revokeObjectUrl = jest.fn();
+    const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation();
+
+    Object.defineProperty(window.URL, 'createObjectURL', {
+      value: createObjectUrl,
+      configurable: true
+    });
+    Object.defineProperty(window.URL, 'revokeObjectURL', {
+      value: revokeObjectUrl,
+      configurable: true
+    });
+    codingJobBackendService.exportJobDefinitionDistributionCsv.mockReturnValue(of(blob));
+
+    component.exportDistributionCsv({
+      id: 42,
+      status: 'approved',
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      createdJobsCount: 2,
+      distributionSnapshots: [{
+        version: 1,
+        source: 'initial_creation',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        distributionSeed: 'seed',
+        selectedVariables: [],
+        selectedVariableBundles: [],
+        selectedCoders: [{ coderId: 1, capacityPercent: 100 }],
+        settings: {},
+        distributionByCoderId: { 'Unit 1::Var 1': { 1: 2 } },
+        doubleCodingInfo: {},
+        aggregationInfo: {},
+        matchingFlags: [],
+        pairDistribution: {},
+        tasksPerCoder: {},
+        coderWeights: {},
+        jobs: []
+      }]
+    });
+
+    expect(codingJobBackendService.exportJobDefinitionDistributionCsv).toHaveBeenCalledWith(1, 42);
+    expect(createObjectUrl).toHaveBeenCalledWith(blob);
+    expect(click).toHaveBeenCalled();
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:distribution');
+
+    click.mockRestore();
+  });
+
+  it('shows a clear message instead of exporting old definitions without snapshots', () => {
+    const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
+      exportJobDefinitionDistributionCsv: jest.Mock;
+    };
+    const snackBar = TestBed.inject(MatSnackBar) as unknown as { open: jest.Mock };
+
+    component.exportDistributionCsv({
+      id: 43,
+      status: 'approved',
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      createdJobsCount: 1
+    });
+
+    expect(codingJobBackendService.exportJobDefinitionDistributionCsv).not.toHaveBeenCalled();
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'coding-job-definitions.messages.snackbar.distribution-export-missing',
+      'common.close',
+      { duration: 5000 }
     );
   });
 
