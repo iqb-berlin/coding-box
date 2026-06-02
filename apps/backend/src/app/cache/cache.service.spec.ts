@@ -11,6 +11,7 @@ describe('CacheService', () => {
       del: jest.fn(),
       exists: jest.fn(),
       incr: jest.fn(),
+      eval: jest.fn(),
       scan: jest.fn()
     };
     service = new CacheService(redis as never);
@@ -71,6 +72,24 @@ describe('CacheService', () => {
     await expect(service.exists('a')).resolves.toBe(true);
     await expect(service.exists('b')).resolves.toBe(false);
     await expect(service.exists('c')).resolves.toBe(false);
+  });
+
+  it('gets and deletes values atomically with a redis script', async () => {
+    redis.eval
+      .mockResolvedValueOnce(JSON.stringify({ ok: true }))
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce('not-json')
+      .mockRejectedValueOnce(new Error('redis down'));
+
+    await expect(service.getAndDelete('json')).resolves.toEqual({ ok: true });
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("GET", KEYS[1])'),
+      1,
+      'json'
+    );
+    await expect(service.getAndDelete('missing')).resolves.toBeNull();
+    await expect(service.getAndDelete('broken')).resolves.toBeNull();
+    await expect(service.getAndDelete('error')).resolves.toBeNull();
   });
 
   it('stores and pages validation results', async () => {

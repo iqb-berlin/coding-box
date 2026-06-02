@@ -9,7 +9,9 @@ import { OidcAuthService } from './service/oidc-auth.service';
 import { AuthController } from './auth.controller';
 import { DatabaseModule } from '../database/database.module';
 import { UserModule } from '../user/user.module';
+import { CacheModule } from '../cache/cache.module';
 import { JwtStrategy } from './jwt.strategy';
+import { WorkspaceTokenStrategy } from './workspace-token.strategy';
 
 @Module({
   imports: [
@@ -17,6 +19,7 @@ import { JwtStrategy } from './jwt.strategy';
     DatabaseModule,
     HttpModule,
     UserModule,
+    CacheModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -25,7 +28,7 @@ import { JwtStrategy } from './jwt.strategy';
     })
   ],
   controllers: [AuthController],
-  providers: [AuthService, OAuth2ClientCredentialsService, OidcAuthService, JwtStrategy],
+  providers: [AuthService, OAuth2ClientCredentialsService, OidcAuthService, JwtStrategy, WorkspaceTokenStrategy],
   exports: [AuthService, OAuth2ClientCredentialsService, OidcAuthService, UserModule]
 })
 export class AuthModule { }

@@ -8,6 +8,11 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../../database/services/users';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
+import {
+  WORKSPACE_TOKEN_AUDIENCE,
+  WORKSPACE_TOKEN_ISSUER,
+  WORKSPACE_TOKEN_USE
+} from '../workspace-token.constants';
 
 @Injectable()
 export class AuthService {
@@ -33,26 +38,6 @@ export class AuthService {
     });
     this.logger.log(`OIDC Provider User with id '${userId}' stored in database.`);
     return userId;
-  }
-
-  async loginOidcProviderUser(user: CreateUserDto) {
-    const {
-      username, lastName, firstName, email, identity, issuer, isAdmin
-    } = user;
-    const userId = await this.usersService.createOidcProviderUser({
-      identity: identity,
-      username: username,
-      email: email,
-      lastName: lastName,
-      firstName: firstName,
-      issuer: issuer,
-      isAdmin: isAdmin
-    });
-    this.logger.log(`OIDC Provider User with id '${userId}' is logging in.`);
-    const payload = {
-      userId: userId, username: username, sub: user
-    };
-    return this.jwtService.sign(payload);
   }
 
   async createToken(
@@ -92,9 +77,18 @@ export class AuthService {
 
   private signWorkspaceToken(user: UserFullDto, workspaceId: number, duration: number): string {
     const payload = {
-      userId: user.id, username: user.username, sub: user, workspace: workspaceId
+      token_use: WORKSPACE_TOKEN_USE,
+      userId: user.id,
+      username: user.username,
+      sub: String(user.id),
+      workspace: workspaceId
     };
-    const token = this.jwtService.sign(payload, { expiresIn: `${duration}d` });
+    const token = this.jwtService.sign(payload, {
+      expiresIn: `${duration}d`,
+      issuer: WORKSPACE_TOKEN_ISSUER,
+      audience: WORKSPACE_TOKEN_AUDIENCE,
+      algorithm: 'HS256'
+    });
     return JSON.stringify(token);
   }
 

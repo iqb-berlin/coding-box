@@ -54,16 +54,18 @@ describe('AuthService', () => {
 
       expect(jwtService.sign).toHaveBeenCalledWith(
         {
+          token_use: 'workspace',
           userId: 5,
           username: 'study-manager',
-          sub: {
-            id: 5,
-            username: 'study-manager',
-            isAdmin: false
-          },
+          sub: '5',
           workspace: 7
         },
-        { expiresIn: '30d' }
+        {
+          expiresIn: '30d',
+          issuer: 'coding-box',
+          audience: 'coding-box-workspace-token',
+          algorithm: 'HS256'
+        }
       );
       expect(usersService.getUserIsAdmin).not.toHaveBeenCalled();
       expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
@@ -126,16 +128,18 @@ describe('AuthService', () => {
       expect(usersService.findUserById).toHaveBeenCalledWith(12);
       expect(jwtService.sign).toHaveBeenCalledWith(
         {
+          token_use: 'workspace',
           userId: 12,
           username: 'coder',
-          sub: {
-            id: 12,
-            username: 'coder',
-            isAdmin: false
-          },
+          sub: '12',
           workspace: 7
         },
-        { expiresIn: '1d' }
+        {
+          expiresIn: '1d',
+          issuer: 'coding-box',
+          audience: 'coding-box-workspace-token',
+          algorithm: 'HS256'
+        }
       );
     });
 

@@ -7,7 +7,7 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import { OAuth2ClientCredentialsService, ClientCredentialsRequest, ClientCredentialsTokenResponse } from './service/oauth2-client-credentials.service';
-import { OidcAuthService, OidcUserInfo } from './service/oidc-auth.service';
+import { OidcAuthService, OidcTokenResponse, OidcUserInfo } from './service/oidc-auth.service';
 import { AuthService } from './service/auth.service';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 
@@ -34,7 +34,51 @@ export class AuthController {
   }
 
   private getDefaultLoginErrorRedirect(): string {
+    const frontendOrigin = this.getDefaultFrontendOrigin();
+    if (frontendOrigin) {
+      return `${frontendOrigin}/?error=authentication_failed`;
+    }
+
     return '/login?error=authentication_failed';
+  }
+
+  private getDefaultFrontendOrigin(): string | null {
+    if (process.env.FRONTEND_URL) {
+      try {
+        return new URL(process.env.FRONTEND_URL).origin;
+      } catch {
+        return null;
+      }
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+      return null;
+    }
+
+    try {
+      const oAuth2Url = new URL(this.getOAuth2Endpoint());
+      const frontendPort = process.env.HTTP_PORT || '4200';
+
+      return `${oAuth2Url.protocol}//${oAuth2Url.hostname}:${frontendPort}`;
+    } catch {
+      return null;
+    }
+  }
+
+  private getAllowedRedirectOrigins(oAuth2Url: URL): Set<string> {
+    const allowedOrigins = new Set<string>([oAuth2Url.origin]);
+    const frontendOrigin = this.getDefaultFrontendOrigin();
+    if (frontendOrigin) {
+      allowedOrigins.add(frontendOrigin);
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      const frontendPort = process.env.HTTP_PORT || '4200';
+      allowedOrigins.add(`http://localhost:${frontendPort}`);
+      allowedOrigins.add(`http://127.0.0.1:${frontendPort}`);
+    }
+
+    return allowedOrigins;
   }
 
   private resolveAllowedRedirectUrl(redirectUri?: string): URL | null {
@@ -51,9 +95,9 @@ export class AuthController {
       const oAuth2Url = new URL(this.getOAuth2Endpoint());
       const redirectUrl = new URL(normalizedRedirectUri, oAuth2Url.origin);
       const isHttpUrl = redirectUrl.protocol === 'http:' || redirectUrl.protocol === 'https:';
-      const isSameOrigin = redirectUrl.origin === oAuth2Url.origin;
+      const isAllowedOrigin = this.getAllowedRedirectOrigins(oAuth2Url).has(redirectUrl.origin);
 
-      return isHttpUrl && isSameOrigin ? redirectUrl : null;
+      return isHttpUrl && isAllowedOrigin ? redirectUrl : null;
     } catch {
       return null;
     }
@@ -296,27 +340,22 @@ export class AuthController {
       // Store user in database but use OpenID Connect Provider access token directly
       await this.authService.storeOidcProviderUser(userData);
 
-      // Return OpenID Connect Provider tokens directly instead of creating internal ones
       const redirectUrl = this.resolveAllowedRedirectUrl(finalRedirectUri);
-      if (redirectUrl) {
-        redirectUrl.searchParams.set('token', tokenResponse.access_token);
-        if (tokenResponse.id_token) {
-          redirectUrl.searchParams.set('id_token', tokenResponse.id_token);
-        }
-        if (tokenResponse.refresh_token) {
-          redirectUrl.searchParams.set('refresh_token', tokenResponse.refresh_token);
-        }
-        res.redirect(redirectUrl.toString());
-      } else {
-        res.json({
-          access_token: tokenResponse.access_token,
-          token_type: tokenResponse.token_type,
-          expires_in: tokenResponse.expires_in,
-          id_token: tokenResponse.id_token,
-          refresh_token: tokenResponse.refresh_token,
-          user: userData
-        });
+      if (!redirectUrl) {
+        this.logger.warn('Refusing to return OIDC tokens for a disallowed redirect URI');
+        res.redirect(this.getDefaultLoginErrorRedirect());
+        return;
       }
+
+      const exchangeCode = await this.oidcAuthService.storeTokenExchange(tokenResponse);
+      if (!exchangeCode) {
+        this.logger.error('Failed to store token exchange data');
+        res.redirect(this.buildErrorRedirectUrl(finalRedirectUri));
+        return;
+      }
+
+      redirectUrl.searchParams.set('auth_code', exchangeCode);
+      res.redirect(redirectUrl.toString());
     } catch (error) {
       this.logger.error('OpenID Connect Provider callback failed:', error);
       // Decode redirect URI from state for error handling too
@@ -332,6 +371,41 @@ export class AuthController {
 
       res.redirect(this.buildErrorRedirectUrl(errorRedirectUri));
     }
+  }
+
+  @Post('exchange')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Exchange a short-lived login code',
+    description: 'Exchanges the one-time login code from the callback redirect for OIDC tokens'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        code: {
+          type: 'string',
+          description: 'Short-lived one-time login code from the frontend redirect'
+        }
+      },
+      required: ['code']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Successfully exchanged the one-time login code'
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Invalid or expired login code'
+  })
+  async exchangeLoginCode(
+    @Body() exchangeData: { code: string }
+  ): Promise<OidcTokenResponse> {
+    const tokenResponse = await this.oidcAuthService.consumeTokenExchange(exchangeData?.code);
+    if (!tokenResponse) {
+      throw new UnauthorizedException('Invalid or expired login code');
+    }
+
+    return tokenResponse;
   }
 
   @Post('logout')
