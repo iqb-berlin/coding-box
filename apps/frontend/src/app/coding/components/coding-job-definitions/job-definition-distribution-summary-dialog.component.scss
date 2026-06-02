@@ -38,8 +38,30 @@
 
 .snapshot-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 12px;
+}
+
+.snapshot-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.snapshot-switcher button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.snapshot-switcher button.selected {
+  border-color: #1976d2;
+  color: #1976d2;
+}
+
+.snapshot-switcher span {
+  color: rgba(0, 0, 0, 0.58);
+  font-size: 0.78rem;
 }
 
 .summary-stat {
@@ -60,6 +82,10 @@
 .summary-stat strong {
   color: #1976d2;
   font-size: 1.2rem;
+}
+
+.summary-stat.positive strong {
+  color: #2e7d32;
 }
 
 .distribution-matrix {
@@ -106,6 +132,22 @@
 
 .total-cell {
   font-weight: 600;
+}
+
+.value-cell {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.added-value,
+.added-total-cell {
+  color: #2e7d32;
+  font-weight: 700;
+}
+
+.added-value {
+  font-size: 0.78rem;
+  line-height: 1;
 }
 
 @media (max-width: 720px) {

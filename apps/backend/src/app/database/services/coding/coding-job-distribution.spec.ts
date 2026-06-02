@@ -318,11 +318,21 @@ describe('CodingJobService distribution from job definitions', () => {
         getJobDefinitionExistingTaskRows: (
           workspaceId: number,
           jobDefinitionId: number
-        ) => Promise<Array<{ responseId: number; taskCount: number }>>;
+        ) => Promise<Array<{
+          responseId: number;
+          itemKey: string;
+          coderId: number;
+          taskCount: number;
+        }>>;
       },
       'getJobDefinitionExistingTaskRows'
     ).mockResolvedValue(
-      [1, 2, 3, 4, 5].map(responseId => ({ responseId, taskCount: 1 }))
+      [1, 2, 3, 4, 5].map(responseId => ({
+        responseId,
+        itemKey: 'Unit 1::Var 1',
+        coderId: 1,
+        taskCount: 1
+      }))
     );
     jest.spyOn(
       service as unknown as {
@@ -361,6 +371,13 @@ describe('CodingJobService distribution from job definitions', () => {
       removedCases: 0,
       addedCodingTasks: 3,
       removedCodingTasks: 0,
+      itemDeltas: [
+        expect.objectContaining({
+          itemKey: 'Unit 1::Var 1',
+          addedCases: 3,
+          addedCodingTasks: 3
+        })
+      ],
       canApply: true
     });
     expect(
