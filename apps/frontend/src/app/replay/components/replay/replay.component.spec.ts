@@ -532,6 +532,56 @@ describe('ReplayComponent', () => {
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', true);
   });
 
+  it('should reuse coding job units loaded from query params during replay navigation', async () => {
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47',
+      onlyOpen: 'true'
+    };
+    codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'unit-123',
+      unitAlias: 'Unit 123',
+      variableId: 'VAR1',
+      variableAnchor: 'VAR1',
+      variablePage: '0',
+      bookletName: 'Booklet 1',
+      personLogin: 'valid',
+      personCode: 'test',
+      personGroup: '',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledTimes(1);
+
+    codingJobBackendServiceMock.getCodingJobUnits.mockClear();
+    component.subscribeRouter();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
+  });
+
   it('should normalize player ID correctly', () => {
     const normalizedId = ReplayComponent.getNormalizedPlayerId('player-1.2.3-beta.js');
     expect(normalizedId).toBe('PLAYER-1.2.3');

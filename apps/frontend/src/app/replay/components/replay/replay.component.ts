@@ -95,6 +95,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   readonly testPersonInput = input<string>();
   readonly unitIdInput = input<string>();
   protected unitsData: UnitsReplay | null = null;
+  private loadedCodingJobUnitsKey: string | null = null;
+  private codingProgressLoadedForJobId: number | null = null;
+  private activeStatusUpdatedForJobId: number | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   @ViewChild('watermark')
   set watermarkRef(ref: ElementRef<HTMLElement> | undefined) {
@@ -200,28 +203,34 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             const jobId = Number(queryParams.codingJobId);
             const wsId = Number(queryParams.workspaceId);
             const onlyOpen = queryParams.onlyOpen === 'true';
+            const unitsCacheKey = `${wsId}:${jobId}:${onlyOpen}`;
             try {
-              const apiUnits = await firstValueFrom(
-                this.codingJobBackendService.getCodingJobUnits(wsId, jobId, this.authToken, onlyOpen)
-              );
-              if (apiUnits && apiUnits.length > 0) {
-                deserializedUnits = {
-                  id: jobId,
-                  name: `Coding-Job: ${jobId}`,
-                  units: apiUnits.map((item, idx) => ({
-                    id: idx,
-                    name: item.unitName,
-                    alias: item.unitAlias,
-                    bookletId: 0,
-                    testPerson: item.personGroup ?
-                      `${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}` :
-                      `${item.personLogin}@${item.personCode}@${item.bookletName}`,
-                    variableId: item.variableId,
-                    variableAnchor: item.variableAnchor,
-                    variablePage: item.variablePage
-                  })),
-                  currentUnitIndex: 0
-                };
+              if (this.unitsData?.id === jobId && this.loadedCodingJobUnitsKey === unitsCacheKey) {
+                deserializedUnits = this.unitsData;
+              } else {
+                const apiUnits = await firstValueFrom(
+                  this.codingJobBackendService.getCodingJobUnits(wsId, jobId, this.authToken, onlyOpen)
+                );
+                if (apiUnits && apiUnits.length > 0) {
+                  deserializedUnits = {
+                    id: jobId,
+                    name: `Coding-Job: ${jobId}`,
+                    units: apiUnits.map((item, idx) => ({
+                      id: idx,
+                      name: item.unitName,
+                      alias: item.unitAlias,
+                      bookletId: 0,
+                      testPerson: item.personGroup ?
+                        `${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}` :
+                        `${item.personLogin}@${item.personCode}@${item.bookletName}`,
+                      variableId: item.variableId,
+                      variableAnchor: item.variableAnchor,
+                      variablePage: item.variablePage
+                    })),
+                    currentUnitIndex: 0
+                  };
+                  this.loadedCodingJobUnitsKey = unitsCacheKey;
+                }
               }
             } catch (e) {
               // ignore fetch errors — unitsData stays null
@@ -263,11 +272,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               this.codingService.codingJobId = deserializedUnits.id || null;
               if (this.codingService.codingJobId && this.workspaceId) {
                 const jobId = this.codingService.codingJobId;
-                await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
+                if (this.codingProgressLoadedForJobId !== jobId) {
+                  await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
+                  this.codingProgressLoadedForJobId = jobId;
+                }
                 if (!this.isReviewMode &&
                   !this.codingService.isCompletedJobReview &&
-                  !this.codingService.isCodingJobFinalized) {
+                  !this.codingService.isCodingJobFinalized &&
+                  this.activeStatusUpdatedForJobId !== jobId) {
                   this.codingService.updateCodingJobStatus(this.workspaceId, jobId, 'active');
+                  this.activeStatusUpdatedForJobId = jobId;
                 }
                 if (!this.codingService.isCompletedJobReview) {
                   this.codingService.checkCodingJobCompletion(this.unitsData);

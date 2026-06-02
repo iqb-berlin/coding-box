@@ -65,15 +65,21 @@ export class ResponseCacheSchedulerService {
 
       for (const person of personsWithUnits) {
         for (const unit of person.units) {
-          const connector = this.createConnector(person, unit.booklet.bookletinfo.name);
-          const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unit.alias)}${this.responseCacheVersionSuffix}`;
+          const connectors = this.createConnectors(person, unit.booklet.bookletinfo.name);
+          const unitIds = this.getReplayUnitIdentifiers(unit);
 
-          cacheCheckItems.push({
-            workspaceId,
-            connector,
-            unitId: unit.alias,
-            cacheKey
-          });
+          for (const connector of connectors) {
+            for (const unitId of unitIds) {
+              const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unitId)}${this.responseCacheVersionSuffix}`;
+
+              cacheCheckItems.push({
+                workspaceId,
+                connector,
+                unitId,
+                cacheKey
+              });
+            }
+          }
         }
       }
 
@@ -106,7 +112,8 @@ export class ResponseCacheSchedulerService {
           batch.map(item => this.cacheResponseWithRetry(
             item.workspaceId,
             item.connector,
-            item.unitId
+            item.unitId,
+            true
           ))
         );
       }
@@ -132,25 +139,40 @@ export class ResponseCacheSchedulerService {
   /**
    * Create a connector string for a person and booklet
    */
-  private createConnector(person: Persons, bookletId: string): string {
-    return `${person.login}@${person.code}@${bookletId}`;
+  private createConnectors(person: Persons, bookletId: string): string[] {
+    const connectors = [
+      person.group ? `${person.login}@${person.code}@${person.group}@${bookletId}` : null,
+      `${person.login}@${person.code}@${bookletId}`
+    ].filter((connector): connector is string => !!connector);
+
+    return [...new Set(connectors)];
+  }
+
+  private getReplayUnitIdentifiers(unit: Unit): string[] {
+    return [...new Set([unit.name, unit.alias].filter((unitId): unitId is string => !!unitId))];
   }
 
   /**
    * Cache a response for a specific workspace, test person, and unit
    */
-  private async cacheResponse(workspaceId: number, connector: string, unitId: string): Promise<void> {
+  private async cacheResponse(
+    workspaceId: number,
+    connector: string,
+    unitId: string,
+    skipExistingCheck = false
+  ): Promise<void> {
     const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(
       workspaceId,
       connector,
       unitId
     )}${this.responseCacheVersionSuffix}`;
 
-    // Check if already in cache
-    const exists = await this.cacheService.exists(cacheKey);
-    if (exists) {
-      this.logger.debug(`Response already in cache: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
-      return;
+    if (!skipExistingCheck) {
+      const exists = await this.cacheService.exists(cacheKey);
+      if (exists) {
+        this.logger.debug(`Response already in cache: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
+        return;
+      }
     }
 
     // Fetch and cache the response
@@ -171,15 +193,16 @@ export class ResponseCacheSchedulerService {
     workspaceId: number,
     connector: string,
     unitId: string,
+    skipExistingCheck = false,
     retries = 2
   ): Promise<void> {
     try {
-      await this.cacheResponse(workspaceId, connector, unitId);
+      await this.cacheResponse(workspaceId, connector, unitId, skipExistingCheck);
     } catch (error) {
       if (retries > 0) {
         this.logger.warn(`Retrying cache operation for workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}. Retries left: ${retries}`);
         await new Promise(resolve => { setTimeout(resolve, 1000); }); // Wait 1 second before retry
-        await this.cacheResponseWithRetry(workspaceId, connector, unitId, retries - 1);
+        await this.cacheResponseWithRetry(workspaceId, connector, unitId, skipExistingCheck, retries - 1);
       } else {
         this.logger.error(`Failed to cache response after retries: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
         // Don't rethrow to avoid failing the entire batch
