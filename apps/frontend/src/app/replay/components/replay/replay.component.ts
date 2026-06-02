@@ -20,7 +20,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { logger } from 'nx/src/utils/logger';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { FileService } from '../../../shared/services/file/file.service';
-import { ReplayBackendService } from '../../services/replay-backend.service';
+import { ReplayBackendService, ReplayClientTimings } from '../../services/replay-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
@@ -91,6 +91,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   readonly testPersonInput = input<string>();
   readonly unitIdInput = input<string>();
   protected unitsData: UnitsReplay | null = null;
+  private loadedCodingJobUnitsKey: string | null = null;
+  private codingProgressLoadedForJobKey: string | null = null;
+  private activeStatusUpdatedForJobKey: string | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   @ViewChild('watermark')
   set watermarkRef(ref: ElementRef<HTMLElement> | undefined) {
@@ -102,6 +105,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private routeStartTime: number = 0;
   private payloadRequestStartTime: number = 0;
   private payloadResponseTime: number = 0;
+  private playerReadyTime: number = 0;
   private successStoredForCurrentReplay: boolean = false;
   protected reloadKey: number = 0;
   workspaceId: number = 0;
@@ -187,25 +191,33 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           } else if (queryParams.codingJobId && queryParams.workspaceId) {
             const jobId = Number(queryParams.codingJobId);
             const wsId = Number(queryParams.workspaceId);
+            const unitsCacheKey = `${wsId}:${jobId}`;
             try {
-              const apiUnits = await firstValueFrom(
-                this.codingJobBackendService.getCodingJobUnits(wsId, jobId)
-              );
-              if (apiUnits && apiUnits.length > 0) {
-                deserializedUnits = {
-                  id: jobId,
-                  name: `Coding-Job: ${jobId}`,
-                  units: apiUnits.map((item, idx) => ({
-                    id: idx,
-                    name: item.unitName,
-                    alias: item.unitAlias,
-                    bookletId: 0,
-                    testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
-                    variableId: item.variableId,
-                    variableAnchor: item.variableAnchor
-                  })),
-                  currentUnitIndex: 0
-                };
+              if (this.unitsData?.id === jobId && this.loadedCodingJobUnitsKey === unitsCacheKey) {
+                deserializedUnits = this.unitsData;
+              } else {
+                const apiUnits = await firstValueFrom(
+                  this.codingJobBackendService.getCodingJobUnits(wsId, jobId)
+                );
+                if (apiUnits && apiUnits.length > 0) {
+                  deserializedUnits = {
+                    id: jobId,
+                    name: `Coding-Job: ${jobId}`,
+                    units: apiUnits.map((item, idx) => ({
+                      id: idx,
+                      name: item.unitName,
+                      alias: item.unitAlias,
+                      bookletId: 0,
+                      testPerson: item.personGroup ?
+                        `${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}` :
+                        `${item.personLogin}@${item.personCode}@${item.bookletName}`,
+                      variableId: item.variableId,
+                      variableAnchor: item.variableAnchor
+                    })),
+                    currentUnitIndex: 0
+                  };
+                  this.loadedCodingJobUnitsKey = unitsCacheKey;
+                }
               }
             } catch (e) {
               // ignore fetch errors — unitsData stays null
@@ -238,10 +250,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             }
             if (this.codingService.codingJobId && this.workspaceId) {
               const jobId = this.codingService.codingJobId;
-              if (!this.isReviewMode) {
+              const jobKey = `${this.workspaceId}:${jobId}`;
+              if (!this.isReviewMode && this.activeStatusUpdatedForJobKey !== jobKey) {
                 this.codingService.updateCodingJobStatus(this.workspaceId, jobId, 'active');
+                this.activeStatusUpdatedForJobKey = jobKey;
               }
-              await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
+              if (this.codingProgressLoadedForJobKey !== jobKey) {
+                await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
+                this.codingProgressLoadedForJobKey = jobKey;
+              }
               this.codingService.checkCodingJobCompletion(this.unitsData);
             }
           }
@@ -507,6 +524,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.storeReplayStatistics(false, duration, errorMessage);
   }
 
+  onPlayerReady(): void {
+    if (!this.playerReadyTime) {
+      this.playerReadyTime = performance.now();
+    }
+  }
+
   onResponseVisible(): void {
     if (this.successStoredForCurrentReplay) {
       return;
@@ -522,11 +545,34 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       `payload=${payloadDuration}ms payloadToVisible=${payloadToVisible}ms`
     );
     const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
-    this.storeReplayStatistics(true, duration);
+    this.storeReplayStatistics(true, duration, undefined, now);
     this.successStoredForCurrentReplay = true;
   }
 
-  private storeReplayStatistics(success: boolean, duration: number, errorMessage?: string): void {
+  private getElapsedMs(startTime: number, endTime: number): number {
+    return Math.max(0, Math.round(endTime - startTime));
+  }
+
+  private getClientTimings(visibleTime: number): ReplayClientTimings {
+    return {
+      payloadToVisibleMs: this.payloadResponseTime ?
+        this.getElapsedMs(this.payloadResponseTime, visibleTime) :
+        null,
+      payloadToPlayerReadyMs: (this.payloadResponseTime && this.playerReadyTime) ?
+        this.getElapsedMs(this.payloadResponseTime, this.playerReadyTime) :
+        null,
+      playerReadyToVisibleMs: this.playerReadyTime ?
+        this.getElapsedMs(this.playerReadyTime, visibleTime) :
+        null
+    };
+  }
+
+  private storeReplayStatistics(
+    success: boolean,
+    duration: number,
+    errorMessage?: string,
+    visibleTime?: number
+  ): void {
     const workspaceId = this.getWorkspaceIdFromToken();
     if (!workspaceId) return;
 
@@ -545,7 +591,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       durationMilliseconds: Math.max(0, duration),
       replayUrl,
       success,
-      errorMessage
+      errorMessage,
+      clientTimings: success && visibleTime ? this.getClientTimings(visibleTime) : undefined
     }).subscribe({
       next: () => {
         logger.log(
@@ -669,6 +716,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.page = undefined;
     this.responses = undefined;
     this.codingService.resetCodingData();
+    this.codingProgressLoadedForJobKey = null;
+    this.playerReadyTime = 0;
   }
 
   ngOnDestroy(): void {

@@ -1,6 +1,6 @@
 {
   "name": "coding-box",
-  "version": "1.14.2",
+  "version": "1.14.3",
   "author": "IQB - Institut zur Qualitätsentwicklung im Bildungswesen",
   "license": "MIT",
   "scripts": {
@@ -53,7 +53,7 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.9",
     "@nestjs/schedule": "^6.1.0",
-    "@nestjs/swagger": "^11.2.3",
+    "@nestjs/swagger": "11.2.6",
     "@nestjs/testing": "^11.1.9",
     "@nestjs/typeorm": "^11.0.0",
     "@ngx-formly/core": "^7.0.0",
@@ -151,7 +151,7 @@
     "serialize-javascript": "7.0.5",
     "picomatch": "4.0.4",
     "vite": "7.3.2",
-    "@nestjs/swagger@^11.2.3": {
+    "@nestjs/swagger@11.2.6": {
       "path-to-regexp": "8.4.2"
     }
   },

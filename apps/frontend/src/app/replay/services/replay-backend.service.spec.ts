@@ -41,7 +41,15 @@ describe('ReplayBackendService', () => {
 
   describe('storeReplayStatistics', () => {
     it('should post statistics', () => {
-      const data = { unitId: 'u1', durationMilliseconds: 1000 };
+      const data = {
+        unitId: 'u1',
+        durationMilliseconds: 1000,
+        clientTimings: {
+          payloadToVisibleMs: 50,
+          payloadToPlayerReadyMs: 20,
+          playerReadyToVisibleMs: 30
+        }
+      };
       service.storeReplayStatistics(1, data).subscribe();
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-statistics`);
