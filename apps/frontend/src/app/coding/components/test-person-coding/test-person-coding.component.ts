@@ -228,6 +228,7 @@ export class TestPersonCodingComponent implements OnInit {
     this.isLoading = true;
     this.currentPage = page;
     this.pageSize = limit;
+    const authToken = localStorage.getItem('auth_token') || '';
     const serverUrl = window.location.origin;
 
     this.testPersonCodingService

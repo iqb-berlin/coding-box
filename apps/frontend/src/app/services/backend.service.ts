@@ -126,7 +126,7 @@ export class BackendService {
   private authenticationService = inject(AuthenticationService);
   private variableAnalysisService = inject(VariableAnalysisService);
 
-  authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+  authHeader = { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
 
   getAuthData(): Observable<import('../../../../../api-dto/auth-data-dto').AuthDataDto> {
     return this.http.get<import('../../../../../api-dto/auth-data-dto').AuthDataDto>(
@@ -1160,7 +1160,7 @@ export class BackendService {
     return this.http.get(url, {
       responseType: 'blob',
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('id_token')}`
+        Authorization: `Bearer ${localStorage.getItem('auth_token')}`
       }
     });
   }

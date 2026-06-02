@@ -9,8 +9,8 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
-import { LocationStrategy, Location } from '@angular/common';
-import { Subscription, filter } from 'rxjs';
+import { LocationStrategy } from '@angular/common';
+import { Subscription, filter, firstValueFrom } from 'rxjs';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
@@ -38,15 +38,13 @@ import { AuthSessionActivityService } from './core/services/auth-session-activit
     ErrorMessageDisplayComponent
   ],
   templateUrl: './app.component.html',
-  styleUrl: './app.component.scss',
-  providers: [AuthService]
+  styleUrl: './app.component.scss'
 })
 export class AppComponent implements OnInit, OnDestroy {
   appService = inject(AppService);
   authService = inject(AuthService);
 
   url = inject(LocationStrategy);
-  location = inject(Location);
   private router = inject(Router);
 
   title = 'IQB-Kodierbox';
@@ -71,11 +69,14 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
-    await this.handleAuthCallback();
+    const postLoginReturnUrl = await this.handleAuthCallback();
 
     if (this.authService.isLoggedIn()) {
       this.setAuthState();
       this.appService.refreshAuthData();
+      if (postLoginReturnUrl) {
+        this.router.navigateByUrl(postLoginReturnUrl).catch(() => undefined);
+      }
     } else {
       this.appService.setAuthBootstrapStatus('ready');
     }
@@ -112,35 +113,61 @@ export class AppComponent implements OnInit, OnDestroy {
     this.appService.loggedUser = this.authService.getLoggedUser();
   }
 
-  private async handleAuthCallback(): Promise<void> {
+  private async handleAuthCallback(): Promise<string | undefined> {
     try {
       const urlParams = new URLSearchParams(window.location.search);
-      const token = urlParams.get('token');
-      const idToken = urlParams.get('id_token');
-      const refreshToken = urlParams.get('refresh_token');
+      const authCode = urlParams.get('auth_code');
 
-      if (token) {
-        this.authService.setToken(token);
+      const hasLegacyTokenParams = urlParams.has('token') || urlParams.has('id_token') || urlParams.has('refresh_token');
 
-        if (idToken) {
-          this.authService.setIdToken(idToken);
+      if (authCode) {
+        const tokenResponse = await firstValueFrom(this.authService.exchangeLoginCode(authCode));
+        this.authService.setToken(tokenResponse.access_token);
+
+        if (tokenResponse.id_token) {
+          this.authService.setIdToken(tokenResponse.id_token);
         }
 
-        if (refreshToken) {
-          this.authService.setRefreshToken(refreshToken);
+        if (tokenResponse.refresh_token) {
+          this.authService.setRefreshToken(tokenResponse.refresh_token);
         }
 
-        urlParams.delete('token');
-        urlParams.delete('id_token');
-        urlParams.delete('refresh_token');
-
-        const query = urlParams.toString();
-        const newUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
-        this.location.replaceState(newUrl);
+        const postLoginReturnUrl = this.getPostLoginReturnUrl();
+        this.removeAuthCallbackParams(postLoginReturnUrl);
+        return postLoginReturnUrl;
+      }
+      if (hasLegacyTokenParams) {
+        this.removeAuthCallbackParams();
       }
     } catch {
       this.authService.login();
     }
+    return undefined;
+  }
+
+  private getPostLoginReturnUrl(): string | undefined {
+    const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+    const queryStart = hash.indexOf('?');
+    if (queryStart < 0) {
+      return undefined;
+    }
+
+    const hashParams = new URLSearchParams(hash.slice(queryStart + 1));
+    return this.appService.normalizeInternalRoute(hashParams.get('returnUrl') || undefined);
+  }
+
+  private removeAuthCallbackParams(postLoginReturnUrl?: string): void {
+    const url = new URL(window.location.href);
+    ['auth_code', 'token', 'id_token', 'refresh_token'].forEach(param => url.searchParams.delete(param));
+    if (postLoginReturnUrl) {
+      url.hash = postLoginReturnUrl;
+    }
+
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${url.pathname}${url.search}${url.hash}`
+    );
   }
 
   isAdminUser(): boolean {

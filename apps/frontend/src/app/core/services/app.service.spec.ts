@@ -1,7 +1,6 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { of } from 'rxjs';
 import { AppService } from './app.service';
 import { LogoService } from './logo.service';
@@ -12,7 +11,7 @@ import {
   BACKEND_CONNECTIVITY_ERROR_MESSAGE
 } from '../interceptors/app-http-error.class';
 import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../interceptors/http-error-context';
-import { DecodedToken } from './auth.service';
+import { DecodedToken } from './auth.models';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 
 describe('AppService', () => {

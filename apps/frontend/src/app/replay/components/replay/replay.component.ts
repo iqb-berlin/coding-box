@@ -937,7 +937,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getWorkspaceIdFromToken(): number | null {
-    const candidateTokens = [this.authToken]
+    const candidateTokens = [this.authToken, localStorage.getItem('auth_token')]
       .filter((token): token is string => !!token);
 
     for (const token of candidateTokens) {

@@ -1,28 +1,9 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
 import { jwtDecode } from 'jwt-decode';
 import { AppService } from './app.service';
-
-export interface UserProfile {
-  id?: string;
-  username?: string;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-}
-
-export interface DecodedToken {
-  sub?: string;
-  email?: string;
-  preferred_username?: string;
-  given_name?: string;
-  family_name?: string;
-  realm_access?: {
-    roles: string[];
-  };
-  exp?: number;
-}
+import { AuthExchangeResponse, DecodedToken, UserProfile } from './auth.models';
 
 @Injectable({
   providedIn: 'root'
@@ -64,7 +45,11 @@ export class AuthService {
   }
 
   isLoggedIn(): boolean {
-    return this.isAuthenticatedSubject.value;
+    const hasValidToken = this.hasValidToken();
+    if (hasValidToken !== this.isAuthenticatedSubject.value) {
+      this.isAuthenticatedSubject.next(hasValidToken);
+    }
+    return hasValidToken;
   }
 
   loadUserProfile(): Promise<UserProfile> {
@@ -84,6 +69,10 @@ export class AuthService {
   login(returnUrl?: string): void {
     const redirectUri = this.appService.createLoginRedirectUri(returnUrl || this.appService.reAuthenticationReturnUrl);
     window.location.href = `${this.appService.serverUrl}auth/login?redirect_uri=${encodeURIComponent(redirectUri)}`;
+  }
+
+  exchangeLoginCode(code: string): Observable<AuthExchangeResponse> {
+    return this.http.post<AuthExchangeResponse>(`${this.appService.serverUrl}auth/exchange`, { code });
   }
 
   logout(): void {
