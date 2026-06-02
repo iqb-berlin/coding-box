@@ -53,7 +53,7 @@ export function getEnabledJobQueueProcessors(
     TypeOrmModule.forFeature([ResponseEntity, ValidationTask]),
     forwardRef(() => CodingModule),
     forwardRef(() => WorkspaceModule),
-    CacheClientModule
+    forwardRef(() => CacheModule)
   ],
   providers: [
     ...getEnabledJobQueueProcessors()
