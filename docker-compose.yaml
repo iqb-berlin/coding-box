@@ -73,6 +73,7 @@ services:
     environment:
       APP_ROLE: api
       API_HOST: backend
+      HTTP_PORT: ${HTTP_PORT:-4200}
       JWT_SECRET: ${JWT_SECRET}
       GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
       <<: [ *env-redis, *env-postgres, *env-oidc ]
