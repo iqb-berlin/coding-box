@@ -7,14 +7,17 @@ import {
   Delete,
   UseGuards,
   Body,
-  ValidationPipe
+  ValidationPipe,
+  Res
 } from '@nestjs/common';
 import {
   ApiOkResponse,
   ApiParam,
   ApiTags,
-  ApiBody
+  ApiBody,
+  ApiProduces
 } from '@nestjs/swagger';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -291,6 +294,39 @@ export class WorkspaceCodingJobDefinitionController {
       @Param('id') id: number
   ): Promise<JobDefinition> {
     return this.jobDefinitionService.getJobDefinition(id, workspace_id);
+  }
+
+  @Get(':workspace_id/coding/job-definitions/:id/distribution/csv')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiProduces('text/csv')
+  @ApiOkResponse({
+    description: 'Job definition distribution exported as CSV.',
+    content: {
+      'text/csv': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportJobDefinitionDistributionAsCsv(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number,
+      @Res() res: Response
+  ): Promise<void> {
+    const csvContent = await this.jobDefinitionService.exportDistributionSnapshotAsCsv(id, workspace_id);
+    const exportDate = new Date().toISOString().slice(0, 10);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="job-definition-distribution-${workspace_id}-${id}-${exportDate}.csv"`
+    );
+    res.send(`\uFEFF${csvContent}`);
   }
 
   @Put(':workspace_id/coding/job-definitions/:id')

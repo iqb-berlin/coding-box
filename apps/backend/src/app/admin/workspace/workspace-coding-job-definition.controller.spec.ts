@@ -130,4 +130,25 @@ describe('WorkspaceCodingJobDefinitionController', () => {
 
     expect(jobDefinitionService.previewCodingJobFromDefinition).toHaveBeenCalledWith(42, 5);
   });
+
+  it('exports job definition distribution snapshots as downloadable CSV', async () => {
+    const jobDefinitionService = {
+      exportDistributionSnapshotAsCsv: jest.fn().mockResolvedValue('header\nrow')
+    };
+    const response = {
+      setHeader: jest.fn(),
+      send: jest.fn()
+    };
+    const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
+
+    await controller.exportJobDefinitionDistributionAsCsv(5, 42, response as never);
+
+    expect(jobDefinitionService.exportDistributionSnapshotAsCsv).toHaveBeenCalledWith(42, 5);
+    expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
+    expect(response.setHeader).toHaveBeenCalledWith(
+      'Content-Disposition',
+      expect.stringMatching(/^attachment; filename="job-definition-distribution-5-42-\d{4}-\d{2}-\d{2}\.csv"$/)
+    );
+    expect(response.send).toHaveBeenCalledWith('\uFEFFheader\nrow');
+  });
 });
