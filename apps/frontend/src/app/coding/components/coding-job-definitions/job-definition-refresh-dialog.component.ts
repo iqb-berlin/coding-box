@@ -9,7 +9,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { JobDefinitionRefreshPreviewDto } from '../../../../../../../api-dto/coding/job-refresh.dto';
+import {
+  JobDefinitionRefreshItemDeltaDto,
+  JobDefinitionRefreshPreviewDto
+} from '../../../../../../../api-dto/coding/job-refresh.dto';
 
 export interface JobDefinitionRefreshDialogData {
   definitionId: number;
@@ -114,6 +117,11 @@ export class JobDefinitionRefreshDialogComponent {
         tone: this.preview.removedCodingTasks > 0 ? 'negative' : 'default'
       }
     ];
+  }
+
+  getAddedItemDeltas(): JobDefinitionRefreshItemDeltaDto[] {
+    return (this.preview.itemDeltas || [])
+      .filter(delta => delta.addedCases > 0 || delta.addedCodingTasks > 0);
   }
 
   close(): void {

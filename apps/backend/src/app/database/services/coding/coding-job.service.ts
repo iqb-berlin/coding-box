@@ -39,6 +39,8 @@ import {
 } from './coding-progress-key.util';
 import {
   CodingJobFreshnessImpactDto,
+  JobDefinitionRefreshCoderTaskDeltaDto,
+  JobDefinitionRefreshItemDeltaDto,
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
@@ -202,6 +204,13 @@ type DistributionPlan = {
   pairDistribution: Record<string, number>;
   tasksPerCoder: Record<string, number>;
   coderWeights: Record<string, number>;
+};
+
+type JobDefinitionExistingTaskRow = {
+  responseId: number;
+  itemKey: string;
+  coderId: number;
+  taskCount: number;
 };
 
 type DistributionCreatedJob = {
@@ -846,23 +855,12 @@ export class CodingJobService {
   private buildJobDefinitionRefreshPreview(
     jobDefinitionId: number,
     plan: DistributionPlan,
-    existingRows: Array<{ responseId: number; taskCount: number }>,
+    existingRows: JobDefinitionExistingTaskRow[],
     jobsRow: { existingJobsCount: number; staleJobsCount: number },
     hasCodingWork: boolean
   ): JobDefinitionRefreshPreviewDto {
     const existingResponseIds = new Set(existingRows.map(row => row.responseId));
     const plannedResponseIds = new Set(plan.plannedCases.map(plannedCase => plannedCase.response.id));
-    const existingTaskCountByResponseId = new Map(existingRows.map(row => [row.responseId, row.taskCount]));
-    const plannedTaskCountByResponseId = new Map<number, number>();
-
-    plan.plannedCases.forEach(plannedCase => {
-      plannedTaskCountByResponseId.set(
-        plannedCase.response.id,
-        (plannedTaskCountByResponseId.get(plannedCase.response.id) || 0) +
-        plannedCase.assignedCoderIds.length
-      );
-    });
-
     const retainedCases = [...plannedResponseIds]
       .filter(responseId => existingResponseIds.has(responseId))
       .length;
@@ -872,22 +870,15 @@ export class CodingJobService {
     const removedCases = [...existingResponseIds]
       .filter(responseId => !plannedResponseIds.has(responseId))
       .length;
-    let addedCodingTasks = 0;
-    let removedCodingTasks = 0;
-    const responseIdsForTaskDelta = new Set([
-      ...existingTaskCountByResponseId.keys(),
-      ...plannedTaskCountByResponseId.keys()
-    ]);
-
-    responseIdsForTaskDelta.forEach(responseId => {
-      const taskDelta = (plannedTaskCountByResponseId.get(responseId) || 0) -
-        (existingTaskCountByResponseId.get(responseId) || 0);
-      if (taskDelta > 0) {
-        addedCodingTasks += taskDelta;
-      } else {
-        removedCodingTasks += Math.abs(taskDelta);
-      }
-    });
+    const itemDeltas = this.buildJobDefinitionRefreshItemDeltas(plan, existingRows);
+    const codingTasksByCoderId = this.buildJobDefinitionRefreshCoderDeltas(plan, existingRows);
+    const taskDeltas = Object.values(codingTasksByCoderId).reduce(
+      (totals, delta) => ({
+        addedCodingTasks: totals.addedCodingTasks + delta.addedCodingTasks,
+        removedCodingTasks: totals.removedCodingTasks + delta.removedCodingTasks
+      }),
+      { addedCodingTasks: 0, removedCodingTasks: 0 }
+    );
     const existingJobsCount = Number(jobsRow.existingJobsCount || 0);
     const canApply = existingJobsCount === 0 || !hasCodingWork;
 
@@ -900,13 +891,172 @@ export class CodingJobService {
       retainedCases,
       addedCases,
       removedCases,
-      addedCodingTasks,
-      removedCodingTasks,
+      addedCodingTasks: taskDeltas.addedCodingTasks,
+      removedCodingTasks: taskDeltas.removedCodingTasks,
+      itemDeltas,
+      codingTasksByCoderId,
       canApply,
       ...(canApply ? {} : {
         blockingReason: 'Bestehende Kodierjobs enthalten bereits Kodierarbeit. Bitte pruefen Sie die betroffenen Jobs, bevor die Definition neu verteilt wird.'
       })
     };
+  }
+
+  private createEmptyRefreshCoderTaskDelta(coderId: number): JobDefinitionRefreshCoderTaskDeltaDto {
+    return {
+      coderId,
+      existingCodingTasks: 0,
+      plannedCodingTasks: 0,
+      retainedCodingTasks: 0,
+      addedCodingTasks: 0,
+      removedCodingTasks: 0
+    };
+  }
+
+  private incrementRefreshCoderTaskDelta(
+    deltas: Map<number, JobDefinitionRefreshCoderTaskDeltaDto>,
+    coderId: number,
+    field: 'existingCodingTasks' | 'plannedCodingTasks' | 'retainedCodingTasks' | 'addedCodingTasks' | 'removedCodingTasks',
+    count: number
+  ): void {
+    const delta = deltas.get(coderId) || this.createEmptyRefreshCoderTaskDelta(coderId);
+    delta[field] += count;
+    deltas.set(coderId, delta);
+  }
+
+  private getRefreshTaskKey(itemKey: string, coderId: number, responseId: number): string {
+    return `${itemKey}\u0000${coderId}\u0000${responseId}`;
+  }
+
+  private buildExistingTaskCountByItemCoderAndResponse(
+    existingRows: JobDefinitionExistingTaskRow[]
+  ): Map<string, number> {
+    const existing = new Map<string, number>();
+    existingRows.forEach(row => {
+      const key = this.getRefreshTaskKey(row.itemKey, row.coderId, row.responseId);
+      existing.set(key, (existing.get(key) || 0) + row.taskCount);
+    });
+    return existing;
+  }
+
+  private buildPlannedTaskCountByItemCoderAndResponse(
+    plannedCases: DistributionPlanCase[]
+  ): Map<string, number> {
+    const planned = new Map<string, number>();
+    plannedCases.forEach(plannedCase => {
+      plannedCase.assignedCoderIds.forEach(coderId => {
+        const key = this.getRefreshTaskKey(
+          plannedCase.item.itemKey,
+          coderId,
+          plannedCase.response.id
+        );
+        planned.set(key, (planned.get(key) || 0) + 1);
+      });
+    });
+    return planned;
+  }
+
+  private buildJobDefinitionRefreshCoderDeltas(
+    plan: DistributionPlan,
+    existingRows: JobDefinitionExistingTaskRow[],
+    itemKey?: string
+  ): Record<string, JobDefinitionRefreshCoderTaskDeltaDto> {
+    const existing = this.buildExistingTaskCountByItemCoderAndResponse(
+      itemKey ? existingRows.filter(row => row.itemKey === itemKey) : existingRows
+    );
+    const planned = this.buildPlannedTaskCountByItemCoderAndResponse(
+      itemKey ?
+        plan.plannedCases.filter(plannedCase => plannedCase.item.itemKey === itemKey) :
+        plan.plannedCases
+    );
+    const deltas = new Map<number, JobDefinitionRefreshCoderTaskDeltaDto>();
+    const keys = new Set([...existing.keys(), ...planned.keys()]);
+
+    keys.forEach(key => {
+      const [, coderIdPart] = key.split('\u0000');
+      const coderId = Number(coderIdPart);
+      if (!Number.isFinite(coderId)) {
+        return;
+      }
+      const existingCount = existing.get(key) || 0;
+      const plannedCount = planned.get(key) || 0;
+      const retainedCount = Math.min(existingCount, plannedCount);
+
+      this.incrementRefreshCoderTaskDelta(deltas, coderId, 'existingCodingTasks', existingCount);
+      this.incrementRefreshCoderTaskDelta(deltas, coderId, 'plannedCodingTasks', plannedCount);
+      this.incrementRefreshCoderTaskDelta(deltas, coderId, 'retainedCodingTasks', retainedCount);
+      if (plannedCount > existingCount) {
+        this.incrementRefreshCoderTaskDelta(deltas, coderId, 'addedCodingTasks', plannedCount - existingCount);
+      } else if (existingCount > plannedCount) {
+        this.incrementRefreshCoderTaskDelta(deltas, coderId, 'removedCodingTasks', existingCount - plannedCount);
+      }
+    });
+
+    return Object.fromEntries(
+      [...deltas.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([coderId, delta]) => [String(coderId), delta])
+    );
+  }
+
+  private buildJobDefinitionRefreshItemDeltas(
+    plan: DistributionPlan,
+    existingRows: JobDefinitionExistingTaskRow[]
+  ): JobDefinitionRefreshItemDeltaDto[] {
+    const itemLabels = new Map<string, string>();
+
+    plan.plannedCases.forEach(plannedCase => {
+      itemLabels.set(plannedCase.item.itemKey, plannedCase.item.itemLabel);
+    });
+    existingRows.forEach(row => {
+      if (!itemLabels.has(row.itemKey)) {
+        itemLabels.set(row.itemKey, row.itemKey.startsWith('bundle:') ? row.itemKey : row.itemKey.replace('::', ' -> '));
+      }
+    });
+
+    return [...itemLabels.keys()]
+      .sort((a, b) => a.localeCompare(b))
+      .map(itemKey => {
+        const existingResponseIds = new Set(
+          existingRows
+            .filter(row => row.itemKey === itemKey)
+            .map(row => row.responseId)
+        );
+        const plannedResponseIds = new Set(
+          plan.plannedCases
+            .filter(plannedCase => plannedCase.item.itemKey === itemKey)
+            .map(plannedCase => plannedCase.response.id)
+        );
+        const codingTasksByCoderId = this.buildJobDefinitionRefreshCoderDeltas(plan, existingRows, itemKey);
+        const taskTotals = Object.values(codingTasksByCoderId).reduce(
+          (totals, delta) => ({
+            existingCodingTasks: totals.existingCodingTasks + delta.existingCodingTasks,
+            plannedCodingTasks: totals.plannedCodingTasks + delta.plannedCodingTasks,
+            retainedCodingTasks: totals.retainedCodingTasks + delta.retainedCodingTasks,
+            addedCodingTasks: totals.addedCodingTasks + delta.addedCodingTasks,
+            removedCodingTasks: totals.removedCodingTasks + delta.removedCodingTasks
+          }),
+          {
+            existingCodingTasks: 0,
+            plannedCodingTasks: 0,
+            retainedCodingTasks: 0,
+            addedCodingTasks: 0,
+            removedCodingTasks: 0
+          }
+        );
+
+        return {
+          itemKey,
+          itemLabel: itemLabels.get(itemKey) || itemKey,
+          existingCases: existingResponseIds.size,
+          plannedCases: plannedResponseIds.size,
+          retainedCases: [...plannedResponseIds].filter(responseId => existingResponseIds.has(responseId)).length,
+          addedCases: [...plannedResponseIds].filter(responseId => !existingResponseIds.has(responseId)).length,
+          removedCases: [...existingResponseIds].filter(responseId => !plannedResponseIds.has(responseId)).length,
+          ...taskTotals,
+          codingTasksByCoderId
+        };
+      });
   }
 
   async deleteCodingJobsByDefinition(
@@ -939,24 +1089,44 @@ export class CodingJobService {
     workspaceId: number,
     jobDefinitionId: number,
     manager?: EntityManager
-  ): Promise<Array<{ responseId: number; taskCount: number }>> {
+  ): Promise<JobDefinitionExistingTaskRow[]> {
     const repository = manager ? manager.getRepository(CodingJobUnit) : this.codingJobUnitRepository;
     const query = repository
       .createQueryBuilder('cju')
       .select('cju.response_id', 'responseId')
+      .addSelect(
+        "CASE WHEN cju.variable_bundle_id IS NOT NULL THEN CONCAT('bundle:', cju.variable_bundle_id) ELSE CONCAT(cju.unit_name, '::', cju.variable_id) END",
+        'itemKey'
+      )
+      .addSelect('coding_job_coder.user_id', 'coderId')
       .addSelect('COUNT(cju.id)', 'taskCount')
       .innerJoin('cju.coding_job', 'coding_job')
+      .innerJoin('coding_job.codingJobCoders', 'coding_job_coder')
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.job_definition_id = :jobDefinitionId', { jobDefinitionId })
       .andWhere('coding_job.training_id IS NULL')
-      .groupBy('cju.response_id');
+      .groupBy('cju.response_id')
+      .addGroupBy('itemKey')
+      .addGroupBy('coding_job_coder.user_id');
 
     await this.applyCodingJobUnitExclusions(query, workspaceId, 'jobDefinitionExistingTasks');
-    const rows = await query.getRawMany<{ responseId: string | number; taskCount: string | number }>();
+    const rows = await query.getRawMany<{
+      responseId: string | number;
+      itemKey: string;
+      coderId: string | number;
+      taskCount: string | number;
+    }>();
     return rows.map(row => ({
       responseId: Number(row.responseId),
+      itemKey: row.itemKey,
+      coderId: Number(row.coderId),
       taskCount: Number(row.taskCount)
-    })).filter(row => Number.isFinite(row.responseId) && Number.isFinite(row.taskCount));
+    })).filter(row => (
+      Number.isFinite(row.responseId) &&
+      Number.isFinite(row.coderId) &&
+      Number.isFinite(row.taskCount) &&
+      isSafeKey(row.itemKey)
+    ));
   }
 
   private async getJobDefinitionJobCounts(

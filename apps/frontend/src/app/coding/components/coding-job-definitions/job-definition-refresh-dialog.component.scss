@@ -143,6 +143,35 @@ h3 {
   color: #ef6c00;
 }
 
+.added-items-list {
+  border: 1px solid rgba(46, 125, 50, 0.18);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.added-item {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.added-item + .added-item {
+  border-top: 1px solid rgba(46, 125, 50, 0.12);
+}
+
+.added-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.added-item strong {
+  color: #2e7d32;
+  white-space: nowrap;
+}
+
 mat-dialog-actions {
   gap: 8px;
   padding: 16px 24px 20px;
