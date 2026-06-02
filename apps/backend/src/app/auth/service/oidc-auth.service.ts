@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { createHash, randomBytes } from 'crypto';
+import { CacheService } from '../../cache/cache.service';
 
 export interface OidcConfiguration {
   issuer: string;
@@ -40,12 +41,13 @@ export class OidcAuthService {
   private readonly oidcConfiguration: OidcConfiguration;
   private readonly oAuth2ClientId: string;
   private readonly oAuth2ClientSecret?: string;
-  private readonly pkceTtlMs = 5 * 60 * 1000;
-  private readonly pkceStore = new Map<string, { codeVerifier: string; expiresAt: number }>();
+  private readonly pkceTtlSeconds = 5 * 60;
+  private readonly tokenExchangeTtlSeconds = 60;
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly cacheService: CacheService
   ) {
     this.oidcConfiguration = {
       issuer: this.configService.get<string>('OIDC_ISSUER') ?? '',
@@ -244,24 +246,47 @@ export class OidcAuthService {
   }
 
   async storePkceVerifier(state: string, codeVerifier: string): Promise<boolean> {
-    const cacheKey = this.pkceCacheKey(state);
-    const expiresAt = Date.now() + this.pkceTtlMs;
-    this.pkceStore.set(cacheKey, { codeVerifier, expiresAt });
-    return true;
+    return this.cacheService.set(
+      this.pkceCacheKey(state),
+      { codeVerifier },
+      this.pkceTtlSeconds
+    );
   }
 
   async consumePkceVerifier(state: string): Promise<string | null> {
-    const cacheKey = this.pkceCacheKey(state);
-    const cached = this.pkceStore.get(cacheKey);
-    this.pkceStore.delete(cacheKey);
-    if (!cached || cached.expiresAt < Date.now()) {
+    const cached = await this.cacheService.getAndDelete<{ codeVerifier: string }>(
+      this.pkceCacheKey(state)
+    );
+    return cached?.codeVerifier ?? null;
+  }
+
+  async storeTokenExchange(tokenResponse: OidcTokenResponse): Promise<string | null> {
+    const code = randomBytes(32).toString('base64url');
+    const stored = await this.cacheService.set(
+      this.tokenExchangeCacheKey(code),
+      tokenResponse,
+      this.tokenExchangeTtlSeconds
+    );
+
+    return stored ? code : null;
+  }
+
+  async consumeTokenExchange(code: string): Promise<OidcTokenResponse | null> {
+    if (!code || typeof code !== 'string') {
       return null;
     }
-    return cached.codeVerifier;
+
+    const cacheKey = this.tokenExchangeCacheKey(code);
+    return this.cacheService.getAndDelete<OidcTokenResponse>(cacheKey);
   }
 
   private pkceCacheKey(state: string): string {
     const digest = createHash('sha256').update(state).digest('hex');
     return `oidc:pkce:${digest}`;
+  }
+
+  private tokenExchangeCacheKey(code: string): string {
+    const digest = createHash('sha256').update(code).digest('hex');
+    return `oidc:token-exchange:${digest}`;
   }
 }

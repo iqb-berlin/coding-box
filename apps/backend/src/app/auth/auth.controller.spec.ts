@@ -15,14 +15,20 @@ describe('AuthController', () => {
   let status: jest.Mock;
   let originalOAuth2RedirectUrl: string | undefined;
   let originalNodeEnv: string | undefined;
+  let originalHttpPort: string | undefined;
+  let originalFrontendUrl: string | undefined;
 
   const encodedState = (redirectUri: string): string => `state:${encodeURIComponent(redirectUri)}`;
 
   beforeEach(() => {
     originalOAuth2RedirectUrl = process.env.OAUTH2_REDIRECT_URL;
     originalNodeEnv = process.env.NODE_ENV;
+    originalHttpPort = process.env.HTTP_PORT;
+    originalFrontendUrl = process.env.FRONTEND_URL;
     process.env.OAUTH2_REDIRECT_URL = '//app.example.test/api/auth/callback';
     process.env.NODE_ENV = 'production';
+    delete process.env.HTTP_PORT;
+    delete process.env.FRONTEND_URL;
 
     oidcAuthService = {
       generatePkcePair: jest.fn().mockReturnValue({
@@ -32,6 +38,14 @@ describe('AuthController', () => {
       storePkceVerifier: jest.fn().mockResolvedValue(true),
       getAuthorizationUrl: jest.fn().mockReturnValue('https://oidc.example.test/auth'),
       consumePkceVerifier: jest.fn().mockResolvedValue('code-verifier'),
+      storeTokenExchange: jest.fn().mockResolvedValue('exchange-code'),
+      consumeTokenExchange: jest.fn().mockResolvedValue({
+        access_token: 'access-token',
+        token_type: 'Bearer',
+        expires_in: 3600,
+        id_token: 'id-token',
+        refresh_token: 'refresh-token'
+      }),
       exchangeCodeForToken: jest.fn().mockResolvedValue({
         access_token: 'access-token',
         token_type: 'Bearer',
@@ -77,6 +91,18 @@ describe('AuthController', () => {
     } else {
       process.env.NODE_ENV = originalNodeEnv;
     }
+
+    if (originalHttpPort === undefined) {
+      delete process.env.HTTP_PORT;
+    } else {
+      process.env.HTTP_PORT = originalHttpPort;
+    }
+
+    if (originalFrontendUrl === undefined) {
+      delete process.env.FRONTEND_URL;
+    } else {
+      process.env.FRONTEND_URL = originalFrontendUrl;
+    }
   });
 
   it('falls back to the login page when an error redirect points to another origin', async () => {
@@ -95,20 +121,58 @@ describe('AuthController', () => {
     await controller.callback('auth-code', encodedState('/workspace/1'), response);
 
     expect(redirect).toHaveBeenCalledWith(
-      'https://app.example.test/workspace/1?token=access-token&id_token=id-token&refresh_token=refresh-token'
+      'https://app.example.test/workspace/1?auth_code=exchange-code'
     );
+    expect(oidcAuthService.storeTokenExchange).toHaveBeenCalledWith(expect.objectContaining({
+      access_token: 'access-token',
+      refresh_token: 'refresh-token'
+    }));
     expect(json).not.toHaveBeenCalled();
   });
 
-  it('returns JSON for successful callbacks with a disallowed redirect URL', async () => {
+  it('allows the local frontend origin as a login redirect in development', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.OAUTH2_REDIRECT_URL = '//localhost:3333/api/auth/callback';
+    process.env.HTTP_PORT = '4200';
+    const frontendRedirectUri = 'http://localhost:4200/#/workspace-admin/1/test-results';
+
+    await controller.login(response, frontendRedirectUri);
+
+    expect(oidcAuthService.storePkceVerifier).toHaveBeenCalledWith(
+      expect.stringContaining(encodeURIComponent(frontendRedirectUri)),
+      'code-verifier'
+    );
+
+    await controller.callback('auth-code', encodedState(frontendRedirectUri), response);
+
+    expect(redirect).toHaveBeenLastCalledWith(
+      'http://localhost:4200/?auth_code=exchange-code#/workspace-admin/1/test-results'
+    );
+  });
+
+  it('does not return tokens for successful callbacks with a disallowed redirect URL', async () => {
     await controller.callback('auth-code', encodedState('https://evil.example.test/phish'), response);
 
-    expect(redirect).not.toHaveBeenCalled();
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({
-      access_token: 'access-token',
-      token_type: 'Bearer',
-      expires_in: 3600
-    }));
+    expect(redirect).toHaveBeenCalledWith('/login?error=authentication_failed');
+    expect(json).not.toHaveBeenCalled();
+    expect(oidcAuthService.storeTokenExchange).not.toHaveBeenCalled();
+  });
+
+  it('exchanges a one-time login code for stored tokens', async () => {
+    await expect(controller.exchangeLoginCode({ code: 'exchange-code' })).resolves.toEqual(
+      expect.objectContaining({
+        access_token: 'access-token',
+        refresh_token: 'refresh-token'
+      })
+    );
+
+    expect(oidcAuthService.consumeTokenExchange).toHaveBeenCalledWith('exchange-code');
+  });
+
+  it('rejects expired one-time login codes', async () => {
+    oidcAuthService.consumeTokenExchange?.mockResolvedValue(null);
+
+    await expect(controller.exchangeLoginCode({ code: 'expired-code' })).rejects.toThrow('Invalid or expired login code');
   });
 
   it('does not store disallowed login redirect URLs in the state parameter', async () => {

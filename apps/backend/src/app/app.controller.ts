@@ -12,7 +12,6 @@ import {
 } from '@nestjs/common';
 
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { Request } from 'express';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 import { UsersService } from './database/services/users';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -66,14 +65,6 @@ export class AppController {
       isAdmin: user.isAdmin,
       workspaces: workspaces
     };
-  }
-
-  @Post('oidc-login')
-  @ApiTags('auth')
-  @ApiOkResponse({ description: 'OpenID Connect login successful.' })
-  async oidcLogin(@Body() user: CreateUserDto) {
-    const token = await this.authService.loginOidcProviderUser(user);
-    return `"${token}"`;
   }
 
   @Post('tc_authentication')

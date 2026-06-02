@@ -75,18 +75,18 @@ describe('AuthService', () => {
 
       expect(jwtService.sign).toHaveBeenCalledWith(
         {
+          token_use: 'workspace',
           userId: 5,
           username: 'study-manager',
-          sub: {
-            id: 5,
-            username: 'study-manager',
-            isAdmin: false
-          },
-          workspace: 7,
-          tokenType: WORKSPACE_API_TOKEN_TYPE,
-          scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+          sub: '5',
+          workspace: 7
         },
-        { expiresIn: '1d' }
+        {
+          expiresIn: '30d',
+          issuer: 'coding-box',
+          audience: 'coding-box-workspace-token',
+          algorithm: 'HS256'
+        }
       );
       expect(usersService.getUserIsAdmin).not.toHaveBeenCalled();
       expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
@@ -265,21 +265,18 @@ describe('AuthService', () => {
       expect(usersService.findUserById).toHaveBeenCalledWith(12);
       expect(jwtService.sign).toHaveBeenCalledWith(
         {
+          token_use: 'workspace',
           userId: 12,
           username: 'coder',
-          sub: {
-            id: 12,
-            username: 'coder',
-            isAdmin: false
-          },
-          workspace: 7,
-          tokenType: WORKSPACE_API_TOKEN_TYPE,
-          scopes: [
-            WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
-            WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
-          ]
+          sub: '12',
+          workspace: 7
         },
-        { expiresIn: '1d' }
+        {
+          expiresIn: '1d',
+          issuer: 'coding-box',
+          audience: 'coding-box-workspace-token',
+          algorithm: 'HS256'
+        }
       );
     });
 
