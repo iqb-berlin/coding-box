@@ -85,7 +85,10 @@ describe('CodingJobService', () => {
   let cacheService: { delete: jest.Mock };
   let codingFreshnessService: { reconcileAppliedManualCodingJobs: jest.Mock };
   let codingFileCacheService: { getVariablePageMap: jest.Mock };
-  let missingsProfilesService: { resolveMissingsProfileId: jest.Mock };
+  let missingsProfilesService: {
+    resolveMissingsProfileId: jest.Mock;
+    getMissingByIdForProfileOrDefault: jest.Mock;
+  };
   let coderTrainingDiscussionResultRepository: ReturnType<typeof createRepo>;
   let workspaceFilesService: {
     getDerivedVariableMap: jest.Mock;
@@ -200,7 +203,8 @@ describe('CodingJobService', () => {
       getVariablePageMap: jest.fn().mockResolvedValue(new Map())
     };
     missingsProfilesService = {
-      resolveMissingsProfileId: jest.fn(async (_workspaceId: number, profileId?: number | null) => profileId || 55)
+      resolveMissingsProfileId: jest.fn(async (_workspaceId: number, profileId?: number | null) => profileId || 55),
+      getMissingByIdForProfileOrDefault: jest.fn().mockResolvedValue({ code: 99 })
     };
     coderTrainingDiscussionResultRepository.count.mockResolvedValue(0);
 
@@ -760,8 +764,16 @@ describe('CodingJobService', () => {
       'buildDistributionPlan'
     ).mockResolvedValue({
       plannedCases: [
-        { response: { id: 10 }, assignedCoderIds: [1, 2] },
-        { response: { id: 20 }, assignedCoderIds: [1] }
+        {
+          item: { itemKey: 'Unit 1::Var 1', itemLabel: 'Unit 1::Var 1' },
+          response: { id: 10 },
+          assignedCoderIds: [1, 2]
+        },
+        {
+          item: { itemKey: 'Unit 1::Var 1', itemLabel: 'Unit 1::Var 1' },
+          response: { id: 20 },
+          assignedCoderIds: [1]
+        }
       ],
       jobsToCreate: [],
       distribution: {},
@@ -777,8 +789,12 @@ describe('CodingJobService', () => {
 
     codingJobUnitRepository.createQueryBuilder
       .mockReturnValueOnce(createQueryBuilder([
-        { responseId: 10, taskCount: '1' },
-        { responseId: 30, taskCount: '2' }
+        {
+          responseId: 10, itemKey: 'Unit 1::Var 1', coderId: 1, taskCount: '1'
+        },
+        {
+          responseId: 30, itemKey: 'Unit 1::Var 1', coderId: 2, taskCount: '2'
+        }
       ]))
       .mockReturnValueOnce(createQueryBuilder(0));
     codingJobRepository.createQueryBuilder.mockReturnValueOnce(createQueryBuilder({
@@ -796,6 +812,84 @@ describe('CodingJobService', () => {
       removedCases: 1,
       addedCodingTasks: 2,
       removedCodingTasks: 2,
+      itemDeltas: [
+        expect.objectContaining({
+          itemKey: 'Unit 1::Var 1',
+          retainedCases: 1,
+          addedCases: 1,
+          removedCases: 1,
+          addedCodingTasks: 2,
+          removedCodingTasks: 2,
+          codingTasksByCoderId: {
+            1: expect.objectContaining({ addedCodingTasks: 1 }),
+            2: expect.objectContaining({ addedCodingTasks: 1, removedCodingTasks: 2 })
+          }
+        })
+      ],
+      canApply: true
+    });
+  });
+
+  it('counts task deltas when retained cases are reassigned to another coder', async () => {
+    jest.spyOn(
+      service as unknown as { buildDistributionPlan: jest.Mock },
+      'buildDistributionPlan'
+    ).mockResolvedValue({
+      plannedCases: [
+        {
+          item: { itemKey: 'Unit 1::Var 1', itemLabel: 'Unit 1::Var 1' },
+          response: { id: 10 },
+          assignedCoderIds: [2]
+        }
+      ],
+      jobsToCreate: [],
+      distribution: {},
+      distributionByCoderId: {},
+      doubleCodingInfo: {},
+      aggregationInfo: {},
+      matchingFlags: [],
+      warnings: [],
+      pairDistribution: {},
+      tasksPerCoder: {},
+      coderWeights: {}
+    });
+
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder([
+        {
+          responseId: 10, itemKey: 'Unit 1::Var 1', coderId: 1, taskCount: '1'
+        }
+      ]))
+      .mockReturnValueOnce(createQueryBuilder(0));
+    codingJobRepository.createQueryBuilder.mockReturnValueOnce(createQueryBuilder({
+      existingJobsCount: '1',
+      staleJobsCount: '0'
+    }));
+
+    await expect(service.previewJobDefinitionRefresh(3, {
+      jobDefinitionId: 9,
+      selectedVariables: [],
+      selectedCoders: []
+    })).resolves.toMatchObject({
+      retainedCases: 1,
+      addedCases: 0,
+      removedCases: 0,
+      addedCodingTasks: 1,
+      removedCodingTasks: 1,
+      codingTasksByCoderId: {
+        1: expect.objectContaining({ removedCodingTasks: 1 }),
+        2: expect.objectContaining({ addedCodingTasks: 1 })
+      },
+      itemDeltas: [
+        expect.objectContaining({
+          itemKey: 'Unit 1::Var 1',
+          retainedCases: 1,
+          addedCases: 0,
+          removedCases: 0,
+          addedCodingTasks: 1,
+          removedCodingTasks: 1
+        })
+      ],
       canApply: true
     });
   });
@@ -806,7 +900,11 @@ describe('CodingJobService', () => {
       'buildDistributionPlan'
     ).mockResolvedValue({
       plannedCases: [
-        { response: { id: 10 }, assignedCoderIds: [1] }
+        {
+          item: { itemKey: 'Unit 1::Var 1', itemLabel: 'Unit 1::Var 1' },
+          response: { id: 10 },
+          assignedCoderIds: [1]
+        }
       ],
       jobsToCreate: [],
       distribution: {},
@@ -828,7 +926,9 @@ describe('CodingJobService', () => {
 
     codingJobUnitRepository.createQueryBuilder
       .mockReturnValueOnce(createQueryBuilder([
-        { responseId: 10, taskCount: '1' }
+        {
+          responseId: 10, itemKey: 'Unit 1::Var 1', coderId: 1, taskCount: '1'
+        }
       ]))
       .mockReturnValueOnce(createQueryBuilder(1));
     codingJobRepository.createQueryBuilder.mockReturnValueOnce(createQueryBuilder({

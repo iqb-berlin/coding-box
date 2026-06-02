@@ -15,6 +15,31 @@ export interface CodingJobFreshnessImpactDto {
   openResponses: number;
 }
 
+export interface JobDefinitionRefreshCoderTaskDeltaDto {
+  coderId: number;
+  existingCodingTasks: number;
+  plannedCodingTasks: number;
+  retainedCodingTasks: number;
+  addedCodingTasks: number;
+  removedCodingTasks: number;
+}
+
+export interface JobDefinitionRefreshItemDeltaDto {
+  itemKey: string;
+  itemLabel: string;
+  existingCases: number;
+  plannedCases: number;
+  retainedCases: number;
+  addedCases: number;
+  removedCases: number;
+  existingCodingTasks: number;
+  plannedCodingTasks: number;
+  retainedCodingTasks: number;
+  addedCodingTasks: number;
+  removedCodingTasks: number;
+  codingTasksByCoderId: Record<string, JobDefinitionRefreshCoderTaskDeltaDto>;
+}
+
 export interface JobDefinitionRefreshPreviewDto {
   jobDefinitionId: number;
   existingJobsCount: number;
@@ -26,6 +51,8 @@ export interface JobDefinitionRefreshPreviewDto {
   removedCases: number;
   addedCodingTasks: number;
   removedCodingTasks: number;
+  itemDeltas?: JobDefinitionRefreshItemDeltaDto[];
+  codingTasksByCoderId?: Record<string, JobDefinitionRefreshCoderTaskDeltaDto>;
   canApply: boolean;
   blockingReason?: string;
 }

@@ -151,6 +151,7 @@ type DistributionResultForSnapshot = {
   pairDistribution?: Record<string, number>;
   tasksPerCoder?: Record<string, number>;
   coderWeights?: Record<string, number>;
+  preview?: JobDefinitionRefreshPreviewDto;
   jobs: {
     itemKey?: string;
     coderId: number;
@@ -707,7 +708,8 @@ export class JobDefinitionService {
         variable: job.variable,
         jobId: job.jobId,
         caseCount: job.caseCount
-      }))
+      })),
+      ...(result.preview ? { refreshPreview: result.preview } : {})
     };
   }
 
