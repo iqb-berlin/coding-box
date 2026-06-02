@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository, In } from 'typeorm';
+import * as fastCsv from 'fast-csv';
 import {
   JobDefinition,
   JobDefinitionCoderConfig,
@@ -26,6 +27,7 @@ import {
   JobDefinitionRefreshApplyResultDto,
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../../api-dto/coding/job-refresh.dto';
+import { sanitizeCsvText } from '../../../utils/csv.util';
 
 type JobDefinitionBundleForUsage = JobDefinitionVariableBundle & {
   variables?: JobDefinitionVariable[];
@@ -161,6 +163,25 @@ type DistributionResultForSnapshot = {
 const DEFAULT_CODER_CAPACITY_PERCENT = 100;
 const MIN_CODER_CAPACITY_PERCENT = 10;
 const MAX_CODER_CAPACITY_PERCENT = 300;
+const JOB_DEFINITION_DISTRIBUTION_CSV_HEADERS = [
+  'Job-Definition-ID',
+  'Snapshot-Zeitpunkt',
+  'Quelle',
+  'Typ',
+  'Variable/Buendel',
+  'Coder-ID',
+  'Coder',
+  'Fallzahl',
+  'Gesamt',
+  'Doppelt kodiert',
+  'Einfach zugewiesen',
+  'Doppelt kodiert fuer Coder'
+] as const;
+
+type JobDefinitionDistributionCsvRow = Record<
+typeof JOB_DEFINITION_DISTRIBUTION_CSV_HEADERS[number],
+string | number
+>;
 
 @Injectable()
 export class JobDefinitionService {
@@ -800,6 +821,149 @@ export class JobDefinitionService {
     await this.hydrateAssignedVariableBundles(jobDefinition);
 
     return jobDefinition;
+  }
+
+  async exportDistributionSnapshotAsCsv(
+    jobDefinitionId: number,
+    workspaceId: number
+  ): Promise<string> {
+    const jobDefinition = await this.getJobDefinition(jobDefinitionId, workspaceId);
+    const snapshots = Array.isArray(jobDefinition.distribution_snapshots) ?
+      jobDefinition.distribution_snapshots :
+      [];
+    const snapshot = snapshots[snapshots.length - 1];
+
+    if (!snapshot) {
+      throw new BadRequestException(
+        'No stored distribution snapshot is available for this job definition'
+      );
+    }
+
+    const coderIds = this.getSnapshotCoderIds(snapshot);
+    const coderNamesById = await this.getCoderNamesById(coderIds);
+    const rows = this.createDistributionCsvRows(
+      jobDefinition.id,
+      snapshot,
+      coderIds,
+      coderNamesById
+    );
+
+    return fastCsv.writeToString(rows, {
+      headers: [...JOB_DEFINITION_DISTRIBUTION_CSV_HEADERS],
+      alwaysWriteHeaders: true,
+      delimiter: ';',
+      quote: '"'
+    });
+  }
+
+  private getSnapshotCoderIds(snapshot: JobDefinitionDistributionSnapshot): number[] {
+    const coderIds = new Set<number>();
+
+    (snapshot.selectedCoders || []).forEach(coder => {
+      coderIds.add(coder.coderId);
+    });
+
+    Object.values(snapshot.distributionByCoderId || {}).forEach(coderCases => {
+      Object.keys(coderCases || {}).forEach(coderId => {
+        const parsedCoderId = Number(coderId);
+        if (Number.isFinite(parsedCoderId)) {
+          coderIds.add(parsedCoderId);
+        }
+      });
+    });
+
+    return Array.from(coderIds).sort((a, b) => a - b);
+  }
+
+  private async getCoderNamesById(coderIds: number[]): Promise<Map<number, string>> {
+    if (coderIds.length === 0) {
+      return new Map();
+    }
+
+    const users = await this.usersRepository.find({ where: { id: In(coderIds) } });
+    return new Map(users.map(user => [user.id, user.username]));
+  }
+
+  private createDistributionCsvRows(
+    jobDefinitionId: number,
+    snapshot: JobDefinitionDistributionSnapshot,
+    coderIds: number[],
+    coderNamesById: Map<number, string>
+  ): JobDefinitionDistributionCsvRow[] {
+    return Object.entries(snapshot.distributionByCoderId || {})
+      .sort(([itemKeyA], [itemKeyB]) => itemKeyA.localeCompare(itemKeyB))
+      .flatMap(([itemKey, coderCases]) => {
+        const doubleCodingInfo = snapshot.doubleCodingInfo?.[itemKey];
+        const fallbackTotalCases = Object.values(coderCases || {}).reduce(
+          (sum, caseCount) => sum + caseCount,
+          0
+        );
+        const totalCases = this.getSnapshotDistinctCaseCount(
+          doubleCodingInfo,
+          snapshot.aggregationInfo?.[itemKey]?.uniqueCases,
+          fallbackTotalCases
+        );
+
+        return coderIds.map(coderId => ({
+          'Job-Definition-ID': jobDefinitionId,
+          'Snapshot-Zeitpunkt': sanitizeCsvText(snapshot.createdAt),
+          Quelle: sanitizeCsvText(this.getSnapshotSourceLabel(snapshot.source)),
+          Typ: sanitizeCsvText(this.getSnapshotItemType(itemKey)),
+          'Variable/Buendel': sanitizeCsvText(this.getSnapshotItemLabel(snapshot, itemKey)),
+          'Coder-ID': coderId,
+          Coder: sanitizeCsvText(coderNamesById.get(coderId) || `Coder ${coderId}`),
+          Fallzahl: coderCases?.[String(coderId)] || 0,
+          Gesamt: totalCases,
+          'Doppelt kodiert': doubleCodingInfo?.doubleCodedCases || 0,
+          'Einfach zugewiesen': doubleCodingInfo?.singleCodedCasesAssigned || 0,
+          'Doppelt kodiert fuer Coder': doubleCodingInfo?.doubleCodedCasesPerCoderId?.[String(coderId)] || 0
+        }));
+      });
+  }
+
+  private getSnapshotDistinctCaseCount(
+    doubleCodingInfo: JobDefinitionDistributionSnapshotDoubleCodingInfo | undefined,
+    aggregationUniqueCases: number | undefined,
+    fallbackTotalCases: number
+  ): number {
+    const legacySelectedCases = doubleCodingInfo ?
+      doubleCodingInfo.doubleCodedCases + doubleCodingInfo.singleCodedCasesAssigned :
+      undefined;
+    const snapshotCaseCount = [
+      doubleCodingInfo?.distinctCases,
+      legacySelectedCases,
+      aggregationUniqueCases,
+      doubleCodingInfo?.totalCases,
+      fallbackTotalCases
+    ].find(caseCount => typeof caseCount === 'number' && Number.isFinite(caseCount));
+
+    return snapshotCaseCount ?? fallbackTotalCases;
+  }
+
+  private getSnapshotSourceLabel(source: JobDefinitionDistributionSnapshotSource): string {
+    return source === 'refresh' ? 'Neuverteilung' : 'Ersterstellung';
+  }
+
+  private getSnapshotItemType(itemKey: string): string {
+    return itemKey.startsWith('bundle:') ? 'Buendel' : 'Variable';
+  }
+
+  private getSnapshotItemLabel(
+    snapshot: JobDefinitionDistributionSnapshot,
+    itemKey: string
+  ): string {
+    if (itemKey.startsWith('bundle:')) {
+      const bundleId = Number(itemKey.slice('bundle:'.length));
+      const bundle = snapshot.selectedVariableBundles.find(selectedBundle => selectedBundle.id === bundleId);
+      return bundle?.name || itemKey;
+    }
+
+    const parts = itemKey.split('::');
+    if (parts.length === 2) {
+      return `${parts[0]} -> ${parts[1]}`;
+    }
+
+    return itemKey;
   }
 
   private async attachCreatedJobsCounts(
