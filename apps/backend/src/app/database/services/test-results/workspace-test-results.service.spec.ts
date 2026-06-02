@@ -64,6 +64,7 @@ describe('WorkspaceTestResultsService', () => {
   let chunkRepository: Repository<ChunkEntity>;
   let codingValidationService: CodingValidationService;
   let dataSource: DataSource;
+  let cacheService: CacheService;
 
   beforeAll(() => {
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
@@ -139,6 +140,14 @@ describe('WorkspaceTestResultsService', () => {
       transaction: jest.fn()
     } as unknown as DataSource;
 
+    cacheService = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue(undefined),
+      generateUnitResponseCacheKey: jest.fn((workspaceId: number, connector: string, unitId: string) => (
+        `responses:${workspaceId}:${connector}:${unitId}`
+      ))
+    } as unknown as CacheService;
+
     service = new WorkspaceTestResultsService(
       personsRepository,
       unitRepository,
@@ -152,7 +161,7 @@ describe('WorkspaceTestResultsService', () => {
       dataSource,
       unitTagService,
       journalService,
-      { get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue(undefined) } as unknown as CacheService,
+      cacheService,
       {} as unknown as CodingListService,
       codingValidationService,
       responseManagementService,
@@ -334,6 +343,31 @@ describe('WorkspaceTestResultsService', () => {
 
       expect(result[0].units[0].tags).toHaveLength(1);
       expect(result[0].units[0].tags[0].tag).toBe('tag1');
+    });
+  });
+
+  describe('findUnitResponse', () => {
+    it('matches replay unit IDs by alias or name after a cache miss', async () => {
+      const unitQb = mockQueryBuilder();
+      unitQb.getRawOne.mockResolvedValue({ unitId: 101 });
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+
+      (chunkRepository as unknown as { find: jest.Mock }).find = jest.fn().mockResolvedValue([]);
+
+      const responseQb = mockQueryBuilder();
+      responseQb.getRawMany.mockResolvedValue([]);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+
+      await service.findUnitResponse(12, 'login-a@code-a@group-a@BOOKLET-A', 'UNIT-NAME');
+
+      expect(unitQb.andWhere).toHaveBeenCalledWith(
+        '(unit.alias = :unitId OR unit.name = :unitId)',
+        { unitId: 'UNIT-NAME' }
+      );
+      expect(cacheService.set).toHaveBeenCalledWith(
+        'responses:12:login-a@code-a@group-a@BOOKLET-A:UNIT-NAME:v4',
+        { responses: [] }
+      );
     });
   });
 

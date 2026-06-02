@@ -2358,7 +2358,7 @@ export class WorkspaceTestResultsService {
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('bookletinfo.name = :bookletId', { bookletId })
-      .andWhere('unit.alias = :unitId', { unitId });
+      .andWhere('(unit.alias = :unitId OR unit.name = :unitId)', { unitId });
 
     const unitRow = await queryBuilder.getRawOne<{ unitId: number }>();
     const unitDbId = unitRow?.unitId;

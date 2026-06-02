@@ -23,6 +23,12 @@ export type ReplayResponsePayload = {
 
 export type ReplayPayload = ReplayAssetsPayload & ReplayResponsePayload;
 
+export type ReplayClientTimings = {
+  payloadToVisibleMs: number | null;
+  payloadToPlayerReadyMs: number | null;
+  playerReadyToVisibleMs: number | null;
+};
+
 export type ReplayStatisticsResponse = {
   id: number;
   timestamp: string;
@@ -35,6 +41,7 @@ export type ReplayStatisticsResponse = {
   replayUrl?: string;
   success?: boolean;
   errorMessage?: string;
+  clientTimings?: ReplayClientTimings;
 };
 
 @Injectable({
@@ -59,6 +66,7 @@ export class ReplayBackendService {
       replayUrl?: string;
       success?: boolean;
       errorMessage?: string;
+      clientTimings?: ReplayClientTimings;
     }
   ): Observable<ReplayStatisticsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics`;
