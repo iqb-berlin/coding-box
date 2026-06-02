@@ -8,6 +8,9 @@ import { TranslateModule } from '@ngx-translate/core';
 import type {
   JobDefinitionDistributionSnapshot
 } from '../../services/coding-job-backend.service';
+import type {
+  JobDefinitionRefreshItemDeltaDto
+} from '../../../../../../../api-dto/coding/job-refresh.dto';
 
 interface DialogCoder {
   id: number;
@@ -18,7 +21,9 @@ interface DistributionSummaryRow {
   itemKey: string;
   label: string;
   coderCases: Record<string, number>;
+  addedCoderTasks: Record<string, number>;
   totalCases: number;
+  addedCases: number;
   doubleCodedCases: number;
   singleCodedCasesAssigned: number;
 }
@@ -26,6 +31,7 @@ interface DistributionSummaryRow {
 export interface JobDefinitionDistributionSummaryDialogData {
   definitionId: number;
   snapshot?: JobDefinitionDistributionSnapshot;
+  snapshots?: JobDefinitionDistributionSnapshot[];
   coders: DialogCoder[];
   createdJobsCount?: number;
 }
@@ -45,14 +51,37 @@ export interface JobDefinitionDistributionSummaryDialogData {
   styleUrls: ['./job-definition-distribution-summary-dialog.component.scss']
 })
 export class JobDefinitionDistributionSummaryDialogComponent {
-  readonly snapshot = this.data.snapshot;
-  readonly coderColumns = this.getCoderColumns();
-  readonly rows = this.getRows();
+  selectedSnapshotIndex = this.getInitialSnapshotIndex();
 
   constructor(
     public dialogRef: MatDialogRef<JobDefinitionDistributionSummaryDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: JobDefinitionDistributionSummaryDialogData
   ) {}
+
+  get snapshots(): JobDefinitionDistributionSnapshot[] {
+    if (this.data.snapshots?.length) {
+      return this.data.snapshots;
+    }
+    return this.data.snapshot ? [this.data.snapshot] : [];
+  }
+
+  get snapshot(): JobDefinitionDistributionSnapshot | undefined {
+    return this.snapshots[this.selectedSnapshotIndex];
+  }
+
+  get coderColumns(): DialogCoder[] {
+    return this.getCoderColumns();
+  }
+
+  get rows(): DistributionSummaryRow[] {
+    return this.getRows();
+  }
+
+  selectSnapshot(index: number): void {
+    if (index >= 0 && index < this.snapshots.length) {
+      this.selectedSnapshotIndex = index;
+    }
+  }
 
   getSnapshotDate(): string {
     if (!this.snapshot?.createdAt) {
@@ -79,9 +108,19 @@ export class JobDefinitionDistributionSummaryDialogComponent {
     return this.rows.reduce((total, row) => total + row.totalCases, 0);
   }
 
+  getGrandAddedCases(): number {
+    return this.rows.reduce((total, row) => total + row.addedCases, 0);
+  }
+
   getGridTemplate(): string {
     const coderColumns = 'minmax(88px, 1fr) '.repeat(this.coderColumns.length);
-    return `minmax(180px, 1.7fr) ${coderColumns}minmax(80px, .8fr) minmax(110px, .9fr)`.trim();
+    const addedCasesColumn = this.hasAddedCases() ? 'minmax(88px, .8fr) ' : '';
+    return `minmax(180px, 1.7fr) ${coderColumns}minmax(80px, .8fr) ${addedCasesColumn}minmax(110px, .9fr)`.trim();
+  }
+
+  hasAddedCases(): boolean {
+    return !!this.snapshot?.refreshPreview?.itemDeltas
+      ?.some(delta => delta.addedCases > 0);
   }
 
   private getCoderColumns(): DialogCoder[] {
@@ -99,14 +138,22 @@ export class JobDefinitionDistributionSummaryDialogComponent {
       return [];
     }
 
+    const deltaByItemKey = new Map(
+      (this.snapshot.refreshPreview?.itemDeltas || [])
+        .map(delta => [delta.itemKey, delta])
+    );
+
     return Object.entries(this.snapshot.distributionByCoderId || {})
       .map(([itemKey, coderCases]) => {
         const doubleCodingInfo = this.snapshot?.doubleCodingInfo?.[itemKey];
+        const delta = deltaByItemKey.get(itemKey);
         return {
           itemKey,
           label: this.getItemLabel(itemKey),
           coderCases,
+          addedCoderTasks: this.getAddedCoderTasks(delta),
           totalCases: Object.values(coderCases).reduce((sum, count) => sum + count, 0),
+          addedCases: delta?.addedCases || 0,
           doubleCodedCases: doubleCodingInfo?.doubleCodedCases || 0,
           singleCodedCasesAssigned: doubleCodingInfo?.singleCodedCasesAssigned || 0
         };
@@ -127,5 +174,29 @@ export class JobDefinitionDistributionSummaryDialogComponent {
     }
 
     return itemKey;
+  }
+
+  private getAddedCoderTasks(
+    delta: JobDefinitionRefreshItemDeltaDto | undefined
+  ): Record<string, number> {
+    if (!delta) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(delta.codingTasksByCoderId || {})
+        .map(([coderId, coderDelta]): [string, number] => [coderId, coderDelta.addedCodingTasks])
+        .filter(([, count]) => count > 0)
+    );
+  }
+
+  private getInitialSnapshotIndex(): number {
+    let snapshots: JobDefinitionDistributionSnapshot[] = [];
+    if (this.data.snapshots?.length) {
+      snapshots = this.data.snapshots;
+    } else if (this.data.snapshot) {
+      snapshots = [this.data.snapshot];
+    }
+    return Math.max(0, snapshots.length - 1);
   }
 }

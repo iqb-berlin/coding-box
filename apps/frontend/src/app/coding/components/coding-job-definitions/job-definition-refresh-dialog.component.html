@@ -77,6 +77,23 @@
       </div>
       }
     </div>
+
+    @if (getAddedItemDeltas().length > 0) {
+    <h3>{{ 'coding-job-definitions.refresh-dialog.added-items-title' | translate }}</h3>
+    <div class="added-items-list">
+      @for (delta of getAddedItemDeltas(); track delta.itemKey) {
+      <div class="added-item">
+        <span>{{ delta.itemLabel }}</span>
+        <strong>
+          {{ 'coding-job-definitions.refresh-dialog.added-item-counts' | translate: {
+            cases: delta.addedCases,
+            tasks: delta.addedCodingTasks
+          } }}
+        </strong>
+      </div>
+      }
+    </div>
+    }
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">
