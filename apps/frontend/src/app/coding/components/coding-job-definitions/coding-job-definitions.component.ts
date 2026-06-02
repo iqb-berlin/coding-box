@@ -21,7 +21,10 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subject, firstValueFrom, takeUntil } from 'rxjs';
-import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import {
+  CodingJobBackendService,
+  JobDefinitionDistributionSnapshot
+} from '../../services/coding-job-backend.service';
 import type { JobDefinitionDistributionPreviewResponse } from '../../services/distributed-coding.service';
 import { AppService } from '../../../core/services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
@@ -38,6 +41,9 @@ import {
   CodingJobBulkCreationDialogComponent,
   BulkCreationData
 } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
+import {
+  JobDefinitionDistributionSummaryDialogComponent
+} from './job-definition-distribution-summary-dialog.component';
 
 interface JobDefinition {
   id?: number;
@@ -46,6 +52,7 @@ interface JobDefinition {
   assignedVariableBundles?: VariableBundle[];
   assignedCoders?: number[];
   assignedCoderConfigs?: { coderId: number; capacityPercent: number }[];
+  distributionSnapshots?: JobDefinitionDistributionSnapshot[];
   missingsProfileId?: number | null;
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
@@ -409,6 +416,27 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return definition.status === 'approved' && createdJobsCount !== undefined && createdJobsCount > 0;
   }
 
+  canViewDistributionSummary(definition: JobDefinition): boolean {
+    const createdJobsCount = this.getCreatedJobsCount(definition);
+    return this.hasDistributionSnapshots(definition) ||
+      (createdJobsCount !== undefined && createdJobsCount > 0);
+  }
+
+  hasDistributionSnapshots(definition: JobDefinition): boolean {
+    return Array.isArray(definition.distributionSnapshots) &&
+      definition.distributionSnapshots.length > 0;
+  }
+
+  getLatestDistributionSnapshot(
+    definition: JobDefinition
+  ): JobDefinitionDistributionSnapshot | undefined {
+    if (!this.hasDistributionSnapshots(definition)) {
+      return undefined;
+    }
+
+    return definition.distributionSnapshots![definition.distributionSnapshots!.length - 1];
+  }
+
   isRefreshingDefinition(definition: JobDefinition): boolean {
     return !!definition.id && this.refreshingDefinitionIds.has(definition.id);
   }
@@ -765,6 +793,24 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     } finally {
       this.refreshingDefinitionIds.delete(definition.id);
     }
+  }
+
+  viewDistributionSummary(definition: JobDefinition): void {
+    if (!definition.id || !this.canViewDistributionSummary(definition)) {
+      return;
+    }
+
+    this.dialog.open(JobDefinitionDistributionSummaryDialogComponent, {
+      width: '1120px',
+      maxWidth: '95vw',
+      data: {
+        definitionId: definition.id,
+        snapshot: this.getLatestDistributionSnapshot(definition),
+        coders: this.coders,
+        createdJobsCount: this.getCreatedJobsCount(definition)
+      },
+      autoFocus: false
+    });
   }
 
   private async applyDefinitionRefresh(
