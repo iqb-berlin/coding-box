@@ -39,6 +39,7 @@ export interface CodingJob {
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
   hasIssues?: boolean;
+  issueSummary?: CodingJobIssueSummary;
   aggregationEnabled?: boolean;
   aggregationThreshold?: number | null;
   responseMatchingFlags?: string[] | null;
@@ -48,6 +49,13 @@ export interface CodingJob {
   freshnessUpdatedAt?: Date | string | null;
   freshnessAffectedUnits?: number;
   freshnessAffectedResponses?: number;
+}
+
+export interface CodingJobIssueSummary {
+  total: number;
+  open: number;
+  codeAssignmentUncertain: number;
+  newCodeNeeded: number;
 }
 
 export interface JobDefinitionCoderConfig {

@@ -239,6 +239,76 @@ describe('CodingJobsComponent', () => {
     expect(component.getStatusClass('unknown')).toBe('');
   });
 
+  it('does not flag open progress entries as coding issues', async () => {
+    await fixture.whenStable();
+    (
+      codingJobBackendServiceMock.getBulkCodingProgress as jest.Mock
+    ).mockReturnValue(
+      of({
+        1: {
+          'person::booklet::UNIT::VAR:open': {
+            id: -1,
+            code: '',
+            label: 'OPEN'
+          }
+        }
+      })
+    );
+
+    component.loadCodingJobs();
+    await fixture.whenStable();
+
+    const job = component.originalData.find(item => item.id === 1);
+    expect(job).toBeDefined();
+    const loadedJob = job as CodingJob;
+    expect(loadedJob.hasIssues).toBe(false);
+    expect(loadedJob.issueSummary).toEqual({
+      total: 0,
+      open: 1,
+      codeAssignmentUncertain: 0,
+      newCodeNeeded: 0
+    });
+    expect(component.getCodingIssueTooltip(loadedJob)).toContain(
+      '1 offene Aufgabe'
+    );
+  });
+
+  it('builds specific coding issue summaries for review issues', async () => {
+    await fixture.whenStable();
+    (
+      codingJobBackendServiceMock.getBulkCodingProgress as jest.Mock
+    ).mockReturnValue(
+      of({
+        1: {
+          uncertain: {
+            id: 4,
+            codingIssueOption: -1
+          },
+          newCode: {
+            id: -2
+          }
+        }
+      })
+    );
+
+    component.loadCodingJobs();
+    await fixture.whenStable();
+
+    const job = component.originalData.find(item => item.id === 1);
+    expect(job).toBeDefined();
+    const loadedJob = job as CodingJob;
+    expect(loadedJob.hasIssues).toBe(true);
+    expect(loadedJob.issueSummary).toEqual({
+      total: 2,
+      open: 0,
+      codeAssignmentUncertain: 1,
+      newCodeNeeded: 1
+    });
+    expect(component.getCodingIssueTooltip(loadedJob)).toBe(
+      '1x Code-Vergabe unsicher, 1x neuer Code benötigt'
+    );
+  });
+
   it('should filter jobs by status, coder, and job name', () => {
     component.originalData = [...(mockCodingJobs as CodingJob[])];
 
