@@ -1070,15 +1070,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
   }
 
-  openCreateJobDefinition(): void {
-    if (this.codingJobDefinitionsComponent) {
-      this.codingJobDefinitionsComponent.createDefinition();
-      return;
-    }
-
-    this.showError('Die Jobdefinitionen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
-  }
-
   refreshManualCodingPlanning(): void {
     this.loadManualTabData(this.activeManualTab);
     this.loadCodingFreshness();
@@ -1152,6 +1143,47 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       0;
   }
 
+  getManualStatusPoolCount(): number {
+    return this.codingProgressOverview?.statusTotalCasesToCode ??
+      this.caseCoverageOverview?.statusTotalCasesToCode ??
+      this.appliedResultsOverview?.statusTotalIncompleteResponses ??
+      (this.manualCodingScopeSummary ?
+        this.manualCodingScopeSummary.manualResponseCount +
+        this.manualCodingScopeSummary.coveredSourceResponseCount :
+        0);
+  }
+
+  getEffectiveManualCaseCount(): number {
+    return this.codingProgressOverview?.totalCasesToCode ??
+      this.caseCoverageOverview?.effectiveTotalCasesToCode ??
+      this.appliedResultsOverview?.totalIncompleteResponses ??
+      0;
+  }
+
+  getManualCaseScopeSummaryText(): string {
+    const statusPoolCount = this.getManualStatusPoolCount();
+    const effectiveCaseCount = this.getEffectiveManualCaseCount();
+    const openCaseCount = this.getOpenCodingCases();
+
+    if (
+      statusPoolCount <= 0 ||
+      effectiveCaseCount <= 0 ||
+      statusPoolCount === effectiveCaseCount
+    ) {
+      return '';
+    }
+
+    const difference = statusPoolCount - effectiveCaseCount;
+    const reason = difference > 0 ?
+      `${difference} Rohantworten werden durch abgeleitete Variablen, Vorverarbeitung oder Aggregation nicht separat verteilt.` :
+      'Die effektive Fallzahl kann durch Mehrfachkodierung oder manuelle Nacharbeit abweichen.';
+    const openCaseHint = openCaseCount !== effectiveCaseCount ?
+      `, davon ${openCaseCount} offen` :
+      '';
+
+    return `${statusPoolCount} Rohantworten im Statuspool -> ${effectiveCaseCount} effektive Arbeitsfälle${openCaseHint}. ${reason}`;
+  }
+
   isResponseAnalysisOutdated(): boolean {
     const analysisRawCases = this.responseAnalysis?.aggregationSummary?.rawCases ?? 0;
     const currentRawManualResponses = this.getCurrentRawManualResponses();
@@ -1185,6 +1217,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       (this.variableCoverageOverview?.conflictedVariables || 0) > 0 ||
       (this.variableCoverageOverview?.missingVariables || 0) > 0 ||
       (this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0;
+  }
+
+  hasVariableCoverageConflicts(): boolean {
+    return (this.variableCoverageOverview?.conflictedVariables || 0) > 0;
   }
 
   isPlanningReady(): boolean {
@@ -1414,6 +1450,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   getPlanningStatusClass(): string {
     switch (this.getPlanningStatusState()) {
       case 'warning':
+        if (this.hasVariableCoverageConflicts()) {
+          return 'status-warning';
+        }
+        if (this.hasManualCodeAvailabilityWarnings) {
+          return 'status-attention';
+        }
         return 'status-warning';
       case 'planning-incomplete':
       case 'completion-ready':
@@ -1438,7 +1480,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return 'warning';
     }
 
-    if ((this.variableCoverageOverview?.conflictedVariables || 0) > 0) {
+    if (this.hasVariableCoverageConflicts()) {
       return 'warning';
     }
 
@@ -1498,9 +1540,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'loading':
         return 'Status wird aktualisiert';
       case 'warning':
-        return this.hasManualCodeAvailabilityWarnings ?
-          'Codes für manuelle Kodierung prüfen' :
-          'Konflikte prüfen';
+        return this.hasVariableCoverageConflicts() ?
+          'Konflikte prüfen' :
+          'Reguläre Codes für manuelle Kodierung prüfen';
       case 'planning-incomplete':
         return 'Planung noch unvollständig';
       case 'execution-ready':
@@ -1527,12 +1569,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return 'Die Planung ist vollständig, der aktuelle Kodierfortschritt konnte aber nicht ermittelt werden. Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs.';
     }
 
-    if (this.hasManualCodeAvailabilityWarnings) {
-      return `${this.manualCodeAvailabilityWarningCount} Variablen haben keine regulären auswählbaren Codes. In der Kodierung wären dort nur Sonderoptionen verfügbar.`;
+    if (this.hasVariableCoverageConflicts()) {
+      return `${this.variableCoverageOverview?.conflictedVariables || 0} Variablenkonflikte müssen vor der verlässlichen Jobplanung geklärt werden.`;
     }
 
-    if ((this.variableCoverageOverview?.conflictedVariables || 0) > 0) {
-      return `${this.variableCoverageOverview?.conflictedVariables || 0} Variablenkonflikte müssen vor der verlässlichen Jobplanung geklärt werden.`;
+    if (this.hasManualCodeAvailabilityWarnings) {
+      return `${this.manualCodeAvailabilityWarningCount} Variablen haben keine regulären Codes mit manueller Instruktion. Kodierer können dort nur Sonderoptionen wie "Code-Vergabe unsicher" oder "Neuer Code nötig" auswählen.`;
     }
 
     if ((this.variableCoverageOverview?.missingVariables || 0) > 0) {
@@ -1569,9 +1611,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'loading':
         return 'Planungsstand wird geladen';
       case 'warning':
-        return this.hasManualCodeAvailabilityWarnings ?
-          'Kodierschema prüfen' :
-          'Konflikte zuerst klären';
+        return this.hasVariableCoverageConflicts() ?
+          'Konflikte zuerst klären' :
+          'Reguläre Codes ergänzen';
       case 'planning-incomplete':
         return 'Kodierfälle in Jobs verteilen';
       case 'execution-ready':
@@ -1595,10 +1637,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'loading':
         return 'Warten Sie kurz, bis die Planungsdaten aktualisiert sind.';
       case 'warning':
-        if (this.hasManualCodeAvailabilityWarnings) {
-          return 'Ergänzen Sie bei mindestens einem regulären Code eine manuelle Instruktion oder prüfen Sie, ob die betroffenen Variablen manuell kodiert werden sollen.';
+        if (this.hasVariableCoverageConflicts()) {
+          return 'Prüfen Sie Variablen, die von mehreren Definitionen mit überlappenden Fällen verwendet werden.';
         }
-        return 'Prüfen Sie Variablen, die von mehreren Definitionen mit überlappenden Fällen verwendet werden.';
+        return 'Ergänzen Sie bei mindestens einem regulären Code eine manuelle Instruktion oder nehmen Sie die betroffenen Variablen aus der manuellen Auswahl.';
       case 'planning-incomplete':
         if ((this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
           const unavailableHint = unavailableCases > 0 ?
@@ -1623,9 +1665,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   getPlanningNextStepActionLabel(): string {
     switch (this.getPlanningStatusState()) {
       case 'warning':
-        return this.hasManualCodeAvailabilityWarnings ?
-          'Zur Variablenauswahl' :
-          'Zu den Jobdefinitionen';
+        return this.hasVariableCoverageConflicts() ?
+          'Zu den Jobdefinitionen' :
+          'Betroffene Variablen ansehen';
       case 'execution-ready':
         return 'Zu den Kodierjobs';
       case 'completion-ready':

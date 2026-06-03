@@ -12,7 +12,12 @@
         <mat-icon>info</mat-icon>
       </button>
     </div>
-    <button mat-raised-button color="primary" type="button" (click)="createDefinition()">
+    <button
+      *ngIf="jobDefinitions.length > 0"
+      mat-raised-button
+      color="primary"
+      type="button"
+      (click)="createDefinition()">
       <mat-icon>add</mat-icon>
       {{ 'coding-job-definitions.create-new' | translate }}
     </button>

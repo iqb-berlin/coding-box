@@ -76,46 +76,13 @@
 
       <div class="planning-status-banner" [ngClass]="getPlanningStatusClass()">
         <mat-icon>{{ getPlanningStatusIcon() }}</mat-icon>
-        <div>
+        <div class="planning-status-copy">
           <strong>{{ getPlanningStatusTitle() }}</strong>
           <span>{{ getPlanningStatusDescription() }}</span>
-        </div>
-      </div>
-
-      <div *ngIf="hasCodingFreshnessWarnings" class="manual-freshness-banner">
-        <mat-icon>warning</mat-icon>
-        <div class="manual-freshness-copy">
-          <strong>{{ manualCodingFreshnessPanelTitle }}</strong>
-          <span>{{ manualCodingFreshnessSummaryText }}</span>
-          <span class="manual-freshness-help">{{
-            manualCodingFreshnessExplanationText
-          }}</span>
-          <div class="manual-freshness-chip-row">
-            <span
-              *ngFor="let item of codingFreshnessWarnings"
-              class="manual-freshness-chip"
-            >
-              {{ getManualFreshnessChipLabel(item) }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div
-        *ngIf="hasManualCodeAvailabilityWarnings"
-        class="manual-code-availability-banner"
-      >
-        <mat-icon>warning</mat-icon>
-        <div class="manual-code-availability-copy">
-          <strong
-            >{{ manualCodeAvailabilityWarningCount }} Variablen ohne reguläre
-            auswählbare Codes</strong
+          <div
+            *ngIf="hasManualCodeAvailabilityWarnings"
+            class="manual-code-availability-list"
           >
-          <span>
-            In diesen Variablen bleiben in der Kodierung nur Sonderoptionen wie
-            „Code-Vergabe unsicher“ oder „Neuer Code nötig“ verfügbar.
-          </span>
-          <div class="manual-code-availability-list">
             <span
               *ngFor="let warning of getManualCodeAvailabilityPreview()"
               class="manual-code-availability-chip"
@@ -134,6 +101,25 @@
                   getManualCodeAvailabilityPreview().length
               }}
               weitere
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div *ngIf="hasCodingFreshnessWarnings" class="manual-freshness-banner">
+        <mat-icon>warning</mat-icon>
+        <div class="manual-freshness-copy">
+          <strong>{{ manualCodingFreshnessPanelTitle }}</strong>
+          <span>{{ manualCodingFreshnessSummaryText }}</span>
+          <span class="manual-freshness-help">{{
+            manualCodingFreshnessExplanationText
+          }}</span>
+          <div class="manual-freshness-chip-row">
+            <span
+              *ngFor="let item of codingFreshnessWarnings"
+              class="manual-freshness-chip"
+            >
+              {{ getManualFreshnessChipLabel(item) }}
             </span>
           </div>
         </div>
@@ -162,6 +148,12 @@
           <span class="metric-hint"
             >effektive Kodierfälle nach Aggregation</span
           >
+          <span
+            *ngIf="getManualCaseScopeSummaryText()"
+            class="metric-explainer"
+          >
+            {{ getManualCaseScopeSummaryText() }}
+          </span>
         </div>
         <div class="overview-metric">
           <span class="metric-label">Für neue Jobs verfügbar</span>
@@ -1084,15 +1076,6 @@
           class="job-definitions-container"
         >
           <div class="manual-tab-actions">
-            <button
-              mat-raised-button
-              color="primary"
-              (click)="openCreateJobDefinition()"
-              aria-label="Neue Jobdefinition erstellen"
-            >
-              <mat-icon>add</mat-icon>
-              Jobdefinition erstellen
-            </button>
             <button
               mat-stroked-button
               color="primary"

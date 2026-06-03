@@ -571,24 +571,93 @@ describe('CodingManagementManualComponent', () => {
 
     expect(component.hasManualCodeAvailabilityWarnings).toBe(true);
     expect(component.hasPlanningWarnings()).toBe(true);
-    expect(component.getPlanningStatusClass()).toBe('status-warning');
+    expect(component.getPlanningStatusClass()).toBe('status-attention');
     expect(component.getPlanningStatusIcon()).toBe('warning');
     expect(component.getPlanningStatusTitle()).toBe(
-      'Codes für manuelle Kodierung prüfen'
+      'Reguläre Codes für manuelle Kodierung prüfen'
     );
-    expect(component.getPlanningNextStepTitle()).toBe('Kodierschema prüfen');
+    expect(component.getPlanningNextStepTitle()).toBe('Reguläre Codes ergänzen');
     expect(component.getPlanningNextStepActionLabel()).toBe(
-      'Zur Variablenauswahl'
+      'Betroffene Variablen ansehen'
     );
 
     fixture.detectChanges();
 
-    const banner = fixture.nativeElement.querySelector(
+    const removedDuplicateBanner = fixture.nativeElement.querySelector(
       '.manual-code-availability-banner'
     ) as HTMLElement | null;
-    expect(banner?.textContent).toContain('UNIT1 / VAR1');
-    expect(banner?.textContent).toContain(
-      'Variablen ohne reguläre auswählbare Codes'
+    const statusBanner = fixture.nativeElement.querySelector(
+      '.planning-status-banner'
+    ) as HTMLElement | null;
+    expect(removedDuplicateBanner).toBeNull();
+    expect(statusBanner?.textContent).toContain('UNIT1 / VAR1');
+    expect(statusBanner?.textContent).toContain(
+      'Reguläre Codes für manuelle Kodierung prüfen'
+    );
+  });
+
+  it('should explain raw status responses versus effective manual cases', () => {
+    setCompletePlanningState();
+    setCodingProgress(145, 25);
+    component.codingProgressOverview = {
+      ...component.codingProgressOverview!,
+      statusTotalCasesToCode: 193
+    };
+
+    expect(component.getManualCaseScopeSummaryText()).toContain(
+      '193 Rohantworten im Statuspool -> 145 effektive Arbeitsfälle'
+    );
+    expect(component.getManualCaseScopeSummaryText()).toContain(
+      'davon 120 offen'
+    );
+    expect(component.getManualCaseScopeSummaryText()).toContain(
+      '48 Rohantworten'
+    );
+  });
+
+  it('should keep conflicts visually stronger than manual code availability warnings', () => {
+    setCompletePlanningState();
+    component.variableCoverageOverview = {
+      ...component.variableCoverageOverview!,
+      conflictedVariables: 1,
+      coverageByStatus: {
+        ...component.variableCoverageOverview!.coverageByStatus,
+        conflicted: [
+          {
+            variableKey: 'UNIT1:VAR1',
+            conflictingDefinitions: [
+              { id: 1, status: 'approved' },
+              { id: 2, status: 'approved' }
+            ]
+          }
+        ]
+      }
+    };
+    component.manualCodeAvailabilityWarnings = [
+      {
+        unitName: 'UNIT1',
+        variableId: 'VAR1',
+        responseCount: 5,
+        casesInJobs: 0,
+        availableCases: 5,
+        uniqueCasesAfterAggregation: 5,
+        regularCodeCount: 2,
+        selectableRegularCodeCount: 0,
+        onlySpecialOptionsAvailable: true,
+        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
+      }
+    ];
+
+    expect(component.getPlanningStatusClass()).toBe('status-warning');
+    expect(component.getPlanningStatusTitle()).toBe('Konflikte prüfen');
+    expect(component.getPlanningStatusDescription()).toContain(
+      '1 Variablenkonflikte'
+    );
+    expect(component.getPlanningNextStepTitle()).toBe(
+      'Konflikte zuerst klären'
+    );
+    expect(component.getPlanningNextStepActionLabel()).toBe(
+      'Zu den Jobdefinitionen'
     );
   });
 
