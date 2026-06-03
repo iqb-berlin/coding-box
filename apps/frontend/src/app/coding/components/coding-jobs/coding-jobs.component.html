@@ -73,48 +73,53 @@
       </div>
 
       <div class="actions-row">
-        <button mat-button (click)="loadCodingJobs()">
-          <mat-icon>refresh</mat-icon>
-          Aktualisieren
-        </button>
-        @if (canApplyResults && showApplyActions) {
-          <button
-            mat-button
-            (click)="bulkApplyCodingResults()"
-            class="bulk-apply-button"
-          >
-            <mat-icon>rule</mat-icon>
-            Alle Ergebnisse anwenden
+        <div class="actions-group primary-actions">
+          @if (canApplyResults && showApplyActions) {
+            <button
+              mat-button
+              (click)="bulkApplyCodingResults()"
+              class="bulk-apply-button"
+            >
+              <mat-icon>rule</mat-icon>
+              Alle Ergebnisse anwenden
+            </button>
+          }
+          @if (canApplyResults && showTransferAction) {
+            <button mat-button (click)="openTransferCodingCasesDialog()">
+              <mat-icon>swap_horiz</mat-icon>
+              Fälle übertragen
+            </button>
+          }
+          @if (showComparisonActions) {
+            <button mat-button (click)="openDoubleCodedReviewDialog()">
+              <mat-icon>compare</mat-icon>
+              Doppelkodierungsreview
+            </button>
+            <button mat-button (click)="openCohensKappaStatisticsDialog()">
+              <mat-icon>analytics</mat-icon>
+              Interrater-Reliabilität
+            </button>
+          }
+        </div>
+
+        <div class="actions-group utility-actions">
+          <button mat-button (click)="loadCodingJobs()">
+            <mat-icon>refresh</mat-icon>
+            Aktualisieren
           </button>
-        }
-        @if (canApplyResults && showTransferAction) {
-          <button mat-button (click)="openTransferCodingCasesDialog()">
-            <mat-icon>swap_horiz</mat-icon>
-            Fälle übertragen
-          </button>
-        }
-        @if (showBulkDeleteAction) {
-          <button
-            mat-raised-button
-            color="warn"
-            (click)="bulkDeleteCodingJobs()"
-            [disabled]="selection.selected.length === 0"
-            class="bulk-delete-button"
-          >
-            <mat-icon>delete_sweep</mat-icon>
-            {{ selection.selected.length }} löschen
-          </button>
-        }
-        @if (showComparisonActions) {
-          <button mat-button (click)="openDoubleCodedReviewDialog()">
-            <mat-icon>compare</mat-icon>
-            Doppelkodierungsreview
-          </button>
-          <button mat-button (click)="openCohensKappaStatisticsDialog()">
-            <mat-icon>analytics</mat-icon>
-            Interrater-Reliabilität
-          </button>
-        }
+          @if (showBulkDeleteAction) {
+            <button
+              mat-raised-button
+              color="warn"
+              (click)="bulkDeleteCodingJobs()"
+              [disabled]="selection.selected.length === 0"
+              class="bulk-delete-button"
+            >
+              <mat-icon>delete_sweep</mat-icon>
+              {{ selection.selected.length }} löschen
+            </button>
+          }
+        </div>
       </div>
     </div>
 
