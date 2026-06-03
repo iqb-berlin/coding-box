@@ -316,10 +316,14 @@
                   {{ aggregation.aggregationActive ? 'Aggregation aktiv' : 'Aggregation nicht aktiv' }}
                 </strong>
                 <span>
-                  Antwort-Analyse: {{ aggregation.rawCases }} Rohantworten ergeben {{ aggregation.effectiveCases }}
-                  effektive Kodierfälle.
+                  {{ 'coding-management-manual.coding-progress.analysis-aggregation-note' | translate:{
+                    rawCases: aggregation.rawCases,
+                    effectiveCases: aggregation.effectiveCases
+                  } }}
                   <ng-container *ngIf="aggregation.collapsedCases > 0">
-                    Einsparung in dieser Analyse: {{ aggregation.collapsedCases }} Kodierungen.
+                    {{ 'coding-management-manual.coding-progress.analysis-aggregation-savings' | translate:{
+                      collapsedCases: aggregation.collapsedCases
+                    } }}
                   </ng-container>
                 </span>
               </div>
@@ -568,7 +572,9 @@
                 <strong>{{ 'coding-management-manual.coding-progress.info-total-title' | translate }}</strong>
                 <span class="info-alert-text-spaced">{{ 'coding-management-manual.coding-progress.info-total-desc' | translate }}</span>
                 <strong>{{ 'coding-management-manual.coding-progress.info-completed-title' | translate }}</strong>
-                <span>{{ 'coding-management-manual.coding-progress.info-completed-desc' | translate }}</span>
+                <span class="info-alert-text-spaced">{{ 'coding-management-manual.coding-progress.info-completed-desc' | translate }}</span>
+                <strong>{{ 'coding-management-manual.coding-progress.info-aggregation-title' | translate }}</strong>
+                <span>{{ 'coding-management-manual.coding-progress.info-aggregation-desc' | translate }}</span>
               </div>
             </div>
 
@@ -639,10 +645,12 @@
             <div *ngIf="codingProgressOverview.aggregationActive" class="aggregation-note">
               <mat-icon>filter_alt</mat-icon>
               <span>
-                Aggregation ist aktiv: {{codingProgressOverview.rawTotalCasesToCode}} Rohantworten ergeben
-                {{codingProgressOverview.totalCasesToCode}} effektive Kodierfälle. Dadurch werden bei Schwelle
-                {{codingProgressOverview.aggregationThreshold}} {{codingProgressOverview.aggregatedDuplicateCases}}
-                Kodierungen eingespart.
+                {{ 'coding-management-manual.coding-progress.aggregation-note' | translate:{
+                  rawCases: codingProgressOverview.rawTotalCasesToCode,
+                  effectiveCases: codingProgressOverview.totalCasesToCode,
+                  threshold: codingProgressOverview.aggregationThreshold,
+                  collapsedCases: codingProgressOverview.aggregatedDuplicateCases
+                } }}
               </span>
             </div>
 
@@ -876,10 +884,12 @@
             <div *ngIf="caseCoverageOverview.aggregationActive" class="aggregation-note">
               <mat-icon>filter_alt</mat-icon>
               <span>
-                Aggregation ist aktiv: {{caseCoverageOverview.totalCasesToCode}} Rohantworten ergeben
-                {{caseCoverageOverview.effectiveTotalCasesToCode}} effektive Kodierfälle. Dadurch werden bei Schwelle
-                {{caseCoverageOverview.aggregationThreshold}} {{caseCoverageOverview.aggregatedDuplicateCases}}
-                Kodierungen eingespart.
+                {{ 'coding-management-manual.coding-progress.aggregation-note' | translate:{
+                  rawCases: caseCoverageOverview.totalCasesToCode,
+                  effectiveCases: caseCoverageOverview.effectiveTotalCasesToCode,
+                  threshold: caseCoverageOverview.aggregationThreshold,
+                  collapsedCases: caseCoverageOverview.aggregatedDuplicateCases
+                } }}
               </span>
             </div>
             <div class="coverage-bar">
@@ -946,10 +956,12 @@
               <div *ngIf="appliedResultsOverview.aggregationActive" class="aggregation-note">
                 <mat-icon>filter_alt</mat-icon>
                 <span>
-                  Aggregation ist aktiv: {{appliedResultsOverview.rawTotalIncompleteResponses}} Rohantworten ergeben
-                  {{appliedResultsOverview.totalIncompleteResponses}} effektive Kodierfälle. Dadurch werden bei Schwelle
-                  {{appliedResultsOverview.aggregationThreshold}} {{appliedResultsOverview.aggregatedDuplicateCases}}
-                  Kodierungen eingespart.
+                  {{ 'coding-management-manual.coding-progress.aggregation-note' | translate:{
+                    rawCases: appliedResultsOverview.rawTotalIncompleteResponses,
+                    effectiveCases: appliedResultsOverview.totalIncompleteResponses,
+                    threshold: appliedResultsOverview.aggregationThreshold,
+                    collapsedCases: appliedResultsOverview.aggregatedDuplicateCases
+                  } }}
                 </span>
               </div>
               <div class="coverage-bar">
