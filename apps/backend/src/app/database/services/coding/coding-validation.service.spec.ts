@@ -131,6 +131,8 @@ describe('CodingValidationService', () => {
       getSlimResponsesForVariables: jest.fn().mockResolvedValue([]),
       aggregateResponsesByValue: jest.fn().mockReturnValue([])
     } as unknown as jest.Mocked<CodingJobService>;
+    mockQueryBuilder.getRawMany.mockResolvedValue([]);
+    mockQueryBuilder.getCount.mockResolvedValue(0);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -1062,6 +1064,33 @@ describe('CodingValidationService', () => {
         'response'
       );
       expect(mockQueryBuilder.getCount).toHaveBeenCalled();
+    });
+
+    it('should count applied DERIVE_ERROR job variables even without incomplete variables', async () => {
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([
+        { unitName: 'unitDerive', variableId: 'varDerive' }
+      ]);
+      mockQueryBuilder.getCount.mockResolvedValueOnce(1);
+
+      const result = await service.getAppliedResultsCount(1, []);
+
+      expect(result).toBe(1);
+      expect(mockResponseRepository.createQueryBuilder).toHaveBeenCalledWith(
+        'response'
+      );
+      expect(mockQueryBuilder.getCount).toHaveBeenCalledTimes(1);
+    });
+
+    it('should treat invalid incomplete variable payloads as empty', async () => {
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([
+        { unitName: 'unitDerive', variableId: 'varDerive' }
+      ]);
+      mockQueryBuilder.getCount.mockResolvedValueOnce(1);
+
+      const result = await service.getAppliedResultsCount(1, undefined as never);
+
+      expect(result).toBe(1);
+      expect(mockQueryBuilder.getCount).toHaveBeenCalledTimes(1);
     });
 
     it('should process variables in batches', async () => {

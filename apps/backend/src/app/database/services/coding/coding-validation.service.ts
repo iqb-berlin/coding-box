@@ -33,6 +33,7 @@ import {
   ManualCodingExcludedSourceSummary,
   summarizeCoveredSourceVariables
 } from '../../utils/manual-coding-scope.util';
+import { createManualCodingVariableReferences } from '../../utils/manual-coding-candidate.util';
 
 interface NormalizedExpectedCombination {
   unitKey: string;
@@ -1138,24 +1139,72 @@ export class CodingValidationService {
     return casesInJobsMap;
   }
 
+  private async getDeriveErrorManualJobVariables(
+    workspaceId: number
+  ): Promise<Array<{ unitName: string; variableId: string }>> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .select('DISTINCT cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .innerJoin('cju.coding_job', 'coding_job')
+      .innerJoin('cju.response', 'response')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
+      .andWhere('response.status_v1 = :deriveErrorStatus', {
+        deriveErrorStatus: statusStringToNumber('DERIVE_ERROR')
+      });
+
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'appliedResultsDeriveErrorVariables'
+    });
+
+    const rawResults = await query.getRawMany<{ unitName: string; variableId: string }>();
+    return rawResults.filter(row => row.unitName && row.variableId);
+  }
+
+  private async getAppliedResultsVariables(
+    workspaceId: number,
+    incompleteVariables: { unitName: string; variableId: string }[]
+  ): Promise<Array<{ unitName: string; variableId: string }>> {
+    const providedVariables = Array.isArray(incompleteVariables) ?
+      incompleteVariables :
+      [];
+    const deriveErrorManualVariables = await this.getDeriveErrorManualJobVariables(workspaceId);
+    return createManualCodingVariableReferences([
+      ...providedVariables,
+      ...deriveErrorManualVariables
+    ]);
+  }
+
   async getAppliedResultsCount(
     workspaceId: number,
     incompleteVariables: { unitName: string; variableId: string }[]
   ): Promise<number> {
     try {
+      const providedVariables = Array.isArray(incompleteVariables) ?
+        incompleteVariables :
+        [];
       this.logger.log(
-        `Getting applied results count for ${incompleteVariables.length} manual coding variables in workspace ${workspaceId}`
+        `Getting applied results count for ${providedVariables.length} manual coding variables in workspace ${workspaceId}`
       );
 
-      if (incompleteVariables.length === 0) {
+      const appliedResultsVariables = await this.getAppliedResultsVariables(
+        workspaceId,
+        providedVariables
+      );
+
+      if (appliedResultsVariables.length === 0) {
         return 0;
       }
 
       let totalAppliedCount = 0;
       const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
       const batchSize = 50;
-      for (let i = 0; i < incompleteVariables.length; i += batchSize) {
-        const batch = incompleteVariables.slice(i, i + batchSize);
+      for (let i = 0; i < appliedResultsVariables.length; i += batchSize) {
+        const batch = appliedResultsVariables.slice(i, i + batchSize);
 
         const query = this.responseRepository
           .createQueryBuilder('response')
@@ -1165,12 +1214,25 @@ export class CodingValidationService {
           .innerJoin('booklet.person', 'person')
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('person.consider = :consider', { consider: true })
-          .andWhere('response.status_v1 IN (:...sourceStatuses)', {
-            sourceStatuses: [
-              statusStringToNumber('CODING_INCOMPLETE'),
-              statusStringToNumber('INTENDED_INCOMPLETE')
-            ]
-          })
+          .andWhere(new Brackets(qb => {
+            qb.where('response.status_v1 IN (:...sourceStatuses)', {
+              sourceStatuses: [
+                statusStringToNumber('CODING_INCOMPLETE'),
+                statusStringToNumber('INTENDED_INCOMPLETE')
+              ]
+            }).orWhere(
+              `response.status_v1 = :deriveErrorStatus
+                AND EXISTS (
+                  SELECT 1
+                  FROM coding_job_unit manual_derive_cju
+                  INNER JOIN coding_job manual_derive_cj
+                    ON manual_derive_cj.id = manual_derive_cju.coding_job_id
+                  WHERE manual_derive_cju.response_id = response.id
+                    AND manual_derive_cj.training_id IS NULL
+                )`,
+              { deriveErrorStatus: statusStringToNumber('DERIVE_ERROR') }
+            );
+          }))
           .andWhere('response.status_v2 IN (:...targetStatuses)', {
             targetStatuses: [
               statusStringToNumber('CODING_COMPLETE'),
