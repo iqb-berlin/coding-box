@@ -1228,7 +1228,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(DownloadCodingResultsDialogComponent, {
       width: '550px',
       data: {
-        currentVersion: this.selectedStatisticsVersion
+        currentVersion: this.selectedStatisticsVersion,
+        hasGeoGebraResponses: this.isGeogebraAvailable
       }
     });
 
@@ -1237,12 +1238,19 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       format: CodingResultsExportFormat;
       includeReplayUrls: boolean;
       includeResponseValues: boolean;
+      includeGeoGebraFiles: boolean;
     } | undefined) => {
       if (result) {
         const {
-          version, format, includeReplayUrls, includeResponseValues
+          version, format, includeReplayUrls, includeResponseValues, includeGeoGebraFiles
         } = result;
-        this.codingManagementService.downloadCodingResults(version, format, includeReplayUrls, includeResponseValues)
+        this.codingManagementService.downloadCodingResults(
+          version,
+          format,
+          includeReplayUrls,
+          includeResponseValues,
+          includeGeoGebraFiles
+        )
           .finally(() => {
             this.isDownloadInProgress = false;
           });

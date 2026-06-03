@@ -23,6 +23,7 @@ import { CoderService } from '../../../coding/services/coder.service';
 import { CodingExportEstimate, JobDefinition } from '../../../coding/services/coding-job-backend.service';
 import { CoderTraining } from '../../../coding/models/coder-training.model';
 import { Coder } from '../../../coding/models/coder.model';
+import { ResponseService } from '../../../shared/services/response/response.service';
 import {
   ExportSelectionDialogComponent,
   ExportSelectionDialogResult
@@ -80,6 +81,7 @@ export class ExportComponent {
   private snackBar = inject(MatSnackBar);
   private codingFacadeService = inject(CodingFacadeService);
   private coderService = inject(CoderService);
+  private responseService = inject(ResponseService);
   private dialog = inject(MatDialog);
 
   selectedFormat: ExportFormat = 'results-by-version';
@@ -89,6 +91,8 @@ export class ExportComponent {
   includeComments = false;
   includeReplayUrl = false;
   includeResponseValues = true;
+  includeGeoGebraFiles = false;
+  hasGeoGebraResponses = false;
   outputCommentsInsteadOfCodes = false;
   anonymizeCoders = false;
   usePseudoCoders = false;
@@ -229,11 +233,25 @@ export class ExportComponent {
     this.coderService.getCoders().subscribe(coders => {
       this.coders = coders;
     });
+
+    this.responseService.hasGeogebraResponses(workspaceId).subscribe(hasGeoGebraResponses => {
+      this.hasGeoGebraResponses = hasGeoGebraResponses;
+      this.clearUnsupportedResultsOptions();
+    });
   }
 
   onFormatChange(): void {
     this.clearLargeByVariableEstimate();
     this.clearUnsupportedOptions();
+    this.clearUnsupportedResultsOptions();
+  }
+
+  onResultsFormatChange(): void {
+    this.clearUnsupportedResultsOptions();
+  }
+
+  onIncludeResponseValuesChange(): void {
+    this.clearUnsupportedResultsOptions();
   }
 
   onDoubleCodingMethodChange(): void {
@@ -287,6 +305,17 @@ export class ExportComponent {
 
     if (!this.supportsManualVariableFilter()) {
       this.excludeAutoCoded = false;
+    }
+  }
+
+  private clearUnsupportedResultsOptions(): void {
+    if (
+      this.selectedFormat !== 'results-by-version' ||
+      this.resultsFormat !== 'excel' ||
+      !this.includeResponseValues ||
+      !this.hasGeoGebraResponses
+    ) {
+      this.includeGeoGebraFiles = false;
     }
   }
 
@@ -404,7 +433,8 @@ export class ExportComponent {
         ...exportConfig,
         version: this.resultsVersion,
         format: this.resultsFormat,
-        includeResponseValues: this.includeResponseValues
+        includeResponseValues: this.includeResponseValues,
+        includeGeoGebraFiles: this.includeGeoGebraFiles
       };
     }
 

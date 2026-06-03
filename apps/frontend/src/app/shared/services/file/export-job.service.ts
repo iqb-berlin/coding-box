@@ -45,6 +45,7 @@ export interface ExportJobConfig {
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;
+  includeGeoGebraFiles?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   doubleCodingMethod?:
@@ -271,7 +272,7 @@ export class ExportJobService implements OnDestroy {
 
   private getDownloadExtension(exportType: string, fileName?: string): string {
     const fileExtension = fileName?.split('.').pop()?.toLowerCase();
-    if (fileExtension && ['csv', 'xlsx', 'json'].includes(fileExtension)) {
+    if (fileExtension && ['csv', 'xlsx', 'json', 'zip'].includes(fileExtension)) {
       return fileExtension;
     }
     return exportType === 'detailed' || exportType === 'by-variable-compact' ? 'csv' : 'xlsx';
