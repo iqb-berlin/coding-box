@@ -164,6 +164,7 @@ describe('ExportComponent', () => {
       exportType: 'results-by-version',
       format: 'excel',
       includeResponseValues: true,
+      includeGeoGebraResponseValues: false,
       includeGeoGebraFiles: true
     }));
 
@@ -175,6 +176,25 @@ describe('ExportComponent', () => {
     expect(startJob).toHaveBeenCalledWith(5, expect.objectContaining({
       exportType: 'results-by-version',
       format: 'csv',
+      includeGeoGebraResponseValues: false,
+      includeGeoGebraFiles: false
+    }));
+  });
+
+  it('includes raw GeoGebra response value option for result exports', () => {
+    component.selectedFormat = 'results-by-version';
+    component.resultsFormat = 'csv';
+    component.includeResponseValues = true;
+    component.hasGeoGebraResponses = true;
+    component.includeGeoGebraResponseValues = true;
+
+    component.onExport();
+
+    expect(startJob).toHaveBeenCalledWith(5, expect.objectContaining({
+      exportType: 'results-by-version',
+      format: 'csv',
+      includeResponseValues: true,
+      includeGeoGebraResponseValues: true,
       includeGeoGebraFiles: false
     }));
   });

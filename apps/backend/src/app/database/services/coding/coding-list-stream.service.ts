@@ -476,7 +476,8 @@ export class CodingListStreamService {
     serverUrl?: string,
     includeReplayUrls: boolean = false,
     progressCallback?: (percentage: number) => Promise<void>,
-    includeResponseValues: boolean = true
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false
   ) {
     this.logger.log(
       `Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
@@ -521,7 +522,8 @@ export class CodingListStreamService {
               serverUrl!,
               workspace_id,
               includeReplayUrls,
-              includeResponseValues
+              includeResponseValues,
+              includeGeoGebraResponseValues
             );
 
             if (item !== null) {
@@ -581,7 +583,8 @@ export class CodingListStreamService {
     serverUrl?: string,
     includeReplayUrls: boolean = false,
     progressCallback?: (percentage: number) => Promise<void>,
-    includeResponseValues: boolean = true
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false
   ): Promise<Buffer> {
     this.logger.log(
       `Starting streaming Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
@@ -650,7 +653,8 @@ export class CodingListStreamService {
             serverUrl || '',
             workspace_id,
             includeReplayUrls,
-            includeResponseValues
+            includeResponseValues,
+            includeGeoGebraResponseValues
           );
 
           if (item !== null) {
@@ -782,6 +786,7 @@ export class CodingListStreamService {
             serverUrl || '',
             workspace_id,
             includeReplayUrls,
+            true,
             true
           );
 

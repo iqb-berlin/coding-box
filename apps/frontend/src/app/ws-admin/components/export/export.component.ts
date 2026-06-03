@@ -91,6 +91,7 @@ export class ExportComponent {
   includeComments = false;
   includeReplayUrl = false;
   includeResponseValues = true;
+  includeGeoGebraResponseValues = false;
   includeGeoGebraFiles = false;
   hasGeoGebraResponses = false;
   outputCommentsInsteadOfCodes = false;
@@ -254,6 +255,10 @@ export class ExportComponent {
     this.clearUnsupportedResultsOptions();
   }
 
+  onIncludeGeoGebraFilesChange(): void {
+    this.clearUnsupportedResultsOptions();
+  }
+
   onDoubleCodingMethodChange(): void {
     this.clearUnsupportedOptions();
   }
@@ -316,6 +321,15 @@ export class ExportComponent {
       !this.hasGeoGebraResponses
     ) {
       this.includeGeoGebraFiles = false;
+    }
+
+    if (
+      this.selectedFormat !== 'results-by-version' ||
+      !this.includeResponseValues ||
+      !this.hasGeoGebraResponses ||
+      this.includeGeoGebraFiles
+    ) {
+      this.includeGeoGebraResponseValues = false;
     }
   }
 
@@ -434,6 +448,7 @@ export class ExportComponent {
         version: this.resultsVersion,
         format: this.resultsFormat,
         includeResponseValues: this.includeResponseValues,
+        includeGeoGebraResponseValues: this.includeGeoGebraResponseValues,
         includeGeoGebraFiles: this.includeGeoGebraFiles
       };
     }

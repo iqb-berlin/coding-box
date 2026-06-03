@@ -13,6 +13,7 @@ export interface VersionedCodingResultsExportOptions {
   serverUrl?: string;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;
+  includeGeoGebraResponseValues?: boolean;
   includeGeoGebraFiles?: boolean;
   onProgress?: (percentage: number) => Promise<void>;
 }
@@ -50,7 +51,8 @@ export class CodingExportOrchestratorService {
       options.serverUrl || '',
       options.includeReplayUrl || false,
       options.onProgress,
-      options.includeResponseValues !== false
+      options.includeResponseValues !== false,
+      options.includeGeoGebraResponseValues === true
     );
   }
 
@@ -75,7 +77,8 @@ export class CodingExportOrchestratorService {
       options.serverUrl || '',
       options.includeReplayUrl || false,
       options.onProgress,
-      options.includeResponseValues !== false
+      options.includeResponseValues !== false,
+      options.includeGeoGebraResponseValues === true
     );
   }
 

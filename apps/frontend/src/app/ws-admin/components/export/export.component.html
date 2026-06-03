@@ -95,8 +95,15 @@
             {{ 'ws-admin.export-options.include-response-values' | translate }}
           </mat-checkbox>
 
+          <mat-checkbox *ngIf="hasGeoGebraResponses" [(ngModel)]="includeGeoGebraResponseValues" color="primary"
+            [disabled]="!includeResponseValues || includeGeoGebraFiles"
+            [matTooltip]="'ws-admin.export-options.include-geogebra-response-values-tooltip' | translate">
+            {{ 'ws-admin.export-options.include-geogebra-response-values' | translate }}
+          </mat-checkbox>
+
           <mat-checkbox *ngIf="hasGeoGebraResponses" [(ngModel)]="includeGeoGebraFiles" color="primary"
             [disabled]="resultsFormat !== 'excel' || !includeResponseValues"
+            (ngModelChange)="onIncludeGeoGebraFilesChange()"
             [matTooltip]="'ws-admin.export-options.include-geogebra-files-tooltip' | translate">
             {{ 'ws-admin.export-options.include-geogebra-files' | translate }}
           </mat-checkbox>
