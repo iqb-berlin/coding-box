@@ -846,6 +846,8 @@ describe('CodingManagementManualComponent', () => {
       loadCaseCoverageOverview(): void;
       loadCodingProgressOverview(): void;
       loadCodingIncompleteVariables(): void;
+      loadCodingFreshness(): void;
+      loadResponseAnalysis(): void;
     };
     const variableCoverageSpy = jest
       .spyOn(componentInternals, 'loadVariableCoverageOverview')
@@ -859,6 +861,12 @@ describe('CodingManagementManualComponent', () => {
     const incompleteVariablesSpy = jest
       .spyOn(componentInternals, 'loadCodingIncompleteVariables')
       .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    const loadResponseAnalysisSpy = jest
+      .spyOn(componentInternals, 'loadResponseAnalysis')
+      .mockImplementation();
 
     componentInternals.loadManualTabData('planning');
 
@@ -866,6 +874,8 @@ describe('CodingManagementManualComponent', () => {
     expect(caseCoverageSpy).toHaveBeenCalled();
     expect(codingProgressSpy).toHaveBeenCalled();
     expect(incompleteVariablesSpy).toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).toHaveBeenCalled();
+    expect(loadResponseAnalysisSpy).toHaveBeenCalled();
   });
 
   it('should ignore duplicate tab change events for the active manual tab', () => {
@@ -880,6 +890,78 @@ describe('CodingManagementManualComponent', () => {
     component.onManualTabChanged(1);
 
     expect(loadManualTabDataSpy).not.toHaveBeenCalled();
+  });
+
+  it('should refresh the active manual workflow tab when the window regains focus', () => {
+    component.selectedManualTabIndex = 1;
+    const componentInternals = component as unknown as {
+      loadManualTabData(tab: 'planning'): void;
+      loadCodingFreshness(): void;
+      reloadCodingJobsList(): void;
+    };
+    const loadManualTabDataSpy = jest
+      .spyOn(componentInternals, 'loadManualTabData')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    const reloadCodingJobsListSpy = jest
+      .spyOn(componentInternals, 'reloadCodingJobsList')
+      .mockImplementation();
+
+    window.dispatchEvent(new Event('focus'));
+
+    expect(loadManualTabDataSpy).toHaveBeenCalledWith(
+      'planning',
+      { reloadCodingJobs: false }
+    );
+    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+    expect(reloadCodingJobsListSpy).toHaveBeenCalled();
+  });
+
+  it('should not reload coding jobs twice when execution regains focus', () => {
+    component.selectedManualTabIndex = 3;
+    const componentInternals = component as unknown as {
+      loadCodingFreshness(): void;
+      loadCodingProgressOverview(): void;
+      loadCaseCoverageOverview(): void;
+      loadWorkspaceKappaSummary(): void;
+      reloadCodingJobsList(): void;
+    };
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    jest
+      .spyOn(componentInternals, 'loadCodingProgressOverview')
+      .mockImplementation();
+    jest
+      .spyOn(componentInternals, 'loadCaseCoverageOverview')
+      .mockImplementation();
+    jest
+      .spyOn(componentInternals, 'loadWorkspaceKappaSummary')
+      .mockImplementation();
+    const reloadCodingJobsListSpy = jest
+      .spyOn(componentInternals, 'reloadCodingJobsList')
+      .mockImplementation();
+
+    window.dispatchEvent(new Event('focus'));
+
+    expect(loadCodingFreshnessSpy).toHaveBeenCalled();
+    expect(reloadCodingJobsListSpy).not.toHaveBeenCalled();
+  });
+
+  it('should not refresh preparation on window focus', () => {
+    component.selectedManualTabIndex = 0;
+    const componentInternals = component as unknown as {
+      refreshManualStateAfterExternalChange(): void;
+    };
+    const refreshSpy = jest
+      .spyOn(componentInternals, 'refreshManualStateAfterExternalChange')
+      .mockImplementation();
+
+    window.dispatchEvent(new Event('focus'));
+
+    expect(refreshSpy).not.toHaveBeenCalled();
   });
 
   it('should open training reliability and discussion in within-training mode', () => {
