@@ -255,7 +255,7 @@
   </div>
 
   <div *ngIf="!isLoading && jobDefinitions.length === 0" class="empty-state">
-    <mat-icon>assignment_add</mat-icon>
+    <mat-icon class="empty-state-icon">assignment_add</mat-icon>
     <h4>{{ 'coding-job-definitions.empty.title' | translate }}</h4>
     <p>{{ 'coding-job-definitions.empty.description' | translate }}</p>
     <button
