@@ -364,6 +364,61 @@ describe('CodingFreshnessService', () => {
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
   });
 
+  it('reopens existing auto-coding freshness rows in the reset response scope', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
+
+    const scopeQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([
+        { unitId: 10, version: 'v1' },
+        { unitId: 10, version: 'v3' }
+      ])
+    });
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '4' }])
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(scopeQb)
+      .mockReturnValueOnce(responseCountsQb);
+
+    await service.markExistingAutoCodingVersionsPendingAfterResetScope(
+      1,
+      ['v1', 'v2', 'v3'],
+      ['UNIT_A'],
+      ['VAR_A']
+    );
+
+    expect(scopeQb.andWhere).toHaveBeenCalledWith(
+      'unit.name IN (:...unitNames)',
+      { unitNames: ['UNIT_A'] }
+    );
+    expect(scopeQb.andWhere).toHaveBeenCalledWith(
+      'response.variableid IN (:...variableIds)',
+      { variableIds: ['VAR_A'] }
+    );
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v1',
+          state: 'PENDING',
+          reason: 'RESET',
+          affected_response_count: 4,
+          source_revision: 9,
+          coded_revision: null
+        }),
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v3',
+          state: 'PENDING',
+          reason: 'RESET',
+          affected_response_count: 4
+        })
+      ]),
+      ['workspace_id', 'unit_id', 'version']
+    );
+    expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(2);
+  });
+
   it('marks only v1 reset units as stale source for manual jobs', async () => {
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
 

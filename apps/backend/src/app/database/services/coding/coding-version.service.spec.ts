@@ -43,6 +43,7 @@ describe('CodingVersionService', () => {
 
   const mockCodingFreshnessService = {
     markVersionsPendingAfterReset: jest.fn().mockResolvedValue(undefined),
+    markExistingAutoCodingVersionsPendingAfterResetScope: jest.fn().mockResolvedValue(undefined),
     markAppliedCodingJobsResultsClearedForUnitIds: jest.fn().mockResolvedValue(undefined),
     markAppliedCodingJobsResultsClearedForResponseIds: jest.fn().mockResolvedValue(undefined),
     reconcileAppliedManualCodingJobs: jest.fn().mockResolvedValue(0)
@@ -100,6 +101,7 @@ describe('CodingVersionService', () => {
     mockCodingAnalysisService.invalidateCache.mockClear();
     mockCodingValidationService.invalidateIncompleteVariablesCache.mockClear();
     mockCodingFreshnessService.markVersionsPendingAfterReset.mockClear();
+    mockCodingFreshnessService.markExistingAutoCodingVersionsPendingAfterResetScope.mockClear();
     mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForUnitIds.mockClear();
     mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds.mockClear();
     mockCodingFreshnessService.reconcileAppliedManualCodingJobs.mockClear();
@@ -521,6 +523,35 @@ describe('CodingVersionService', () => {
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v2');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
       expect(mockCodingFreshnessService.markVersionsPendingAfterReset).not.toHaveBeenCalled();
+      expect(mockCodingFreshnessService.markExistingAutoCodingVersionsPendingAfterResetScope)
+        .toHaveBeenCalledWith(1, ['v1', 'v3'], undefined, undefined);
+    });
+
+    it('reopens existing auto-coding freshness even when no coded responses match reset', async () => {
+      const workspaceId = 1;
+      const version = 'v1';
+      const unitFilters = ['UNIT_A'];
+      const variableFilters = ['VAR_A'];
+
+      mockQueryBuilder.getCount.mockResolvedValue(0);
+
+      await service.resetCodingVersion(workspaceId, version, unitFilters, variableFilters);
+
+      expect(mockResponseRepository.update).not.toHaveBeenCalled();
+      expect(mockCodingFreshnessService.markExistingAutoCodingVersionsPendingAfterResetScope)
+        .toHaveBeenCalledWith(1, ['v1', 'v3'], unitFilters, variableFilters);
+    });
+
+    it('reopens second auto-coding freshness after manual coding reset cascades to v3', async () => {
+      const workspaceId = 1;
+      const version = 'v2';
+
+      mockQueryBuilder.getCount.mockResolvedValue(0);
+
+      await service.resetCodingVersion(workspaceId, version);
+
+      expect(mockCodingFreshnessService.markExistingAutoCodingVersionsPendingAfterResetScope)
+        .toHaveBeenCalledWith(1, ['v3'], undefined, undefined);
     });
 
     it('should handle large batches correctly', async () => {

@@ -628,6 +628,79 @@ export class CodingFreshnessService {
     }
   }
 
+  async markExistingAutoCodingVersionsPendingAfterResetScope(
+    workspaceId: number,
+    versions: CodingFreshnessVersion[],
+    unitNames?: string[],
+    variableIds?: string[]
+  ): Promise<void> {
+    const autoCodingVersions = this.uniqueVersions(versions)
+      .filter((version): version is Extract<CodingFreshnessVersion, 'v1' | 'v3'> => (
+        version === 'v1' || version === 'v3'
+      ));
+    if (autoCodingVersions.length === 0) {
+      return;
+    }
+    const autoCodingVersionSet = new Set<CodingFreshnessVersion>(autoCodingVersions);
+
+    const query = this.responseRepository
+      .createQueryBuilder('response')
+      .select('response.unitid', 'unitId')
+      .addSelect('freshness.version', 'version')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin(
+        CodingUnitFreshness,
+        'freshness',
+        `freshness.workspace_id = :workspaceId
+          AND freshness.unit_id = response.unitid
+          AND freshness.version IN (:...versions)`,
+        { workspaceId, versions: autoCodingVersions }
+      )
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.status IN (:...codedStatuses)', { codedStatuses: [1, 2, 3] })
+      .andWhere('response.is_autocoder_generated IS NOT TRUE')
+      .groupBy('response.unitid')
+      .addGroupBy('freshness.version');
+
+    const scopedUnitNames = this.uniqueStrings(unitNames || []);
+    if (scopedUnitNames.length > 0) {
+      query.andWhere('unit.name IN (:...unitNames)', { unitNames: scopedUnitNames });
+    }
+
+    const scopedVariableIds = this.uniqueStrings(variableIds || []);
+    if (scopedVariableIds.length > 0) {
+      query.andWhere('response.variableid IN (:...variableIds)', {
+        variableIds: scopedVariableIds
+      });
+    }
+
+    await this.applyWorkspaceExclusions(workspaceId, query);
+
+    const rows = await query.getRawMany<{
+      unitId: number | string;
+      version: CodingFreshnessVersion;
+    }>();
+    const resetUnitIdsByVersion: ResetFreshnessUnitMap = {};
+
+    rows.forEach(row => {
+      const unitId = Number(row.unitId);
+      if (!Number.isInteger(unitId) || unitId <= 0 || !autoCodingVersionSet.has(row.version)) {
+        return;
+      }
+
+      resetUnitIdsByVersion[row.version] = [
+        ...(resetUnitIdsByVersion[row.version] || []),
+        unitId
+      ];
+    });
+
+    await this.markVersionsPendingAfterReset(workspaceId, resetUnitIdsByVersion);
+  }
+
   async clearVersionsAfterReset(
     workspaceId: number,
     versions: CodingFreshnessVersion[],
