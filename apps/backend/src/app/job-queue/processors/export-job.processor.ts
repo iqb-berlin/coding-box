@@ -42,6 +42,26 @@ export class ExportJobProcessor {
         'results-by-version exports support only "csv" or "excel" format'
       );
     }
+
+    if (
+      job.data.exportType === 'results-by-version' &&
+      job.data.includeGeoGebraFiles &&
+      job.data.format !== 'excel'
+    ) {
+      throw new Error(
+        'GeoGebra file packages are supported only for results-by-version Excel exports'
+      );
+    }
+
+    if (
+      job.data.exportType === 'results-by-version' &&
+      job.data.includeGeoGebraFiles &&
+      job.data.includeResponseValues === false
+    ) {
+      throw new Error(
+        'GeoGebra file packages require response values because links are written to the value column'
+      );
+    }
   }
 
   private async checkCancellation(
@@ -134,6 +154,13 @@ export class ExportJobProcessor {
       if (job.data.exportType === 'coding-list' && job.data.format === 'json') {
         fileExt = 'json';
       }
+      if (
+        job.data.exportType === 'results-by-version' &&
+        job.data.format === 'excel' &&
+        job.data.includeGeoGebraFiles
+      ) {
+        fileExt = 'zip';
+      }
       const fileName = `export_${job.id}_${Date.now()}.${fileExt}`;
       filePath = path.join(tempDir, fileName);
       this.logger.log(`Generating export file: ${filePath}`);
@@ -165,7 +192,8 @@ export class ExportJobProcessor {
               serverUrl: job.data.serverUrl || '',
               includeReplayUrl: job.data.includeReplayUrl || false,
               onProgress,
-              includeResponseValues: job.data.includeResponseValues !== false
+              includeResponseValues: job.data.includeResponseValues !== false,
+              includeGeoGebraFiles: job.data.includeGeoGebraFiles === true
             });
           } else {
             // CSV Stream

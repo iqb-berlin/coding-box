@@ -38,6 +38,7 @@ export interface CodingExportConfig {
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;
+  includeGeoGebraFiles?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   doubleCodingMethod?:

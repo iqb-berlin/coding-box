@@ -156,6 +156,54 @@ describe('ExportJobProcessor', () => {
     }
   });
 
+  it('uses ZIP extension for final result GeoGebra package exports', async () => {
+    const { processor, codingExportOrchestratorService } = createProcessor();
+    codingExportOrchestratorService.exportResultsByVersionAsExcel.mockResolvedValue(Buffer.from('zip'));
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'results-by-version',
+        version: 'v2',
+        format: 'excel',
+        includeReplayUrl: true,
+        includeResponseValues: true,
+        includeGeoGebraFiles: true,
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example'
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportOrchestratorService.exportResultsByVersionAsExcel).toHaveBeenCalledWith({
+        workspaceId: 7,
+        version: 'v2',
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example',
+        includeReplayUrl: true,
+        onProgress: expect.any(Function),
+        includeResponseValues: true,
+        includeGeoGebraFiles: true
+      });
+      expect(result.fileName).toMatch(/\.zip$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('zip');
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('rejects GeoGebra package exports without response values', async () => {
+    const { processor, codingExportOrchestratorService } = createProcessor();
+
+    await expect(processor.process(createJob({
+      exportType: 'results-by-version',
+      format: 'excel',
+      includeResponseValues: false,
+      includeGeoGebraFiles: true
+    }))).rejects.toThrow('GeoGebra file packages require response values');
+
+    expect(codingExportOrchestratorService.exportResultsByVersionAsExcel).not.toHaveBeenCalled();
+  });
+
   it('routes detailed export jobs through the orchestrator', async () => {
     const { processor, codingExportOrchestratorService } = createProcessor();
     codingExportOrchestratorService.exportDetailed.mockResolvedValue(Buffer.from('csv'));

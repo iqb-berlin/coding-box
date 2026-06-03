@@ -193,4 +193,22 @@ export class CodingListService {
       includeResponseValues
     );
   }
+
+  async getCodingResultsByVersionAsGeoGebraZip(
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken?: string,
+    serverUrl?: string,
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Buffer> {
+    return this.streamService.getCodingResultsByVersionAsGeoGebraZip(
+      workspace_id,
+      version,
+      authToken,
+      serverUrl,
+      includeReplayUrls,
+      progressCallback
+    );
+  }
 }

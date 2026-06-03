@@ -216,7 +216,31 @@ describe('CodingManagementService', () => {
         'csv',
         true,
         undefined,
+        false,
         false
+      );
+    });
+
+    it('should pass GeoGebra package option to background export job', async () => {
+      exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }) as never);
+      const mockBlob = new Blob(['zip data'], { type: 'application/zip' });
+      exportServiceMock.downloadExportFile.mockReturnValue(of(mockBlob));
+
+      global.URL.createObjectURL = jest.fn();
+      global.URL.revokeObjectURL = jest.fn();
+
+      await service.downloadCodingResults('v2', 'excel', false, true, true);
+
+      expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(
+        1,
+        'results-by-version',
+        'v2',
+        'excel',
+        false,
+        undefined,
+        true,
+        true
       );
     });
   });
