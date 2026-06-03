@@ -520,7 +520,7 @@ describe('CodingValidationService', () => {
 
       expect(result).toEqual(cachedVariables);
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v5:1'
+        'coding_incomplete_variables_v6:1'
       );
     });
 
@@ -532,11 +532,13 @@ describe('CodingValidationService', () => {
         { unitName: 'unit1', variableId: 'var1', responseCount: '3' },
         { unitName: 'unit1', variableId: 'intended-only', responseCount: '2' }
       ]);
+      const deriveErrorQb = createQueryBuilderMock([]);
       const casesInJobsQb = createQueryBuilderMock([]);
 
       mockResponseRepository.createQueryBuilder = jest.fn()
         .mockReturnValueOnce(codingIncompleteQb)
-        .mockReturnValueOnce(intendedIncompleteQb);
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb);
       (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
 
       mockCacheService.get.mockResolvedValue(null);
@@ -571,10 +573,51 @@ describe('CodingValidationService', () => {
         })
       ]);
       expect(mockCacheService.set).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v5:1',
+        'coding_incomplete_variables_v6:1',
         result,
         300
       );
+    });
+
+    it('should expose DERIVE_ERROR response counts per manual coding variable', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '5' },
+        { unitName: 'unit1', variableId: 'var2', responseCount: '2' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const deriveErrorQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '3' }
+      ]);
+      const casesInJobsQb = createQueryBuilderMock([]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1', 'var2'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          variableId: 'var1',
+          deriveErrorResponseCount: 3
+        }),
+        expect.objectContaining({
+          variableId: 'var2',
+          deriveErrorResponseCount: 0
+        })
+      ]);
     });
 
     it('should exclude INTENDED_INCOMPLETE source variables covered by derived manual variables', async () => {
@@ -585,18 +628,21 @@ describe('CodingValidationService', () => {
         { unitName: 'unit1', variableId: 'base-var', responseCount: '3' },
         { unitName: 'unit1', variableId: 'standalone-var', responseCount: '2' }
       ]);
+      const deriveErrorQb = createQueryBuilderMock([]);
       const casesInJobsQb = createQueryBuilderMock([]);
 
       mockResponseRepository.createQueryBuilder = jest.fn()
         .mockReturnValueOnce(codingIncompleteQb)
         .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb)
         .mockReturnValueOnce(createQueryBuilderMock([
           { unitName: 'unit1', variableId: 'derived-var', responseCount: '3' }
         ]))
         .mockReturnValueOnce(createQueryBuilderMock([
           { unitName: 'unit1', variableId: 'base-var', responseCount: '3' },
           { unitName: 'unit1', variableId: 'standalone-var', responseCount: '2' }
-        ]));
+        ]))
+        .mockReturnValueOnce(createQueryBuilderMock([]));
       (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
 
       mockCacheService.get.mockResolvedValue(null);
@@ -643,11 +689,13 @@ describe('CodingValidationService', () => {
         { unitName: 'unit1', variableId: 'var1', responseCount: '4' }
       ]);
       const intendedIncompleteQb = createQueryBuilderMock([]);
+      const deriveErrorQb = createQueryBuilderMock([]);
       const casesInJobsQb = createQueryBuilderMock([]);
 
       mockResponseRepository.createQueryBuilder = jest.fn()
         .mockReturnValueOnce(codingIncompleteQb)
-        .mockReturnValueOnce(intendedIncompleteQb);
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb);
       (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
 
       mockCacheService.get.mockResolvedValue(null);
@@ -705,11 +753,13 @@ describe('CodingValidationService', () => {
         { unitName: 'unit1', variableId: 'derived-var', responseCount: '4' }
       ]);
       const intendedIncompleteQb = createQueryBuilderMock([]);
+      const deriveErrorQb = createQueryBuilderMock([]);
       const casesInJobsQb = createQueryBuilderMock([]);
 
       mockResponseRepository.createQueryBuilder = jest.fn()
         .mockReturnValueOnce(codingIncompleteQb)
-        .mockReturnValueOnce(intendedIncompleteQb);
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb);
       (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
 
       mockCacheService.get.mockResolvedValue(null);
@@ -749,6 +799,7 @@ describe('CodingValidationService', () => {
         { unitName: 'unit1', variableId: 'var1', responseCount: '6' }
       ]);
       const intendedIncompleteQb = createQueryBuilderMock([]);
+      const deriveErrorQb = createQueryBuilderMock([]);
       const casesInJobsQb = createQueryBuilderMock([
         { unitName: 'unit1', variableId: 'var1', casesInJobs: '4' }
       ]);
@@ -761,7 +812,8 @@ describe('CodingValidationService', () => {
 
       mockResponseRepository.createQueryBuilder = jest.fn()
         .mockReturnValueOnce(codingIncompleteQb)
-        .mockReturnValueOnce(intendedIncompleteQb);
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb);
       (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock)
         .mockReturnValueOnce(casesInJobsQb)
         .mockReturnValueOnce(assignedResponsesQb);
@@ -887,11 +939,13 @@ describe('CodingValidationService', () => {
         { unitName: 'unit1', variableId: 'var1', responseCount: '5' }
       ]);
       const intendedIncompleteQb = createQueryBuilderMock([]);
+      const deriveErrorQb = createQueryBuilderMock([]);
       const casesInJobsQb = createQueryBuilderMock([]);
 
       mockResponseRepository.createQueryBuilder = jest.fn()
         .mockReturnValueOnce(codingIncompleteQb)
-        .mockReturnValueOnce(intendedIncompleteQb);
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb);
       (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock)
         .mockReturnValue(casesInJobsQb);
 
@@ -1023,7 +1077,7 @@ describe('CodingValidationService', () => {
     it('should generate correct cache key', () => {
       const cacheKey = service.generateIncompleteVariablesCacheKey(123);
 
-      expect(cacheKey).toBe('coding_incomplete_variables_v5:123');
+      expect(cacheKey).toBe('coding_incomplete_variables_v6:123');
     });
   });
 
@@ -1034,7 +1088,7 @@ describe('CodingValidationService', () => {
       await service.invalidateIncompleteVariablesCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v5:1'
+        'coding_incomplete_variables_v6:1'
       );
     });
   });

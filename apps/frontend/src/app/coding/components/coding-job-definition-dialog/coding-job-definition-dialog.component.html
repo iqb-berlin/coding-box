@@ -476,7 +476,7 @@
                         }
 	                      </div>
 	                      }
-                        @if (data.mode === 'definition') {
+                        @if (data.mode === 'definition' && hasDeriveErrorResponses(variable)) {
                         <div class="derive-error-option" (click)="$event.stopPropagation()">
                           <mat-checkbox
                             [checked]="isDeriveErrorIncluded(variable)"

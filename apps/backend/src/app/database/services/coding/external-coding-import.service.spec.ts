@@ -102,7 +102,7 @@ describe('ExternalCodingImportService', () => {
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v5:17');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v6:17');
   });
 
   it('imports DERIVE_ERROR without turning it into completed false coding', async () => {
