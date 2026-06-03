@@ -39,7 +39,7 @@
         </mat-select>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="filter-field">
+      <mat-form-field appearance="outline" class="filter-field" *ngIf="showTrainingFilter">
         <mat-label>Nach Training filtern</mat-label>
         <mat-select [(value)]="selectedTrainingId" (selectionChange)="onTrainingFilterChange()">
           <mat-option [value]="null">Alle Trainings</mat-option>
@@ -52,29 +52,39 @@
     </div>
 
     <div class="actions-row">
-      @if (canApplyResults) {
+      <button mat-button (click)="loadCodingJobs()">
+        <mat-icon>refresh</mat-icon>
+        Aktualisieren
+      </button>
+      @if (canApplyResults && showApplyActions) {
       <button mat-button (click)="bulkApplyCodingResults()" class="bulk-apply-button">
         <mat-icon>rule</mat-icon>
         Alle Ergebnisse anwenden
       </button>
+      }
+      @if (canApplyResults && showTransferAction) {
       <button mat-button (click)="openTransferCodingCasesDialog()">
         <mat-icon>swap_horiz</mat-icon>
         Fälle übertragen
       </button>
       }
+      @if (showBulkDeleteAction) {
       <button mat-raised-button color="warn" (click)="bulkDeleteCodingJobs()"
         [disabled]="selection.selected.length === 0" class="bulk-delete-button">
         <mat-icon>delete_sweep</mat-icon>
         {{ selection.selected.length }} löschen
       </button>
+      }
+      @if (showComparisonActions) {
       <button mat-button (click)="openDoubleCodedReviewDialog()">
         <mat-icon>compare</mat-icon>
-        Doppelkodierung-Review
+        Doppelkodierungsreview
       </button>
       <button mat-button (click)="openCohensKappaStatisticsDialog()">
         <mat-icon>analytics</mat-icon>
-        Cohen's Kappa
+        Interrater-Reliabilität
       </button>
+      }
     </div>
   </div>
 
@@ -178,7 +188,7 @@
                 <span>Offene Fälle ansehen</span>
               </button>
             }
-            @if (canApplyResults && getPrimaryJobAction(element) !== 'apply') {
+            @if (showApplyActions && canApplyResults && getPrimaryJobAction(element) !== 'apply') {
               <button
                 mat-menu-item
                 type="button"

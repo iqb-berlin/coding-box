@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, ViewChild, AfterViewInit, inject, Output, EventEmitter
+  Component, OnInit, ViewChild, AfterViewInit, OnDestroy, inject, Output, EventEmitter, Input
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -78,6 +78,7 @@ interface SavedCode {
 }
 
 type JobPrimaryAction = 'start' | 'results' | 'apply';
+type CodingJobScope = 'all' | 'training' | 'productive';
 
 @Component({
   selector: 'coding-box-coding-jobs',
@@ -115,7 +116,7 @@ type JobPrimaryAction = 'start' | 'results' | 'apply';
     MatOption
   ]
 })
-export class CodingJobsComponent implements OnInit, AfterViewInit {
+export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   appService = inject(AppService);
   codingJobBackendService = inject(CodingJobBackendService);
   codingTrainingBackendService = inject(CodingTrainingBackendService);
@@ -157,9 +158,18 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   private lastKnownPaginator?: MatPaginator;
 
   @Output() jobsChanged = new EventEmitter<void>();
+  @Input() jobScope: CodingJobScope = 'all';
+  @Input() showTrainingFilter = true;
+  @Input() showComparisonActions = true;
+  @Input() showTransferAction = true;
+  @Input() showApplyActions = true;
+  @Input() showBulkDeleteAction = true;
+  @Input() autoReloadOnFocus = true;
 
   private handleWindowFocus = () => {
-    this.loadCodingJobs();
+    if (this.autoReloadOnFocus) {
+      this.loadCodingJobs();
+    }
   };
 
   ngOnInit(): void {
@@ -192,6 +202,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     if (this.lastKnownPaginator) {
       this.dataSource.paginator = this.lastKnownPaginator;
     }
+  }
+
+  ngOnDestroy(): void {
+    window.removeEventListener('focus', this.handleWindowFocus);
   }
 
   loadCodingJobs(): void {
@@ -247,7 +261,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
             this.jobDetailsCache.clear();
             this.isLoading = false;
             this.applyAllFilters();
-            this.jobsChanged.emit();
           },
           error: () => {
             this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
@@ -295,7 +308,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
             this.jobDetailsCache.clear();
             this.isLoading = false;
             this.applyAllFilters();
-            this.jobsChanged.emit();
           },
           error: () => {
             this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
@@ -327,6 +339,12 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   private applyAllFilters(): void {
     let filteredData = this.originalData || [];
+
+    if (this.jobScope === 'training') {
+      filteredData = filteredData.filter(job => !!job.training_id || !!job.training);
+    } else if (this.jobScope === 'productive') {
+      filteredData = filteredData.filter(job => !job.training_id && !job.training);
+    }
 
     if (this.selectedStatus !== null && this.selectedStatus !== 'all') {
       filteredData = filteredData.filter(job => job.status === this.selectedStatus);
@@ -548,6 +566,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   getPrimaryJobAction(job: CodingJob): JobPrimaryAction {
+    if (this.showApplyActions && this.canApplyCodingResults(job)) {
+      return 'apply';
+    }
+
     if (job.status === 'completed' || job.status === 'results_applied') {
       return 'results';
     }
@@ -572,7 +594,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   canApplyCodingResults(job: CodingJob): boolean {
-    return this.canApplyResults &&
+    return this.showApplyActions &&
+      this.canApplyResults &&
       job.status === 'completed' &&
       this.isCodingJobFreshnessApplyable(job) &&
       !job.training?.id &&

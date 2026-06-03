@@ -25,6 +25,28 @@
   min-width: 0;
 }
 
+.manual-coding-tabs {
+  display: block;
+  margin: 8px 0 24px;
+}
+
+.manual-tab-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+  min-width: 0;
+
+  button {
+    min-height: 40px;
+    height: auto;
+    line-height: 1.2;
+    white-space: normal;
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

@@ -179,6 +179,24 @@ describe('CodingJobsComponent', () => {
     expect(component.allCoders.length).toBe(2);
   });
 
+  it('should not emit jobsChanged for a plain reload', fakeAsync(() => {
+    const jobsChangedSpy = jest.spyOn(component.jobsChanged, 'emit');
+
+    component.loadCodingJobs();
+    tick();
+    flush();
+
+    expect(jobsChangedSpy).not.toHaveBeenCalled();
+  }));
+
+  it('should remove the window focus listener on destroy', () => {
+    const removeListenerSpy = jest.spyOn(window, 'removeEventListener');
+
+    component.ngOnDestroy();
+
+    expect(removeListenerSpy).toHaveBeenCalledWith('focus', expect.any(Function));
+  });
+
   it('should return correct status text', () => {
     expect(component.getStatusText('active')).toBe('Aktiv');
     expect(component.getStatusText('completed')).toBe('Abgeschlossen');
@@ -314,8 +332,12 @@ describe('CodingJobsComponent', () => {
     component.canApplyResults = true;
 
     expect(component.getPrimaryJobAction(mockCodingJobs[0] as CodingJob)).toBe('start');
+    expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe('apply');
+
+    component.showApplyActions = false;
     expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe('results');
 
+    component.showApplyActions = true;
     component.canApplyResults = false;
     expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe('results');
   });
