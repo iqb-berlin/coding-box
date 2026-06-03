@@ -21,6 +21,10 @@ import {
   AutocodingReadinessDto,
   AutocodingReadinessStatus
 } from '../../../../../../../api-dto/coding/autocoding-readiness.dto';
+import {
+  getCodingVariableIdCandidateSql,
+  isCodingVariableIdCandidate
+} from './coding-response-candidate.util';
 
 export type AutocodingReadinessOptions = {
   personIds?: string[];
@@ -336,6 +340,7 @@ export class CodingReadinessService {
           });
         })
       );
+    this.applyCodingCandidateFilter(query, 'response');
 
     this.applyAutocoderGeneratedFilter(query, autoCoderRun);
     const rows = await query
@@ -350,6 +355,13 @@ export class CodingReadinessService {
         responseCount: Number(row.response_count || 0)
       }))
       .filter(row => Number.isInteger(row.unitid) && row.responseCount > 0);
+  }
+
+  private applyCodingCandidateFilter(
+    query: SelectQueryBuilder<ResponseEntity>,
+    alias: string
+  ): void {
+    query.andWhere(getCodingVariableIdCandidateSql(alias));
   }
 
   private async createScopedResponseQuery(
@@ -556,6 +568,10 @@ export class CodingReadinessService {
     }>();
 
     candidateCounts.forEach(item => {
+      if (!isCodingVariableIdCandidate(item.variableid)) {
+        return;
+      }
+
       const unitName = unitIdToNameMap.get(item.unitid) || '';
       const validVars = validVariableSets.get(unitName.toUpperCase());
       if (validVars?.has(item.variableid)) {
@@ -600,6 +616,10 @@ export class CodingReadinessService {
     }>();
 
     responses.forEach(response => {
+      if (!isCodingVariableIdCandidate(response.variableid)) {
+        return;
+      }
+
       const unitName = unitIdToNameMap.get(response.unitid) || '';
       const validVars = validVariableSets.get(unitName.toUpperCase());
       if (validVars?.has(response.variableid)) {
