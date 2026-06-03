@@ -2392,7 +2392,8 @@
     "loading": "Doppelkodierungsdaten werden geladen...",
     "no-data": {
       "title": "Keine Daten verfügbar",
-      "message": "Es sind keine doppelkodierten Variablen zur Überprüfung verfügbar."
+      "message": "Es sind keine doppelkodierten Variablen zur Überprüfung verfügbar.",
+      "filter-hint": "Wenn in der Interrater-Statistik doppelt kodierte Antworten vorhanden sind, prüfen Sie die aktiven Filter für Jobdefinitionen, Schulungen, Status und Entscheidungen."
     },
     "no-conflicts": {
       "title": "Keine Konflikte gefunden",
