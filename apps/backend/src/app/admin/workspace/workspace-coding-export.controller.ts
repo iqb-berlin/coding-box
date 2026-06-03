@@ -88,6 +88,26 @@ export class WorkspaceCodingExportController {
         'results-by-version exports support only "csv" or "excel" format'
       );
     }
+
+    if (
+      body.exportType === 'results-by-version' &&
+      body.includeGeoGebraFiles &&
+      body.format !== 'excel'
+    ) {
+      throw new BadRequestException(
+        'GeoGebra file packages are supported only for Excel result exports'
+      );
+    }
+
+    if (
+      body.exportType === 'results-by-version' &&
+      body.includeGeoGebraFiles &&
+      body.includeResponseValues === false
+    ) {
+      throw new BadRequestException(
+        'GeoGebra file packages require response values because links are written to the value column'
+      );
+    }
   }
 
   private getRequestUserId(req: Request): number {
@@ -457,10 +477,22 @@ export class WorkspaceCodingExportController {
     description: 'Include response values in the export',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'includeGeoGebraFiles',
+    required: false,
+    description: 'Return a ZIP package with GeoGebra responses as .ggb files and Excel hyperlinks',
+    type: Boolean
+  })
   @ApiOkResponse({
-    description: 'Coding results for specified version exported as Excel',
+    description: 'Coding results for specified version exported as Excel or as ZIP when GeoGebra files are included',
     content: {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      },
+      'application/zip': {
         schema: {
           type: 'string',
           format: 'binary'
@@ -477,26 +509,37 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
       @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
+      @Query('includeGeoGebraFiles', { transform: value => value === 'true' })
+                   includeGeoGebraFiles: boolean,
                    @Res() res: Response
   ): Promise<void> {
+    if (includeGeoGebraFiles && !includeResponseValues) {
+      throw new BadRequestException(
+        'GeoGebra file packages require response values because links are written to the value column'
+      );
+    }
+
     const buffer = await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
       workspaceId: workspace_id,
       version,
       authToken: authToken || '',
       serverUrl,
       includeReplayUrl: includeReplayUrls,
-      includeResponseValues
+      includeResponseValues,
+      includeGeoGebraFiles
     });
 
     res.setHeader(
       'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      includeGeoGebraFiles ?
+        'application/zip' :
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
     res.setHeader(
       'Content-Disposition',
       `attachment; filename="coding-results-${version}-${new Date()
         .toISOString()
-        .slice(0, 10)}.xlsx"`
+        .slice(0, 10)}.${includeGeoGebraFiles ? 'zip' : 'xlsx'}"`
     );
 
     res.send(buffer);
@@ -1079,6 +1122,7 @@ export class WorkspaceCodingExportController {
         outputCommentsInsteadOfCodes: { type: 'boolean' },
         includeReplayUrl: { type: 'boolean' },
         includeResponseValues: { type: 'boolean' },
+        includeGeoGebraFiles: { type: 'boolean' },
         anonymizeCoders: { type: 'boolean' },
         usePseudoCoders: { type: 'boolean' },
         doubleCodingMethod: {
@@ -1302,11 +1346,14 @@ export class WorkspaceCodingExportController {
         normalizedFileName.endsWith('.csv') ||
         metadata.exportType === 'detailed';
       const isJson = normalizedFileName.endsWith('.json');
+      const isZip = normalizedFileName.endsWith('.zip');
       let contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       if (isCsv) {
         contentType = 'text/csv; charset=utf-8';
       } else if (isJson) {
         contentType = 'application/json; charset=utf-8';
+      } else if (isZip) {
+        contentType = 'application/zip';
       }
       res.setHeader('Content-Type', contentType);
       res.setHeader(

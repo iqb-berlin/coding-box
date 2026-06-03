@@ -163,6 +163,24 @@ export class CodingResultsExportService {
     );
   }
 
+  async exportCodingResultsByVersionAsGeoGebraZip(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken: string,
+    serverUrl: string,
+    includeReplayUrls: boolean,
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Buffer> {
+    return this.codingListService.getCodingResultsByVersionAsGeoGebraZip(
+      workspaceId,
+      version,
+      authToken || '',
+      serverUrl || '',
+      includeReplayUrls,
+      progressCallback
+    );
+  }
+
   private async generateReplayUrlWithPageLookup(
     req: Request,
     loginName: string,

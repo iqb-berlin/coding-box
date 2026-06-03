@@ -174,6 +174,7 @@ function createService(overrides: {
     getVariablePageMap: jest.fn().mockResolvedValue(overrides.pageMap ?? new Map([['VAR1', '3']])),
     getCodingResultsByVersionCsvStream: jest.fn().mockResolvedValue(Readable.from(['csv'])),
     getCodingResultsByVersionAsExcel: jest.fn().mockResolvedValue(Buffer.from('xlsx')),
+    getCodingResultsByVersionAsGeoGebraZip: jest.fn().mockResolvedValue(Buffer.from('zip')),
     getCodingListVariables: jest.fn().mockResolvedValue(overrides.codingListVariables ?? [{ unitName: 'UNIT1', variableId: 'VAR1' }])
   } as unknown as CodingListService;
   const workspaceExclusionService = {
@@ -216,6 +217,24 @@ describe('CodingResultsExportService', () => {
 
     expect(codingListService.getCodingResultsByVersionCsvStream).toHaveBeenCalledWith(1, 'v2', '', '', true, undefined, true);
     expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(1, 'v3', '', '', false, undefined, true);
+  });
+
+  it('delegates versioned GeoGebra ZIP exports', async () => {
+    const { service, codingListService } = createService();
+    const onProgress = jest.fn();
+
+    await expect(
+      service.exportCodingResultsByVersionAsGeoGebraZip(1, 'v2', '', '', true, onProgress)
+    ).resolves.toEqual(Buffer.from('zip'));
+
+    expect(codingListService.getCodingResultsByVersionAsGeoGebraZip).toHaveBeenCalledWith(
+      1,
+      'v2',
+      '',
+      '',
+      true,
+      onProgress
+    );
   });
 
   it('caches variable page maps per workspace and falls back to page zero', async () => {
