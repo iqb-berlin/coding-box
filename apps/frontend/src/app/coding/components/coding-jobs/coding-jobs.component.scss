@@ -63,6 +63,10 @@
   transition: all 0.2s ease;
 }
 
+.primary-row-action-tooltip-wrapper {
+  display: inline-flex;
+}
+
 a,
 button[mat-button],
 button[mat-stroked-button],
@@ -138,7 +142,8 @@ mat-cell {
   justify-content: center;
 }
 
-.mat-column-name, .mat-column-description {
+.mat-column-name,
+.mat-column-description {
   flex: 1 0 180px;
   min-width: 180px;
 }
@@ -307,7 +312,8 @@ button.primary-row-action[mat-stroked-button] {
   }
 }
 
-.mat-column-created_at, .mat-column-updated_at {
+.mat-column-created_at,
+.mat-column-updated_at {
   flex: 0 0 150px;
 }
 

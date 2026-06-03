@@ -1,5 +1,9 @@
 import {
-  ComponentFixture, TestBed, fakeAsync, tick, flush
+  ComponentFixture,
+  TestBed,
+  fakeAsync,
+  tick,
+  flush
 } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
@@ -69,31 +73,37 @@ describe('CodingJobsComponent', () => {
       deleteCodingJob: jest.fn().mockReturnValue(of({ success: true })),
       startCodingJob: jest.fn().mockReturnValue(of({ items: [], total: 0 })),
       restartCodingJobWithOpenUnits: jest.fn().mockReturnValue(of({})),
-      transferCodingCases: jest.fn().mockReturnValue(of({
-        sourceCoderId: 1,
-        targetCoderId: 2,
-        affectedJobs: 2,
-        updatedAssignments: 2,
-        removedDuplicateAssignments: 0,
-        transferredCases: 10
-      })),
-      applyCodingResults: jest.fn().mockReturnValue(of({
-        success: true,
-        updatedResponsesCount: 1,
-        skippedReviewCount: 0,
-        skippedAlreadyCodedCount: 0,
-        overwrittenExistingCount: 0,
-        messageKey: 'coding-results.apply.success.bulk'
-      })),
-      bulkApplyCodingResults: jest.fn().mockReturnValue(of({
-        success: true,
-        jobsProcessed: 0,
-        totalUpdatedResponses: 0,
-        totalSkippedReview: 0,
-        totalSkippedAlreadyCoded: 0,
-        totalOverwrittenExisting: 0,
-        results: []
-      }))
+      transferCodingCases: jest.fn().mockReturnValue(
+        of({
+          sourceCoderId: 1,
+          targetCoderId: 2,
+          affectedJobs: 2,
+          updatedAssignments: 2,
+          removedDuplicateAssignments: 0,
+          transferredCases: 10
+        })
+      ),
+      applyCodingResults: jest.fn().mockReturnValue(
+        of({
+          success: true,
+          updatedResponsesCount: 1,
+          skippedReviewCount: 0,
+          skippedAlreadyCodedCount: 0,
+          overwrittenExistingCount: 0,
+          messageKey: 'coding-results.apply.success.bulk'
+        })
+      ),
+      bulkApplyCodingResults: jest.fn().mockReturnValue(
+        of({
+          success: true,
+          jobsProcessed: 0,
+          totalUpdatedResponses: 0,
+          totalSkippedReview: 0,
+          totalSkippedAlreadyCoded: 0,
+          totalOverwrittenExisting: 0,
+          results: []
+        })
+      )
     };
 
     codingTrainingBackendServiceMock = {
@@ -103,7 +113,13 @@ describe('CodingJobsComponent', () => {
     appServiceMock = {
       selectedWorkspaceId: 1,
       authData: {
-        userId: 1, isAdmin: false, userName: '', email: '', firstName: '', lastName: '', workspaces: []
+        userId: 1,
+        isAdmin: false,
+        userName: '',
+        email: '',
+        firstName: '',
+        lastName: '',
+        workspaces: []
       },
       loggedUser: { sub: 'user-1' },
       createOwnToken: jest.fn().mockReturnValue(of('token'))
@@ -126,14 +142,17 @@ describe('CodingJobsComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [
-        TranslateModule.forRoot(),
-        CodingJobsComponent
-      ],
+      imports: [TranslateModule.forRoot(), CodingJobsComponent],
       providers: [
         provideNoopAnimations(),
-        { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
-        { provide: CodingTrainingBackendService, useValue: codingTrainingBackendServiceMock },
+        {
+          provide: CodingJobBackendService,
+          useValue: codingJobBackendServiceMock
+        },
+        {
+          provide: CodingTrainingBackendService,
+          useValue: codingTrainingBackendServiceMock
+        },
         { provide: AppService, useValue: appServiceMock },
         { provide: UserBackendService, useValue: userBackendServiceMock },
         { provide: CoderService, useValue: coderServiceMock },
@@ -144,19 +163,27 @@ describe('CodingJobsComponent', () => {
           useValue: { snapshot: { data: {} } }
         }
       ]
-    }).overrideComponent(CodingJobsComponent, {
-      add: {
-        providers: [
-          { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
-          { provide: CodingTrainingBackendService, useValue: codingTrainingBackendServiceMock },
-          { provide: AppService, useValue: appServiceMock },
-          { provide: UserBackendService, useValue: userBackendServiceMock },
-          { provide: CoderService, useValue: coderServiceMock },
-          { provide: MatSnackBar, useValue: matSnackBarMock },
-          { provide: MatDialog, useValue: matDialogMock }
-        ]
-      }
-    }).compileComponents();
+    })
+      .overrideComponent(CodingJobsComponent, {
+        add: {
+          providers: [
+            {
+              provide: CodingJobBackendService,
+              useValue: codingJobBackendServiceMock
+            },
+            {
+              provide: CodingTrainingBackendService,
+              useValue: codingTrainingBackendServiceMock
+            },
+            { provide: AppService, useValue: appServiceMock },
+            { provide: UserBackendService, useValue: userBackendServiceMock },
+            { provide: CoderService, useValue: coderServiceMock },
+            { provide: MatSnackBar, useValue: matSnackBarMock },
+            { provide: MatDialog, useValue: matDialogMock }
+          ]
+        }
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(CodingJobsComponent);
     component = fixture.componentInstance;
@@ -194,7 +221,10 @@ describe('CodingJobsComponent', () => {
 
     component.ngOnDestroy();
 
-    expect(removeListenerSpy).toHaveBeenCalledWith('focus', expect.any(Function));
+    expect(removeListenerSpy).toHaveBeenCalledWith(
+      'focus',
+      expect.any(Function)
+    );
   });
 
   it('should return correct status text', () => {
@@ -210,7 +240,7 @@ describe('CodingJobsComponent', () => {
   });
 
   it('should filter jobs by status, coder, and job name', () => {
-    component.originalData = [...mockCodingJobs as CodingJob[]];
+    component.originalData = [...(mockCodingJobs as CodingJob[])];
 
     // Filter by Coder
     component.selectedCoderId = 1;
@@ -235,10 +265,14 @@ describe('CodingJobsComponent', () => {
 
   it('should handle fallback when loading coding jobs fails initially', fakeAsync(() => {
     // Initial fail
-    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValueOnce(throwError(() => new Error('Error')));
+    (
+      codingJobBackendServiceMock.getCodingJobs as jest.Mock
+    ).mockReturnValueOnce(throwError(() => new Error('Error')));
 
     // Fallback success
-    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(of({ data: mockCodingJobs }));
+    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(
+      of({ data: mockCodingJobs })
+    );
 
     component.loadCodingJobs();
     tick();
@@ -249,15 +283,20 @@ describe('CodingJobsComponent', () => {
 
   it('should view coding results', () => {
     const job = mockCodingJobs[0] as CodingJob;
-    const dialogRefSpyObj = { afterClosed: jest.fn().mockReturnValue(of({ resultsApplied: true })) };
+    const dialogRefSpyObj = {
+      afterClosed: jest.fn().mockReturnValue(of({ resultsApplied: true }))
+    };
     (matDialogMock.open as jest.Mock).mockReturnValue(dialogRefSpyObj);
     const loadSpy = jest.spyOn(component, 'loadCodingJobs');
 
     component.viewCodingResults(job);
 
-    expect(matDialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      data: expect.objectContaining({ codingJob: job })
-    }));
+    expect(matDialogMock.open).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        data: expect.objectContaining({ codingJob: job })
+      })
+    );
     expect(loadSpy).toHaveBeenCalled();
   });
 
@@ -290,9 +329,7 @@ describe('CodingJobsComponent', () => {
 
   it('should format bundle lists correctly', () => {
     const jobWithManyBundles = {
-      assignedVariableBundles: [
-        { name: 'B1' }, { name: 'B2' }, { name: 'B3' }
-      ]
+      assignedVariableBundles: [{ name: 'B1' }, { name: 'B2' }, { name: 'B3' }]
     } as CodingJob;
 
     const formatted = component.getVariableBundles(jobWithManyBundles);
@@ -309,65 +346,118 @@ describe('CodingJobsComponent', () => {
     const completedJob = mockCodingJobs[1] as CodingJob;
     expect(component.getProgress(completedJob)).toBe('100% (20/20)');
 
-    expect(component.getProgress({
-      totalUnits: 10,
-      codedUnits: 0,
-      openUnits: 10,
-      progress: 0
-    } as CodingJob)).toBe('0% (0/10, 10 offen)');
+    expect(
+      component.getProgress({
+        totalUnits: 10,
+        codedUnits: 0,
+        openUnits: 10,
+        progress: 0
+      } as CodingJob)
+    ).toBe('0% (0/10, 10 offen)');
 
-    expect(component.getProgress(null as unknown as CodingJob)).toBe('Keine Daten');
-    expect(component.getProgress({ totalUnits: 0 } as unknown as CodingJob)).toBe('Keine Aufgaben');
+    expect(component.getProgress(null as unknown as CodingJob)).toBe(
+      'Keine Daten'
+    );
+    expect(
+      component.getProgress({ totalUnits: 0 } as unknown as CodingJob)
+    ).toBe('Keine Aufgaben');
   });
 
   it('shows an explicit empty state when there are no coding jobs', () => {
     component.dataSource.data = [];
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelector('.no-data-message')?.textContent)
-      .toContain('Keine Kodierjobs vorhanden');
+    expect(
+      fixture.nativeElement.querySelector('.no-data-message')?.textContent
+    ).toContain('Keine Kodierjobs vorhanden');
   });
 
   it('should choose a single primary row action by job state', () => {
     component.canApplyResults = true;
 
-    expect(component.getPrimaryJobAction(mockCodingJobs[0] as CodingJob)).toBe('start');
-    expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe('apply');
+    expect(component.getPrimaryJobAction(mockCodingJobs[0] as CodingJob)).toBe(
+      'start'
+    );
+    expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe(
+      'apply'
+    );
 
     component.showApplyActions = false;
-    expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe('results');
+    expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe(
+      'results'
+    );
 
     component.showApplyActions = true;
     component.canApplyResults = false;
-    expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe('results');
+    expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe(
+      'results'
+    );
+    expect(
+      component.getPrimaryJobAction({
+        ...mockCodingJobs[0],
+        assignedCoders: [2]
+      } as CodingJob)
+    ).toBe('notAssigned');
+  });
+
+  it('does not start coding jobs that are assigned to another coder', () => {
+    const job = {
+      ...mockCodingJobs[0],
+      assignedCoders: [2]
+    } as CodingJob;
+
+    component.startCodingJob(job);
+
+    expect(codingJobBackendServiceMock.startCodingJob).not.toHaveBeenCalled();
+    expect(matSnackBarMock.open).toHaveBeenCalledWith(
+      'Dieser Kodierjob ist Ihnen nicht als Kodierer zugewiesen.',
+      'Schließen',
+      { duration: 4000 }
+    );
   });
 
   it('should only allow applying results for completed non-training jobs', () => {
     component.canApplyResults = true;
 
-    expect(component.canApplyCodingResults(mockCodingJobs[1] as CodingJob)).toBe(true);
-    expect(component.canApplyCodingResults(mockCodingJobs[0] as CodingJob)).toBe(false);
-    expect(component.canApplyCodingResults({
-      ...mockCodingJobs[1],
-      training_id: 1
-    } as CodingJob)).toBe(false);
-    expect(component.canApplyCodingResults({
-      ...mockCodingJobs[1],
-      freshnessStatus: 'review_required'
-    } as CodingJob)).toBe(true);
-    expect(component.canApplyCodingResults({
-      ...mockCodingJobs[1],
-      freshnessStatus: 'stale_source'
-    } as CodingJob)).toBe(false);
+    expect(
+      component.canApplyCodingResults(mockCodingJobs[1] as CodingJob)
+    ).toBe(true);
+    expect(
+      component.canApplyCodingResults(mockCodingJobs[0] as CodingJob)
+    ).toBe(false);
+    expect(
+      component.canApplyCodingResults({
+        ...mockCodingJobs[1],
+        training_id: 1
+      } as CodingJob)
+    ).toBe(false);
+    expect(
+      component.canApplyCodingResults({
+        ...mockCodingJobs[1],
+        freshnessStatus: 'review_required'
+      } as CodingJob)
+    ).toBe(true);
+    expect(
+      component.canApplyCodingResults({
+        ...mockCodingJobs[1],
+        freshnessStatus: 'stale_source'
+      } as CodingJob)
+    ).toBe(false);
   });
 
   it('should only show restart for non-training jobs with open units', () => {
-    expect(component.canRestartCodingJob(mockCodingJobs[0] as CodingJob)).toBe(true);
-    expect(component.canRestartCodingJob(mockCodingJobs[1] as CodingJob)).toBe(false);
-    expect(component.canRestartCodingJob({
-      ...mockCodingJobs[0],
-      training_id: 1
-    } as CodingJob)).toBe(false);
+    expect(component.canRestartCodingJob(mockCodingJobs[0] as CodingJob)).toBe(
+      true
+    );
+    expect(component.canRestartCodingJob(mockCodingJobs[1] as CodingJob)).toBe(
+      false
+    );
+    expect(
+      component.canRestartCodingJob({
+        ...mockCodingJobs[0],
+        training_id: 1
+      } as CodingJob)
+    ).toBe(false);
   });
 
   it('separates deleting a coding job from regular row actions', async () => {
@@ -384,8 +474,9 @@ describe('CodingJobsComponent', () => {
     const overlayElement = overlayContainer.getContainerElement();
 
     expect(overlayElement.querySelector('.menu-section-divider')).toBeTruthy();
-    expect(overlayElement.querySelector('.danger-menu-item')?.textContent)
-      .toContain('Kodierjob löschen');
+    expect(
+      overlayElement.querySelector('.danger-menu-item')?.textContent
+    ).toContain('Kodierjob löschen');
   });
 
   it('should return correct coder names', () => {
@@ -406,7 +497,10 @@ describe('CodingJobsComponent', () => {
     component.deleteCodingJob(job);
 
     expect(matDialogMock.open).toHaveBeenCalled();
-    expect(codingJobBackendServiceMock.deleteCodingJob).toHaveBeenCalledWith(1, job.id);
+    expect(codingJobBackendServiceMock.deleteCodingJob).toHaveBeenCalledWith(
+      1,
+      job.id
+    );
     expect(matSnackBarMock.open).toHaveBeenCalledWith(
       expect.stringContaining('erfolgreich gelöscht'),
       'Schließen',
@@ -427,7 +521,9 @@ describe('CodingJobsComponent', () => {
     tick(); // Dialog afterClosed
     flush(); // All deletions
 
-    expect(codingJobBackendServiceMock.deleteCodingJob).toHaveBeenCalledTimes(1);
+    expect(codingJobBackendServiceMock.deleteCodingJob).toHaveBeenCalledTimes(
+      1
+    );
     expect(matSnackBarMock.open).toHaveBeenCalled();
   }));
 
@@ -439,25 +535,50 @@ describe('CodingJobsComponent', () => {
 
   it('should handle start coding job', () => {
     const job = mockCodingJobs[0] as CodingJob;
-    (codingJobBackendServiceMock.startCodingJob as jest.Mock).mockReturnValue(of({
-      total: 1,
-      firstReplayUrl: 'http://replay.url',
-      items: [{
-        unitName: 'Unit 1',
-        variableId: 'Var 1',
-        personLogin: 'Person 1',
-        personCode: 'Code 1',
-        bookletName: 'Booklet 1',
-        replayUrl: 'http://replay.url'
-      }]
-    }));
+    (codingJobBackendServiceMock.startCodingJob as jest.Mock).mockReturnValue(
+      of({
+        total: 1,
+        firstReplayUrl: 'http://replay.url',
+        items: [
+          {
+            unitName: 'Unit 1',
+            variableId: 'Var 1',
+            personLogin: 'Person 1',
+            personCode: 'Code 1',
+            bookletName: 'Booklet 1',
+            replayUrl: 'http://replay.url'
+          }
+        ]
+      })
+    );
     jest.spyOn(window, 'open').mockImplementation(() => null);
 
     component.startCodingJob(job);
 
-    expect(codingJobBackendServiceMock.startCodingJob).toHaveBeenCalledWith(1, job.id);
+    expect(codingJobBackendServiceMock.startCodingJob).toHaveBeenCalledWith(
+      1,
+      job.id
+    );
     expect(appServiceMock.createOwnToken).toHaveBeenCalled();
     expect(window.open).toHaveBeenCalled();
+  });
+
+  it('opens backend-generated replay URLs on the current frontend origin', () => {
+    const job = mockCodingJobs[0] as CodingJob;
+    (codingJobBackendServiceMock.startCodingJob as jest.Mock).mockReturnValue(
+      of({
+        total: 1,
+        firstReplayUrl: 'http://localhost:3333/#/replay/person/unit/0/var'
+      })
+    );
+    jest.spyOn(window, 'open').mockImplementation(() => null);
+
+    component.startCodingJob(job);
+
+    expect(window.open).toHaveBeenCalledWith(
+      'http://localhost/#/replay/person/unit/0/var?auth=token&mode=coding&codingJobId=1&workspaceId=1',
+      '_blank'
+    );
   });
 
   it('should handle restart coding job', fakeAsync(() => {
@@ -465,36 +586,53 @@ describe('CodingJobsComponent', () => {
     (matDialogMock.open as jest.Mock).mockReturnValue({
       afterClosed: () => of(true)
     });
-    (codingJobBackendServiceMock.restartCodingJobWithOpenUnits as jest.Mock).mockReturnValue(of(job));
-    (codingJobBackendServiceMock.startCodingJob as jest.Mock).mockReturnValue(of({
-      total: 1,
-      firstReplayUrl: 'http://replay.url',
-      items: [{
-        unitName: 'Unit 1',
-        variableId: 'Var 1',
-        personLogin: 'Person 1',
-        personCode: 'Code 1',
-        bookletName: 'Booklet 1',
-        replayUrl: 'http://replay.url'
-      }]
-    }));
+    (
+      codingJobBackendServiceMock.restartCodingJobWithOpenUnits as jest.Mock
+    ).mockReturnValue(of(job));
+    (codingJobBackendServiceMock.startCodingJob as jest.Mock).mockReturnValue(
+      of({
+        total: 1,
+        firstReplayUrl: 'http://replay.url',
+        items: [
+          {
+            unitName: 'Unit 1',
+            variableId: 'Var 1',
+            personLogin: 'Person 1',
+            personCode: 'Code 1',
+            bookletName: 'Booklet 1',
+            replayUrl: 'http://replay.url'
+          }
+        ]
+      })
+    );
     window.open = jest.fn();
 
     component.restartCodingJob(job);
     tick();
 
     expect(matDialogMock.open).toHaveBeenCalled();
-    expect(codingJobBackendServiceMock.restartCodingJobWithOpenUnits).toHaveBeenCalledWith(1, job.id);
-    expect(codingJobBackendServiceMock.startCodingJob).toHaveBeenCalledWith(1, job.id);
+    expect(
+      codingJobBackendServiceMock.restartCodingJobWithOpenUnits
+    ).toHaveBeenCalledWith(1, job.id);
+    expect(codingJobBackendServiceMock.startCodingJob).toHaveBeenCalledWith(
+      1,
+      job.id
+    );
     expect(window.open).toHaveBeenCalled();
-    expect((window.open as jest.Mock).mock.calls[0][0]).toContain('onlyOpen=true');
+    expect((window.open as jest.Mock).mock.calls[0][0]).toContain(
+      'onlyOpen=true'
+    );
   }));
 
   it('should calculate next id correctly', () => {
-    expect((component as unknown as { getNextId: () => number }).getNextId()).toBe(3);
+    expect(
+      (component as unknown as { getNextId: () => number }).getNextId()
+    ).toBe(3);
 
     component.dataSource.data = [];
-    expect((component as unknown as { getNextId: () => number }).getNextId()).toBe(1);
+    expect(
+      (component as unknown as { getNextId: () => number }).getNextId()
+    ).toBe(1);
   });
 
   it('should handle apply coding results', () => {
@@ -505,9 +643,13 @@ describe('CodingJobsComponent', () => {
 
     component.applyCodingResults(job);
 
-    expect(codingJobBackendServiceMock.applyCodingResults).toHaveBeenCalledWith(1, job.id, {
-      overwriteExisting: false
-    });
+    expect(codingJobBackendServiceMock.applyCodingResults).toHaveBeenCalledWith(
+      1,
+      job.id,
+      {
+        overwriteExisting: false
+      }
+    );
     expect(matSnackBarMock.open).toHaveBeenCalledWith(
       expect.stringContaining('Ergebnisse erfolgreich angewendet'),
       'Schließen',
@@ -523,7 +665,9 @@ describe('CodingJobsComponent', () => {
     component.bulkApplyCodingResults();
 
     expect(matDialogMock.open).toHaveBeenCalled();
-    expect(codingJobBackendServiceMock.bulkApplyCodingResults).toHaveBeenCalledWith(1);
+    expect(
+      codingJobBackendServiceMock.bulkApplyCodingResults
+    ).toHaveBeenCalledWith(1);
     expect(matSnackBarMock.open).toHaveBeenCalledWith(
       expect.stringContaining('Massenanwendung abgeschlossen'),
       'Schließen',
@@ -541,7 +685,9 @@ describe('CodingJobsComponent', () => {
 
     component.openTransferCodingCasesDialog();
 
-    expect(codingJobBackendServiceMock.transferCodingCases).toHaveBeenCalledWith(1, 1, 2);
+    expect(
+      codingJobBackendServiceMock.transferCodingCases
+    ).toHaveBeenCalledWith(1, 1, 2);
     expect(matSnackBarMock.open).toHaveBeenCalledWith(
       expect.stringContaining('Übertragung erfolgreich'),
       'Schließen',
@@ -550,8 +696,12 @@ describe('CodingJobsComponent', () => {
   });
 
   it('should handle API errors when loading jobs', () => {
-    (codingJobBackendServiceMock.getCodingIncompleteVariables as jest.Mock).mockReturnValue(throwError(() => new Error('API Error')));
-    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(throwError(() => new Error('API Error')));
+    (
+      codingJobBackendServiceMock.getCodingIncompleteVariables as jest.Mock
+    ).mockReturnValue(throwError(() => new Error('API Error')));
+    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(
+      throwError(() => new Error('API Error'))
+    );
 
     component.loadCodingJobs();
 
