@@ -38,35 +38,10 @@
     <div class="statistics-card">
       <div class="header-row">
         <div>
-          <h2 class="section-title">Manuelle Kodierung planen</h2>
-          <p class="section-description">Verwalten Sie Kodierjobs für die manuelle Kodierung von Antworten.</p>
+          <h2 class="section-title">Manuelle Kodierung</h2>
+          <p class="section-description">Bereiten Sie Kodierfälle vor, planen Sie Jobs und schließen Sie manuelle Ergebnisse ab.</p>
         </div>
         <div class="header-actions">
-          <button
-            mat-raised-button
-            color="primary"
-            (click)="openCreateJobDefinition()"
-            aria-label="Neue Kodierjob-Definition erstellen">
-            <mat-icon>add</mat-icon>
-            Jobdefinition erstellen
-          </button>
-          <button
-            mat-stroked-button
-            color="primary"
-            (click)="refreshManualCodingPlanning()"
-            [disabled]="isAnyPlanningDataLoading()"
-            aria-label="Planungsdaten aktualisieren">
-            <mat-icon>refresh</mat-icon>
-            Aktualisieren
-          </button>
-          <button
-            mat-stroked-button
-            color="primary"
-            (click)="navigateToCodingManagementOverview()"
-            aria-label="Zur Kodierungsübersicht zurückkehren">
-            <mat-icon>arrow_back</mat-icon>
-            Zurück zur Übersicht
-          </button>
           <button
             mat-stroked-button
             color="primary"
@@ -126,7 +101,18 @@
         </div>
       </div>
 
-      <div class="planning-overview-grid" aria-label="Übersicht zur manuellen Kodierungsplanung">
+      <mat-tab-group
+        class="manual-coding-tabs"
+        [selectedIndex]="selectedManualTabIndex"
+        (selectedIndexChange)="onManualTabChanged($event)">
+        <mat-tab label="Vorbereitung"></mat-tab>
+        <mat-tab label="Planung"></mat-tab>
+        <mat-tab label="Schulung"></mat-tab>
+        <mat-tab label="Durchführung"></mat-tab>
+        <mat-tab label="Abschluss"></mat-tab>
+      </mat-tab-group>
+
+      <div *ngIf="isManualTab('planning')" class="planning-overview-grid" aria-label="Übersicht zur manuellen Kodierungsplanung">
         <div class="overview-metric">
           <span class="metric-label">Offene Arbeitsfälle</span>
           <span class="metric-value">{{ getOpenCodingCases() }}</span>
@@ -159,7 +145,7 @@
         </div>
       </div>
 
-      <div class="planning-next-step" [ngClass]="getPlanningStatusClass()">
+      <div *ngIf="isManualTab('planning')" class="planning-next-step" [ngClass]="getPlanningStatusClass()">
         <mat-icon>{{ getPlanningNextStepIcon() }}</mat-icon>
         <div class="next-step-copy">
           <strong>{{ getPlanningNextStepTitle() }}</strong>
@@ -174,64 +160,8 @@
         </button>
       </div>
 
-      <nav class="planning-section-nav" aria-label="Abschnitte der manuellen Kodierungsplanung">
-        <button
-          mat-button
-          type="button"
-          class="section-nav-button"
-          [class.nav-warning]="hasPreparationWarnings()"
-          [class.nav-complete]="isPreparationReady()"
-          (click)="scrollToSection('manual-preparation')">
-          <mat-icon>fact_check</mat-icon>
-          <span>Vorbereitung</span>
-          <small>Analyse & Aggregation</small>
-        </button>
-        <button
-          mat-button
-          type="button"
-          class="section-nav-button"
-          [class.nav-warning]="hasPlanningWarnings()"
-          [class.nav-complete]="isPlanningReady()"
-          (click)="scrollToSection('manual-planning')">
-          <mat-icon>assignment</mat-icon>
-          <span>Planung</span>
-          <small>Definitionen & Abdeckung</small>
-        </button>
-        <button
-          mat-button
-          type="button"
-          class="section-nav-button"
-          [class.nav-warning]="hasExecutionOpenWork()"
-          [class.nav-complete]="!hasExecutionOpenWork() && !!codingProgressOverview"
-          (click)="scrollToSection('manual-execution')">
-          <mat-icon>play_circle</mat-icon>
-          <span>Durchführung</span>
-          <small>Kodierjobs</small>
-        </button>
-        <button
-          mat-button
-          type="button"
-          class="section-nav-button"
-          [class.nav-warning]="!isCompletionComplete() && !!appliedResultsOverview"
-          [class.nav-complete]="isCompletionComplete()"
-          (click)="scrollToSection('manual-completion')">
-          <mat-icon>published_with_changes</mat-icon>
-          <span>Abschluss</span>
-          <small>Ergebnisse übernehmen</small>
-        </button>
-        <button
-          mat-button
-          type="button"
-          class="section-nav-button"
-          (click)="scrollToSection('manual-support')">
-          <mat-icon>school</mat-icon>
-          <span>Hilfen</span>
-          <small>Schulung & Bündel</small>
-        </button>
-      </nav>
-
       <!-- Aggregation Configuration and Actions -->
-      <div id="manual-preparation" class="manual-coding-sections-container">
+      <div *ngIf="isManualTab('preparation')" id="manual-preparation" class="manual-coding-sections-container">
         <div class="aggregation-config">
           <h3 class="subsection-title"
             [matTooltip]="responseAnalysis?.isCalculating ? 'Einstellungen gesperrt während die Analyse läuft' : ''">
@@ -553,7 +483,7 @@
 
       <div class="statistics-content">
         <!-- Coding Progress Overview -->
-        <div *ngIf="codingProgressOverview" class="coding-progress-section statistics-section"
+        <div *ngIf="isManualTab('execution') && codingProgressOverview" class="coding-progress-section statistics-section"
           [class.blurred-content]="isLoadingCodingProgress">
           <div class="statistics-card">
             <h2 class="section-title section-title-with-action">
@@ -666,13 +596,32 @@
           </div>
         </div>
 
-        <div id="manual-planning" class="job-definitions-container">
+        <div *ngIf="isManualTab('planning')" id="manual-planning" class="job-definitions-container">
+          <div class="manual-tab-actions">
+            <button
+              mat-raised-button
+              color="primary"
+              (click)="openCreateJobDefinition()"
+              aria-label="Neue Jobdefinition erstellen">
+              <mat-icon>add</mat-icon>
+              Jobdefinition erstellen
+            </button>
+            <button
+              mat-stroked-button
+              color="primary"
+              (click)="refreshManualCodingPlanning()"
+              [disabled]="isAnyPlanningDataLoading()"
+              aria-label="Planungsdaten aktualisieren">
+              <mat-icon>refresh</mat-icon>
+              Aktualisieren
+            </button>
+          </div>
           <coding-box-coding-job-definitions (bulkCreationCompleted)="reloadCodingJobsList()"
             (jobDefinitionChanged)="onJobDefinitionChanged()"></coding-box-coding-job-definitions>
         </div>
 
         <!-- Variable Coverage Statistics -->
-        <div *ngIf="variableCoverageOverview" class="variable-coverage-section statistics-section"
+        <div *ngIf="isManualTab('planning') && variableCoverageOverview" class="variable-coverage-section statistics-section"
           [class.blurred-content]="isLoadingVariableCoverage">
           <div class="statistics-card">
             <h2 class="section-title section-title-with-action">
@@ -809,7 +758,7 @@
           </div>
         </div>
 
-        <div id="manual-execution" class="coding-jobs-container manual-section-block">
+        <div *ngIf="isManualTab('execution')" id="manual-execution" class="coding-jobs-container manual-section-block">
           <h3 class="manual-section-title">
             Kodierjobs
             <button mat-icon-button (click)="showCodingJobsInfo = !showCodingJobsInfo"
@@ -828,11 +777,33 @@
             </div>
           </div>
 
-          <coding-box-coding-jobs (jobsChanged)="onJobDefinitionChanged()"></coding-box-coding-jobs>
+          <div class="manual-tab-actions">
+            <button mat-stroked-button color="primary" type="button" (click)="openExecutionTransferCases()">
+              <mat-icon>swap_horiz</mat-icon>
+              Fälle übertragen
+            </button>
+            <button mat-stroked-button color="primary" type="button" (click)="openExecutionReliability()">
+              <mat-icon>analytics</mat-icon>
+              Interrater-Reliabilität
+            </button>
+            <button mat-stroked-button color="primary" type="button" (click)="openExecutionDoubleCodedReview()">
+              <mat-icon>compare</mat-icon>
+              Doppelkodierungsreview
+            </button>
+          </div>
+
+          <coding-box-coding-jobs
+            [jobScope]="'productive'"
+            [showTrainingFilter]="false"
+            [showComparisonActions]="false"
+            [showTransferAction]="false"
+            [showApplyActions]="false"
+            [autoReloadOnFocus]="autoRefreshManualCodingJobs"
+            (jobsChanged)="onJobDefinitionChanged()"></coding-box-coding-jobs>
         </div>
 
         <!-- Case Coverage Statistics -->
-        <div *ngIf="caseCoverageOverview" class="case-coverage-section statistics-section"
+        <div *ngIf="isManualTab('execution') && caseCoverageOverview" class="case-coverage-section statistics-section"
           [class.blurred-content]="isLoadingCaseCoverage">
           <div class="statistics-card">
             <h2 class="section-title section-title-with-action">
@@ -905,7 +876,7 @@
         </div>
 
         <!-- Applied Results Section -->
-        <div id="manual-completion">
+        <div *ngIf="isManualTab('completion')" id="manual-completion">
           <div *ngIf="appliedResultsOverview" class="applied-results-section">
             <div class="statistics-card">
               <h2 class="section-title section-title-with-action">
@@ -980,20 +951,11 @@
                 </div>
                 <div class="completion-action-buttons">
                   <button
-                    mat-stroked-button
-                    color="primary"
-                    type="button"
-                    (click)="refreshManualCodingPlanning()"
-                    [disabled]="isAnyPlanningDataLoading() || isLoadingCompletedJobsReadyForApply || isApplyingCodingResults">
-                    <mat-icon>refresh</mat-icon>
-                    Aktualisieren
-                  </button>
-                  <button
                     *ngIf="!hasCompletedJobsReadyForApply() && !isCompletionComplete()"
                     mat-stroked-button
                     color="primary"
                     type="button"
-                    (click)="scrollToSection('manual-execution')">
+                    (click)="goToManualTab('execution', 'manual-execution')">
                     <mat-icon>assignment</mat-icon>
                     Zu den Kodierjobs
                   </button>
@@ -1006,7 +968,7 @@
                     [disabled]="!canApplyCompletedJobResults() || isApplyingCodingResults || isLoadingCompletedJobsReadyForApply">
                     <mat-icon *ngIf="!isApplyingCodingResults">done_all</mat-icon>
                     <mat-spinner *ngIf="isApplyingCodingResults" diameter="18"></mat-spinner>
-                    Alle anwenden
+                    Alle Ergebnisse anwenden
                   </button>
                 </div>
               </div>
@@ -1045,7 +1007,7 @@
                     mat-stroked-button
                     color="primary"
                     type="button"
-                    (click)="scrollToSection('manual-execution')">
+                    (click)="goToManualTab('execution', 'manual-execution')">
                     <mat-icon>visibility</mat-icon>
                     Zu den Kodierjobs
                   </button>
@@ -1056,7 +1018,7 @@
         </div>
 
 
-        <div id="manual-support" class="coder-training-list-container manual-section-block">
+        <div *ngIf="isManualTab('training')" id="manual-support" class="coder-training-list-container manual-section-block">
           <h3 class="manual-section-title">
             Kodierer-Schulungen
             <button mat-icon-button (click)="showCoderTrainingsInfo = !showCoderTrainingsInfo"
@@ -1074,11 +1036,42 @@
               <span>{{ 'coding-management-manual.coder-trainings.info-desc' | translate }}</span>
             </div>
           </div>
-          <coding-box-coder-trainings-list (onCreateTraining)="openCoderTraining()"
+          <div class="manual-tab-actions">
+            <button mat-raised-button color="primary" type="button" (click)="openCoderTraining()">
+              <mat-icon>add</mat-icon>
+              Kodierschulung erstellen
+            </button>
+            <button mat-stroked-button color="primary" type="button" (click)="openTrainingReliability()">
+              <mat-icon>analytics</mat-icon>
+              Interrater-Reliabilität
+            </button>
+            <button mat-stroked-button color="primary" type="button" (click)="openTrainingDiscussion()">
+              <mat-icon>forum</mat-icon>
+              Diskussion
+            </button>
+            <button mat-stroked-button color="primary" type="button" (click)="openTrainingComparison()">
+              <mat-icon>compare_arrows</mat-icon>
+              Schulungen vergleichen
+            </button>
+          </div>
+          <coding-box-coder-trainings-list
+            [showCreateButton]="false"
+            (onCreateTraining)="openCoderTraining()"
             (onEditTraining)="openTrainingEdit($event)">
           </coding-box-coder-trainings-list>
+          <div class="coding-jobs-container manual-section-block">
+            <h3 class="manual-section-title">Kodierjobs</h3>
+            <coding-box-coding-jobs
+              [jobScope]="'training'"
+              [showTrainingFilter]="true"
+              [showComparisonActions]="false"
+              [showTransferAction]="false"
+              [showApplyActions]="false"
+              [autoReloadOnFocus]="autoRefreshManualCodingJobs"
+              (jobsChanged)="onJobDefinitionChanged()"></coding-box-coding-jobs>
+          </div>
         </div>
-        <div class="variable-bundle-container manual-section-block">
+        <div *ngIf="isManualTab('preparation')" class="variable-bundle-container manual-section-block">
           <h3 class="manual-section-title">
             Variablenbündel
             <button mat-icon-button (click)="showVariableBundlesInfo = !showVariableBundlesInfo"
