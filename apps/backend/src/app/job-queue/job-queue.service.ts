@@ -155,6 +155,7 @@ export interface ExportJobData {
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;
+  includeGeoGebraResponseValues?: boolean;
   includeGeoGebraFiles?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;

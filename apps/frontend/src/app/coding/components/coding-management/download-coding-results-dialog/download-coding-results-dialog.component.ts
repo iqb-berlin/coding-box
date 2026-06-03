@@ -123,7 +123,19 @@ export interface DownloadCodingResultsDialogData {
           </div>
           @if (data.hasGeoGebraResponses) {
             <div class="option-item">
-              <mat-checkbox [(ngModel)]="includeGeoGebraFiles" [disabled]="selectedFormat !== 'excel' || !includeResponseValues"
+              <mat-checkbox [(ngModel)]="includeGeoGebraResponseValues"
+                [disabled]="!includeResponseValues || includeGeoGebraFiles"
+                class="option-checkbox">
+                {{ 'coding-management.download-dialog.include-geogebra-response-values' | translate }}
+              </mat-checkbox>
+              <p class="option-description">
+                {{ 'coding-management.download-dialog.geogebra-response-values-description' | translate }}
+              </p>
+            </div>
+            <div class="option-item">
+              <mat-checkbox [(ngModel)]="includeGeoGebraFiles"
+                [disabled]="selectedFormat !== 'excel' || !includeResponseValues"
+                (ngModelChange)="onIncludeGeoGebraFilesChange()"
                 class="option-checkbox">
                 {{ 'coding-management.download-dialog.include-geogebra-files' | translate }}
               </mat-checkbox>
@@ -343,6 +355,7 @@ export class DownloadCodingResultsDialogComponent {
   includeReplayUrls: boolean = false;
   includeResponseValues: boolean = true;
   includeGeoGebraFiles: boolean = false;
+  includeGeoGebraResponseValues: boolean = false;
 
   constructor(
     public dialogRef: MatDialogRef<DownloadCodingResultsDialogComponent>,
@@ -359,9 +372,16 @@ export class DownloadCodingResultsDialogComponent {
     this.clearUnsupportedGeoGebraOption();
   }
 
+  onIncludeGeoGebraFilesChange(): void {
+    this.clearUnsupportedGeoGebraOption();
+  }
+
   private clearUnsupportedGeoGebraOption(): void {
     if (this.selectedFormat !== 'excel' || !this.includeResponseValues || !this.data.hasGeoGebraResponses) {
       this.includeGeoGebraFiles = false;
+    }
+    if (!this.includeResponseValues || !this.data.hasGeoGebraResponses || this.includeGeoGebraFiles) {
+      this.includeGeoGebraResponseValues = false;
     }
   }
 
@@ -372,7 +392,8 @@ export class DownloadCodingResultsDialogComponent {
       format: this.selectedFormat,
       includeReplayUrls: this.includeReplayUrls,
       includeResponseValues: this.includeResponseValues,
-      includeGeoGebraFiles: this.includeGeoGebraFiles
+      includeGeoGebraFiles: this.includeGeoGebraFiles,
+      includeGeoGebraResponseValues: this.includeGeoGebraResponseValues
     });
   }
 

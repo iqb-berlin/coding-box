@@ -146,7 +146,8 @@ describe('ExportJobProcessor', () => {
         serverUrl: 'http://app.example',
         includeReplayUrl: true,
         onProgress: expect.any(Function),
-        includeResponseValues: true
+        includeResponseValues: true,
+        includeGeoGebraResponseValues: false
       });
       expect(result.fileName).toMatch(/\.csv$/);
       expect(filePath).toBeDefined();
@@ -182,6 +183,7 @@ describe('ExportJobProcessor', () => {
         includeReplayUrl: true,
         onProgress: expect.any(Function),
         includeResponseValues: true,
+        includeGeoGebraResponseValues: false,
         includeGeoGebraFiles: true
       });
       expect(result.fileName).toMatch(/\.zip$/);

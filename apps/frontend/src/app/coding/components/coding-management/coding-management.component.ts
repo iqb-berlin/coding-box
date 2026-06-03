@@ -1239,17 +1239,24 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       includeReplayUrls: boolean;
       includeResponseValues: boolean;
       includeGeoGebraFiles: boolean;
+      includeGeoGebraResponseValues: boolean;
     } | undefined) => {
       if (result) {
         const {
-          version, format, includeReplayUrls, includeResponseValues, includeGeoGebraFiles
+          version,
+          format,
+          includeReplayUrls,
+          includeResponseValues,
+          includeGeoGebraFiles,
+          includeGeoGebraResponseValues
         } = result;
         this.codingManagementService.downloadCodingResults(
           version,
           format,
           includeReplayUrls,
           includeResponseValues,
-          includeGeoGebraFiles
+          includeGeoGebraFiles,
+          includeGeoGebraResponseValues
         )
           .finally(() => {
             this.isDownloadInProgress = false;

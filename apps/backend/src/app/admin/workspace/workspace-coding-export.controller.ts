@@ -382,6 +382,12 @@ export class WorkspaceCodingExportController {
     description: 'Include response values in the export',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'includeGeoGebraResponseValues',
+    required: false,
+    description: 'Include GeoGebra response values as raw strings instead of placeholders',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as CSV',
     content: {
@@ -402,6 +408,8 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
       @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
+      @Query('includeGeoGebraResponseValues', { transform: value => value === 'true' })
+                   includeGeoGebraResponseValues: boolean,
                    @Res() res: Response
   ): Promise<void> {
     try {
@@ -411,7 +419,8 @@ export class WorkspaceCodingExportController {
         authToken: authToken || '',
         serverUrl,
         includeReplayUrl: includeReplayUrls,
-        includeResponseValues
+        includeResponseValues,
+        includeGeoGebraResponseValues
       });
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -478,6 +487,12 @@ export class WorkspaceCodingExportController {
     type: Boolean
   })
   @ApiQuery({
+    name: 'includeGeoGebraResponseValues',
+    required: false,
+    description: 'Include GeoGebra response values as raw strings instead of placeholders',
+    type: Boolean
+  })
+  @ApiQuery({
     name: 'includeGeoGebraFiles',
     required: false,
     description: 'Return a ZIP package with GeoGebra responses as .ggb files and Excel hyperlinks',
@@ -509,6 +524,8 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
       @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
+      @Query('includeGeoGebraResponseValues', { transform: value => value === 'true' })
+                   includeGeoGebraResponseValues: boolean,
       @Query('includeGeoGebraFiles', { transform: value => value === 'true' })
                    includeGeoGebraFiles: boolean,
                    @Res() res: Response
@@ -526,6 +543,7 @@ export class WorkspaceCodingExportController {
       serverUrl,
       includeReplayUrl: includeReplayUrls,
       includeResponseValues,
+      includeGeoGebraResponseValues,
       includeGeoGebraFiles
     });
 
@@ -1122,6 +1140,7 @@ export class WorkspaceCodingExportController {
         outputCommentsInsteadOfCodes: { type: 'boolean' },
         includeReplayUrl: { type: 'boolean' },
         includeResponseValues: { type: 'boolean' },
+        includeGeoGebraResponseValues: { type: 'boolean' },
         includeGeoGebraFiles: { type: 'boolean' },
         anonymizeCoders: { type: 'boolean' },
         usePseudoCoders: { type: 'boolean' },

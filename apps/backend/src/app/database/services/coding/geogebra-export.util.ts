@@ -4,6 +4,8 @@ export interface GeoGebraExportReference {
   buffer: Buffer;
 }
 
+export const suppressedGeoGebraValuePlaceholder = '[GeoGebra]';
+
 const geogebraDataUriPattern = /^data:[^,]*;base64,(UEsD[\s\S]*)$/i;
 const unsafeFileNameChars = /[<>:"/\\|?*]/g;
 const whitespacePattern = /\s/g;

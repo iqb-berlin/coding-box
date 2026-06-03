@@ -45,6 +45,7 @@ export interface ExportJobConfig {
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;
+  includeGeoGebraResponseValues?: boolean;
   includeGeoGebraFiles?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;

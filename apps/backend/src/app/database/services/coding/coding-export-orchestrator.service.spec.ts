@@ -53,7 +53,32 @@ describe('CodingExportOrchestratorService', () => {
       'http://app.example',
       true,
       onProgress,
+      false,
       false
+    );
+  });
+
+  it('passes raw GeoGebra response value option to versioned exports', async () => {
+    const { service, codingResultsExportService } = createService();
+    const buffer = Buffer.from('xlsx');
+    codingResultsExportService.exportCodingResultsByVersionAsExcel.mockResolvedValue(buffer);
+
+    await expect(service.exportResultsByVersionAsExcel({
+      workspaceId: 7,
+      version: 'v2',
+      includeResponseValues: true,
+      includeGeoGebraResponseValues: true
+    })).resolves.toBe(buffer);
+
+    expect(codingResultsExportService.exportCodingResultsByVersionAsExcel).toHaveBeenCalledWith(
+      7,
+      'v2',
+      '',
+      '',
+      false,
+      undefined,
+      true,
+      true
     );
   });
 
