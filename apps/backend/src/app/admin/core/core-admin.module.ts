@@ -26,6 +26,8 @@ import { Setting } from '../../database/entities/setting.entity';
 import FileUpload from '../../database/entities/file_upload.entity';
 import { ContentPoolSettingsController } from '../content-pool/content-pool-settings.controller';
 import { ContentPoolIntegrationService } from '../content-pool/content-pool-integration.service';
+import { LegalNoticeController } from '../legal-notice/legal-notice.controller';
+import { LegalNoticeService } from '../legal-notice/legal-notice.service';
 
 @Module({
   imports: [
@@ -54,12 +56,14 @@ import { ContentPoolIntegrationService } from '../content-pool/content-pool-inte
     VariableBundleController,
     CodingJobsController,
     DatabaseAdminController,
-    ContentPoolSettingsController
+    ContentPoolSettingsController,
+    LegalNoticeController
   ],
   providers: [
     DatabaseExportService,
     DatabaseExportProcessor,
-    ContentPoolIntegrationService
+    ContentPoolIntegrationService,
+    LegalNoticeService
   ]
 })
 export class CoreAdminModule { }

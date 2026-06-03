@@ -31,6 +31,7 @@ h2 {
   min-width: 0;
 }
 
+.legal-notice-settings-card,
 .content-pool-settings-card,
 .database-export-card {
   margin-bottom: 30px;
@@ -74,6 +75,8 @@ mat-card-content {
   .logo-upload-container,
   .logo-alt-text-container,
   .background-color-container,
+  .legal-notice-editor-container,
+  .legal-notice-preview-container,
   .content-pool-settings-container {
     padding: 15px;
   }
@@ -90,6 +93,7 @@ mat-card-content {
 
   .alt-text-actions,
   .background-color-actions,
+  .legal-notice-actions,
   .preview-actions,
   .export-actions {
     flex-direction: column;
@@ -107,6 +111,8 @@ mat-card-content {
 .logo-upload-container,
 .logo-alt-text-container,
 .background-color-container,
+.legal-notice-editor-container,
+.legal-notice-preview-container,
 .content-pool-settings-container {
   background-color: #f9f9f9;
   border-radius: 6px;
@@ -273,8 +279,47 @@ mat-form-field {
 
 .logo-alt-text-container,
 .background-color-container,
+.legal-notice-editor-container,
+.legal-notice-preview-container,
 .content-pool-settings-container {
   margin-bottom: 30px;
+}
+
+.legal-notice-editor-container textarea {
+  min-height: 320px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.legal-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 15px;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.legal-notice-preview {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  color: #333;
+  line-height: 1.5;
+  max-height: 420px;
+  overflow: auto;
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+
+:host ::ng-deep .legal-notice-preview h2 {
+  color: #07465e;
+  font-size: 16px;
+  margin: 20px 0 10px;
+}
+
+:host ::ng-deep .legal-notice-preview p {
+  margin: 0 0 15px;
 }
 
 .content-pool-description {
