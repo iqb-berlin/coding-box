@@ -207,6 +207,7 @@ describe('CodingListStreamService', () => {
         'http://server',
         1,
         false,
+        false,
         false
       );
     });
