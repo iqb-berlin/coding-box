@@ -1618,6 +1618,23 @@
                     appliedResultsOverview.remainingResponses
                   }}</span>
                 </div>
+                <div class="stat-item" *ngIf="hasDeriveErrorManualCases">
+                  <span class="stat-label">{{
+                    'applied-results-overview.derive-error-additional'
+                      | translate
+                  }}</span>
+                  <span class="stat-value">
+                    {{
+                      'applied-results-overview.derive-error-progress'
+                        | translate
+                          : {
+                              applied: deriveErrorAppliedCases,
+                              total: deriveErrorManualCases,
+                              remaining: deriveErrorRemainingCases
+                            }
+                    }}
+                  </span>
+                </div>
                 <div class="stat-item">
                   <span class="stat-label">{{
                     'applied-results-overview.completion-progress' | translate
