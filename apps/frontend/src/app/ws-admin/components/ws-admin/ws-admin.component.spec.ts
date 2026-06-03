@@ -1,4 +1,3 @@
-import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -9,18 +8,8 @@ import { of } from 'rxjs';
 import { WsAdminComponent } from './ws-admin.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
-import { MyCodingJobsComponent } from '../../../coding/components/my-coding-jobs/my-coding-jobs.component';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
-
-@Component({
-  selector: 'coding-box-my-coding-jobs',
-  template: '<div data-testid="my-coding-jobs"></div>',
-  standalone: true
-})
-class MyCodingJobsStubComponent {
-  @Input() workspaceId?: number;
-}
 
 describe('WsAdminComponent', () => {
   let component: WsAdminComponent;
@@ -36,11 +25,6 @@ describe('WsAdminComponent', () => {
         limit: 1
       }))
     };
-
-    TestBed.overrideComponent(WsAdminComponent, {
-      remove: { imports: [MyCodingJobsComponent] },
-      add: { imports: [MyCodingJobsStubComponent] }
-    });
 
     await TestBed.configureTestingModule({
       imports: [WsAdminComponent, MatTabsModule, TranslateModule.forRoot()],
@@ -122,11 +106,17 @@ describe('WsAdminComponent', () => {
 
   it('should render coding manager links without own coding jobs when canCode is false', () => {
     const links = renderNavLinks(2, false);
+    const navLinks = (component as unknown as { navLinks: Array<{ path: string }> }).navLinks;
 
     expect(links).toEqual([
-      'ws-admin.coding-statistics',
+      'ws-admin.coding-overview',
       'ws-admin.manual-coding',
       'ws-admin.export'
+    ]);
+    expect(navLinks.map(link => link.path)).toEqual([
+      'coding/statistics',
+      'coding/manual',
+      'coding/export'
     ]);
   });
 
@@ -135,7 +125,7 @@ describe('WsAdminComponent', () => {
 
     expect(links).toEqual([
       'ws-admin.my-coding-jobs',
-      'ws-admin.coding-statistics',
+      'ws-admin.coding-overview',
       'ws-admin.manual-coding',
       'ws-admin.export'
     ]);
@@ -146,7 +136,7 @@ describe('WsAdminComponent', () => {
 
     expect(links).toEqual([
       'ws-admin.my-coding-jobs',
-      'ws-admin.coding-statistics',
+      'ws-admin.coding-overview',
       'ws-admin.manual-coding',
       'ws-admin.export'
     ]);
@@ -154,15 +144,17 @@ describe('WsAdminComponent', () => {
 
   it('should render full navigation without own coding jobs for study managers without canCode', () => {
     const links = renderNavLinks(3, false);
+    const navLinks = (component as unknown as { navLinks: Array<{ path: string }> }).navLinks;
 
     expect(links).toEqual([
       'ws-admin.test-files',
       'ws-admin.test-results',
-      'ws-admin.coding',
-      'ws-admin.cleaning',
+      'ws-admin.coding-overview',
+      'ws-admin.manual-coding',
       'ws-admin.export',
       'ws-admin.settings'
     ]);
+    expect(navLinks.map(link => link.path)).toContain('coding/management');
   });
 
   it('should render own coding jobs and full navigation for study managers with canCode', () => {
@@ -187,8 +179,8 @@ describe('WsAdminComponent', () => {
     expect(links).toEqual([
       'ws-admin.test-files',
       'ws-admin.test-results',
-      'ws-admin.coding',
-      'ws-admin.cleaning',
+      'ws-admin.coding-overview',
+      'ws-admin.manual-coding',
       'ws-admin.export',
       'ws-admin.settings'
     ]);
@@ -201,8 +193,8 @@ describe('WsAdminComponent', () => {
       'ws-admin.my-coding-jobs',
       'ws-admin.test-files',
       'ws-admin.test-results',
-      'ws-admin.coding',
-      'ws-admin.cleaning',
+      'ws-admin.coding-overview',
+      'ws-admin.manual-coding',
       'ws-admin.export',
       'ws-admin.settings'
     ]);
