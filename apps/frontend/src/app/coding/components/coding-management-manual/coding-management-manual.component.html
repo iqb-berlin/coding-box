@@ -1094,12 +1094,13 @@
         </div>
 
         <!-- Variable Coverage Statistics -->
-        <div
-          *ngIf="isManualTab('planning') && variableCoverageOverview"
-          class="variable-coverage-section statistics-section"
-          [class.blurred-content]="isLoadingVariableCoverage"
-        >
-          <div class="statistics-card">
+        <div id="manual-variable-coverage" *ngIf="isManualTab('planning')">
+          <div
+            *ngIf="variableCoverageOverview"
+            class="variable-coverage-section statistics-section"
+            [class.blurred-content]="isLoadingVariableCoverage"
+          >
+            <div class="statistics-card">
             <h2 class="section-title section-title-with-action">
               Variablenabdeckung
               <button
@@ -1315,6 +1316,7 @@
                 }}
               </div>
             </div>
+          </div>
           </div>
         </div>
 
