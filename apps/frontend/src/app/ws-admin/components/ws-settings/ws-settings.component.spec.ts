@@ -55,6 +55,8 @@ describe('WsSettingsComponent', () => {
     mockWorkspaceSettingsService = {
       getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(true)),
       setAutoFetchCodingStatistics: jest.fn().mockReturnValue(of({})),
+      getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true)),
+      setAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of({})),
       getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false)),
       setShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of({}))
     } as unknown as jest.Mocked<WorkspaceSettingsService>;
@@ -116,6 +118,8 @@ describe('WsSettingsComponent', () => {
     it('should load workspace settings on init', () => {
       expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
       expect(component.autoFetchCodingStatistics).toBe(true);
+      expect(mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1);
+      expect(component.autoRefreshManualCodingJobs).toBe(true);
       expect(mockWorkspaceSettingsService.getShowTestResultsLogAnomalies).toHaveBeenCalledWith(1);
       expect(component.showTestResultsLogAnomalies).toBe(false);
     });
@@ -202,6 +206,28 @@ describe('WsSettingsComponent', () => {
       component.autoFetchCodingStatistics = true;
       component.toggleAutoFetchCodingStatistics({ checked: false });
       expect(component.autoFetchCodingStatistics).toBe(true);
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('toggleAutoRefreshManualCodingJobs', () => {
+    it('should call service with true', () => {
+      component.toggleAutoRefreshManualCodingJobs({ checked: true });
+      expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1, true);
+    });
+
+    it('should call service with false', () => {
+      component.toggleAutoRefreshManualCodingJobs({ checked: false });
+      expect(component.autoRefreshManualCodingJobs).toBe(false);
+      expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1, false);
+    });
+
+    it('should revert state on error', () => {
+      mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs.mockReturnValue(throwError(() => new Error('error')));
+      component.autoRefreshManualCodingJobs = true;
+      component.toggleAutoRefreshManualCodingJobs({ checked: false });
+      expect(component.autoRefreshManualCodingJobs).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });
