@@ -1635,7 +1635,12 @@
       "info-total-title": "Gesamt zu kodierende Fälle",
       "info-total-desc": "Zählt die Basisanzahl eindeutiger Antworten, die noch der manuellen Kodierung bedürfen. Antworten von ausgeschlossenen Testteilnehmern werden dynamisch abgezogen.",
       "info-completed-title": "Abgeschlossene Fälle",
-      "info-completed-desc": "Zählt die Anzahl der eindeutigen Fälle, für die mindestens eine abschließende Kodierung in den Jobs vorliegt. Doppelkodierungen werden hierbei als ein Fall gezählt, um eine konsistente Fortschrittsanzeige von maximal 100% zu gewährleisten."
+      "info-completed-desc": "Zählt die Anzahl der eindeutigen Fälle, für die mindestens eine abschließende Kodierung in den Jobs vorliegt. Doppelkodierungen werden hierbei als ein Fall gezählt, um eine konsistente Fortschrittsanzeige von maximal 100% zu gewährleisten.",
+      "info-aggregation-title": "Antwortwert-Aggregation, falls aktiv",
+      "info-aggregation-desc": "Wenn Antwortwert-Aggregation aktiv ist, werden gleiche Antwortwerte pro Aufgabe/Variable gruppiert. Pro Gruppe wird ein Repräsentant in den Kodierjob gegeben; die Kodierung gilt anschließend für die zugehörigen Rohantworten. Abgeleitete Variablen werden nicht aggregiert.",
+      "aggregation-note": "Antwortwert-Aggregation ist aktiv: {{rawCases}} Rohantworten werden zu {{effectiveCases}} effektiven Kodierfällen zusammengefasst. Dadurch müssen bei Schwelle {{threshold}} {{collapsedCases}} gleichwertige Rohantworten nicht separat manuell kodiert werden.",
+      "analysis-aggregation-note": "Antwort-Analyse: {{rawCases}} Rohantworten ergeben {{effectiveCases}} effektive Kodierfälle.",
+      "analysis-aggregation-savings": "{{collapsedCases}} gleichwertige Rohantworten werden in dieser Analyse nicht separat als Kodierfälle gezählt."
     },
     "variable-coverage": {
       "info-tooltip": "Erklärung zur Variablenabdeckung anzeigen",

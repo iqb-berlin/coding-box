@@ -51,6 +51,18 @@ describe('CodingManagementManualComponent', () => {
     const translateService = TestBed.inject(TranslateService);
     translateService.setTranslation('de', {
       'coding-management-manual': {
+        'coding-progress': {
+          'info-tooltip': 'Erklärung zur Berechnung der Fortschrittswerte anzeigen',
+          'info-total-title': 'Gesamt zu kodierende Fälle',
+          'info-total-desc': 'Zählt die Basisanzahl eindeutiger Antworten.',
+          'info-completed-title': 'Abgeschlossene Fälle',
+          'info-completed-desc': 'Zählt die Anzahl der eindeutigen abgeschlossenen Fälle.',
+          'info-aggregation-title': 'Antwortwert-Aggregation, falls aktiv',
+          'info-aggregation-desc': 'Wenn Antwortwert-Aggregation aktiv ist, werden gleiche Antwortwerte pro Aufgabe/Variable gruppiert. Pro Gruppe wird ein Repräsentant in den Kodierjob gegeben; die Kodierung gilt anschließend für die zugehörigen Rohantworten. Abgeleitete Variablen werden nicht aggregiert.',
+          'aggregation-note': 'Antwortwert-Aggregation ist aktiv: {{rawCases}} Rohantworten werden zu {{effectiveCases}} effektiven Kodierfällen zusammengefasst. Dadurch müssen bei Schwelle {{threshold}} {{collapsedCases}} gleichwertige Rohantworten nicht separat manuell kodiert werden.',
+          'analysis-aggregation-note': 'Antwort-Analyse: {{rawCases}} Rohantworten ergeben {{effectiveCases}} effektive Kodierfälle.',
+          'analysis-aggregation-savings': '{{collapsedCases}} gleichwertige Rohantworten werden in dieser Analyse nicht separat als Kodierfälle gezählt.'
+        },
         freshness: {
           'second-autocoding-ready-title': 'Auto-Coding 2 bereit',
           'second-autocoding-ready-summary': 'Die manuelle Kodierung ist abgeschlossen. Auto-Coding 2 kann nun für {{taskResults}} gestartet oder aktualisiert werden. Das betrifft {{responses}}.',
@@ -638,6 +650,31 @@ describe('CodingManagementManualComponent', () => {
 
     expect(component.caseCoverageOverview?.effectiveUnassignedCases).toBe(0);
     expect(component.getAvailableCasesForNewJobs()).toBe(0);
+  });
+
+  it('explains aggregation savings as avoided separate manual coding', () => {
+    setCompletePlanningState();
+    setCodingProgress(16606, 12000);
+    component.codingProgressOverview = {
+      ...component.codingProgressOverview!,
+      rawTotalCasesToCode: 21606,
+      aggregationActive: true,
+      aggregationThreshold: 2,
+      aggregatedDuplicateCases: 5000
+    };
+    component.showProgressInfo = true;
+
+    fixture.detectChanges();
+
+    const pageText = fixture.nativeElement.textContent as string;
+    expect(pageText).toContain(
+      'Antwortwert-Aggregation ist aktiv: 21606 Rohantworten werden zu 16606 effektiven Kodierfällen zusammengefasst.'
+    );
+    expect(pageText).toContain(
+      'Dadurch müssen bei Schwelle 2 5000 gleichwertige Rohantworten nicht separat manuell kodiert werden.'
+    );
+    expect(pageText).toContain('Abgeleitete Variablen werden nicht aggregiert.');
+    expect(pageText).not.toContain('Kodierungen eingespart');
   });
 
   it('should guide users from incomplete planning to job definitions with available-case context', () => {
