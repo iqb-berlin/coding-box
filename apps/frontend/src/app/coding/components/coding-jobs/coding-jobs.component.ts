@@ -468,20 +468,32 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     const summary = job.issueSummary;
     if (!summary || summary.total === 0) {
       if (summary?.open) {
-        const openLabel = summary.open === 1 ? 'Aufgabe' : 'Aufgaben';
-        return `${summary.open} offene ${openLabel}, keine prüfpflichtigen Kodierungsprobleme`;
+        const key = summary.open === 1 ?
+          'coding.jobs.issue-tooltip.open-no-review-issues-singular' :
+          'coding.jobs.issue-tooltip.open-no-review-issues-plural';
+        return this.translateService.instant(key, { count: summary.open });
       }
-      return 'Keine prüfpflichtigen Kodierungsprobleme';
+      return this.translateService.instant(
+        'coding.jobs.issue-tooltip.no-review-issues'
+      );
     }
 
     const parts: string[] = [];
     if (summary.codeAssignmentUncertain > 0) {
       parts.push(
-        `${summary.codeAssignmentUncertain}x Code-Vergabe unsicher`
+        this.translateService.instant(
+          'coding.jobs.issue-tooltip.code-assignment-uncertain',
+          { count: summary.codeAssignmentUncertain }
+        )
       );
     }
     if (summary.newCodeNeeded > 0) {
-      parts.push(`${summary.newCodeNeeded}x neuer Code benötigt`);
+      parts.push(
+        this.translateService.instant(
+          'coding.jobs.issue-tooltip.new-code-needed',
+          { count: summary.newCodeNeeded }
+        )
+      );
     }
 
     return parts.join(', ');
