@@ -1684,6 +1684,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningNextStepTargetSection(): string {
     switch (this.getPlanningStatusState()) {
+      case 'warning':
+        return this.hasVariableCoverageConflicts() ?
+          'manual-planning' :
+          'manual-variable-coverage';
       case 'execution-ready':
         return 'manual-execution';
       case 'completion-ready':

@@ -580,6 +580,9 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getPlanningNextStepActionLabel()).toBe(
       'Betroffene Variablen ansehen'
     );
+    expect(component.getPlanningNextStepTargetSection()).toBe(
+      'manual-variable-coverage'
+    );
 
     fixture.detectChanges();
 
@@ -594,6 +597,37 @@ describe('CodingManagementManualComponent', () => {
     expect(statusBanner?.textContent).toContain(
       'Reguläre Codes für manuelle Kodierung prüfen'
     );
+  });
+
+  it('should keep the affected variables scroll target while coverage is loading', () => {
+    component.selectedManualTabIndex = component.manualCodingTabs.indexOf('planning');
+    component.variableCoverageOverview = null;
+    component.manualCodeAvailabilityWarnings = [
+      {
+        unitName: 'UNIT1',
+        variableId: 'VAR1',
+        responseCount: 5,
+        casesInJobs: 0,
+        availableCases: 5,
+        uniqueCasesAfterAggregation: 5,
+        regularCodeCount: 2,
+        selectableRegularCodeCount: 0,
+        onlySpecialOptionsAvailable: true,
+        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
+      }
+    ];
+
+    fixture.detectChanges();
+
+    expect(component.getPlanningNextStepTargetSection()).toBe(
+      'manual-variable-coverage'
+    );
+    expect(
+      fixture.nativeElement.querySelector('#manual-variable-coverage')
+    ).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('.variable-coverage-section')
+    ).toBeNull();
   });
 
   it('should explain raw status responses versus effective manual cases', () => {
@@ -658,6 +692,9 @@ describe('CodingManagementManualComponent', () => {
     );
     expect(component.getPlanningNextStepActionLabel()).toBe(
       'Zu den Jobdefinitionen'
+    );
+    expect(component.getPlanningNextStepTargetSection()).toBe(
+      'manual-planning'
     );
   });
 
