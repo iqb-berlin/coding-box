@@ -51,6 +51,7 @@ type ManualCodingVariableCaseCounts = {
   unitName: string;
   variableId: string;
   responseCount: number;
+  deriveErrorResponseCount: number;
   isDerived: boolean;
   coderTrainingRequired: boolean;
 };
@@ -82,6 +83,7 @@ type ManualCodingVariableWithCaseInfo = {
   unitName: string;
   variableId: string;
   responseCount: number;
+  deriveErrorResponseCount: number;
   casesInJobs: number;
   availableCases: number;
   uniqueCasesAfterAggregation: number;
@@ -492,6 +494,7 @@ export class CodingValidationService {
       unitName: string;
       variableId: string;
       responseCount: number;
+      deriveErrorResponseCount: number;
       casesInJobs: number;
       availableCases: number;
       uniqueCasesAfterAggregation: number;
@@ -517,6 +520,7 @@ export class CodingValidationService {
         unitName: string;
         variableId: string;
         responseCount: number;
+        deriveErrorResponseCount: number;
         casesInJobs: number;
         availableCases: number;
         uniqueCasesAfterAggregation: number;
@@ -921,7 +925,7 @@ export class CodingValidationService {
     unitName?: string,
     trainingRequired?: boolean
   ): Promise<
-    { unitName: string; variableId: string; responseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
+    { unitName: string; variableId: string; responseCount: number; deriveErrorResponseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
     > {
     const scope = await this.fetchManualCodingScopeFromDb(
       workspaceId,
@@ -964,9 +968,10 @@ export class CodingValidationService {
     };
 
     // Run both queries in parallel
-    const [codingIncompleteRaw, intendedIncompleteRaw] = await Promise.all([
+    const [codingIncompleteRaw, intendedIncompleteRaw, deriveErrorCountsByKey] = await Promise.all([
       buildQuery(statusStringToNumber('CODING_INCOMPLETE')).getRawMany(),
-      buildQuery(statusStringToNumber('INTENDED_INCOMPLETE')).getRawMany()
+      buildQuery(statusStringToNumber('INTENDED_INCOMPLETE')).getRawMany(),
+      this.getDeriveErrorResponseCountsByVariable(workspaceId, unitName)
     ]);
 
     this.logger.debug(
@@ -1051,6 +1056,7 @@ export class CodingValidationService {
       unitName: string;
       variableId: string;
       responseCount: number;
+      deriveErrorResponseCount: number;
       isDerived: boolean;
       coderTrainingRequired: boolean;
     }>();
@@ -1059,6 +1065,7 @@ export class CodingValidationService {
       const key = `${row.unitName}::${row.variableId}`;
       const existing = mergedMap.get(key);
       const count = parseInt(row.responseCount, 10);
+      const deriveErrorResponseCount = deriveErrorCountsByKey.get(key) || 0;
       const isDerived = derivedVariableSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
       const coderTrainingRequired = trainingRequiredSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
 
@@ -1069,6 +1076,7 @@ export class CodingValidationService {
           unitName: row.unitName,
           variableId: row.variableId,
           responseCount: count,
+          deriveErrorResponseCount,
           isDerived,
           coderTrainingRequired
         });
@@ -1086,6 +1094,51 @@ export class CodingValidationService {
       variables: result,
       excludedSourceSummary
     };
+  }
+
+  private async getDeriveErrorResponseCountsByVariable(
+    workspaceId: number,
+    unitName?: string
+  ): Promise<Map<string, number>> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.responseRepository
+      .createQueryBuilder('response')
+      .select('unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .addSelect('COUNT(response.id)', 'responseCount')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 = :status', {
+        status: statusStringToNumber('DERIVE_ERROR')
+      })
+      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)')
+      .groupBy('unit.name')
+      .addGroupBy('response.variableid');
+
+    if (unitName) {
+      query.andWhere('unit.name = :unitName', { unitName });
+    }
+
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      parameterPrefix: 'deriveErrorResponseCounts'
+    });
+
+    const rawResults = await query.getRawMany<{
+      unitName: string;
+      variableId: string;
+      responseCount: string;
+    }>();
+
+    return rawResults.reduce((counts, row) => {
+      if (row.unitName && row.variableId) {
+        counts.set(`${row.unitName}::${row.variableId}`, parseInt(row.responseCount, 10) || 0);
+      }
+      return counts;
+    }, new Map<string, number>());
   }
 
   generateIncompleteVariablesCacheKey(workspaceId: number): string {

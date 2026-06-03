@@ -59,6 +59,7 @@ export interface Variable {
   unitName: string;
   variableId: string;
   responseCount?: number;
+  deriveErrorResponseCount?: number;
   casesInJobs?: number;
   availableCases?: number;
   uniqueCasesAfterAggregation?: number;

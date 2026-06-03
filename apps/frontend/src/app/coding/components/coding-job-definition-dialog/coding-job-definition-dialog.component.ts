@@ -682,13 +682,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.syncSelectionWithAvailability();
   }
 
-  private getVariableMetrics(variable: Pick<Variable, 'unitName' | 'variableId'>): Pick<Variable, 'responseCount' | 'availableCases' | 'uniqueCasesAfterAggregation' | 'casesInJobs' | 'isDerived' | 'coderTrainingRequired'> {
+  private getVariableMetrics(variable: Pick<Variable, 'unitName' | 'variableId'>): Pick<Variable, 'responseCount' | 'deriveErrorResponseCount' | 'availableCases' | 'uniqueCasesAfterAggregation' | 'casesInJobs' | 'isDerived' | 'coderTrainingRequired'> {
     const matchingVar = this.variables.find(
       v => v.unitName === variable.unitName && v.variableId === variable.variableId
     );
 
     return {
       responseCount: matchingVar?.responseCount ?? 0,
+      deriveErrorResponseCount: matchingVar?.deriveErrorResponseCount ?? 0,
       availableCases: matchingVar?.availableCases,
       uniqueCasesAfterAggregation: matchingVar?.uniqueCasesAfterAggregation,
       casesInJobs: matchingVar?.casesInJobs,
@@ -1040,8 +1041,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return variable.includeDeriveError === true;
   }
 
+  hasDeriveErrorResponses(variable: Variable): boolean {
+    return (variable.deriveErrorResponseCount ?? 0) > 0 || variable.includeDeriveError === true;
+  }
+
   setDeriveErrorIncluded(variable: Variable, includeDeriveError: boolean): void {
-    if (this.isReadOnly || this.data.mode !== 'definition') {
+    if (this.isReadOnly || this.data.mode !== 'definition' || !this.hasDeriveErrorResponses(variable)) {
       return;
     }
 
@@ -1058,7 +1063,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return this.selectedVariables.selected.map(variable => ({
       unitName: variable.unitName,
       variableId: variable.variableId,
-      ...(variable.includeDeriveError === true ? { includeDeriveError: true } : {})
+      ...(variable.includeDeriveError === true && this.hasDeriveErrorResponses(variable) ? { includeDeriveError: true } : {})
     }));
   }
 
