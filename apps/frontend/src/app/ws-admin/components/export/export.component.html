@@ -83,15 +83,22 @@
 
           <mat-form-field appearance="outline">
             <mat-label>{{ 'ws-admin.export-options.results-format' | translate }}</mat-label>
-            <mat-select [(ngModel)]="resultsFormat">
+            <mat-select [(ngModel)]="resultsFormat" (ngModelChange)="onResultsFormatChange()">
               <mat-option value="csv">{{ 'ws-admin.export-options.results-format-csv' | translate }}</mat-option>
               <mat-option value="excel">{{ 'ws-admin.export-options.results-format-excel' | translate }}</mat-option>
             </mat-select>
           </mat-form-field>
 
           <mat-checkbox [(ngModel)]="includeResponseValues" color="primary"
+            (ngModelChange)="onIncludeResponseValuesChange()"
             [matTooltip]="'ws-admin.export-options.include-response-values-tooltip' | translate">
             {{ 'ws-admin.export-options.include-response-values' | translate }}
+          </mat-checkbox>
+
+          <mat-checkbox *ngIf="hasGeoGebraResponses" [(ngModel)]="includeGeoGebraFiles" color="primary"
+            [disabled]="resultsFormat !== 'excel' || !includeResponseValues"
+            [matTooltip]="'ws-admin.export-options.include-geogebra-files-tooltip' | translate">
+            {{ 'ws-admin.export-options.include-geogebra-files' | translate }}
           </mat-checkbox>
         </div>
 

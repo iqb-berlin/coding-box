@@ -18,6 +18,7 @@ describe('CodingExportOrchestratorService', () => {
     const codingResultsExportService = {
       exportCodingResultsByVersionAsCsv: jest.fn(),
       exportCodingResultsByVersionAsExcel: jest.fn(),
+      exportCodingResultsByVersionAsGeoGebraZip: jest.fn(),
       exportCodingResultsDetailed: jest.fn()
     };
 
@@ -54,6 +55,33 @@ describe('CodingExportOrchestratorService', () => {
       onProgress,
       false
     );
+  });
+
+  it('routes versioned Excel GeoGebra packages to the ZIP export service', async () => {
+    const { service, codingResultsExportService } = createService();
+    const buffer = Buffer.from('zip');
+    const onProgress = jest.fn();
+    codingResultsExportService.exportCodingResultsByVersionAsGeoGebraZip.mockResolvedValue(buffer);
+
+    await expect(service.exportResultsByVersionAsExcel({
+      workspaceId: 7,
+      version: 'v2',
+      authToken: 'token',
+      serverUrl: 'http://app.example',
+      includeReplayUrl: true,
+      includeGeoGebraFiles: true,
+      onProgress
+    })).resolves.toBe(buffer);
+
+    expect(codingResultsExportService.exportCodingResultsByVersionAsGeoGebraZip).toHaveBeenCalledWith(
+      7,
+      'v2',
+      'token',
+      'http://app.example',
+      true,
+      onProgress
+    );
+    expect(codingResultsExportService.exportCodingResultsByVersionAsExcel).not.toHaveBeenCalled();
   });
 
   it('routes unscoped detailed exports to the specialized batched results export service', async () => {

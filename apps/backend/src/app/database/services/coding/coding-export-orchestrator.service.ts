@@ -13,6 +13,7 @@ export interface VersionedCodingResultsExportOptions {
   serverUrl?: string;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;
+  includeGeoGebraFiles?: boolean;
   onProgress?: (percentage: number) => Promise<void>;
 }
 
@@ -56,6 +57,17 @@ export class CodingExportOrchestratorService {
   exportResultsByVersionAsExcel(
     options: VersionedCodingResultsExportOptions
   ): Promise<Buffer> {
+    if (options.includeGeoGebraFiles) {
+      return this.codingResultsExportService.exportCodingResultsByVersionAsGeoGebraZip(
+        options.workspaceId,
+        options.version || 'v2',
+        options.authToken || '',
+        options.serverUrl || '',
+        options.includeReplayUrl || false,
+        options.onProgress
+      );
+    }
+
     return this.codingResultsExportService.exportCodingResultsByVersionAsExcel(
       options.workspaceId,
       options.version || 'v2',

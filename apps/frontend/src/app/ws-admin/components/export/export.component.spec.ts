@@ -9,6 +9,7 @@ import { AppService } from '../../../core/services/app.service';
 import { ExportJobService } from '../../../shared/services/file/export-job.service';
 import { CodingFacadeService } from '../../../services/facades/coding-facade.service';
 import { CoderService } from '../../../coding/services/coder.service';
+import { ResponseService } from '../../../shared/services/response/response.service';
 
 describe('ExportComponent', () => {
   let fixture: ComponentFixture<ExportComponent>;
@@ -61,6 +62,12 @@ describe('ExportComponent', () => {
               { id: 30, name: 'coder1' },
               { id: 31, name: 'coder2' }
             ]))
+          }
+        },
+        {
+          provide: ResponseService,
+          useValue: {
+            hasGeogebraResponses: jest.fn().mockReturnValue(of(false))
           }
         },
         {
@@ -141,6 +148,35 @@ describe('ExportComponent', () => {
     expect(config).not.toHaveProperty('coderIds');
     expect(config).not.toHaveProperty('excludeAutoCoded');
     expect(snackOpen).toHaveBeenCalledWith('Datenexport gestartet', 'Schließen', { duration: 3000 });
+  });
+
+  it('includes GeoGebra package option only for Excel result exports', () => {
+    component.selectedFormat = 'results-by-version';
+    component.resultsVersion = 'v2';
+    component.resultsFormat = 'excel';
+    component.includeResponseValues = true;
+    component.hasGeoGebraResponses = true;
+    component.includeGeoGebraFiles = true;
+
+    component.onExport();
+
+    expect(startJob).toHaveBeenCalledWith(5, expect.objectContaining({
+      exportType: 'results-by-version',
+      format: 'excel',
+      includeResponseValues: true,
+      includeGeoGebraFiles: true
+    }));
+
+    startJob.mockClear();
+    component.resultsFormat = 'csv';
+    component.onResultsFormatChange();
+    component.onExport();
+
+    expect(startJob).toHaveBeenCalledWith(5, expect.objectContaining({
+      exportType: 'results-by-version',
+      format: 'csv',
+      includeGeoGebraFiles: false
+    }));
   });
 
   it('keeps audit export filters for detailed coding protocol exports', () => {

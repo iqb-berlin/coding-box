@@ -1,4 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import * as ExcelJS from 'exceljs';
+import AdmZip = require('adm-zip');
 import { CodingListStreamService } from './coding-list-stream.service';
 import { CodingResponseFilterService } from './coding-response-filter.service';
 import { CodingItemBuilderService } from './coding-item-builder.service';
@@ -6,11 +9,14 @@ import { CodingFileCacheService } from './coding-file-cache.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { ResponseEntity } from '../../entities/response.entity';
 
+jest.mock('libxmljs2', () => ({}));
+
 describe('CodingListStreamService', () => {
   let service: CodingListStreamService;
   let mockResponseFilterService: jest.Mocked<CodingResponseFilterService>;
   let mockItemBuilderService: jest.Mocked<CodingItemBuilderService>;
   let mockFileCacheService: jest.Mocked<CodingFileCacheService>;
+  let mockConfigService: jest.Mocked<ConfigService>;
 
   const createMockResponse = (id: number): ResponseEntity => ({
     id,
@@ -78,6 +84,10 @@ describe('CodingListStreamService', () => {
       loadVoudData: jest.fn()
     } as unknown as jest.Mocked<CodingFileCacheService>;
 
+    mockConfigService = {
+      get: jest.fn().mockReturnValue(undefined)
+    } as unknown as jest.Mocked<ConfigService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CodingListStreamService,
@@ -87,6 +97,7 @@ describe('CodingListStreamService', () => {
         },
         { provide: CodingItemBuilderService, useValue: mockItemBuilderService },
         { provide: CodingFileCacheService, useValue: mockFileCacheService },
+        { provide: ConfigService, useValue: mockConfigService },
         {
           provide: WorkspaceFilesService,
           useValue: {
@@ -333,6 +344,163 @@ describe('CodingListStreamService', () => {
         validCodingVariablesOnly: true,
         givenResponsesOnly: true
       });
+    });
+
+    it('should export GeoGebra values as linked .ggb files in a ZIP package', async () => {
+      const geoGebraResponse = createMockResponse(1);
+      const plainResponse = createMockResponse(2);
+      mockResponseFilterService.countResponses.mockResolvedValue(2);
+      mockResponseFilterService.getResponsesBatch
+        .mockResolvedValueOnce([geoGebraResponse, plainResponse])
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'unit_alias',
+        'person_login',
+        'person_code',
+        'person_group',
+        'booklet_name',
+        'variable_id',
+        'variable_page',
+        'variable_anchor',
+        'value',
+        'status_v1',
+        'code_v1',
+        'score_v1'
+      ]);
+      mockItemBuilderService.buildCodingItemWithVersions
+        .mockResolvedValueOnce({
+          unit_key: 'Unit/1',
+          unit_alias: 'Unit 1',
+          person_login: 'login',
+          person_code: 'code',
+          person_group: 'group',
+          booklet_name: 'Booklet',
+          variable_id: 'Geo:Var',
+          variable_page: '1',
+          variable_anchor: 'Geo:Var',
+          value: 'UEsDBA==',
+          status_v1: 'VALUE_CHANGED',
+          code_v1: '',
+          score_v1: ''
+        } as never)
+        .mockResolvedValueOnce({
+          unit_key: 'Unit 1',
+          unit_alias: 'Unit 1',
+          person_login: 'login',
+          person_code: 'code',
+          person_group: 'group',
+          booklet_name: 'Booklet',
+          variable_id: 'Plain',
+          variable_page: '1',
+          variable_anchor: 'Plain',
+          value: 'plain answer',
+          status_v1: 'VALUE_CHANGED',
+          code_v1: '',
+          score_v1: ''
+        } as never);
+
+      const result = await service.getCodingResultsByVersionAsGeoGebraZip(
+        1,
+        'v1',
+        'token',
+        'http://server'
+      );
+
+      const zip = new AdmZip(result);
+      const entries = zip.getEntries().map(entry => entry.entryName);
+      expect(entries).toContain('coding-results-v1.xlsx');
+      expect(entries).toContain('geogebra/login__code__Booklet__Unit_1__Geo_Var__response-1.ggb');
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(zip.readFile('coding-results-v1.xlsx')!);
+      const worksheet = workbook.getWorksheet('Coding Results')!;
+      expect(worksheet.getCell('J2').value).toEqual(expect.objectContaining({
+        text: 'login__code__Booklet__Unit_1__Geo_Var__response-1.ggb',
+        hyperlink: 'geogebra/login__code__Booklet__Unit_1__Geo_Var__response-1.ggb'
+      }));
+      expect(worksheet.getCell('J3').value).toBe('plain answer');
+    });
+
+    it('should abort GeoGebra ZIP export when configured file count limit is exceeded', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'GEOGEBRA_EXPORT_MAX_FILES') return '1';
+        return undefined;
+      });
+      mockResponseFilterService.countResponses.mockResolvedValue(2);
+      mockResponseFilterService.getResponsesBatch
+        .mockResolvedValueOnce([createMockResponse(1), createMockResponse(2)])
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'person_login',
+        'person_code',
+        'booklet_name',
+        'variable_id',
+        'value'
+      ]);
+      mockItemBuilderService.buildCodingItemWithVersions
+        .mockResolvedValueOnce({
+          unit_key: 'Unit 1',
+          person_login: 'login',
+          person_code: 'code',
+          booklet_name: 'Booklet',
+          variable_id: 'Geo 1',
+          value: 'UEsDBA=='
+        } as never)
+        .mockResolvedValueOnce({
+          unit_key: 'Unit 1',
+          person_login: 'login',
+          person_code: 'code',
+          booklet_name: 'Booklet',
+          variable_id: 'Geo 2',
+          value: 'UEsDBA=='
+        } as never);
+
+      await expect(service.getCodingResultsByVersionAsGeoGebraZip(
+        1,
+        'v1',
+        'token',
+        'http://server'
+      )).rejects.toThrow(
+        'GeoGebra-ZIP-Export abgebrochen: 2 GeoGebra-Dateien überschreiten das Limit von 1.'
+      );
+    });
+
+    it('should abort GeoGebra ZIP export when configured byte limit is exceeded', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'GEOGEBRA_EXPORT_MAX_BYTES') return '3';
+        return undefined;
+      });
+      mockResponseFilterService.countResponses.mockResolvedValue(1);
+      mockResponseFilterService.getResponsesBatch
+        .mockResolvedValueOnce([createMockResponse(1)])
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'person_login',
+        'person_code',
+        'booklet_name',
+        'variable_id',
+        'value'
+      ]);
+      mockItemBuilderService.buildCodingItemWithVersions.mockResolvedValue({
+        unit_key: 'Unit 1',
+        person_login: 'login',
+        person_code: 'code',
+        booklet_name: 'Booklet',
+        variable_id: 'Geo 1',
+        value: 'UEsDBA=='
+      } as never);
+
+      await expect(service.getCodingResultsByVersionAsGeoGebraZip(
+        1,
+        'v1',
+        'token',
+        'http://server'
+      )).rejects.toThrow(
+        'GeoGebra-ZIP-Export abgebrochen: 4 Bytes GeoGebra-Daten überschreiten das Limit von 3 Bytes.'
+      );
     });
   });
 

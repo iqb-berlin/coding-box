@@ -92,6 +92,25 @@ describe('CodingExportService', () => {
       format: 'csv',
       includeReplayUrl: false,
       includeResponseValues: false,
+      includeGeoGebraFiles: false,
+      authToken: 'auth-token'
+    });
+    req.flush({ jobId: 'job-1', message: 'started' });
+  });
+
+  it('should pass GeoGebra package option to Excel result export jobs', () => {
+    service.startExportJob(1, 'results-by-version', 'v2', 'excel', false, undefined, true, true).subscribe(res => {
+      expect(res).toBeDefined();
+    });
+
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/export/start`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toMatchObject({
+      exportType: 'results-by-version',
+      version: 'v2',
+      format: 'excel',
+      includeResponseValues: true,
+      includeGeoGebraFiles: true,
       authToken: 'auth-token'
     });
     req.flush({ jobId: 'job-1', message: 'started' });
