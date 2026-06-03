@@ -25,6 +25,9 @@ describe('SysAdminSettingsComponent', () => {
     getContentPoolSettings: jest.Mock;
     updateContentPoolSettings: jest.Mock;
     testContentPoolConnection: jest.Mock;
+    getLegalNotice: jest.Mock;
+    updateLegalNotice: jest.Mock;
+    resetLegalNotice: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -46,6 +49,18 @@ describe('SysAdminSettingsComponent', () => {
         validatedScopes: ['acp.read', 'files.read', 'files.write'],
         message:
           'Verbindung erfolgreich. 2 ACPs erreichbar. Benötigte Scopes geprüft.'
+      })),
+      getLegalNotice: jest.fn(() => of({
+        html: '<p>Legal</p>',
+        isDefault: false
+      })),
+      updateLegalNotice: jest.fn(() => of({
+        html: '<p>Updated legal</p>',
+        isDefault: false
+      })),
+      resetLegalNotice: jest.fn(() => of({
+        html: '<p>Default legal</p>',
+        isDefault: true
       }))
     };
 
@@ -96,6 +111,51 @@ describe('SysAdminSettingsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  describe('legal notice settings', () => {
+    it('loads the current legal notice on init', () => {
+      expect(systemSettingsService.getLegalNotice).toHaveBeenCalled();
+      expect(component.legalNoticeHtml).toBe('<p>Legal</p>');
+      expect(component.isLegalNoticeDefault).toBe(false);
+    });
+
+    it('saves the edited legal notice', () => {
+      component.legalNoticeHtml = ' <p>Edited legal</p> ';
+
+      component.saveLegalNotice();
+
+      expect(systemSettingsService.updateLegalNotice).toHaveBeenCalledWith({
+        html: '<p>Edited legal</p>'
+      });
+      expect(component.legalNoticeHtml).toBe('<p>Updated legal</p>');
+      expect(snackBar.open).toHaveBeenCalledWith(
+        'Impressum/Datenschutz-Text wurde gespeichert.',
+        'Schließen',
+        { duration: 3000 }
+      );
+    });
+
+    it('requires legal notice text before saving', () => {
+      component.legalNoticeHtml = '   ';
+
+      component.saveLegalNotice();
+
+      expect(systemSettingsService.updateLegalNotice).not.toHaveBeenCalled();
+      expect(snackBar.open).toHaveBeenCalledWith(
+        'Bitte einen Impressum/Datenschutz-Text hinterlegen.',
+        'Schließen',
+        { duration: 4000 }
+      );
+    });
+
+    it('resets legal notice to the built-in default', () => {
+      component.resetLegalNoticeToDefault();
+
+      expect(systemSettingsService.resetLegalNotice).toHaveBeenCalled();
+      expect(component.legalNoticeHtml).toBe('<p>Default legal</p>');
+      expect(component.isLegalNoticeDefault).toBe(true);
+    });
   });
 
   describe('testContentPoolConnection', () => {

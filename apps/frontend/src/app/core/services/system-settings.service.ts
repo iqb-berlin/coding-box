@@ -8,6 +8,7 @@ import {
   ContentPoolSettings,
   ContentPoolSettingsUpdate
 } from '../../ws-admin/models/content-pool.model';
+import { LegalNoticeDto, UpdateLegalNoticeDto } from '../../../../../../api-dto/legal-notice/legal-notice.dto';
 
 @Injectable({
   providedIn: 'root'
@@ -48,6 +49,33 @@ export class SystemSettingsService {
     return this.http.post<ContentPoolConnectionTestResponse>(
       `${this.serverUrl}admin/content-pool/settings/test`,
       settings,
+      {
+        headers: this.authHeader
+      }
+    );
+  }
+
+  getLegalNotice(): Observable<LegalNoticeDto> {
+    return this.http.get<LegalNoticeDto>(
+      `${this.serverUrl}legal-notice`
+    );
+  }
+
+  updateLegalNotice(
+    legalNotice: UpdateLegalNoticeDto
+  ): Observable<LegalNoticeDto> {
+    return this.http.put<LegalNoticeDto>(
+      `${this.serverUrl}legal-notice`,
+      legalNotice,
+      {
+        headers: this.authHeader
+      }
+    );
+  }
+
+  resetLegalNotice(): Observable<LegalNoticeDto> {
+    return this.http.delete<LegalNoticeDto>(
+      `${this.serverUrl}legal-notice`,
       {
         headers: this.authHeader
       }

@@ -1,7 +1,8 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
-  Component, OnDestroy, OnInit, inject
+  Component, OnDestroy, OnInit, SecurityContext, inject
 } from '@angular/core';
+import { DomSanitizer } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -18,6 +19,7 @@ import { LogoService } from '../../../core/services/logo.service';
 import { SystemSettingsService } from '../../../core/services/system-settings.service';
 import { ContentPoolSettings } from '../../../ws-admin/models/content-pool.model';
 import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
+import { defaultLegalNoticeHtml } from '../../../../../../../api-dto/legal-notice/default-legal-notice-html';
 import { SERVER_URL } from '../../../injection-tokens';
 
 type DatabaseExportStatus =
@@ -62,6 +64,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   private systemSettingsService = inject(SystemSettingsService);
   private snackBar = inject(MatSnackBar);
   private rawServerUrl = inject(SERVER_URL);
+  private sanitizer = inject(DomSanitizer);
   private exportPollingSubscription: Subscription | null = null;
 
   selectedFile: File | null = null;
@@ -73,6 +76,11 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   databaseExportProgress = 0;
   databaseExportStatus: DatabaseExportStatus | null = null;
   databaseExportError: string | null = null;
+  isLoadingLegalNotice = false;
+  isSavingLegalNotice = false;
+  isLegalNoticeDefault = true;
+  legalNoticeHtml = defaultLegalNoticeHtml;
+  legalNoticePreviewHtml = this.sanitizeHtml(defaultLegalNoticeHtml);
   isLoadingContentPoolSettings = false;
   isSavingContentPoolSettings = false;
   isTestingContentPoolConnection = false;
@@ -93,6 +101,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.loadLegalNotice();
     this.loadContentPoolSettings();
   }
 
@@ -253,6 +262,93 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         this.snackBar.open('Fehler beim Zurücksetzen der Hintergrundfarbe', 'Schließen', { duration: 3000 });
       }
     });
+  }
+
+  loadLegalNotice(): void {
+    this.isLoadingLegalNotice = true;
+    this.systemSettingsService.getLegalNotice().subscribe({
+      next: legalNotice => {
+        this.legalNoticeHtml = legalNotice.html || defaultLegalNoticeHtml;
+        this.isLegalNoticeDefault = legalNotice.isDefault;
+        this.updateLegalNoticePreview();
+        this.isLoadingLegalNotice = false;
+      },
+      error: () => {
+        this.legalNoticeHtml = defaultLegalNoticeHtml;
+        this.isLegalNoticeDefault = true;
+        this.updateLegalNoticePreview();
+        this.isLoadingLegalNotice = false;
+        this.snackBar.open(
+          'Impressum/Datenschutz-Text konnte nicht geladen werden.',
+          'Schließen',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  saveLegalNotice(): void {
+    const html = (this.legalNoticeHtml || '').trim();
+    if (!html) {
+      this.snackBar.open(
+        'Bitte einen Impressum/Datenschutz-Text hinterlegen.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    this.isSavingLegalNotice = true;
+    this.systemSettingsService.updateLegalNotice({ html }).subscribe({
+      next: legalNotice => {
+        this.legalNoticeHtml = legalNotice.html;
+        this.isLegalNoticeDefault = legalNotice.isDefault;
+        this.updateLegalNoticePreview();
+        this.isSavingLegalNotice = false;
+        this.snackBar.open(
+          'Impressum/Datenschutz-Text wurde gespeichert.',
+          'Schließen',
+          { duration: 3000 }
+        );
+      },
+      error: error => {
+        this.isSavingLegalNotice = false;
+        const message = this.extractErrorMessage(
+          error,
+          'Impressum/Datenschutz-Text konnte nicht gespeichert werden.'
+        );
+        this.snackBar.open(message, 'Schließen', { duration: 4000 });
+      }
+    });
+  }
+
+  resetLegalNoticeToDefault(): void {
+    this.isSavingLegalNotice = true;
+    this.systemSettingsService.resetLegalNotice().subscribe({
+      next: legalNotice => {
+        this.legalNoticeHtml = legalNotice.html;
+        this.isLegalNoticeDefault = legalNotice.isDefault;
+        this.updateLegalNoticePreview();
+        this.isSavingLegalNotice = false;
+        this.snackBar.open(
+          'Impressum/Datenschutz-Text wurde auf den Standard zurückgesetzt.',
+          'Schließen',
+          { duration: 3000 }
+        );
+      },
+      error: error => {
+        this.isSavingLegalNotice = false;
+        const message = this.extractErrorMessage(
+          error,
+          'Impressum/Datenschutz-Text konnte nicht zurückgesetzt werden.'
+        );
+        this.snackBar.open(message, 'Schließen', { duration: 4000 });
+      }
+    });
+  }
+
+  updateLegalNoticePreview(): void {
+    this.legalNoticePreviewHtml = this.sanitizeHtml(this.legalNoticeHtml);
   }
 
   ngOnDestroy(): void {
@@ -570,6 +666,10 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     anchor.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(anchor);
+  }
+
+  private sanitizeHtml(html: string): string {
+    return this.sanitizer.sanitize(SecurityContext.HTML, html) || '';
   }
 
   private extractErrorMessage(error: unknown, fallback: string): string {

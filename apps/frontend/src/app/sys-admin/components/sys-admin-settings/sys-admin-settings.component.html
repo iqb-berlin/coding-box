@@ -98,6 +98,53 @@
     </mat-card-content>
   </mat-card>
 
+  <mat-card class="legal-notice-settings-card">
+    <mat-card-header>
+      <mat-card-title>Impressum/Datenschutz</mat-card-title>
+    </mat-card-header>
+    @if (isLoadingLegalNotice) {
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    }
+    <mat-card-content>
+      <div class="legal-notice-editor-container">
+        <mat-form-field class="full-width">
+          <mat-label>Text</mat-label>
+          <textarea
+            matInput
+            [(ngModel)]="legalNoticeHtml"
+            (ngModelChange)="updateLegalNoticePreview()"
+            [disabled]="isLoadingLegalNotice || isSavingLegalNotice"
+            rows="14"></textarea>
+          <mat-hint>HTML wird beim Anzeigen bereinigt.</mat-hint>
+        </mat-form-field>
+
+        <div class="legal-notice-actions">
+          <button
+            mat-raised-button
+            color="primary"
+            [disabled]="isLoadingLegalNotice || isSavingLegalNotice"
+            (click)="saveLegalNotice()">
+            <mat-icon>save</mat-icon>
+            {{ isSavingLegalNotice ? 'Speichere...' : 'Text speichern' }}
+          </button>
+          <button
+            mat-stroked-button
+            color="primary"
+            [disabled]="isLoadingLegalNotice || isSavingLegalNotice || isLegalNoticeDefault"
+            (click)="resetLegalNoticeToDefault()">
+            <mat-icon>restore</mat-icon>
+            Standard wiederherstellen
+          </button>
+        </div>
+      </div>
+
+      <div class="legal-notice-preview-container">
+        <h3>Vorschau</h3>
+        <div class="legal-notice-preview" [innerHTML]="legalNoticePreviewHtml"></div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
   <mat-card class="content-pool-settings-card">
     <mat-card-header>
       <mat-card-title>Content-Pool Integration</mat-card-title>
