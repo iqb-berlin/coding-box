@@ -2424,6 +2424,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private refreshAfterApplyingCodingResults(): void {
     this.refreshAllStatistics();
+    this.loadResponseAnalysis();
     this.loadCodingFreshness();
     this.reloadCodingJobsList();
   }

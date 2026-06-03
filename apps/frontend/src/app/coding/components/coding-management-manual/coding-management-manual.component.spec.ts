@@ -709,6 +709,7 @@ describe('CodingManagementManualComponent', () => {
       refreshAfterApplyingCodingResults(): void;
       loadCodingFreshness(): void;
       refreshAllStatistics(): void;
+      loadResponseAnalysis(): void;
       reloadCodingJobsList(): void;
     };
     const loadCodingFreshnessSpy = jest
@@ -720,10 +721,14 @@ describe('CodingManagementManualComponent', () => {
     const reloadCodingJobsListSpy = jest
       .spyOn(componentInternals, 'reloadCodingJobsList')
       .mockImplementation();
+    const loadResponseAnalysisSpy = jest
+      .spyOn(componentInternals, 'loadResponseAnalysis')
+      .mockImplementation();
 
     componentInternals.refreshAfterApplyingCodingResults();
 
     expect(refreshAllStatisticsSpy).toHaveBeenCalled();
+    expect(loadResponseAnalysisSpy).toHaveBeenCalled();
     expect(loadCodingFreshnessSpy).toHaveBeenCalled();
     expect(reloadCodingJobsListSpy).toHaveBeenCalled();
   });
