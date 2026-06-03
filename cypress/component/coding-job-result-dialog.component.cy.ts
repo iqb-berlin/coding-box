@@ -1,4 +1,5 @@
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideHttpClient } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
@@ -9,6 +10,7 @@ import { CodingJobResultDialogComponent } from '../../apps/frontend/src/app/codi
 import { CodingJobBackendService } from '../../apps/frontend/src/app/coding/services/coding-job-backend.service';
 import { CodingJob } from '../../apps/frontend/src/app/coding/models/coding-job.model';
 import { AppService } from '../../apps/frontend/src/app/core/services/app.service';
+import { SERVER_URL } from '../../apps/frontend/src/app/injection-tokens';
 import { FileService } from '../../apps/frontend/src/app/shared/services/file/file.service';
 import { base64ToUtf8 } from '../../apps/frontend/src/app/shared/utils/common-utils';
 
@@ -40,6 +42,8 @@ describe('CodingJobResultDialogComponent review flow', () => {
       imports: [TranslateModule.forRoot()],
       providers: [
         provideNoopAnimations(),
+        provideHttpClient(),
+        { provide: SERVER_URL, useValue: '/api/' },
         {
           provide: MatDialogRef,
           useValue: { close: () => {} }
