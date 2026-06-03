@@ -231,7 +231,7 @@ describe('CodingJobBackendService', () => {
     });
 
     it('should export a job definition distribution as CSV', () => {
-      const mockBlob = new Blob(['Job-Definition-ID;Coder'], { type: 'text/csv' });
+      const mockBlob = new Blob(['Jobdefinition-ID;Coder'], { type: 'text/csv' });
 
       service.exportJobDefinitionDistributionCsv(1, 42).subscribe(response => {
         expect(response).toBe(mockBlob);

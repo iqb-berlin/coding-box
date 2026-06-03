@@ -196,7 +196,7 @@
   }
 
   .mat-column-actions {
-    width: 176px;
+    width: 340px;
     text-align: left;
     overflow-wrap: normal;
   }
@@ -231,6 +231,15 @@
 
     &:hover {
       transform: none;
+    }
+  }
+
+  button.danger-row-action[mat-stroked-button] {
+    color: #b3261e;
+    border-color: rgba(179, 38, 30, 0.45);
+
+    mat-icon {
+      color: #b3261e;
     }
   }
 

@@ -100,6 +100,27 @@
             </button>
 
             <button
+              mat-stroked-button
+              type="button"
+              class="primary-row-action"
+              (click)="requestFullEdit(training)"
+              [attr.aria-label]="getTrainingActionAriaLabel('edit', training)">
+              <mat-icon>edit</mat-icon>
+              <span>{{ 'common.edit' | translate }}</span>
+            </button>
+
+            <button
+              mat-stroked-button
+              type="button"
+              class="primary-row-action danger-row-action"
+              color="warn"
+              (click)="deleteTraining(training)"
+              [attr.aria-label]="getTrainingActionAriaLabel('delete', training)">
+              <mat-icon>delete</mat-icon>
+              <span>{{ 'common.delete' | translate }}</span>
+            </button>
+
+            <button
               mat-icon-button
               type="button"
               class="more-actions-button"
@@ -116,24 +137,6 @@
                 [attr.aria-label]="getTrainingActionAriaLabel('compare', training)">
                 <mat-icon>compare</mat-icon>
                 <span>{{ 'coding.trainings.compare.button' | translate }}</span>
-              </button>
-              <button
-                mat-menu-item
-                type="button"
-                (click)="requestFullEdit(training)"
-                [attr.aria-label]="getTrainingActionAriaLabel('edit', training)">
-                <mat-icon>edit</mat-icon>
-                <span>{{ 'common.edit' | translate }}</span>
-              </button>
-              <mat-divider class="menu-section-divider"></mat-divider>
-              <button
-                mat-menu-item
-                type="button"
-                class="danger-menu-item"
-                (click)="deleteTraining(training)"
-                [attr.aria-label]="getTrainingActionAriaLabel('delete', training)">
-                <mat-icon>delete</mat-icon>
-                <span>{{ 'common.delete' | translate }}</span>
               </button>
             </mat-menu>
           </div>

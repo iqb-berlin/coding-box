@@ -23,7 +23,7 @@ import { JobDefinition } from '../../services/coding-job-backend.service';
   ],
   template: `
     <div class="dialog-header">
-      <h2>Job-Definition auswählen</h2>
+      <h2>Jobdefinition auswählen</h2>
       <button mat-icon-button (click)="close()">
         <mat-icon>close</mat-icon>
       </button>
