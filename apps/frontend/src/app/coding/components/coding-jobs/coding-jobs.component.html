@@ -409,14 +409,17 @@
             <mat-icon
               [matTooltip]="getCodingIssueTooltip(element)"
               [attr.aria-label]="getCodingIssueTooltip(element)"
+              tabindex="0"
               class="issues-icon"
               >warning</mat-icon
             >
           } @else {
             <span
               class="no-issues-marker"
+              role="img"
               [matTooltip]="getCodingIssueTooltip(element)"
               [attr.aria-label]="getCodingIssueTooltip(element)"
+              tabindex="0"
             >
               -
             </span>

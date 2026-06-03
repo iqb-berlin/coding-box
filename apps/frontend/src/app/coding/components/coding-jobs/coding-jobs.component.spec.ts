@@ -5,7 +5,7 @@ import {
   tick,
   flush
 } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
@@ -188,6 +188,24 @@ describe('CodingJobsComponent', () => {
     fixture = TestBed.createComponent(CodingJobsComponent);
     component = fixture.componentInstance;
     overlayContainer = TestBed.inject(OverlayContainer);
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('de', {
+      coding: {
+        jobs: {
+          'issue-tooltip': {
+            'no-review-issues': 'Keine prüfpflichtigen Kodierungsprobleme',
+            'open-no-review-issues-singular':
+              '{{count}} offene Aufgabe, keine prüfpflichtigen Kodierungsprobleme',
+            'open-no-review-issues-plural':
+              '{{count}} offene Aufgaben, keine prüfpflichtigen Kodierungsprobleme',
+            'code-assignment-uncertain':
+              '{{count}}x Code-Vergabe unsicher',
+            'new-code-needed': '{{count}}x neuer Code benötigt'
+          }
+        }
+      }
+    });
+    translateService.use('de');
     fixture.detectChanges();
   });
 

@@ -819,6 +819,13 @@
         "coder": "Kodierer:in",
         "status": "Status",
         "units": "Aufgaben"
+      },
+      "issue-tooltip": {
+        "no-review-issues": "Keine prüfpflichtigen Kodierungsprobleme",
+        "open-no-review-issues-singular": "{{count}} offene Aufgabe, keine prüfpflichtigen Kodierungsprobleme",
+        "open-no-review-issues-plural": "{{count}} offene Aufgaben, keine prüfpflichtigen Kodierungsprobleme",
+        "code-assignment-uncertain": "{{count}}x Code-Vergabe unsicher",
+        "new-code-needed": "{{count}}x neuer Code benötigt"
       }
     },
     "tooltip": {
