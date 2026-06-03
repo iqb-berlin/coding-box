@@ -6,7 +6,7 @@ import {
 } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { Request, Response } from 'express';
-import { EXCLUDED_STATUSES, statusStringToNumber } from '../../utils/response-status-converter';
+import { EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { generateReplayUrl, generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
   calculateModalValue, getLatestCode, buildCoderNameMapping, mapCodeForExport
@@ -26,6 +26,12 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { MissingsProfilesService, ResolvedMissingValue } from './missings-profiles.service';
+import {
+  createManualCodingVariablePairKeySet,
+  createManualCodingVariableReferences,
+  ManualCodingVariableReference,
+  toManualCodingVariablePairKey
+} from '../../utils/manual-coding-candidate.util';
 
 interface ByVariableCombination {
   unitName: string;
@@ -171,6 +177,35 @@ export class CodingExportService {
   private async getExclusionChecker(workspaceId: number): Promise<(bookletName: string, unitName: string) => boolean> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     return (bookletName: string, unitName: string) => !unitName || isExcludedByResolvedExclusions(exclusions, bookletName, unitName);
+  }
+
+  private async getManualCodingVariableReferences(workspaceId: number): Promise<ManualCodingVariableReference[]> {
+    const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+    const manualJobVariables = await this.codingJobUnitRepository
+      .createQueryBuilder('coding_job_unit')
+      .select('DISTINCT coding_job_unit.unit_name', 'unitName')
+      .addSelect('coding_job_unit.variable_id', 'variableId')
+      .innerJoin('coding_job_unit.coding_job', 'coding_job')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
+      .getRawMany<{ unitName: string; variableId: string }>();
+
+    const manualCodingVariables = createManualCodingVariableReferences([
+      ...codingListVariables,
+      ...manualJobVariables
+    ]);
+
+    if (manualCodingVariables.length === 0) {
+      throw new Error('No manual coding variables found for this workspace');
+    }
+
+    this.logger.log(`Found ${manualCodingVariables.length} manual unit-variable combinations for workspace ${workspaceId}`);
+    return manualCodingVariables;
+  }
+
+  private async getManualCodingVariableSet(workspaceId: number): Promise<Set<string>> {
+    const manualCodingVariables = await this.getManualCodingVariableReferences(workspaceId);
+    return createManualCodingVariablePairKeySet(manualCodingVariables);
   }
 
   private getByVariableWorksheetLimit(): number {
@@ -562,6 +597,55 @@ export class CodingExportService {
     coderTrainingIds?: number[],
     coderIds?: number[]
   ): Promise<ByVariableCombination[]> {
+    const hasScopedJobFilters = !!(jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length);
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const isExcluded = await this.getExclusionChecker(workspaceId);
+
+    if (excludeAutoCoded && !hasScopedJobFilters) {
+      const manualCodingVariables = await this.getManualCodingVariableReferences(workspaceId);
+      return manualCodingVariables
+        .filter(variable => !isExcluded('', variable.unitName))
+        .sort((a, b) => {
+          const unitCmp = a.unitName.localeCompare(b.unitName);
+          if (unitCmp !== 0) return unitCmp;
+          return a.variableId.localeCompare(b.variableId);
+        });
+    }
+
+    if (excludeAutoCoded) {
+      const jobUnitVariableResultsQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
+        .innerJoin('cju.coding_job', 'cj')
+        .select('cju.unit_name', 'unitName')
+        .addSelect('cju.variable_id', 'variableId')
+        .addSelect('MIN(cju.booklet_name)', 'bookletName')
+        .where('cj.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('cju.unit_name IS NOT NULL')
+        .andWhere('cju.variable_id IS NOT NULL');
+      applyResolvedExclusionsToQuery(jobUnitVariableResultsQuery, exclusions, {
+        unitNameExpression: 'cju.unit_name',
+        bookletNameExpression: 'cju.booklet_name'
+      });
+      this.applyJobFilters(
+        jobUnitVariableResultsQuery as SelectQueryBuilder<unknown>,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds,
+        'cju'
+      );
+      if (!coderTrainingIds?.length) {
+        jobUnitVariableResultsQuery.andWhere('cj.training_id IS NULL');
+      }
+
+      const combinations = await jobUnitVariableResultsQuery
+        .groupBy('cju.unit_name')
+        .addGroupBy('cju.variable_id')
+        .orderBy('cju.unit_name', 'ASC')
+        .addOrderBy('cju.variable_id', 'ASC')
+        .getRawMany<ByVariableCombination>();
+
+      return combinations.filter(c => c.unitName && !isExcluded(c.bookletName || '', c.unitName));
+    }
+
     const unitVariableResultsQuery = this.responseRepository.createQueryBuilder('resp')
       .innerJoin('resp.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
@@ -572,28 +656,24 @@ export class CodingExportService {
       .addSelect('MIN(bookletinfo.name)', 'bookletName')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     applyResolvedExclusionsToQuery(unitVariableResultsQuery, exclusions, {
       unitAlias: 'unit',
       bookletInfoAlias: 'bookletinfo'
     });
 
-    if (excludeAutoCoded) {
-      unitVariableResultsQuery.andWhere('resp.status_v1 = :status', {
-        status: statusStringToNumber('CODING_INCOMPLETE')
-      });
-    }
-
-    if (jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length) {
+    if (hasScopedJobFilters) {
       unitVariableResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
         .innerJoin('cju.coding_job', 'cj');
       this.applyJobFilters(
-        unitVariableResultsQuery,
+        unitVariableResultsQuery as SelectQueryBuilder<unknown>,
         jobDefinitionIds,
         coderTrainingIds,
         coderIds,
         'cju'
       );
+      if (!coderTrainingIds?.length) {
+        unitVariableResultsQuery.andWhere('cj.training_id IS NULL');
+      }
     }
 
     const combinations = await unitVariableResultsQuery
@@ -602,8 +682,6 @@ export class CodingExportService {
       .orderBy('unit.name', 'ASC')
       .addOrderBy('resp.variableid', 'ASC')
       .getRawMany<ByVariableCombination>();
-
-    const isExcluded = await this.getExclusionChecker(workspaceId);
 
     return combinations.filter(c => c.unitName && !isExcluded(c.bookletName || '', c.unitName));
   }
@@ -720,11 +798,7 @@ export class CodingExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length === 0) {
-        throw new Error('No manual coding variables found in the coding list for this workspace');
-      }
-      manualCodingVariableSet = new Set<string>(codingListVariables.map(item => `${item.unitName}|${item.variableId}`));
+      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
     // 1. Get all variables to define columns
@@ -759,7 +833,7 @@ export class CodingExportService {
     variableRecords.forEach(v => {
       if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
         const compositeKey = `${v.unitName}_${v.variableId}`;
-        if (!manualCodingVariableSet || manualCodingVariableSet.has(`${v.unitName}|${v.variableId}`)) {
+        if (!manualCodingVariableSet || manualCodingVariableSet.has(toManualCodingVariablePairKey(v.unitName, v.variableId))) {
           variableSet.add(compositeKey);
           variableUnitNames.set(compositeKey, v.unitName);
         }
@@ -817,6 +891,9 @@ export class CodingExportService {
         normalizedCoderIds,
         'cju'
       );
+      if (normalizedCoderTrainingIds.length === 0) {
+        personResultsQuery.andWhere('cj.training_id IS NULL');
+      }
     }
 
     const personResults = await personResultsQuery
@@ -1081,8 +1158,7 @@ export class CodingExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      manualCodingVariableSet = new Set<string>(codingListVariables.map(item => `${item.unitName}|${item.variableId}`));
+      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
     const variableRecordsQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
@@ -1096,6 +1172,9 @@ export class CodingExportService {
     });
 
     this.applyJobFilters(variableRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
+    if (!coderTrainingIds?.length) {
+      variableRecordsQuery.andWhere('cj.training_id IS NULL');
+    }
 
     const variableRecords = await variableRecordsQuery
       .groupBy('cju.unit_name')
@@ -1107,7 +1186,7 @@ export class CodingExportService {
     variableRecords.forEach(v => {
       if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
         const compositeKey = `${v.unitName}_${v.variableId}`;
-        if (!manualCodingVariableSet || manualCodingVariableSet.has(`${v.unitName}|${v.variableId}`)) {
+        if (!manualCodingVariableSet || manualCodingVariableSet.has(toManualCodingVariablePairKey(v.unitName, v.variableId))) {
           variableSet.add(compositeKey);
           variableUnitNames.set(compositeKey, v.unitName);
         }
@@ -1149,6 +1228,9 @@ export class CodingExportService {
       .where('cj.workspace_id = :workspaceId', { workspaceId });
 
     this.applyJobFilters(coderRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+    if (!coderTrainingIds?.length) {
+      coderRecordsQuery.andWhere('cj.training_id IS NULL');
+    }
 
     const coderRecords = await coderRecordsQuery
       .groupBy('user.username')
@@ -1188,6 +1270,9 @@ export class CodingExportService {
       personResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
         .innerJoin('cju.coding_job', 'cj');
       this.applyJobFilters(personResultsQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
+      if (!coderTrainingIds?.length) {
+        personResultsQuery.andWhere('cj.training_id IS NULL');
+      }
     }
 
     const personResults = await personResultsQuery
@@ -1267,6 +1352,9 @@ export class CodingExportService {
         .where('person.id IN (:...ids)', { ids: batchPersonIds });
 
       this.applyJobFilters(manualCodingQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
+      if (!coderTrainingIds?.length) {
+        manualCodingQuery.andWhere('cj.training_id IS NULL');
+      }
 
       const manualCoding = await manualCodingQuery.getRawMany();
       if ((coderTrainingIds?.length || 0) > 0 && manualCoding.length > 0) {
@@ -1464,8 +1552,7 @@ export class CodingExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      manualCodingVariableSet = new Set<string>(codingListVariables.map(item => `${item.unitName}|${item.variableId}`));
+      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
     // 1. Get all coders to build mapping
@@ -1476,6 +1563,9 @@ export class CodingExportService {
       .where('cj.workspace_id = :workspaceId', { workspaceId });
 
     this.applyJobFilters(coderRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+    if (!coderTrainingIds?.length) {
+      coderRecordsQuery.andWhere('cj.training_id IS NULL');
+    }
 
     const coderRecords = await coderRecordsQuery
       .groupBy('user.username')
@@ -1512,6 +1602,9 @@ export class CodingExportService {
     });
 
     this.applyJobFilters(variableCoderPairsQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
+    if (!coderTrainingIds?.length) {
+      variableCoderPairsQuery.andWhere('cj.training_id IS NULL');
+    }
 
     const variableCoderPairs = await variableCoderPairsQuery
       .groupBy('cju.unit_name')
@@ -1522,7 +1615,7 @@ export class CodingExportService {
     const colSet = new Set<string>();
     variableCoderPairs.forEach(v => {
       if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
-        if (!manualCodingVariableSet || manualCodingVariableSet.has(`${v.unitName}|${v.variableId}`)) {
+        if (!manualCodingVariableSet || manualCodingVariableSet.has(toManualCodingVariablePairKey(v.unitName, v.variableId))) {
           const cName = anonymizeCoders ? coderMapping.get(v.userName)! : v.userName;
           colSet.add(`${v.unitName}_${v.variableId}_${cName}`);
         }
@@ -1561,7 +1654,7 @@ export class CodingExportService {
 
       managerVariablePairRows.forEach(pair => {
         if (!pair.unitName || isExcluded(pair.bookletName || '', pair.unitName)) return;
-        if (manualCodingVariableSet && !manualCodingVariableSet.has(`${pair.unitName}|${pair.variableId}`)) return;
+        if (manualCodingVariableSet && !manualCodingVariableSet.has(toManualCodingVariablePairKey(pair.unitName, pair.variableId))) return;
 
         const caseKey = `${parseInt(pair.trainingId, 10)}|${parseInt(pair.responseId, 10)}`;
         const discussion = managerDiscussionMap.get(caseKey);
@@ -1615,6 +1708,9 @@ export class CodingExportService {
       personResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
         .innerJoin('cju.coding_job', 'cj');
       this.applyJobFilters(personResultsQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
+      if (!coderTrainingIds?.length) {
+        personResultsQuery.andWhere('cj.training_id IS NULL');
+      }
     }
 
     const personResults = await personResultsQuery
@@ -1680,6 +1776,9 @@ export class CodingExportService {
         .where('person.id IN (:...ids)', { ids: batchPersonIds });
 
       this.applyJobFilters(manualCodingQuery, jobDefinitionIds, coderTrainingIds, coderIds, 'cju');
+      if (!coderTrainingIds?.length) {
+        manualCodingQuery.andWhere('cj.training_id IS NULL');
+      }
 
       const manualCoding = await manualCodingQuery.getRawMany();
       if ((coderTrainingIds?.length || 0) > 0 && manualCoding.length > 0) {
@@ -1866,6 +1965,9 @@ export class CodingExportService {
       normalizedCoderTrainingIds,
       normalizedCoderIds
     );
+    if (normalizedCoderTrainingIds.length === 0) {
+      codingJobsQuery.andWhere('cj.training_id IS NULL');
+    }
 
     const codingJobs = await codingJobsQuery.getMany();
 
@@ -1913,10 +2015,7 @@ export class CodingExportService {
     const isExcluded = await this.getExclusionChecker(workspaceId);
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      manualCodingVariableSet = new Set<string>(
-        codingListVariables.map(item => `${item.unitName}|${item.variableId}`)
-      );
+      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
     const chunks: Buffer[] = [];
@@ -1949,7 +2048,7 @@ export class CodingExportService {
       });
       const visibleVariablePairs = (await variablePairsQuery.getRawMany())
         .filter(item => (
-          (!manualCodingVariableSet || manualCodingVariableSet.has(`${item.unitName}|${item.variableId}`)) &&
+          (!manualCodingVariableSet || manualCodingVariableSet.has(toManualCodingVariablePairKey(item.unitName, item.variableId))) &&
           !isExcluded(item.bookletName || '', item.unitName)
         ));
       const uniqueVariablePairs = Array.from(
@@ -2066,7 +2165,7 @@ export class CodingExportService {
                 continue;
               }
 
-              if (manualCodingVariableSet && !manualCodingVariableSet.has(`${managerCase.unitName}|${managerCase.variableId}`)) {
+              if (manualCodingVariableSet && !manualCodingVariableSet.has(toManualCodingVariablePairKey(managerCase.unitName, managerCase.variableId))) {
                 continue;
               }
 
@@ -2126,7 +2225,7 @@ export class CodingExportService {
               continue;
             }
 
-            if (manualCodingVariableSet && !manualCodingVariableSet.has(`${resp.unitName}|${resp.variableId}`)) {
+            if (manualCodingVariableSet && !manualCodingVariableSet.has(toManualCodingVariablePairKey(resp.unitName, resp.variableId))) {
               continue;
             }
 
@@ -2202,7 +2301,7 @@ export class CodingExportService {
     coderIds?: number[],
     serverUrl?: string
   ): Promise<Buffer> {
-    this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (CODING_INCOMPLETE only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
+    this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (manual coding only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
     this.clearPageMapsCache();
     const {
@@ -2307,6 +2406,9 @@ export class CodingExportService {
         normalizedCoderIds,
         'cju'
       );
+      if (normalizedCoderTrainingIds.length === 0) {
+        coderQueryBuilder.andWhere('cj.training_id IS NULL');
+      }
 
       const coderQuery = await coderQueryBuilder
         .groupBy('user.username')
@@ -2415,6 +2517,9 @@ export class CodingExportService {
           normalizedCoderIds,
           'cju'
         );
+        if (normalizedCoderTrainingIds.length === 0) {
+          dataQueryBuilder.andWhere('cj.training_id IS NULL');
+        }
 
         const dataQuery = await dataQueryBuilder.getRawMany();
 
@@ -2624,7 +2729,7 @@ export class CodingExportService {
     coderIds?: number[],
     serverUrl?: string
   ): AsyncGenerator<string> {
-    this.logger.log(`Exporting compact coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (CODING_INCOMPLETE only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
+    this.logger.log(`Exporting compact coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (manual coding only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
     this.clearPageMapsCache();
     const {
@@ -2645,6 +2750,9 @@ export class CodingExportService {
 
     if (checkCancellation) await checkCancellation();
 
+    const manualCodingVariableSet = excludeAutoCoded ?
+      await this.getManualCodingVariableSet(workspaceId) :
+      null;
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const globalCoderMapping = await this.getCompactByVariableCoderMapping(
       workspaceId,
@@ -2708,12 +2816,6 @@ export class CodingExportService {
         parameterPrefix: 'variableCompactRows'
       });
 
-      if (excludeAutoCoded) {
-        dataQueryBuilder.andWhere('resp.status_v1 = :manualCodingStatus', {
-          manualCodingStatus: statusStringToNumber('CODING_INCOMPLETE')
-        });
-      }
-
       this.applyJobFilters(
         dataQueryBuilder,
         normalizedJobDefinitionIds,
@@ -2721,6 +2823,9 @@ export class CodingExportService {
         normalizedCoderIds,
         'cju'
       );
+      if (normalizedCoderTrainingIds.length === 0) {
+        dataQueryBuilder.andWhere('cj.training_id IS NULL');
+      }
       this.applySelectedCoderJoinFilter(dataQueryBuilder, normalizedCoderIds);
 
       const rows = await dataQueryBuilder
@@ -2751,6 +2856,12 @@ export class CodingExportService {
         new Map<string, { code: number | null, managerUsername: string | null, updatedAt: Date | null }>();
 
       for (const row of rows) {
+        if (
+          manualCodingVariableSet &&
+          !manualCodingVariableSet.has(toManualCodingVariablePairKey(row.unitName, row.variableId))
+        ) {
+          continue;
+        }
         const groupKey = this.getCompactByVariableGroupKey(row);
         if (currentGroup && currentGroup.key !== groupKey) {
           const renderedGroup = await this.renderCompactByVariableGroup(
@@ -2859,6 +2970,9 @@ export class CodingExportService {
       coderTrainingIds,
       coderIds
     );
+    if (coderTrainingIds.length === 0) {
+      coderQueryBuilder.andWhere('cj.training_id IS NULL');
+    }
     this.applySelectedCoderJoinFilter(coderQueryBuilder, coderIds);
 
     const coderRows = await coderQueryBuilder
@@ -3080,10 +3194,7 @@ export class CodingExportService {
     try {
       let manualCodingVariableSet: Set<string> | null = null;
       if (excludeAutoCoded) {
-        const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-        if (codingListVariables.length > 0) {
-          manualCodingVariableSet = new Set(codingListVariables.map(v => `${v.unitName}|${v.variableId}`));
-        }
+        manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
       }
 
       const isExcluded = await this.getExclusionChecker(workspaceId);
@@ -3266,7 +3377,10 @@ export class CodingExportService {
 
         for (const unit of sortedUnitsBatch) {
           if (unit.unit_name && isExcluded(unit.response?.unit?.booklet?.bookletinfo?.name || '', unit.unit_name)) continue;
-          if (manualCodingVariableSet && !manualCodingVariableSet.has(`${unit.unit_name}|${unit.variable_id}`)) continue;
+          if (
+            manualCodingVariableSet &&
+            !manualCodingVariableSet.has(toManualCodingVariablePairKey(unit.unit_name, unit.variable_id))
+          ) continue;
           if (unit.response?.status_v1 !== null && unit.response?.status_v1 !== undefined && EXCLUDED_STATUSES.includes(unit.response.status_v1)) continue;
 
           const trainingId = unit.coding_job?.training_id ?? 0;
@@ -3393,14 +3507,7 @@ export class CodingExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length === 0) {
-        throw new Error('No manual coding variables found in the coding list for this workspace');
-      }
-      manualCodingVariableSet = new Set<string>();
-      codingListVariables.forEach(item => {
-        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-      });
+      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
     const codingJobUnitsQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
@@ -3427,6 +3534,9 @@ export class CodingExportService {
       normalizedCoderIds,
       'cju'
     );
+    if (normalizedCoderTrainingIds.length === 0) {
+      codingJobUnitsQuery.andWhere('cj.training_id IS NULL');
+    }
     const codingJobUnitsRaw = await codingJobUnitsQuery.getMany();
 
     const isExcluded = await this.getExclusionChecker(workspaceId);
@@ -3495,13 +3605,14 @@ export class CodingExportService {
 
       const variableUnitCoders = new Map<string, Set<string>>();
       const variableUnitCoderTimestamps = new Map<string, Map<string, Date[]>>();
+      const variableUnitLabels = new Map<string, { unitName: string; variableId: string }>();
 
       for (const unit of codingJobUnits) {
         if (!unit.response?.unit?.name || !unit.updated_at) continue;
 
         const variableId = unit.variable_id;
         const unitName = unit.response.unit.name;
-        const variableUnitKey = `${unitName}|${variableId}`;
+        const variableUnitKey = toManualCodingVariablePairKey(unitName, variableId);
         const timestamp = new Date(unit.updated_at);
 
         if (manualCodingVariableSet) {
@@ -3512,6 +3623,7 @@ export class CodingExportService {
 
         if (!variableUnitCoders.has(variableUnitKey)) {
           variableUnitCoders.set(variableUnitKey, new Set());
+          variableUnitLabels.set(variableUnitKey, { unitName, variableId });
         }
 
         if (!variableUnitCoderTimestamps.has(variableUnitKey)) {
@@ -3555,7 +3667,10 @@ export class CodingExportService {
       const sortedVariableUnitKeys = Array.from(variableUnitCoders.keys()).sort();
 
       for (const variableUnitKey of sortedVariableUnitKeys) {
-        const [unitName, variableId] = variableUnitKey.split('|');
+        const { unitName, variableId } = variableUnitLabels.get(variableUnitKey) || {
+          unitName: variableUnitKey,
+          variableId: ''
+        };
         const assignedCoders = variableUnitCoders.get(variableUnitKey)!;
 
         const rowData: { [key: string]: string | number | null } = {
