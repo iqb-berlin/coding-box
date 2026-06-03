@@ -73,7 +73,21 @@ describe('CodingExportService', () => {
     const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/1/coding/results-by-version` &&
       request.params.get('version') === 'v2' &&
       request.params.get('includeReplayUrls') === 'true' &&
-      request.params.get('includeResponseValues') === 'false'
+      request.params.get('includeResponseValues') === 'false' &&
+      request.params.get('includeGeoGebraResponseValues') === 'false'
+    );
+    expect(req.request.method).toBe('GET');
+    req.flush(new Blob());
+  });
+
+  it('should pass GeoGebra response value option to direct result exports', () => {
+    service.getCodingResultsByVersion(1, 'v2', false, true, true).subscribe(res => {
+      expect(res).toBeDefined();
+    });
+
+    const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/1/coding/results-by-version` &&
+      request.params.get('includeResponseValues') === 'true' &&
+      request.params.get('includeGeoGebraResponseValues') === 'true'
     );
     expect(req.request.method).toBe('GET');
     req.flush(new Blob());
@@ -93,6 +107,7 @@ describe('CodingExportService', () => {
       includeReplayUrl: false,
       includeResponseValues: false,
       includeGeoGebraFiles: false,
+      includeGeoGebraResponseValues: false,
       authToken: 'auth-token'
     });
     req.flush({ jobId: 'job-1', message: 'started' });
@@ -111,6 +126,36 @@ describe('CodingExportService', () => {
       format: 'excel',
       includeResponseValues: true,
       includeGeoGebraFiles: true,
+      includeGeoGebraResponseValues: false,
+      authToken: 'auth-token'
+    });
+    req.flush({ jobId: 'job-1', message: 'started' });
+  });
+
+  it('should pass raw GeoGebra response value option to export jobs', () => {
+    service.startExportJob(
+      1,
+      'results-by-version',
+      'v2',
+      'csv',
+      false,
+      undefined,
+      true,
+      false,
+      true
+    ).subscribe(res => {
+      expect(res).toBeDefined();
+    });
+
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/export/start`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toMatchObject({
+      exportType: 'results-by-version',
+      version: 'v2',
+      format: 'csv',
+      includeResponseValues: true,
+      includeGeoGebraFiles: false,
+      includeGeoGebraResponseValues: true,
       authToken: 'auth-token'
     });
     req.flush({ jobId: 'job-1', message: 'started' });

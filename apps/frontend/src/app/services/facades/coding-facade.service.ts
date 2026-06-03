@@ -157,13 +157,15 @@ export class CodingFacadeService {
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
     includeReplayUrls: boolean = false,
-    includeResponseValues: boolean = true
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
     return this.codingExportService.getCodingResultsByVersion(
       workspaceId,
       version,
       includeReplayUrls,
-      includeResponseValues
+      includeResponseValues,
+      includeGeoGebraResponseValues
     );
   }
 
@@ -171,13 +173,16 @@ export class CodingFacadeService {
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
     includeReplayUrls: boolean = false,
-    includeResponseValues: boolean = true
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
     return this.codingExportService.getCodingResultsByVersionAsExcel(
       workspaceId,
       version,
       includeReplayUrls,
-      includeResponseValues
+      includeResponseValues,
+      false,
+      includeGeoGebraResponseValues
     );
   }
 

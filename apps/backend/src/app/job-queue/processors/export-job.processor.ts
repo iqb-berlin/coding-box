@@ -193,6 +193,7 @@ export class ExportJobProcessor {
               includeReplayUrl: job.data.includeReplayUrl || false,
               onProgress,
               includeResponseValues: job.data.includeResponseValues !== false,
+              includeGeoGebraResponseValues: job.data.includeGeoGebraResponseValues === true,
               includeGeoGebraFiles: job.data.includeGeoGebraFiles === true
             });
           } else {
@@ -204,7 +205,8 @@ export class ExportJobProcessor {
               serverUrl: job.data.serverUrl || '',
               includeReplayUrl: job.data.includeReplayUrl || false,
               onProgress,
-              includeResponseValues: job.data.includeResponseValues !== false
+              includeResponseValues: job.data.includeResponseValues !== false,
+              includeGeoGebraResponseValues: job.data.includeGeoGebraResponseValues === true
             });
 
             await this.writeStreamToFile(stream, filePath, {

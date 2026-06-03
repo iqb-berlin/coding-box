@@ -6,6 +6,10 @@ import {
 } from '../../utils/response-status-converter';
 import { mapCodeForExport } from '../../../utils/coding-utils';
 import { CodingFileCacheService } from './coding-file-cache.service';
+import {
+  extractGeoGebraBase64,
+  suppressedGeoGebraValuePlaceholder
+} from './geogebra-export.util';
 
 export interface CodingItem {
   unit_key: string;
@@ -46,6 +50,17 @@ export class CodingItemBuilderService {
       status :
       statusStringToNumber(String(status));
     return statusNumber === null ? '' : statusNumberToString(statusNumber) || '';
+  }
+
+  private formatResponseValue(
+    value: string | null | undefined,
+    includeGeoGebraResponseValues: boolean
+  ): string {
+    if (!includeGeoGebraResponseValues && extractGeoGebraBase64(value)) {
+      return suppressedGeoGebraValuePlaceholder;
+    }
+
+    return value ?? '';
   }
 
   /**
@@ -119,7 +134,8 @@ export class CodingItemBuilderService {
     serverUrl: string,
     workspaceId: number,
     includeReplayUrls: boolean = false,
-    includeResponseValues: boolean = true
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false
   ): Promise<CodingItem | null> {
     try {
       const unit = response.unit;
@@ -163,7 +179,10 @@ export class CodingItemBuilderService {
       };
 
       if (includeResponseValues) {
-        baseItem.value = response.value ?? '';
+        baseItem.value = this.formatResponseValue(
+          response.value,
+          includeGeoGebraResponseValues
+        );
       }
 
       // Add version-specific data (include all lower versions) and convert status numbers to strings

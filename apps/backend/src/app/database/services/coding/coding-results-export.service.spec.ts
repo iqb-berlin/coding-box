@@ -215,8 +215,26 @@ describe('CodingResultsExportService', () => {
     await expect(service.exportCodingResultsByVersionAsCsv(1, 'v2', '', '', true)).resolves.toBeInstanceOf(Readable);
     await expect(service.exportCodingResultsByVersionAsExcel(1, 'v3', '', '', false)).resolves.toEqual(Buffer.from('xlsx'));
 
-    expect(codingListService.getCodingResultsByVersionCsvStream).toHaveBeenCalledWith(1, 'v2', '', '', true, undefined, true);
-    expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(1, 'v3', '', '', false, undefined, true);
+    expect(codingListService.getCodingResultsByVersionCsvStream).toHaveBeenCalledWith(
+      1,
+      'v2',
+      '',
+      '',
+      true,
+      undefined,
+      true,
+      false
+    );
+    expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(
+      1,
+      'v3',
+      '',
+      '',
+      false,
+      undefined,
+      true,
+      false
+    );
   });
 
   it('delegates versioned GeoGebra ZIP exports', async () => {

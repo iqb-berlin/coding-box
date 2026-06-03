@@ -81,6 +81,7 @@ describe('WorkspaceCodingExportController', () => {
       'http://server',
       false,
       false,
+      false,
       res as never
     );
     await new Promise(resolve => {
@@ -97,7 +98,8 @@ describe('WorkspaceCodingExportController', () => {
         authToken: 'token',
         serverUrl: 'http://server',
         includeReplayUrl: false,
-        includeResponseValues: false
+        includeResponseValues: false,
+        includeGeoGebraResponseValues: false
       });
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
     expect(res.end).toHaveBeenCalled();

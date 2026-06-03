@@ -157,7 +157,8 @@ export class CodingListService {
     serverUrl?: string,
     includeReplayUrls: boolean = false,
     progressCallback?: (percentage: number) => Promise<void>,
-    includeResponseValues: boolean = true
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false
   ) {
     return this.streamService.getCodingResultsByVersionCsvStream(
       workspace_id,
@@ -166,7 +167,8 @@ export class CodingListService {
       serverUrl,
       includeReplayUrls,
       progressCallback,
-      includeResponseValues
+      includeResponseValues,
+      includeGeoGebraResponseValues
     );
   }
 
@@ -181,7 +183,8 @@ export class CodingListService {
     serverUrl?: string,
     includeReplayUrls: boolean = false,
     progressCallback?: (percentage: number) => Promise<void>,
-    includeResponseValues: boolean = true
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false
   ): Promise<Buffer> {
     return this.streamService.getCodingResultsByVersionAsExcel(
       workspace_id,
@@ -190,7 +193,8 @@ export class CodingListService {
       serverUrl,
       includeReplayUrls,
       progressCallback,
-      includeResponseValues
+      includeResponseValues,
+      includeGeoGebraResponseValues
     );
   }
 
