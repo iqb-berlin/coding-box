@@ -241,8 +241,14 @@ mat-cell {
   color: #ff5722;
 }
 
-.no-issues-icon {
-  color: #4caf50;
+.no-issues-marker {
+  color: #8a8f98;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  font-weight: 600;
 }
 
 .mat-column-viewResults {
@@ -399,12 +405,6 @@ button.primary-row-action[mat-stroked-button] {
   }
 }
 
-@media (max-width: 1024px) {
-  .header-row {
-    flex-wrap: wrap;
-  }
-}
-
 @media (max-width: 768px) {
   .container {
     padding: 16px;
@@ -443,7 +443,6 @@ button.primary-row-action[mat-stroked-button] {
   }
 
   .header-row {
-    flex-direction: column;
     align-items: stretch;
   }
 

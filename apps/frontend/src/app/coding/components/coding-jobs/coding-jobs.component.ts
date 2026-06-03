@@ -53,6 +53,7 @@ import { CodingTrainingBackendService } from '../../services/coding-training-bac
 
 import {
   CodingJob,
+  CodingJobIssueSummary,
   Variable,
   VariableBundle
 } from '../../models/coding-job.model';
@@ -100,7 +101,7 @@ interface BulkApplyResultItem {
 interface SavedCode {
   id: number;
   code?: string;
-  label: string;
+  label?: string;
   score?: number;
   description?: string;
   codingIssueOption?: number;
@@ -303,24 +304,11 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
                 }
 
                 processedData.forEach(job => {
-                  const progressResult = bulkProgressResult?.[job.id];
-                  job.hasIssues = progressResult ?
-                    Object.values(
-                      progressResult as Record<string, SavedCode>
-                    ).some(
-                      progress => progress &&
-                          typeof progress === 'object' &&
-                          'id' in progress &&
-                          ((typeof progress.id === 'number' &&
-                            (progress.id === -1 || progress.id === -2)) ||
-                            progress.codingIssueOption === -1 ||
-                            progress.codingIssueOption === -2)
-                    ) :
-                    false;
+                  this.applyIssueSummary(job, bulkProgressResult?.[job.id]);
                 });
               } catch (error) {
                 processedData.forEach(job => {
-                  job.hasIssues = false;
+                  this.applyIssueSummary(job);
                 });
               }
 
@@ -373,25 +361,15 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
                 }
 
                 processedData.forEach(job => {
-                  const progressResult = fallbackBulkProgressResult?.[job.id];
-                  job.hasIssues = progressResult ?
-                    Object.values(
-                      progressResult as Record<string, SavedCode>
-                    ).some(
-                      progress => progress &&
-                          typeof progress === 'object' &&
-                          'id' in progress &&
-                          ((typeof progress.id === 'number' &&
-                            (progress.id === -1 || progress.id === -2)) ||
-                            progress.codingIssueOption === -1 ||
-                            progress.codingIssueOption === -2)
-                    ) :
-                    false;
+                  this.applyIssueSummary(
+                    job,
+                    fallbackBulkProgressResult?.[job.id]
+                  );
                 });
               } catch (fallbackError) {
                 // If bulk fetch fails, fall back to individual calls as a last resort
                 processedData.forEach(job => {
-                  job.hasIssues = false;
+                  this.applyIssueSummary(job);
                 });
               }
 
@@ -414,6 +392,99 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
           });
         }
       });
+  }
+
+  private applyIssueSummary(
+    job: CodingJob,
+    progressResult?: Record<string, unknown>
+  ): void {
+    const issueSummary = this.getCodingIssueSummary(progressResult);
+    job.issueSummary = issueSummary;
+    job.hasIssues = issueSummary.total > 0;
+  }
+
+  private getCodingIssueSummary(
+    progressResult?: Record<string, unknown>
+  ): CodingJobIssueSummary {
+    const summary: CodingJobIssueSummary = {
+      total: 0,
+      open: 0,
+      codeAssignmentUncertain: 0,
+      newCodeNeeded: 0
+    };
+
+    Object.entries(progressResult ?? {}).forEach(([key, progress]) => {
+      if (!this.isSavedCode(progress)) {
+        return;
+      }
+
+      if (this.isOpenProgressEntry(key, progress)) {
+        summary.open += 1;
+        return;
+      }
+
+      const issueOption = this.getReviewIssueOption(progress);
+      if (issueOption === -1) {
+        summary.codeAssignmentUncertain += 1;
+        summary.total += 1;
+      } else if (issueOption === -2) {
+        summary.newCodeNeeded += 1;
+        summary.total += 1;
+      }
+    });
+
+    return summary;
+  }
+
+  private isSavedCode(progress: unknown): progress is SavedCode {
+    return (
+      !!progress &&
+      typeof progress === 'object' &&
+      'id' in progress &&
+      typeof (progress as SavedCode).id === 'number'
+    );
+  }
+
+  private isOpenProgressEntry(key: string, progress: SavedCode): boolean {
+    return key.endsWith(':open') || progress.label === 'OPEN';
+  }
+
+  private getReviewIssueOption(progress: SavedCode): number | null {
+    if (
+      progress.codingIssueOption === -1 ||
+      progress.codingIssueOption === -2
+    ) {
+      return progress.codingIssueOption;
+    }
+
+    if (progress.id === -1 || progress.id === -2) {
+      return progress.id;
+    }
+
+    return null;
+  }
+
+  getCodingIssueTooltip(job: CodingJob): string {
+    const summary = job.issueSummary;
+    if (!summary || summary.total === 0) {
+      if (summary?.open) {
+        const openLabel = summary.open === 1 ? 'Aufgabe' : 'Aufgaben';
+        return `${summary.open} offene ${openLabel}, keine prüfpflichtigen Kodierungsprobleme`;
+      }
+      return 'Keine prüfpflichtigen Kodierungsprobleme';
+    }
+
+    const parts: string[] = [];
+    if (summary.codeAssignmentUncertain > 0) {
+      parts.push(
+        `${summary.codeAssignmentUncertain}x Code-Vergabe unsicher`
+      );
+    }
+    if (summary.newCodeNeeded > 0) {
+      parts.push(`${summary.newCodeNeeded}x neuer Code benötigt`);
+    }
+
+    return parts.join(', ');
   }
 
   applyFilter(): void {

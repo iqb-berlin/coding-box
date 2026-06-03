@@ -407,14 +407,19 @@
         >
           @if (element.hasIssues) {
             <mat-icon
-              matTooltip="Kodierungsprobleme vorhanden"
+              [matTooltip]="getCodingIssueTooltip(element)"
+              [attr.aria-label]="getCodingIssueTooltip(element)"
               class="issues-icon"
               >warning</mat-icon
             >
           } @else {
-            <mat-icon matTooltip="Keine Probleme" class="no-issues-icon"
-              >check_circle</mat-icon
+            <span
+              class="no-issues-marker"
+              [matTooltip]="getCodingIssueTooltip(element)"
+              [attr.aria-label]="getCodingIssueTooltip(element)"
             >
+              -
+            </span>
           }
         </mat-cell>
       </ng-container>
