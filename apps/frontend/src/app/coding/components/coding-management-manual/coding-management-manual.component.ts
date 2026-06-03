@@ -2542,6 +2542,23 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.appliedResultsOverview?.aggregatedDuplicateCases ?? 0;
   }
 
+  get hasDeriveErrorManualCases(): boolean {
+    return (this.appliedResultsOverview?.deriveErrorRawTotalResponses ?? 0) > 0 ||
+      (this.appliedResultsOverview?.deriveErrorTotalResponses ?? 0) > 0;
+  }
+
+  get deriveErrorManualCases(): number {
+    return this.appliedResultsOverview?.deriveErrorTotalResponses ?? 0;
+  }
+
+  get deriveErrorAppliedCases(): number {
+    return this.appliedResultsOverview?.deriveErrorAppliedResponses ?? 0;
+  }
+
+  get deriveErrorRemainingCases(): number {
+    return this.appliedResultsOverview?.deriveErrorRemainingResponses ?? 0;
+  }
+
   get isDuplicateAggregationActive(): boolean {
     return !this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION);
   }

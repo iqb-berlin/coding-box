@@ -1176,7 +1176,12 @@ describe('CodingManagementManualComponent', () => {
   function setAppliedResults(
     totalResponses: number,
     appliedResponses: number,
-    remainingResponses: number
+    remainingResponses: number,
+    deriveErrorResponses: {
+      total: number;
+      applied: number;
+      remaining: number;
+    } = { total: 0, applied: 0, remaining: 0 }
   ): void {
     const completionPercentage =
       totalResponses > 0 ? (appliedResponses / totalResponses) * 100 : 100;
@@ -1192,6 +1197,11 @@ describe('CodingManagementManualComponent', () => {
       aggregationActive: false,
       aggregationThreshold: null,
       aggregatedDuplicateCases: 0,
+      deriveErrorTotalResponses: deriveErrorResponses.total,
+      deriveErrorAppliedResponses: deriveErrorResponses.applied,
+      deriveErrorRemainingResponses: deriveErrorResponses.remaining,
+      deriveErrorRawTotalResponses: deriveErrorResponses.total,
+      deriveErrorRawAppliedResponses: deriveErrorResponses.applied,
       totalIncompleteVariables: 1,
       finalStatusBreakdown: {
         codingComplete: appliedResponses,
@@ -1201,4 +1211,14 @@ describe('CodingManagementManualComponent', () => {
       }
     } satisfies ManualAppliedResultsOverview;
   }
+
+  it('should expose DERIVE_ERROR additional manual progress separately', () => {
+    setAppliedResults(5, 3, 2, { total: 2, applied: 1, remaining: 1 });
+
+    expect(component.hasDeriveErrorManualCases).toBe(true);
+    expect(component.deriveErrorManualCases).toBe(2);
+    expect(component.deriveErrorAppliedCases).toBe(1);
+    expect(component.deriveErrorRemainingCases).toBe(1);
+    expect(component.isCompletionComplete()).toBe(false);
+  });
 });

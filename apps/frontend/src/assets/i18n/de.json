@@ -2513,6 +2513,8 @@
     "aggregation-savings": "Einsparung durch Aggregation:",
     "applied-results": "Angewendete Ergebnisse:",
     "remaining": "Verbleibend:",
+    "derive-error-additional": "DERIVE_ERROR-Zusatzfälle:",
+    "derive-error-progress": "{{applied}} von {{total}} angewendet, {{remaining}} offen",
     "completion-progress": "Fertigstellungsfortschritt",
     "responses-have-been-applied": "der Antworten wurden angewendet",
     "final-status-distribution": "Endgültige Statusverteilung",
