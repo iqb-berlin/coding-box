@@ -357,6 +357,16 @@ mat-form-field {
       color: #718096;
     }
   }
+
+  .bundle-derive-error-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 8px 16px 12px;
+    background: #ffffff;
+    border-top: 1px solid #edf2f7;
+    font-size: 0.8rem;
+  }
 }
 
 // Variables List
@@ -368,7 +378,7 @@ mat-form-field {
 
   .variable-item {
     display: grid;
-    grid-template-columns: 1fr 240px 40px 40px;
+    grid-template-columns: minmax(220px, 1fr) 240px minmax(120px, auto) 40px 40px;
     align-items: start;
     gap: 16px;
     padding: 24px 16px 16px;
@@ -483,6 +493,30 @@ mat-form-field {
     min-height: 18px;
     font-size: 0.68rem;
   }
+}
+
+.derive-error-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+
+  &.compact {
+    margin-left: 8px;
+  }
+}
+
+.derive-error-checkbox {
+  align-self: center;
+  white-space: nowrap;
 }
 
 // Summary

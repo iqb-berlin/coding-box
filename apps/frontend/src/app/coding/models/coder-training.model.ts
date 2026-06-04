@@ -14,8 +14,14 @@ export interface CoderTraining {
   created_at: Date;
   updated_at: Date;
   jobsCount: number;
-  assigned_variables?: { unitName: string; variableId: string; sampleCount: number }[];
-  assigned_variable_bundles?: { id: number; name: string; sampleCount?: number; caseOrderingMode?: 'continuous' | 'alternating' }[];
+  assigned_variables?: { unitName: string; variableId: string; sampleCount: number; includeDeriveError?: boolean }[];
+  assigned_variable_bundles?: {
+    id: number;
+    name: string;
+    sampleCount?: number;
+    caseOrderingMode?: 'continuous' | 'alternating';
+    variables?: { unitName: string; variableId: string; sampleCount?: number; includeDeriveError?: boolean }[];
+  }[];
   assigned_coders?: number[];
   case_ordering_mode?: 'continuous' | 'alternating';
   case_selection_mode?: CaseSelectionMode;

@@ -71,6 +71,8 @@ export interface Variable {
   casesInJobs?: number;
   availableCases?: number;
   uniqueCasesAfterAggregation?: number;
+  availableCasesWithDeriveError?: number;
+  uniqueCasesAfterAggregationWithDeriveError?: number;
   isDerived?: boolean;
   coderTrainingRequired?: boolean;
   includeDeriveError?: boolean;

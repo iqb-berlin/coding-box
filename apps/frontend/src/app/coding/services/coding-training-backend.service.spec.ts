@@ -65,11 +65,26 @@ describe('CodingTrainingBackendService', () => {
       service.createCoderTrainingJobs(
         1,
         [{ id: 2, name: 'Coder' }],
-        [{ variableId: 'v1', unitId: 'u1', sampleCount: 3 }],
+        [{
+          variableId: 'v1',
+          unitId: 'u1',
+          sampleCount: 3,
+          includeDeriveError: true
+        }],
         'With Options',
         99,
-        [{ unitName: 'Unit', variableId: 'v1', sampleCount: 5 }],
-        [{ id: 7, name: 'Bundle', caseOrderingMode: 'alternating' }],
+        [{
+          unitName: 'Unit',
+          variableId: 'v1',
+          sampleCount: 5,
+          includeDeriveError: true
+        }],
+        [{
+          id: 7,
+          name: 'Bundle',
+          caseOrderingMode: 'alternating',
+          variables: [{ unitName: 'Unit', variableId: 'v2', includeDeriveError: true }]
+        }],
         'alternating',
         'random',
         [10, 11],
@@ -82,10 +97,25 @@ describe('CodingTrainingBackendService', () => {
       expect(req.request.body).toEqual({
         trainingLabel: 'With Options',
         selectedCoders: [{ id: 2, name: 'Coder' }],
-        variableConfigs: [{ variableId: 'v1', unitId: 'u1', sampleCount: 3 }],
+        variableConfigs: [{
+          variableId: 'v1',
+          unitId: 'u1',
+          sampleCount: 3,
+          includeDeriveError: true
+        }],
         missingsProfileId: 99,
-        assignedVariables: [{ unitName: 'Unit', variableId: 'v1', sampleCount: 5 }],
-        assignedVariableBundles: [{ id: 7, name: 'Bundle', caseOrderingMode: 'alternating' }],
+        assignedVariables: [{
+          unitName: 'Unit',
+          variableId: 'v1',
+          sampleCount: 5,
+          includeDeriveError: true
+        }],
+        assignedVariableBundles: [{
+          id: 7,
+          name: 'Bundle',
+          caseOrderingMode: 'alternating',
+          variables: [{ unitName: 'Unit', variableId: 'v2', includeDeriveError: true }]
+        }],
         caseOrderingMode: 'alternating',
         caseSelectionMode: 'random',
         referenceTrainingIds: [10, 11],
