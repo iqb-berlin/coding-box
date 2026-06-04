@@ -77,6 +77,7 @@ import {
   ApplyCodingResultsDialogResult
 } from './apply-coding-results-dialog.component';
 import { normalizeReplayUrlToCurrentOrigin } from '../../utils/replay-url.util';
+import { hasManagementWorkspaceAccess } from '../../../shared/utils/workspace-access';
 
 interface BulkApplyResultItem {
   jobId: number;
@@ -108,7 +109,7 @@ interface SavedCode {
   [key: string]: unknown;
 }
 
-type JobPrimaryAction = 'start' | 'results' | 'apply' | 'notAssigned';
+type JobPrimaryAction = 'start' | 'review' | 'results' | 'apply' | 'notAssigned';
 type CodingJobScope = 'all' | 'training' | 'productive';
 
 @Component({
@@ -158,6 +159,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   private coderService = inject(CoderService);
 
   canApplyResults = false;
+  canReviewCodingJobs = false;
 
   private coderNamesByJobId = new Map<number, string>();
   allCoders: Coder[] = [];
@@ -227,22 +229,24 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
       this.updateCoderNamesMap(this.dataSource.data);
     });
 
-    this.updateCanApplyResults();
+    this.updateCodingJobPermissions();
     this.loadCoderTrainings();
     this.loadCodingJobs();
     window.addEventListener('focus', this.handleWindowFocus);
   }
 
-  private updateCanApplyResults(): void {
+  private updateCodingJobPermissions(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     const userId = this.appService.authData.userId;
     if (this.appService.authData.isAdmin || !workspaceId || userId <= 0) {
       this.canApplyResults = this.appService.authData.isAdmin;
+      this.canReviewCodingJobs = this.appService.authData.isAdmin;
       return;
     }
     this.userBackendService.getUsers(workspaceId).subscribe(users => {
       const currentUser = users.find(u => u.id === userId);
       this.canApplyResults = (currentUser?.accessLevel ?? 0) >= 3;
+      this.canReviewCodingJobs = currentUser ? hasManagementWorkspaceAccess(currentUser) : false;
     });
   }
 
@@ -259,7 +263,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   loadCodingJobs(): void {
     this.isLoading = true;
-    this.updateCanApplyResults();
+    this.updateCodingJobPermissions();
     this.loadCoderTrainings();
 
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -810,6 +814,14 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
       return 'apply';
     }
 
+    if (this.canReviewCodingJob(job) && (
+      job.status === 'completed' ||
+      job.status === 'results_applied' ||
+      !this.canStartCodingJob(job)
+    )) {
+      return 'review';
+    }
+
     if (job.status === 'completed' || job.status === 'results_applied') {
       return 'results';
     }
@@ -830,20 +842,20 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
-  getStartCodingJobLabel(job: CodingJob): string {
-    if (job.status === 'completed' || job.status === 'results_applied') {
-      return 'Review öffnen';
-    }
+  canReviewCodingJob(job: CodingJob): boolean {
+    return !!job?.id && this.canReviewCodingJobs;
+  }
 
+  getStartCodingJobLabel(): string {
     return 'Kodierjob starten';
   }
 
-  getStartCodingJobIcon(job: CodingJob): string {
-    if (job.status === 'completed' || job.status === 'results_applied') {
-      return 'visibility';
-    }
-
+  getStartCodingJobIcon(): string {
     return 'play_arrow';
+  }
+
+  getReviewCodingJobLabel(): string {
+    return 'Review öffnen';
   }
 
   canApplyCodingResults(job: CodingJob): boolean {
@@ -875,7 +887,9 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     const jobName = this.getDisplayName(job);
     switch (action) {
       case 'start':
-        return `${this.getStartCodingJobLabel(job)}: ${jobName}`;
+        return `${this.getStartCodingJobLabel()}: ${jobName}`;
+      case 'review':
+        return `${this.getReviewCodingJobLabel()}: ${jobName}`;
       case 'results':
         return `Ergebnisse anzeigen: ${jobName}`;
       case 'restart':
@@ -958,6 +972,67 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
             error?.status === 403 ?
               'Dieser Kodierjob ist Ihnen nicht als Kodierer zugewiesen.' :
               'Fehler beim Starten des Kodierjobs';
+          this.snackBar.open(message, 'Fehler', { duration: 3000 });
+        }
+      });
+  }
+
+  openCodingJobReview(job: CodingJob): void {
+    const selectedJob = job;
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+        duration: 3000
+      });
+      return;
+    }
+
+    const loadingSnack = this.snackBar.open(
+      `Öffne Review für Kodierjob "${selectedJob.name}"...`,
+      '',
+      { duration: 3000 }
+    );
+
+    this.codingJobBackendService
+      .prepareCodingJobReview(workspaceId, selectedJob.id)
+      .subscribe({
+        next: reviewResult => {
+          loadingSnack.dismiss();
+          if (!reviewResult || reviewResult.total === 0) {
+            this.snackBar.open('Keine passenden Antworten gefunden', 'Info', {
+              duration: 3000
+            });
+            return;
+          }
+
+          if (!reviewResult.firstReplayUrl) {
+            this.snackBar.open(
+              'Fehler beim Generieren der Replay-URL',
+              'Fehler',
+              { duration: 3000 }
+            );
+            return;
+          }
+
+          this.appService.createOwnToken(workspaceId, 1).subscribe(token => {
+            const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding-review&codingJobId=${encodeURIComponent(selectedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}`;
+            const replayUrl = `${normalizeReplayUrlToCurrentOrigin(reviewResult.firstReplayUrl)}?${queryParams}`;
+
+            window.open(replayUrl, '_blank');
+            this.snackBar.open(
+              `Review für Kodierjob "${selectedJob.name}" geöffnet`,
+              'Schließen',
+              { duration: 3000 }
+            );
+          });
+        },
+        error: (error: { status?: number }) => {
+          loadingSnack.dismiss();
+          const message =
+            error?.status === 403 ?
+              'Sie haben keinen Zugriff auf diesen Kodierjob.' :
+              'Fehler beim Öffnen des Reviews';
           this.snackBar.open(message, 'Fehler', { duration: 3000 });
         }
       });

@@ -72,6 +72,7 @@ describe('CodingJobsComponent', () => {
       getBulkCodingProgress: jest.fn().mockReturnValue(of({})),
       deleteCodingJob: jest.fn().mockReturnValue(of({ success: true })),
       startCodingJob: jest.fn().mockReturnValue(of({ items: [], total: 0 })),
+      prepareCodingJobReview: jest.fn().mockReturnValue(of({ total: 0, firstReplayUrl: '' })),
       restartCodingJobWithOpenUnits: jest.fn().mockReturnValue(of({})),
       transferCodingCases: jest.fn().mockReturnValue(
         of({
@@ -472,20 +473,46 @@ describe('CodingJobsComponent', () => {
 
     component.showApplyActions = false;
     expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe(
-      'results'
+      'review'
     );
 
     component.showApplyActions = true;
     component.canApplyResults = false;
     expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe(
-      'results'
+      'review'
     );
     expect(
       component.getPrimaryJobAction({
         ...mockCodingJobs[0],
         assignedCoders: [2]
       } as CodingJob)
-    ).toBe('notAssigned');
+    ).toBe('review');
+  });
+
+  it('does not offer reviews for unassigned jobs without management access', () => {
+    component.canApplyResults = false;
+    component.canReviewCodingJobs = false;
+
+    const job = {
+      ...mockCodingJobs[0],
+      assignedCoders: [2]
+    } as CodingJob;
+
+    expect(component.canReviewCodingJob(job)).toBe(false);
+    expect(component.getPrimaryJobAction(job)).toBe('notAssigned');
+  });
+
+  it('does not offer review actions to assigned coders without management access', () => {
+    component.canApplyResults = false;
+    component.canReviewCodingJobs = false;
+
+    expect(component.getPrimaryJobAction(mockCodingJobs[0] as CodingJob)).toBe(
+      'start'
+    );
+    expect(component.getPrimaryJobAction({
+      ...mockCodingJobs[1],
+      assignedCoders: [1]
+    } as CodingJob)).toBe('results');
   });
 
   it('does not start coding jobs that are assigned to another coder', () => {
@@ -665,6 +692,32 @@ describe('CodingJobsComponent', () => {
 
     expect(window.open).toHaveBeenCalledWith(
       'http://localhost/#/replay/person/unit/0/var?auth=token&mode=coding&codingJobId=1&workspaceId=1',
+      '_blank'
+    );
+  });
+
+  it('opens coding job reviews read-only without starting the job', () => {
+    const job = {
+      ...mockCodingJobs[0],
+      assignedCoders: [2]
+    } as CodingJob;
+    (codingJobBackendServiceMock.prepareCodingJobReview as jest.Mock).mockReturnValue(
+      of({
+        total: 1,
+        firstReplayUrl: 'http://localhost:3333/#/replay/person/unit/0/var'
+      })
+    );
+    jest.spyOn(window, 'open').mockImplementation(() => null);
+
+    component.openCodingJobReview(job);
+
+    expect(codingJobBackendServiceMock.startCodingJob).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.prepareCodingJobReview).toHaveBeenCalledWith(
+      1,
+      job.id
+    );
+    expect(window.open).toHaveBeenCalledWith(
+      'http://localhost/#/replay/person/unit/0/var?auth=token&mode=coding-review&codingJobId=1&workspaceId=1',
       '_blank'
     );
   });

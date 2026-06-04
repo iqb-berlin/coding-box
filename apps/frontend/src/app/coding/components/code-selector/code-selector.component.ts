@@ -310,6 +310,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   onCommentClick(): void {
+    if (this.isReadOnly) return;
     this.openCommentDialog.emit();
   }
 
