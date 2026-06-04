@@ -44,6 +44,14 @@ interface ReplayCodeSelectedMessage extends PostMessage {
   responseId?: number;
 }
 
+export type CodingResultsComparisonMode = 'between-trainings' | 'within-training';
+
+export interface CodingResultsComparisonDialogData {
+  workspaceId: number;
+  selectedTraining?: CoderTraining;
+  initialMode?: CodingResultsComparisonMode;
+}
+
 interface TrainingComparison {
   responseId: number;
   unitName: string;
@@ -229,7 +237,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   selectedTrainings = new SelectionModel<number>(true, []);
   comparisonData: TrainingComparison[] = [];
   withinTrainingData: WithinTrainingComparison[] = [];
-  comparisonMode: 'between-trainings' | 'within-training' = 'between-trainings';
+  comparisonMode: CodingResultsComparisonMode = 'between-trainings';
   selectedTrainingForWithin: number | null = null;
 
   availableCoders: Array<{ jobId: number; coderName: string }> = [];
@@ -293,7 +301,7 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   constructor(
     public dialogRef: MatDialogRef<CodingResultsComparisonComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { workspaceId: number; selectedTraining?: CoderTraining },
+    @Inject(MAT_DIALOG_DATA) public data: CodingResultsComparisonDialogData,
     private paginatorIntl: MatPaginatorIntl
   ) {
     this.paginatorIntl.itemsPerPageLabel = this.translate.instant('paginator.itemsPerPageLabel');
@@ -315,6 +323,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   ngOnInit(): void {
     this.setupFilterPredicate();
     this.discussionManagerLabel = this.appService.authData.userName || this.appService.loggedUser?.preferred_username || 'Diskussion';
+    this.comparisonMode = this.data.initialMode || 'between-trainings';
 
     this.loadCoderTrainings().then(() => {
       if (this.data.selectedTraining) {

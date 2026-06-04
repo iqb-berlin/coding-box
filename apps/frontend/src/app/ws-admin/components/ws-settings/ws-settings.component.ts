@@ -88,6 +88,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   readonly minTokenDurationDays = 1;
   readonly maxTokenDurationDays = 90;
   autoFetchCodingStatistics = true;
+  autoRefreshManualCodingJobs = true;
   showTestResultsLogAnomalies = false;
   isExporting = false;
   databaseExportProgress = 0;
@@ -101,6 +102,11 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(enabled => {
           this.autoFetchCodingStatistics = enabled;
+        });
+      this.workspaceSettingsService
+        .getAutoRefreshManualCodingJobs(workspaceId)
+        .subscribe(enabled => {
+          this.autoRefreshManualCodingJobs = enabled;
         });
       this.workspaceSettingsService
         .getShowTestResultsLogAnomalies(workspaceId)
@@ -244,6 +250,45 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
               }
             );
             this.autoFetchCodingStatistics = !this.autoFetchCodingStatistics;
+          }
+        });
+    }
+  }
+
+  toggleAutoRefreshManualCodingJobs(toggleEvent: { checked: boolean }): void {
+    this.autoRefreshManualCodingJobs = toggleEvent.checked;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService
+        .setAutoRefreshManualCodingJobs(
+          workspaceId,
+          this.autoRefreshManualCodingJobs
+        )
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.autoRefreshManualCodingJobs ?
+                this.translateService.instant(
+                  'ws-settings.auto-refresh-manual-coding-jobs-enabled'
+                ) :
+                this.translateService.instant(
+                  'ws-settings.auto-refresh-manual-coding-jobs-disabled'
+                ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
+            this.autoRefreshManualCodingJobs = !this.autoRefreshManualCodingJobs;
           }
         });
     }

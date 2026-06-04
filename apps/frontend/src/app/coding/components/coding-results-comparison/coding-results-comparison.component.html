@@ -326,7 +326,7 @@
         </div>
       </div>
 
-      <!-- Cohen's Kappa Statistics Section (within-training mode only) -->
+      <!-- Interrater reliability section (within-training mode only) -->
       <div
         class="kappa-section"
         *ngIf="
@@ -338,7 +338,7 @@
             <mat-icon>{{
               showKappaStatistics ? 'expand_less' : 'expand_more'
             }}</mat-icon>
-            Cohen's Kappa (Interrater-Reliabilität)
+            Interrater-Reliabilität
           </h4>
           <button mat-icon-button class="toggle-button">
             <mat-icon>{{
@@ -353,7 +353,7 @@
               mode="indeterminate"
               diameter="30"
             ></mat-progress-spinner>
-            <p>Berechne Cohen's Kappa...</p>
+            <p>Berechne Interrater-Reliabilität...</p>
           </div>
 
           <div *ngIf="kappaStatistics" class="kappa-statistics">

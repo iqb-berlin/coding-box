@@ -1,0 +1,31 @@
+import { Repository } from 'typeorm';
+import { WorkspaceSettingsController } from './workspace-settings.controller';
+import { Setting } from '../database/entities/setting.entity';
+
+describe('WorkspaceSettingsController', () => {
+  let controller: WorkspaceSettingsController;
+  let settingRepository: jest.Mocked<Pick<Repository<Setting>, 'findOne'>>;
+
+  beforeEach(() => {
+    settingRepository = {
+      findOne: jest.fn()
+    };
+    controller = new WorkspaceSettingsController(
+      settingRepository as unknown as Repository<Setting>
+    );
+  });
+
+  it('returns the default manual coding job auto-refresh setting when it is missing', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'auto-refresh-manual-coding-jobs')
+    ).resolves.toEqual({
+      id: 0,
+      key: 'workspace-5-auto-refresh-manual-coding-jobs',
+      value: JSON.stringify({ enabled: true }),
+      description:
+        'Controls whether manual coding job tables refresh automatically when the browser window regains focus'
+    });
+  });
+});

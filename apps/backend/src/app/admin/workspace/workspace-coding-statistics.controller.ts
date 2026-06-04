@@ -1367,6 +1367,26 @@ export class WorkspaceCodingStatisticsController {
         aggregatedDuplicateCases: {
           type: 'number',
           description: 'Number of raw responses collapsed by duplicate aggregation'
+        },
+        deriveErrorTotalResponses: {
+          type: 'number',
+          description: 'DERIVE_ERROR opt-in cases after duplicate aggregation'
+        },
+        deriveErrorAppliedResponses: {
+          type: 'number',
+          description: 'Applied DERIVE_ERROR opt-in cases after duplicate aggregation'
+        },
+        deriveErrorRemainingResponses: {
+          type: 'number',
+          description: 'Remaining DERIVE_ERROR opt-in cases after duplicate aggregation'
+        },
+        deriveErrorRawTotalResponses: {
+          type: 'number',
+          description: 'Raw DERIVE_ERROR opt-in responses before duplicate aggregation'
+        },
+        deriveErrorRawAppliedResponses: {
+          type: 'number',
+          description: 'Raw applied DERIVE_ERROR opt-in responses before duplicate aggregation'
         }
       }
     }
@@ -1387,6 +1407,11 @@ export class WorkspaceCodingStatisticsController {
         aggregationActive: boolean;
         aggregationThreshold: number | null;
         aggregatedDuplicateCases: number;
+        deriveErrorTotalResponses: number;
+        deriveErrorAppliedResponses: number;
+        deriveErrorRemainingResponses: number;
+        deriveErrorRawTotalResponses: number;
+        deriveErrorRawAppliedResponses: number;
       }> {
     return this.codingProgressService.getAppliedResultsOverview(workspace_id);
   }

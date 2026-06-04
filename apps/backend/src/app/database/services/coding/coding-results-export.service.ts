@@ -1,7 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Readable } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { Request } from 'express';
 import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
@@ -22,6 +22,12 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { MissingsProfilesService, ResolvedMissingValue } from './missings-profiles.service';
+import {
+  createManualCodingVariablePairKeySet,
+  createManualCodingVariableReferences,
+  ManualCodingVariableReference,
+  toManualCodingVariablePairKey
+} from '../../utils/manual-coding-candidate.util';
 
 @Injectable()
 export class CodingResultsExportService {
@@ -102,6 +108,37 @@ export class CodingResultsExportService {
   private async getExclusionChecker(workspaceId: number): Promise<(bookletName: string, unitName: string) => boolean> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     return (bookletName: string, unitName: string) => !unitName || isExcludedByResolvedExclusions(exclusions, bookletName, unitName);
+  }
+
+  private async getManualCodingVariableReferences(
+    workspaceId: number
+  ): Promise<ManualCodingVariableReference[]> {
+    const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+    const manualJobVariables = await this.codingJobUnitRepository
+      .createQueryBuilder('coding_job_unit')
+      .select('DISTINCT coding_job_unit.unit_name', 'unitName')
+      .addSelect('coding_job_unit.variable_id', 'variableId')
+      .innerJoin('coding_job_unit.coding_job', 'coding_job')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
+      .getRawMany<{ unitName: string; variableId: string }>();
+
+    const manualCodingVariables = createManualCodingVariableReferences([
+      ...codingListVariables,
+      ...manualJobVariables
+    ]);
+
+    if (manualCodingVariables.length === 0) {
+      throw new Error('No manual coding variables found for this workspace');
+    }
+
+    this.logger.log(`Found ${manualCodingVariables.length} manual unit-variable combinations for workspace ${workspaceId}`);
+    return manualCodingVariables;
+  }
+
+  private async getManualCodingVariableSet(workspaceId: number): Promise<Set<string>> {
+    const manualCodingVariables = await this.getManualCodingVariableReferences(workspaceId);
+    return createManualCodingVariablePairKeySet(manualCodingVariables);
   }
 
   clearPageMapsCache(): void {
@@ -286,21 +323,14 @@ export class CodingResultsExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length === 0) {
-        throw new Error('No manual coding variables found in the coding list for this workspace');
-      }
-      this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
-      manualCodingVariableSet = new Set<string>();
-      codingListVariables.forEach(item => {
-        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-      });
+      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
     const codingJobUnits = await this.codingJobUnitRepository.find({
       where: {
         coding_job: {
-          workspace_id: workspaceId
+          workspace_id: workspaceId,
+          training_id: IsNull()
         }
       },
       relations: [
@@ -353,7 +383,7 @@ export class CodingResultsExportService {
         if (!unitName || !variableId) continue;
 
         if (manualCodingVariableSet) {
-          const variableKey = `${unitName}|${variableId}`;
+          const variableKey = toManualCodingVariablePairKey(unitName, variableId);
           if (!manualCodingVariableSet.has(variableKey)) {
             continue;
           }
@@ -573,21 +603,14 @@ export class CodingResultsExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length === 0) {
-        throw new Error('No manual coding variables found in the coding list for this workspace');
-      }
-      this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
-      manualCodingVariableSet = new Set<string>();
-      codingListVariables.forEach(item => {
-        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-      });
+      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
     const codingJobUnits = await this.codingJobUnitRepository.find({
       where: {
         coding_job: {
-          workspace_id: workspaceId
+          workspace_id: workspaceId,
+          training_id: IsNull()
         }
       },
       relations: [
@@ -648,7 +671,7 @@ export class CodingResultsExportService {
         if (!unitName || !variableId) continue;
 
         if (manualCodingVariableSet) {
-          const variableKey = `${unitName}|${variableId}`;
+          const variableKey = toManualCodingVariablePairKey(unitName, variableId);
           if (!manualCodingVariableSet.has(variableKey)) {
             continue;
           }
@@ -890,23 +913,15 @@ export class CodingResultsExportService {
     // Get manual coding variables filter if enabled
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length === 0) {
-        throw new Error('No manual coding variables found in the coding list for this workspace');
-      }
-      this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
-      // Create set of unit-variable combinations
-      manualCodingVariableSet = new Set<string>();
-      codingListVariables.forEach(item => {
-        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-      });
+      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
     // Get all coding job units with their coders and responses
     const codingJobUnits = await this.codingJobUnitRepository.find({
       where: {
         coding_job: {
-          workspace_id: workspaceId
+          workspace_id: workspaceId,
+          training_id: IsNull()
         }
       },
       relations: [
@@ -969,7 +984,7 @@ export class CodingResultsExportService {
         if (!unitName || !variableId) continue;
 
         if (manualCodingVariableSet) {
-          const variableKey = `${unitName}|${variableId}`;
+          const variableKey = toManualCodingVariablePairKey(unitName, variableId);
           if (!manualCodingVariableSet.has(variableKey)) {
             continue;
           }
@@ -1195,18 +1210,11 @@ export class CodingResultsExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length === 0) {
-        throw new Error('No manual coding variables found in the coding list for this workspace');
-      }
-      manualCodingVariableSet = new Set<string>();
-      codingListVariables.forEach(item => {
-        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-      });
+      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
     const codingJobs = await this.codingJobRepository.find({
-      where: { workspace_id: workspaceId },
+      where: { workspace_id: workspaceId, training_id: IsNull() },
       relations: ['codingJobCoders', 'codingJobCoders.user', 'codingJobUnits', 'codingJobUnits.response', 'codingJobUnits.response.unit']
     });
 
@@ -1292,7 +1300,7 @@ export class CodingResultsExportService {
               continue;
             }
 
-            if (manualCodingVariableSet && !manualCodingVariableSet.has(`${unitName}|${variableId}`)) {
+            if (manualCodingVariableSet && !manualCodingVariableSet.has(toManualCodingVariablePairKey(unitName, variableId))) {
               continue;
             }
 
@@ -1435,7 +1443,7 @@ export class CodingResultsExportService {
   }
 
   async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
-    this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (CODING_INCOMPLETE only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
+    this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (manual coding only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
     // Clear page maps cache at start of export
     this.clearPageMapsCache();
@@ -1452,53 +1460,49 @@ export class CodingResultsExportService {
     // Check for cancellation before starting
     if (checkCancellation) await checkCancellation();
 
-    let incompleteVariables: Array<{ unitName: string; variableId: string }> = [];
+    let incompleteVariableSet = new Set<string>();
+    let manualCodingVariableReferences: Array<{ unitName: string; variableId: string }> = [];
     if (excludeAutoCoded) {
-      incompleteVariables = await this.codingListService.getCodingListVariables(workspaceId);
-
-      if (incompleteVariables.length === 0) {
-        throw new Error('No manual coding variables found for this workspace');
-      }
-      this.logger.log(`Found ${incompleteVariables.length} manual coding variables for workspace ${workspaceId}`);
-    }
-
-    // Create a filter set for quick lookup: "unitName|variableId"
-    const incompleteVariableSet = new Set<string>();
-    if (excludeAutoCoded) {
-      incompleteVariables.forEach(variable => {
-        incompleteVariableSet.add(`${variable.unitName}|${variable.variableId}`);
-      });
+      manualCodingVariableReferences = await this.getManualCodingVariableReferences(workspaceId);
+      incompleteVariableSet = new Set(
+        manualCodingVariableReferences.map(item => toManualCodingVariablePairKey(item.unitName, item.variableId))
+      );
     }
 
     const isExcluded = await this.getExclusionChecker(workspaceId);
 
-    // Get distinct unit-variable combinations for CODING_INCOMPLETE responses only
-    const unitVariableQuery = this.responseRepository
-      .createQueryBuilder('response')
-      .select('unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .leftJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    applyResolvedExclusionsToQuery(unitVariableQuery, exclusions);
-    const unitVariableResults = await unitVariableQuery
-      .groupBy('unit.name')
-      .addGroupBy('response.variableid')
-      .orderBy('unit.name', 'ASC')
-      .addOrderBy('response.variableid', 'ASC')
-      .getRawMany();
+    let unitVariableResults: Array<{ unitName: string; variableId: string; bookletName?: string }> =
+      manualCodingVariableReferences;
+    if (!excludeAutoCoded) {
+      // Get distinct unit-variable combinations for CODING_INCOMPLETE responses only
+      const unitVariableQuery = this.responseRepository
+        .createQueryBuilder('response')
+        .select('unit.name', 'unitName')
+        .addSelect('response.variableid', 'variableId')
+        .leftJoin('response.unit', 'unit')
+        .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.bookletinfo', 'bookletinfo')
+        .leftJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      applyResolvedExclusionsToQuery(unitVariableQuery, exclusions);
+      unitVariableResults = await unitVariableQuery
+        .groupBy('unit.name')
+        .addGroupBy('response.variableid')
+        .orderBy('unit.name', 'ASC')
+        .addOrderBy('response.variableid', 'ASC')
+        .getRawMany();
+    }
 
     // Filter to only include variables that are in the incomplete set AND not ignored
-    const filteredUnitVariableResults = unitVariableResults.filter(result => (!excludeAutoCoded || incompleteVariableSet.has(`${result.unitName}|${result.variableId}`)) &&
+    const filteredUnitVariableResults = unitVariableResults.filter(result => (!excludeAutoCoded || incompleteVariableSet.has(toManualCodingVariablePairKey(result.unitName, result.variableId))) &&
       result.unitName && !isExcluded(result.bookletName || '', result.unitName)
     );
 
-    this.logger.log(`Filtered to ${filteredUnitVariableResults.length} unit-variable combinations from ${unitVariableResults.length} total CODING_INCOMPLETE responses`);
+    const sourceDescription = excludeAutoCoded ? 'manual coding variables' : 'CODING_INCOMPLETE responses';
+    this.logger.log(`Filtered to ${filteredUnitVariableResults.length} unit-variable combinations from ${unitVariableResults.length} total ${sourceDescription}`);
 
     if (filteredUnitVariableResults.length === 0) {
       throw new Error('No manual coding variables with responses found for this workspace');
@@ -1535,7 +1539,8 @@ export class CodingResultsExportService {
                 unit_name: unitName,
                 variable_id: variableId,
                 coding_job: {
-                  workspace_id: workspaceId
+                  workspace_id: workspaceId,
+                  training_id: IsNull()
                 }
               },
               relations: [
@@ -1805,13 +1810,7 @@ export class CodingResultsExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length > 0) {
-        manualCodingVariableSet = new Set<string>();
-        codingListVariables.forEach(item => {
-          manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-        });
-      }
+      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
     const isExcluded = await this.getExclusionChecker(workspaceId);
@@ -1893,7 +1892,7 @@ export class CodingResultsExportService {
           }
 
           if (manualCodingVariableSet) {
-            const variableKey = `${unit.unit_name}|${unit.variable_id}`;
+            const variableKey = toManualCodingVariablePairKey(unit.unit_name, unit.variable_id);
             if (!manualCodingVariableSet.has(variableKey)) {
               continue;
             }

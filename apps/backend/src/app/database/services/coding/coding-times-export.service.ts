@@ -9,6 +9,10 @@ import {
   isExcludedByResolvedExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+import {
+  createManualCodingVariablePairKeySet,
+  toManualCodingVariablePairKey
+} from '../../utils/manual-coding-candidate.util';
 
 @Injectable()
 export class CodingTimesExportService {
@@ -21,6 +25,30 @@ export class CodingTimesExportService {
     private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
+  private async getManualCodingVariableSet(workspaceId: number): Promise<Set<string>> {
+    const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+    const manualJobVariables = await this.codingJobUnitRepository
+      .createQueryBuilder('coding_job_unit')
+      .select('DISTINCT coding_job_unit.unit_name', 'unitName')
+      .addSelect('coding_job_unit.variable_id', 'variableId')
+      .innerJoin('coding_job_unit.coding_job', 'coding_job')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
+      .getRawMany<{ unitName: string; variableId: string }>();
+
+    const manualCodingVariableSet = createManualCodingVariablePairKeySet([
+      ...codingListVariables,
+      ...manualJobVariables
+    ]);
+
+    if (manualCodingVariableSet.size === 0) {
+      throw new Error('No manual coding variables found for this workspace');
+    }
+
+    this.logger.log(`Found ${manualCodingVariableSet.size} manual unit-variable combinations for workspace ${workspaceId}`);
+    return manualCodingVariableSet;
+  }
+
   async exportCodingTimesReport(workspaceId: number, anonymizeCoders = false, usePseudoCoders = false, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
     this.logger.log(`Exporting coding times report for workspace ${workspaceId}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
@@ -29,20 +57,14 @@ export class CodingTimesExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length === 0) {
-        throw new Error('No manual coding variables found in the coding list for this workspace');
-      }
-      manualCodingVariableSet = new Set<string>();
-      codingListVariables.forEach(item => {
-        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-      });
+      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
     const codingJobUnits = await this.codingJobUnitRepository.find({
       where: {
         coding_job: {
-          workspace_id: workspaceId
+          workspace_id: workspaceId,
+          training_id: IsNull()
         },
         code: Not(IsNull()) // Only include units that have been coded
       },
@@ -152,13 +174,14 @@ export class CodingTimesExportService {
 
       const variableUnitCoders = new Map<string, Set<string>>();
       const variableUnitCoderTimestamps = new Map<string, Map<string, Date[]>>();
+      const variableUnitLabels = new Map<string, { unitName: string; variableId: string }>();
 
       for (const unit of visibleCodingJobUnits) {
         if (!unit.response?.unit?.name || !unit.updated_at) continue;
 
         const variableId = unit.variable_id;
         const unitName = unit.response.unit.name;
-        const variableUnitKey = `${unitName}|${variableId}`;
+        const variableUnitKey = toManualCodingVariablePairKey(unitName, variableId);
         const timestamp = new Date(unit.updated_at);
 
         if (manualCodingVariableSet) {
@@ -169,6 +192,7 @@ export class CodingTimesExportService {
 
         if (!variableUnitCoders.has(variableUnitKey)) {
           variableUnitCoders.set(variableUnitKey, new Set());
+          variableUnitLabels.set(variableUnitKey, { unitName, variableId });
         }
 
         if (!variableUnitCoderTimestamps.has(variableUnitKey)) {
@@ -208,7 +232,10 @@ export class CodingTimesExportService {
       const sortedVariableUnitKeys = Array.from(variableUnitCoders.keys()).sort();
 
       for (const variableUnitKey of sortedVariableUnitKeys) {
-        const [unitName, variableId] = variableUnitKey.split('|');
+        const { unitName, variableId } = variableUnitLabels.get(variableUnitKey) || {
+          unitName: variableUnitKey,
+          variableId: ''
+        };
         const assignedCoders = variableUnitCoders.get(variableUnitKey)!;
 
         const rowData: { [key: string]: string | number | null } = {

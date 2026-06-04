@@ -43,7 +43,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   const mockVariables: Variable[] = [
     {
-      unitName: 'Unit 1', variableId: 'Var 1', responseCount: 10, availableCases: 10, uniqueCasesAfterAggregation: 10
+      unitName: 'Unit 1', variableId: 'Var 1', responseCount: 10, deriveErrorResponseCount: 2, availableCases: 10, uniqueCasesAfterAggregation: 10
     },
     {
       unitName: 'Unit 2', variableId: 'Var 2', responseCount: 5, availableCases: 5, uniqueCasesAfterAggregation: 5
@@ -468,6 +468,22 @@ describe('CodingJobDefinitionDialogComponent', () => {
         includeDeriveError: true
       }]
     }));
+  });
+
+  it('should show the DERIVE_ERROR opt-in only for variables with DERIVE_ERROR responses', () => {
+    createComponent();
+
+    expect(component.hasDeriveErrorResponses(component.variables[0])).toBe(true);
+    expect(component.hasDeriveErrorResponses(component.variables[1])).toBe(false);
+    expect(component.dataSource.data.filter(variable => component.hasDeriveErrorResponses(variable))).toHaveLength(1);
+  });
+
+  it('should not enable DERIVE_ERROR opt-in for variables without DERIVE_ERROR responses', () => {
+    createComponent();
+
+    component.setDeriveErrorIncluded(component.variables[1], true);
+
+    expect(component.variables[1].includeDeriveError).toBe(false);
   });
 
   it('should send the selected missings profile when creating a definition', async () => {

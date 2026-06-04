@@ -1,5 +1,6 @@
 import { Readable } from 'stream';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
+import * as ExcelJS from 'exceljs';
 import { CodingResultsExportService } from './coding-results-export.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -102,6 +103,8 @@ const createCodingJobUnitQueryBuilder = (units: TestCodingJobUnit[]) => {
     leftJoin: jest.fn().mockReturnThis(),
     innerJoinAndSelect: jest.fn().mockReturnThis(),
     leftJoinAndSelect: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
@@ -115,6 +118,16 @@ const createCodingJobUnitQueryBuilder = (units: TestCodingJobUnit[]) => {
       return queryBuilder;
     }),
     getCount: jest.fn().mockImplementation(async () => queryVisibleUnits(units).length),
+    getRawMany: jest.fn().mockImplementation(async () => Array.from(
+      new Map(
+        queryVisibleUnits(units)
+          .filter(unit => unit.unit_name && unit.variable_id)
+          .map(unit => [`${unit.unit_name}|${unit.variable_id}`, {
+            unitName: unit.unit_name,
+            variableId: unit.variable_id
+          }])
+      ).values()
+    )),
     getMany: jest.fn().mockImplementation(async () => queryVisibleUnits(units)
       .slice(skipValue, skipValue + takeValue))
   };
@@ -207,6 +220,15 @@ function createService(overrides: {
     workspaceExclusionService
   };
 }
+
+const expectProductionJobUnitFilter = (where: unknown) => {
+  expect(where).toEqual(expect.objectContaining({
+    coding_job: expect.objectContaining({
+      workspace_id: 1
+    })
+  }));
+  expect((where as { coding_job?: { training_id?: unknown } }).coding_job?.training_id).toEqual(IsNull());
+};
 
 describe('CodingResultsExportService', () => {
   it('delegates versioned CSV and Excel exports with fallback strings', async () => {
@@ -453,5 +475,146 @@ describe('CodingResultsExportService', () => {
     )).toString('utf-8');
 
     expect(csv).toContain('"VAR1"');
+  });
+
+  it('includes DERIVE_ERROR job-only variables in manual-only aggregated export', async () => {
+    const { service } = createService({
+      codingListVariables: [],
+      codingJobUnits: [{
+        ...baseUnit,
+        variable_id: 'DERIVE_ONLY',
+        response: {
+          ...baseUnit.response,
+          status_v1: 4
+        }
+      }]
+    });
+
+    const buffer = await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'most-frequent',
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.worksheets[0];
+    const cellValues = worksheet.getSheetValues().flat().map(value => String(value ?? ''));
+
+    expect(cellValues.some(value => value.includes('DERIVE_ONLY'))).toBe(true);
+  });
+
+  it('includes DERIVE_ERROR job-only variables in manual-only by-variable export', async () => {
+    const { service } = createService({
+      codingListVariables: [],
+      codingJobUnits: [{
+        ...baseUnit,
+        variable_id: 'DERIVE_VAR',
+        response: {
+          ...baseUnit.response,
+          status_v1: 4
+        }
+      }]
+    });
+
+    const buffer = await service.exportCodingResultsByVariable(
+      1,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheetNames = workbook.worksheets.map(worksheet => worksheet.name);
+
+    expect(worksheetNames.some(name => name.includes('DERIVE_VAR'))).toBe(true);
+  });
+
+  it('limits repository-backed export reads to non-training jobs', async () => {
+    const {
+      service,
+      codingJobUnitRepository,
+      codingJobRepository
+    } = createService();
+    await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'most-frequent',
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'new-row-per-variable',
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'new-column-per-coder',
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    await service.exportCodingResultsByVariable(
+      1,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    await expect(service.exportCodingResultsByCoder(1)).rejects.toThrow('No coding jobs found');
+
+    const unitFindWheres = (codingJobUnitRepository.find as jest.Mock).mock.calls
+      .map(([options]) => options?.where)
+      .filter(Boolean);
+
+    expect(unitFindWheres.length).toBeGreaterThanOrEqual(4);
+    unitFindWheres.forEach(expectProductionJobUnitFilter);
+    expect(codingJobRepository.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        workspace_id: 1,
+        training_id: IsNull()
+      })
+    }));
   });
 });

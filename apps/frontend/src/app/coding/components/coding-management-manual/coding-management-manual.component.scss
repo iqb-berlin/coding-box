@@ -25,6 +25,28 @@
   min-width: 0;
 }
 
+.manual-coding-tabs {
+  display: block;
+  margin: 8px 0 24px;
+}
+
+.manual-tab-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+  min-width: 0;
+
+  button {
+    min-height: 40px;
+    height: auto;
+    line-height: 1.2;
+    white-space: normal;
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -578,7 +600,7 @@
       color: #1976d2;
     }
 
-    div {
+    .planning-status-copy {
       display: flex;
       flex-direction: column;
       gap: 2px;
@@ -594,6 +616,24 @@
       font-size: 13px;
       line-height: 1.4;
       overflow-wrap: anywhere;
+    }
+
+    .manual-code-availability-list {
+      display: flex;
+      flex-flow: row wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .manual-code-availability-chip {
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(245, 124, 0, 0.24);
+      border-radius: 999px;
+      color: rgba(0, 0, 0, 0.76);
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.2;
+      padding: 5px 8px;
     }
 
     &.status-attention {
@@ -673,59 +713,6 @@
     }
 
     .manual-freshness-chip {
-      background: rgba(255, 255, 255, 0.72);
-      border: 1px solid rgba(245, 124, 0, 0.24);
-      border-radius: 999px;
-      color: rgba(0, 0, 0, 0.76);
-      font-size: 12px;
-      font-weight: 650;
-      line-height: 1.2;
-      padding: 5px 8px;
-    }
-  }
-
-  .manual-code-availability-banner {
-    align-items: flex-start;
-    background: rgba(245, 124, 0, 0.08);
-    border: 1px solid rgba(245, 124, 0, 0.28);
-    border-radius: 8px;
-    color: #5f4217;
-    display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
-    padding: 14px 16px;
-
-    > mat-icon {
-      color: #ef6c00;
-      flex: 0 0 auto;
-    }
-
-    .manual-code-availability-copy {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 0;
-    }
-
-    strong {
-      font-size: 14px;
-      font-weight: 700;
-    }
-
-    span {
-      font-size: 13px;
-      line-height: 1.4;
-      overflow-wrap: anywhere;
-    }
-
-    .manual-code-availability-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 4px;
-    }
-
-    .manual-code-availability-chip {
       background: rgba(255, 255, 255, 0.72);
       border: 1px solid rgba(245, 124, 0, 0.24);
       border-radius: 999px;
@@ -1192,6 +1179,13 @@
     .metric-hint {
       font-size: 12px;
       color: #666;
+      overflow-wrap: anywhere;
+    }
+
+    .metric-explainer {
+      color: #4b5563;
+      font-size: 12px;
+      line-height: 1.35;
       overflow-wrap: anywhere;
     }
   }

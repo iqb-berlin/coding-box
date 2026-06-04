@@ -11,6 +11,7 @@ import User from '../../entities/user.entity';
 import { CodingListService } from './coding-list.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { statusStringToNumber } from '../../utils/response-status-converter';
 
 jest.mock('./coding-list.service', () => ({
   CodingListService: function MockCodingListService() {}
@@ -1131,6 +1132,114 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     );
   });
 
+  it('includes DERIVE_ERROR job-only variables in the active manual-only aggregated export', async () => {
+    const createQueryBuilder = (rawRows: unknown[] = []) => {
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(rawRows)
+      };
+      return qb;
+    };
+
+    const manualJobVariablesQuery = createQueryBuilder([{
+      unitName: 'UNIT',
+      variableId: 'DERIVED'
+    }]);
+    const variableRecordsQuery = createQueryBuilder([{
+      unitName: 'UNIT',
+      variableId: 'DERIVED',
+      bookletName: 'BOOKLET-A'
+    }]);
+    const manualCodingQuery = createQueryBuilder([{
+      personId: '10',
+      unitName: 'UNIT',
+      variableId: 'DERIVED',
+      cju_code: '4',
+      coding_issue_option: null,
+      code_v1: null,
+      code_v2: null,
+      code_v3: null,
+      notes: null,
+      username: 'Coder A',
+      jobId: '1',
+      trainingId: null,
+      missingsProfileId: null,
+      responseId: '100'
+    }]);
+    const personResultsQuery = createQueryBuilder([{
+      id: '10',
+      login: 'login-a',
+      code: 'code-a',
+      group: 'group-a',
+      bookletName: 'BOOKLET-A'
+    }]);
+    const responseRepository = {
+      createQueryBuilder: jest.fn().mockReturnValueOnce(personResultsQuery)
+    };
+    const codingJobUnitRepository = {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(manualJobVariablesQuery)
+        .mockReturnValueOnce(variableRecordsQuery)
+        .mockReturnValueOnce(manualCodingQuery)
+    };
+    const codingListService = {
+      getCodingListVariables: jest.fn().mockResolvedValue([])
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+
+    const service = new CodingExportService(
+      responseRepository as unknown as Repository<ResponseEntity>,
+      {} as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
+      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn() } as unknown as Repository<User>,
+      codingListService as unknown as CodingListService,
+      {} as WorkspaceCoreService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService
+    );
+
+    const buffer = await service.exportCodingResultsAggregated(
+      7,
+      false,
+      false,
+      false,
+      false,
+      'most-frequent',
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.getWorksheet('Coding Results');
+
+    expect(statusStringToNumber('DERIVE_ERROR')).not.toBeNull();
+    expect(codingListService.getCodingListVariables).toHaveBeenCalledWith(7);
+    expect(manualJobVariablesQuery.andWhere).toHaveBeenCalledWith('coding_job.training_id IS NULL');
+    expect(variableRecordsQuery.andWhere).toHaveBeenCalledWith('cj.training_id IS NULL');
+    expect(manualCodingQuery.andWhere).toHaveBeenCalledWith('cj.training_id IS NULL');
+    expect(worksheet?.getRow(1).getCell(4).value).toBe('UNIT_DERIVED');
+    expect(worksheet?.getRow(2).getCell(4).value).toBe('4');
+  });
+
   it('rejects coding-times export when scoped filters match no coded units', async () => {
     const codingTimesQueryBuilder = {
       innerJoinAndSelect: jest.fn().mockReturnThis(),
@@ -1171,5 +1280,6 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       undefined,
       [123]
     )).rejects.toThrow('Keine Kodierergebnisse für den gewählten Job-/Training-/Kodierer-Filter');
+    expect(codingTimesQueryBuilder.andWhere).toHaveBeenCalledWith('cj.training_id IS NULL');
   });
 });
