@@ -432,7 +432,8 @@ export class CodingJobBackendService {
   getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    includeDeriveErrorOnly?: boolean
   ): Observable<
     {
       unitName: string;
@@ -442,6 +443,8 @@ export class CodingJobBackendService {
       casesInJobs: number;
       availableCases: number;
       uniqueCasesAfterAggregation: number;
+      availableCasesWithDeriveError?: number;
+      uniqueCasesAfterAggregationWithDeriveError?: number;
       isDerived: boolean;
       coderTrainingRequired?: boolean;
     }[]
@@ -454,6 +457,9 @@ export class CodingJobBackendService {
     if (trainingRequired !== undefined) {
       params = params.set('trainingRequired', trainingRequired.toString());
     }
+    if (includeDeriveErrorOnly !== undefined) {
+      params = params.set('includeDeriveErrorOnly', includeDeriveErrorOnly.toString());
+    }
     params = params.set('_t', Date.now().toString());
     return this.http.get<
     {
@@ -464,6 +470,8 @@ export class CodingJobBackendService {
       casesInJobs: number;
       availableCases: number;
       uniqueCasesAfterAggregation: number;
+      availableCasesWithDeriveError?: number;
+      uniqueCasesAfterAggregationWithDeriveError?: number;
       isDerived: boolean;
       coderTrainingRequired?: boolean;
     }[]

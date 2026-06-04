@@ -25,7 +25,12 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
-import { buildAggregationGroups } from './aggregation-metrics.util';
+import {
+  buildAggregationGroups,
+  deduplicateManualCodingResponses,
+  getManualCodingDeduplicationKey,
+  ManualCodingDeduplicationResponse
+} from './aggregation-metrics.util';
 import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
 import {
   getCoveredSourceKeysForManualDerivedVariables,
@@ -33,7 +38,10 @@ import {
   ManualCodingExcludedSourceSummary,
   summarizeCoveredSourceVariables
 } from '../../utils/manual-coding-scope.util';
-import { createManualCodingVariableReferences } from '../../utils/manual-coding-candidate.util';
+import {
+  createManualCodingVariableReferences,
+  DERIVE_ERROR_STATUS
+} from '../../utils/manual-coding-candidate.util';
 
 interface NormalizedExpectedCombination {
   unitKey: string;
@@ -61,12 +69,18 @@ type SlimCodingResponse = {
   unitName: string;
   variableid: string;
   value: string | null;
+  statusV1?: number | null;
+  personLogin?: string | null;
+  personCode?: string | null;
+  personGroup?: string | null;
 };
 
 type VariableCaseInfo = {
   casesInJobs: number;
   availableCases: number;
   uniqueCasesAfterAggregation: number;
+  availableCasesWithDeriveError?: number;
+  uniqueCasesAfterAggregationWithDeriveError?: number;
 };
 
 type ManualCodingScopeFromDb = {
@@ -87,6 +101,8 @@ type ManualCodingVariableWithCaseInfo = {
   casesInJobs: number;
   availableCases: number;
   uniqueCasesAfterAggregation: number;
+  availableCasesWithDeriveError?: number;
+  uniqueCasesAfterAggregationWithDeriveError?: number;
   isDerived: boolean;
   coderTrainingRequired: boolean;
 };
@@ -488,7 +504,8 @@ export class CodingValidationService {
   async getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    includeDeriveErrorOnly = false
   ): Promise<
     {
       unitName: string;
@@ -498,21 +515,28 @@ export class CodingValidationService {
       casesInJobs: number;
       availableCases: number;
       uniqueCasesAfterAggregation: number;
+      availableCasesWithDeriveError?: number;
+      uniqueCasesAfterAggregationWithDeriveError?: number;
       isDerived: boolean;
       coderTrainingRequired: boolean;
     }[]
     > {
     try {
-      if (unitName || trainingRequired !== undefined) {
+      if (unitName || trainingRequired !== undefined || includeDeriveErrorOnly) {
         this.logger.log(
           `Querying manual coding variables for workspace ${workspaceId}${unitName ? ` and unit ${unitName}` : ''}${trainingRequired !== undefined ? ` (trainingRequired: ${trainingRequired})` : ''} (not cached)`
         );
         const variables = await this.fetchCodingIncompleteVariablesFromDb(
           workspaceId,
           unitName,
-          trainingRequired
+          trainingRequired,
+          includeDeriveErrorOnly
         );
-        return await this.enrichVariablesWithCaseInfo(workspaceId, variables);
+        return await this.enrichVariablesWithCaseInfo(
+          workspaceId,
+          variables,
+          includeDeriveErrorOnly
+        );
       }
       const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
       const cachedResult = await this.cacheService.get<
@@ -524,6 +548,8 @@ export class CodingValidationService {
         casesInJobs: number;
         availableCases: number;
         uniqueCasesAfterAggregation: number;
+        availableCasesWithDeriveError?: number;
+        uniqueCasesAfterAggregationWithDeriveError?: number;
         isDerived: boolean;
         coderTrainingRequired: boolean;
       }[]
@@ -538,7 +564,10 @@ export class CodingValidationService {
         `Cache miss: Querying manual coding variables for workspace ${workspaceId}`
       );
       const variables = await this.fetchCodingIncompleteVariablesFromDb(
-        workspaceId
+        workspaceId,
+        undefined,
+        undefined,
+        includeDeriveErrorOnly
       );
       const result = await this.enrichVariablesWithCaseInfo(
         workspaceId,
@@ -667,9 +696,14 @@ export class CodingValidationService {
      */
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
-    variables: ManualCodingVariableCaseCounts[]
+    variables: ManualCodingVariableCaseCounts[],
+    includeDeriveErrorInCaseInfo = false
   ): Promise<ManualCodingVariableWithCaseInfo[]> {
-    const caseInfoMap = await this.computeVariableCaseInfo(workspaceId, variables);
+    const caseInfoMap = await this.computeVariableCaseInfo(
+      workspaceId,
+      variables,
+      includeDeriveErrorInCaseInfo
+    );
 
     return variables.map(variable => {
       const key = `${variable.unitName}::${variable.variableId}`;
@@ -693,7 +727,8 @@ export class CodingValidationService {
    */
   private async computeVariableCaseInfo(
     workspaceId: number,
-    variables: ManualCodingVariableCaseCounts[]
+    variables: ManualCodingVariableCaseCounts[],
+    includeDeriveErrorInCaseInfo = false
   ): Promise<Map<string, VariableCaseInfo>> {
     const result = new Map<string, VariableCaseInfo>();
 
@@ -701,34 +736,20 @@ export class CodingValidationService {
       return result;
     }
 
-    const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
     const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
 
-    if (aggregationThreshold === null) {
-      variables.forEach(v => {
-        const key = `${v.unitName}::${v.variableId}`;
-        const casesInJobs = casesInJobsMap.get(key) || 0;
-        result.set(key, {
-          casesInJobs,
-          availableCases: Math.max(0, v.responseCount - casesInJobs),
-          uniqueCasesAfterAggregation: v.responseCount
-        });
-      });
-      return result;
-    }
-
     const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
-    const baseVariables = variables.filter(v => !v.isDerived);
-    const baseVariableReferences = baseVariables.map(v => ({
+    const variableReferences = variables.map(v => ({
       unitName: v.unitName,
-      variableId: v.variableId
+      variableId: v.variableId,
+      ...(includeDeriveErrorInCaseInfo ? { includeDeriveError: true } : {})
     }));
     const [slimResponses, assignedResponseIdsByVariable] = await Promise.all([
       this.codingJobService.getSlimResponsesForVariables(
         workspaceId,
-        baseVariableReferences
+        variableReferences
       ) as Promise<SlimCodingResponse[]>,
-      this.getAssignedResponseIdsByVariable(workspaceId, baseVariableReferences)
+      this.getAssignedResponseIdsByVariable(workspaceId, variableReferences)
     ]);
 
     const derivedVariableMap = new Map<string, Set<string>>();
@@ -743,54 +764,79 @@ export class CodingValidationService {
 
     for (const variable of variables) {
       const key = `${variable.unitName}::${variable.variableId}`;
-      const rawCasesInJobs = casesInJobsMap.get(key) || 0;
 
-      if (variable.isDerived) {
-        result.set(key, {
-          casesInJobs: rawCasesInJobs,
-          availableCases: Math.max(0, variable.responseCount - rawCasesInJobs),
-          uniqueCasesAfterAggregation: variable.responseCount
-        });
-        continue;
-      }
-
-      const varResponses = slimResponses.filter(
+      const varResponsesWithRequestedStatuses = slimResponses.filter(
         r => r.unitName === variable.unitName && r.variableid === variable.variableId
       );
 
-      const aggregatedGroups = buildAggregationGroups(
-        varResponses.map(response => ({
-          ...response,
-          responseId: response.id,
-          variableId: response.variableid
-        })),
-        matchingFlags,
-        aggregationThreshold,
-        derivedVariableMap
-      );
-
-      let uniqueCases = 0;
-      let casesInJobs = 0;
-      const assignedResponseIds = assignedResponseIdsByVariable.get(key) || new Set<number>();
-
-      for (const group of aggregatedGroups) {
-        if (group.responses.length >= aggregationThreshold) {
-          uniqueCases += 1;
-          if (group.responses.some(response => assignedResponseIds.has(response.responseId))) {
-            casesInJobs += 1;
-          }
-        } else {
-          uniqueCases += group.responses.length;
-          casesInJobs += group.responses
+      const countAggregatedCases = (responses: SlimCodingResponse[]) => {
+        const responsesWithCaseFields: ManualCodingDeduplicationResponse[] =
+          responses.map(response => ({
+            ...response,
+            responseId: response.id,
+            variableId: response.variableid
+          }));
+        const assignedResponseIds = assignedResponseIdsByVariable.get(key) || new Set<number>();
+        const assignedDeduplicationKeys = new Set(
+          responsesWithCaseFields
             .filter(response => assignedResponseIds.has(response.responseId))
-            .length;
+            .map(response => getManualCodingDeduplicationKey(response))
+        );
+        const dedupedResponses = deduplicateManualCodingResponses(responsesWithCaseFields);
+        const assignedDedupedResponseIds = new Set(
+          dedupedResponses
+            .filter(response => (
+              assignedResponseIds.has(response.responseId) ||
+              assignedDeduplicationKeys.has(getManualCodingDeduplicationKey(response))
+            ))
+            .map(response => response.responseId)
+        );
+        const aggregatedGroups = buildAggregationGroups(
+          dedupedResponses,
+          matchingFlags,
+          aggregationThreshold,
+          derivedVariableMap
+        );
+
+        let uniqueCases = 0;
+        let casesInJobs = 0;
+
+        for (const group of aggregatedGroups) {
+          if (aggregationThreshold !== null && group.responses.length >= aggregationThreshold) {
+            uniqueCases += 1;
+            if (group.responses.some(response => assignedDedupedResponseIds.has(response.responseId))) {
+              casesInJobs += 1;
+            }
+          } else {
+            uniqueCases += group.responses.length;
+            casesInJobs += group.responses
+              .filter(response => assignedDedupedResponseIds.has(response.responseId))
+              .length;
+          }
         }
-      }
+
+        return { uniqueCases, casesInJobs };
+      };
+
+      const regularVarResponses = includeDeriveErrorInCaseInfo ?
+        varResponsesWithRequestedStatuses.filter(response => response.statusV1 !== DERIVE_ERROR_STATUS) :
+        varResponsesWithRequestedStatuses;
+      const regularCaseInfo = countAggregatedCases(regularVarResponses);
+      const deriveErrorCaseInfo = includeDeriveErrorInCaseInfo ?
+        countAggregatedCases(varResponsesWithRequestedStatuses) :
+        null;
 
       result.set(key, {
-        casesInJobs,
-        availableCases: Math.max(0, uniqueCases - casesInJobs),
-        uniqueCasesAfterAggregation: uniqueCases
+        casesInJobs: regularCaseInfo.casesInJobs,
+        availableCases: Math.max(0, regularCaseInfo.uniqueCases - regularCaseInfo.casesInJobs),
+        uniqueCasesAfterAggregation: regularCaseInfo.uniqueCases,
+        ...(deriveErrorCaseInfo ? {
+          availableCasesWithDeriveError: Math.max(
+            0,
+            deriveErrorCaseInfo.uniqueCases - deriveErrorCaseInfo.casesInJobs
+          ),
+          uniqueCasesAfterAggregationWithDeriveError: deriveErrorCaseInfo.uniqueCases
+        } : {})
       });
     }
 
@@ -923,14 +969,16 @@ export class CodingValidationService {
   private async fetchCodingIncompleteVariablesFromDb(
     workspaceId: number,
     unitName?: string,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    includeDeriveErrorOnly = false
   ): Promise<
     { unitName: string; variableId: string; responseCount: number; deriveErrorResponseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
     > {
     const scope = await this.fetchManualCodingScopeFromDb(
       workspaceId,
       unitName,
-      trainingRequired
+      trainingRequired,
+      includeDeriveErrorOnly
     );
     return scope.variables;
   }
@@ -938,7 +986,8 @@ export class CodingValidationService {
   private async fetchManualCodingScopeFromDb(
     workspaceId: number,
     unitName?: string,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    includeDeriveErrorOnly = false
   ): Promise<ManualCodingScopeFromDb> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     // Helper to build the base query for a given status
@@ -1081,6 +1130,32 @@ export class CodingValidationService {
           coderTrainingRequired
         });
       }
+    }
+
+    if (includeDeriveErrorOnly) {
+      deriveErrorCountsByKey.forEach((deriveErrorResponseCount, key) => {
+        if (mergedMap.has(key)) {
+          return;
+        }
+
+        const [deriveUnitName, variableId] = key.split('::');
+        if (!filterFn({
+          unitName: deriveUnitName,
+          variableId,
+          responseCount: String(deriveErrorResponseCount)
+        })) {
+          return;
+        }
+
+        mergedMap.set(key, {
+          unitName: deriveUnitName,
+          variableId,
+          responseCount: 0,
+          deriveErrorResponseCount,
+          isDerived: derivedVariableSets.get(deriveUnitName?.toUpperCase())?.has(variableId) ?? false,
+          coderTrainingRequired: trainingRequiredSets.get(deriveUnitName?.toUpperCase())?.has(variableId) ?? false
+        });
+      });
     }
 
     const result = Array.from(mergedMap.values());

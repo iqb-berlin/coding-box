@@ -1,8 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { createHash } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Repository, In, IsNull, Not
+  Repository, In, IsNull, Not, Brackets
 } from 'typeorm';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -19,7 +18,6 @@ import User from '../../entities/user.entity';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
-import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingJobService } from './coding-job.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
@@ -34,6 +32,14 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import type { CaseSelectionMode, ReferenceMode } from '../../entities/coder-training.entity';
+import {
+  DERIVE_ERROR_STATUS,
+  MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+} from '../../utils/manual-coding-candidate.util';
+import {
+  buildAggregationGroups,
+  deduplicateManualCodingResponses
+} from './aggregation-metrics.util';
 
 interface CoderTrainingResponse {
   responseId: number;
@@ -81,6 +87,13 @@ interface CoderTrainingWithJobs {
 }
 
 export type TrainingResponseIdsMap = Record<string, number[]>;
+
+type TrainingVariableConfig = {
+  variableId: string;
+  unitId: string;
+  sampleCount: number;
+  includeDeriveError?: boolean;
+};
 
 type DiscussionSource = 'manual' | 'auto_agreement' | null;
 
@@ -424,6 +437,218 @@ export class CoderTrainingService {
     });
 
     return discussionResults > 0;
+  }
+
+  private makeTrainingVariableKey(unitName: string, variableId: string): string {
+    return `${unitName}::${variableId}`;
+  }
+
+  private getValidatedBundleIds(
+    assignedVariableBundles: JobDefinitionVariableBundle[] = []
+  ): number[] {
+    const invalidBundleIds = assignedVariableBundles
+      .map(bundle => bundle?.id)
+      .filter(id => !Number.isInteger(id));
+
+    if (invalidBundleIds.length > 0) {
+      throw new BadRequestException(
+        `Invalid variable bundle IDs: ${invalidBundleIds.map(id => String(id)).join(', ')}`
+      );
+    }
+
+    return assignedVariableBundles.map(bundle => bundle.id);
+  }
+
+  private async getWorkspaceVariableBundlesById(
+    workspaceId: number,
+    bundleIds: number[]
+  ): Promise<Map<number, VariableBundle>> {
+    const uniqueBundleIds = Array.from(new Set(bundleIds));
+    if (uniqueBundleIds.length === 0) {
+      return new Map();
+    }
+
+    const variableBundles = await this.variableBundleRepository.find({
+      where: {
+        id: In(uniqueBundleIds),
+        workspace_id: workspaceId
+      }
+    });
+    const variableBundlesById = new Map(variableBundles.map(bundle => [bundle.id, bundle]));
+    const missingBundleIds = uniqueBundleIds.filter(id => !variableBundlesById.has(id));
+
+    if (missingBundleIds.length > 0) {
+      throw new BadRequestException(
+        `Unknown variable bundle IDs for workspace ${workspaceId}: ${missingBundleIds.join(', ')}`
+      );
+    }
+
+    return variableBundlesById;
+  }
+
+  private async resolveBundleVariableSelections(
+    workspaceId: number,
+    assignedVariableBundles: JobDefinitionVariableBundle[] = []
+  ): Promise<JobDefinitionVariable[]> {
+    const bundleIds = this.getValidatedBundleIds(assignedVariableBundles);
+    const fetchedBundleById = await this.getWorkspaceVariableBundlesById(workspaceId, bundleIds);
+    const variablesByKey = new Map<string, JobDefinitionVariable>();
+
+    const addBundleVariable = (
+      variable: JobDefinitionVariable,
+      bundleSampleCount?: number
+    ) => {
+      if (!variable.unitName || !variable.variableId) {
+        return;
+      }
+
+      const key = this.makeTrainingVariableKey(variable.unitName, variable.variableId);
+      const existing = variablesByKey.get(key);
+      variablesByKey.set(key, {
+        unitName: variable.unitName,
+        variableId: variable.variableId,
+        sampleCount: existing?.sampleCount || variable.sampleCount || bundleSampleCount || 10,
+        includeDeriveError: existing?.includeDeriveError === true || variable.includeDeriveError === true ?
+          true :
+          undefined
+      });
+    };
+
+    assignedVariableBundles.forEach(bundle => {
+      const configuredBundleVariablesByKey = new Map(
+        (bundle.variables || []).map(variable => [
+          this.makeTrainingVariableKey(variable.unitName, variable.variableId),
+          variable
+        ])
+      );
+      const bundleVariables = fetchedBundleById.get(bundle.id)?.variables || [];
+      bundleVariables.forEach(variable => {
+        const configuredVariable = configuredBundleVariablesByKey.get(
+          this.makeTrainingVariableKey(variable.unitName, variable.variableId)
+        );
+        addBundleVariable({
+          unitName: variable.unitName,
+          variableId: variable.variableId,
+          sampleCount: configuredVariable?.sampleCount,
+          includeDeriveError: configuredVariable?.includeDeriveError
+        }, bundle.sampleCount);
+      });
+    });
+
+    return Array.from(variablesByKey.values());
+  }
+
+  private async buildTrainingVariableSelections(
+    workspaceId: number,
+    variableConfigs: TrainingVariableConfig[] = [],
+    assignedVariables: JobDefinitionVariable[] = [],
+    assignedVariableBundles: JobDefinitionVariableBundle[] = []
+  ): Promise<JobDefinitionVariable[]> {
+    const bundleVariables = await this.resolveBundleVariableSelections(workspaceId, assignedVariableBundles);
+    const fallbackVariables = [...assignedVariables, ...bundleVariables];
+    const assignedVariablesByKey = new Map<string, JobDefinitionVariable>();
+    fallbackVariables.forEach(variable => {
+      assignedVariablesByKey.set(
+        this.makeTrainingVariableKey(variable.unitName, variable.variableId),
+        variable
+      );
+    });
+
+    const selectionsByKey = new Map<string, JobDefinitionVariable>();
+    variableConfigs.forEach(config => {
+      const key = this.makeTrainingVariableKey(config.unitId, config.variableId);
+      const assignedVariable = assignedVariablesByKey.get(key);
+      selectionsByKey.set(key, {
+        unitName: config.unitId,
+        variableId: config.variableId,
+        sampleCount: config.sampleCount || assignedVariable?.sampleCount || 10,
+        includeDeriveError: config.includeDeriveError === true || assignedVariable?.includeDeriveError === true ?
+          true :
+          undefined
+      });
+    });
+
+    fallbackVariables.forEach(variable => {
+      const key = this.makeTrainingVariableKey(variable.unitName, variable.variableId);
+      if (!selectionsByKey.has(key)) {
+        selectionsByKey.set(key, {
+          unitName: variable.unitName,
+          variableId: variable.variableId,
+          sampleCount: variable.sampleCount || 10,
+          includeDeriveError: variable.includeDeriveError === true ? true : undefined
+        });
+      }
+    });
+
+    return Array.from(selectionsByKey.values());
+  }
+
+  private mapTrainingVariableSelectionsToConfigs(
+    variables: JobDefinitionVariable[] = []
+  ): TrainingVariableConfig[] {
+    return variables.map(variable => ({
+      variableId: variable.variableId,
+      unitId: variable.unitName,
+      sampleCount: variable.sampleCount || 10,
+      includeDeriveError: variable.includeDeriveError === true ? true : undefined
+    }));
+  }
+
+  private mapTrainingBundles(
+    bundles: CoderTrainingBundle[] = [],
+    variables: JobDefinitionVariable[] = []
+  ): JobDefinitionVariableBundle[] {
+    const variablesByKey = new Map(
+      variables.map(variable => [
+        this.makeTrainingVariableKey(variable.unitName, variable.variableId),
+        variable
+      ])
+    );
+
+    return bundles.map(bundle => ({
+      id: bundle.variable_bundle_id,
+      name: bundle.bundle?.name || '',
+      sampleCount: bundle.sample_count || 10,
+      caseOrderingMode: bundle.case_ordering_mode ?? undefined,
+      variables: bundle.bundle?.variables?.map(variable => {
+        const savedVariable = variablesByKey.get(
+          this.makeTrainingVariableKey(variable.unitName, variable.variableId)
+        );
+        return {
+          unitName: variable.unitName,
+          variableId: variable.variableId,
+          sampleCount: savedVariable?.sampleCount ?? bundle.sample_count ?? 10,
+          includeDeriveError: savedVariable?.includeDeriveError === true ? true : undefined
+        };
+      })
+    }));
+  }
+
+  private mapTrainingVariables(
+    variables: CoderTrainingVariable[] = []
+  ): JobDefinitionVariable[] {
+    return variables.map(variable => ({
+      variableId: variable.variable_id,
+      unitName: variable.unit_name,
+      sampleCount: variable.sample_count || 10,
+      includeDeriveError: variable.include_derive_error === true ? true : undefined
+    }));
+  }
+
+  private getBundleVariableKeys(bundles: CoderTrainingBundle[] = []): Set<string> {
+    return new Set(
+      bundles.flatMap(bundle => bundle.bundle?.variables || [])
+        .map(variable => this.makeTrainingVariableKey(variable.unitName, variable.variableId))
+    );
+  }
+
+  private getTrainingVariablesByKey(
+    variables: CoderTrainingVariable[] = []
+  ): Map<string, CoderTrainingVariable> {
+    return new Map(variables.map(variable => [
+      this.makeTrainingVariableKey(variable.unit_name, variable.variable_id),
+      variable
+    ]));
   }
 
   private mapDisplayCodeAndScore(
@@ -947,7 +1172,7 @@ export class CoderTrainingService {
   async generateCoderTrainingPackages(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    variableConfigs: TrainingVariableConfig[],
     options?: {
       caseSelectionMode?: CaseSelectionMode;
       referenceTrainingIds?: number[];
@@ -971,13 +1196,12 @@ export class CoderTrainingService {
     const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
     this.logger.log(`Aggregation threshold: ${aggregationThreshold}, matching flags: ${matchingFlags.join(', ')}`);
 
-    // Build derived variable lookup to skip aggregation for derived vars
+    // Build derived variable lookup for the shared aggregation logic.
     const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
     const derivedVariableSets = new Map<string, Set<string>>();
     derivedVariableMap.forEach((vars, unitNameKey) => {
       derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
     });
-    const isDerivedVariable = (unitName: string, variableId: string): boolean => derivedVariableSets.get(unitName.toUpperCase())?.has(variableId) ?? false;
 
     // Pre-sample responses for each variable configuration to ensure consistency across all coders
     const sampledResponsesByConfig: Map<string, CoderTrainingResponse[]> = new Map();
@@ -987,6 +1211,7 @@ export class CoderTrainingService {
       const unitId = config.unitId;
       const sampleCount = config.sampleCount;
       const configKey = `${unitId}:${variableId}`;
+      const includeDeriveError = config.includeDeriveError === true;
 
       this.logger.log(`Querying incomplete responses for unit ${unitId}, variable ${variableId}`);
 
@@ -999,12 +1224,16 @@ export class CoderTrainingService {
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.status_v1 IN (:...statuses)', {
-          statuses: [
-            statusStringToNumber('CODING_INCOMPLETE'),
-            statusStringToNumber('INTENDED_INCOMPLETE')
-          ]
-        })
+        .andWhere(includeDeriveError ?
+          new Brackets(qb => {
+            qb.where('response.status_v1 IN (:...statuses)', {
+              statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+            }).orWhere('response.status_v1 = :deriveErrorStatus', {
+              deriveErrorStatus: DERIVE_ERROR_STATUS
+            });
+          }) :
+          'response.status_v1 IN (:...statuses)',
+        { statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES })
         .andWhere('response.variableid = :variableId', { variableId })
         .andWhere('response.status_v2 IS NULL')
         .andWhere('(unit.alias = :unitId OR unit.name = :unitId)', { unitId })
@@ -1083,52 +1312,30 @@ export class CoderTrainingService {
         }
       }
 
-      // De-duplicate identical responses per person/unit/variable/value (keep lowest responseId).
-      const dedupedByPersonValue = new Map<string, CoderTrainingResponse>();
-      for (const response of transformedResponses) {
-        const valueHash = createHash('sha1').update(response.value || '').digest('hex');
-        const key = `${response.personLogin}::${response.personCode}::${response.personGroup}::${response.unitName}::${response.variableId}::${valueHash}`;
-        const existing = dedupedByPersonValue.get(key);
-        if (!existing || response.responseId < existing.responseId) {
-          dedupedByPersonValue.set(key, response);
-        }
+      const dedupedResponses = deduplicateManualCodingResponses(transformedResponses);
+      if (dedupedResponses.length !== transformedResponses.length) {
+        this.logger.debug(`Removed ${transformedResponses.length - dedupedResponses.length} duplicate responses for unit ${unitId}, variable ${variableId}.`);
       }
-      if (dedupedByPersonValue.size !== transformedResponses.length) {
-        this.logger.debug(`Removed ${transformedResponses.length - dedupedByPersonValue.size} duplicate responses for unit ${unitId}, variable ${variableId}.`);
-      }
-      transformedResponses = Array.from(dedupedByPersonValue.values());
+      transformedResponses = dedupedResponses;
 
-      // Apply aggregation grouping: if threshold is set, keep only 1 representative per value group.
-      // Derived variables have null/empty values — skip aggregation to avoid collapsing all responses into 1 group.
-      const isDerived = isDerivedVariable(unitId, variableId);
+      // Apply the same aggregation grouping used by availability analysis.
       let responsesForSampling: CoderTrainingResponse[];
-      if (!isDerived && aggregationThreshold !== null) {
-        // Build slim-compatible objects for aggregation
-        const slimResponses = transformedResponses.map(r => ({
-          id: r.responseId,
-          variableid: r.variableId,
-          value: r.value,
-          unitName: r.unitName,
-          unitAlias: r.unitAlias,
-          bookletName: r.bookletName,
-          personLogin: r.personLogin,
-          personCode: r.personCode,
-          personGroup: r.personGroup
-        }));
-        const aggregatedGroups = this.codingJobService.aggregateResponsesByValue(slimResponses, matchingFlags);
+      if (aggregationThreshold !== null) {
+        const aggregatedGroups = buildAggregationGroups(
+          transformedResponses,
+          matchingFlags,
+          aggregationThreshold,
+          derivedVariableSets
+        );
         responsesForSampling = [];
         for (const group of aggregatedGroups) {
           if (group.responses.length >= aggregationThreshold) {
-            // Keep only 1 representative (lowest id first)
-            const representative = group.responses.reduce((a, b) => (a.id < b.id ? a : b));
-            const orig = transformedResponses.find(r => r.responseId === representative.id);
-            if (orig) responsesForSampling.push(orig);
+            const representative = group.responses.reduce((a, b) => (
+              a.responseId < b.responseId ? a : b
+            ));
+            responsesForSampling.push(representative);
           } else {
-            // Below threshold — all responses are kept individually
-            for (const slimR of group.responses) {
-              const orig = transformedResponses.find(r => r.responseId === slimR.id);
-              if (orig) responsesForSampling.push(orig);
-            }
+            responsesForSampling.push(...group.responses);
           }
         }
         this.logger.log(
@@ -1183,7 +1390,7 @@ export class CoderTrainingService {
   async createCoderTrainingJobs(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    variableConfigs: TrainingVariableConfig[],
     trainingLabel: string,
     missingsProfileId?: number,
     assignedVariables?: JobDefinitionVariable[],
@@ -1204,6 +1411,13 @@ export class CoderTrainingService {
         workspaceId,
         missingsProfileId
       );
+      const trainingVariableSelections = await this.buildTrainingVariableSelections(
+        workspaceId,
+        variableConfigs,
+        assignedVariables || [],
+        assignedVariableBundles || []
+      );
+      const trainingVariableConfigs = this.mapTrainingVariableSelectionsToConfigs(trainingVariableSelections);
 
       const coderTraining = new CoderTraining();
       coderTraining.workspace_id = workspaceId;
@@ -1219,16 +1433,15 @@ export class CoderTrainingService {
       const savedTraining = await this.coderTrainingRepository.save(coderTraining);
       const trainingId = savedTraining.id;
 
-      // Save assigned variables
-      if (assignedVariables) {
-        for (const variable of assignedVariables) {
-          const trainingVariable = new CoderTrainingVariable();
-          trainingVariable.coder_training_id = trainingId;
-          trainingVariable.variable_id = variable.variableId;
-          trainingVariable.unit_name = variable.unitName;
-          trainingVariable.sample_count = variable.sampleCount || 10;
-          await this.coderTrainingVariableRepository.save(trainingVariable);
-        }
+      // Save selected variables, including variables that came from bundles.
+      for (const variable of trainingVariableSelections) {
+        const trainingVariable = new CoderTrainingVariable();
+        trainingVariable.coder_training_id = trainingId;
+        trainingVariable.variable_id = variable.variableId;
+        trainingVariable.unit_name = variable.unitName;
+        trainingVariable.sample_count = variable.sampleCount || 10;
+        trainingVariable.include_derive_error = variable.includeDeriveError === true;
+        await this.coderTrainingVariableRepository.save(trainingVariable);
       }
 
       // Save assigned bundles
@@ -1253,7 +1466,7 @@ export class CoderTrainingService {
 
       this.logger.log(`Created coder training ${trainingId} with label '${trainingLabel}' and configuration`);
 
-      const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs, {
+      const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, trainingVariableConfigs, {
         caseSelectionMode: caseSelectionMode ?? 'oldest_first',
         referenceTrainingIds,
         referenceMode
@@ -1264,12 +1477,10 @@ export class CoderTrainingService {
       const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating'>();
       this.logger.log(`Building bundle maps for ${assignedVariableBundles?.length || 0} bundles`);
       if (assignedVariableBundles && assignedVariableBundles.length > 0) {
-        const bundleIds = assignedVariableBundles.map(b => b.id);
+        const bundleIds = this.getValidatedBundleIds(assignedVariableBundles);
         if (bundleIds.length > 0) {
-          const fetchedBundles = await this.variableBundleRepository.find({
-            where: { id: In(bundleIds) }
-          });
-          for (const bundle of fetchedBundles) {
+          const fetchedBundlesById = await this.getWorkspaceVariableBundlesById(workspaceId, bundleIds);
+          for (const bundle of fetchedBundlesById.values()) {
             // Store the bundle's sorting mode (if set, otherwise null)
             const bundleConfig = assignedVariableBundles.find(b => b.id === bundle.id);
             const mode = bundleConfig?.caseOrderingMode || null;
@@ -1435,31 +1646,49 @@ export class CoderTrainingService {
       order: { created_at: 'DESC' }
     });
 
-    return trainings.map(training => ({
-      id: training.id,
-      workspace_id: training.workspace_id,
-      label: training.label,
-      created_at: training.created_at,
-      updated_at: training.updated_at,
-      jobsCount: training.codingJobs?.length || 0,
-      case_ordering_mode: training.case_ordering_mode,
-      case_selection_mode: training.case_selection_mode,
-      reference_training_ids: training.reference_training_ids ?? undefined,
-      reference_mode: training.reference_mode ?? undefined,
-      suppress_general_instructions: training.suppress_general_instructions,
-      assigned_variables: training.variables?.map(v => ({
-        variableId: v.variable_id,
-        unitName: v.unit_name,
-        sampleCount: v.sample_count
-      })),
-      assigned_variable_bundles: training.bundles?.map(b => ({
-        id: b.variable_bundle_id,
-        name: b.bundle?.name || 'Unknown Bundle',
-        sampleCount: b.sample_count,
-        caseOrderingMode: b.case_ordering_mode
-      })),
-      assigned_coders: training.coders?.map(c => c.user_id)
-    }));
+    return trainings.map(training => {
+      const bundleVariableKeys = this.getBundleVariableKeys(training.bundles || []);
+      const trainingVariablesByKey = this.getTrainingVariablesByKey(training.variables || []);
+
+      return {
+        id: training.id,
+        workspace_id: training.workspace_id,
+        label: training.label,
+        created_at: training.created_at,
+        updated_at: training.updated_at,
+        jobsCount: training.codingJobs?.length || 0,
+        case_ordering_mode: training.case_ordering_mode,
+        case_selection_mode: training.case_selection_mode,
+        reference_training_ids: training.reference_training_ids ?? undefined,
+        reference_mode: training.reference_mode ?? undefined,
+        suppress_general_instructions: training.suppress_general_instructions,
+        assigned_variables: training.variables
+          ?.filter(v => !bundleVariableKeys.has(this.makeTrainingVariableKey(v.unit_name, v.variable_id)))
+          .map(v => ({
+            variableId: v.variable_id,
+            unitName: v.unit_name,
+            sampleCount: v.sample_count,
+            ...(v.include_derive_error === true ? { includeDeriveError: true } : {})
+          })),
+        assigned_variable_bundles: training.bundles?.map(b => ({
+          id: b.variable_bundle_id,
+          name: b.bundle?.name || 'Unknown Bundle',
+          sampleCount: b.sample_count,
+          caseOrderingMode: b.case_ordering_mode,
+          variables: b.bundle?.variables?.map(variable => {
+            const savedVariable = trainingVariablesByKey.get(
+              this.makeTrainingVariableKey(variable.unitName, variable.variableId)
+            );
+            return {
+              ...variable,
+              sampleCount: savedVariable?.sample_count ?? b.sample_count,
+              ...(savedVariable?.include_derive_error === true ? { includeDeriveError: true } : {})
+            };
+          })
+        })),
+        assigned_coders: training.coders?.map(c => c.user_id)
+      };
+    });
   }
 
   async getTrainingCodingComparison(
@@ -1851,7 +2080,7 @@ export class CoderTrainingService {
     trainingId: number,
     trainingLabel: string,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    variableConfigs: TrainingVariableConfig[],
     missingsProfileId?: number,
     assignedVariables?: JobDefinitionVariable[],
     assignedVariableBundles?: JobDefinitionVariableBundle[],
@@ -1870,7 +2099,7 @@ export class CoderTrainingService {
 
       const training = await this.coderTrainingRepository.findOne({
         where: { id: trainingId, workspace_id: workspaceId },
-        relations: ['codingJobs', 'variables', 'bundles', 'coders']
+        relations: ['codingJobs', 'variables', 'bundles', 'bundles.bundle', 'coders']
       });
 
       if (!training) {
@@ -1903,35 +2132,44 @@ export class CoderTrainingService {
       const newCoderIds = selectedCoders.map(c => c.id).sort();
       const codersChanged = JSON.stringify(currentCoderIds) !== JSON.stringify(newCoderIds);
 
-      const currentAssignedVariables: JobDefinitionVariable[] = training.variables?.map(v => ({
-        variableId: v.variable_id,
-        unitName: v.unit_name,
-        sampleCount: v.sample_count || 10
-      })) || [];
+      const currentAssignedVariables = this.mapTrainingVariables(training.variables || []);
 
       const currentCaseOrderingMode = training.case_ordering_mode || 'continuous';
       const newCaseOrderingMode = caseOrderingMode ?? currentCaseOrderingMode;
 
-      const currentAssignedVariableBundles: JobDefinitionVariableBundle[] = training.bundles?.map(b => ({
-        id: b.variable_bundle_id,
-        name: b.bundle?.name || '',
-        sampleCount: b.sample_count || 10,
-        caseOrderingMode: b.case_ordering_mode ?? undefined
-      })) || [];
+      const currentAssignedVariableBundles = this.mapTrainingBundles(
+        training.bundles || [],
+        currentAssignedVariables
+      );
+      const currentTrainingVariables = await this.buildTrainingVariableSelections(
+        workspaceId,
+        [],
+        currentAssignedVariables,
+        currentAssignedVariableBundles
+      );
 
       const effectiveAssignedVariables = assignedVariables ?? currentAssignedVariables;
       const effectiveAssignedVariableBundles = assignedVariableBundles ?? currentAssignedVariableBundles;
+      const effectiveTrainingVariables = await this.buildTrainingVariableSelections(
+        workspaceId,
+        variableConfigs,
+        effectiveAssignedVariables,
+        effectiveAssignedVariableBundles
+      );
+      const effectiveTrainingVariableConfigs = this.mapTrainingVariableSelectionsToConfigs(effectiveTrainingVariables);
 
-      const currentVariables = currentAssignedVariables.map(v => ({
+      const currentVariables = currentTrainingVariables.map(v => ({
         variableId: v.variableId,
         unitName: v.unitName,
-        sampleCount: v.sampleCount || 10
+        sampleCount: v.sampleCount || 10,
+        includeDeriveError: v.includeDeriveError === true
       })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName));
 
-      const newVariables = effectiveAssignedVariables.map(v => ({
+      const newVariables = effectiveTrainingVariables.map(v => ({
         variableId: v.variableId,
         unitName: v.unitName,
-        sampleCount: v.sampleCount || 10
+        sampleCount: v.sampleCount || 10,
+        includeDeriveError: v.includeDeriveError === true
       })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName));
 
       const variablesChanged = JSON.stringify(currentVariables) !== JSON.stringify(newVariables);
@@ -2010,12 +2248,13 @@ export class CoderTrainingService {
         await this.coderTrainingCoderRepository.delete({ coder_training_id: trainingId });
 
         // Save new configuration relations
-        for (const variable of effectiveAssignedVariables) {
+        for (const variable of effectiveTrainingVariables) {
           const trainingVariable = new CoderTrainingVariable();
           trainingVariable.coder_training_id = trainingId;
           trainingVariable.variable_id = variable.variableId;
           trainingVariable.unit_name = variable.unitName;
           trainingVariable.sample_count = variable.sampleCount || 10;
+          trainingVariable.include_derive_error = variable.includeDeriveError === true;
           await this.coderTrainingVariableRepository.save(trainingVariable);
         }
 
@@ -2045,7 +2284,7 @@ export class CoderTrainingService {
         }
 
         // Generate and create new jobs
-        const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs, {
+        const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, effectiveTrainingVariableConfigs, {
           caseSelectionMode: newCaseSelectionMode,
           referenceTrainingIds: effectiveReferenceTrainingIds,
           referenceMode: newReferenceMode ?? undefined
@@ -2056,12 +2295,10 @@ export class CoderTrainingService {
         const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating' | null>();
         this.logger.log(`[Update] Building bundle maps for ${effectiveAssignedVariableBundles.length} bundles`);
         if (effectiveAssignedVariableBundles.length > 0) {
-          const bundleIds = effectiveAssignedVariableBundles.map(b => b.id);
+          const bundleIds = this.getValidatedBundleIds(effectiveAssignedVariableBundles);
           if (bundleIds.length > 0) {
-            const fetchedBundles = await this.variableBundleRepository.find({
-              where: { id: In(bundleIds) }
-            });
-            for (const bundle of fetchedBundles) {
+            const fetchedBundlesById = await this.getWorkspaceVariableBundlesById(workspaceId, bundleIds);
+            for (const bundle of fetchedBundlesById.values()) {
               // Store the bundle's sorting mode (if set, otherwise null)
               const bundleConfig = effectiveAssignedVariableBundles.find(b => b.id === bundle.id);
               const mode = bundleConfig?.caseOrderingMode ?? null;
