@@ -70,7 +70,7 @@
     "ajv": "^8.18.0",
     "ajv-formats": "^2.1.1",
     "ajv-keywords": "^5.1.0",
-    "axios": "^1.15.0",
+    "axios": "^1.17.0",
     "bull": "^4.16.5",
     "cheerio": "^1.1.0",
     "class-transformer": "^0.5.1",
@@ -98,12 +98,12 @@
     "timers": "^0.1.1",
     "tslib": "^2.3.0",
     "typeorm": "^0.3.27",
-    "uuid": "^9.0.1",
+    "uuid": "^14.0.0",
     "xml2js": "^0.6.2",
     "zone.js": "0.15.0"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "20.3.19",
+    "@angular-devkit/build-angular": "20.3.27",
     "@angular-devkit/core": "20.3.19",
     "@angular-devkit/schematics": "20.3.19",
     "@angular/cli": "~20.3.19",
