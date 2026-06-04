@@ -429,6 +429,14 @@ export class CodingJobBackendService {
     return this.http.post<{ total: number; firstReplayUrl: string }>(url, {}, { headers: this.authHeader });
   }
 
+  prepareCodingJobReview(
+    workspaceId: number,
+    codingJobId: number
+  ): Observable<{ total: number; firstReplayUrl: string }> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/review`;
+    return this.http.get<{ total: number; firstReplayUrl: string }>(url, { headers: this.authHeader });
+  }
+
   getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string,

@@ -20,6 +20,9 @@ describe('WsgCodingJobController', () => {
     assertUserCanAccessCodingJob: jest.Mock;
     assertUserCanCodeCodingJob: jest.Mock;
   };
+  let codingReplayService: {
+    generateReplayUrlsForItemsBulk: jest.Mock;
+  };
   const req = { user: { id: 5 }, protocol: 'http', get: jest.fn().mockReturnValue('localhost') } as never;
 
   beforeEach(() => {
@@ -41,10 +44,13 @@ describe('WsgCodingJobController', () => {
       assertUserCanAccessCodingJob: jest.fn().mockResolvedValue(undefined),
       assertUserCanCodeCodingJob: jest.fn().mockResolvedValue(undefined)
     };
+    codingReplayService = {
+      generateReplayUrlsForItemsBulk: jest.fn().mockResolvedValue([{ replayUrl: 'http://localhost/#/replay/p/u/0/v' }])
+    };
 
     controller = new WsgCodingJobController(
       codingJobService as never,
-      {} as never
+      codingReplayService as never
     );
   });
 
@@ -70,6 +76,28 @@ describe('WsgCodingJobController', () => {
     expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(123, 47, 5);
     expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
     expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+  });
+
+  it('prepares read-only reviews with management access and without changing job state', async () => {
+    codingJobService.getCodingJobUnits.mockResolvedValue([{
+      unitName: 'UNIT',
+      variableId: 'VAR'
+    }]);
+
+    await expect(controller.prepareCodingJobReview(47, 123, req)).resolves.toEqual({
+      total: 1,
+      firstReplayUrl: 'http://localhost/#/replay/p/u/0/v'
+    });
+
+    expect(codingJobService.assertUserCanAccessCodingJob).toHaveBeenCalledWith(123, 47, 5);
+    expect(codingJobService.assertUserCanCodeCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.getCodingJobUnits).toHaveBeenCalledWith(123, false);
+    expect(codingReplayService.generateReplayUrlsForItemsBulk).toHaveBeenCalledWith(
+      47,
+      [{ unitName: 'UNIT', variableId: 'VAR' }],
+      'http://localhost'
+    );
   });
 
   it('uses coding access for saving coding progress', async () => {

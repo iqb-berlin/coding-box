@@ -179,6 +179,19 @@
                   <span>Ergebnisse</span>
                 </button>
               }
+              @case ('review') {
+                <button
+                  mat-stroked-button
+                  type="button"
+                  class="primary-row-action"
+                  color="primary"
+                  (click)="openCodingJobReview(element)"
+                  [attr.aria-label]="getJobActionAriaLabel('review', element)"
+                >
+                  <mat-icon>visibility</mat-icon>
+                  <span>Review öffnen</span>
+                </button>
+              }
               @case ('notAssigned') {
                 <span
                   class="primary-row-action-tooltip-wrapper"
@@ -231,7 +244,9 @@
             <mat-menu #jobActionsMenu="matMenu">
               @if (
                 canStartCodingJob(element) &&
-                getPrimaryJobAction(element) !== 'start'
+                getPrimaryJobAction(element) !== 'start' &&
+                element.status !== 'completed' &&
+                element.status !== 'results_applied'
               ) {
                 <button
                   mat-menu-item
@@ -239,8 +254,22 @@
                   (click)="startCodingJob(element)"
                   [attr.aria-label]="getJobActionAriaLabel('start', element)"
                 >
-                  <mat-icon>{{ getStartCodingJobIcon(element) }}</mat-icon>
-                  <span>{{ getStartCodingJobLabel(element) }}</span>
+                  <mat-icon>{{ getStartCodingJobIcon() }}</mat-icon>
+                  <span>{{ getStartCodingJobLabel() }}</span>
+                </button>
+              }
+              @if (
+                canReviewCodingJob(element) &&
+                getPrimaryJobAction(element) !== 'review'
+              ) {
+                <button
+                  mat-menu-item
+                  type="button"
+                  (click)="openCodingJobReview(element)"
+                  [attr.aria-label]="getJobActionAriaLabel('review', element)"
+                >
+                  <mat-icon>visibility</mat-icon>
+                  <span>Review öffnen</span>
                 </button>
               }
               @if (getPrimaryJobAction(element) !== 'results') {

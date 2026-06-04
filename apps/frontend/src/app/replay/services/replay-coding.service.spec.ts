@@ -251,6 +251,7 @@ describe('ReplayCodingService', () => {
       service.isResumingJob = true;
       service.isCodingJobFinalized = true;
       service.isCompletedJobReview = true;
+      service.isReviewMode = true;
       service.hasSaveError = true;
       service.lastSaveError = 'failed';
       service.showScore = true;
@@ -263,6 +264,7 @@ describe('ReplayCodingService', () => {
       expect(service.isResumingJob).toBe(false);
       expect(service.isCodingJobFinalized).toBe(false);
       expect(service.isCompletedJobReview).toBe(false);
+      expect(service.isReviewMode).toBe(false);
       expect(service.hasSaveError).toBe(false);
       expect(service.lastSaveError).toBeNull();
       expect(service.showScore).toBe(false);
@@ -325,6 +327,43 @@ describe('ReplayCodingService', () => {
           notes: 'note'
         }
       );
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('read-only review mode', () => {
+    beforeEach(() => {
+      service.isReviewMode = true;
+      service.codingJobId = 100;
+    });
+
+    it('does not update status or persist coding changes', async () => {
+      await service.updateCodingJobStatus(1, 100, 'active');
+      await service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'l' });
+      await service.saveNotes(1, 'p1', 'u1', 'v1', 'note');
+      await service.saveCodingJobComment(1, 'comment');
+      await service.pauseCodingJob(1, 100);
+      await service.resumeCodingJob(1, 100);
+      await service.submitCodingJob(1, 100);
+
+      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.saveCodingNotes).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.updateCodingJobKeepalive).not.toHaveBeenCalled();
+    });
+
+    it('ignores code selections without changing local progress', async () => {
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+
+      await expect(service.handleCodeSelected(
+        { variableId: 'v1', code: { id: 1, label: 'one', score: 1 } as never },
+        'p1',
+        'u1',
+        1,
+        null
+      )).resolves.toBeNull();
+
+      expect(service.selectedCodes.has(key)).toBe(false);
       expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
     });
   });

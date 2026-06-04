@@ -41,6 +41,7 @@ export class ReplayCodingService {
   isResumingJob: boolean = false;
   isCodingJobFinalized: boolean = false;
   isCompletedJobReview: boolean = false;
+  isReviewMode: boolean = false;
   hasSaveError: boolean = false;
   lastSaveError: string | null = null;
   private failedSaveKeys = new Set<string>();
@@ -67,6 +68,7 @@ export class ReplayCodingService {
     this.isResumingJob = false;
     this.isCodingJobFinalized = false;
     this.isCompletedJobReview = false;
+    this.isReviewMode = false;
     this.hasSaveError = false;
     this.lastSaveError = null;
     this.failedSaveKeys.clear();
@@ -88,6 +90,7 @@ export class ReplayCodingService {
   }
 
   async updateCodingJobStatus(workspaceId: number, jobId: number, status: 'active' | 'paused' | 'completed' | 'open') {
+    if (this.isReviewMode) return Promise.resolve(undefined);
     return firstValueFrom(
       this.codingJobBackendService.updateCodingJob(workspaceId, jobId, { status }, ...this.authTokenArg)
     );
@@ -183,6 +186,7 @@ export class ReplayCodingService {
     selectedCode: SavedCode | null
   ): Promise<void> {
     if (!jobId || !workspaceId) return;
+    if (this.isReviewMode) return;
 
     const saveKey = this.generateCompositeKey(testPerson, unitId, variableId);
     await this.enqueueRowMutation(saveKey, async () => {
@@ -240,6 +244,7 @@ export class ReplayCodingService {
 
   async saveAllCodingProgress(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
+    if (this.isReviewMode) return;
 
     const savePromises: Promise<void>[] = [];
 
@@ -264,6 +269,8 @@ export class ReplayCodingService {
     workspaceId: number,
     unitsData: UnitsReplay | null
   ): Promise<SavedCode | null> {
+    if (this.isReviewMode) return null;
+
     const compositeKey = this.generateCompositeKey(testPerson, unitId, event.variableId);
     const revision = this.nextSelectionRevision(compositeKey);
 
@@ -420,6 +427,7 @@ export class ReplayCodingService {
     notes: string
   ): Promise<void> {
     if (!this.codingJobId || !workspaceId) return;
+    if (this.isReviewMode) return;
 
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     await this.enqueueRowMutation(compositeKey, async () => {
@@ -455,6 +463,7 @@ export class ReplayCodingService {
 
   async saveCodingJobComment(workspaceId: number, comment: string): Promise<void> {
     if (!this.codingJobId || !workspaceId) return;
+    if (this.isReviewMode) return;
 
     try {
       this.codingJobComment = comment;
@@ -468,6 +477,7 @@ export class ReplayCodingService {
 
   async pauseCodingJob(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
+    if (this.isReviewMode) return;
     if (this.isCodingJobCompleted || this.isCompletedJobReview || this.isCodingJobFinalized) return;
     this.isPausingJob = true;
 
@@ -482,6 +492,7 @@ export class ReplayCodingService {
 
   pauseCodingJobOnUnload(workspaceId: number, jobId: number): void {
     if (!jobId || !workspaceId) return;
+    if (this.isReviewMode) return;
     if (this.isCodingJobCompleted || this.isCompletedJobReview || this.isCodingJobFinalized) return;
     this.codingJobBackendService.updateCodingJobKeepalive(
       workspaceId,
@@ -493,6 +504,7 @@ export class ReplayCodingService {
 
   async resumeCodingJob(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
+    if (this.isReviewMode) return;
     this.isResumingJob = true;
 
     try {
@@ -506,6 +518,7 @@ export class ReplayCodingService {
 
   async submitCodingJob(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
+    if (this.isReviewMode) return;
 
     if (this.hasSaveError) {
       this.snackBar.open(

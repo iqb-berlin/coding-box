@@ -84,6 +84,28 @@ export class WsgCodingJobController {
     );
   }
 
+  private async prepareCodingJobReplay(
+    workspaceId: number,
+    codingJobId: number,
+    req: Request,
+    onlyOpen: boolean
+  ): Promise<{ total: number; firstReplayUrl: string }> {
+    const items = await this.codingJobService.getCodingJobUnits(codingJobId, onlyOpen);
+
+    if (items.length === 0) {
+      return { total: 0, firstReplayUrl: '' };
+    }
+
+    const serverUrl = `${req.protocol}://${req.get('host') ?? ''}`;
+    const firstItemWithUrl = await this.codingReplayService.generateReplayUrlsForItemsBulk(
+      workspaceId,
+      [items[0]],
+      serverUrl
+    );
+
+    return { total: items.length, firstReplayUrl: firstItemWithUrl[0]?.replayUrl ?? '' };
+  }
+
   @Post('transfer-cases')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
@@ -356,24 +378,50 @@ export class WsgCodingJobController {
     const job = await this.codingJobService.getCodingJob(id, workspaceId);
 
     const onlyOpen = job.codingJob.status === 'open';
-    const items = await this.codingJobService.getCodingJobUnits(id, onlyOpen);
 
     if (!['completed', 'results_applied'].includes(job.codingJob.status)) {
       await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
     }
 
-    if (items.length === 0) {
-      return { total: 0, firstReplayUrl: '' };
+    return this.prepareCodingJobReplay(workspaceId, id, req, onlyOpen);
+  }
+
+  @Get(':id/review')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Prepare a coding job review',
+    description: 'Prepares replay data for read-only review without changing job state'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'Review replay data prepared successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        total: { type: 'number' },
+        firstReplayUrl: { type: 'string' }
+      }
     }
-
-    const serverUrl = `${req.protocol}://${req.get('host') ?? ''}`;
-    const firstItemWithUrl = await this.codingReplayService.generateReplayUrlsForItemsBulk(
-      workspaceId,
-      [items[0]],
-      serverUrl
-    );
-
-    return { total: items.length, firstReplayUrl: firstItemWithUrl[0]?.replayUrl ?? '' };
+  })
+  async prepareCodingJobReview(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<{ total: number; firstReplayUrl: string }> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
+    return this.prepareCodingJobReplay(workspaceId, id, req, false);
   }
 
   @Delete(':id')
