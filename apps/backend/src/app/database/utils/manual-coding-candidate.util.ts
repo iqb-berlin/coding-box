@@ -36,11 +36,16 @@ export function createManualCodingVariableReferences(
   const referencesByKey = new Map<string, ManualCodingVariableReference>();
   variables.forEach(variable => {
     if (variable.unitName && variable.variableId) {
+      const key = toManualCodingVariablePairKey(variable.unitName, variable.variableId);
+      const existing = referencesByKey.get(key);
       referencesByKey.set(
-        toManualCodingVariablePairKey(variable.unitName, variable.variableId),
+        key,
         {
           unitName: variable.unitName,
-          variableId: variable.variableId
+          variableId: variable.variableId,
+          includeDeriveError: existing?.includeDeriveError === true || variable.includeDeriveError === true ?
+            true :
+            undefined
         }
       );
     }
