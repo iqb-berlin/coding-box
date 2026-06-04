@@ -92,7 +92,8 @@ export class WorkspaceCoderTrainingController {
             properties: {
               variableId: { type: 'string' },
               unitId: { type: 'string' },
-              sampleCount: { type: 'number' }
+              sampleCount: { type: 'number' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         }
@@ -139,6 +140,7 @@ export class WorkspaceCoderTrainingController {
                        variableId: string;
                        unitId: string;
                        sampleCount: number;
+                       includeDeriveError?: boolean;
                      }[];
                    }
   ): Promise<
@@ -291,7 +293,8 @@ export class WorkspaceCoderTrainingController {
             properties: {
               variableId: { type: 'string' },
               unitId: { type: 'string' },
-              sampleCount: { type: 'number' }
+              sampleCount: { type: 'number' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -302,7 +305,8 @@ export class WorkspaceCoderTrainingController {
             properties: {
               unitName: { type: 'string' },
               variableId: { type: 'string' },
-              sampleCount: { type: 'number' }
+              sampleCount: { type: 'number' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -362,6 +366,7 @@ export class WorkspaceCoderTrainingController {
                        variableId: string;
                        unitId: string;
                        sampleCount: number;
+                       includeDeriveError?: boolean;
                      }[];
                      assignedVariables?: JobDefinitionVariable[];
                      assignedVariableBundles?: JobDefinitionVariableBundle[];
@@ -666,7 +671,8 @@ export class WorkspaceCoderTrainingController {
             properties: {
               variableId: { type: 'string' },
               unitId: { type: 'string' },
-              sampleCount: { type: 'number' }
+              sampleCount: { type: 'number' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -677,7 +683,8 @@ export class WorkspaceCoderTrainingController {
             properties: {
               unitName: { type: 'string' },
               variableId: { type: 'string' },
-              sampleCount: { type: 'number' }
+              sampleCount: { type: 'number' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -725,6 +732,7 @@ export class WorkspaceCoderTrainingController {
           variableId: string;
           unitId: string;
           sampleCount: number;
+          includeDeriveError?: boolean;
         }[];
         assignedVariables?: JobDefinitionVariable[];
         assignedVariableBundles?: JobDefinitionVariableBundle[];

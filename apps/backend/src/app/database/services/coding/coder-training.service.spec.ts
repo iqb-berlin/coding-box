@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { CoderTrainingService, TrainingResponseIdsMap } from './coder-training.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -150,10 +150,19 @@ describe('CoderTrainingService', () => {
       const selectedCoders = [{ id: 10, name: 'Coder 1' }];
       const variableConfigs = [];
       const trainingLabel = 'Test Training';
-      const assignedVariables = [{ variableId: 'v1', unitName: 'u1', sampleCount: 5 }];
+      const assignedVariables = [{
+        variableId: 'v1',
+        unitName: 'u1',
+        sampleCount: 5,
+        includeDeriveError: true
+      }];
       const assignedVariableBundles = [{ id: 2, name: 'Bundle 1', sampleCount: 20 }];
 
-      mockRepository.find.mockResolvedValue([]); // For responses query
+      mockRepository.find.mockResolvedValue([{
+        id: 2,
+        workspace_id: workspaceId,
+        variables: []
+      }]);
       mockRepository.save.mockResolvedValue({ id: 1 }); // For all saves
 
       await service.createCoderTrainingJobs(
@@ -177,7 +186,8 @@ describe('CoderTrainingService', () => {
         coder_training_id: 1,
         variable_id: 'v1',
         unit_name: 'u1',
-        sample_count: 5
+        sample_count: 5,
+        include_derive_error: true
       }));
 
       // Verify CoderTrainingBundle save
@@ -347,6 +357,104 @@ describe('CoderTrainingService', () => {
 
       generatePackagesSpy.mockRestore();
     });
+
+    it('should generate packages from normalized selections when variable configs are missing bundle variables', async () => {
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages')
+        .mockResolvedValue([]);
+      mockRepository.find.mockResolvedValue([{
+        id: 5,
+        workspace_id: 1,
+        variables: [{ unitName: 'UNIT2', variableId: 'VAR2' }]
+      }]);
+      const assignedVariableBundles = [{
+        id: 5,
+        name: 'Bundle',
+        sampleCount: 4,
+        variables: [{
+          unitName: 'UNIT2',
+          variableId: 'VAR2',
+          includeDeriveError: true
+        }]
+      }];
+
+      await service.createCoderTrainingJobs(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [],
+        'Bundle Training',
+        undefined,
+        [],
+        assignedVariableBundles
+      );
+
+      expect(coderTrainingVariableRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        variable_id: 'VAR2',
+        unit_name: 'UNIT2',
+        sample_count: 4,
+        include_derive_error: true
+      }));
+      expect(generatePackagesSpy).toHaveBeenCalledWith(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [{
+          variableId: 'VAR2',
+          unitId: 'UNIT2',
+          sampleCount: 4,
+          includeDeriveError: true
+        }],
+        {
+          caseSelectionMode: 'oldest_first',
+          referenceTrainingIds: undefined,
+          referenceMode: undefined
+        }
+      );
+
+      generatePackagesSpy.mockRestore();
+    });
+
+    it('should reject variable bundles outside the workspace before creating the training', async () => {
+      mockRepository.find.mockResolvedValue([]);
+      (coderTrainingRepository.save as jest.Mock).mockClear();
+
+      const result = await service.createCoderTrainingJobs(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [],
+        'Invalid Bundle Training',
+        undefined,
+        [],
+        [{ id: 99, name: 'Foreign Bundle', sampleCount: 4 }]
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Unknown variable bundle IDs for workspace 1: 99');
+      expect(mockRepository.find).toHaveBeenCalledWith({
+        where: {
+          id: expect.any(Object),
+          workspace_id: 1
+        }
+      });
+      expect(coderTrainingRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should reject invalid variable bundle ids before creating the training', async () => {
+      (coderTrainingRepository.save as jest.Mock).mockClear();
+
+      const result = await service.createCoderTrainingJobs(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [],
+        'Invalid Bundle Training',
+        undefined,
+        [],
+        [{ id: '99' as unknown as number, name: 'Invalid Bundle', sampleCount: 4 }]
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Invalid variable bundle IDs: 99');
+      expect(mockRepository.find).not.toHaveBeenCalled();
+      expect(coderTrainingRepository.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateCoderTraining', () => {
@@ -370,6 +478,11 @@ describe('CoderTrainingService', () => {
       };
 
       mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.find.mockResolvedValue([{
+        id: 3,
+        workspace_id: workspaceId,
+        variables: []
+      }]);
       mockRepository.save.mockResolvedValue({ id: trainingId });
 
       await service.updateCoderTraining(
@@ -750,6 +863,11 @@ describe('CoderTrainingService', () => {
       };
 
       mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.find.mockResolvedValue([{
+        id: 5,
+        workspace_id: 1,
+        variables: []
+      }]);
       mockRepository.delete.mockClear();
       mockRepository.save.mockClear();
 
@@ -1012,6 +1130,63 @@ describe('CoderTrainingService', () => {
 
       generatePackagesSpy.mockRestore();
     });
+
+    it('should not treat legacy bundle variables as changed when editing without assignment changes', async () => {
+      const existingTraining = {
+        id: 1,
+        workspace_id: 1,
+        label: 'Old Label',
+        case_ordering_mode: 'continuous',
+        case_selection_mode: 'oldest_first',
+        coders: [{ user_id: 10 }],
+        variables: [],
+        bundles: [{
+          variable_bundle_id: 5,
+          sample_count: 4,
+          case_ordering_mode: null,
+          bundle: {
+            id: 5,
+            name: 'Bundle',
+            variables: [{ unitName: 'UNIT2', variableId: 'VAR2' }]
+          }
+        }],
+        codingJobs: [{ id: 100 }]
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingTraining);
+      mockRepository.find.mockResolvedValue([{
+        id: 5,
+        workspace_id: 1,
+        variables: [{ unitName: 'UNIT2', variableId: 'VAR2' }]
+      }]);
+      mockRepository.count.mockRejectedValue(new Error('Unchanged legacy bundle variables must not trigger progress checks'));
+      (coderTrainingRepository.save as jest.Mock).mockClear();
+      (coderTrainingCoderRepository.delete as jest.Mock).mockClear();
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages');
+
+      const result = await service.updateCoderTraining(
+        1,
+        1,
+        'Updated Label',
+        [{ id: 10, name: 'Coder 1' }],
+        [{ variableId: 'VAR2', unitId: 'UNIT2', sampleCount: 4 }],
+        undefined,
+        [],
+        [{
+          id: 5,
+          name: 'Bundle',
+          sampleCount: 4,
+          variables: [{ unitName: 'UNIT2', variableId: 'VAR2', sampleCount: 4 }]
+        }]
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockRepository.count).not.toHaveBeenCalled();
+      expect(coderTrainingCoderRepository.delete).not.toHaveBeenCalled();
+      expect(generatePackagesSpy).not.toHaveBeenCalled();
+
+      generatePackagesSpy.mockRestore();
+    });
   });
 
   describe('getCoderTrainings', () => {
@@ -1129,19 +1304,28 @@ describe('CoderTrainingService', () => {
   });
 
   describe('generateCoderTrainingPackages', () => {
-    const makeResponseEntity = (responseId: number) => ({
+    const makeResponseEntity = (
+      responseId: number,
+      overrides: Partial<{
+        value: string | null;
+        unitid: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+      }> = {}
+    ) => ({
       id: responseId,
       variableid: 'var1',
-      value: `value-${responseId}`,
-      unitid: responseId + 100,
+      value: overrides.value ?? `value-${responseId}`,
+      unitid: overrides.unitid ?? responseId + 100,
       unit: {
         alias: 'Alias Unit',
         name: 'Real Unit',
         booklet: {
           person: {
-            login: `person-${responseId}`,
-            code: `${responseId}`,
-            group: 'Group'
+            login: overrides.personLogin ?? `person-${responseId}`,
+            code: overrides.personCode ?? `${responseId}`,
+            group: overrides.personGroup ?? 'Group'
           },
           bookletinfo: {
             name: 'Booklet'
@@ -1240,6 +1424,109 @@ describe('CoderTrainingService', () => {
         statusStringToNumber('INTENDED_INCOMPLETE')
       ]);
       expect(statuses).not.toContain(statusStringToNumber('DERIVE_ERROR'));
+    });
+
+    it('includes DERIVE_ERROR responses in training package sampling when the variable opts in', async () => {
+      const responseQb = mockResponseRepository([]);
+
+      await service.generateCoderTrainingPackages(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [{
+          unitId: 'Alias Unit',
+          variableId: 'var1',
+          sampleCount: 5,
+          includeDeriveError: true
+        }]
+      );
+
+      const bracketCall = responseQb.andWhere.mock.calls.find(
+        ([condition]) => condition instanceof Brackets
+      );
+      expect(bracketCall).toBeDefined();
+
+      const bracketBuilder: Record<string, jest.Mock> = {
+        where: jest.fn().mockReturnThis(),
+        orWhere: jest.fn().mockReturnThis()
+      };
+      (bracketCall?.[0] as Brackets).whereFactory(bracketBuilder as never);
+
+      expect(bracketBuilder.where).toHaveBeenCalledWith(
+        'response.status_v1 IN (:...statuses)',
+        {
+          statuses: [
+            statusStringToNumber('CODING_INCOMPLETE'),
+            statusStringToNumber('INTENDED_INCOMPLETE')
+          ]
+        }
+      );
+      expect(bracketBuilder.orWhere).toHaveBeenCalledWith(
+        'response.status_v1 = :deriveErrorStatus',
+        { deriveErrorStatus: statusStringToNumber('DERIVE_ERROR') }
+      );
+    });
+
+    it('uses the shared aggregation semantics for empty training responses', async () => {
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(2);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockResponseRepository([
+        makeResponseEntity(1, { value: '' }),
+        makeResponseEntity(2, { value: '' }),
+        makeResponseEntity(3, { value: '[]' }),
+        makeResponseEntity(4, { value: 'same' }),
+        makeResponseEntity(5, { value: 'same' })
+      ]);
+
+      const result = await service.generateCoderTrainingPackages(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [{ unitId: 'Alias Unit', variableId: 'var1', sampleCount: 10 }],
+        { caseSelectionMode: 'random' }
+      );
+
+      expect(result[0].responses.map(response => response.responseId)).toEqual([
+        1,
+        2,
+        3,
+        4
+      ]);
+      expect(mockCodingJobService.aggregateResponsesByValue).not.toHaveBeenCalled();
+    });
+
+    it('deduplicates identical training responses before sampling', async () => {
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+      mockResponseRepository([
+        makeResponseEntity(1, {
+          value: 'same',
+          personLogin: 'person',
+          personCode: 'code',
+          personGroup: 'group'
+        }),
+        makeResponseEntity(2, {
+          value: 'same',
+          personLogin: 'person',
+          personCode: 'code',
+          personGroup: 'group'
+        }),
+        makeResponseEntity(3, {
+          value: 'other',
+          personLogin: 'person',
+          personCode: 'code',
+          personGroup: 'group'
+        })
+      ]);
+
+      const result = await service.generateCoderTrainingPackages(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [{ unitId: 'Alias Unit', variableId: 'var1', sampleCount: 10 }],
+        { caseSelectionMode: 'random' }
+      );
+
+      expect(result[0].responses.map(response => response.responseId)).toEqual([
+        1,
+        3
+      ]);
     });
 
     it('should keep the same referenced cases when the training uses a unit alias', async () => {
