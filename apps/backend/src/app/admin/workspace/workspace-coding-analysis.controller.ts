@@ -200,6 +200,12 @@ export class WorkspaceCodingAnalysisController {
     description: 'Filter variables by coder training requirement',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'includeDeriveErrorOnly',
+    required: false,
+    description: 'Also include variables that only have DERIVE_ERROR responses and expose DERIVE_ERROR-aware case counts',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Manual coding variables retrieved successfully.',
     schema: {
@@ -212,6 +218,10 @@ export class WorkspaceCodingAnalysisController {
           responseCount: {
             type: 'number',
             description: 'Number of responses for this variable'
+          },
+          deriveErrorResponseCount: {
+            type: 'number',
+            description: 'Number of DERIVE_ERROR responses for this variable'
           },
           casesInJobs: {
             type: 'number',
@@ -226,6 +236,14 @@ export class WorkspaceCodingAnalysisController {
             type: 'number',
             description: 'Number of unique coding cases after applying aggregation grouping (1 per duplicate group)'
           },
+          availableCasesWithDeriveError: {
+            type: 'number',
+            description: 'Number of available cases when DERIVE_ERROR is included'
+          },
+          uniqueCasesAfterAggregationWithDeriveError: {
+            type: 'number',
+            description: 'Number of unique coding cases after aggregation when DERIVE_ERROR is included'
+          },
           isDerived: {
             type: 'boolean',
             description: 'Whether this is a derived variable (computed from other variables)'
@@ -237,15 +255,19 @@ export class WorkspaceCodingAnalysisController {
   async getCodingIncompleteVariables(
     @WorkspaceId() workspace_id: number,
       @Query('unitName') unitName?: string,
-      @Query('trainingRequired') trainingRequired?: string
+      @Query('trainingRequired') trainingRequired?: string,
+      @Query('includeDeriveErrorOnly') includeDeriveErrorOnly?: string
   ): Promise<
       {
         unitName: string;
         variableId: string;
         responseCount: number;
+        deriveErrorResponseCount: number;
         casesInJobs: number;
         availableCases: number;
         uniqueCasesAfterAggregation: number;
+        availableCasesWithDeriveError?: number;
+        uniqueCasesAfterAggregationWithDeriveError?: number;
         isDerived: boolean;
       }[]
       > {
@@ -258,7 +280,8 @@ export class WorkspaceCodingAnalysisController {
     return this.codingValidationService.getCodingIncompleteVariables(
       workspace_id,
       unitName,
-      trainingRequiredParam
+      trainingRequiredParam,
+      includeDeriveErrorOnly === 'true'
     );
   }
 
