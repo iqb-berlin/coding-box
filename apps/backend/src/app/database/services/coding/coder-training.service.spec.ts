@@ -331,12 +331,14 @@ describe('CoderTrainingService', () => {
       expect(mockRepository.save).toHaveBeenCalledWith(expect.arrayContaining([
         expect.objectContaining({
           response_id: 101,
+          workspace_id: 1,
           variable_id: 'VAR',
           unit_name: 'UNIT',
           variable_bundle_id: null
         }),
         expect.objectContaining({
           response_id: 202,
+          workspace_id: 1,
           variable_id: 'VAR2',
           unit_name: 'UNIT2',
           variable_bundle_id: 5
@@ -1005,6 +1007,7 @@ describe('CoderTrainingService', () => {
         .map(([arg]) => arg)
         .find(arg => Array.isArray(arg) && arg.every(unit => unit instanceof CodingJobUnit)) as CodingJobUnit[];
       expect(savedUnits.map(unit => unit.response_id)).toEqual([1, 2, 4, 3]);
+      expect(savedUnits.map(unit => unit.workspace_id)).toEqual([1, 1, 1, 1]);
       expect(savedUnits.map(unit => unit.person_group)).toEqual(['group-1', 'group-1', 'group-2', 'group-2']);
 
       generatePackagesSpy.mockRestore();

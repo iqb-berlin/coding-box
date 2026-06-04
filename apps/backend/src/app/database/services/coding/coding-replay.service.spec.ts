@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CodingReplayService } from './coding-replay.service';
 import { ResponseEntity } from '../../entities/response.entity';
+import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CodingListService } from './coding-list.service';
 import * as replayUrlUtil from '../../../utils/replay-url.util';
 
@@ -12,6 +13,17 @@ describe('CodingReplayService', () => {
 
   const mockResponseRepository = {
     findOne: jest.fn()
+  };
+
+  const mockCodingJobUnitQueryBuilder = {
+    innerJoinAndSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    getOne: jest.fn()
+  };
+
+  const mockCodingJobUnitRepository = {
+    createQueryBuilder: jest.fn(() => mockCodingJobUnitQueryBuilder)
   };
 
   const mockCodingListService = {
@@ -27,6 +39,10 @@ describe('CodingReplayService', () => {
           useValue: mockResponseRepository
         },
         {
+          provide: getRepositoryToken(CodingJobUnit),
+          useValue: mockCodingJobUnitRepository
+        },
+        {
           provide: CodingListService,
           useValue: mockCodingListService
         }
@@ -36,6 +52,7 @@ describe('CodingReplayService', () => {
     service = module.get<CodingReplayService>(CodingReplayService);
 
     jest.clearAllMocks();
+    mockCodingJobUnitQueryBuilder.getOne.mockResolvedValue(null);
   });
 
   it('should be defined', () => {
@@ -99,6 +116,7 @@ describe('CodingReplayService', () => {
         variableAnchor: 'var1',
         authToken: 'token123'
       });
+      expect(mockCodingJobUnitRepository.createQueryBuilder).not.toHaveBeenCalled();
     });
 
     it('should throw error when response not found', async () => {
@@ -126,6 +144,120 @@ describe('CodingReplayService', () => {
       await expect(
         service.generateReplayUrlForResponse(1, 1, 'http://example.com', 'token')
       ).rejects.toThrow('Response 1 does not belong to workspace 1');
+      expect(mockCodingJobUnitRepository.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('should use coding job unit metadata when response metadata is incomplete', async () => {
+      const mockResponse = {
+        id: 1,
+        variableid: 'var1',
+        unit: {
+          name: 'unit1',
+          booklet: {
+            person: {
+              workspace_id: 1,
+              login: 'response-user',
+              code: 'response-code',
+              group: 'response-group'
+            },
+            bookletinfo: null
+          }
+        }
+      };
+      const mockCodingJobUnit = {
+        unit_name: 'unit1',
+        variable_id: 'var1',
+        variable_anchor: 'anchor1',
+        booklet_name: 'booklet-from-job-unit',
+        person_login: 'job-user',
+        person_code: 'job-code',
+        person_group: 'job-group'
+      };
+
+      mockResponseRepository.findOne.mockResolvedValue(mockResponse);
+      mockCodingJobUnitQueryBuilder.getOne.mockResolvedValue(mockCodingJobUnit);
+      mockCodingListService.getVariablePageMap.mockResolvedValue(new Map([['var1', '3']]));
+      (replayUrlUtil.generateReplayUrl as jest.Mock).mockReturnValue('http://example.com/replay');
+
+      await service.generateReplayUrlForResponse(1, 1, 'http://example.com', 'token');
+
+      expect(mockCodingJobUnitRepository.createQueryBuilder).toHaveBeenCalledWith('codingJobUnit');
+      expect(mockCodingJobUnitQueryBuilder.innerJoinAndSelect).toHaveBeenCalledWith(
+        'codingJobUnit.coding_job',
+        'codingJob',
+        'codingJob.workspace_id = :workspaceId',
+        { workspaceId: 1 }
+      );
+      expect(mockCodingJobUnitQueryBuilder.where).toHaveBeenCalledWith(
+        'codingJobUnit.response_id = :responseId',
+        { responseId: 1 }
+      );
+      expect(replayUrlUtil.generateReplayUrl).toHaveBeenCalledWith({
+        serverUrl: 'http://example.com',
+        loginName: 'response-user',
+        loginCode: 'response-code',
+        loginGroup: 'response-group',
+        bookletId: 'booklet-from-job-unit',
+        unitId: 'unit1',
+        variablePage: '3',
+        variableAnchor: 'anchor1',
+        authToken: 'token'
+      });
+    });
+
+    it('should use workspace-scoped coding job unit metadata when response has no person relation', async () => {
+      const mockResponse = {
+        id: 1,
+        variableid: 'var1',
+        unit: {
+          name: 'unit1',
+          booklet: {
+            bookletinfo: {
+              name: 'booklet1'
+            }
+          }
+        }
+      };
+      const mockCodingJobUnit = {
+        unit_name: 'unit1',
+        variable_id: 'var1',
+        variable_anchor: 'var1',
+        booklet_name: 'booklet-from-job-unit',
+        person_login: 'job-user',
+        person_code: 'job-code',
+        person_group: 'job-group'
+      };
+
+      mockResponseRepository.findOne.mockResolvedValue(mockResponse);
+      mockCodingJobUnitQueryBuilder.getOne.mockResolvedValue(mockCodingJobUnit);
+      mockCodingListService.getVariablePageMap.mockResolvedValue(new Map());
+      (replayUrlUtil.generateReplayUrl as jest.Mock).mockReturnValue('http://example.com/replay');
+
+      await service.generateReplayUrlForResponse(1, 1, 'http://example.com', 'token');
+
+      expect(replayUrlUtil.generateReplayUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loginName: 'job-user',
+          loginCode: 'job-code',
+          loginGroup: 'job-group',
+          bookletId: 'booklet1'
+        })
+      );
+    });
+
+    it('should throw when neither response nor coding job unit provide enough replay metadata', async () => {
+      mockResponseRepository.findOne.mockResolvedValue({
+        id: 1,
+        variableid: 'var1',
+        unit: {
+          name: 'unit1'
+        }
+      });
+      mockCodingJobUnitQueryBuilder.getOne.mockResolvedValue(null);
+
+      await expect(
+        service.generateReplayUrlForResponse(1, 1, 'http://example.com', 'token')
+      ).rejects.toThrow('Replay metadata for response 1 in workspace 1 not found');
     });
 
     it('should use default page 0 when variable not found in map', async () => {
@@ -154,6 +286,117 @@ describe('CodingReplayService', () => {
       mockResponseRepository.findOne.mockResolvedValue(mockResponse);
       mockCodingListService.getVariablePageMap.mockResolvedValue(mockVariablePageMap);
       (replayUrlUtil.generateReplayUrl as jest.Mock).mockReturnValue(mockReplayUrl);
+
+      await service.generateReplayUrlForResponse(1, 1, 'http://example.com', 'token');
+
+      expect(replayUrlUtil.generateReplayUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variablePage: '0'
+        })
+      );
+    });
+
+    it('should generate replay URL when person code is empty', async () => {
+      const mockResponse = {
+        id: 1,
+        variableid: 'var1',
+        unit: {
+          name: 'unit1',
+          booklet: {
+            person: {
+              workspace_id: 1,
+              login: 'testuser',
+              code: '',
+              group: 'group1'
+            },
+            bookletinfo: {
+              name: 'booklet1'
+            }
+          }
+        }
+      };
+
+      mockResponseRepository.findOne.mockResolvedValue(mockResponse);
+      mockCodingListService.getVariablePageMap.mockResolvedValue(new Map([['var1', '2']]));
+      (replayUrlUtil.generateReplayUrl as jest.Mock).mockReturnValue('http://example.com/replay');
+
+      await service.generateReplayUrlForResponse(1, 1, 'http://example.com', 'token');
+
+      expect(mockCodingJobUnitRepository.createQueryBuilder).not.toHaveBeenCalled();
+      expect(replayUrlUtil.generateReplayUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loginCode: ''
+        })
+      );
+    });
+
+    it('should keep empty response person code and group when fallback metadata is needed', async () => {
+      const mockResponse = {
+        id: 1,
+        variableid: 'var1',
+        unit: {
+          name: 'unit1',
+          booklet: {
+            person: {
+              workspace_id: 1,
+              login: 'testuser',
+              code: '',
+              group: ''
+            },
+            bookletinfo: null
+          }
+        }
+      };
+      const mockCodingJobUnit = {
+        unit_name: 'unit1',
+        variable_id: 'var1',
+        variable_anchor: 'anchor1',
+        booklet_name: 'booklet-from-job-unit',
+        person_login: 'job-user',
+        person_code: 'stale-code',
+        person_group: 'stale-group'
+      };
+
+      mockResponseRepository.findOne.mockResolvedValue(mockResponse);
+      mockCodingJobUnitQueryBuilder.getOne.mockResolvedValue(mockCodingJobUnit);
+      mockCodingListService.getVariablePageMap.mockResolvedValue(new Map([['var1', '2']]));
+      (replayUrlUtil.generateReplayUrl as jest.Mock).mockReturnValue('http://example.com/replay');
+
+      await service.generateReplayUrlForResponse(1, 1, 'http://example.com', 'token');
+
+      expect(replayUrlUtil.generateReplayUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loginName: 'testuser',
+          loginCode: '',
+          loginGroup: '',
+          bookletId: 'booklet-from-job-unit'
+        })
+      );
+    });
+
+    it('should use default page 0 when variable page lookup fails', async () => {
+      const mockResponse = {
+        id: 1,
+        variableid: 'var1',
+        unit: {
+          name: 'unit1',
+          booklet: {
+            person: {
+              workspace_id: 1,
+              login: 'testuser',
+              code: 'code123',
+              group: 'group1'
+            },
+            bookletinfo: {
+              name: 'booklet1'
+            }
+          }
+        }
+      };
+
+      mockResponseRepository.findOne.mockResolvedValue(mockResponse);
+      mockCodingListService.getVariablePageMap.mockRejectedValue(new Error('VOUD unavailable'));
+      (replayUrlUtil.generateReplayUrl as jest.Mock).mockReturnValue('http://example.com/replay');
 
       await service.generateReplayUrlForResponse(1, 1, 'http://example.com', 'token');
 
@@ -304,6 +547,41 @@ describe('CodingReplayService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].replayUrl).toBe('');
+    });
+  });
+
+  describe('generateReplayUrlsForItemsBulk', () => {
+    it('should use variable anchor when generating replay URLs', async () => {
+      const items = [
+        {
+          responseId: 1,
+          unitName: 'unit1',
+          unitAlias: null,
+          variableId: 'var1',
+          variableAnchor: 'anchor1',
+          bookletName: 'booklet1',
+          personLogin: 'user1',
+          personCode: 'code1',
+          personGroup: 'group1'
+        }
+      ];
+
+      mockCodingListService.getVariablePageMap.mockResolvedValue(new Map([['var1', '4']]));
+      (replayUrlUtil.generateReplayUrl as jest.Mock).mockReturnValue('http://example.com/replay?auth=');
+
+      const result = await service.generateReplayUrlsForItemsBulk(
+        1,
+        items,
+        'http://example.com'
+      );
+
+      expect(result[0].replayUrl).toBe('http://example.com/replay');
+      expect(replayUrlUtil.generateReplayUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variablePage: '4',
+          variableAnchor: 'anchor1'
+        })
+      );
     });
   });
 });

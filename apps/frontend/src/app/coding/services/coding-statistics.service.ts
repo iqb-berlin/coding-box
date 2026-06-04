@@ -82,7 +82,10 @@ export class CodingStatisticsService {
     return this.http
       .get<{ replayUrl: string }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/responses/${responseId}/replay-url`,
-      { params }
+      {
+        params,
+        context: suppressGlobalHttpErrorContext()
+      }
     )
       .pipe(
         catchError(() => of({ replayUrl: '' }))
