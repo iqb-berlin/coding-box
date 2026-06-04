@@ -141,7 +141,8 @@ export class CodingResponseQueryService {
 
   async getManualTestPersons(
     workspaceId: number,
-    personIds?: string
+    personIds?: string,
+    codedStatus?: string
   ): Promise<Array<ResponseEntity & { unitname: string }>> {
     this.logger.log(
       `Fetching responses for workspaceId = ${workspaceId} ${personIds ? `and personIds = ${personIds}` : ''
@@ -156,8 +157,20 @@ export class CodingResponseQueryService {
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.status_v1 IN (:...statuses)', {
+        .andWhere('person.consider = :consider', { consider: true });
+
+      if (codedStatus) {
+        const statusNumber = statusStringToNumber(codedStatus);
+        if (statusNumber === null) {
+          this.logger.warn(`Invalid manual coding status filter: ${codedStatus}`);
+          return [];
+        }
+
+        queryBuilder.andWhere('response.status_v1 = :codedStatus', {
+          codedStatus: statusNumber
+        });
+      } else {
+        queryBuilder.andWhere('response.status_v1 IN (:...statuses)', {
           statuses: [
             statusStringToNumber('CODING_INCOMPLETE'),
             statusStringToNumber('INTENDED_INCOMPLETE'),
@@ -165,6 +178,7 @@ export class CodingResponseQueryService {
             statusStringToNumber('CODING_ERROR')
           ]
         });
+      }
 
       if (personIds) {
         const personIdsArray = personIds.split(',').map(id => id.trim()).filter(Boolean);

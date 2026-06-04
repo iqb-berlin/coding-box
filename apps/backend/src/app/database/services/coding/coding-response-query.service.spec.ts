@@ -90,6 +90,8 @@ describe('CodingResponseQueryService', () => {
 
     service = module.get<CodingResponseQueryService>(CodingResponseQueryService);
     jest.clearAllMocks();
+    mockQueryBuilder.getCount.mockResolvedValue(0);
+    mockQueryBuilder.getMany.mockResolvedValue([]);
     mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
       ['Unit1', new Set(['var1', 'var2'])]
     ]));
@@ -171,6 +173,27 @@ describe('CodingResponseQueryService', () => {
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
         `${getEffectiveCodingStatusExpression('v3')} = :status`,
         { status: 9 }
+      );
+    });
+
+    it('should retrieve DERIVE_ERROR responses by status', async () => {
+      const mockResponses = [{ id: 1, variableid: 'var1', status_v1: 4 }];
+
+      (statusConverter.statusStringToNumber as jest.Mock).mockReturnValue(4);
+      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getMany.mockResolvedValue(mockResponses);
+
+      const result = await service.getResponsesByStatus(1, 'DERIVE_ERROR', 'v1', 1, 100);
+
+      expect(result).toEqual({
+        data: mockResponses,
+        total: 1,
+        page: 1,
+        limit: 100
+      });
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 = :status',
+        { status: 4 }
       );
     });
 
@@ -261,6 +284,64 @@ describe('CodingResponseQueryService', () => {
       await expect(
         service.getResponsesByStatus(1, 'CODING_COMPLETE', 'v1', 1, 100)
       ).rejects.toThrow('Could not retrieve responses. Please check the database connection or query.');
+    });
+  });
+
+  describe('getManualTestPersons', () => {
+    const statusNumbers: Record<string, number> = {
+      CODING_INCOMPLETE: 8,
+      INTENDED_INCOMPLETE: 12,
+      CODE_SELECTION_PENDING: 13,
+      CODING_ERROR: 9,
+      DERIVE_ERROR: 4
+    };
+
+    beforeEach(() => {
+      (statusConverter.statusStringToNumber as jest.Mock).mockImplementation(
+        (status: string) => statusNumbers[status] ?? null
+      );
+    });
+
+    it('should keep default manual person statuses compatible', async () => {
+      await service.getManualTestPersons(1);
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 IN (:...statuses)',
+        { statuses: [8, 12, 13, 9] }
+      );
+    });
+
+    it('should filter manual persons by DERIVE_ERROR when requested', async () => {
+      const mockResponses = [{
+        id: 1,
+        status_v1: 4,
+        unit: { name: 'Unit1' }
+      }];
+      mockQueryBuilder.getMany.mockResolvedValue(mockResponses);
+
+      const result = await service.getManualTestPersons(1, '1, 2', 'DERIVE_ERROR');
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 = :codedStatus',
+        { codedStatus: 4 }
+      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'person.id IN (:...personIdsArray)',
+        { personIdsArray: ['1', '2'] }
+      );
+      expect(result).toEqual([
+        {
+          ...mockResponses[0],
+          unitname: 'Unit1'
+        }
+      ]);
+    });
+
+    it('should return no manual persons for invalid status filters', async () => {
+      const result = await service.getManualTestPersons(1, undefined, 'NOPE');
+
+      expect(result).toEqual([]);
+      expect(mockQueryBuilder.getMany).not.toHaveBeenCalled();
     });
   });
 });

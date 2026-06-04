@@ -129,6 +129,21 @@ describe('TestPersonCodingService', () => {
       req.flush(mockResponse);
     });
 
+    it('should include codedStatus parameter when provided', () => {
+      const mockResponse = [{ id: 1, name: 'Test Person 1' }];
+
+      service.getManualTestPersons(mockWorkspaceId, undefined, 'DERIVE_ERROR').subscribe(response => {
+        expect(response).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/manual` &&
+        request.params.get('codedStatus') === 'DERIVE_ERROR'
+      ));
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+    });
+
     it('should handle errors and return empty array', () => {
       service.getManualTestPersons(mockWorkspaceId).subscribe(response => {
         expect(response).toEqual([]);
