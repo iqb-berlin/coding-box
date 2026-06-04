@@ -117,6 +117,29 @@ describe('CodingJobDefinitionsComponent', () => {
     expect(fixture.nativeElement.querySelector('.empty-state')).toBeTruthy();
   });
 
+  it('keeps the create action only in the empty state when no definitions exist', () => {
+    component.isLoading = false;
+    component.jobDefinitions = [];
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.header-actions > button')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.empty-state button')).toBeTruthy();
+
+    component.jobDefinitions = [
+      {
+        id: 1,
+        status: 'draft',
+        assignedVariables: [],
+        assignedVariableBundles: [],
+        assignedCoders: []
+      }
+    ];
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.header-actions > button')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.empty-state')).toBeNull();
+  });
+
   it('separates delete from regular definition actions', async () => {
     component.isLoading = false;
     component.selectionMode = false;

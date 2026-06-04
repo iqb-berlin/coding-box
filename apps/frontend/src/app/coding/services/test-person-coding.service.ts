@@ -194,6 +194,11 @@ export interface AppliedResultsOverview {
   statusTotalIncompleteResponses?: number;
   coveredSourceVariableCount?: number;
   coveredSourceResponseCount?: number;
+  deriveErrorTotalResponses?: number;
+  deriveErrorAppliedResponses?: number;
+  deriveErrorRemainingResponses?: number;
+  deriveErrorRawTotalResponses?: number;
+  deriveErrorRawAppliedResponses?: number;
 }
 
 @Injectable({

@@ -27,10 +27,7 @@ describe('MyCodingJobsComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
-        MyCodingJobsComponent,
-        TranslateModule.forRoot()
-      ],
+      imports: [MyCodingJobsComponent, TranslateModule.forRoot()],
       providers: [
         provideNoopAnimations(),
         {
@@ -47,16 +44,20 @@ describe('MyCodingJobsComponent', () => {
         {
           provide: CodingJobBackendService,
           useValue: {
-            getCodingJobs: jest.fn().mockReturnValue(of({
-              data: [],
-              total: 0,
-              page: 1,
-              limit: 100
-            })),
-            startCodingJob: jest.fn().mockReturnValue(of({
-              total: 1,
-              firstReplayUrl: 'https://example.test/replay'
-            }))
+            getCodingJobs: jest.fn().mockReturnValue(
+              of({
+                data: [],
+                total: 0,
+                page: 1,
+                limit: 100
+              })
+            ),
+            startCodingJob: jest.fn().mockReturnValue(
+              of({
+                total: 1,
+                firstReplayUrl: 'https://example.test/replay'
+              })
+            )
           }
         },
         {
@@ -72,28 +73,34 @@ describe('MyCodingJobsComponent', () => {
     component = fixture.componentInstance;
   });
 
-  it.each(['completed', 'results_applied'])('renders %s coding jobs with a single review action', status => {
-    const job = {
-      ...completedJob,
-      status
-    };
-    component.isAuthorized = true;
-    component.isLoading = false;
-    component.dataSource.data = [job];
+  it.each(['completed', 'results_applied'])(
+    'renders %s coding jobs with a single review action',
+    status => {
+      const job = {
+        ...completedJob,
+        status
+      };
+      component.isAuthorized = true;
+      component.isLoading = false;
+      component.dataSource.data = [job];
 
-    fixture.detectChanges();
+      fixture.detectChanges();
 
-    const actionCell: HTMLElement = fixture.nativeElement.querySelector('.actions-cell');
-    const buttons = actionCell.querySelectorAll('button');
+      const actionCell: HTMLElement =
+        fixture.nativeElement.querySelector('.actions-cell');
+      const buttons = actionCell.querySelectorAll('button');
 
-    expect(buttons).toHaveLength(1);
-    expect(actionCell.textContent).toContain('visibility');
-    expect(actionCell.textContent).not.toContain('check_circle');
-    expect(component.getStartCodingJobLabel(job)).toBe('Review öffnen');
-  });
+      expect(buttons).toHaveLength(1);
+      expect(actionCell.textContent).toContain('visibility');
+      expect(actionCell.textContent).not.toContain('check_circle');
+      expect(component.getStartCodingJobLabel(job)).toBe('Review öffnen');
+    }
+  );
 
   it('loads only the selected workspace through the own-jobs backend filter', () => {
-    const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
+    const codingJobBackendService = TestBed.inject(
+      CodingJobBackendService
+    ) as unknown as {
       getCodingJobs: jest.Mock;
     };
     component.workspaceId = 5;
@@ -113,7 +120,9 @@ describe('MyCodingJobsComponent', () => {
   });
 
   it('ignores stale coding job loads after a newer workspace request starts', () => {
-    const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
+    const codingJobBackendService = TestBed.inject(
+      CodingJobBackendService
+    ) as unknown as {
       getCodingJobs: jest.Mock;
     };
     const firstLoad = new Subject<{
@@ -156,10 +165,14 @@ describe('MyCodingJobsComponent', () => {
   });
 
   it('clears stale jobs when loading the current workspace fails', () => {
-    const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
+    const codingJobBackendService = TestBed.inject(
+      CodingJobBackendService
+    ) as unknown as {
       getCodingJobs: jest.Mock;
     };
-    codingJobBackendService.getCodingJobs.mockReturnValueOnce(throwError(() => new Error('load failed')));
+    codingJobBackendService.getCodingJobs.mockReturnValueOnce(
+      throwError(() => new Error('load failed'))
+    );
     component.dataSource.data = [completedJob];
     component.originalData = [completedJob];
     component.selectedWorkspaceIds = [1];
@@ -182,5 +195,27 @@ describe('MyCodingJobsComponent', () => {
     expect(component.incompleteJobs).toBe(0);
     expect(component.completedJobs).toBe(0);
     expect(component.isLoading).toBe(false);
+  });
+
+  it('opens backend-generated replay URLs on the current frontend origin', () => {
+    const codingJobBackendService = TestBed.inject(
+      CodingJobBackendService
+    ) as unknown as {
+      startCodingJob: jest.Mock;
+    };
+    codingJobBackendService.startCodingJob.mockReturnValueOnce(
+      of({
+        total: 1,
+        firstReplayUrl: 'http://localhost:3333/#/replay/person/unit/0/var'
+      })
+    );
+    jest.spyOn(window, 'open').mockImplementation(() => null);
+
+    component.startCodingJob(completedJob);
+
+    expect(window.open).toHaveBeenCalledWith(
+      'http://localhost/#/replay/person/unit/0/var?auth=token&mode=coding&codingJobId=10&workspaceId=1',
+      '_blank'
+    );
   });
 });

@@ -12,7 +12,12 @@
         <mat-icon>info</mat-icon>
       </button>
     </div>
-    <button mat-raised-button color="primary" type="button" (click)="createDefinition()">
+    <button
+      *ngIf="jobDefinitions.length > 0"
+      mat-raised-button
+      color="primary"
+      type="button"
+      (click)="createDefinition()">
       <mat-icon>add</mat-icon>
       {{ 'coding-job-definitions.create-new' | translate }}
     </button>
@@ -40,7 +45,7 @@
   <div
     *ngIf="!isLoading && jobDefinitions.length > 0"
     class="definition-summary"
-    aria-label="Status der Job-Definitionen">
+    aria-label="Status der Jobdefinitionen">
     <div class="summary-item">
       <span>{{ 'coding-job-definitions.summary.total' | translate }}</span>
       <strong>{{ jobDefinitions.length }}</strong>
@@ -255,7 +260,7 @@
   </div>
 
   <div *ngIf="!isLoading && jobDefinitions.length === 0" class="empty-state">
-    <mat-icon>assignment_add</mat-icon>
+    <mat-icon class="empty-state-icon">assignment_add</mat-icon>
     <h4>{{ 'coding-job-definitions.empty.title' | translate }}</h4>
     <p>{{ 'coding-job-definitions.empty.description' | translate }}</p>
     <button

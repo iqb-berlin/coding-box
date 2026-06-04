@@ -117,6 +117,14 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('should initialize from the requested comparison mode', () => {
+    component.data.initialMode = 'within-training';
+
+    component.ngOnInit();
+
+    expect(component.comparisonMode).toBe('within-training');
+  });
+
   it('should expose replay as its own table column', () => {
     expect(component.displayedColumns).toEqual([
       'index',

@@ -40,10 +40,12 @@ const executeBrackets = (condition: unknown, queryBuilder: MockQueryBuilder) => 
 
   const bracketBuilder: Record<string, jest.Mock> = {};
   bracketBuilder.where = jest.fn().mockReturnValue(bracketBuilder);
-  bracketBuilder.orWhere = jest.fn((callback: (builder: { subQuery: jest.Mock }) => string) => {
-    callback({
-      subQuery: jest.fn().mockReturnValue(createSubQueryProbe(queryBuilder))
-    });
+  bracketBuilder.orWhere = jest.fn((conditionOrCallback: string | ((builder: { subQuery: jest.Mock }) => string)) => {
+    if (typeof conditionOrCallback === 'function') {
+      conditionOrCallback({
+        subQuery: jest.fn().mockReturnValue(createSubQueryProbe(queryBuilder))
+      });
+    }
     return bracketBuilder;
   });
   condition.whereFactory(bracketBuilder as never);
@@ -255,6 +257,52 @@ describe('CodingProgressService variable coverage conflicts', () => {
       statusTotalCasesToCode: 3,
       coveredSourceVariableCount: 0,
       coveredSourceResponseCount: 0
+    });
+  });
+
+  it('includes DERIVE_ERROR manual job units in applied result progress', async () => {
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    const deriveErrorStatus = statusStringToNumber('DERIVE_ERROR');
+    const codingCompleteStatus = statusStringToNumber('CODING_COMPLETE');
+    const responses = [
+      {
+        responseId: '100',
+        unitName: 'UnitA',
+        variableId: 'standard-var',
+        value: 'standard value',
+        codeV2: null,
+        statusV2: null,
+        statusV1: String(codingIncompleteStatus)
+      },
+      {
+        responseId: '101',
+        unitName: 'UnitA',
+        variableId: 'derived-error-var',
+        value: 'derive error value',
+        codeV2: '2',
+        statusV2: String(codingCompleteStatus),
+        statusV1: String(deriveErrorStatus)
+      }
+    ];
+
+    responseRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder(responses))
+      .mockReturnValueOnce(createQueryBuilder(responses));
+    settingRepository.findOne.mockResolvedValue({ content: 'disabled' });
+
+    const result = await service.getAppliedResultsOverview(5);
+
+    expect(result).toMatchObject({
+      rawTotalIncompleteResponses: 2,
+      rawAppliedResponses: 1,
+      totalIncompleteResponses: 2,
+      appliedResponses: 1,
+      remainingResponses: 1,
+      deriveErrorRawTotalResponses: 1,
+      deriveErrorRawAppliedResponses: 1,
+      deriveErrorTotalResponses: 1,
+      deriveErrorAppliedResponses: 1,
+      deriveErrorRemainingResponses: 0
     });
   });
 

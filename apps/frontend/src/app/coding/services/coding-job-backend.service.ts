@@ -438,6 +438,7 @@ export class CodingJobBackendService {
       unitName: string;
       variableId: string;
       responseCount: number;
+      deriveErrorResponseCount: number;
       casesInJobs: number;
       availableCases: number;
       uniqueCasesAfterAggregation: number;
@@ -459,6 +460,7 @@ export class CodingJobBackendService {
       unitName: string;
       variableId: string;
       responseCount: number;
+      deriveErrorResponseCount: number;
       casesInJobs: number;
       availableCases: number;
       uniqueCasesAfterAggregation: number;

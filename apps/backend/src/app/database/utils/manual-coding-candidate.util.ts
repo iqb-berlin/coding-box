@@ -30,6 +30,34 @@ export function toManualCodingVariablePairKey(
   return `${unitName}\u001F${variableId}`;
 }
 
+export function createManualCodingVariableReferences(
+  variables: ManualCodingVariableReference[]
+): ManualCodingVariableReference[] {
+  const referencesByKey = new Map<string, ManualCodingVariableReference>();
+  variables.forEach(variable => {
+    if (variable.unitName && variable.variableId) {
+      referencesByKey.set(
+        toManualCodingVariablePairKey(variable.unitName, variable.variableId),
+        {
+          unitName: variable.unitName,
+          variableId: variable.variableId
+        }
+      );
+    }
+  });
+  return Array.from(referencesByKey.values());
+}
+
+export function createManualCodingVariablePairKeySet(
+  variables: ManualCodingVariableReference[]
+): Set<string> {
+  return new Set(
+    createManualCodingVariableReferences(variables).map(variable => (
+      toManualCodingVariablePairKey(variable.unitName, variable.variableId)
+    ))
+  );
+}
+
 export function getDeriveErrorManualCodingPairKeys(
   variables: ManualCodingVariableReference[]
 ): string[] {

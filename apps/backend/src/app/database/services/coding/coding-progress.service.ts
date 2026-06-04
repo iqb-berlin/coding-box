@@ -64,6 +64,19 @@ interface EffectiveCaseProgress {
   aggregatedDuplicateCases: number;
 }
 
+interface DeriveErrorManualProgress {
+  deriveErrorTotalResponses: number;
+  deriveErrorAppliedResponses: number;
+  deriveErrorRemainingResponses: number;
+  deriveErrorRawTotalResponses: number;
+  deriveErrorRawAppliedResponses: number;
+}
+
+interface ManualProgressStatusQuery {
+  where: (condition: string | Brackets, parameters?: Record<string, unknown>) => unknown;
+  andWhere: (condition: string | Brackets, parameters?: Record<string, unknown>) => unknown;
+}
+
 interface VariableDefinitionReference {
   id: number;
   status: string;
@@ -179,6 +192,11 @@ export class CodingProgressService {
     statusTotalIncompleteResponses: number;
     coveredSourceVariableCount: number;
     coveredSourceResponseCount: number;
+    deriveErrorTotalResponses: number;
+    deriveErrorAppliedResponses: number;
+    deriveErrorRemainingResponses: number;
+    deriveErrorRawTotalResponses: number;
+    deriveErrorRawAppliedResponses: number;
   }> {
     const responseScope = await this.getCoverageResponseScope(workspaceId);
     const responses = responseScope.manualResponses;
@@ -198,6 +216,11 @@ export class CodingProgressService {
         0;
     const rawCompletionPercentage =
       responses.length > 0 ? (appliedResponseIds.size / responses.length) * 100 : 0;
+    const deriveErrorProgress = await this.getDeriveErrorManualProgress(
+      workspaceId,
+      responses,
+      appliedResponseIds
+    );
 
     return {
       totalIncompleteResponses: effectiveProgress.effectiveTotalCasesToCode,
@@ -217,7 +240,8 @@ export class CodingProgressService {
       coveredSourceVariableCount:
         responseScope.excludedSourceSummary.coveredSourceVariableCount,
       coveredSourceResponseCount:
-        responseScope.excludedSourceSummary.coveredSourceResponseCount
+        responseScope.excludedSourceSummary.coveredSourceResponseCount,
+      ...deriveErrorProgress
     };
   }
 
@@ -351,6 +375,62 @@ export class CodingProgressService {
     };
   }
 
+  private async getDeriveErrorManualProgress(
+    workspaceId: number,
+    responses: CoverageResponse[],
+    appliedResponseIds: Set<number>
+  ): Promise<DeriveErrorManualProgress> {
+    const deriveErrorStatus = statusStringToNumber('DERIVE_ERROR');
+    const deriveErrorResponses = responses.filter(response => response.statusV1 === deriveErrorStatus);
+    const deriveErrorAppliedResponseIds = new Set(
+      deriveErrorResponses
+        .filter(response => appliedResponseIds.has(response.responseId))
+        .map(response => response.responseId)
+    );
+    const effectiveProgress = await this.getEffectiveCaseProgress(
+      workspaceId,
+      deriveErrorAppliedResponseIds,
+      deriveErrorResponses
+    );
+
+    return {
+      deriveErrorTotalResponses: effectiveProgress.effectiveTotalCasesToCode,
+      deriveErrorAppliedResponses: effectiveProgress.effectiveCompletedCases,
+      deriveErrorRemainingResponses: Math.max(
+        0,
+        effectiveProgress.effectiveTotalCasesToCode - effectiveProgress.effectiveCompletedCases
+      ),
+      deriveErrorRawTotalResponses: deriveErrorResponses.length,
+      deriveErrorRawAppliedResponses: deriveErrorAppliedResponseIds.size
+    };
+  }
+
+  private applyManualProgressStatusFilter(
+    query: ManualProgressStatusQuery,
+    method: 'where' | 'andWhere' = 'where'
+  ): void {
+    const deriveErrorStatus = statusStringToNumber('DERIVE_ERROR');
+    query[method](new Brackets(qb => {
+      qb.where('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      }).orWhere(
+        `response.status_v1 = :deriveErrorStatus
+          AND EXISTS (
+            SELECT 1
+            FROM coding_job_unit manual_derive_cju
+            INNER JOIN coding_job manual_derive_cj
+              ON manual_derive_cj.id = manual_derive_cju.coding_job_id
+            WHERE manual_derive_cju.response_id = response.id
+              AND manual_derive_cj.training_id IS NULL
+          )`,
+        { deriveErrorStatus }
+      );
+    }));
+  }
+
   private async getEffectiveCaseProgress(
     workspaceId: number,
     completedResponseIds: Set<number>,
@@ -434,15 +514,10 @@ export class CodingProgressService {
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .orderBy('response.id', 'ASC');
+    this.applyManualProgressStatusFilter(query, 'andWhere');
 
     if (manualPoolOnly) {
       query.andWhere(new Brackets(qb => {
@@ -499,13 +574,7 @@ export class CodingProgressService {
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('coding_job.training_id IS NULL')
       .andWhere(new Brackets(qb => {
@@ -520,6 +589,7 @@ export class CodingProgressService {
             return `EXISTS (${exists})`;
           });
       }));
+    this.applyManualProgressStatusFilter(query, 'andWhere');
     applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: 'assignedCoverageRows' });
     const raw = await query.getRawMany();
     return raw
@@ -541,13 +611,8 @@ export class CodingProgressService {
       .andWhere('coding_job.training_id IS NULL')
       .andWhere('cju.code IS NOT NULL')
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
       .select('DISTINCT cju.response_id', 'responseId');
+    this.applyManualProgressStatusFilter(query, 'andWhere');
     applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: 'completedCoverage' });
     const raw = await query.getRawMany();
 
@@ -579,13 +644,7 @@ export class CodingProgressService {
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('coding_job.training_id IS NULL')
       .andWhere(new Brackets(qb => {
@@ -600,6 +659,7 @@ export class CodingProgressService {
             return `EXISTS (${exists})`;
           });
       }));
+    this.applyManualProgressStatusFilter(query, 'andWhere');
     applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: 'assignedCoverage' });
     const raw = await query.getRawMany();
 

@@ -1,5 +1,12 @@
 import {
-  Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Param,
+  Body,
+  ParseIntPipe
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -28,7 +35,17 @@ export class WorkspaceSettingsController {
           id: 0,
           key: settingKey,
           value: JSON.stringify({ enabled: true }),
-          description: 'Controls whether coding statistics are automatically fetched in the coding management component'
+          description:
+            'Controls whether coding statistics are automatically fetched in the coding management component'
+        };
+      }
+      if (key === 'auto-refresh-manual-coding-jobs') {
+        return {
+          id: 0,
+          key: settingKey,
+          value: JSON.stringify({ enabled: true }),
+          description:
+            'Controls whether manual coding job tables refresh automatically when the browser window regains focus'
         };
       }
       if (key === 'show-test-results-log-anomalies') {
@@ -36,7 +53,8 @@ export class WorkspaceSettingsController {
           id: 0,
           key: settingKey,
           value: JSON.stringify({ enabled: false }),
-          description: 'Controls whether log anomalies are shown as a column in the test results table'
+          description:
+            'Controls whether log anomalies are shown as a column in the test results table'
         };
       }
       if (key === 'response-matching-mode') {
@@ -44,7 +62,8 @@ export class WorkspaceSettingsController {
           id: 0,
           key: settingKey,
           value: JSON.stringify({ flags: [] }),
-          description: 'Controls how responses are aggregated by value similarity for coding case distribution'
+          description:
+            'Controls how responses are aggregated by value similarity for coding case distribution'
         };
       }
       throw new Error(`Setting ${key} not found for workspace ${workspaceId}`);

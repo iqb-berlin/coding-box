@@ -115,6 +115,12 @@ export class CodingVersionService {
             unitFilters,
             variableFilters
           );
+        await this.markExistingAutoCodingFreshnessPendingAfterReset(
+          workspaceId,
+          version,
+          unitFilters,
+          variableFilters
+        );
         await this.reconcileAppliedCodingJobsAfterReset(
           workspaceId,
           version,
@@ -206,6 +212,12 @@ export class CodingVersionService {
       await this.codingFreshnessService?.markVersionsPendingAfterReset(
         workspaceId,
         this.toResetUnitIdsByVersion(resetUnitIdsByVersion)
+      );
+      await this.markExistingAutoCodingFreshnessPendingAfterReset(
+        workspaceId,
+        version,
+        unitFilters,
+        variableFilters
       );
       await this.markAppliedCodingJobsResultsClearedAfterReset(
         workspaceId,
@@ -460,6 +472,31 @@ export class CodingVersionService {
         unitNames: unitFilters,
         variableIds: variableFilters
       }
+    );
+  }
+
+  private async markExistingAutoCodingFreshnessPendingAfterReset(
+    workspaceId: number,
+    version: ResetCodingVersion,
+    unitFilters?: string[],
+    variableFilters?: string[]
+  ): Promise<void> {
+    if (!this.codingFreshnessService) {
+      return;
+    }
+
+    const versionsToRefresh: CodingFreshnessVersion[] = [];
+    if (version === 'v1') {
+      versionsToRefresh.push('v1', 'v3');
+    } else if (version === 'v2' || version === 'v3') {
+      versionsToRefresh.push('v3');
+    }
+
+    await this.codingFreshnessService.markExistingAutoCodingVersionsPendingAfterResetScope(
+      workspaceId,
+      versionsToRefresh,
+      unitFilters,
+      variableFilters
     );
   }
 
