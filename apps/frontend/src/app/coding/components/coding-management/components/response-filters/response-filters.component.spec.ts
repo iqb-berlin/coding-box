@@ -71,6 +71,7 @@ describe('ResponseFiltersComponent', () => {
 
   it('should keep DERIVE_ERROR as the visible status label', () => {
     expect(component.mapStatusToString('4')).toBe('DERIVE_ERROR');
+    expect(component.mapStatusToString('DERIVE_ERROR')).toBe('DERIVE_ERROR');
     expect(component.mapStatusToString('4abc')).toBe('4abc');
   });
 

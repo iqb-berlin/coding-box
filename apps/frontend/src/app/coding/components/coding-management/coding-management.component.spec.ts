@@ -899,9 +899,18 @@ describe('CodingManagementComponent', () => {
 
   describe('Data Fetching', () => {
     it('should get available statuses from coding statistics', () => {
+      component.codingStatistics = {
+        totalResponses: 103,
+        statusCounts: {
+          4: 3,
+          200: 50,
+          300: 50
+        }
+      };
+
       const statuses = component.getAvailableStatuses();
 
-      expect(statuses).toEqual(['200', '300']);
+      expect(statuses).toEqual(['4', '200', '300']);
     });
 
     it('should use centralized status labels in empty result snackbars', () => {

@@ -6548,12 +6548,17 @@ export class WorkspaceTestResultsService {
       }
 
       if (searchParams.codedStatus) {
-        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
-          searchParams.version || 'v1'
-        );
-        query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
-          codedStatus: searchParams.codedStatus
-        });
+        const codedStatusNumber = statusStringToNumber(searchParams.codedStatus);
+        if (codedStatusNumber === null) {
+          query.andWhere('1=0');
+        } else {
+          const effectiveStatusExpression = getEffectiveCodingStatusExpression(
+            searchParams.version || 'v1'
+          );
+          query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
+            codedStatus: codedStatusNumber
+          });
+        }
       }
 
       if (searchParams.group) {
