@@ -96,11 +96,18 @@ export class CodingTrainingBackendService {
       variableId: string;
       unitId: string;
       sampleCount: number;
+      includeDeriveError?: boolean;
     }[],
     trainingLabel: string,
     missingsProfileId?: number,
-    assignedVariables?: { unitName: string; variableId: string; sampleCount: number }[],
-    assignedVariableBundles?: { id: number; name: string; sampleCount?: number; caseOrderingMode?: 'continuous' | 'alternating' }[],
+    assignedVariables?: { unitName: string; variableId: string; sampleCount: number; includeDeriveError?: boolean }[],
+    assignedVariableBundles?: {
+      id: number;
+      name: string;
+      sampleCount?: number;
+      caseOrderingMode?: 'continuous' | 'alternating';
+      variables?: { unitName: string; variableId: string; sampleCount?: number; includeDeriveError?: boolean }[];
+    }[],
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
@@ -133,10 +140,16 @@ export class CodingTrainingBackendService {
     trainingId: number,
     label: string,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    variableConfigs: { variableId: string; unitId: string; sampleCount: number; includeDeriveError?: boolean }[],
     missingsProfileId?: number,
-    assignedVariables?: { unitName: string; variableId: string; sampleCount: number }[],
-    assignedVariableBundles?: { id: number; name: string; sampleCount?: number; caseOrderingMode?: 'continuous' | 'alternating' }[],
+    assignedVariables?: { unitName: string; variableId: string; sampleCount: number; includeDeriveError?: boolean }[],
+    assignedVariableBundles?: {
+      id: number;
+      name: string;
+      sampleCount?: number;
+      caseOrderingMode?: 'continuous' | 'alternating';
+      variables?: { unitName: string; variableId: string; sampleCount?: number; includeDeriveError?: boolean }[];
+    }[],
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
