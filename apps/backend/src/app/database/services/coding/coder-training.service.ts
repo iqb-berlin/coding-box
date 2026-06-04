@@ -1384,6 +1384,7 @@ export class CoderTrainingService {
         const codingJobUnits: CodingJobUnit[] = sortedResponses.map(response => {
           const codingJobUnit = new CodingJobUnit();
           codingJobUnit.coding_job_id = jobId;
+          codingJobUnit.workspace_id = workspaceId;
           codingJobUnit.response_id = response.responseId;
           codingJobUnit.unit_name = response.unitName;
           codingJobUnit.unit_alias = response.unitAlias || null;
@@ -2171,6 +2172,7 @@ export class CoderTrainingService {
           const codingJobUnits: CodingJobUnit[] = sortedResponses.map(response => {
             const codingJobUnit = new CodingJobUnit();
             codingJobUnit.coding_job_id = jobId;
+            codingJobUnit.workspace_id = workspaceId;
             codingJobUnit.response_id = response.responseId;
             codingJobUnit.unit_name = response.unitName;
             codingJobUnit.unit_alias = response.unitAlias || null;
