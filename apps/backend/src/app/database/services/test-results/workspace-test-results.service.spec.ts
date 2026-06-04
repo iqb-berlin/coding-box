@@ -868,13 +868,48 @@ describe('WorkspaceTestResultsService', () => {
 
       await service.searchResponses(
         1,
-        { codedStatus: '5', version: 'v3', responseSource: 'all' },
+        { codedStatus: 'CODING_COMPLETE', version: 'v3', responseSource: 'all' },
         { page: 1, limit: 100 }
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining('COALESCE(response.status_v3'),
-        { codedStatus: '5' }
+        { codedStatus: 5 }
+      );
+    });
+
+    it('should apply DERIVE_ERROR codedStatus filters numerically', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { codedStatus: 'DERIVE_ERROR', version: 'v1', responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 = :codedStatus',
+        { codedStatus: 4 }
+      );
+    });
+
+    it('should return no response search results for invalid codedStatus filters', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { codedStatus: 'NOPE', responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('1=0');
+      expect(qb.andWhere).not.toHaveBeenCalledWith(
+        expect.stringContaining(' = :codedStatus'),
+        expect.any(Object)
       );
     });
 

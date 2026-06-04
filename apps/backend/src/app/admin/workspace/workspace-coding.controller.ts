@@ -119,14 +119,21 @@ export class WorkspaceCodingController {
   @Get(':workspace_id/coding/manual')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'codedStatus',
+    required: false,
+    description: 'Optional response status_v1 filter, e.g. DERIVE_ERROR'
+  })
   async getManualTestPersons(
     @Query('testPersons') testPersons: string,
+      @Query('codedStatus') codedStatus: string,
       @WorkspaceId() /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
                           workspace_id: number
   ): Promise<Array<ResponseEntity & { unitname: string }>> {
     return this.codingResponseQueryService.getManualTestPersons(
       workspace_id,
-      testPersons
+      testPersons,
+      codedStatus
     );
   }
 

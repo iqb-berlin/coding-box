@@ -247,14 +247,20 @@ export class TestPersonCodingService {
       );
   }
 
-  getManualTestPersons(workspaceId: number, testPersonIds?: string): Observable<unknown> {
-    let url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/manual`;
+  getManualTestPersons(workspaceId: number, testPersonIds?: string, codedStatus?: string): Observable<unknown> {
+    let params = new HttpParams();
     if (testPersonIds) {
-      url += `?testPersons=${testPersonIds}`;
+      params = params.set('testPersons', testPersonIds);
+    }
+    if (codedStatus) {
+      params = params.set('codedStatus', codedStatus);
     }
 
     return this.http
-      .get<unknown>(url, { headers: this.authHeader })
+      .get<unknown>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/manual`,
+      { headers: this.authHeader, params }
+    )
       .pipe(
         catchError(() => of([]))
       );
