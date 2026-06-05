@@ -14,16 +14,28 @@ export interface ExpectedCombinationDto {
   variable_anchor?: string;
 }
 
+export interface ModalValueResult {
+  modalValue: number | null;
+  deviationCount: number;
+  isTie: boolean;
+  modalCandidates: number[];
+}
+
 /**
  * Calculates the modal value (most frequent code) from a list of codes.
- * If there are multiple modes, one is selected randomly.
+ * If there are multiple modes, the smallest code is selected deterministically.
  *
  * @param codes - Array of numerical codes
  * @returns Object containing the modal value and the number of deviations from it
  */
-export function calculateModalValue(codes: number[]): { modalValue: number; deviationCount: number } {
+export function calculateModalValue(codes: number[]): ModalValueResult {
   if (codes.length === 0) {
-    return { modalValue: 0, deviationCount: 0 };
+    return {
+      modalValue: null,
+      deviationCount: 0,
+      isTie: false,
+      modalCandidates: []
+    };
   }
 
   const frequency = new Map<number, number>();
@@ -44,10 +56,39 @@ export function calculateModalValue(codes: number[]): { modalValue: number; devi
     }
   });
 
-  const modalValue = modalCodes[Math.floor(Math.random() * modalCodes.length)];
+  const modalCandidates = modalCodes.sort((a, b) => a - b);
+  const modalValue = modalCandidates[0] ?? null;
   const deviationCount = codes.length - maxFrequency;
 
-  return { modalValue, deviationCount };
+  return {
+    modalValue,
+    deviationCount,
+    isTie: modalCandidates.length > 1,
+    modalCandidates
+  };
+}
+
+export function getModalTieLabel(modal: ModalValueResult | null | undefined): string {
+  if (!modal || modal.modalValue === null) {
+    return '';
+  }
+
+  return modal.isTie ? 'Ja' : 'Nein';
+}
+
+export function formatModalCandidates(
+  modal: ModalValueResult | null | undefined,
+  formatter: (code: number) => string | number | null | undefined = code => code
+): string {
+  if (!modal || modal.modalCandidates.length === 0) {
+    return '';
+  }
+
+  return modal.modalCandidates
+    .map(code => formatter(code))
+    .filter((code): code is string | number => code !== null && code !== undefined && code !== '')
+    .map(code => code.toString())
+    .join(',');
 }
 
 /**

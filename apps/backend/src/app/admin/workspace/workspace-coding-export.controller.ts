@@ -614,7 +614,7 @@ export class WorkspaceCodingExportController {
     name: 'includeModalValue',
     required: false,
     type: Boolean,
-    description: 'Include modal value and deviation count columns'
+    description: 'Include modal value, deviation count, modal tie and modal candidate columns'
   })
   @ApiQuery({
     name: 'excludeAutoCoded',
@@ -800,7 +800,7 @@ export class WorkspaceCodingExportController {
     name: 'includeModalValue',
     required: false,
     type: Boolean,
-    description: 'Include modal value and deviation count columns'
+    description: 'Include modal value, deviation count, modal tie and modal candidate columns'
   })
   @ApiQuery({
     name: 'includeDoubleCoded',

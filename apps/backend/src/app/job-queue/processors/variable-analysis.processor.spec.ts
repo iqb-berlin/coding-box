@@ -4,6 +4,7 @@ import { WorkspaceExclusionService } from '../../database/services/workspace';
 import { WorkspaceFilesService } from '../../database/services/workspace/workspace-files.service';
 import { VariableAnalysisJobData } from '../job-queue.service';
 import { VariableAnalysisProcessor } from './variable-analysis.processor';
+import eatPrepReferenceGolden = require('./__fixtures__/variable-analysis-eatpreptba-reference.golden.json');
 
 type MockQueryBuilder = ReturnType<typeof createQueryBuilder>;
 
@@ -62,6 +63,60 @@ const defaultExclusions = {
   globalIgnoredUnits: [],
   ignoredBooklets: [],
   testletIgnoredUnits: []
+};
+
+interface ReferenceVariableCombo {
+  unitName: string;
+  variableId: string;
+  totalCount: number;
+  validCount: number;
+  invalidCount: number;
+  emptyCount: number;
+  emptyPercentage: number;
+  distinctValueCount: number;
+}
+
+interface ReferenceFrequency {
+  unitName: string;
+  variableId: string;
+  value: string;
+  label?: string;
+  score?: number;
+  count: number;
+  validOccurrenceCount: number;
+  percentageTotal: number;
+  percentageValid: number;
+  isSchemaOnly: boolean;
+}
+
+interface EatPrepReferenceGolden {
+  tolerance: number;
+  variableCombos: ReferenceVariableCombo[];
+  frequencies: ReferenceFrequency[];
+}
+
+const eatPrepReference =
+  eatPrepReferenceGolden as EatPrepReferenceGolden;
+
+const toReferenceKey = (
+  unitName: string,
+  variableId: string,
+  value?: string
+): string => (
+  value === undefined ?
+    `${unitName}\u001F${variableId}` :
+    `${unitName}\u001F${variableId}\u001F${value}`
+);
+
+const expectCloseToReference = (
+  actual: unknown,
+  expected: number,
+  tolerance: number
+): void => {
+  expect(typeof actual).toBe('number');
+  expect(Math.abs((actual as number) - expected)).toBeLessThanOrEqual(
+    tolerance
+  );
 };
 
 const createProcessor = ({
@@ -135,6 +190,285 @@ const createProcessor = ({
 };
 
 describe('VariableAnalysisProcessor', () => {
+  it('matches the documented eatPrepTBA reference fixture for variable frequencies', async () => {
+    const { processor, cacheService } = createProcessor({
+      representativeRows: [{ unitName: 'UNIT_REF', unitId: '1' }],
+      unitVariableDetails: [
+        {
+          unitName: 'UNIT_REF',
+          unitId: 'UNIT_REF',
+          variables: [
+            {
+              id: 'VAR_BASE',
+              alias: 'VAR_BASE',
+              type: 'string',
+              sourceType: 'BASE',
+              hasCodingScheme: true,
+              codes: [
+                { id: 'A', label: 'Alpha', score: 1 },
+                { id: 'B', label: 'Beta', score: 0 },
+                { id: 'C', label: 'Gamma', score: 0 }
+              ]
+            },
+            {
+              id: 'VAR_MULTI',
+              alias: 'VAR_MULTI',
+              type: 'string',
+              sourceType: 'BASE',
+              multiple: true,
+              hasCodingScheme: false,
+              values: [
+                { value: 'A', label: 'Alpha' },
+                { value: 'B', label: 'Beta' },
+                { value: 'C', label: 'Gamma' }
+              ]
+            }
+          ]
+        }
+      ],
+      queryResults: [
+        [
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_BASE',
+            totalCount: '5',
+            validCount: '4',
+            emptyCount: '1',
+            distinctValueCount: '4'
+          },
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_MULTI',
+            totalCount: '4',
+            validCount: '3',
+            emptyCount: '1',
+            distinctValueCount: '3'
+          }
+        ],
+        [
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_BASE',
+            value: 'A',
+            valueLength: '1',
+            valueHash: 'hash-a',
+            count: '2',
+            validCount: '2'
+          },
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_BASE',
+            value: 'B',
+            valueLength: '1',
+            valueHash: 'hash-b',
+            count: '1',
+            validCount: '1'
+          },
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_BASE',
+            value: 'D',
+            valueLength: '1',
+            valueHash: 'hash-d',
+            count: '1',
+            validCount: '1'
+          },
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_BASE',
+            value: '',
+            valueLength: '0',
+            valueHash: 'hash-empty',
+            count: '1',
+            validCount: '0'
+          }
+        ],
+        [
+          {
+            responseId: '1',
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_MULTI',
+            value: '["A","B"]',
+            status: '3',
+            statusV1: null,
+            codeV1: null,
+            scoreV1: null
+          },
+          {
+            responseId: '2',
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_MULTI',
+            value: '["B"]',
+            status: '3',
+            statusV1: null,
+            codeV1: null,
+            scoreV1: null
+          },
+          {
+            responseId: '3',
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_MULTI',
+            value: '[]',
+            status: '7',
+            statusV1: null,
+            codeV1: null,
+            scoreV1: null
+          },
+          {
+            responseId: '4',
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_MULTI',
+            value: '["A","C","C"]',
+            status: '3',
+            statusV1: null,
+            codeV1: null,
+            scoreV1: null
+          }
+        ],
+        [
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_BASE',
+            value: 'A',
+            count: '2',
+            validCount: '2'
+          },
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_BASE',
+            value: 'B',
+            count: '1',
+            validCount: '1'
+          }
+        ],
+        [
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_BASE',
+            status: '3',
+            count: '4'
+          },
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_BASE',
+            status: '7',
+            count: '1'
+          },
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_MULTI',
+            status: '3',
+            count: '3'
+          },
+          {
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_MULTI',
+            status: '7',
+            count: '1'
+          }
+        ]
+      ]
+    });
+
+    await processor.process(createJob());
+
+    const variableCombos = findCacheSetPayload<Array<Record<string, unknown>>>(
+      cacheService,
+      'variable-analysis:1:job-1:variable-combos:0'
+    );
+    const combosByKey = new Map(
+      variableCombos.map(combo => [
+        toReferenceKey(
+          String(combo.unitName),
+          String(combo.variableId)
+        ),
+        combo
+      ])
+    );
+
+    eatPrepReference.variableCombos.forEach(expected => {
+      const actual = combosByKey.get(
+        toReferenceKey(expected.unitName, expected.variableId)
+      );
+      expect(actual).toBeDefined();
+      expect(actual).toMatchObject({
+        unitName: expected.unitName,
+        variableId: expected.variableId
+      });
+      [
+        'totalCount',
+        'validCount',
+        'invalidCount',
+        'emptyCount',
+        'emptyPercentage',
+        'distinctValueCount'
+      ].forEach(field => {
+        expectCloseToReference(
+          actual?.[field],
+          expected[field as keyof ReferenceVariableCombo] as number,
+          eatPrepReference.tolerance
+        );
+      });
+    });
+
+    const frequencyChunks = findCacheSetPayload<
+    Array<[string, Array<Record<string, unknown>>]>
+    >(
+      cacheService,
+      'variable-analysis:1:job-1:frequencies:0'
+    );
+    const frequenciesByKey = new Map<string, Record<string, unknown>>();
+    frequencyChunks.flatMap(([, rows]) => rows).forEach(row => {
+      frequenciesByKey.set(
+        toReferenceKey(
+          String(row.unitName),
+          String(row.variableId),
+          String(row.value)
+        ),
+        row
+      );
+    });
+
+    eatPrepReference.frequencies.forEach(expected => {
+      const actual = frequenciesByKey.get(
+        toReferenceKey(
+          expected.unitName,
+          expected.variableId,
+          expected.value
+        )
+      );
+      expect(actual).toBeDefined();
+      expect(actual).toMatchObject({
+        unitName: expected.unitName,
+        variableId: expected.variableId,
+        value: expected.value
+      });
+      if (expected.label !== undefined) {
+        expect(actual?.label).toBe(expected.label);
+      }
+      if (expected.score !== undefined) {
+        expectCloseToReference(
+          actual?.score,
+          expected.score,
+          eatPrepReference.tolerance
+        );
+      }
+      expect(Boolean(actual?.isSchemaOnly)).toBe(expected.isSchemaOnly);
+      [
+        'count',
+        'validOccurrenceCount',
+        'percentageTotal',
+        'percentageValid'
+      ].forEach(field => {
+        expectCloseToReference(
+          actual?.[field],
+          expected[field as keyof ReferenceFrequency] as number,
+          eatPrepReference.tolerance
+        );
+      });
+    });
+  });
+
   it('builds the analyzed variable set from metadata and keeps missing schema variables with zero counts', async () => {
     const { processor, cacheService, responseRepository } = createProcessor({
       unitVariableDetails: [
