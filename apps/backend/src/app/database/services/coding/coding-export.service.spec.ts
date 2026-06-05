@@ -131,6 +131,56 @@ function createServiceWithDetailedMocks(
 }
 
 describe('CodingExportService (WS-Admin export smoke)', () => {
+  it('uses TypeORM distinct flag for manual job variable references', async () => {
+    const manualJobVariablesQuery = {
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([{ unitName: 'UNIT', variableId: 'VAR' }])
+    };
+    const codingJobUnitRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(manualJobVariablesQuery)
+    };
+    const codingListService = {
+      getCodingListVariables: jest.fn().mockResolvedValue([])
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+    const service = new CodingExportService(
+      {} as Repository<ResponseEntity>,
+      {} as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
+      {} as Repository<CoderTrainingDiscussionResult>,
+      {} as Repository<User>,
+      codingListService as unknown as CodingListService,
+      {} as WorkspaceCoreService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService
+    );
+
+    const references = await (service as unknown as {
+      getManualCodingVariableReferences: (
+        workspaceId: number
+      ) => Promise<Array<{ unitName: string; variableId: string; includeDeriveError?: boolean }>>
+    }).getManualCodingVariableReferences(13);
+
+    expect(references).toEqual([{ unitName: 'UNIT', variableId: 'VAR', includeDeriveError: undefined }]);
+    expect(manualJobVariablesQuery.select).toHaveBeenCalledWith('coding_job_unit.unit_name', 'unitName');
+    expect(manualJobVariablesQuery.select).not.toHaveBeenCalledWith(
+      expect.stringContaining('DISTINCT'),
+      expect.anything()
+    );
+    expect(manualJobVariablesQuery.distinct).toHaveBeenCalledWith(true);
+  });
+
   it('keeps code value and writes code hint when coding_issue_option is set', async () => {
     const { service, totalCountQueryBuilder, unitsBatchQueryBuilder } = createServiceWithDetailedMocks(1);
 
@@ -506,6 +556,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         leftJoin: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
+        distinct: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
@@ -637,6 +688,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         leftJoin: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
+        distinct: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
@@ -799,6 +851,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
+        distinct: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
@@ -902,6 +955,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         leftJoin: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
+        distinct: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
@@ -1010,6 +1064,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         leftJoin: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
+        distinct: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
@@ -1139,6 +1194,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         leftJoin: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
+        distinct: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),

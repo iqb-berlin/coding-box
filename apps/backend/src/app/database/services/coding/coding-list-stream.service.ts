@@ -483,7 +483,12 @@ export class CodingListStreamService {
       `Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
     );
     this.fileCacheService.clearCaches();
-    const csvStream = fastCsv.format({ headers: true, delimiter: ';' });
+    const headers = this.itemBuilderService.getHeadersForVersion(version, includeResponseValues);
+    const csvStream = fastCsv.format({
+      headers: includeReplayUrls ? [...headers, 'url'] : headers,
+      delimiter: ';',
+      alwaysWriteHeaders: true
+    });
 
     (async () => {
       try {
