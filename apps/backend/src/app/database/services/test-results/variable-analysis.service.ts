@@ -81,7 +81,10 @@ const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
   { header: 'Leere Werte (%)', key: 'emptyPercentage', width: 18 },
   { header: 'Unterschiedliche Werte', key: 'distinctValueCount', width: 22 },
   { header: 'Weitere Werte nicht enthalten', key: 'hiddenValueCount', width: 28 },
-  { header: 'Antwortstatus', key: 'statusSummary', width: 42 }
+  { header: 'Antwortstatus', key: 'statusSummary', width: 42 },
+  { header: 'Punktbiseriale Korrelation', key: 'pointBiserial', width: 26 },
+  { header: 'Code-PBC', key: 'codePbc', width: 14 },
+  { header: 'Kategorie-PBC', key: 'categoryPbc', width: 16 }
 ] as const;
 
 type VariableAnalysisExportColumnKey =
@@ -1322,7 +1325,10 @@ export class VariableAnalysisService {
           emptyPercentage: this.roundPercentage(emptyPercentage),
           distinctValueCount,
           hiddenValueCount,
-          statusSummary
+          statusSummary,
+          pointBiserial: this.formatOptionalMetric(frequency.pointBiserial),
+          codePbc: this.formatOptionalMetric(frequency.codePbc),
+          categoryPbc: this.formatOptionalMetric(frequency.categoryPbc)
         });
       });
     });
@@ -1359,6 +1365,10 @@ export class VariableAnalysisService {
 
   private roundPercentage(value: number): number {
     return Math.round(value * 10) / 10;
+  }
+
+  private formatOptionalMetric(value: number | null | undefined): number | string {
+    return value === null || value === undefined ? '' : value;
   }
 
   private formatStatusSummary(

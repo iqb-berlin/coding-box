@@ -62,6 +62,13 @@
       "outputs": [
         "{workspaceRoot}/coverage/apps/backend"
       ],
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/jest.config.ts",
+        "{workspaceRoot}/jest.preset.js",
+        "{workspaceRoot}/scripts/reference/variable-analysis-eatpreptba/**/*"
+      ],
       "options": {
         "jestConfig": "apps/backend/jest.config.ts",
         "passWithNoTests": true

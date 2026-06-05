@@ -1,3 +1,5 @@
+import * as childProcess from 'child_process';
+import * as path from 'path';
 import { Job } from 'bull';
 import { CacheService } from '../../cache/cache.service';
 import { WorkspaceExclusionService } from '../../database/services/workspace';
@@ -98,6 +100,12 @@ interface EatPrepReferenceGolden {
 const eatPrepReference =
   eatPrepReferenceGolden as EatPrepReferenceGolden;
 
+const repoRoot = path.resolve(__dirname, '../../../../../..');
+const eatPrepReferenceNormalizerPath = path.join(
+  repoRoot,
+  'scripts/reference/variable-analysis-eatpreptba/normalize-eatpreptba-reference.mjs'
+);
+
 const toReferenceKey = (
   unitName: string,
   variableId: string,
@@ -190,6 +198,26 @@ const createProcessor = ({
 };
 
 describe('VariableAnalysisProcessor', () => {
+  it('keeps the documented eatPrepTBA reference golden in sync with the normalized reference table', () => {
+    try {
+      childProcess.execFileSync(
+        process.execPath,
+        [eatPrepReferenceNormalizerPath, '--check'],
+        {
+          cwd: repoRoot,
+          stdio: 'pipe'
+        }
+      );
+    } catch (error) {
+      const execError = error as { stdout?: Buffer; stderr?: Buffer };
+      throw new Error(
+        'eatPrepTBA reference golden check failed.\n' +
+          `${execError.stdout?.toString() || ''}` +
+          `${execError.stderr?.toString() || ''}`
+      );
+    }
+  });
+
   it('matches the documented eatPrepTBA reference fixture for variable frequencies', async () => {
     const { processor, cacheService } = createProcessor({
       representativeRows: [{ unitName: 'UNIT_REF', unitId: '1' }],
@@ -376,6 +404,9 @@ describe('VariableAnalysisProcessor', () => {
       cacheService,
       'variable-analysis:1:job-1:variable-combos:0'
     );
+    expect(variableCombos).toHaveLength(
+      eatPrepReference.variableCombos.length
+    );
     const combosByKey = new Map(
       variableCombos.map(combo => [
         toReferenceKey(
@@ -385,6 +416,7 @@ describe('VariableAnalysisProcessor', () => {
         combo
       ])
     );
+    expect(combosByKey.size).toBe(eatPrepReference.variableCombos.length);
 
     eatPrepReference.variableCombos.forEach(expected => {
       const actual = combosByKey.get(
@@ -417,8 +449,10 @@ describe('VariableAnalysisProcessor', () => {
       cacheService,
       'variable-analysis:1:job-1:frequencies:0'
     );
+    const actualFrequencies = frequencyChunks.flatMap(([, rows]) => rows);
+    expect(actualFrequencies).toHaveLength(eatPrepReference.frequencies.length);
     const frequenciesByKey = new Map<string, Record<string, unknown>>();
-    frequencyChunks.flatMap(([, rows]) => rows).forEach(row => {
+    actualFrequencies.forEach(row => {
       frequenciesByKey.set(
         toReferenceKey(
           String(row.unitName),
@@ -428,6 +462,7 @@ describe('VariableAnalysisProcessor', () => {
         row
       );
     });
+    expect(frequenciesByKey.size).toBe(eatPrepReference.frequencies.length);
 
     eatPrepReference.frequencies.forEach(expected => {
       const actual = frequenciesByKey.get(
