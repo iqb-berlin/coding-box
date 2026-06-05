@@ -4,11 +4,16 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog } from '@angular/material/dialog';
 import { Observable, of, throwError } from 'rxjs';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 import { ResponseMatchingFlag } from '../../../ws-admin/services/workspace-settings.service';
+import { CoderService } from '../../services/coder.service';
+import { ExportJobService } from '../../../shared/services/file/export-job.service';
+import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
+import { ManualCodingExportDialogComponent } from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
 
 type VariableCoverageOverview = NonNullable<
 CodingManagementManualComponent['variableCoverageOverview']
@@ -46,6 +51,21 @@ describe('CodingManagementManualComponent', () => {
         {
           provide: MatSnackBar,
           useValue: { open: jest.fn() }
+        },
+        {
+          provide: MatDialog,
+          useValue: { open: jest.fn().mockReturnValue({ afterClosed: () => of(undefined) }) }
+        },
+        {
+          provide: CoderService,
+          useValue: {
+            getCoders: jest.fn().mockReturnValue(of([])),
+            getCodersForExport: jest.fn().mockReturnValue(of([]))
+          }
+        },
+        {
+          provide: ExportJobService,
+          useValue: { startJob: jest.fn().mockReturnValue(of({ jobId: 'export-1' })) }
         },
         {
           provide: Router,
@@ -964,22 +984,189 @@ describe('CodingManagementManualComponent', () => {
     expect(refreshSpy).not.toHaveBeenCalled();
   });
 
-  it('should open training reliability and discussion in within-training mode', () => {
-    const openResultsComparison = jest.fn();
+  it('should open training reliability with a coder-training kappa scope', () => {
+    const dialog = { open: jest.fn() };
+    (component as unknown as { dialog: typeof dialog }).dialog = dialog;
     component.coderTrainingsListComponent = {
-      openResultsComparison
+      originalData: [{ id: 7 }],
+      coderTrainings: [],
+      openResultsComparison: jest.fn()
     } as unknown as CodingManagementManualComponent['coderTrainingsListComponent'];
 
     component.openTrainingReliability();
+
+    expect(dialog.open).toHaveBeenCalledWith(
+      CohensKappaStatisticsComponent,
+      expect.objectContaining({
+        data: {
+          excludeTrainings: false,
+          scope: { coderTrainingIds: [7] }
+        }
+      })
+    );
+  });
+
+  it('should open execution reliability with cached job definitions when planning tab is not rendered', () => {
+    const dialog = { open: jest.fn() };
+    const componentInternals = component as unknown as {
+      dialog: typeof dialog;
+      jobDefinitionsForExport: Array<{
+        id: number;
+        status: 'approved';
+        assignedVariables: unknown[];
+        assignedVariableBundles: unknown[];
+      }>;
+      jobDefinitionsForExportWorkspaceId: number;
+      hasLoadedJobDefinitionsForExport: boolean;
+      appService: { selectedWorkspaceId: number };
+    };
+    componentInternals.dialog = dialog;
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.jobDefinitionsForExport = [
+      {
+        id: 11,
+        status: 'approved',
+        assignedVariables: [],
+        assignedVariableBundles: []
+      }
+    ];
+    componentInternals.jobDefinitionsForExportWorkspaceId = 5;
+    componentInternals.hasLoadedJobDefinitionsForExport = true;
+    component.codingJobDefinitionsComponent = undefined;
+
+    component.openExecutionReliability();
+
+    expect(dialog.open).toHaveBeenCalledWith(
+      CohensKappaStatisticsComponent,
+      expect.objectContaining({
+        data: {
+          excludeTrainings: true,
+          scope: { jobDefinitionIds: [11] }
+        }
+      })
+    );
+  });
+
+  it('should start execution exports with cached job definition scope when the dialog keeps defaults', () => {
+    const exportJobService = TestBed.inject(ExportJobService);
+    const dialog = {
+      open: jest.fn().mockReturnValue({
+        afterClosed: () => of({ exportType: 'detailed' })
+      })
+    };
+    const componentInternals = component as unknown as {
+      dialog: typeof dialog;
+      jobDefinitionsForExport: Array<{
+        id: number;
+        status: 'approved';
+        assignedVariables: unknown[];
+        assignedVariableBundles: unknown[];
+      }>;
+      jobDefinitionsForExportWorkspaceId: number;
+      hasLoadedJobDefinitionsForExport: boolean;
+      codersForExportWorkspaceId: number;
+      hasLoadedCodersForExport: boolean;
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+    };
+    componentInternals.dialog = dialog;
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    componentInternals.jobDefinitionsForExport = [
+      {
+        id: 11,
+        status: 'approved',
+        assignedVariables: [],
+        assignedVariableBundles: []
+      }
+    ];
+    componentInternals.jobDefinitionsForExportWorkspaceId = 5;
+    componentInternals.hasLoadedJobDefinitionsForExport = true;
+    componentInternals.codersForExportWorkspaceId = 5;
+    componentInternals.hasLoadedCodersForExport = true;
+    component.codingJobDefinitionsComponent = undefined;
+
+    component.openExecutionExport();
+
+    expect(dialog.open).toHaveBeenCalledWith(
+      ManualCodingExportDialogComponent,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          defaultJobDefinitionIds: [11],
+          jobDefinitions: [
+            expect.objectContaining({
+              id: 11
+            })
+          ]
+        })
+      })
+    );
+    expect(exportJobService.startJob).toHaveBeenCalledWith(
+      5,
+      expect.objectContaining({
+        exportType: 'detailed',
+        userId: 9,
+        excludeAutoCoded: true,
+        jobDefinitionIds: [11]
+      })
+    );
+  });
+
+  it('should wait for coder scope before opening execution export dialog', () => {
+    const dialog = { open: jest.fn() };
+    const componentInternals = component as unknown as {
+      dialog: typeof dialog;
+      jobDefinitionsForExport: Array<{
+        id: number;
+        status: 'approved';
+        assignedVariables: unknown[];
+        assignedVariableBundles: unknown[];
+      }>;
+      jobDefinitionsForExportWorkspaceId: number;
+      hasLoadedJobDefinitionsForExport: boolean;
+      codersForExportWorkspaceId?: number;
+      hasLoadedCodersForExport: boolean;
+      isLoadingCodersForExport: boolean;
+      appService: {
+        selectedWorkspaceId: number;
+      };
+    };
+    componentInternals.dialog = dialog;
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.jobDefinitionsForExport = [
+      {
+        id: 11,
+        status: 'approved',
+        assignedVariables: [],
+        assignedVariableBundles: []
+      }
+    ];
+    componentInternals.jobDefinitionsForExportWorkspaceId = 5;
+    componentInternals.hasLoadedJobDefinitionsForExport = true;
+    componentInternals.codersForExportWorkspaceId = 5;
+    componentInternals.hasLoadedCodersForExport = false;
+    componentInternals.isLoadingCodersForExport = false;
+    component.codingJobDefinitionsComponent = undefined;
+
+    component.openExecutionExport();
+
+    expect(dialog.open).not.toHaveBeenCalled();
+    expect(componentInternals.hasLoadedCodersForExport).toBe(true);
+  });
+
+  it('should open training discussion in within-training mode', () => {
+    const openResultsComparison = jest.fn();
+    component.coderTrainingsListComponent = {
+      originalData: [],
+      coderTrainings: [],
+      openResultsComparison
+    } as unknown as CodingManagementManualComponent['coderTrainingsListComponent'];
+
     component.openTrainingDiscussion();
 
-    expect(openResultsComparison).toHaveBeenNthCalledWith(
-      1,
-      undefined,
-      'within-training'
-    );
-    expect(openResultsComparison).toHaveBeenNthCalledWith(
-      2,
+    expect(openResultsComparison).toHaveBeenCalledWith(
       undefined,
       'within-training'
     );

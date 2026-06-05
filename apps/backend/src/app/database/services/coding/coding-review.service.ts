@@ -522,7 +522,10 @@ export class CodingReviewService {
 
   async getCodedVariablesForKappa(
     workspaceId: number,
-    excludeTrainings: boolean = true
+    excludeTrainings: boolean = true,
+    jobDefinitionIds: number[] = [],
+    coderTrainingIds: number[] = [],
+    coderIds: number[] = []
   ): Promise<Array<{
       responseId: number;
       unitName: string;
@@ -544,6 +547,7 @@ export class CodingReviewService {
         codedAt: Date;
       }>;
     }>> {
+    const scopedJobDefinitionBundleScope = await this.getJobDefinitionBundleScope(workspaceId, jobDefinitionIds);
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const batchSize = 5000;
     const query = this.codingJobUnitRepository
@@ -592,6 +596,35 @@ export class CodingReviewService {
 
     if (excludeTrainings) {
       query.andWhere('cj.training_id IS NULL');
+    }
+
+    if (this.hasScopeFilters(jobDefinitionIds, coderTrainingIds)) {
+      const scopeClauses: string[] = [];
+
+      if (jobDefinitionIds.length) {
+        scopeClauses.push(this.getJobDefinitionScopeClause(
+          'cj',
+          'cju',
+          'kappaJobDefinitionIds',
+          'kappaJobDefinitionBundleIds',
+          scopedJobDefinitionBundleScope.bundleIds
+        ));
+        query.setParameter('kappaJobDefinitionIds', jobDefinitionIds);
+        if (scopedJobDefinitionBundleScope.bundleIds.length) {
+          query.setParameter('kappaJobDefinitionBundleIds', scopedJobDefinitionBundleScope.bundleIds);
+        }
+      }
+
+      if (coderTrainingIds.length) {
+        scopeClauses.push('cj.training_id IN (:...kappaCoderTrainingIds)');
+        query.setParameter('kappaCoderTrainingIds', coderTrainingIds);
+      }
+
+      query.andWhere(`(${scopeClauses.join(' OR ')})`);
+    }
+
+    if (coderIds.length) {
+      query.andWhere('cjc.user_id IN (:...kappaCoderIds)', { kappaCoderIds: coderIds });
     }
 
     applyResolvedExclusionsToQuery(query, exclusions, {
@@ -1116,7 +1149,10 @@ export class CodingReviewService {
   async getWorkspaceCohensKappaSummary(
     workspaceId: number,
     weightedMean: boolean = true,
-    excludeTrainings: boolean = true
+    excludeTrainings: boolean = true,
+    jobDefinitionIds: number[] = [],
+    coderTrainingIds: number[] = [],
+    coderIds: number[] = []
   ): Promise<{
       coderPairs: Array<{
         coder1Id: number;
@@ -1143,6 +1179,21 @@ export class CodingReviewService {
         `Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}${excludeTrainings ? ' (excluding trainings)' : ''}`
       );
 
+      if (coderIds.length === 1) {
+        return {
+          coderPairs: [],
+          workspaceSummary: {
+            totalDoubleCodedResponses: 0,
+            totalCoderPairs: 0,
+            averageKappa: null,
+            variablesIncluded: 0,
+            codersIncluded: 0,
+            weightingMethod: weightedMean ? 'weighted' : 'unweighted'
+          }
+        };
+      }
+
+      let totalReviewItems = 0;
       let totalDoubleCodedResponses = 0;
       let currentPage = 1;
       const batchSize = 1000;
@@ -1174,16 +1225,25 @@ export class CodingReviewService {
           undefined, // statusFilter
           undefined, // resolvedFilter
           undefined, // agreementFilter
-          undefined, // jobDefinitionIds
-          undefined, // coderTrainingIds
+          jobDefinitionIds,
+          coderTrainingIds,
           false // includeRelations = false
         );
 
+        if (coderIds.length > 0) {
+          doubleCodedData.data.forEach(item => {
+            item.coderResults = item.coderResults.filter(result => coderIds.includes(result.coderId));
+          });
+        }
+
         if (currentPage === 1) {
-          totalDoubleCodedResponses = doubleCodedData.total;
+          totalReviewItems = doubleCodedData.total;
         }
 
         for (const item of doubleCodedData.data) {
+          if (item.coderResults.length < 2) continue;
+
+          totalDoubleCodedResponses += 1;
           uniqueVariables.add(`${item.unitName}:${item.variableId}`);
 
           const coders = item.coderResults;
@@ -1238,7 +1298,7 @@ export class CodingReviewService {
           }
         }
 
-        if ((currentPage * batchSize) >= totalDoubleCodedResponses || doubleCodedData.data.length === 0) {
+        if ((currentPage * batchSize) >= totalReviewItems || doubleCodedData.data.length === 0) {
           hasMore = false;
         } else {
           currentPage += 1;

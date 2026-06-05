@@ -68,6 +68,7 @@ import {
   ApplyCodingResultsResponse,
   BulkApplyCodingResultsResponse,
   CodingJobBackendService,
+  JobDefinition,
   ManualCodingScopeSummary
 } from '../../services/coding-job-backend.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
@@ -105,6 +106,13 @@ import {
   isCodingFreshnessOpenWarning
 } from '../../../shared/utils/coding-freshness-text.util';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { ExportJobConfig, ExportJobService } from '../../../shared/services/file/export-job.service';
+import { CoderService } from '../../services/coder.service';
+import {
+  ManualCodingExportDialogComponent,
+  ManualCodingExportDialogResult
+} from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
+import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 
 interface SavedCodeProgress {
   id?: number;
@@ -170,6 +178,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private validationStateService = inject(ValidationStateService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private userBackendService = inject(UserBackendService);
+  private coderService = inject(CoderService);
+  private exportJobService = inject(ExportJobService);
   private translateService = inject(TranslateService);
   private dialog = inject(MatDialog);
   private router = inject(Router);
@@ -349,6 +359,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   showCoderTraining = false;
   editTraining: CoderTraining | null = null;
+  coders: Coder[] = [];
+  isStartingManualExport = false;
+  isLoadingCodersForExport = false;
+  private codersForExportWorkspaceId?: number;
+  private hasLoadedCodersForExport = false;
+  private jobDefinitionsForExport: JobDefinition[] = [];
+  private jobDefinitionsForExportWorkspaceId?: number;
+  private hasLoadedJobDefinitionsForExport = false;
+  private isLoadingJobDefinitionsForExport = false;
 
   expectedCombinations: ExpectedCombinationDto[] = [];
 
@@ -381,10 +400,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       currentProgress.status === 'loading' ||
       currentProgress.status === 'processing';
 
+    this.loadCodersForExport();
+    this.loadJobDefinitionsForExport();
+
     // Set up debounced statistics refresh
     this.jobDefinitionChangeSubject
       .pipe(debounceTime(500), takeUntil(this.destroy$))
       .subscribe(() => {
+        this.loadJobDefinitionsForExport();
         this.loadManualTabData(this.activeManualTab);
         if (this.coderTrainingsListComponent) {
           this.coderTrainingsListComponent.loadCoderTrainings();
@@ -465,6 +488,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.loadCodingFreshness();
         this.loadResponseAnalysis();
         this.reloadCodingJobsList();
+        this.loadJobDefinitionsForExport();
         if (this.codingJobDefinitionsComponent) {
           this.codingJobDefinitionsComponent.refresh();
         }
@@ -1007,7 +1031,22 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   openTrainingReliability(): void {
-    this.openTrainingWithinComparison();
+    const coderTrainingIds = this.getCoderTrainingIds();
+
+    if (coderTrainingIds.length === 0) {
+      this.showError('Die Schulungen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+      return;
+    }
+
+    this.dialog.open(CohensKappaStatisticsComponent, {
+      width: '95vw',
+      maxWidth: '1200px',
+      height: '90vh',
+      data: {
+        excludeTrainings: false,
+        scope: { coderTrainingIds }
+      }
+    });
   }
 
   private openTrainingWithinComparison(): void {
@@ -1029,12 +1068,21 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   openExecutionReliability(): void {
-    if (this.codingJobsComponent) {
-      this.codingJobsComponent.openCohensKappaStatisticsDialog();
+    if (!this.ensureExecutionJobDefinitionScopeReady()) {
       return;
     }
 
-    this.showError('Die Kodierjobs werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+    const jobDefinitionIds = this.getJobDefinitionIds();
+
+    this.dialog.open(CohensKappaStatisticsComponent, {
+      width: '95vw',
+      maxWidth: '1200px',
+      height: '90vh',
+      data: {
+        excludeTrainings: true,
+        scope: jobDefinitionIds.length ? { jobDefinitionIds } : undefined
+      }
+    });
   }
 
   openExecutionDoubleCodedReview(): void {
@@ -1044,6 +1092,190 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.showError('Die Kodierjobs werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+  }
+
+  openTrainingExport(): void {
+    const coderTrainingIds = this.getCoderTrainingIds();
+
+    if (coderTrainingIds.length === 0) {
+      this.showError('Die Schulungen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+      return;
+    }
+
+    if (!this.ensureCoderScopeReady()) {
+      return;
+    }
+
+    this.openManualCodingExportDialog('training');
+  }
+
+  openExecutionExport(): void {
+    if (!this.ensureExecutionJobDefinitionScopeReady()) {
+      return;
+    }
+
+    if (!this.ensureCoderScopeReady()) {
+      return;
+    }
+
+    this.openManualCodingExportDialog('execution');
+  }
+
+  private openManualCodingExportDialog(context: 'training' | 'execution'): void {
+    this.dialog.open(ManualCodingExportDialogComponent, {
+      width: '680px',
+      maxWidth: '95vw',
+      data: {
+        context,
+        coders: this.coders,
+        jobDefinitions: context === 'execution' ? this.getJobDefinitionExportOptions() : undefined,
+        coderTrainings: context === 'training' ? this.getCoderTrainingsForExport() : undefined,
+        defaultJobDefinitionIds: context === 'execution' ? this.getJobDefinitionIds() : undefined,
+        defaultCoderTrainingIds: context === 'training' ? this.getCoderTrainingIds() : undefined
+      }
+    }).afterClosed()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((result?: ManualCodingExportDialogResult) => {
+        if (!result) {
+          return;
+        }
+
+        this.startManualCodingExport(context, result);
+      });
+  }
+
+  private startManualCodingExport(
+    context: 'training' | 'execution',
+    result: ManualCodingExportDialogResult
+  ): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (!workspaceId) {
+      this.showError('Kein Arbeitsbereich ausgewählt.');
+      return;
+    }
+
+    const exportConfig: ExportJobConfig = {
+      exportType: result.exportType,
+      userId: this.appService.userId,
+      includeReplayUrl: false,
+      outputCommentsInsteadOfCodes: result.outputCommentsInsteadOfCodes,
+      anonymizeCoders: result.anonymizeCoders,
+      usePseudoCoders: result.usePseudoCoders,
+      doubleCodingMethod: result.doubleCodingMethod,
+      includeComments: result.includeComments,
+      includeModalValue: result.includeModalValue,
+      excludeAutoCoded: true,
+      coderIds: result.coderIds,
+      coderTrainingIds: context === 'training' ?
+        result.coderTrainingIds ?? this.getCoderTrainingIds() :
+        undefined,
+      jobDefinitionIds: context === 'execution' ?
+        result.jobDefinitionIds ?? this.getJobDefinitionIds() :
+        undefined
+    };
+
+    this.isStartingManualExport = true;
+    this.exportJobService.startJob(workspaceId, exportConfig)
+      .pipe(finalize(() => {
+        this.isStartingManualExport = false;
+      }))
+      .subscribe({
+        next: () => {
+          this.showSuccess('Exportjob wurde gestartet.');
+        },
+        error: () => {
+          this.showError('Exportjob konnte nicht gestartet werden.');
+        }
+      });
+  }
+
+  private getCoderTrainingIds(): number[] {
+    return this.getCoderTrainingsForExport()
+      .map(training => training.id)
+      .filter((id): id is number => Number.isFinite(id));
+  }
+
+  private getJobDefinitionIds(): number[] {
+    return this.getJobDefinitionsForManualScope()
+      .map(jobDefinition => jobDefinition.id)
+      .filter((id): id is number => Number.isFinite(id));
+  }
+
+  private getCoderTrainingsForExport(): CoderTraining[] {
+    return this.coderTrainingsListComponent?.originalData.length ?
+      this.coderTrainingsListComponent.originalData :
+      this.coderTrainingsListComponent?.coderTrainings ?? [];
+  }
+
+  private getJobDefinitionExportOptions(): { id: number; label: string }[] {
+    return this.getJobDefinitionsForManualScope()
+      .filter(jobDefinition => Number.isFinite(jobDefinition.id))
+      .map(jobDefinition => {
+        const variableCount = jobDefinition.assignedVariables?.length ?? 0;
+        const bundleCount = jobDefinition.assignedVariableBundles?.length ?? 0;
+        const status = jobDefinition.status ? ` (${jobDefinition.status})` : '';
+        return {
+          id: jobDefinition.id as number,
+          label: `Definition #${jobDefinition.id}${status}: ${variableCount} Variablen, ${bundleCount} Bündel`
+        };
+      });
+  }
+
+  private getJobDefinitionsForManualScope(): JobDefinition[] {
+    const renderedDefinitions = this.codingJobDefinitionsComponent?.jobDefinitions;
+    if (renderedDefinitions?.length) {
+      return renderedDefinitions;
+    }
+
+    return this.jobDefinitionsForExportWorkspaceId === this.appService.selectedWorkspaceId ?
+      this.jobDefinitionsForExport :
+      [];
+  }
+
+  private ensureExecutionJobDefinitionScopeReady(): boolean {
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (!workspaceId) {
+      return true;
+    }
+
+    if (
+      (this.hasLoadedJobDefinitionsForExport &&
+        this.jobDefinitionsForExportWorkspaceId === workspaceId) ||
+      this.codingJobDefinitionsComponent
+    ) {
+      return true;
+    }
+
+    if (!this.isLoadingJobDefinitionsForExport) {
+      this.loadJobDefinitionsForExport();
+    }
+
+    this.showError('Die Jobdefinitionen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+    return false;
+  }
+
+  private ensureCoderScopeReady(): boolean {
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (!workspaceId) {
+      return true;
+    }
+
+    if (
+      this.hasLoadedCodersForExport &&
+      this.codersForExportWorkspaceId === workspaceId
+    ) {
+      return true;
+    }
+
+    if (!this.isLoadingCodersForExport) {
+      this.loadCodersForExport();
+    }
+
+    this.showError('Die Kodierer werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+    return false;
   }
 
   closeCoderTraining(): void {
@@ -1090,6 +1322,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   refreshManualCodingPlanning(): void {
     const activeTab = this.activeManualTab;
     this.loadManualTabData(activeTab);
+    this.loadJobDefinitionsForExport();
     if (activeTab !== 'planning') {
       this.loadCodingFreshness();
     }
@@ -1111,6 +1344,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private refreshManualStateAfterExternalChange(): void {
     const activeTab = this.activeManualTab;
     this.loadManualTabData(activeTab, { reloadCodingJobs: false });
+    this.loadJobDefinitionsForExport();
     if (activeTab !== 'planning') {
       this.loadCodingFreshness();
     }
@@ -1920,6 +2154,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadCodingIncompleteVariables();
     this.loadStatusDistributionV2();
     this.reloadCodingJobsList();
+    this.loadJobDefinitionsForExport();
 
     if (this.codingJobDefinitionsComponent) {
       this.codingJobDefinitionsComponent.refresh();
@@ -2034,6 +2269,105 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.canApplyManualCodingResults = false;
+        }
+      });
+  }
+
+  private loadJobDefinitionsForExport(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (!workspaceId) {
+      this.jobDefinitionsForExport = [];
+      this.jobDefinitionsForExportWorkspaceId = undefined;
+      this.hasLoadedJobDefinitionsForExport = false;
+      this.isLoadingJobDefinitionsForExport = false;
+      return;
+    }
+
+    if (this.jobDefinitionsForExportWorkspaceId !== workspaceId) {
+      this.jobDefinitionsForExport = [];
+      this.hasLoadedJobDefinitionsForExport = false;
+      this.jobDefinitionsForExportWorkspaceId = workspaceId;
+    }
+
+    this.isLoadingJobDefinitionsForExport = true;
+    this.codingJobBackendService
+      .getJobDefinitions(workspaceId)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          if (this.jobDefinitionsForExportWorkspaceId === workspaceId) {
+            this.isLoadingJobDefinitionsForExport = false;
+          }
+        })
+      )
+      .subscribe({
+        next: definitions => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) {
+            return;
+          }
+
+          this.jobDefinitionsForExport = definitions;
+          this.jobDefinitionsForExportWorkspaceId = workspaceId;
+          this.hasLoadedJobDefinitionsForExport = true;
+        },
+        error: () => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) {
+            return;
+          }
+
+          this.jobDefinitionsForExport = [];
+          this.jobDefinitionsForExportWorkspaceId = workspaceId;
+          this.hasLoadedJobDefinitionsForExport = false;
+        }
+      });
+  }
+
+  private loadCodersForExport(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (!workspaceId) {
+      this.coders = [];
+      this.codersForExportWorkspaceId = undefined;
+      this.hasLoadedCodersForExport = false;
+      this.isLoadingCodersForExport = false;
+      return;
+    }
+
+    if (this.codersForExportWorkspaceId !== workspaceId) {
+      this.coders = [];
+      this.hasLoadedCodersForExport = false;
+      this.codersForExportWorkspaceId = workspaceId;
+    }
+
+    this.isLoadingCodersForExport = true;
+    this.coderService.getCodersForExport()
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          if (this.codersForExportWorkspaceId === workspaceId) {
+            this.isLoadingCodersForExport = false;
+          }
+        })
+      )
+      .subscribe({
+        next: coders => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) {
+            return;
+          }
+
+          this.coders = coders;
+          this.codersForExportWorkspaceId = workspaceId;
+          this.hasLoadedCodersForExport = true;
+        },
+        error: () => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) {
+            return;
+          }
+
+          this.coders = [];
+          this.codersForExportWorkspaceId = workspaceId;
+          this.hasLoadedCodersForExport = false;
         }
       });
   }
