@@ -1,8 +1,17 @@
 {
-  "source": "eatPrepTBA evaluate_psychometrics reference subset for GitHub issue #563",
+  "source": "Normalized from checked-in manual eatPrepTBA-shaped reference table for GitHub issue #563",
+  "referenceUrl": "https://github.com/franikowsp/eatPrepTBA/blob/16e3567adefb7341a3e93fd3d97aa25a207d0c99/R/evaluate_psychometrics.R",
+  "referenceCommit": "16e3567adefb7341a3e93fd3d97aa25a207d0c99",
+  "referenceTable": "scripts/reference/variable-analysis-eatpreptba/eatpreptba-shaped-reference.csv",
+  "referenceInputs": [
+    "scripts/reference/variable-analysis-eatpreptba/reference-responses.csv",
+    "scripts/reference/variable-analysis-eatpreptba/reference-schema.csv"
+  ],
+  "generator": "scripts/reference/variable-analysis-eatpreptba/normalize-eatpreptba-reference.mjs",
   "tolerance": 1e-9,
   "notes": [
-    "Percentages are stored as percent values in Kodierbox. eatPrepTBA emits proportions in code_p_total, code_p_valid, category_p_total, and category_p_valid.",
+    "The reference table is manually normalized in the eatPrepTBA evaluate_psychometrics column format. It is not an unchanged external eatPrepTBA export.",
+    "Percentages are stored as percent values in Kodierbox. eatPrepTBA emits proportions in category_p_total and category_p_valid.",
     "Point-biserial discrimination columns are intentionally outside this fixture because the current Kodierbox variable analysis does not calculate domain scores."
   ],
   "variableCombos": [
@@ -32,37 +41,25 @@
       "unitName": "UNIT_REF",
       "variableId": "VAR_BASE",
       "value": "A",
-      "label": "Alpha",
-      "score": 1,
       "count": 2,
       "validOccurrenceCount": 2,
       "percentageTotal": 40,
       "percentageValid": 50,
-      "isSchemaOnly": false
+      "isSchemaOnly": false,
+      "label": "Alpha",
+      "score": 1
     },
     {
       "unitName": "UNIT_REF",
       "variableId": "VAR_BASE",
       "value": "B",
-      "label": "Beta",
-      "score": 0,
       "count": 1,
       "validOccurrenceCount": 1,
       "percentageTotal": 20,
       "percentageValid": 25,
-      "isSchemaOnly": false
-    },
-    {
-      "unitName": "UNIT_REF",
-      "variableId": "VAR_BASE",
-      "value": "C",
-      "label": "Gamma",
-      "score": 0,
-      "count": 0,
-      "validOccurrenceCount": 0,
-      "percentageTotal": 0,
-      "percentageValid": 0,
-      "isSchemaOnly": true
+      "isSchemaOnly": false,
+      "label": "Beta",
+      "score": 0
     },
     {
       "unitName": "UNIT_REF",
@@ -73,6 +70,18 @@
       "percentageTotal": 20,
       "percentageValid": 25,
       "isSchemaOnly": false
+    },
+    {
+      "unitName": "UNIT_REF",
+      "variableId": "VAR_BASE",
+      "value": "C",
+      "count": 0,
+      "validOccurrenceCount": 0,
+      "percentageTotal": 0,
+      "percentageValid": 0,
+      "isSchemaOnly": true,
+      "label": "Gamma",
+      "score": 0
     },
     {
       "unitName": "UNIT_REF",
@@ -88,34 +97,34 @@
       "unitName": "UNIT_REF",
       "variableId": "VAR_MULTI",
       "value": "A",
-      "label": "Alpha",
       "count": 2,
       "validOccurrenceCount": 2,
       "percentageTotal": 50,
       "percentageValid": 66.66666666666666,
-      "isSchemaOnly": false
+      "isSchemaOnly": false,
+      "label": "Alpha"
     },
     {
       "unitName": "UNIT_REF",
       "variableId": "VAR_MULTI",
       "value": "B",
-      "label": "Beta",
       "count": 2,
       "validOccurrenceCount": 2,
       "percentageTotal": 50,
       "percentageValid": 66.66666666666666,
-      "isSchemaOnly": false
+      "isSchemaOnly": false,
+      "label": "Beta"
     },
     {
       "unitName": "UNIT_REF",
       "variableId": "VAR_MULTI",
       "value": "C",
-      "label": "Gamma",
       "count": 1,
       "validOccurrenceCount": 1,
       "percentageTotal": 25,
       "percentageValid": 33.33333333333333,
-      "isSchemaOnly": false
+      "isSchemaOnly": false,
+      "label": "Gamma"
     }
   ]
 }
