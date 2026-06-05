@@ -1,0 +1,7 @@
+unitName,variableId,value,label,score
+UNIT_REF,VAR_BASE,A,Alpha,1
+UNIT_REF,VAR_BASE,B,Beta,0
+UNIT_REF,VAR_BASE,C,Gamma,0
+UNIT_REF,VAR_MULTI,A,Alpha,
+UNIT_REF,VAR_MULTI,B,Beta,
+UNIT_REF,VAR_MULTI,C,Gamma,
