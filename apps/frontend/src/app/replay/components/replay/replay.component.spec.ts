@@ -532,6 +532,51 @@ describe('ReplayComponent', () => {
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', true);
   });
 
+  it('should load coding-review mode as read-only without coding job status side effects', async () => {
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding-review',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'unit-123',
+      unitAlias: 'Unit 123',
+      variableId: 'VAR1',
+      variableAnchor: 'VAR1',
+      bookletName: 'Booklet 1',
+      personLogin: 'valid',
+      personCode: 'test',
+      personGroup: '',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+    codingJobBackendServiceMock.updateCodingJob.mockClear();
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(component.isCodingMode).toBe(true);
+    expect(component.isReviewMode).toBe(true);
+    expect(component.codingService.isReviewMode).toBe(true);
+    expect(component.isCodingReadOnly()).toBe(true);
+    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', false);
+    expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+  });
+
   it('should reuse coding job units loaded from query params during replay navigation', async () => {
     routeParams = {
       page: '0',
@@ -829,6 +874,37 @@ describe('ReplayComponent', () => {
         variableId: 'V1',
         code: digitShortcutCodingScheme.variableCodings[0].codes[1]
       });
+    });
+
+    it('should ignore digit shortcuts in coding review mode', () => {
+      component.isCodingMode = true;
+      component.isReviewMode = true;
+      const unitsData = {
+        id: 123,
+        name: 'job',
+        currentUnitIndex: 0,
+        units: [
+          {
+            id: 1,
+            name: 'UNIT1',
+            alias: 'UNIT1',
+            bookletId: 0,
+            testPerson: 'tp1@code1@grp@booklet',
+            variableId: 'V1',
+            variableAnchor: 'V1'
+          }
+        ]
+      };
+      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
+      replayComponent.unitsData = unitsData;
+      component.codingService.currentVariableId = 'V1';
+      component.codingService.codingScheme = digitShortcutCodingScheme;
+      const onCodeSelectedSpy = jest.spyOn(component, 'onCodeSelected').mockResolvedValue();
+      const event = new KeyboardEvent('keydown', { key: '2', code: 'Digit2' });
+
+      component.onKeyDown(event);
+
+      expect(onCodeSelectedSpy).not.toHaveBeenCalled();
     });
   });
 

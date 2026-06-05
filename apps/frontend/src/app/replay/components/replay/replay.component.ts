@@ -191,7 +191,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.workspaceId = Number(workspace);
 
         const queryParams = await firstValueFrom(this.route.queryParams);
-        this.isCodingMode = queryParams.mode === 'coding';
+        this.isReviewMode = queryParams.mode === 'coding-review';
+        this.codingService.isReviewMode = this.isReviewMode;
+        this.isCodingMode = queryParams.mode === 'coding' || this.isReviewMode;
         this.isBookletReplayMode = queryParams.mode === 'booklet-view' || queryParams.mode === 'booklet';
         this.originResponseId = queryParams.originResponseId ? Number(queryParams.originResponseId) : null;
         if (this.isCodingMode || this.isBookletReplayMode) {
@@ -250,7 +252,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           if (deserializedUnits) {
             this.unitsData = deserializedUnits;
             // Check if this is a review session (contains " - Review: " in name)
-            this.isReviewMode = this.unitsData.name.includes(' - Review: ');
+            this.isReviewMode = this.isReviewMode || this.unitsData.name.includes(' - Review: ');
+            this.codingService.isReviewMode = this.isReviewMode;
             this.currentUnitIndex = deserializedUnits.currentUnitIndex;
             this.totalUnits = deserializedUnits.units.length;
             const unitAny = (this.unitsData.units[this.currentUnitIndex] || {}) as unknown as {
@@ -828,6 +831,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   async onCodeSelected(event: { variableId: string; code: any }): Promise<void> {
+    if (this.isCodingReadOnly()) return;
+
     let savedCode: { code?: string; score?: number } | null = null;
     try {
       savedCode = await this.codingService.handleCodeSelected(event, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
@@ -859,6 +864,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   onNotesChanged(notes: string): void {
+    if (this.isCodingReadOnly()) return;
+
     this.codingService.saveNotes(
       this.workspaceId,
       this.testPerson,
@@ -880,6 +887,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return this.codingService.getProgressPercentage(this.unitsData);
   }
 
+  isCodingReadOnly(): boolean {
+    return this.isReviewMode || this.codingService.isCodingJobFinalized;
+  }
+
   getPreSelectedCodeId(variableId: string): number | null {
     return this.codingService.getPreSelectedCodeId(this.testPerson, this.unitId, variableId);
   }
@@ -891,6 +902,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   pauseCodingJob(): void {
     if (
       this.codingService.codingJobId &&
+      !this.isReviewMode &&
       !this.codingService.isCompletedJobReview &&
       !this.codingService.isCodingJobFinalized
     ) {
@@ -899,12 +911,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   resumeCodingJob(): void {
-    if (this.codingService.codingJobId) {
+    if (this.codingService.codingJobId && !this.isReviewMode) {
       this.codingService.resumeCodingJob(this.workspaceId, this.codingService.codingJobId);
     }
   }
 
   async submitCodingJob(): Promise<void> {
+    if (this.isReviewMode) return;
+
     if (this.codingService.codingJobId) {
       if (this.codingService.hasSaveError) {
         await this.codingService.submitCodingJob(this.workspaceId, this.codingService.codingJobId);
@@ -921,6 +935,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   openCommentDialog(): void {
+    if (this.isCodingReadOnly()) return;
+
     const dialogRef = this.dialog.open(CodingJobCommentDialogComponent, {
       width: '500px',
       data: { comment: this.codingService.codingJobComment }
@@ -998,7 +1014,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         const compositeKey = this.codingService.generateCompositeKey(this.testPerson, currentUnitName, currentVariableId);
         const hasSelection = this.codingService.selectedCodes.has(compositeKey);
 
-        if (hasSelection || this.codingService.isCodingJobFinalized) {
+        if (hasSelection || this.isCodingReadOnly()) {
           const nextIndex = currentIndex + 1;
           if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
             this.handleUnitChanged(this.unitsData.units[nextIndex]);
@@ -1013,7 +1029,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       } else if (
         ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(keyboardEvent.key) &&
         this.codingService.currentVariableId &&
-        !this.codingService.isCodingJobFinalized
+        !this.isCodingReadOnly()
       ) {
         keyboardEvent.preventDefault();
         const codeId = parseInt(keyboardEvent.key, 10);

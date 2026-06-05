@@ -74,7 +74,7 @@
         matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
         <mat-icon>directions</mat-icon>
       </button>
-      <button mat-icon-button (click)="onCommentClick()" class="comment-button"
+      <button mat-icon-button (click)="onCommentClick()" [disabled]="isReadOnly" class="comment-button"
         matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
         <mat-icon>comment</mat-icon>
       </button>
