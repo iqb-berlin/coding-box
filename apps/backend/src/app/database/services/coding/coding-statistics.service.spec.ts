@@ -560,6 +560,93 @@ describe('CodingStatisticsService', () => {
       expect(result[0].agreement).toBe(1);
     });
 
+    it('should match the REQ-002 code-level reference dataset', () => {
+      const result = service.calculateCohensKappa([
+        {
+          coder1Id: 1,
+          coder1Name: 'Coder1',
+          coder2Id: 2,
+          coder2Name: 'Coder2',
+          codes: [
+            { code1: 0, code2: 0 },
+            { code1: 0, code2: 6 },
+            { code1: 6, code2: 6 },
+            { code1: 8, code2: 9 },
+            { code1: 9, code2: 9 },
+            { code1: 0, code2: 0 },
+            { code1: 6, code2: 0 },
+            { code1: 8, code2: 8 },
+            { code1: null, code2: 0 }
+          ]
+        }
+      ]);
+
+      expect(result[0].validPairs).toBe(8);
+      expect(result[0].totalItems).toBe(9);
+      expect(result[0].agreement).toBe(0.625);
+      expect(result[0].kappa).toBe(0.489);
+    });
+
+    it('should match the REQ-002 score-level perfect agreement convention', () => {
+      const result = service.calculateCohensKappa(
+        [
+          {
+            coder1Id: 1,
+            coder1Name: 'Coder1',
+            coder2Id: 2,
+            coder2Name: 'Coder2',
+            codes: [],
+            scores: [
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: null, score2: 0 }
+            ]
+          }
+        ],
+        'score'
+      );
+
+      expect(result[0].validPairs).toBe(8);
+      expect(result[0].totalItems).toBe(9);
+      expect(result[0].agreement).toBe(1);
+      expect(result[0].kappa).toBe(1);
+    });
+
+    it('should match the REQ-002 score-level two-category reference dataset', () => {
+      const result = service.calculateCohensKappa(
+        [
+          {
+            coder1Id: 1,
+            coder1Name: 'Coder1',
+            coder2Id: 2,
+            coder2Name: 'Coder2',
+            codes: [],
+            scores: [
+              { score1: 1, score2: 1 },
+              { score1: 1, score2: 1 },
+              { score1: 1, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 1 },
+              { score1: 1, score2: 1 },
+              { score1: 0, score2: 0 }
+            ]
+          }
+        ],
+        'score'
+      );
+
+      expect(result[0].validPairs).toBe(8);
+      expect(result[0].agreement).toBe(0.75);
+      expect(result[0].kappa).toBe(0.5);
+    });
+
     it('should handle no valid coding pairs', () => {
       const coderPairs = [
         {

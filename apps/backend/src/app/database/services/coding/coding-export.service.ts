@@ -9,7 +9,13 @@ import { Request, Response } from 'express';
 import { EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { generateReplayUrl, generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
-  calculateModalValue, getLatestCode, buildCoderNameMapping, mapCodeForExport
+  calculateModalValue,
+  formatModalCandidates,
+  getLatestCode,
+  getModalTieLabel,
+  buildCoderNameMapping,
+  mapCodeForExport,
+  type ModalValueResult
 } from '../../../utils/coding-utils';
 import { generateUniqueWorksheetName } from '../../../utils/excel-utils';
 import { CodingListService, CodingItem } from './coding-list.service';
@@ -283,6 +289,24 @@ export class CodingExportService {
     }
 
     return `${mappedCode} (${issueSuffixes.join('; ')})`;
+  }
+
+  private formatModalCandidatesWithIssueSuffixes(
+    modal: ModalValueResult | null | undefined,
+    codings: AggregatedMostFrequentCoding[]
+  ): string {
+    return formatModalCandidates(modal, code => this.formatCodeWithIssueSuffixes(
+      code,
+      this.getCodingIssueOptionsForModalCode(codings, code)
+    ));
+  }
+
+  private getMostFrequentModalTieHeader(variable: string): string {
+    return `${variable} Modalwert-Gleichstand`;
+  }
+
+  private getMostFrequentModalCandidatesHeader(variable: string): string {
+    return `${variable} Modalwert-Kandidaten`;
   }
 
   private getCodingIssueOptionsForModalCode(
@@ -920,7 +944,19 @@ export class CodingExportService {
 
     const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
     if (includeReplayUrl) baseHeaders.push('Replay URL');
-    const headers = [...baseHeaders, ...variables];
+    const includeMostFrequentModalMetadata = includeModalValue && !outputCommentsInsteadOfCodes;
+    const variableHeaders = variables.flatMap(variable => {
+      if (!includeMostFrequentModalMetadata) {
+        return [variable];
+      }
+
+      return [
+        variable,
+        this.getMostFrequentModalTieHeader(variable),
+        this.getMostFrequentModalCandidatesHeader(variable)
+      ];
+    });
+    const headers = [...baseHeaders, ...variableHeaders];
 
     worksheet.columns = headers.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
 
@@ -1098,8 +1134,17 @@ export class CodingExportService {
             row[vKey] = outputCommentsInsteadOfCodes ?
               data.comments.join(' | ') :
               this.formatCodeWithIssueSuffixes(modalResult.modalValue, codingIssueOptions);
+            if (includeMostFrequentModalMetadata) {
+              row[this.getMostFrequentModalTieHeader(vKey)] = getModalTieLabel(modalResult);
+              row[this.getMostFrequentModalCandidatesHeader(vKey)] =
+                this.formatModalCandidatesWithIssueSuffixes(modalResult, data.codings);
+            }
           } else {
             row[vKey] = '';
+            if (includeMostFrequentModalMetadata) {
+              row[this.getMostFrequentModalTieHeader(vKey)] = '';
+              row[this.getMostFrequentModalCandidatesHeader(vKey)] = '';
+            }
           }
         }
 
@@ -1151,6 +1196,8 @@ export class CodingExportService {
 
     const MODAL_VALUE_HEADER = 'Häufigster Wert';
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
+    const MODAL_TIE_HEADER = 'Modalwert-Gleichstand';
+    const MODAL_CANDIDATES_HEADER = 'Modalwert-Kandidaten';
     const COMMENTS_HEADER = 'Kommentare';
     const hasScopedJobFilters = !!(jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length);
 
@@ -1308,7 +1355,9 @@ export class CodingExportService {
     });
 
     const headers = [...baseHeaders, ...coderHeaderNames];
-    if (includeModalValue) headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
+    if (includeModalValue) {
+      headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER, MODAL_TIE_HEADER, MODAL_CANDIDATES_HEADER);
+    }
     if (includeComments) headers.push(COMMENTS_HEADER);
 
     worksheet.columns = headers.map(h => ({ header: h, key: h, width: h === 'Replay URL' ? 60 : 15 }));
@@ -1500,9 +1549,13 @@ export class CodingExportService {
             const modalResult = calculateModalValue(codes);
             row[MODAL_VALUE_HEADER] = mapCodeForExport(modalResult.modalValue) ?? '';
             row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
+            row[MODAL_TIE_HEADER] = getModalTieLabel(modalResult);
+            row[MODAL_CANDIDATES_HEADER] = formatModalCandidates(modalResult, code => mapCodeForExport(code));
           } else if (includeModalValue) {
             row[MODAL_VALUE_HEADER] = '';
             row[DEVIATION_COUNT_HEADER] = '';
+            row[MODAL_TIE_HEADER] = '';
+            row[MODAL_CANDIDATES_HEADER] = '';
           }
 
           if (includeComments) {
@@ -1545,6 +1598,8 @@ export class CodingExportService {
 
     const MODAL_VALUE_HEADER = 'Häufigster Wert';
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
+    const MODAL_TIE_HEADER = 'Modalwert-Gleichstand';
+    const MODAL_CANDIDATES_HEADER = 'Modalwert-Kandidaten';
     const COMMENTS_HEADER = 'Kommentare';
 
     const isExcluded = await this.getExclusionChecker(workspaceId);
@@ -1737,7 +1792,9 @@ export class CodingExportService {
 
     const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
     const headers = [...baseHeaders, ...sortedColumns];
-    if (includeModalValue) headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
+    if (includeModalValue) {
+      headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER, MODAL_TIE_HEADER, MODAL_CANDIDATES_HEADER);
+    }
     if (includeComments) headers.push(COMMENTS_HEADER);
 
     worksheet.columns = headers.map(h => ({ header: h, key: h, width: 25 }));
@@ -1901,9 +1958,13 @@ export class CodingExportService {
           const modalResult = calculateModalValue(codes);
           row[MODAL_VALUE_HEADER] = mapCodeForExport(modalResult.modalValue) ?? '';
           row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
+          row[MODAL_TIE_HEADER] = getModalTieLabel(modalResult);
+          row[MODAL_CANDIDATES_HEADER] = formatModalCandidates(modalResult, code => mapCodeForExport(code));
         } else if (includeModalValue) {
           row[MODAL_VALUE_HEADER] = '';
           row[DEVIATION_COUNT_HEADER] = '';
+          row[MODAL_TIE_HEADER] = '';
+          row[MODAL_CANDIDATES_HEADER] = '';
         }
 
         if (includeComments) {
@@ -2320,6 +2381,8 @@ export class CodingExportService {
 
     const MODAL_VALUE_HEADER = 'Häufigster Wert';
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
+    const MODAL_TIE_HEADER = 'Modalwert-Gleichstand';
+    const MODAL_CANDIDATES_HEADER = 'Modalwert-Kandidaten';
     const DOUBLE_CODED_HEADER = 'Doppelkodierung';
     const COMMENTS_HEADER = 'Kommentare';
     const hasScopedJobFilters = !!(
@@ -2465,7 +2528,9 @@ export class CodingExportService {
       const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
       if (includeReplayUrl) baseHeaders.push('Replay URL');
       baseHeaders.push(...displayCoders);
-      if (includeModalValue) baseHeaders.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
+      if (includeModalValue) {
+        baseHeaders.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER, MODAL_TIE_HEADER, MODAL_CANDIDATES_HEADER);
+      }
       if (includeDoubleCoded) baseHeaders.push(DOUBLE_CODED_HEADER);
       if (includeComments) baseHeaders.push(...displayCoders.map(c => `${COMMENTS_HEADER} (${c})`));
 
@@ -2599,10 +2664,17 @@ export class CodingExportService {
             }
           }
 
-          if (includeModalValue) {
+          if (includeModalValue && codes.length > 0) {
             const modal = calculateModalValue(codes);
             row[MODAL_VALUE_HEADER] = modal.modalValue ?? '';
             row[DEVIATION_COUNT_HEADER] = modal.deviationCount;
+            row[MODAL_TIE_HEADER] = getModalTieLabel(modal);
+            row[MODAL_CANDIDATES_HEADER] = formatModalCandidates(modal);
+          } else if (includeModalValue) {
+            row[MODAL_VALUE_HEADER] = '';
+            row[DEVIATION_COUNT_HEADER] = '';
+            row[MODAL_TIE_HEADER] = '';
+            row[MODAL_CANDIDATES_HEADER] = '';
           }
 
           if (includeDoubleCoded) {
@@ -2941,7 +3013,14 @@ export class CodingExportService {
       'Code-Hinweis'
     ];
     if (includeComments) headerColumns.splice(7, 0, 'Kommentar');
-    if (includeModalValue) headerColumns.push('Häufigster Wert', 'Anzahl der Abweichungen');
+    if (includeModalValue) {
+      headerColumns.push(
+        'Häufigster Wert',
+        'Anzahl der Abweichungen',
+        'Modalwert-Gleichstand',
+        'Modalwert-Kandidaten'
+      );
+    }
     if (includeDoubleCoded) headerColumns.push('Doppelkodierung');
     if (includeReplayUrl) headerColumns.push('Replay URL');
     return `${headerColumns.map(h => this.escapeCsvField(h)).join(';')}\n`;
@@ -3132,7 +3211,9 @@ export class CodingExportService {
       if (includeModalValue) {
         rowFields.push(
           this.escapeCsvField(modal?.modalValue ?? ''),
-          this.escapeCsvField(modal?.deviationCount ?? '')
+          this.escapeCsvField(modal?.deviationCount ?? ''),
+          this.escapeCsvField(getModalTieLabel(modal)),
+          this.escapeCsvField(formatModalCandidates(modal))
         );
       }
       if (includeDoubleCoded) rowFields.push(this.escapeCsvField(codes.length > 1 ? 'Ja' : 'Nein'));

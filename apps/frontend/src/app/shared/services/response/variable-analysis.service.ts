@@ -24,6 +24,9 @@ export interface VariableFrequencyDto {
   percentage: number;
   percentageTotal?: number;
   percentageValid?: number | null;
+  pointBiserial?: number | null;
+  codePbc?: number | null;
+  categoryPbc?: number | null;
 }
 
 export type VariableAnalysisSortBy =
