@@ -100,6 +100,26 @@ describe('CodingFileCacheService', () => {
     expect(pageMap.get('VAR_ALIAS')).toBe('1');
   });
 
+  it('parses VOCS page overrides from already structured file data', async () => {
+    const repository = createRepository({
+      'UNIT.VOCS': {
+        file_id: 'UNIT.VOCS',
+        file_type: 'Resource',
+        workspace_id: 1,
+        data: {
+          variableCodings: [
+            { id: 'STRUCTURED_VAR', page: '3' }
+          ]
+        } as unknown as string
+      }
+    });
+    const service = new CodingFileCacheService(repository);
+
+    const pageMap = await service.loadVoudData('UNIT', 1);
+
+    expect(pageMap.get('STRUCTURED_VAR')).toBe('2');
+  });
+
   it('ignores empty and invalid VOCS pages and keeps VOUD fallback pages', async () => {
     const repository = createRepository({
       'UNIT.VOUD': createFile('UNIT.VOUD', {

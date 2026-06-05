@@ -583,5 +583,39 @@ describe('CodingReplayService', () => {
         })
       );
     });
+
+    it('should use resolved page overrides for coding job replay URLs', async () => {
+      const items = [
+        {
+          responseId: 1,
+          unitName: 'UNIT',
+          unitAlias: null,
+          variableId: 'VAR_WITH_OVERRIDE',
+          variableAnchor: 'VAR_WITH_OVERRIDE',
+          bookletName: 'BOOKLET',
+          personLogin: 'login',
+          personCode: 'code',
+          personGroup: 'group'
+        }
+      ];
+
+      mockCodingListService.getVariablePageMap.mockResolvedValue(new Map([
+        ['VAR_WITH_OVERRIDE', '1']
+      ]));
+      (replayUrlUtil.generateReplayUrl as jest.Mock).mockImplementation(params => (
+        `${params.serverUrl}/#/replay/${params.loginName}@${params.loginCode}@${params.loginGroup}@${params.bookletId}/${params.unitId}/${params.variablePage}/${params.variableAnchor}?auth=${params.authToken}`
+      ));
+
+      const result = await service.generateReplayUrlsForItemsBulk(
+        7,
+        items,
+        'http://example.com'
+      );
+
+      expect(mockCodingListService.getVariablePageMap).toHaveBeenCalledWith('UNIT', 7);
+      expect(result[0].replayUrl).toBe(
+        'http://example.com/#/replay/login@code@group@BOOKLET/UNIT/1/VAR_WITH_OVERRIDE'
+      );
+    });
   });
 });
