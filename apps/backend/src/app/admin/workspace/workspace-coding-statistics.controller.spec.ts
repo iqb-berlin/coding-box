@@ -198,7 +198,10 @@ describe('WorkspaceCodingStatisticsController', () => {
       'true',
       undefined,
       undefined,
-      'false'
+      'false',
+      '11,12',
+      '21',
+      ['31', '32']
     );
 
     expect(result.variables[0].meanKappa).toBe(0.667);
@@ -214,7 +217,7 @@ describe('WorkspaceCodingStatisticsController', () => {
     expect(result.workspaceSummary.totalDoubleCodedResponses).toBe(1);
     expect(
       codingReviewService.getCodedVariablesForKappa
-    ).toHaveBeenCalledWith(5, false);
+    ).toHaveBeenCalledWith(5, false, [11, 12], [21], [31, 32]);
   });
 
   it('adds unweighted mean kappa per variable to detailed kappa statistics', async () => {
@@ -356,11 +359,14 @@ describe('WorkspaceCodingStatisticsController', () => {
       'UNIT',
       'VAR',
       'false',
+      undefined,
+      undefined,
+      undefined,
       response as never
     );
 
     expect(codingReviewService.getCodedVariablesForKappa)
-      .toHaveBeenCalledWith(5, false);
+      .toHaveBeenCalledWith(5, false, [], [], []);
     expect(response.setHeader).toHaveBeenCalledWith(
       'Content-Type',
       'text/csv; charset=utf-8'
@@ -437,6 +443,9 @@ describe('WorkspaceCodingStatisticsController', () => {
       '=UNIT',
       '+VAR',
       'true',
+      undefined,
+      undefined,
+      undefined,
       response as never
     );
 
@@ -526,6 +535,9 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       'true',
+      undefined,
+      undefined,
+      undefined,
       response as never
     );
 
@@ -613,6 +625,9 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       'true',
+      undefined,
+      undefined,
+      undefined,
       response as never
     );
 
@@ -707,6 +722,9 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       'true',
+      undefined,
+      undefined,
+      undefined,
       response as never
     );
 
@@ -810,6 +828,9 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       'true',
+      undefined,
+      undefined,
+      undefined,
       response as never
     );
 

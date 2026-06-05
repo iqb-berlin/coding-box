@@ -90,6 +90,12 @@ export interface CohensKappaStatisticsResponse {
   };
 }
 
+export interface CohensKappaScope {
+  jobDefinitionIds?: number[];
+  coderTrainingIds?: number[];
+  coderIds?: number[];
+}
+
 export interface AggregationSettingsResponse {
   success: boolean;
   threshold: number;
@@ -1180,7 +1186,8 @@ export class TestPersonCodingService {
     weightedMean: boolean = true,
     excludeTrainings: boolean = true,
     unitName?: string,
-    variableId?: string
+    variableId?: string,
+    scope?: CohensKappaScope
   ): Observable<CohensKappaStatisticsResponse> {
     let params = new HttpParams();
 
@@ -1193,6 +1200,7 @@ export class TestPersonCodingService {
     if (variableId) {
       params = params.set('variableId', variableId);
     }
+    params = this.appendCohensKappaScopeParams(params, scope);
 
     return this.http
       .get<CohensKappaStatisticsResponse>(
@@ -1221,13 +1229,15 @@ export class TestPersonCodingService {
     weightedMean: boolean = true,
     excludeTrainings: boolean = true,
     unitName?: string,
-    variableId?: string
+    variableId?: string,
+    scope?: CohensKappaScope
   ): Observable<Blob> {
     const params = this.buildCohensKappaExportParams(
       weightedMean,
       excludeTrainings,
       unitName,
-      variableId
+      variableId,
+      scope
     );
 
     return this.http
@@ -1247,13 +1257,15 @@ export class TestPersonCodingService {
     weightedMean: boolean = true,
     excludeTrainings: boolean = true,
     unitName?: string,
-    variableId?: string
+    variableId?: string,
+    scope?: CohensKappaScope
   ): Observable<Blob> {
     const params = this.buildCohensKappaExportParams(
       weightedMean,
       excludeTrainings,
       unitName,
-      variableId
+      variableId,
+      scope
     );
 
     return this.http
@@ -1273,13 +1285,15 @@ export class TestPersonCodingService {
     weightedMean: boolean = true,
     excludeTrainings: boolean = true,
     unitName?: string,
-    variableId?: string
+    variableId?: string,
+    scope?: CohensKappaScope
   ): Observable<Blob> {
     const params = this.buildCohensKappaExportParams(
       weightedMean,
       excludeTrainings,
       unitName,
-      variableId
+      variableId,
+      scope
     );
 
     return this.http
@@ -1298,7 +1312,8 @@ export class TestPersonCodingService {
     weightedMean: boolean,
     excludeTrainings: boolean,
     unitName?: string,
-    variableId?: string
+    variableId?: string,
+    scope?: CohensKappaScope
   ): HttpParams {
     let params = new HttpParams()
       .set('weightedMean', weightedMean.toString())
@@ -1311,13 +1326,30 @@ export class TestPersonCodingService {
       params = params.set('variableId', variableId);
     }
 
-    return params;
+    return this.appendCohensKappaScopeParams(params, scope);
+  }
+
+  private appendCohensKappaScopeParams(params: HttpParams, scope?: CohensKappaScope): HttpParams {
+    let scopedParams = params;
+
+    if (scope?.jobDefinitionIds?.length) {
+      scopedParams = scopedParams.set('jobDefinitionIds', scope.jobDefinitionIds.join(','));
+    }
+    if (scope?.coderTrainingIds?.length) {
+      scopedParams = scopedParams.set('coderTrainingIds', scope.coderTrainingIds.join(','));
+    }
+    if (scope?.coderIds?.length) {
+      scopedParams = scopedParams.set('coderIds', scope.coderIds.join(','));
+    }
+
+    return scopedParams;
   }
 
   getWorkspaceCohensKappaSummary(
     workspaceId: number,
     weightedMean: boolean = true,
-    excludeTrainings: boolean = true
+    excludeTrainings: boolean = true,
+    scope?: CohensKappaScope
   ): Observable<{
       coderPairs: Array<{
         coder1Id: number;
@@ -1339,9 +1371,9 @@ export class TestPersonCodingService {
         weightingMethod: 'weighted' | 'unweighted';
       };
     }> {
-    const params = new HttpParams()
+    const params = this.appendCohensKappaScopeParams(new HttpParams()
       .set('weightedMean', weightedMean.toString())
-      .set('excludeTrainings', excludeTrainings.toString());
+      .set('excludeTrainings', excludeTrainings.toString()), scope);
     return this.http
       .get<{
       coderPairs: Array<{

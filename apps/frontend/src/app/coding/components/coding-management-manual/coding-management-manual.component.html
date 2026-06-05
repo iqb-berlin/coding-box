@@ -1359,6 +1359,16 @@
               mat-stroked-button
               color="primary"
               type="button"
+              [disabled]="isStartingManualExport || isLoadingCodersForExport"
+              (click)="openExecutionExport()"
+            >
+              <mat-icon>download</mat-icon>
+              Export
+            </button>
+            <button
+              mat-stroked-button
+              color="primary"
+              type="button"
               (click)="openExecutionTransferCases()"
             >
               <mat-icon>swap_horiz</mat-icon>
@@ -1833,6 +1843,16 @@
             >
               <mat-icon>add</mat-icon>
               Kodierschulung erstellen
+            </button>
+            <button
+              mat-stroked-button
+              color="primary"
+              type="button"
+              [disabled]="isStartingManualExport || isLoadingCodersForExport"
+              (click)="openTrainingExport()"
+            >
+              <mat-icon>download</mat-icon>
+              Export
             </button>
             <button
               mat-stroked-button

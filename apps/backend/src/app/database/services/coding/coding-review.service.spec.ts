@@ -33,6 +33,7 @@ describe('CodingReviewService', () => {
     having: jest.Mock;
     andHaving: jest.Mock;
     andWhere: jest.Mock;
+    setParameter: jest.Mock;
     orderBy: jest.Mock;
     addOrderBy: jest.Mock;
     offset: jest.Mock;
@@ -112,6 +113,7 @@ describe('CodingReviewService', () => {
       having: jest.fn().mockReturnThis(),
       andHaving: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
+      setParameter: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
       offset: jest.fn().mockReturnThis(),
@@ -1064,5 +1066,175 @@ describe('CodingReviewService', () => {
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.code IS NOT NULL');
     expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cj.training_id IS NULL');
+  });
+
+  it('applies job definition, coder training and coder scopes to kappa data', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([]);
+
+    await service.getCodedVariablesForKappa(workspaceId, false, [11], [21], [31]);
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cj.job_definition_id IN (:...kappaJobDefinitionIds) OR cj.training_id IN (:...kappaCoderTrainingIds))'
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'cjc.user_id IN (:...kappaCoderIds)',
+      { kappaCoderIds: [31] }
+    );
+    expect(queryBuilder.setParameter).toHaveBeenCalledWith('kappaJobDefinitionIds', [11]);
+    expect(queryBuilder.setParameter).toHaveBeenCalledWith('kappaCoderTrainingIds', [21]);
+  });
+
+  it('returns an empty workspace kappa summary for a single selected coder', async () => {
+    const getDoubleCodedVariablesForReviewSpy = jest.spyOn(
+      service,
+      'getDoubleCodedVariablesForReview'
+    );
+
+    const result = await service.getWorkspaceCohensKappaSummary(
+      workspaceId,
+      true,
+      true,
+      [],
+      [],
+      [31]
+    );
+
+    expect(getDoubleCodedVariablesForReviewSpy).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      coderPairs: [],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 0,
+        totalCoderPairs: 0,
+        averageKappa: null,
+        variablesIncluded: 0,
+        codersIncluded: 0,
+        weightingMethod: 'weighted'
+      }
+    });
+  });
+
+  it('keeps workspace kappa summary pairs within the selected coder scope', async () => {
+    const codingStatisticsService = {
+      calculateCohensKappa: jest.fn().mockReturnValue([
+        {
+          coder1Id: 31,
+          coder1Name: 'Coder 31',
+          coder2Id: 32,
+          coder2Name: 'Coder 32',
+          kappa: 1,
+          agreement: 1,
+          totalSharedResponses: 1,
+          validPairs: 1,
+          interpretation: 'Sehr gut'
+        }
+      ])
+    };
+    service = new CodingReviewService(
+      {} as never,
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      codingStatisticsService as never,
+      {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
+      } as never
+    );
+    const getDoubleCodedVariablesForReviewSpy = jest
+      .spyOn(service, 'getDoubleCodedVariablesForReview')
+      .mockResolvedValueOnce({
+        data: [
+          {
+            responseId: 10,
+            unitName: 'UNIT_1',
+            variableId: 'VAR_1',
+            personLogin: 'person-1',
+            personCode: 'P001',
+            personGroup: 'GROUP_1',
+            bookletName: 'BOOKLET_1',
+            givenAnswer: 'answer',
+            isResolved: false,
+            coderResults: [
+              {
+                coderId: 31,
+                coderName: 'Coder 31',
+                jobId: 100,
+                jobName: 'Job 31',
+                jobDefinitionId: 11,
+                trainingId: null,
+                trainingLabel: null,
+                code: 1,
+                score: 1,
+                notes: null,
+                supervisorComment: null,
+                codedAt: new Date('2026-05-18T00:00:00.000Z')
+              },
+              {
+                coderId: 32,
+                coderName: 'Coder 32',
+                jobId: 101,
+                jobName: 'Job 32',
+                jobDefinitionId: 11,
+                trainingId: null,
+                trainingLabel: null,
+                code: 1,
+                score: 1,
+                notes: null,
+                supervisorComment: null,
+                codedAt: new Date('2026-05-18T00:00:00.000Z')
+              },
+              {
+                coderId: 33,
+                coderName: 'Coder 33',
+                jobId: 102,
+                jobName: 'Job 33',
+                jobDefinitionId: 11,
+                trainingId: null,
+                trainingLabel: null,
+                code: 2,
+                score: 1,
+                notes: null,
+                supervisorComment: null,
+                codedAt: new Date('2026-05-18T00:00:00.000Z')
+              }
+            ]
+          }
+        ],
+        total: 1,
+        page: 1,
+        limit: 1000
+      });
+
+    const result = await service.getWorkspaceCohensKappaSummary(
+      workspaceId,
+      true,
+      true,
+      [],
+      [],
+      [31, 32]
+    );
+
+    expect(getDoubleCodedVariablesForReviewSpy).toHaveBeenCalledWith(
+      workspaceId,
+      1,
+      1000,
+      false,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [],
+      [],
+      false
+    );
+    expect(codingStatisticsService.calculateCohensKappa).toHaveBeenCalledWith([
+      expect.objectContaining({
+        coder1Id: 31,
+        coder2Id: 32,
+        codes: [{ code1: 1, code2: 1 }]
+      })
+    ]);
+    expect(result.workspaceSummary.codersIncluded).toBe(2);
   });
 });
