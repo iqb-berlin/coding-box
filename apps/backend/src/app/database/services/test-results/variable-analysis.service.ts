@@ -1044,6 +1044,9 @@ export class VariableAnalysisService {
         percentage: percentageTotal,
         percentageTotal,
         percentageValid,
+        pointBiserial: row.pointBiserial,
+        codePbc: row.codePbc,
+        categoryPbc: row.categoryPbc,
         totalCount,
         validCount,
         invalidCount,
@@ -1209,7 +1212,10 @@ export class VariableAnalysisService {
         validOccurrenceCount: row.validOccurrenceCount,
         percentage: row.percentage,
         percentageTotal: row.percentageTotal,
-        percentageValid: row.percentageValid
+        percentageValid: row.percentageValid,
+        pointBiserial: row.pointBiserial,
+        codePbc: row.codePbc,
+        categoryPbc: row.categoryPbc
       });
     });
 

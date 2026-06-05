@@ -618,6 +618,21 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         jobId: '3',
         trainingId: null,
         responseId: '100'
+      },
+      {
+        personId: '10',
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        cju_code: '8',
+        coding_issue_option: '-3',
+        code_v1: null,
+        code_v2: null,
+        code_v3: null,
+        notes: null,
+        username: 'Coder D',
+        jobId: '4',
+        trainingId: null,
+        responseId: '100'
       }
     ]);
     const personResultsQuery = createQueryBuilder([{
@@ -667,14 +682,20 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       false,
       false,
       false,
-      'most-frequent'
+      'most-frequent',
+      false,
+      true
     );
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
     const worksheet = workbook.getWorksheet('Coding Results');
 
     expect(worksheet?.getRow(1).getCell(4).value).toBe('UNIT_VAR');
+    expect(worksheet?.getRow(1).getCell(5).value).toBe('UNIT_VAR Modalwert-Gleichstand');
+    expect(worksheet?.getRow(1).getCell(6).value).toBe('UNIT_VAR Modalwert-Kandidaten');
     expect(worksheet?.getRow(2).getCell(4).value).toBe('7 (unsicher; neuer Code nötig)');
+    expect(worksheet?.getRow(2).getCell(5).value).toBe('Ja');
+    expect(worksheet?.getRow(2).getCell(6).value).toBe('7 (unsicher; neuer Code nötig),8 (ungültig)');
     expect(manualCodingQuery.addSelect).toHaveBeenCalledWith(
       'cju.coding_issue_option',
       'coding_issue_option'
@@ -1042,14 +1063,16 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
 
     const csv = await streamToString(service.exportCodingResultsByVariableCompactAsCsvStream(
       7,
-      false,
+      true,
       true,
       true
     ));
 
     expect(csv).toContain('"Unit";"Variable";"Test Person Login"');
+    expect(csv).toContain('"Häufigster Wert";"Anzahl der Abweichungen";"Modalwert-Gleichstand";"Modalwert-Kandidaten";"Doppelkodierung"');
     expect(csv).toContain('"UNIT";"VAR";"login-a";"code-a";"group-a";"Coder A";"5";"note-a";');
     expect(csv).toContain('"UNIT";"VAR";"login-a";"code-a";"group-a";"Coder B";"7";"note-b";');
+    expect(csv).toContain('"5";"1";"Ja";"5,7";"Ja"');
     expect(csv).toContain('"Ja"');
     expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
     expect(codingJobUnitRepository.createQueryBuilder).toHaveBeenCalledTimes(2);
@@ -1293,6 +1316,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     expect(variableRecordsQuery.andWhere).toHaveBeenCalledWith('cj.training_id IS NULL');
     expect(manualCodingQuery.andWhere).toHaveBeenCalledWith('cj.training_id IS NULL');
     expect(worksheet?.getRow(1).getCell(4).value).toBe('UNIT_DERIVED');
+    expect(worksheet?.getRow(1).getCell(5).value).toBeNull();
     expect(worksheet?.getRow(2).getCell(4).value).toBe('4');
   });
 

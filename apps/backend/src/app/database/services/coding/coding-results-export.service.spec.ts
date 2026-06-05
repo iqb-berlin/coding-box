@@ -510,6 +510,58 @@ describe('CodingResultsExportService', () => {
     const cellValues = worksheet.getSheetValues().flat().map(value => String(value ?? ''));
 
     expect(cellValues.some(value => value.includes('DERIVE_ONLY'))).toBe(true);
+    expect(worksheet.getRow(1).getCell(5).value).toBeNull();
+  });
+
+  it('adds modal tie metadata to most-frequent aggregated export variables', async () => {
+    const { service } = createService({
+      codingJobUnits: [
+        {
+          ...baseUnit,
+          id: 1,
+          code: 7,
+          coding_issue_option: 1,
+          coding_job: {
+            ...baseUnit.coding_job,
+            codingJobCoders: [{ user: { id: 11, username: 'coder-a' } }]
+          }
+        },
+        {
+          ...baseUnit,
+          id: 2,
+          code: 8,
+          coding_issue_option: null,
+          coding_job: {
+            ...baseUnit.coding_job,
+            codingJobCoders: [{ user: { id: 12, username: 'coder-b' } }]
+          }
+        }
+      ]
+    });
+
+    const buffer = await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'most-frequent',
+      false,
+      true,
+      '',
+      undefined,
+      true
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.worksheets[0];
+
+    expect(worksheet.getRow(1).getCell(4).value).toBe('UNIT1_VAR1');
+    expect(worksheet.getRow(1).getCell(5).value).toBe('UNIT1_VAR1 Modalwert-Gleichstand');
+    expect(worksheet.getRow(1).getCell(6).value).toBe('UNIT1_VAR1 Modalwert-Kandidaten');
+    expect(worksheet.getRow(2).getCell(4).value).toBe(7);
+    expect(worksheet.getRow(2).getCell(5).value).toBe('Ja');
+    expect(worksheet.getRow(2).getCell(6).value).toBe('7,8');
   });
 
   it('includes DERIVE_ERROR job-only variables in manual-only by-variable export', async () => {
