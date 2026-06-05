@@ -97,6 +97,9 @@ export interface VariableAnalysisData {
         percentage: number;
         percentageTotal?: number;
         percentageValid?: number | null;
+        pointBiserial?: number | null;
+        codePbc?: number | null;
+        categoryPbc?: number | null;
       }[];
     };
     total: number;
@@ -128,6 +131,9 @@ export interface VariableFrequency {
   percentage: number;
   percentageTotal?: number;
   percentageValid?: number | null;
+  pointBiserial?: number | null;
+  codePbc?: number | null;
+  categoryPbc?: number | null;
 }
 
 export interface VariableStatusCount {
@@ -414,7 +420,10 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 validOccurrenceCount: freq.validOccurrenceCount,
                 percentage: freq.percentage,
                 percentageTotal: freq.percentageTotal,
-                percentageValid: freq.percentageValid
+                percentageValid: freq.percentageValid,
+                pointBiserial: freq.pointBiserial,
+                codePbc: freq.codePbc,
+                categoryPbc: freq.categoryPbc
               }));
           }
         }
@@ -1257,6 +1266,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           percentage: 0,
           percentageTotal: 0,
           percentageValid: summary.validCount > 0 ? 0 : null,
+          pointBiserial: undefined,
+          codePbc: undefined,
+          categoryPbc: undefined,
           isSchemaOnly: true
         }];
 
@@ -1291,6 +1303,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           percentage: percentageTotal,
           percentageTotal,
           percentageValid,
+          pointBiserial: frequency.pointBiserial,
+          codePbc: frequency.codePbc,
+          categoryPbc: frequency.categoryPbc,
           totalCount: summary.totalCount,
           validCount: summary.validCount,
           invalidCount: summary.invalidCount,

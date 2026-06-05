@@ -7,7 +7,14 @@ import { Request } from 'express';
 import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
-  calculateModalValue, getLatestCode, buildCoderMapping, buildCoderNameMapping, mapCodeForExport
+  calculateModalValue,
+  formatModalCandidates,
+  getLatestCode,
+  getModalTieLabel,
+  buildCoderMapping,
+  buildCoderNameMapping,
+  mapCodeForExport,
+  ModalValueResult
 } from '../../../utils/coding-utils';
 import { generateUniqueWorksheetName } from '../../../utils/excel-utils';
 import { CodingListService } from './coding-list.service';
@@ -295,6 +302,14 @@ export class CodingResultsExportService {
     return `${mappedCode} (${issueSuffix})`;
   }
 
+  private getMostFrequentModalTieHeader(variable: string): string {
+    return `${variable} Modalwert-Gleichstand`;
+  }
+
+  private getMostFrequentModalCandidatesHeader(variable: string): string {
+    return `${variable} Modalwert-Kandidaten`;
+  }
+
   async exportCodingResultsAggregated(
     workspaceId: number,
     outputCommentsInsteadOfCodes = false,
@@ -498,7 +513,7 @@ export class CodingResultsExportService {
 
       this.logger.log(`Processed ${codingJobUnits.length} units and potentially auto-only responses. Creating Excel file with ${testPersonList.length} test persons and ${variableSet.size} variables.`);
 
-      const testPersonModalValues = new Map<string, Map<string, { modalValue: number | null; deviationCount: number }>>();
+      const testPersonModalValues = new Map<string, Map<string, ModalValueResult>>();
 
       for (const testPersonKey of testPersonList) {
         testPersonModalValues.set(testPersonKey, new Map());
@@ -509,7 +524,12 @@ export class CodingResultsExportService {
             const modalResult = calculateModalValue(codes);
             testPersonModalValues.get(testPersonKey)!.set(variableKey, modalResult);
           } else {
-            testPersonModalValues.get(testPersonKey)!.set(variableKey, { modalValue: null, deviationCount: 0 });
+            testPersonModalValues.get(testPersonKey)!.set(variableKey, {
+              modalValue: null,
+              deviationCount: 0,
+              isTie: false,
+              modalCandidates: []
+            });
           }
         }
       }
@@ -520,7 +540,19 @@ export class CodingResultsExportService {
         baseHeaders.push('Replay URL');
       }
 
-      const headers = [...baseHeaders, ...variables];
+      const includeMostFrequentModalMetadata = includeModalValue && !outputCommentsInsteadOfCodes;
+      const variableHeaders = variables.flatMap(variable => {
+        if (!includeMostFrequentModalMetadata) {
+          return [variable];
+        }
+
+        return [
+          variable,
+          this.getMostFrequentModalTieHeader(variable),
+          this.getMostFrequentModalCandidatesHeader(variable)
+        ];
+      });
+      const headers = [...baseHeaders, ...variableHeaders];
 
       worksheet.columns = headers.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
 
@@ -560,6 +592,11 @@ export class CodingResultsExportService {
           } else {
             row[variable] = modalData?.modalValue ?? '';
           }
+
+          if (includeMostFrequentModalMetadata) {
+            row[this.getMostFrequentModalTieHeader(variable)] = getModalTieLabel(modalData);
+            row[this.getMostFrequentModalCandidatesHeader(variable)] = formatModalCandidates(modalData);
+          }
         }
 
         worksheet.addRow(row);
@@ -598,6 +635,8 @@ export class CodingResultsExportService {
 
     const MODAL_VALUE_HEADER = 'Häufigster Wert';
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
+    const MODAL_TIE_HEADER = 'Modalwert-Gleichstand';
+    const MODAL_CANDIDATES_HEADER = 'Modalwert-Kandidaten';
     const COMMENTS_HEADER = 'Kommentare';
 
     if (checkCancellation) await checkCancellation();
@@ -796,7 +835,7 @@ export class CodingResultsExportService {
       const headers = [...baseHeaders, ...coderList];
 
       if (includeModalValue) {
-        headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
+        headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER, MODAL_TIE_HEADER, MODAL_CANDIDATES_HEADER);
       }
       if (includeComments) {
         headers.push(COMMENTS_HEADER);
@@ -863,9 +902,16 @@ export class CodingResultsExportService {
             const modalResult = calculateModalValue(codes);
             row[MODAL_VALUE_HEADER] = mapCodeForExport(modalResult.modalValue) ?? '';
             row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
+            row[MODAL_TIE_HEADER] = getModalTieLabel(modalResult);
+            row[MODAL_CANDIDATES_HEADER] = formatModalCandidates(
+              modalResult,
+              candidateCode => mapCodeForExport(candidateCode)
+            );
           } else if (includeModalValue) {
             row[MODAL_VALUE_HEADER] = '';
             row[DEVIATION_COUNT_HEADER] = '';
+            row[MODAL_TIE_HEADER] = '';
+            row[MODAL_CANDIDATES_HEADER] = '';
           }
 
           // Add comments
@@ -907,6 +953,8 @@ export class CodingResultsExportService {
 
     const MODAL_VALUE_HEADER = 'Häufigster Wert';
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
+    const MODAL_TIE_HEADER = 'Modalwert-Gleichstand';
+    const MODAL_CANDIDATES_HEADER = 'Modalwert-Kandidaten';
     const COMMENTS_HEADER = 'Kommentare';
 
     if (checkCancellation) await checkCancellation();
@@ -1119,7 +1167,7 @@ export class CodingResultsExportService {
       const headers = [...baseHeaders, ...columnLabels];
 
       if (includeModalValue) {
-        headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
+        headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER, MODAL_TIE_HEADER, MODAL_CANDIDATES_HEADER);
       }
       if (includeComments) {
         headers.push(COMMENTS_HEADER);
@@ -1171,9 +1219,16 @@ export class CodingResultsExportService {
           const modalResult = calculateModalValue(allCodes);
           row[MODAL_VALUE_HEADER] = mapCodeForExport(modalResult.modalValue) ?? '';
           row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
+          row[MODAL_TIE_HEADER] = getModalTieLabel(modalResult);
+          row[MODAL_CANDIDATES_HEADER] = formatModalCandidates(
+            modalResult,
+            candidateCode => mapCodeForExport(candidateCode)
+          );
         } else if (includeModalValue) {
           row[MODAL_VALUE_HEADER] = '';
           row[DEVIATION_COUNT_HEADER] = '';
+          row[MODAL_TIE_HEADER] = '';
+          row[MODAL_CANDIDATES_HEADER] = '';
         }
 
         // Add comments
@@ -1455,6 +1510,8 @@ export class CodingResultsExportService {
     // Column header constants
     const MODAL_VALUE_HEADER = 'Häufigster Wert';
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
+    const MODAL_TIE_HEADER = 'Modalwert-Gleichstand';
+    const MODAL_CANDIDATES_HEADER = 'Modalwert-Kandidaten';
     const DOUBLE_CODED_HEADER = 'Doppelkodierung';
     const COMMENTS_HEADER = 'Kommentare';
 
@@ -1638,7 +1695,7 @@ export class CodingResultsExportService {
             baseHeaders.push(...displayCoderList);
 
             if (includeModalValue) {
-              baseHeaders.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
+              baseHeaders.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER, MODAL_TIE_HEADER, MODAL_CANDIDATES_HEADER);
             }
 
             if (includeDoubleCoded) {
@@ -1700,43 +1757,16 @@ export class CodingResultsExportService {
 
               // Calculate modal value and deviations if requested
               if (includeModalValue && codeValues.length > 0) {
-                // Count frequency of each code
-                const frequencyMap = new Map<number, number>();
-                for (const code of codeValues) {
-                  frequencyMap.set(code, (frequencyMap.get(code) || 0) + 1);
-                }
-
-                // Find the maximum frequency
-                let maxFrequency = 0;
-                for (const freq of frequencyMap.values()) {
-                  if (freq > maxFrequency) {
-                    maxFrequency = freq;
-                  }
-                }
-
-                // Collect all codes with the maximum frequency
-                const modalCandidates: number[] = [];
-                for (const [code, freq] of frequencyMap.entries()) {
-                  if (freq === maxFrequency) {
-                    modalCandidates.push(code);
-                  }
-                }
-
-                // Select randomly if there are multiple modal values (tie)
-                const modalValue = modalCandidates.length > 0 ?
-                  modalCandidates[Math.floor(Math.random() * modalCandidates.length)] :
-                  null;
-
-                // Count deviations from modal value (number of coders who used a different code)
-                const deviations = modalValue !== null ?
-                  codeValues.filter(code => code !== modalValue).length :
-                  0;
-
-                row[MODAL_VALUE_HEADER] = modalValue ?? '';
-                row[DEVIATION_COUNT_HEADER] = deviations;
+                const modal = calculateModalValue(codeValues);
+                row[MODAL_VALUE_HEADER] = modal.modalValue ?? '';
+                row[DEVIATION_COUNT_HEADER] = modal.deviationCount;
+                row[MODAL_TIE_HEADER] = getModalTieLabel(modal);
+                row[MODAL_CANDIDATES_HEADER] = formatModalCandidates(modal);
               } else if (includeModalValue) {
                 row[MODAL_VALUE_HEADER] = '';
                 row[DEVIATION_COUNT_HEADER] = '';
+                row[MODAL_TIE_HEADER] = '';
+                row[MODAL_CANDIDATES_HEADER] = '';
               }
 
               if (includeDoubleCoded) {
