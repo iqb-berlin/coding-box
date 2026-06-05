@@ -80,6 +80,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       this.handleUnitDefChange(unitDefChange.currentValue, unitPlayerChange, unitResponsesChange);
     } else if (unitResponsesChange?.currentValue &&
       unitResponsesChange.previousValue !== unitResponsesChange.currentValue) {
+      this.hasEmittedResponseVisible = false;
       this.handleResponsesChange(unitResponsesChange.currentValue);
       this.sendUnitData();
     }

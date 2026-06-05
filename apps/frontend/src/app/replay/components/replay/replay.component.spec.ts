@@ -396,10 +396,12 @@ describe('ReplayComponent', () => {
       alias: null,
       bookletId: 0,
       variableId: 'VAR_2',
+      variableAnchor: 'ANCHOR_2',
       variablePage: '1'
     });
 
     expect(component.page).toBe('1');
+    expect(component.anchor).toBe('ANCHOR_2');
     expect(component.codingService.currentVariableId).toBe('VAR_2');
   });
 
