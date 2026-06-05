@@ -2302,4 +2302,42 @@ describe('CodingJobService', () => {
     expect(result[0].isDoubleCoded).toBe(true);
     expect(result[0].otherCoders).toEqual(['coder1']);
   });
+
+  it('returns resolved page overrides for coding job units', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 10,
+      workspace_id: 3,
+      job_definition_id: 5,
+      training_id: null,
+      case_ordering_mode: 'continuous',
+      codingJobCoders: []
+    });
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    codingJobUnitRepository.find
+      .mockResolvedValueOnce([{
+        response_id: 99,
+        unit_name: 'UNIT',
+        unit_alias: 'UNIT',
+        variable_id: 'VAR_WITH_OVERRIDE',
+        variable_anchor: 'VAR_WITH_OVERRIDE',
+        booklet_name: 'BOOKLET',
+        person_login: 'login',
+        person_code: '',
+        person_group: 'group',
+        notes: null,
+        variable_bundle_id: null
+      }])
+      .mockResolvedValueOnce([]);
+    codingFileCacheService.getVariablePageMap.mockResolvedValue(new Map([
+      ['VAR_WITH_OVERRIDE', '1']
+    ]));
+
+    const result = await service.getCodingJobUnits(10);
+
+    expect(codingFileCacheService.getVariablePageMap).toHaveBeenCalledWith('UNIT', 3);
+    expect(result[0]).toMatchObject({
+      variableId: 'VAR_WITH_OVERRIDE',
+      variablePage: '1'
+    });
+  });
 });
