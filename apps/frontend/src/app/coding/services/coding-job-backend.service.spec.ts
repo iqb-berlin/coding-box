@@ -317,6 +317,14 @@ describe('CodingJobBackendService', () => {
       req.flush([]);
     });
 
+    it('should prepare coding job reviews through the read-only endpoint', () => {
+      service.prepareCodingJobReview(47, 123).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/47/coding-job/123/review`);
+      expect(req.request.method).toBe('GET');
+      req.flush({ total: 1, firstReplayUrl: 'http://replay.url' });
+    });
+
     it('should use the supplied auth token when saving coding progress', () => {
       service.saveCodingProgress(47, 123, {
         testPerson: 'login@code@booklet',
