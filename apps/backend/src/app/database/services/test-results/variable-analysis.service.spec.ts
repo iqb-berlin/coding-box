@@ -837,7 +837,10 @@ describe('VariableAnalysisService', () => {
               variableId: '+VAR',
               value: '@value',
               count: 8,
-              percentage: 80
+              percentage: 80,
+              pointBiserial: 0.42,
+              codePbc: 0.5,
+              categoryPbc: 0.25
             },
             {
               unitId: 1,
@@ -870,7 +873,11 @@ describe('VariableAnalysisService', () => {
     });
 
     expect(csv).toContain('Unit-ID;Unit-Name;Variablen-ID');
+    expect(csv).toContain(
+      'Punktbiseriale Korrelation;Code-PBC;Kategorie-PBC'
+    );
     expect(csv).toContain(";'=UNIT;'+VAR;'@value;");
+    expect(csv).toContain(';0.42;0.5;0.25');
     expect(csv).toContain('VALUE_CHANGED: 8 (80%)');
     expect(csv).toContain('CODING_INCOMPLETE: 2 (20%)');
     expect(csv).not.toContain('OTHER');
@@ -973,7 +980,10 @@ describe('VariableAnalysisService', () => {
                 validOccurrenceCount: 10,
                 percentage: 100,
                 percentageTotal: 100,
-                percentageValid: 100
+                percentageValid: 100,
+                pointBiserial: -0.2,
+                codePbc: 0.3,
+                categoryPbc: 0.4
               }
             ]
           },
@@ -998,6 +1008,9 @@ describe('VariableAnalysisService', () => {
     expect(worksheet?.getRow(2).getCell(11).value).toBe(10);
     expect(worksheet?.getRow(2).getCell(12).value).toBe(10);
     expect(worksheet?.getRow(2).getCell(13).value).toBe(0);
+    expect(worksheet?.getRow(2).getCell(19).value).toBe(-0.2);
+    expect(worksheet?.getRow(2).getCell(20).value).toBe(0.3);
+    expect(worksheet?.getRow(2).getCell(21).value).toBe(0.4);
     expect(worksheet?.getColumn(9).numFmt).toBe('0.0');
     expect(worksheet?.getColumn(10).numFmt).toBe('0.0');
   });
