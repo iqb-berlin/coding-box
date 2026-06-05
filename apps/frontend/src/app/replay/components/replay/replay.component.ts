@@ -698,12 +698,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       name: string;
       testPerson?: string;
       variableId?: string;
+      variableAnchor?: string;
       variablePage?: string;
     };
     const incomingTestPerson = unitAny.testPerson;
 
     if (typeof unitAny.variableId === 'string' && unitAny.variableId.length > 0) {
-      this.anchor = unitAny.variableId;
+      this.anchor = unitAny.variableAnchor || unitAny.variableId;
       this.codingService.currentVariableId = unitAny.variableId;
     }
 
