@@ -1,0 +1,49 @@
+:host {
+  display: block;
+  min-width: min(620px, 92vw);
+}
+
+h2[mat-dialog-title] {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.manual-export-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 620px;
+}
+
+.manual-export-subtitle {
+  color: rgba(0, 0, 0, 0.65);
+  margin: 0;
+}
+
+.manual-export-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.manual-export-section h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.manual-export-radio-group,
+.manual-export-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.manual-export-field {
+  width: 100%;
+}
+
+mat-dialog-actions button mat-icon {
+  margin-right: 6px;
+}

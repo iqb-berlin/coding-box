@@ -14,12 +14,18 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { finalize } from 'rxjs';
 import {
+  CohensKappaScope,
   CohensKappaCoderPair,
   CohensKappaStatisticsResponse,
   CohensKappaVariableSummary,
   TestPersonCodingService
 } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
+
+export interface CohensKappaStatisticsDialogData {
+  scope?: CohensKappaScope;
+  excludeTrainings?: boolean;
+}
 
 @Component({
   selector: 'coding-box-cohens-kappa-statistics',
@@ -48,14 +54,20 @@ export class CohensKappaStatisticsComponent implements OnInit {
 
   constructor(
     @Optional() public dialogRef: MatDialogRef<CohensKappaStatisticsComponent>,
-    @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: unknown
-  ) { }
+    @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: CohensKappaStatisticsDialogData | null
+  ) {
+    this.kappaScope = dialogData?.scope;
+    this.excludeTrainings = dialogData?.excludeTrainings ?? !dialogData?.scope?.coderTrainingIds?.length;
+    this.excludeTrainingsLocked = !!dialogData?.scope?.coderTrainingIds?.length;
+  }
 
   isLoading = false;
   kappaStatistics: CohensKappaVariableSummary[] = [];
   showInterpretationScale = false;
   useWeightedMean = true; // Default to weighted mean (matching R reference implementation)
   excludeTrainings = true; // Default: exclude trainings
+  excludeTrainingsLocked = false;
+  private kappaScope?: CohensKappaScope;
   exportInProgress: 'summary' | 'details' | 'xlsx' | null = null;
 
   workspaceKappaSummary: {
@@ -75,20 +87,29 @@ export class CohensKappaStatisticsComponent implements OnInit {
       return;
     }
 
-    this.testPersonCodingService.getCohensKappaStatistics(workspaceId, this.useWeightedMean, this.excludeTrainings).subscribe({
-      next: response => {
-        this.kappaStatistics = response.variables;
-        this.workspaceKappaSummary = {
-          workspaceSummary: response.workspaceSummary
-        };
-        this.isLoading = false;
-      },
-      error: () => {
-        this.kappaStatistics = [];
-        this.workspaceKappaSummary = null;
-        this.isLoading = false;
-      }
-    });
+    this.testPersonCodingService
+      .getCohensKappaStatistics(
+        workspaceId,
+        this.useWeightedMean,
+        this.excludeTrainings,
+        undefined,
+        undefined,
+        this.kappaScope
+      )
+      .subscribe({
+        next: response => {
+          this.kappaStatistics = response.variables;
+          this.workspaceKappaSummary = {
+            workspaceSummary: response.workspaceSummary
+          };
+          this.isLoading = false;
+        },
+        error: () => {
+          this.kappaStatistics = [];
+          this.workspaceKappaSummary = null;
+          this.isLoading = false;
+        }
+      });
   }
 
   toggleWeightingMethod(): void {
@@ -107,7 +128,14 @@ export class CohensKappaStatisticsComponent implements OnInit {
 
     this.exportInProgress = 'summary';
     this.testPersonCodingService
-      .exportCohensKappaSummaryAsCsv(workspaceId, this.useWeightedMean, this.excludeTrainings)
+      .exportCohensKappaSummaryAsCsv(
+        workspaceId,
+        this.useWeightedMean,
+        this.excludeTrainings,
+        undefined,
+        undefined,
+        this.kappaScope
+      )
       .pipe(finalize(() => {
         this.exportInProgress = null;
       }))
@@ -133,7 +161,14 @@ export class CohensKappaStatisticsComponent implements OnInit {
 
     this.exportInProgress = 'xlsx';
     this.testPersonCodingService
-      .exportCohensKappaStatisticsAsXlsx(workspaceId, this.useWeightedMean, this.excludeTrainings)
+      .exportCohensKappaStatisticsAsXlsx(
+        workspaceId,
+        this.useWeightedMean,
+        this.excludeTrainings,
+        undefined,
+        undefined,
+        this.kappaScope
+      )
       .pipe(finalize(() => {
         this.exportInProgress = null;
       }))
@@ -159,7 +194,14 @@ export class CohensKappaStatisticsComponent implements OnInit {
 
     this.exportInProgress = 'details';
     this.testPersonCodingService
-      .exportCohensKappaStatisticsAsCsv(workspaceId, this.useWeightedMean, this.excludeTrainings)
+      .exportCohensKappaStatisticsAsCsv(
+        workspaceId,
+        this.useWeightedMean,
+        this.excludeTrainings,
+        undefined,
+        undefined,
+        this.kappaScope
+      )
       .pipe(finalize(() => {
         this.exportInProgress = null;
       }))

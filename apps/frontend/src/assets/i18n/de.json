@@ -72,6 +72,22 @@
       "results-by-version": "Finale Ergebnisdaten"
     }
   },
+  "manual-coding-export": {
+    "title": "Manuelle Kodierung exportieren",
+    "subtitle-training": "Exportiert Auswertungen aus Kodierschulungen.",
+    "subtitle-execution": "Exportiert Auswertungen aus produktiven Kodieraufträgen.",
+    "mode-title": "Auswertung",
+    "mode-review": "Review- und Diskussionssicht",
+    "mode-report": "Mehrfach-Job-Bericht",
+    "double-coding-method": "Doppelkodierung darstellen",
+    "report-type": "Berichtstyp",
+    "report-detailed": "Detailliertes Kodierprotokoll",
+    "report-coding-times": "Kodierzeiten",
+    "job-definition-filter": "Jobdefinitionen filtern",
+    "training-filter": "Schulungen filtern",
+    "coder-filter": "Kodierer filtern",
+    "start": "Exportjob starten"
+  },
   "process-overview": {
     "title": "Zentrale Prozess-Übersicht",
     "refresh": "Aktualisieren",
@@ -410,8 +426,8 @@
     "job-definitions": "Jobdefinitionen",
     "coding-statistics": "Kodierstatistiken",
     "manual-coding": "Manuelle Kodierung",
-    "export-subtitle": "Finale Ergebnisdaten und Audit-Sichten exportieren",
-    "export-description": "Exportieren Sie finale Ergebnisdaten oder nachvollziehbare Sichten aus Kodieraufträgen.",
+    "export-subtitle": "Finale Ergebnisdaten exportieren",
+    "export-description": "Exportieren Sie die final angewendeten Ergebnisdaten des Arbeitsbereichs.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
     "export-action-button": "Datenexport starten",
     "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff.",

@@ -24,7 +24,7 @@
         </mat-card-header>
         <mat-card-content>
           <div class="toggles-container">
-            <div class="toggle-item">
+            <div class="toggle-item" *ngIf="!excludeTrainingsLocked">
               <mat-slide-toggle [(ngModel)]="excludeTrainings" (change)="toggleExcludeTrainings()" color="primary">
                 {{ 'cohens-kappa-statistics.exclude-trainings' | translate }}
               </mat-slide-toggle>

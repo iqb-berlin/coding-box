@@ -53,6 +53,24 @@ describe('CoderService', () => {
     });
   });
 
+  describe('getCodersForExport', () => {
+    it('should propagate loading errors', done => {
+      service.getCodersForExport().subscribe({
+        next: () => {
+          done.fail('Expected getCodersForExport to propagate the error');
+        },
+        error: error => {
+          expect(error.status).toBe(500);
+          done();
+        }
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}/admin/workspace/1/coders`);
+      expect(req.request.method).toBe('GET');
+      req.flush('failed', { status: 500, statusText: 'Server Error' });
+    });
+  });
+
   describe('getJobsByCoderId', () => {
     it('should fetch jobs for coder', () => {
       service.getJobsByCoderId(1).subscribe();
