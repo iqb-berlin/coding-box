@@ -5,6 +5,17 @@ import FileUpload from '../../entities/file_upload.entity';
 import { resolveVariablePageMap } from '../../../utils/voud/resolveVariablePageMap';
 import { LRUCache } from '../shared';
 
+interface VocsVariableCoding {
+  id?: unknown;
+  alias?: unknown;
+  page?: unknown;
+  sourceType?: unknown;
+}
+
+interface VocsScheme {
+  variableCodings?: VocsVariableCoding[];
+}
+
 /**
  * Service responsible for loading, parsing, and caching VOUD and VOCS files.
  *
@@ -88,15 +99,7 @@ export class CodingFileCacheService {
     }
 
     try {
-      interface VocsScheme {
-        variableCodings?: {
-          id?: unknown;
-          alias?: unknown;
-          page?: unknown;
-        }[];
-      }
-
-      const scheme = JSON.parse(vocsFile.data) as VocsScheme;
+      const scheme = this.parseVocsScheme(vocsFile.data);
       const vars = Array.isArray(scheme?.variableCodings) ?
         scheme.variableCodings :
         [];
@@ -117,6 +120,10 @@ export class CodingFileCacheService {
     }
 
     return pageOverrides;
+  }
+
+  private parseVocsScheme(data: unknown): VocsScheme {
+    return (typeof data === 'string' ? JSON.parse(data) : data) as VocsScheme;
   }
 
   private toVeronaPageIndex(page: unknown): string | null {
@@ -176,25 +183,15 @@ export class CodingFileCacheService {
 
     if (vocsFile) {
       try {
-        interface VocsScheme {
-          variableCodings?: { id: string; sourceType?: string }[];
-        }
-
-        const data =
-          typeof vocsFile.data === 'string' ?
-            JSON.parse(vocsFile.data) :
-            vocsFile.data;
-        const scheme = data as VocsScheme;
-        const vars = scheme?.variableCodings || [];
+        const scheme = this.parseVocsScheme(vocsFile.data);
+        const vars = Array.isArray(scheme?.variableCodings) ?
+          scheme.variableCodings :
+          [];
 
         for (const vc of vars) {
-          if (
-            vc &&
-            vc.id &&
-            vc.sourceType &&
-            vc.sourceType === 'BASE_NO_VALUE'
-          ) {
-            exclusions.add(`${unitName}||${vc.id}`);
+          const variableId = String(vc?.id || '').trim();
+          if (variableId && vc?.sourceType === 'BASE_NO_VALUE') {
+            exclusions.add(`${unitName}||${variableId}`);
           }
         }
       } catch (error) {
