@@ -1759,6 +1759,26 @@ describe('WorkspaceTestResultsService', () => {
     });
   });
 
+  describe('exportTestLogsToStream', () => {
+    const collectStream = (stream: PassThrough): Promise<string> => new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      stream.on('error', reject);
+    });
+
+    it('should write headers when no test logs are available', async () => {
+      const resStream = new PassThrough();
+      const outputPromise = collectStream(resStream);
+
+      await service.exportTestLogsToStream(1, resStream);
+
+      await expect(outputPromise).resolves.toBe(
+        'groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry'
+      );
+    });
+  });
+
   describe('deletion methods', () => {
     it('deleteTestPersons should invalidate cache', async () => {
       const workspaceId = 1;

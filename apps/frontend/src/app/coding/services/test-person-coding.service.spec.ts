@@ -641,7 +641,11 @@ describe('TestPersonCodingService', () => {
       };
 
       service
-        .getCohensKappaStatistics(mockWorkspaceId, true, false, 'UNIT', 'VAR')
+        .getCohensKappaStatistics(mockWorkspaceId, true, false, 'UNIT', 'VAR', {
+          jobDefinitionIds: [11, 12],
+          coderTrainingIds: [21],
+          coderIds: [31, 32]
+        })
         .subscribe(response => {
           expect(response).toEqual(mockResponse);
           expect(response.variables[0].meanKappa).toBe(0.667);
@@ -652,7 +656,10 @@ describe('TestPersonCodingService', () => {
         request.params.get('weightedMean') === 'true' &&
         request.params.get('excludeTrainings') === 'false' &&
         request.params.get('unitName') === 'UNIT' &&
-        request.params.get('variableId') === 'VAR'
+        request.params.get('variableId') === 'VAR' &&
+        request.params.get('jobDefinitionIds') === '11,12' &&
+        request.params.get('coderTrainingIds') === '21' &&
+        request.params.get('coderIds') === '31,32'
       ));
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
@@ -664,7 +671,11 @@ describe('TestPersonCodingService', () => {
       const mockBlob = new Blob(['subunit;nCases'], { type: 'text/csv' });
 
       service
-        .exportCohensKappaSummaryAsCsv(mockWorkspaceId, false, false, 'UNIT', 'VAR')
+        .exportCohensKappaSummaryAsCsv(mockWorkspaceId, false, false, 'UNIT', 'VAR', {
+          jobDefinitionIds: [11],
+          coderTrainingIds: [21],
+          coderIds: [31]
+        })
         .subscribe(response => {
           expect(response).toEqual(mockBlob);
         });
@@ -674,7 +685,10 @@ describe('TestPersonCodingService', () => {
         request.params.get('weightedMean') === 'false' &&
         request.params.get('excludeTrainings') === 'false' &&
         request.params.get('unitName') === 'UNIT' &&
-        request.params.get('variableId') === 'VAR'
+        request.params.get('variableId') === 'VAR' &&
+        request.params.get('jobDefinitionIds') === '11' &&
+        request.params.get('coderTrainingIds') === '21' &&
+        request.params.get('coderIds') === '31'
       ));
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
@@ -687,7 +701,10 @@ describe('TestPersonCodingService', () => {
       });
 
       service
-        .exportCohensKappaStatisticsAsXlsx(mockWorkspaceId, true, true)
+        .exportCohensKappaStatisticsAsXlsx(mockWorkspaceId, true, true, undefined, undefined, {
+          jobDefinitionIds: [11, 12],
+          coderIds: [31]
+        })
         .subscribe(response => {
           expect(response).toEqual(mockBlob);
         });
@@ -695,7 +712,9 @@ describe('TestPersonCodingService', () => {
       const req = httpMock.expectOne(request => (
         request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/xlsx` &&
         request.params.get('weightedMean') === 'true' &&
-        request.params.get('excludeTrainings') === 'true'
+        request.params.get('excludeTrainings') === 'true' &&
+        request.params.get('jobDefinitionIds') === '11,12' &&
+        request.params.get('coderIds') === '31'
       ));
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
@@ -706,7 +725,9 @@ describe('TestPersonCodingService', () => {
       const mockBlob = new Blob(['Variable;Kappa-Wert'], { type: 'text/csv' });
 
       service
-        .exportCohensKappaStatisticsAsCsv(mockWorkspaceId, false, false, 'UNIT', 'VAR')
+        .exportCohensKappaStatisticsAsCsv(mockWorkspaceId, false, false, 'UNIT', 'VAR', {
+          coderTrainingIds: [21, 22]
+        })
         .subscribe(response => {
           expect(response).toEqual(mockBlob);
         });
@@ -716,7 +737,8 @@ describe('TestPersonCodingService', () => {
         request.params.get('weightedMean') === 'false' &&
         request.params.get('excludeTrainings') === 'false' &&
         request.params.get('unitName') === 'UNIT' &&
-        request.params.get('variableId') === 'VAR'
+        request.params.get('variableId') === 'VAR' &&
+        request.params.get('coderTrainingIds') === '21,22'
       ));
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');

@@ -17,6 +17,16 @@ export class CoderService {
   private codersSubject = new BehaviorSubject<Coder[]>([]);
 
   getCoders(): Observable<Coder[]> {
+    return this.fetchWorkspaceCoders().pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  getCodersForExport(): Observable<Coder[]> {
+    return this.fetchWorkspaceCoders();
+  }
+
+  private fetchWorkspaceCoders(): Observable<Coder[]> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return of([]);
@@ -41,8 +51,7 @@ export class CoderService {
         }));
         this.codersSubject.next(coders);
         return coders;
-      }),
-      catchError(() => of([]))
+      })
     );
   }
 

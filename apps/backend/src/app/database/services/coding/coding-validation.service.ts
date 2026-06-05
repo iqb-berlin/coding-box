@@ -1273,7 +1273,7 @@ export class CodingValidationService {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const query = this.codingJobUnitRepository
       .createQueryBuilder('cju')
-      .select('DISTINCT cju.unit_name', 'unitName')
+      .select('cju.unit_name', 'unitName')
       .addSelect('cju.variable_id', 'variableId')
       .innerJoin('cju.coding_job', 'coding_job')
       .innerJoin('cju.response', 'response')
@@ -1281,7 +1281,8 @@ export class CodingValidationService {
       .andWhere('coding_job.training_id IS NULL')
       .andWhere('response.status_v1 = :deriveErrorStatus', {
         deriveErrorStatus: statusStringToNumber('DERIVE_ERROR')
-      });
+      })
+      .distinct(true);
 
     applyResolvedExclusionsToQuery(query, exclusions, {
       unitNameExpression: 'cju.unit_name',

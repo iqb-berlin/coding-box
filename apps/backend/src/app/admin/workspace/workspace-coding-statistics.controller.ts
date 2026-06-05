@@ -152,6 +152,16 @@ type KappaStatisticsBuildResult = KappaStatisticsResponse & {
   sourceItems: KappaSourceItem[];
 };
 
+type KappaStatisticsOptions = {
+  weightedMean: boolean;
+  excludeTrainings: boolean;
+  unitName?: string;
+  variableId?: string;
+  jobDefinitionIds: number[];
+  coderTrainingIds: number[];
+  coderIds: number[];
+};
+
 type KappaSourceItem = {
   unitName: string;
   variableId: string;
@@ -426,12 +436,7 @@ export class WorkspaceCodingStatisticsController {
 
   private createCohensKappaExportRows(
     statistics: KappaStatisticsResponse,
-    options: {
-      weightedMean: boolean;
-      excludeTrainings: boolean;
-      unitName?: string;
-      variableId?: string;
-    }
+    options: Pick<KappaStatisticsOptions, 'weightedMean' | 'excludeTrainings' | 'unitName' | 'variableId'>
   ): Record<string, string | number>[] {
     const exportedAt = new Date().toISOString();
     const weightingMethod = options.weightedMean ?
@@ -663,12 +668,7 @@ export class WorkspaceCodingStatisticsController {
 
   private async buildCohensKappaStatistics(
     workspaceId: number,
-    options: {
-      weightedMean: boolean;
-      excludeTrainings: boolean;
-      unitName?: string;
-      variableId?: string;
-    }
+    options: KappaStatisticsOptions
   ): Promise<KappaStatisticsBuildResult> {
     this.logger.log(
       `Calculating Cohen's Kappa for workspace ${workspaceId}${options.unitName ? `, unit: ${options.unitName}` : ''
@@ -677,7 +677,10 @@ export class WorkspaceCodingStatisticsController {
 
     const allCodedItems = (await this.codingReviewService.getCodedVariablesForKappa(
       workspaceId,
-      options.excludeTrainings
+      options.excludeTrainings,
+      options.jobDefinitionIds,
+      options.coderTrainingIds,
+      options.coderIds
     )).map(item => ({
       unitName: item.unitName,
       variableId: item.variableId,
@@ -1162,6 +1165,38 @@ export class WorkspaceCodingStatisticsController {
       .flatMap(item => String(item).split(','))
       .map(item => item.trim())
       .filter(item => item !== '');
+  }
+
+  private parseIdArrayQuery(value?: string | string[]): number[] {
+    return this.parseArrayQuery(value).map(item => {
+      const parsed = Number(item);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new BadRequestException('ID query values must be positive integers');
+      }
+      return parsed;
+    });
+  }
+
+  private buildKappaOptionsFromQuery(query: {
+    weightedMean?: string;
+    excludeTrainings?: string;
+    unitName?: string;
+    variableId?: string;
+    jobDefinitionIds?: string | string[];
+    coderTrainingIds?: string | string[];
+    coderIds?: string | string[];
+  }): KappaStatisticsOptions {
+    const coderTrainingIds = this.parseIdArrayQuery(query.coderTrainingIds);
+
+    return {
+      weightedMean: query.weightedMean !== 'false',
+      excludeTrainings: coderTrainingIds.length > 0 ? false : query.excludeTrainings !== 'false',
+      unitName: query.unitName,
+      variableId: query.variableId,
+      jobDefinitionIds: this.parseIdArrayQuery(query.jobDefinitionIds),
+      coderTrainingIds,
+      coderIds: this.parseIdArrayQuery(query.coderIds)
+    };
   }
 
   @Get(':workspace_id/coding/groups')
@@ -1719,6 +1754,24 @@ export class WorkspaceCodingStatisticsController {
     description: 'Exclude coder training jobs (default: true)',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'jobDefinitionIds',
+    required: false,
+    description: 'Limit statistics to one or more job definition IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderTrainingIds',
+    required: false,
+    description: 'Limit statistics to one or more coder training IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderIds',
+    required: false,
+    description: 'Limit statistics to one or more coder IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
   @ApiOkResponse({
     description:
       "Cohen's Kappa statistics for double-coded variables with workspace summary.",
@@ -1824,20 +1877,27 @@ export class WorkspaceCodingStatisticsController {
       @Query('weightedMean') weightedMean?: string,
       @Query('unitName') unitName?: string,
       @Query('variableId') variableId?: string,
-      @Query('excludeTrainings') excludeTrainings?: string
+      @Query('excludeTrainings') excludeTrainings?: string,
+      @Query('jobDefinitionIds') jobDefinitionIds?: string | string[],
+      @Query('coderTrainingIds') coderTrainingIds?: string | string[],
+      @Query('coderIds') coderIds?: string | string[]
   ): Promise<KappaStatisticsResponse> {
     try {
-      const useWeightedMean = weightedMean !== 'false'; // Default true
-      const isExcludeTrainings = excludeTrainings !== 'false'; // Default true
-
-      const statistics = await this.buildCohensKappaStatistics(workspace_id, {
-        weightedMean: useWeightedMean,
-        excludeTrainings: isExcludeTrainings,
+      const options = this.buildKappaOptionsFromQuery({
+        weightedMean,
+        excludeTrainings,
         unitName,
-        variableId
+        variableId,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds
       });
+      const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
       return this.toPublicCohensKappaStatistics(statistics);
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       this.logger.error(
         `Error calculating Cohen's Kappa: ${error.message}`,
         error.stack
@@ -1876,6 +1936,24 @@ export class WorkspaceCodingStatisticsController {
     description: 'Exclude coder training jobs (default: true)',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'jobDefinitionIds',
+    required: false,
+    description: 'Limit export to one or more job definition IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderTrainingIds',
+    required: false,
+    description: 'Limit export to one or more coder training IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderIds',
+    required: false,
+    description: 'Limit export to one or more coder IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
   @ApiOkResponse({
     description: "Cohen's Kappa coder-pair details exported as CSV.",
     content: {
@@ -1893,23 +1971,23 @@ export class WorkspaceCodingStatisticsController {
       @Query('unitName') unitName: string | undefined,
       @Query('variableId') variableId: string | undefined,
       @Query('excludeTrainings') excludeTrainings: string | undefined,
+      @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
+      @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
+      @Query('coderIds') coderIds: string | string[] | undefined,
       @Res() res: Response
   ): Promise<void> {
     try {
-      const useWeightedMean = weightedMean !== 'false';
-      const isExcludeTrainings = excludeTrainings !== 'false';
-      const statistics = await this.buildCohensKappaStatistics(workspace_id, {
-        weightedMean: useWeightedMean,
-        excludeTrainings: isExcludeTrainings,
+      const options = this.buildKappaOptionsFromQuery({
+        weightedMean,
+        excludeTrainings,
         unitName,
-        variableId
+        variableId,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds
       });
-      const rows = this.createCohensKappaExportRows(statistics, {
-        weightedMean: useWeightedMean,
-        excludeTrainings: isExcludeTrainings,
-        unitName,
-        variableId
-      });
+      const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
+      const rows = this.createCohensKappaExportRows(statistics, options);
       const csvContent = await fastCsv.writeToString(rows, {
         headers: [...COHENS_KAPPA_EXPORT_HEADERS],
         alwaysWriteHeaders: true,
@@ -1925,6 +2003,9 @@ export class WorkspaceCodingStatisticsController {
       );
       res.send(`\uFEFF${csvContent}`);
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       this.logger.error(
         `Error exporting Cohen's Kappa CSV: ${error.message}`,
         error.stack
@@ -1963,6 +2044,24 @@ export class WorkspaceCodingStatisticsController {
     description: 'Exclude coder training jobs (default: true)',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'jobDefinitionIds',
+    required: false,
+    description: 'Limit export to one or more job definition IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderTrainingIds',
+    required: false,
+    description: 'Limit export to one or more coder training IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderIds',
+    required: false,
+    description: 'Limit export to one or more coder IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
   @ApiOkResponse({
     description: "Cohen's Kappa variable summary exported as CSV.",
     content: {
@@ -1980,15 +2079,22 @@ export class WorkspaceCodingStatisticsController {
       @Query('unitName') unitName: string | undefined,
       @Query('variableId') variableId: string | undefined,
       @Query('excludeTrainings') excludeTrainings: string | undefined,
+      @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
+      @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
+      @Query('coderIds') coderIds: string | string[] | undefined,
       @Res() res: Response
   ): Promise<void> {
     try {
-      const statistics = await this.buildCohensKappaStatistics(workspace_id, {
-        weightedMean: weightedMean !== 'false',
-        excludeTrainings: excludeTrainings !== 'false',
+      const options = this.buildKappaOptionsFromQuery({
+        weightedMean,
+        excludeTrainings,
         unitName,
-        variableId
+        variableId,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds
       });
+      const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
       const csvContent = await fastCsv.writeToString(
         this.createCohensKappaSummaryExportRows(statistics),
         {
@@ -2007,6 +2113,9 @@ export class WorkspaceCodingStatisticsController {
       );
       res.send(`\uFEFF${csvContent}`);
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       this.logger.error(
         `Error exporting Cohen's Kappa summary CSV: ${error.message}`,
         error.stack
@@ -2045,6 +2154,24 @@ export class WorkspaceCodingStatisticsController {
     description: 'Exclude coder training jobs (default: true)',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'jobDefinitionIds',
+    required: false,
+    description: 'Limit export to one or more job definition IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderTrainingIds',
+    required: false,
+    description: 'Limit export to one or more coder training IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderIds',
+    required: false,
+    description: 'Limit export to one or more coder IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
   @ApiOkResponse({
     description:
       "Cohen's Kappa workbook exported as XLSX with summary, pairwise details and coding results sheets.",
@@ -2063,15 +2190,22 @@ export class WorkspaceCodingStatisticsController {
       @Query('unitName') unitName: string | undefined,
       @Query('variableId') variableId: string | undefined,
       @Query('excludeTrainings') excludeTrainings: string | undefined,
+      @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
+      @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
+      @Query('coderIds') coderIds: string | string[] | undefined,
       @Res() res: Response
   ): Promise<void> {
     try {
-      const statistics = await this.buildCohensKappaStatistics(workspace_id, {
-        weightedMean: weightedMean !== 'false',
-        excludeTrainings: excludeTrainings !== 'false',
+      const options = this.buildKappaOptionsFromQuery({
+        weightedMean,
+        excludeTrainings,
         unitName,
-        variableId
+        variableId,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds
       });
+      const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
       const buffer = await this.createCohensKappaWorkbookBuffer(
         statistics,
         statistics.sourceItems
@@ -2088,6 +2222,9 @@ export class WorkspaceCodingStatisticsController {
       );
       res.send(buffer);
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       this.logger.error(
         `Error exporting Cohen's Kappa XLSX: ${error.message}`,
         error.stack
@@ -2113,6 +2250,24 @@ export class WorkspaceCodingStatisticsController {
     required: false,
     description: 'Exclude coder training jobs (default: true)',
     type: Boolean
+  })
+  @ApiQuery({
+    name: 'jobDefinitionIds',
+    required: false,
+    description: 'Limit statistics to one or more job definition IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderTrainingIds',
+    required: false,
+    description: 'Limit statistics to one or more coder training IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderIds',
+    required: false,
+    description: 'Limit statistics to one or more coder IDs (comma-separated or repeated query parameters)',
+    type: String
   })
   @ApiOkResponse({
     description:
@@ -2193,7 +2348,10 @@ export class WorkspaceCodingStatisticsController {
   async getWorkspaceCohensKappaSummary(
     @WorkspaceId() workspace_id: number,
       @Query('weightedMean') weightedMean?: string,
-      @Query('excludeTrainings') excludeTrainings?: string
+      @Query('excludeTrainings') excludeTrainings?: string,
+      @Query('jobDefinitionIds') jobDefinitionIds?: string | string[],
+      @Query('coderTrainingIds') coderTrainingIds?: string | string[],
+      @Query('coderIds') coderIds?: string | string[]
   ): Promise<{
         coderPairs: Array<{
           coder1Id: number;
@@ -2215,12 +2373,20 @@ export class WorkspaceCodingStatisticsController {
           weightingMethod: 'weighted' | 'unweighted';
         };
       }> {
-    const useWeightedMean = weightedMean !== 'false'; // Default true
-    const isExcludeTrainings = excludeTrainings !== 'false'; // Default true
+    const options = this.buildKappaOptionsFromQuery({
+      weightedMean,
+      excludeTrainings,
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds
+    });
     return this.codingReviewService.getWorkspaceCohensKappaSummary(
       workspace_id,
-      useWeightedMean,
-      isExcludeTrainings
+      options.weightedMean,
+      options.excludeTrainings,
+      options.jobDefinitionIds,
+      options.coderTrainingIds,
+      options.coderIds
     );
   }
 
