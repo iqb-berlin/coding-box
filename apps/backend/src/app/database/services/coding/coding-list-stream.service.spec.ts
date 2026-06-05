@@ -76,7 +76,21 @@ describe('CodingListStreamService', () => {
     mockItemBuilderService = {
       buildCodingItem: jest.fn(),
       buildCodingItemWithVersions: jest.fn(),
-      getHeadersForVersion: jest.fn()
+      getHeadersForVersion: jest.fn().mockReturnValue([
+        'unit_key',
+        'unit_alias',
+        'person_login',
+        'person_code',
+        'person_group',
+        'booklet_name',
+        'variable_id',
+        'variable_page',
+        'variable_anchor',
+        'value',
+        'status_v1',
+        'code_v1',
+        'score_v1'
+      ])
     } as unknown as jest.Mocked<CodingItemBuilderService>;
 
     mockFileCacheService = {
@@ -152,6 +166,94 @@ describe('CodingListStreamService', () => {
 
       expect(stream).toBeDefined();
       expect(mockFileCacheService.clearCaches).toHaveBeenCalled();
+    });
+
+    it('should write headers for empty versioned CSV exports', async () => {
+      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
+
+      const stream = await service.getCodingResultsByVersionCsvStream(
+        1,
+        'v1',
+        'token',
+        'http://server'
+      );
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+
+      await new Promise(resolve => {
+        stream.on('end', resolve);
+      });
+
+      expect(Buffer.concat(chunks).toString()).toBe([
+        'unit_key',
+        'unit_alias',
+        'person_login',
+        'person_code',
+        'person_group',
+        'booklet_name',
+        'variable_id',
+        'variable_page',
+        'variable_anchor',
+        'value',
+        'status_v1',
+        'code_v1',
+        'score_v1'
+      ].join(';'));
+      expect(mockItemBuilderService.getHeadersForVersion).toHaveBeenCalledWith('v1', true);
+    });
+
+    it('should include replay URL column in versioned CSV exports when requested', async () => {
+      const response = createMockResponse(1);
+      mockResponseFilterService.getResponsesBatch
+        .mockResolvedValueOnce([response])
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.buildCodingItemWithVersions.mockResolvedValue({
+        unit_key: 'unit1',
+        unit_alias: 'Unit 1',
+        person_login: 'user1',
+        person_code: 'code1',
+        person_group: 'group1',
+        booklet_name: 'booklet1',
+        variable_id: 'var1',
+        variable_page: '1',
+        variable_anchor: 'var1',
+        value: 'answer',
+        status_v1: 'VALUE_CHANGED',
+        code_v1: '',
+        score_v1: '',
+        url: 'http://server/#/replay/user1@code1@group1@booklet1/unit1/1/var1?auth=token'
+      } as never);
+
+      const stream = await service.getCodingResultsByVersionCsvStream(
+        1,
+        'v1',
+        'token',
+        'http://server',
+        true
+      );
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+
+      await new Promise(resolve => {
+        stream.on('end', resolve);
+      });
+
+      const [header, row] = Buffer.concat(chunks).toString().split('\n');
+
+      expect(header.split(';')).toContain('url');
+      expect(row).toContain(
+        'http://server/#/replay/user1@code1@group1@booklet1/unit1/1/var1?auth=token'
+      );
+      expect(mockItemBuilderService.buildCodingItemWithVersions).toHaveBeenCalledWith(
+        response,
+        'v1',
+        'token',
+        'http://server',
+        1,
+        true,
+        true,
+        false
+      );
     });
 
     it('should pass response value option to versioned CSV item builder', async () => {

@@ -7369,7 +7369,8 @@ export class WorkspaceTestResultsService {
         'logentry'
       ],
       delimiter: ';',
-      quote: null
+      quote: null,
+      alwaysWriteHeaders: true
     });
 
     csvStream.pipe(stream);

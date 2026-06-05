@@ -116,11 +116,12 @@ export class CodingResultsExportService {
     const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
     const manualJobVariables = await this.codingJobUnitRepository
       .createQueryBuilder('coding_job_unit')
-      .select('DISTINCT coding_job_unit.unit_name', 'unitName')
+      .select('coding_job_unit.unit_name', 'unitName')
       .addSelect('coding_job_unit.variable_id', 'variableId')
       .innerJoin('coding_job_unit.coding_job', 'coding_job')
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL')
+      .distinct(true)
       .getRawMany<{ unitName: string; variableId: string }>();
 
     const manualCodingVariables = createManualCodingVariableReferences([
