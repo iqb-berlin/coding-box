@@ -191,6 +191,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private assignedCodingJobsLoaded = false;
   private assignedCodingJobsReloadRequested = false;
   private authDataSubscription: Subscription | null = null;
+  private authBootstrapSubscription: Subscription | null = null;
+  private replayReAuthenticationPending = false;
+  private replayTokenRefreshRunning = false;
   private codingJobWorkspaceNames = new Map<number, string>();
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   @ViewChild('watermark')
@@ -234,6 +237,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.requestAssignedCodingJobsReload().catch(() => undefined);
       }
     });
+    this.authBootstrapSubscription = this.appService.authBootstrapStatus$.subscribe(status => {
+      if (status === 'session-expired') {
+        this.replayReAuthenticationPending = true;
+        return;
+      }
+
+      if (status === 'ready' && this.replayReAuthenticationPending) {
+        this.replayReAuthenticationPending = false;
+        this.refreshReplayAuthTokenAfterReAuthentication().catch(() => undefined);
+      }
+    });
     this.subscribeRouter();
   }
 
@@ -260,6 +274,106 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return auth;
   }
 
+  private getWorkspaceIdFromAuthToken(authToken?: string): number {
+    if (!authToken) {
+      return 0;
+    }
+
+    try {
+      const decoded: JwtPayload & { workspace?: string | number } = jwtDecode(authToken);
+      return Number(decoded?.workspace) || 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  private getWorkspaceIdFromQueryParams(queryParams: Params): number {
+    return Number(queryParams.workspaceId) || 0;
+  }
+
+  private canRefreshReplayAuthTokenForWorkspace(
+    workspaceId: number,
+    tokenValidation: ReturnType<typeof validateToken> = this.authToken ?
+      validateToken(this.authToken) :
+      { isValid: false, errorType: 'token_invalid' }
+  ): boolean {
+    if (!workspaceId || !this.authToken || !this.appService.hasStoredAuthToken()) {
+      return false;
+    }
+
+    if (!tokenValidation.isValid && tokenValidation.errorType !== 'token_expired') {
+      return false;
+    }
+
+    const tokenWorkspaceId = this.getWorkspaceIdFromAuthToken(this.authToken);
+    return tokenWorkspaceId === workspaceId;
+  }
+
+  private async refreshExpiredReplayAuthToken(workspaceId: number): Promise<void> {
+    const tokenValidation: ReturnType<typeof validateToken> = this.authToken ?
+      validateToken(this.authToken) :
+      { isValid: false, errorType: 'token_invalid' };
+    if (tokenValidation.isValid || tokenValidation.errorType !== 'token_expired') {
+      return;
+    }
+
+    if (!this.canRefreshReplayAuthTokenForWorkspace(workspaceId, tokenValidation)) {
+      return;
+    }
+
+    await this.refreshReplayAuthTokenForWorkspace(workspaceId);
+  }
+
+  private async refreshReplayAuthTokenAfterReAuthentication(): Promise<void> {
+    const workspaceId = this.workspaceId || this.getWorkspaceIdFromAuthToken(this.authToken);
+    if (!this.canRefreshReplayAuthTokenForWorkspace(workspaceId)) {
+      return;
+    }
+
+    await this.refreshReplayAuthTokenForWorkspace(workspaceId);
+  }
+
+  private async refreshReplayAuthTokenForWorkspace(workspaceId: number): Promise<boolean> {
+    if (this.replayTokenRefreshRunning || !this.appService.hasStoredAuthToken()) {
+      return false;
+    }
+
+    this.replayTokenRefreshRunning = true;
+    try {
+      const token = await firstValueFrom(this.appService.createOwnToken(workspaceId, 1));
+      if (!token) {
+        return false;
+      }
+
+      this.authToken = token;
+      this.workspaceId = workspaceId;
+      this.codingService.setAuthToken(token);
+      this.replaceReplayAuthTokenInUrl(token);
+      return true;
+    } catch (error) {
+      return false;
+    } finally {
+      this.replayTokenRefreshRunning = false;
+    }
+  }
+
+  private replaceReplayAuthTokenInUrl(authToken: string): void {
+    try {
+      const url = new URL(window.location.href);
+      if (!url.hash) {
+        return;
+      }
+
+      const [hashPath, hashQuery = ''] = url.hash.split('?');
+      const hashParams = new URLSearchParams(hashQuery);
+      hashParams.set('auth', authToken);
+      url.hash = `${hashPath}?${hashParams.toString()}`;
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    } catch (error) {
+      // Keep the refreshed token in memory even if the browser URL cannot be rewritten.
+    }
+  }
+
   private deserializeUnitsData(encodedData: string): UnitsReplay | null {
     if (!encodedData) {
       return null;
@@ -280,17 +394,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.resetSnackBars();
         this.resetUnitData();
         this.authToken = await this.getAuthToken();
-        this.codingService.setAuthToken(this.authToken);
-        let workspace: string | undefined;
-        try {
-          const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-          workspace = decoded?.workspace;
-        } catch (error) {
-          workspace = undefined;
-        }
-        this.workspaceId = Number(workspace);
-
         const queryParams = await firstValueFrom(this.route.queryParams);
+        this.workspaceId = this.getWorkspaceIdFromQueryParams(queryParams) ||
+          this.getWorkspaceIdFromAuthToken(this.authToken);
+        await this.refreshExpiredReplayAuthToken(this.workspaceId);
+        this.codingService.setAuthToken(this.authToken);
+        const workspace = this.workspaceId ? String(this.workspaceId) : undefined;
         this.isReviewMode = queryParams.mode === 'coding-review';
         this.codingService.isReviewMode = this.isReviewMode;
         this.isCodingMode = queryParams.mode === 'coding' || this.isReviewMode;
@@ -804,6 +913,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   async handleUnitChanged(unit: UnitsReplayUnit): Promise<void> {
+    if (this.isCodingInteractionBlockedByReAuthentication()) return;
     if (this.isSwitchingCodingJob) return;
     await this.applyUnitChanged(unit);
   }
@@ -902,8 +1012,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
     this.authDataSubscription?.unsubscribe();
+    this.authBootstrapSubscription?.unsubscribe();
     this.routerSubscription = null;
     this.authDataSubscription = null;
+    this.authBootstrapSubscription = null;
     this.cancelPendingAnchorHighlight();
     this.resetSnackBars();
     this.watermarkObserver?.disconnect();
@@ -1014,9 +1126,26 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   isCodingReadOnly(): boolean {
     return this.isSwitchingCodingJob ||
+      this.appService.needsReAuthentication ||
       this.isReviewMode ||
       this.codingService.isCompletedJobReview ||
       this.codingService.isCodingJobFinalized;
+  }
+
+  isCodingInteractionBlockedByReAuthentication(): boolean {
+    return this.isCodingMode && !this.isReviewMode && this.appService.needsReAuthentication;
+  }
+
+  isSubmitCodingJobDisabled(): boolean {
+    return this.codingService.isSubmittingJob || this.isCodingInteractionBlockedByReAuthentication();
+  }
+
+  getCodingJobSwitchDisabledTooltip(): string {
+    if (this.isCodingInteractionBlockedByReAuthentication()) {
+      return this.translateService.instant('replay.reauthentication-required');
+    }
+
+    return this.codingService.hasSaveError ? this.translateService.instant('replay.job-switcher.save-error') : '';
   }
 
   hasCodingJobPanelContent(): boolean {
@@ -1041,6 +1170,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return !this.canSwitchAssignedCodingJobs() ||
       this.isLoadingAssignedCodingJobs ||
       this.isSwitchingCodingJob ||
+      this.isCodingInteractionBlockedByReAuthentication() ||
       this.codingService.hasSaveError;
   }
 
@@ -1083,6 +1213,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (
       this.codingService.codingJobId &&
       !this.isSwitchingCodingJob &&
+      !this.isCodingInteractionBlockedByReAuthentication() &&
       !this.isReviewMode &&
       !this.codingService.isCompletedJobReview &&
       !this.codingService.isCodingJobFinalized
@@ -1092,13 +1223,21 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   resumeCodingJob(): void {
-    if (this.codingService.codingJobId && !this.isReviewMode) {
+    if (this.codingService.codingJobId && !this.isReviewMode && !this.isCodingInteractionBlockedByReAuthentication()) {
       this.codingService.resumeCodingJob(this.workspaceId, this.codingService.codingJobId);
     }
   }
 
   async submitCodingJob(): Promise<void> {
     if (this.isReviewMode) return;
+    if (this.isCodingInteractionBlockedByReAuthentication()) {
+      this.errorSnackBar.open(
+        this.translateService.instant('replay.reauthentication-required'),
+        this.translateService.instant('close'),
+        { duration: 4000, panelClass: ['snackbar-error'] }
+      );
+      return;
+    }
 
     if (this.codingService.codingJobId) {
       if (this.codingService.hasSaveError) {
@@ -1131,7 +1270,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   openNavigateDialog(): void {
-    if (!this.unitsData || this.isSwitchingCodingJob) return;
+    if (!this.unitsData || this.isSwitchingCodingJob || this.isCodingInteractionBlockedByReAuthentication()) return;
 
     const dialogData: NavigateCodingCasesDialogData = {
       unitsData: this.unitsData,
@@ -1165,7 +1304,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       return;
     }
 
-    if (this.isSwitchingCodingJob && ['Enter', 'ArrowRight', 'ArrowLeft'].includes(keyboardEvent.key)) {
+    if ((this.isSwitchingCodingJob || this.isCodingInteractionBlockedByReAuthentication()) &&
+      ['Enter', 'ArrowRight', 'ArrowLeft'].includes(keyboardEvent.key)) {
       keyboardEvent.preventDefault();
       return;
     }
@@ -1245,6 +1385,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       !this.codingService.isCodingJobCompleted &&
       !this.codingService.isCompletedJobReview &&
       !this.codingService.isCodingJobFinalized &&
+      !this.isCodingInteractionBlockedByReAuthentication() &&
       !this.isReviewMode
     ) {
       this.codingService.pauseCodingJobOnUnload(this.workspaceId, this.codingService.codingJobId);
@@ -1497,6 +1638,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     const currentJobKey = this.getActiveCodingJobKey();
     if (!this.canSwitchAssignedCodingJobs()) {
       this.selectedCodingJobKey = currentJobKey;
+      return;
+    }
+
+    if (this.isCodingInteractionBlockedByReAuthentication()) {
+      this.selectedCodingJobKey = currentJobKey;
+      this.errorSnackBar.open(
+        this.translateService.instant('replay.reauthentication-required'),
+        this.translateService.instant('close'),
+        { duration: 4000, panelClass: ['snackbar-error'] }
+      );
       return;
     }
 

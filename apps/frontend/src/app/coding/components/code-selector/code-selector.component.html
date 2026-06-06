@@ -12,7 +12,7 @@
   @if (availableVariables.length > 1) {
   <div class="variable-selector-section">
     <div class="variable-dropdown-wrapper">
-      <button class="variable-trigger-btn" (click)="toggleVariablePanel()" type="button">
+      <button class="variable-trigger-btn" (click)="toggleVariablePanel()" [disabled]="isNavigationDisabled" type="button">
         <span class="variable-trigger-label">
           @if (activeVariableKey) {
           @let prog = getProgressForKey(activeVariableKey);
@@ -70,7 +70,7 @@
     }
 
     <div class="action-controls">
-      <button mat-icon-button (click)="onNavigateClick()" class="navigate-button"
+      <button mat-icon-button (click)="onNavigateClick()" [disabled]="isNavigationDisabled" class="navigate-button"
         matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
         <mat-icon>directions</mat-icon>
       </button>

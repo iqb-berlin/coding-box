@@ -55,6 +55,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() allowComments: boolean = true;
   @Input() suppressGeneralInstructions: boolean = false;
   @Input() isReadOnly: boolean = false;
+  @Input() isNavigationDisabled: boolean = false;
   @Input() hasSaveError: boolean = false;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
@@ -306,6 +307,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   onNavigateClick(): void {
+    if (this.isNavigationDisabled) return;
     this.openNavigateDialog.emit();
   }
 
@@ -328,6 +330,7 @@ export class CodeSelectorComponent implements OnChanges {
     const data = this.unitsData;
     if (!data) return;
 
+    if (this.isNavigationDisabled) return;
     if (this.hasSaveError) return;
     if (!this.isReadOnly && !this.hasCurrentSelection()) return;
 
@@ -340,6 +343,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   previousUnit(): void {
     const data = this.unitsData;
+    if (this.isNavigationDisabled) return;
     if (!data || !this.hasPreviousUnit()) return;
 
     const currentIndex = data.currentUnitIndex;
@@ -351,6 +355,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   hasNextUnit(): boolean {
     const data = this.unitsData;
+    if (this.isNavigationDisabled) return false;
     if (!data || !data.units.length) return false;
 
     const currentIndex = data.currentUnitIndex;
@@ -362,6 +367,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   hasPreviousUnit(): boolean {
     const data = this.unitsData;
+    if (this.isNavigationDisabled) return false;
     if (!data) return false;
 
     return data.currentUnitIndex > 0;
@@ -431,6 +437,7 @@ export class CodeSelectorComponent implements OnChanges {
   isVariablePanelOpen = false;
 
   toggleVariablePanel(): void {
+    if (this.isNavigationDisabled) return;
     this.isVariablePanelOpen = !this.isVariablePanelOpen;
     if (this.isVariablePanelOpen) {
       setTimeout(() => this.focusCurrentVariableInPanel(), 0);
@@ -442,6 +449,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   selectVariable(key: string): void {
+    if (this.isNavigationDisabled) return;
     this.isVariablePanelOpen = false;
     this.jumpToVariable(key);
   }
@@ -518,6 +526,7 @@ export class CodeSelectorComponent implements OnChanges {
    * Falls back to the first matching unit if all are coded.
    */
   jumpToVariable(key: string): void {
+    if (this.isNavigationDisabled) return;
     if (!this.unitsData?.units) return;
     const [unitName, variableId] = key.split('::');
     const variableUnits = this.unitsData.units
