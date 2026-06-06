@@ -8,7 +8,11 @@ import {
   CodingResponseFilterService,
   ResponseFilterOptions
 } from './coding-response-filter.service';
-import { CodingItemBuilderService, CodingItem } from './coding-item-builder.service';
+import {
+  CodingItemBuilderService,
+  CodingItem,
+  CodingVariableAnchorMaps
+} from './coding-item-builder.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
@@ -16,6 +20,8 @@ import {
   buildGeoGebraFileName,
   decodeGeoGebraValue
 } from './geogebra-export.util';
+import { ResponseEntity } from '../../entities/response.entity';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 
 interface JsonStream {
   on(event: 'data', listener: (item: CodingItem) => void): void;
@@ -44,7 +50,8 @@ export class CodingListStreamService {
     private readonly itemBuilderService: CodingItemBuilderService,
     private readonly fileCacheService: CodingFileCacheService,
     private readonly workspaceFilesService: WorkspaceFilesService,
-    @Optional() private readonly configService?: ConfigService
+    @Optional() private readonly configService?: ConfigService,
+    @Optional() private readonly replayAnchorService?: CodingReplayAnchorService
   ) { }
 
   private getGeoGebraExportLimits(): { maxFileCount: number; maxBytes: number } {
@@ -96,6 +103,36 @@ export class CodingListStreamService {
     };
   }
 
+  private async loadVariableAnchorMapsForResponses(
+    responses: ResponseEntity[],
+    workspaceId: number
+  ): Promise<CodingVariableAnchorMaps> {
+    if (!this.replayAnchorService) {
+      return new Map();
+    }
+
+    const unitNames = Array.from(new Set(
+      responses
+        .map(response => response.unit?.name || '')
+        .filter(unitName => unitName)
+    ));
+
+    if (!unitNames.length) {
+      return new Map();
+    }
+
+    try {
+      return await this.replayAnchorService.getVariableAnchorMaps(unitNames, workspaceId);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to load replay anchor overrides for workspace ${workspaceId}: ${error.message}`
+      );
+      return new Map(
+        unitNames.map(unitName => [unitName, new Map<string, string>()])
+      );
+    }
+  }
+
   /**
    * Stream coding list as CSV with memory-efficient batching.
    */
@@ -134,6 +171,11 @@ export class CodingListStreamService {
 
           if (!responses.length) break;
 
+          const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
+            responses,
+            workspace_id
+          );
+
           // Process responses
           const items: CodingItem[] = [];
 
@@ -152,7 +194,8 @@ export class CodingListStreamService {
               response,
               authToken,
               serverUrl!,
-              workspace_id
+              workspace_id,
+              variableAnchorMaps
             );
             if (item) {
               items.push(item);
@@ -271,6 +314,11 @@ export class CodingListStreamService {
 
         if (!responses.length) break;
 
+        const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
+          responses,
+          workspace_id
+        );
+
         for (const response of responses) {
           // Apply trainingRequired filter here
           if (trainingRequired !== undefined && trainingRequiredMap) {
@@ -286,7 +334,8 @@ export class CodingListStreamService {
             response,
             authToken!,
             serverUrl!,
-            workspace_id
+            workspace_id,
+            variableAnchorMaps
           );
           if (item) {
             worksheet.addRow(item).commit();
@@ -416,6 +465,11 @@ export class CodingListStreamService {
 
         if (!responses.length) break;
 
+        const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
+          responses,
+          workspace_id
+        );
+
         for (const response of responses) {
           // Apply trainingRequired filter here
           if (trainingRequired !== undefined && trainingRequiredMap) {
@@ -431,7 +485,8 @@ export class CodingListStreamService {
             response,
             authToken,
             serverUrl,
-            workspace_id
+            workspace_id,
+            variableAnchorMaps
           );
           if (item) {
             dataListener(item);
@@ -519,6 +574,11 @@ export class CodingListStreamService {
 
           if (!responses.length) break;
 
+          const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
+            responses,
+            workspace_id
+          );
+
           for (const response of responses) {
             const item = await this.itemBuilderService.buildCodingItemWithVersions(
               response,
@@ -528,7 +588,8 @@ export class CodingListStreamService {
               workspace_id,
               includeReplayUrls,
               includeResponseValues,
-              includeGeoGebraResponseValues
+              includeGeoGebraResponseValues,
+              variableAnchorMaps
             );
 
             if (item !== null) {
@@ -650,6 +711,11 @@ export class CodingListStreamService {
 
         if (!responses.length) break;
 
+        const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
+          responses,
+          workspace_id
+        );
+
         for (const response of responses) {
           const item = await this.itemBuilderService.buildCodingItemWithVersions(
             response,
@@ -659,7 +725,8 @@ export class CodingListStreamService {
             workspace_id,
             includeReplayUrls,
             includeResponseValues,
-            includeGeoGebraResponseValues
+            includeGeoGebraResponseValues,
+            variableAnchorMaps
           );
 
           if (item !== null) {
@@ -783,6 +850,11 @@ export class CodingListStreamService {
 
         if (!responses.length) break;
 
+        const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
+          responses,
+          workspace_id
+        );
+
         for (const response of responses) {
           const item = await this.itemBuilderService.buildCodingItemWithVersions(
             response,
@@ -792,7 +864,8 @@ export class CodingListStreamService {
             workspace_id,
             includeReplayUrls,
             true,
-            true
+            true,
+            variableAnchorMaps
           );
 
           if (item !== null) {

@@ -8,6 +8,7 @@ import { CodingItemBuilderService } from './coding-item-builder.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { ResponseEntity } from '../../entities/response.entity';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 
 jest.mock('libxmljs2', () => ({}));
 
@@ -17,6 +18,7 @@ describe('CodingListStreamService', () => {
   let mockItemBuilderService: jest.Mocked<CodingItemBuilderService>;
   let mockFileCacheService: jest.Mocked<CodingFileCacheService>;
   let mockConfigService: jest.Mocked<ConfigService>;
+  let mockReplayAnchorService: jest.Mocked<CodingReplayAnchorService>;
 
   const createMockResponse = (id: number): ResponseEntity => ({
     id,
@@ -102,6 +104,10 @@ describe('CodingListStreamService', () => {
       get: jest.fn().mockReturnValue(undefined)
     } as unknown as jest.Mocked<ConfigService>;
 
+    mockReplayAnchorService = {
+      getVariableAnchorMaps: jest.fn().mockResolvedValue(new Map())
+    } as unknown as jest.Mocked<CodingReplayAnchorService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CodingListStreamService,
@@ -112,6 +118,7 @@ describe('CodingListStreamService', () => {
         { provide: CodingItemBuilderService, useValue: mockItemBuilderService },
         { provide: CodingFileCacheService, useValue: mockFileCacheService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: CodingReplayAnchorService, useValue: mockReplayAnchorService },
         {
           provide: WorkspaceFilesService,
           useValue: {
@@ -252,7 +259,8 @@ describe('CodingListStreamService', () => {
         1,
         true,
         true,
-        false
+        false,
+        expect.any(Map)
       );
     });
 
@@ -310,7 +318,8 @@ describe('CodingListStreamService', () => {
         1,
         false,
         false,
-        false
+        false,
+        expect.any(Map)
       );
     });
   });
@@ -640,6 +649,61 @@ describe('CodingListStreamService', () => {
 
       expect(mockResponseFilterService.getResponsesBatch).toHaveBeenCalledTimes(
         2
+      );
+    });
+
+    it('should load replay anchor maps once per batch and pass them to item builder', async () => {
+      const responses = [createMockResponse(1), createMockResponse(2)];
+      const variableAnchorMaps = new Map([
+        ['unit1', new Map([['var1', 'anchor1']])]
+      ]);
+      mockResponseFilterService.getResponsesBatch
+        .mockResolvedValueOnce(responses)
+        .mockResolvedValueOnce([]);
+      mockReplayAnchorService.getVariableAnchorMaps.mockResolvedValueOnce(variableAnchorMaps);
+      mockItemBuilderService.buildCodingItem.mockResolvedValue({
+        unit_key: 'unit1',
+        unit_alias: 'Unit 1',
+        person_login: 'user1',
+        person_code: 'code1',
+        person_group: 'group1',
+        booklet_name: 'booklet1',
+        variable_id: 'var1',
+        variable_page: '1',
+        variable_anchor: 'anchor1',
+        url: 'http://test'
+      });
+
+      const stream = await service.getCodingListCsvStream(
+        1,
+        'token',
+        'http://server'
+      );
+      stream.on('data', () => {});
+      await new Promise(resolve => {
+        stream.on('end', resolve);
+      });
+
+      expect(mockReplayAnchorService.getVariableAnchorMaps).toHaveBeenCalledTimes(1);
+      expect(mockReplayAnchorService.getVariableAnchorMaps).toHaveBeenCalledWith(
+        ['unit1'],
+        1
+      );
+      expect(mockItemBuilderService.buildCodingItem).toHaveBeenNthCalledWith(
+        1,
+        responses[0],
+        'token',
+        'http://server',
+        1,
+        variableAnchorMaps
+      );
+      expect(mockItemBuilderService.buildCodingItem).toHaveBeenNthCalledWith(
+        2,
+        responses[1],
+        'token',
+        'http://server',
+        1,
+        variableAnchorMaps
       );
     });
 
