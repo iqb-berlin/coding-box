@@ -180,7 +180,20 @@ export class CodingReplayService {
     > {
     const uniqueUnitNames = [...new Set(items.map(i => i.unitName))];
     const variablePageMaps = new Map<string, Map<string, string>>();
-    const variableAnchorMaps = new Map<string, Map<string, string>>();
+    let variableAnchorMaps = new Map<string, Map<string, string>>();
+    if (this.replayAnchorService) {
+      try {
+        variableAnchorMaps = await this.replayAnchorService.getVariableAnchorMaps(
+          uniqueUnitNames,
+          workspaceId
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Failed to get variable anchor maps for workspace ${workspaceId}: ${error.message}`
+        );
+      }
+    }
+
     await Promise.all(
       uniqueUnitNames.map(async unitName => {
         try {
@@ -189,15 +202,6 @@ export class CodingReplayService {
         } catch (error) {
           this.logger.warn(`Failed to get variable page map for unit '${unitName}': ${error.message}`);
           variablePageMaps.set(unitName, new Map());
-        }
-        try {
-          const anchorMap = this.replayAnchorService ?
-            await this.replayAnchorService.getVariableAnchorMap(unitName, workspaceId) :
-            new Map<string, string>();
-          variableAnchorMaps.set(unitName, anchorMap);
-        } catch (error) {
-          this.logger.warn(`Failed to get variable anchor map for unit '${unitName}': ${error.message}`);
-          variableAnchorMaps.set(unitName, new Map());
         }
       })
     );

@@ -3545,24 +3545,20 @@ export class CodingJobService {
       )
     );
 
-    await Promise.all(
-      unitNames.map(async unitName => {
-        try {
-          const anchorMap = await this.replayAnchorService!.getVariableAnchorMap(
-            unitName,
-            workspaceId
-          );
-          variableAnchorMaps.set(unitName, anchorMap);
-        } catch (error) {
-          this.logger.warn(
-            `Error loading variable anchor map for coding job unit ${unitName}: ${error.message}`
-          );
-          variableAnchorMaps.set(unitName, new Map<string, string>());
-        }
-      })
-    );
-
-    return variableAnchorMaps;
+    try {
+      return await this.replayAnchorService.getVariableAnchorMaps(
+        unitNames,
+        workspaceId
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Error loading variable anchor maps for coding job units in workspace ${workspaceId}: ${error.message}`
+      );
+      unitNames.forEach(unitName => {
+        variableAnchorMaps.set(unitName, new Map<string, string>());
+      });
+      return variableAnchorMaps;
+    }
   }
 
   private isComparableDoubleCodingScope(

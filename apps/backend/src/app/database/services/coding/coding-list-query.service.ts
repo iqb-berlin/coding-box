@@ -21,6 +21,7 @@ import {
   INTENDED_INCOMPLETE_STATUS,
   MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
 } from '../../utils/manual-coding-candidate.util';
+import { generateReplayUrl } from '../../../utils/replay-url.util';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 
 const PAGE_MAP_LOOKUP_BATCH_SIZE = 8;
@@ -190,7 +191,17 @@ export class CodingListQueryService {
         const unitVarAnchors = variableAnchorMap.get(unitKey);
         const variableAnchor = unitVarAnchors?.get(variableId) || variableId;
 
-        const url = `${server}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+        const url = generateReplayUrl({
+          serverUrl: server || '',
+          loginName,
+          loginCode,
+          loginGroup,
+          bookletId,
+          unitId: unitKey,
+          variablePage,
+          variableAnchor,
+          authToken
+        });
 
         return {
           unit_key: unitKey,
@@ -265,23 +276,16 @@ export class CodingListQueryService {
       return variableAnchorMap;
     }
 
-    for (let start = 0; start < unitKeys.length; start += PAGE_MAP_LOOKUP_BATCH_SIZE) {
-      const batch = unitKeys.slice(start, start + PAGE_MAP_LOOKUP_BATCH_SIZE);
-      await Promise.all(
-        batch.map(async unitKey => {
-          try {
-            variableAnchorMap.set(
-              unitKey,
-              await this.replayAnchorService.getVariableAnchorMap(unitKey, workspaceId)
-            );
-          } catch (error) {
-            this.logger.warn(
-              `Error loading variable anchor map for unit ${unitKey}: ${error.message}`
-            );
-            variableAnchorMap.set(unitKey, new Map<string, string>());
-          }
-        })
+    try {
+      return await this.replayAnchorService.getVariableAnchorMaps(
+        unitKeys,
+        workspaceId
       );
+    } catch (error) {
+      this.logger.warn(
+        `Error loading replay anchor maps for workspace ${workspaceId}: ${error.message}`
+      );
+      unitKeys.forEach(unitKey => variableAnchorMap.set(unitKey, new Map()));
     }
 
     return variableAnchorMap;
