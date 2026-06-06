@@ -65,3 +65,62 @@ ALTER TABLE "public"."coder_training_variable"
   ADD COLUMN IF NOT EXISTS "include_derive_error" BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- rollback ALTER TABLE "public"."coder_training_variable" DROP COLUMN IF EXISTS "include_derive_error";
+
+-- changeset jurei733:6
+-- comment: Scope missings profiles to workspaces
+
+ALTER TABLE "public"."missings_profile"
+  ADD COLUMN "workspace_id" INTEGER;
+
+ALTER TABLE "public"."missings_profile"
+  DROP CONSTRAINT IF EXISTS "missings_profile_label_key";
+
+WITH missings_profile_scopes AS (
+  SELECT "id" AS "workspace_id"
+  FROM "public"."workspace"
+  UNION
+  SELECT "workspace_id"
+  FROM "public"."coding_job"
+  WHERE "missings_profile_id" IS NOT NULL
+  UNION
+  SELECT "workspace_id"
+  FROM "public"."job_definitions"
+  WHERE "missings_profile_id" IS NOT NULL
+)
+INSERT INTO "public"."missings_profile" ("workspace_id", "label", "missings")
+SELECT scopes."workspace_id", mp."label", mp."missings"
+FROM missings_profile_scopes scopes
+CROSS JOIN "public"."missings_profile" mp
+WHERE mp."workspace_id" IS NULL;
+
+UPDATE "public"."coding_job" cj
+SET "missings_profile_id" = scoped."id"
+FROM "public"."missings_profile" global_profile,
+     "public"."missings_profile" scoped
+WHERE cj."missings_profile_id" = global_profile."id"
+  AND global_profile."workspace_id" IS NULL
+  AND scoped."workspace_id" = cj."workspace_id"
+  AND scoped."label" = global_profile."label";
+
+UPDATE "public"."job_definitions" jd
+SET "missings_profile_id" = scoped."id"
+FROM "public"."missings_profile" global_profile,
+     "public"."missings_profile" scoped
+WHERE jd."missings_profile_id" = global_profile."id"
+  AND global_profile."workspace_id" IS NULL
+  AND scoped."workspace_id" = jd."workspace_id"
+  AND scoped."label" = global_profile."label";
+
+DELETE FROM "public"."missings_profile"
+WHERE "workspace_id" IS NULL;
+
+ALTER TABLE "public"."missings_profile"
+  ALTER COLUMN "workspace_id" SET NOT NULL;
+
+ALTER TABLE "public"."missings_profile"
+  ADD CONSTRAINT "uq_missings_profile_workspace_label"
+    UNIQUE ("workspace_id", "label");
+
+-- rollback ALTER TABLE "public"."missings_profile" DROP CONSTRAINT IF EXISTS "uq_missings_profile_workspace_label";
+-- rollback ALTER TABLE "public"."missings_profile" DROP COLUMN IF EXISTS "workspace_id";
+-- rollback -- Cannot safely restore the previous global label uniqueness after profiles have been duplicated per workspace.

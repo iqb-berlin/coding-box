@@ -59,6 +59,7 @@ export class MissingsProfilesService {
       await this.ensureDefaultMissingsProfile(workspaceId);
 
       const profiles = await this.missingsProfileRepository.find({
+        where: { workspace_id: workspaceId },
         select: ['id', 'label']
       });
 
@@ -69,10 +70,10 @@ export class MissingsProfilesService {
     }
   }
 
-  async getMissingsProfileByLabel(label: string): Promise<MissingsProfilesDto | null> {
+  async getMissingsProfileByLabel(workspaceId: number, label: string): Promise<MissingsProfilesDto | null> {
     try {
       const profileEntity = await this.missingsProfileRepository.findOne({
-        where: { label }
+        where: { workspace_id: workspaceId, label }
       });
 
       if (!profileEntity) {
@@ -102,10 +103,10 @@ export class MissingsProfilesService {
     return this.toDto(savedProfile);
   }
 
-  private async getMissingsProfileById(id: number): Promise<MissingsProfilesDto | null> {
+  private async getMissingsProfileById(workspaceId: number, id: number): Promise<MissingsProfilesDto | null> {
     try {
       const profileEntity = await this.missingsProfileRepository.findOne({
-        where: { id }
+        where: { id, workspace_id: workspaceId }
       });
 
       if (!profileEntity) {
@@ -140,13 +141,40 @@ export class MissingsProfilesService {
     return false;
   }
 
+  private parseMissingsForStorage(profile: MissingsProfilesDto): MissingDto[] {
+    if (!profile.missings) {
+      return [];
+    }
+
+    if (Array.isArray(profile.missings)) {
+      return profile.missings as MissingDto[];
+    }
+
+    if (typeof profile.missings === 'string') {
+      try {
+        const parsed = JSON.parse(profile.missings);
+        if (!Array.isArray(parsed)) {
+          throw new BadRequestException('Missings profile must contain a valid missings array');
+        }
+        return parsed;
+      } catch (error) {
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
+        throw new BadRequestException('Missings profile must contain valid JSON');
+      }
+    }
+
+    throw new BadRequestException('Missings profile must contain a valid missings array');
+  }
+
   private normalizeProfileMissings(profile: MissingsProfilesDto): MissingDto[] {
-    const missings = profile.parseMissings();
+    const missings = this.parseMissingsForStorage(profile);
     if (!Array.isArray(missings)) {
       throw new BadRequestException('Missings profile must contain a valid missings array');
     }
 
-    return missings.map((missing, index) => {
+    const normalizedMissings = missings.map((missing, index) => {
       const code = Number(missing.code);
       const score = Number(missing.score);
 
@@ -166,6 +194,10 @@ export class MissingsProfilesService {
         throw new BadRequestException(`Missing entry '${missing.id}' must define an integer code`);
       }
 
+      if (code >= 0) {
+        throw new BadRequestException(`Missing entry '${missing.id}' must define a negative code`);
+      }
+
       if (!this.hasExplicitFiniteScore(missing.score)) {
         throw new BadRequestException(`Missing entry '${missing.id}' must define a score`);
       }
@@ -178,6 +210,28 @@ export class MissingsProfilesService {
         score
       };
     });
+
+    const ids = new Set<string>();
+    const codes = new Set<number>();
+    normalizedMissings.forEach(missing => {
+      if (ids.has(missing.id)) {
+        throw new BadRequestException(`Duplicate missing id '${missing.id}'`);
+      }
+      ids.add(missing.id);
+
+      if (codes.has(missing.code)) {
+        throw new BadRequestException(`Duplicate missing code '${missing.code}'`);
+      }
+      codes.add(missing.code);
+    });
+
+    ['mir', 'mci'].forEach(requiredId => {
+      if (!ids.has(requiredId)) {
+        throw new BadRequestException(`Missings profile must define '${requiredId}'`);
+      }
+    });
+
+    return normalizedMissings;
   }
 
   private prepareProfileForStorage(rawProfile: MissingsProfilesDto): MissingsProfilesDto {
@@ -275,7 +329,7 @@ export class MissingsProfilesService {
   async ensureDefaultMissingsProfile(workspaceId: number): Promise<MissingsProfilesDto> {
     try {
       const existingProfile = await this.missingsProfileRepository.findOne({
-        where: { label: this.defaultProfileLabel }
+        where: { workspace_id: workspaceId, label: this.defaultProfileLabel }
       });
 
       if (existingProfile) {
@@ -290,6 +344,7 @@ export class MissingsProfilesService {
 
       const defaultProfile = this.prepareProfileForStorage(this.createDefaultMissingsProfile());
       const profileEntity = new MissingsProfile();
+      profileEntity.workspace_id = workspaceId;
       profileEntity.label = defaultProfile.label;
       profileEntity.missings = defaultProfile.missings as string;
 
@@ -320,7 +375,7 @@ export class MissingsProfilesService {
     profileId?: number | null
   ): Promise<Set<number>> {
     const resolvedProfileId = await this.resolveMissingsProfileId(workspaceId, profileId);
-    const profile = await this.getMissingsProfileById(resolvedProfileId);
+    const profile = await this.getMissingsProfileById(workspaceId, resolvedProfileId);
     if (!profile) {
       throw new BadRequestException(`Missing profile ${resolvedProfileId} not found`);
     }
@@ -334,7 +389,7 @@ export class MissingsProfilesService {
     missingId: string
   ): Promise<ResolvedMissingValue> {
     const resolvedProfileId = await this.resolveMissingsProfileId(workspaceId, profileId);
-    const profile = await this.getMissingsProfileById(resolvedProfileId);
+    const profile = await this.getMissingsProfileById(workspaceId, resolvedProfileId);
     if (!profile) {
       throw new BadRequestException(`Missing profile ${resolvedProfileId} not found`);
     }
@@ -353,7 +408,7 @@ export class MissingsProfilesService {
     code: number
   ): Promise<ResolvedMissingValue> {
     const resolvedProfileId = await this.resolveMissingsProfileId(workspaceId, profileId);
-    const profile = await this.getMissingsProfileById(resolvedProfileId);
+    const profile = await this.getMissingsProfileById(workspaceId, resolvedProfileId);
     if (!profile) {
       throw new BadRequestException(`Missing profile ${resolvedProfileId} not found`);
     }
@@ -378,7 +433,7 @@ export class MissingsProfilesService {
       throw new BadRequestException(`Invalid missings profile id: ${profileId}`);
     }
 
-    const profile = await this.getMissingsProfileById(profileId);
+    const profile = await this.getMissingsProfileById(workspaceId, profileId);
     if (!profile) {
       throw new BadRequestException(`Missing profile ${profileId} not found`);
     }
@@ -388,11 +443,11 @@ export class MissingsProfilesService {
 
   private async assertProfileIsNotReferenced(profile: MissingsProfile): Promise<void> {
     const codingJobReferenceWhere = profile.label === this.defaultProfileLabel ?
-      [{ missings_profile_id: profile.id }, { missings_profile_id: IsNull() }] :
-      { missings_profile_id: profile.id };
+      [{ workspace_id: profile.workspace_id, missings_profile_id: profile.id }, { workspace_id: profile.workspace_id, missings_profile_id: IsNull() }] :
+      { workspace_id: profile.workspace_id, missings_profile_id: profile.id };
     const jobDefinitionReferenceWhere = profile.label === this.defaultProfileLabel ?
-      [{ missings_profile_id: profile.id }, { missings_profile_id: IsNull() }] :
-      { missings_profile_id: profile.id };
+      [{ workspace_id: profile.workspace_id, missings_profile_id: profile.id }, { workspace_id: profile.workspace_id, missings_profile_id: IsNull() }] :
+      { workspace_id: profile.workspace_id, missings_profile_id: profile.id };
 
     const [codingJobReferences, jobDefinitionReferences] = await Promise.all([
       this.codingJobRepository.count({ where: codingJobReferenceWhere }),
@@ -413,7 +468,7 @@ export class MissingsProfilesService {
       const normalizedProfile = this.prepareProfileForStorage(profile);
 
       const existingProfile = await this.missingsProfileRepository.findOne({
-        where: { label: normalizedProfile.label }
+        where: { workspace_id: workspaceId, label: normalizedProfile.label }
       });
 
       if (existingProfile) {
@@ -422,6 +477,7 @@ export class MissingsProfilesService {
       }
 
       const profileEntity = new MissingsProfile();
+      profileEntity.workspace_id = workspaceId;
       profileEntity.label = normalizedProfile.label;
       profileEntity.missings = normalizedProfile.missings as string;
 
@@ -440,7 +496,7 @@ export class MissingsProfilesService {
       const normalizedProfile = this.prepareProfileForStorage(profile);
 
       const existingProfile = await this.missingsProfileRepository.findOne({
-        where: { label }
+        where: { workspace_id: workspaceId, label }
       });
 
       if (!existingProfile) {
@@ -450,7 +506,7 @@ export class MissingsProfilesService {
 
       if (normalizedProfile.label !== existingProfile.label) {
         const duplicateProfile = await this.missingsProfileRepository.findOne({
-          where: { label: normalizedProfile.label }
+          where: { workspace_id: workspaceId, label: normalizedProfile.label }
         });
 
         if (duplicateProfile && duplicateProfile.id !== existingProfile.id) {
@@ -477,7 +533,7 @@ export class MissingsProfilesService {
       this.logger.log(`Deleting missings profile '${label}' for workspace ${workspaceId}`);
 
       const existingProfile = await this.missingsProfileRepository.findOne({
-        where: { label }
+        where: { workspace_id: workspaceId, label }
       });
       if (!existingProfile) {
         return false;
@@ -485,7 +541,7 @@ export class MissingsProfilesService {
 
       await this.assertProfileIsNotReferenced(existingProfile);
 
-      const result = await this.missingsProfileRepository.delete({ label });
+      const result = await this.missingsProfileRepository.delete({ workspace_id: workspaceId, label });
 
       return result.affected ? result.affected > 0 : false;
     } catch (error) {
@@ -500,7 +556,7 @@ export class MissingsProfilesService {
   async getMissingsProfileDetails(workspaceId: number, id: number): Promise<MissingsProfilesDto | null> {
     try {
       this.logger.log(`Getting missings profile details for '${id}' in workspace ${workspaceId}`);
-      return await this.getMissingsProfileById(id);
+      return await this.getMissingsProfileById(workspaceId, id);
     } catch (error) {
       this.logger.error(`Error getting missings profile details: ${error.message}`, error.stack);
       return null;
