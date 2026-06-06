@@ -37,10 +37,6 @@ export class ErrorMessageDisplayComponent {
     this.appService.setBackendUnavailable(false);
   }
 
-  dismissReAuthentication(): void {
-    this.appService.setNeedsReAuthentication(false);
-  }
-
   handleLogin(): void {
     this.authService.login(this.appService.reAuthenticationReturnUrl);
   }
