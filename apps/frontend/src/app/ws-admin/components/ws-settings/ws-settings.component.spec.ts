@@ -57,6 +57,8 @@ describe('WsSettingsComponent', () => {
       setAutoFetchCodingStatistics: jest.fn().mockReturnValue(of({})),
       getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true)),
       setAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of({})),
+      getIncludeDeriveErrorInManualCoding: jest.fn().mockReturnValue(of(false)),
+      setIncludeDeriveErrorInManualCoding: jest.fn().mockReturnValue(of({})),
       getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false)),
       setShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of({}))
     } as unknown as jest.Mocked<WorkspaceSettingsService>;
@@ -120,6 +122,8 @@ describe('WsSettingsComponent', () => {
       expect(component.autoFetchCodingStatistics).toBe(true);
       expect(mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1);
       expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(mockWorkspaceSettingsService.getIncludeDeriveErrorInManualCoding).toHaveBeenCalledWith(1);
+      expect(component.includeDeriveErrorInManualCoding).toBe(false);
       expect(mockWorkspaceSettingsService.getShowTestResultsLogAnomalies).toHaveBeenCalledWith(1);
       expect(component.showTestResultsLogAnomalies).toBe(false);
     });
@@ -228,6 +232,22 @@ describe('WsSettingsComponent', () => {
       component.autoRefreshManualCodingJobs = true;
       component.toggleAutoRefreshManualCodingJobs({ checked: false });
       expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('toggleIncludeDeriveErrorInManualCoding', () => {
+    it('should call service with true', () => {
+      component.toggleIncludeDeriveErrorInManualCoding({ checked: true });
+      expect(component.includeDeriveErrorInManualCoding).toBe(true);
+      expect(mockWorkspaceSettingsService.setIncludeDeriveErrorInManualCoding).toHaveBeenCalledWith(1, true);
+    });
+
+    it('should revert state on error', () => {
+      mockWorkspaceSettingsService.setIncludeDeriveErrorInManualCoding.mockReturnValue(throwError(() => new Error('error')));
+      component.includeDeriveErrorInManualCoding = true;
+      component.toggleIncludeDeriveErrorInManualCoding({ checked: false });
+      expect(component.includeDeriveErrorInManualCoding).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });

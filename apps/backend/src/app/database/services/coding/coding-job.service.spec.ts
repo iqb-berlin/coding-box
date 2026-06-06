@@ -296,6 +296,53 @@ describe('CodingJobService', () => {
     expect(codingJobCoderRepository.save).not.toHaveBeenCalled();
   });
 
+  it('rejects DERIVE_ERROR manual coding opt-ins when the workspace setting is disabled', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(service.assertDeriveErrorManualCodingEnabled(3, {
+      selectedVariables: [{ unitName: 'UNIT', variableId: 'VAR', includeDeriveError: true }]
+    })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('allows DERIVE_ERROR manual coding opt-ins when the workspace setting is enabled', async () => {
+    settingRepository.findOne.mockResolvedValue({
+      key: 'workspace-3-include-derive-error-in-manual-coding',
+      content: JSON.stringify({ enabled: true })
+    });
+
+    await expect(service.assertDeriveErrorManualCodingEnabled(3, {
+      selectedVariables: [{ unitName: 'UNIT', variableId: 'VAR', includeDeriveError: true }]
+    })).resolves.toBeUndefined();
+
+    expect(settingRepository.findOne).toHaveBeenCalledWith({
+      where: { key: 'workspace-3-include-derive-error-in-manual-coding' }
+    });
+  });
+
+  it('does not block usage calculations for existing DERIVE_ERROR opt-ins', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+    jest.spyOn(
+      service as unknown as {
+        createDistributionVariableUsageContext: () => Promise<unknown>;
+      },
+      'createDistributionVariableUsageContext'
+    ).mockResolvedValue({
+      matchingFlags: [],
+      aggregationThreshold: null,
+      derivedVariableSets: new Map(),
+      allResponses: [],
+      assignedResponseIds: new Set()
+    });
+
+    await expect(service.calculateDistributionVariableUsageBatch(3, [{
+      key: 'existing-definition',
+      selectedVariables: [{ unitName: 'UNIT', variableId: 'VAR', includeDeriveError: true }],
+      selectedVariableBundles: []
+    }])).resolves.toEqual(new Map([['existing-definition', new Map()]]));
+
+    expect(settingRepository.findOne).not.toHaveBeenCalled();
+  });
+
   it('rejects missings profile changes after coding work exists', async () => {
     codingJobRepository.findOne.mockResolvedValue({
       id: 12,
@@ -828,6 +875,22 @@ describe('CodingJobService', () => {
       ],
       canApply: true
     });
+  });
+
+  it('rejects DERIVE_ERROR opt-ins in job definition refresh previews when the setting is disabled', async () => {
+    const buildDistributionPlanSpy = jest.spyOn(
+      service as unknown as { buildDistributionPlan: jest.Mock },
+      'buildDistributionPlan'
+    );
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(service.previewJobDefinitionRefresh(3, {
+      jobDefinitionId: 9,
+      selectedVariables: [{ unitName: 'UNIT', variableId: 'VAR', includeDeriveError: true }],
+      selectedCoders: []
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(buildDistributionPlanSpy).not.toHaveBeenCalled();
   });
 
   it('counts task deltas when retained cases are reassigned to another coder', async () => {

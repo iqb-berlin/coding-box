@@ -57,6 +57,15 @@ export class WorkspaceSettingsController {
             'Controls whether log anomalies are shown as a column in the test results table'
         };
       }
+      if (key === 'include-derive-error-in-manual-coding') {
+        return {
+          id: 0,
+          key: settingKey,
+          value: JSON.stringify({ enabled: false }),
+          description:
+            'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
+        };
+      }
       if (key === 'response-matching-mode') {
         return {
           id: 0,

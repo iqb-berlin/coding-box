@@ -19,6 +19,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
+import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 
@@ -31,6 +32,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
   let mockCoderService: Partial<CoderService>;
   let mockCodingJobService: Partial<CodingJobService>;
   let mockMissingsProfileService: Partial<MissingsProfileService>;
+  let mockWorkspaceSettingsService: Partial<WorkspaceSettingsService>;
   let mockDialogRef: Partial<MatDialogRef<CodingJobDefinitionDialogComponent>>;
   let mockSnackBar: Partial<MatSnackBar>;
   let mockTranslateService: Partial<TranslateService>;
@@ -133,6 +135,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
       ]))
     } as Partial<MissingsProfileService>;
 
+    mockWorkspaceSettingsService = {
+      getIncludeDeriveErrorInManualCoding: jest.fn().mockReturnValue(of(false))
+    } as Partial<WorkspaceSettingsService>;
+
     mockDialogRef = {
       close: jest.fn()
     };
@@ -168,6 +174,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
         { provide: CoderService, useValue: mockCoderService },
         { provide: CodingJobService, useValue: mockCodingJobService },
         { provide: MissingsProfileService, useValue: mockMissingsProfileService },
+        { provide: WorkspaceSettingsService, useValue: mockWorkspaceSettingsService },
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: mockData },
         { provide: MatSnackBar, useValue: mockSnackBar },
@@ -183,7 +190,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
     }).compileComponents();
   });
 
-  const createComponent = (dataOverride?: Partial<CodingJobDefinitionDialogData>) => {
+  const createComponent = (
+    dataOverride?: Partial<CodingJobDefinitionDialogData>,
+    includeDeriveErrorInManualCoding = false
+  ) => {
+    (mockWorkspaceSettingsService.getIncludeDeriveErrorInManualCoding as jest.Mock)
+      .mockReturnValue(of(includeDeriveErrorInManualCoding));
     TestBed.overrideProvider(MAT_DIALOG_DATA, { useValue: { ...mockData, ...dataOverride } });
     fixture = TestBed.createComponent(CodingJobDefinitionDialogComponent);
     component = fixture.componentInstance;
@@ -230,7 +242,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   it('should load variables and coders on init', () => {
     createComponent();
-    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(1, undefined, undefined);
+    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(1, undefined, undefined, undefined);
     expect(mockCoderService.getCoders).toHaveBeenCalled();
     expect(component.variables.length).toBe(3);
     expect(component.availableCoders.length).toBe(2);
@@ -452,7 +464,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
   });
 
   it('should include DERIVE_ERROR opt-in only for selected definition variables', async () => {
-    createComponent();
+    createComponent(undefined, true);
     (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
 
     component.selectedCoders.select(mockCoders[0]);
@@ -471,7 +483,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
   });
 
   it('should show the DERIVE_ERROR opt-in only for variables with DERIVE_ERROR responses', () => {
-    createComponent();
+    createComponent(undefined, true);
 
     expect(component.hasDeriveErrorResponses(component.variables[0])).toBe(true);
     expect(component.hasDeriveErrorResponses(component.variables[1])).toBe(false);
@@ -479,7 +491,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
   });
 
   it('should not enable DERIVE_ERROR opt-in for variables without DERIVE_ERROR responses', () => {
-    createComponent();
+    createComponent(undefined, true);
 
     component.setDeriveErrorIncluded(component.variables[1], true);
 
@@ -610,7 +622,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       isEdit: true,
       jobDefinitionId: 555,
       codingJob: definitionAsCodingJob as CodingJob
-    });
+    }, true);
 
     expect(mockCoderService.getCodersByJobId).not.toHaveBeenCalled();
     expect(component.selectedCoders.selected.map(coder => coder.id)).toEqual([1]);
@@ -629,7 +641,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       isEdit: true,
       jobDefinitionId: 555,
       codingJob: definitionAsCodingJob as CodingJob
-    });
+    }, true);
 
     component.selectedVariables.select(mockVariables[0]);
     component.updateCoderCapacityPercent(component.selectedCoders.selected[0], 150);
@@ -659,13 +671,37 @@ describe('CodingJobDefinitionDialogComponent', () => {
       isEdit: true,
       jobDefinitionId: 555,
       codingJob: definitionAsCodingJob as CodingJob
-    });
+    }, true);
 
     const restoredVariable = component.variables.find(variable => variable.unitName === 'Unit 1' && variable.variableId === 'Var 1');
 
     expect(restoredVariable).toBeDefined();
     expect(component.selectedVariables.selected).toContain(restoredVariable);
     expect(restoredVariable?.includeDeriveError).toBe(true);
+  });
+
+  it('should not restore the DERIVE_ERROR opt-in when the workspace setting is disabled', () => {
+    const definitionAsCodingJob = {
+      id: 555,
+      assignedVariables: [{
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        includeDeriveError: true
+      }]
+    } as Partial<CodingJob>;
+
+    createComponent({
+      mode: 'definition',
+      isEdit: true,
+      jobDefinitionId: 555,
+      codingJob: definitionAsCodingJob as CodingJob
+    });
+
+    const restoredVariable = component.variables.find(variable => variable.unitName === 'Unit 1' && variable.variableId === 'Var 1');
+
+    expect(restoredVariable).toBeDefined();
+    expect(component.selectedVariables.selected).toContain(restoredVariable);
+    expect(restoredVariable?.includeDeriveError).toBe(false);
   });
 
   it('should open locked definitions read-only without submitting changes', async () => {

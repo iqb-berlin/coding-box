@@ -32,6 +32,7 @@ describe('JobDefinitionService', () => {
     getCodingJobCountsByDefinitionIds: jest.Mock;
     getBlockingCodingJobCountsByDefinitionIds: jest.Mock;
     assertCodersCanCodeInWorkspace: jest.Mock;
+    assertDeriveErrorManualCodingEnabled: jest.Mock;
   };
   let codingValidationService: { getCodingIncompleteVariables: jest.Mock };
   let missingsProfilesService: { resolveMissingsProfileId: jest.Mock };
@@ -77,7 +78,8 @@ describe('JobDefinitionService', () => {
       calculateDistributionVariableUsageBatch: jest.fn(),
       getCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map()),
       getBlockingCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map()),
-      assertCodersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined)
+      assertCodersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined),
+      assertDeriveErrorManualCodingEnabled: jest.fn().mockResolvedValue(undefined)
     };
     codingValidationService = {
       getCodingIncompleteVariables: jest.fn().mockResolvedValue([
@@ -1376,6 +1378,38 @@ describe('JobDefinitionService', () => {
     })).rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7);
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects approval endpoint calls with DERIVE_ERROR opt-ins when the workspace setting is disabled', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 4,
+      workspace_id: 7,
+      status: 'pending_review',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 1,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-4'
+    });
+    codingJobService.assertDeriveErrorManualCodingEnabled.mockRejectedValueOnce(
+      new BadRequestException('DERIVE_ERROR manual coding is disabled for this workspace.')
+    );
+
+    await expect(service.approveJobDefinition(4, 7, {
+      status: 'approved'
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(codingJobService.assertDeriveErrorManualCodingEnabled).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+        selectedVariableBundles: []
+      })
+    );
+    expect(codingJobService.assertCodersCanCodeInWorkspace).not.toHaveBeenCalled();
     expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
   });
 

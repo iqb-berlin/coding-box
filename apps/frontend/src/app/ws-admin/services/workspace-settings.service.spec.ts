@@ -143,6 +143,39 @@ describe('WorkspaceSettingsService', () => {
     });
   });
 
+  describe('getIncludeDeriveErrorInManualCoding', () => {
+    it('should return parsed boolean', () => {
+      service.getIncludeDeriveErrorInManualCoding(1).subscribe(val => {
+        expect(val).toBe(true);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/include-derive-error-in-manual-coding`);
+      req.flush({ value: '{"enabled":true}' });
+    });
+
+    it('should return false on error', () => {
+      service.getIncludeDeriveErrorInManualCoding(1).subscribe(val => {
+        expect(val).toBe(false);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/include-derive-error-in-manual-coding`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setIncludeDeriveErrorInManualCoding', () => {
+    it('should persist the setting', () => {
+      service.setIncludeDeriveErrorInManualCoding(1, true).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'include-derive-error-in-manual-coding',
+        value: '{"enabled":true}',
+        description: 'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
+      });
+      req.flush({});
+    });
+  });
+
   describe('getAggregationThreshold', () => {
     it('should return a persisted threshold', () => {
       service.getAggregationThreshold(1).subscribe(val => {
