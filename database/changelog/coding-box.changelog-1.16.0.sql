@@ -57,3 +57,11 @@ ALTER TABLE "public"."job_definitions"
   ADD COLUMN "distribution_snapshots" JSONB NULL;
 
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "distribution_snapshots";
+
+-- changeset jurei733:5
+-- comment: Persist DERIVE_ERROR opt-in for coder-training variables
+
+ALTER TABLE "public"."coder_training_variable"
+  ADD COLUMN IF NOT EXISTS "include_derive_error" BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- rollback ALTER TABLE "public"."coder_training_variable" DROP COLUMN IF EXISTS "include_derive_error";
