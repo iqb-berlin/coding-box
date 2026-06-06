@@ -3,12 +3,32 @@
  */
 
 const HIGHLIGHT_BORDER = '3px solid #4285f4';
+const HIGHLIGHT_FIELD_SHADOW = 'inset 0 0 0 2px #4285f4';
 const HIGHLIGHT_ATTR = 'data-coding-box-anchor-highlight';
+const NATIVE_FIELD_SELECTOR = [
+  'input:not([type="hidden"])',
+  'textarea',
+  'select',
+  '[role="textbox"]',
+  '[role="spinbutton"]',
+  '[contenteditable="true"]'
+].join(',');
+const FIELD_HOST_SELECTOR = [
+  'aspect-text-field',
+  '[data-element-type="text-field"]',
+  '[data-aspect-type="text-field"]'
+].join(',');
+const FIELD_CONTROL_SELECTOR = [
+  '.mat-mdc-text-field-wrapper',
+  '.mdc-text-field'
+].join(',');
+const FIELD_OUTLINE_SELECTOR = '.mdc-notched-outline';
 
 function clearHighlight(element: HTMLElement): void {
   element.style.border = '';
   element.style.outline = '';
   element.style.outlineOffset = '';
+  element.style.boxShadow = '';
   element.removeAttribute(HIGHLIGHT_ATTR);
 }
 
@@ -17,9 +37,14 @@ function highlightWithBorder(element: HTMLElement): void {
   element.setAttribute(HIGHLIGHT_ATTR, 'true');
 }
 
-function highlightWithOutline(element: HTMLElement): void {
+function highlightWithOutline(element: HTMLElement, outlineOffset = '-3px'): void {
   element.style.outline = HIGHLIGHT_BORDER;
-  element.style.outlineOffset = '-3px';
+  element.style.outlineOffset = outlineOffset;
+  element.setAttribute(HIGHLIGHT_ATTR, 'true');
+}
+
+function highlightField(element: HTMLElement): void {
+  element.style.boxShadow = HIGHLIGHT_FIELD_SHADOW;
   element.setAttribute(HIGHLIGHT_ATTR, 'true');
 }
 
@@ -68,6 +93,69 @@ function getTableHighlightTarget(anchorElement: HTMLElement): HTMLElement | null
   }
 
   return anchorElement;
+}
+
+function getSingleDescendant(
+  element: HTMLElement,
+  selector: string,
+  preferInnermost = false
+): HTMLElement | null {
+  const descendants = Array.from(element.querySelectorAll(selector)) as HTMLElement[];
+  const candidates = descendants.filter(candidate => {
+    if (preferInnermost) {
+      return !descendants.some(other => other !== candidate && candidate.contains(other));
+    }
+
+    return !descendants.some(other => other !== candidate && other.contains(candidate));
+  });
+
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+function getFieldRoot(anchorElement: HTMLElement): HTMLElement {
+  return (
+    anchorElement.closest(FIELD_HOST_SELECTOR) ||
+    anchorElement.closest('[data-element-alias]') ||
+    anchorElement
+  ) as HTMLElement;
+}
+
+function getFieldControlHighlightTarget(nativeFieldElement: HTMLElement, root: HTMLElement): HTMLElement {
+  const outlineElement = getSingleDescendant(root, FIELD_OUTLINE_SELECTOR);
+  if (outlineElement) {
+    return outlineElement;
+  }
+
+  const controlElement = nativeFieldElement.closest(FIELD_CONTROL_SELECTOR) as HTMLElement | null;
+
+  return controlElement && root.contains(controlElement) ? controlElement : nativeFieldElement;
+}
+
+function getFieldHighlightTarget(anchorElement: HTMLElement): HTMLElement | null {
+  if (anchorElement.closest('aspect-cloze')) {
+    return null;
+  }
+
+  const fieldRoot = getFieldRoot(anchorElement);
+  const nativeFieldElement = anchorElement.closest(NATIVE_FIELD_SELECTOR) as HTMLElement | null;
+  if (nativeFieldElement) {
+    return getFieldControlHighlightTarget(nativeFieldElement, fieldRoot);
+  }
+
+  const nativeFieldDescendant = getSingleDescendant(anchorElement, NATIVE_FIELD_SELECTOR, true);
+  if (nativeFieldDescendant) {
+    return getFieldControlHighlightTarget(nativeFieldDescendant, fieldRoot);
+  }
+
+  const fieldHostElement = anchorElement.closest(FIELD_HOST_SELECTOR) as HTMLElement | null;
+  if (fieldHostElement) {
+    const nativeFieldInsideHost = getSingleDescendant(fieldHostElement, NATIVE_FIELD_SELECTOR, true);
+    return nativeFieldInsideHost ?
+      getFieldControlHighlightTarget(nativeFieldInsideHost, fieldHostElement) :
+      fieldHostElement;
+  }
+
+  return getSingleDescendant(anchorElement, FIELD_HOST_SELECTOR);
 }
 
 /**
@@ -143,6 +231,16 @@ export function highlightAspectSectionWithAnchor(iframe: HTMLIFrameElement, anch
           }
         }
 
+        const fieldHighlightTarget = getFieldHighlightTarget(anchorElement);
+        if (fieldHighlightTarget) {
+          highlightField(fieldHighlightTarget);
+          const parentSection = getParentSection(anchorElement);
+          if (parentSection) {
+            result.push(parentSection);
+          }
+          return result;
+        }
+
         // Filter aspect-section tags that contain the anchor element
         filteredElements = Array.from(allAspectSections).filter(aspectSection => aspectSection.contains(anchorElement));
 
@@ -205,7 +303,8 @@ export function scrollToElementByAlias(
     const elements = findElementsByDataAlias(iframe);
     const element = elements[alias];
     if (element) {
-      element.scrollIntoView(options || { behavior: 'smooth', block: 'center' });
+      (getTableHighlightTarget(element) || getFieldHighlightTarget(element) || element)
+        .scrollIntoView(options || { behavior: 'smooth', block: 'center' });
       return true;
     }
   } catch (error) {

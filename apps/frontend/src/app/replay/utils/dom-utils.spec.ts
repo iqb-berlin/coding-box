@@ -151,6 +151,7 @@ describe('replay dom-utils', () => {
     expect(highlighted).toEqual([section]);
     expect(sectionFrame.style.border).toBe('');
     expect(fieldA.style.outline).toBe('3px solid #4285f4');
+    expect(fieldA.style.outlineOffset).toBe('-3px');
     expect(fieldB.style.outline).toBe('');
   });
 
@@ -195,6 +196,77 @@ describe('replay dom-utils', () => {
     expect(sectionFrame.style.border).toBe('');
     expect(cellA.style.outline).toBe('');
     expect(cellB.style.outline).toBe('3px solid #4285f4');
+    expect(fieldB.style.outline).toBe('');
+  });
+
+  it('highlights a standalone text field instead of the whole section grid', () => {
+    const iframe = createIframe(`
+      <aspect-section id="section">
+        <div id="section-frame">
+          <div id="table-frame"></div>
+          <span data-element-alias="text_1">Kirschsaft</span>
+          <aspect-text-field id="field-a" data-element-alias="01a"></aspect-text-field>
+          <aspect-text-field id="field-b" data-element-alias="01b"></aspect-text-field>
+        </div>
+      </aspect-section>
+    `);
+
+    const highlighted = highlightAspectSectionWithAnchor(iframe, '01a');
+    const section = iframe.contentDocument?.querySelector('#section') as HTMLElement;
+    const sectionFrame = iframe.contentDocument?.querySelector('#section-frame') as HTMLElement;
+    const fieldA = iframe.contentDocument?.querySelector('#field-a') as HTMLElement;
+    const fieldB = iframe.contentDocument?.querySelector('#field-b') as HTMLElement;
+
+    expect(highlighted).toEqual([section]);
+    expect(sectionFrame.style.border).toBe('');
+    expect(fieldA.style.outline).toBe('');
+    expect(fieldA.style.boxShadow).toBe('inset 0 0 0 2px #4285f4');
+    expect(fieldB.style.boxShadow).toBe('');
+  });
+
+  it('highlights a text field inside an aliased element wrapper', () => {
+    const iframe = createIframe(`
+      <aspect-section id="section">
+        <div id="section-frame">
+          <aspect-element data-element-alias="01a">
+            <aspect-text-field id="field-a">
+              <div id="material-wrapper-a" class="mat-mdc-text-field-wrapper mdc-text-field">
+                <div id="material-outline-a" class="mdc-notched-outline"></div>
+                <input id="native-input-a">
+              </div>
+            </aspect-text-field>
+          </aspect-element>
+          <aspect-element data-element-alias="01b">
+            <aspect-text-field id="field-b">
+              <div id="material-wrapper-b" class="mat-mdc-text-field-wrapper mdc-text-field">
+                <div id="material-outline-b" class="mdc-notched-outline"></div>
+                <input id="native-input-b">
+              </div>
+            </aspect-text-field>
+          </aspect-element>
+        </div>
+      </aspect-section>
+    `);
+
+    const highlighted = highlightAspectSectionWithAnchor(iframe, '01a');
+    const section = iframe.contentDocument?.querySelector('#section') as HTMLElement;
+    const sectionFrame = iframe.contentDocument?.querySelector('#section-frame') as HTMLElement;
+    const fieldA = iframe.contentDocument?.querySelector('#field-a') as HTMLElement;
+    const inputA = iframe.contentDocument?.querySelector('#native-input-a') as HTMLElement;
+    const materialWrapperA = iframe.contentDocument?.querySelector('#material-wrapper-a') as HTMLElement;
+    const materialOutlineA = iframe.contentDocument?.querySelector('#material-outline-a') as HTMLElement;
+    const materialOutlineB = iframe.contentDocument?.querySelector('#material-outline-b') as HTMLElement;
+    const materialWrapperB = iframe.contentDocument?.querySelector('#material-wrapper-b') as HTMLElement;
+    const fieldB = iframe.contentDocument?.querySelector('#field-b') as HTMLElement;
+
+    expect(highlighted).toEqual([section]);
+    expect(sectionFrame.style.border).toBe('');
+    expect(fieldA.style.outline).toBe('');
+    expect(inputA.style.boxShadow).toBe('');
+    expect(materialWrapperA.style.boxShadow).toBe('');
+    expect(materialOutlineA.style.boxShadow).toBe('inset 0 0 0 2px #4285f4');
+    expect(materialOutlineB.style.boxShadow).toBe('');
+    expect(materialWrapperB.style.boxShadow).toBe('');
     expect(fieldB.style.outline).toBe('');
   });
 
