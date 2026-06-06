@@ -147,6 +147,37 @@ export class WorkspaceSettingsService {
     );
   }
 
+  getIncludeDeriveErrorInManualCoding(workspaceId: number): Observable<boolean> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(workspaceId, 'include-derive-error-in-manual-coding', true)
+        .subscribe({
+          next: setting => {
+            try {
+              const parsed = JSON.parse(setting.value);
+              observer.next(parsed.enabled ?? false);
+            } catch {
+              observer.next(false);
+            }
+            observer.complete();
+          },
+          error: () => {
+            observer.next(false);
+            observer.complete();
+          }
+        });
+    });
+  }
+
+  setIncludeDeriveErrorInManualCoding(workspaceId: number, enabled: boolean): Observable<WorkspaceSettings> {
+    const value = JSON.stringify({ enabled });
+    return this.setWorkspaceSetting(
+      workspaceId,
+      'include-derive-error-in-manual-coding',
+      value,
+      'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
+    );
+  }
+
   getResponseMatchingMode(workspaceId: number): Observable<ResponseMatchingFlag[]> {
     return new Observable(observer => {
       this.getWorkspaceSetting(workspaceId, 'response-matching-mode')

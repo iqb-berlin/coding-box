@@ -89,6 +89,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   readonly maxTokenDurationDays = 90;
   autoFetchCodingStatistics = true;
   autoRefreshManualCodingJobs = true;
+  includeDeriveErrorInManualCoding = false;
   showTestResultsLogAnomalies = false;
   isExporting = false;
   databaseExportProgress = 0;
@@ -107,6 +108,11 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .getAutoRefreshManualCodingJobs(workspaceId)
         .subscribe(enabled => {
           this.autoRefreshManualCodingJobs = enabled;
+        });
+      this.workspaceSettingsService
+        .getIncludeDeriveErrorInManualCoding(workspaceId)
+        .subscribe(enabled => {
+          this.includeDeriveErrorInManualCoding = enabled;
         });
       this.workspaceSettingsService
         .getShowTestResultsLogAnomalies(workspaceId)
@@ -289,6 +295,46 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
               }
             );
             this.autoRefreshManualCodingJobs = !this.autoRefreshManualCodingJobs;
+          }
+        });
+    }
+  }
+
+  toggleIncludeDeriveErrorInManualCoding(toggleEvent: { checked: boolean }): void {
+    this.includeDeriveErrorInManualCoding = toggleEvent.checked;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService
+        .setIncludeDeriveErrorInManualCoding(
+          workspaceId,
+          this.includeDeriveErrorInManualCoding
+        )
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.includeDeriveErrorInManualCoding ?
+                this.translateService.instant(
+                  'ws-settings.include-derive-error-in-manual-coding-enabled'
+                ) :
+                this.translateService.instant(
+                  'ws-settings.include-derive-error-in-manual-coding-disabled'
+                ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
+            this.includeDeriveErrorInManualCoding =
+              !this.includeDeriveErrorInManualCoding;
           }
         });
     }

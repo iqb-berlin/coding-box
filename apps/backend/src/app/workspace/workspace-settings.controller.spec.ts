@@ -28,4 +28,18 @@ describe('WorkspaceSettingsController', () => {
         'Controls whether manual coding job tables refresh automatically when the browser window regains focus'
     });
   });
+
+  it('returns DERIVE_ERROR manual coding disabled by default when it is missing', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'include-derive-error-in-manual-coding')
+    ).resolves.toEqual({
+      id: 0,
+      key: 'workspace-5-include-derive-error-in-manual-coding',
+      value: JSON.stringify({ enabled: false }),
+      description:
+        'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
+    });
+  });
 });

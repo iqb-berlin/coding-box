@@ -158,6 +158,13 @@ type DistributionVariableUsageBatchRequest = DistributionVariableUsageRequest & 
   key: string | number;
 };
 
+type DeriveErrorManualCodingRequest = {
+  selectedVariables?: ManualCodingVariableReference[];
+  selectedVariableBundles?: Array<{
+    variables?: ManualCodingVariableReference[];
+  }>;
+};
+
 type DistributionVariableUsageContext = {
   matchingFlags: ResponseMatchingFlag[];
   aggregationThreshold: number | null;
@@ -306,6 +313,8 @@ export interface CodingJobAggregationSettings {
   aggregationSettingsVersion: number | null;
   fromJobSnapshot: boolean;
 }
+
+const INCLUDE_DERIVE_ERROR_IN_MANUAL_CODING_SETTING_KEY = 'include-derive-error-in-manual-coding';
 
 @Injectable()
 export class CodingJobService {
@@ -472,6 +481,56 @@ export class CodingJobService {
     }
 
     return response.statusV1 !== DERIVE_ERROR_STATUS || variable.includeDeriveError === true;
+  }
+
+  private requestIncludesDeriveErrorManualCoding(
+    request: DeriveErrorManualCodingRequest
+  ): boolean {
+    return (request.selectedVariables || []).some(variable => variable.includeDeriveError === true) ||
+      (request.selectedVariableBundles || []).some(bundle => (
+        (bundle.variables || []).some(variable => variable.includeDeriveError === true)
+      ));
+  }
+
+  async getIncludeDeriveErrorInManualCoding(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<boolean> {
+    const repository = manager ? manager.getRepository(Setting) : this.settingRepository;
+    const setting = await repository.findOne({
+      where: {
+        key: `workspace-${workspaceId}-${INCLUDE_DERIVE_ERROR_IN_MANUAL_CODING_SETTING_KEY}`
+      }
+    });
+
+    if (!setting) {
+      return false;
+    }
+
+    try {
+      const parsed = JSON.parse(setting.content);
+      return parsed.enabled === true;
+    } catch {
+      return false;
+    }
+  }
+
+  async assertDeriveErrorManualCodingEnabled(
+    workspaceId: number,
+    request: DeriveErrorManualCodingRequest,
+    manager?: EntityManager
+  ): Promise<void> {
+    if (!this.requestIncludesDeriveErrorManualCoding(request)) {
+      return;
+    }
+
+    if (await this.getIncludeDeriveErrorInManualCoding(workspaceId, manager)) {
+      return;
+    }
+
+    throw new BadRequestException(
+      'DERIVE_ERROR manual coding is disabled for this workspace.'
+    );
   }
 
   async assertUserCanAccessCodingJob(
@@ -830,6 +889,8 @@ export class CodingJobService {
     if (!Number.isInteger(jobDefinitionId) || jobDefinitionId < 1) {
       throw new BadRequestException('A valid job definition id is required.');
     }
+
+    await this.assertDeriveErrorManualCodingEnabled(workspaceId, request);
 
     const [
       plan,
@@ -4440,6 +4501,7 @@ export class CodingJobService {
       tasksPerCoder: Record<string, number>;
       coderWeights: Record<string, number>;
     }> {
+    await this.assertDeriveErrorManualCodingEnabled(workspaceId, request);
     const plan = await this.buildDistributionPlan(workspaceId, request);
     return {
       distribution: plan.distribution,
@@ -4470,6 +4532,7 @@ export class CodingJobService {
 
     await this.connection.transaction(async manager => {
       await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      await this.assertDeriveErrorManualCodingEnabled(workspaceId, request, manager);
       await this.assertApprovedJobDefinitionCanBeUsed(
         manager,
         workspaceId,
@@ -4618,6 +4681,7 @@ export class CodingJobService {
     const createdJobs: DistributionCreatedJob[] = [];
 
     try {
+      await this.assertDeriveErrorManualCodingEnabled(workspaceId, request);
       const plan = await this.buildDistributionPlan(workspaceId, request);
 
       if (plan.jobsToCreate.length > 0 || request.jobDefinitionId !== undefined) {

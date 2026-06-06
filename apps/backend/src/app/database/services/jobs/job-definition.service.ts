@@ -748,6 +748,14 @@ export class JobDefinitionService {
       createDto.missingsProfileId
     );
 
+    await this.codingJobService.assertDeriveErrorManualCodingEnabled(
+      workspaceId,
+      {
+        selectedVariables: createDto.assignedVariables || [],
+        selectedVariableBundles: []
+      }
+    );
+
     this.validateDefinitionState({
       status: createDto.status ?? 'draft',
       assignedVariables: createDto.assignedVariables,
@@ -1167,6 +1175,21 @@ export class JobDefinitionService {
 
     this.validateStatusTransition(jobDefinition.status, updateDto.status);
     this.validateDefinitionState(nextState);
+
+    if (
+      updateDto.assignedVariables !== undefined ||
+      updateDto.assignedVariableBundles !== undefined ||
+      updateDto.status === 'approved'
+    ) {
+      await this.codingJobService.assertDeriveErrorManualCodingEnabled(
+        workspaceId,
+        {
+          selectedVariables: nextState.assignedVariables || [],
+          selectedVariableBundles: []
+        }
+      );
+    }
+
     const coderAssignmentsChanged = updateDto.assignedCoders !== undefined ||
       updateDto.assignedCoderConfigs !== undefined;
     const approvesDefinition = updateDto.status === 'approved' && jobDefinition.status !== 'approved';
@@ -1290,6 +1313,17 @@ export class JobDefinitionService {
     if (approveDto.status === 'pending_review' && jobDefinition.status === 'draft') {
       jobDefinition.status = 'pending_review';
     } else if (approveDto.status === 'approved' && ['draft', 'pending_review'].includes(jobDefinition.status)) {
+      await this.codingJobService.assertDeriveErrorManualCodingEnabled(
+        workspaceId,
+        this.buildPlannedVariableUsageBatchRequest(jobDefinition.id, {
+          id: jobDefinition.id,
+          assigned_variables: jobDefinition.assigned_variables || [],
+          assigned_variable_bundles: jobDefinition.assigned_variable_bundles || [],
+          max_coding_cases: jobDefinition.max_coding_cases,
+          case_ordering_mode: jobDefinition.case_ordering_mode,
+          distribution_seed: this.getDefinitionDistributionSeed(jobDefinition)
+        })
+      );
       await this.codingJobService.assertCodersCanCodeInWorkspace(
         coderAssignments.assignedCoders,
         jobDefinition.workspace_id

@@ -49,6 +49,7 @@ import { CodingJobService } from '../../services/coding-job.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
 import { CodingJobBulkCreationDialogComponent, BulkCreationData, BulkCreationResult } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
+import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 
 export interface CodingJobDefinitionDialogData {
   codingJob?: CodingJob;
@@ -143,6 +144,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private codingJobService = inject(CodingJobService);
   private testPersonCodingService = inject(TestPersonCodingService);
   private missingsProfileService = inject(MissingsProfileService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
   private matDialog = inject(MatDialog);
   private translateService = inject(TranslateService);
   private destroy$ = new Subject<void>();
@@ -199,6 +201,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private baseAvailableCasesByVariable = new Map<string, number>();
   existingJobDefinitions: JobDefinition[] = [];
   manualCodingScopeSummary: ManualCodingScopeSummary | null = null;
+  includeDeriveErrorInManualCoding = false;
 
   constructor(
     public dialogRef: MatDialogRef<CodingJobDefinitionDialogComponent>,
@@ -215,7 +218,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     this.initForm();
-    this.loadCodingIncompleteVariables();
+    this.loadIncludeDeriveErrorSetting();
     this.loadVariableBundles();
     this.loadAvailableCoders();
     if (this.data.isEdit && this.data.mode === 'job' && this.data.codingJob?.id) {
@@ -256,6 +259,29 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  private loadIncludeDeriveErrorSetting(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId || this.data.mode !== 'definition') {
+      this.includeDeriveErrorInManualCoding = false;
+      this.loadCodingIncompleteVariables();
+      return;
+    }
+
+    this.workspaceSettingsService
+      .getIncludeDeriveErrorInManualCoding(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: enabled => {
+          this.includeDeriveErrorInManualCoding = enabled;
+          this.loadCodingIncompleteVariables();
+        },
+        error: () => {
+          this.includeDeriveErrorInManualCoding = false;
+          this.loadCodingIncompleteVariables();
+        }
+      });
   }
 
   loadAvailableCoders(): void {
@@ -493,7 +519,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.codingJobBackendService.getCodingIncompleteVariables(
       workspaceId,
       unitNameFilter || undefined,
-      trainingRequired
+      trainingRequired,
+      this.includeDeriveErrorInManualCoding ? true : undefined
     ).subscribe({
       next: variables => {
         this.variables = variables;
@@ -560,7 +587,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       this.selectedVariables.clear();
       this.variables.forEach(rowVar => {
         const rowKey = makeKey(rowVar.unitName ?? '', rowVar.variableId ?? '');
-        rowVar.includeDeriveError = assignedByKey.get(rowKey)?.includeDeriveError === true;
+        rowVar.includeDeriveError =
+          this.includeDeriveErrorInManualCoding &&
+          assignedByKey.get(rowKey)?.includeDeriveError === true;
         if (assignedKeySet.has(rowKey)) {
           this.selectedVariables.select(rowVar);
         }
@@ -1042,7 +1071,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   hasDeriveErrorResponses(variable: Variable): boolean {
-    return (variable.deriveErrorResponseCount ?? 0) > 0 || variable.includeDeriveError === true;
+    return this.includeDeriveErrorInManualCoding &&
+      ((variable.deriveErrorResponseCount ?? 0) > 0 || variable.includeDeriveError === true);
   }
 
   setDeriveErrorIncluded(variable: Variable, includeDeriveError: boolean): void {
@@ -1063,7 +1093,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return this.selectedVariables.selected.map(variable => ({
       unitName: variable.unitName,
       variableId: variable.variableId,
-      ...(variable.includeDeriveError === true && this.hasDeriveErrorResponses(variable) ? { includeDeriveError: true } : {})
+      ...(this.includeDeriveErrorInManualCoding &&
+        variable.includeDeriveError === true &&
+        this.hasDeriveErrorResponses(variable) ? { includeDeriveError: true } : {})
     }));
   }
 
