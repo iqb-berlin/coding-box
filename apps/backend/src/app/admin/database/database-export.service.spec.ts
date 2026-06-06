@@ -129,7 +129,7 @@ describe('DatabaseExportService', () => {
     ]));
 
     const missingsProfileConfig = tables.find(table => table.name === 'missings_profile');
-    expect(missingsProfileConfig?.query).toContain('FROM job_definitions jd');
+    expect(missingsProfileConfig?.query).toContain('mp.workspace_id = $1');
   });
 
   it('exports workspace tables through a read-only repeatable-read query runner', async () => {

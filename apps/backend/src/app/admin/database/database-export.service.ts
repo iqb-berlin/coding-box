@@ -724,16 +724,7 @@ export class DatabaseExportService {
         name: 'missings_profile',
         query: `
           SELECT mp.* FROM missings_profile mp
-          WHERE EXISTS (
-            SELECT 1 FROM coding_job cj
-            WHERE cj.missings_profile_id = mp.id
-              AND cj.workspace_id = $1
-          )
-          OR EXISTS (
-            SELECT 1 FROM job_definitions jd
-            WHERE jd.missings_profile_id = mp.id
-              AND jd.workspace_id = $1
-          )
+          WHERE mp.workspace_id = $1
         `
       },
       {

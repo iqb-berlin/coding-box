@@ -10,6 +10,17 @@ const createRepo = () => ({
   delete: jest.fn()
 });
 
+const setValidMissings = (profile: MissingsProfilesDto): void => {
+  profile.setMissings([
+    {
+      id: 'mir', label: 'MIR', description: 'Invalid response', code: -98, score: 0
+    },
+    {
+      id: 'mci', label: 'MCI', description: 'Coding impossible', code: -97, score: 0
+    }
+  ]);
+};
+
 describe('MissingsProfilesService', () => {
   let repo: ReturnType<typeof createRepo>;
   let codingJobRepository: ReturnType<typeof createRepo>;
@@ -128,7 +139,7 @@ describe('MissingsProfilesService', () => {
     });
     repo.save.mockImplementationOnce(async value => value);
 
-    const profile = await service.getMissingsProfileByLabel('IQB-Standard');
+    const profile = await service.getMissingsProfileByLabel(1, 'IQB-Standard');
 
     expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
       id: 7,
@@ -146,11 +157,11 @@ describe('MissingsProfilesService', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ label: 'ById', missings: [{ code: -98 }] });
 
-    await expect(service.getMissingsProfileByLabel('Custom')).resolves.toMatchObject({
+    await expect(service.getMissingsProfileByLabel(1, 'Custom')).resolves.toMatchObject({
       label: 'Custom',
       missings: [{ code: -99 }]
     });
-    await expect(service.getMissingsProfileByLabel('Missing')).resolves.toBeNull();
+    await expect(service.getMissingsProfileByLabel(1, 'Missing')).resolves.toBeNull();
     await expect(service.getMissingsProfileDetails(1, 2)).resolves.toMatchObject({
       label: 'ById',
       missings: [{ code: -98 }]
@@ -160,9 +171,7 @@ describe('MissingsProfilesService', () => {
   it('creates, updates and deletes profiles', async () => {
     const profile = new MissingsProfilesDto();
     profile.label = 'Profile';
-    profile.setMissings([{
-      id: 'x', label: 'X', description: 'X', code: -1, score: 0
-    }]);
+    setValidMissings(profile);
 
     repo.findOne
       .mockResolvedValueOnce(null)
@@ -187,9 +196,14 @@ describe('MissingsProfilesService', () => {
   it('creates and updates profiles from plain request bodies', async () => {
     const profile = {
       label: 'Plain',
-      missings: JSON.stringify([{
-        id: 'x', label: 'X', description: 'X', code: -1, score: 0
-      }])
+      missings: JSON.stringify([
+        {
+          id: 'mir', label: 'MIR', description: 'Invalid response', code: -98, score: 0
+        },
+        {
+          id: 'mci', label: 'MCI', description: 'Coding impossible', code: -97, score: 0
+        }
+      ])
     } as MissingsProfilesDto;
 
     repo.findOne
@@ -228,12 +242,51 @@ describe('MissingsProfilesService', () => {
     expect(repo.save).not.toHaveBeenCalled();
   });
 
+  it('rejects malformed missings JSON', async () => {
+    const profile = {
+      label: 'Malformed',
+      missings: '[not json'
+    } as MissingsProfilesDto;
+
+    await expect(service.createMissingsProfile(1, profile)).rejects.toThrow('valid JSON');
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects profiles without MIR and MCI entries', async () => {
+    const profile = {
+      label: 'Incomplete',
+      missings: JSON.stringify([{
+        id: 'mir', label: 'MIR', description: 'Invalid response', code: -98, score: 0
+      }])
+    } as MissingsProfilesDto;
+
+    await expect(service.createMissingsProfile(1, profile)).rejects.toThrow("'mci'");
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it('keeps duplicate profile labels scoped to a workspace', async () => {
+    const profile = new MissingsProfilesDto();
+    profile.label = 'Profile';
+    setValidMissings(profile);
+    repo.findOne.mockResolvedValueOnce(null);
+
+    await expect(service.createMissingsProfile(2, profile)).resolves.toMatchObject({
+      label: 'Profile'
+    });
+
+    expect(repo.findOne).toHaveBeenCalledWith({
+      where: { workspace_id: 2, label: 'Profile' }
+    });
+    expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
+      workspace_id: 2,
+      label: 'Profile'
+    }));
+  });
+
   it('rejects profile renames to an existing label', async () => {
     const profile = new MissingsProfilesDto();
     profile.label = 'Duplicate';
-    profile.setMissings([{
-      id: 'x', label: 'X', description: 'X', code: -1, score: 0
-    }]);
+    setValidMissings(profile);
 
     repo.findOne
       .mockResolvedValueOnce({ id: 1, label: 'Old', missings: profile.missings })
@@ -328,10 +381,10 @@ describe('MissingsProfilesService', () => {
   it('blocks updates and deletes for referenced profiles', async () => {
     const profile = new MissingsProfilesDto();
     profile.label = 'Used';
-    profile.setMissings([{
-      id: 'x', label: 'X', description: '', code: -96, score: 0
-    }]);
-    repo.findOne.mockResolvedValue({ id: 5, label: 'Used', missings: profile.missings });
+    setValidMissings(profile);
+    repo.findOne.mockResolvedValue({
+      id: 5, workspace_id: 1, label: 'Used', missings: profile.missings
+    });
     codingJobRepository.count.mockResolvedValue(1);
 
     await expect(service.updateMissingsProfile(1, 'Used', profile)).rejects.toBeInstanceOf(BadRequestException);
@@ -343,10 +396,10 @@ describe('MissingsProfilesService', () => {
   it('blocks updates and deletes for the default profile when legacy jobs use it implicitly', async () => {
     const profile = new MissingsProfilesDto();
     profile.label = 'IQB-Standard';
-    profile.setMissings([{
-      id: 'mci', label: 'MCI', description: '', code: -97, score: 0
-    }]);
-    repo.findOne.mockResolvedValue({ id: 7, label: 'IQB-Standard', missings: profile.missings });
+    setValidMissings(profile);
+    repo.findOne.mockResolvedValue({
+      id: 7, workspace_id: 1, label: 'IQB-Standard', missings: profile.missings
+    });
     codingJobRepository.count.mockImplementation(async ({ where }) => (Array.isArray(where) ? 1 : 0));
 
     await expect(service.updateMissingsProfile(1, 'IQB-Standard', profile)).rejects.toBeInstanceOf(BadRequestException);
@@ -354,8 +407,8 @@ describe('MissingsProfilesService', () => {
 
     expect(codingJobRepository.count).toHaveBeenCalledWith({
       where: expect.arrayContaining([
-        { missings_profile_id: 7 },
-        expect.objectContaining({ missings_profile_id: expect.any(Object) })
+        { workspace_id: 1, missings_profile_id: 7 },
+        expect.objectContaining({ workspace_id: 1, missings_profile_id: expect.any(Object) })
       ])
     });
     expect(repo.save).not.toHaveBeenCalled();
