@@ -31,8 +31,18 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WorkspaceId } from '../../admin/workspace/workspace.decorator';
-import { AccessLevelGuard, RequireAccessLevel } from '../../admin/workspace/access-level.guard';
-import { CodingJobService, CodingReplayService } from '../../database/services/coding';
+import {
+  AccessLevelGuard,
+  RequireAccessLevel
+} from '../../admin/workspace/access-level.guard';
+import {
+  CodingJobService,
+  CodingReplayService
+} from '../../database/services/coding';
+import {
+  CodingJobListSortBy,
+  CodingJobListSortDirection
+} from '../../database/services/coding/coding-job.service';
 import { CodingJobDto } from '../../admin/coding-job/dto/coding-job.dto';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
@@ -47,10 +57,14 @@ export class WsgCodingJobController {
   constructor(
     private readonly codingJobService: CodingJobService,
     private readonly codingReplayService: CodingReplayService
-  ) { }
+  ) {}
 
   private getRequestUserId(req: Request): number {
-    const user = (req as Request & { user?: { id?: number | string; userId?: number | string } }).user;
+    const user = (
+      req as Request & {
+        user?: { id?: number | string; userId?: number | string };
+      }
+    ).user;
     const userId = Number(user?.id ?? user?.userId);
 
     if (!Number.isFinite(userId) || userId <= 0) {
@@ -58,6 +72,66 @@ export class WsgCodingJobController {
     }
 
     return userId;
+  }
+
+  private parseOptionalPositiveInt(
+    value: string | undefined,
+    fieldName: string
+  ): number | undefined {
+    if (value === undefined || value === '') {
+      return undefined;
+    }
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new BadRequestException(`${fieldName} must be a positive integer`);
+    }
+    return parsed;
+  }
+
+  private normalizeJobScope(
+    scope: string | undefined
+  ): 'all' | 'training' | 'productive' | undefined {
+    if (!scope) {
+      return undefined;
+    }
+    if (scope === 'all' || scope === 'training' || scope === 'productive') {
+      return scope;
+    }
+    throw new BadRequestException(
+      'scope must be one of "all", "training", or "productive"'
+    );
+  }
+
+  private normalizeSortBy(
+    sortBy: string | undefined
+  ): CodingJobListSortBy | undefined {
+    if (!sortBy) {
+      return undefined;
+    }
+    if (
+      sortBy === 'name' ||
+      sortBy === 'description' ||
+      sortBy === 'status' ||
+      sortBy === 'createdAt' ||
+      sortBy === 'updatedAt'
+    ) {
+      return sortBy;
+    }
+    throw new BadRequestException(
+      'sortBy must be one of "name", "description", "status", "createdAt", or "updatedAt"'
+    );
+  }
+
+  private normalizeSortDirection(
+    sortDirection: string | undefined
+  ): CodingJobListSortDirection | undefined {
+    if (!sortDirection) {
+      return undefined;
+    }
+    if (sortDirection === 'asc' || sortDirection === 'desc') {
+      return sortDirection;
+    }
+    throw new BadRequestException('sortDirection must be "asc" or "desc"');
   }
 
   private async assertCodingJobAccess(
@@ -90,20 +164,27 @@ export class WsgCodingJobController {
     req: Request,
     onlyOpen: boolean
   ): Promise<{ total: number; firstReplayUrl: string }> {
-    const items = await this.codingJobService.getCodingJobUnits(codingJobId, onlyOpen);
+    const items = await this.codingJobService.getCodingJobUnits(
+      codingJobId,
+      onlyOpen
+    );
 
     if (items.length === 0) {
       return { total: 0, firstReplayUrl: '' };
     }
 
     const serverUrl = `${req.protocol}://${req.get('host') ?? ''}`;
-    const firstItemWithUrl = await this.codingReplayService.generateReplayUrlsForItemsBulk(
-      workspaceId,
-      [items[0]],
-      serverUrl
-    );
+    const firstItemWithUrl =
+      await this.codingReplayService.generateReplayUrlsForItemsBulk(
+        workspaceId,
+        [items[0]],
+        serverUrl
+      );
 
-    return { total: items.length, firstReplayUrl: firstItemWithUrl[0]?.replayUrl ?? '' };
+    return {
+      total: items.length,
+      firstReplayUrl: firstItemWithUrl[0]?.replayUrl ?? ''
+    };
   }
 
   @Post('transfer-cases')
@@ -112,7 +193,8 @@ export class WsgCodingJobController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Transfer coding cases between coders',
-    description: 'Transfers coding jobs/cases assigned to one coder to another coder within the same workspace'
+    description:
+      'Transfers coding jobs/cases assigned to one coder to another coder within the same workspace'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -166,15 +248,75 @@ export class WsgCodingJobController {
   @ApiQuery({
     name: 'assignedTo',
     required: false,
-    description: 'Use "me" to return only coding jobs assigned to the authenticated user',
+    description:
+      'Use "me" to return only coding jobs assigned to the authenticated user',
     type: String
+  })
+  @ApiQuery({
+    name: 'scope',
+    required: false,
+    description: 'Filter jobs by scope: all, training, or productive',
+    type: String
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description: 'Filter jobs by status',
+    type: String
+  })
+  @ApiQuery({
+    name: 'excludeStatus',
+    required: false,
+    description: 'Exclude jobs with this status',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderId',
+    required: false,
+    description: 'Filter jobs assigned to a coder',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'jobName',
+    required: false,
+    description: 'Filter jobs by name fragment',
+    type: String
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    description:
+      'Sort jobs by name, description, status, createdAt, or updatedAt',
+    type: String
+  })
+  @ApiQuery({
+    name: 'sortDirection',
+    required: false,
+    description: 'Sort direction: asc or desc',
+    type: String
+  })
+  @ApiQuery({
+    name: 'trainingId',
+    required: false,
+    description: 'Filter jobs by training ID or "none"',
+    type: String
+  })
+  @ApiQuery({
+    name: 'includeIssueSummary',
+    required: false,
+    description:
+      'Include aggregated coding issue summaries in the list response',
+    type: Boolean
   })
   @ApiOkResponse({
     description: 'List of coding jobs retrieved successfully',
     schema: {
       type: 'object',
       properties: {
-        data: { type: 'array', items: { $ref: '#/components/schemas/CodingJobDto' } },
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/CodingJobDto' }
+        },
         total: { type: 'number' },
         totalOpenUnits: { type: 'number' },
         page: { type: 'number' },
@@ -191,10 +333,26 @@ export class WsgCodingJobController {
   async getCodingJobs(
     @WorkspaceId() workspaceId: number,
       @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-      @Query('limit', new ParseIntPipe({ optional: true })) limit: number | undefined,
-      @Query('assignedTo') assignedTo: string | undefined,
-      @Req() req: Request
-  ): Promise<{ data: CodingJobDto[]; total: number; totalOpenUnits: number; page: number; limit?: number }> {
+      @Query('limit', new ParseIntPipe({ optional: true }))
+                   limit: number | undefined,
+                   @Query('assignedTo') assignedTo: string | undefined,
+                   @Query('scope') scope: string | undefined,
+                   @Query('status') status: string | undefined,
+                   @Query('excludeStatus') excludeStatus: string | undefined,
+                   @Query('coderId') coderIdParam: string | undefined,
+                   @Query('jobName') jobName: string | undefined,
+                   @Query('sortBy') sortBy: string | undefined,
+                   @Query('sortDirection') sortDirection: string | undefined,
+                   @Query('trainingId') trainingIdParam: string | undefined,
+                   @Query('includeIssueSummary') includeIssueSummary: string | undefined,
+                   @Req() req: Request
+  ): Promise<{
+        data: CodingJobDto[];
+        total: number;
+        totalOpenUnits: number;
+        page: number;
+        limit?: number;
+      }> {
     let assignedToUserId: number | undefined;
     if (assignedTo) {
       if (assignedTo !== 'me') {
@@ -203,9 +361,35 @@ export class WsgCodingJobController {
       assignedToUserId = this.getRequestUserId(req);
     }
 
-    const result = await this.codingJobService.getCodingJobs(workspaceId, page, limit, assignedToUserId);
+    const trainingId =
+      trainingIdParam === 'none' ?
+        'none' :
+        this.parseOptionalPositiveInt(trainingIdParam, 'trainingId');
+    const result = await this.codingJobService.getCodingJobs(
+      workspaceId,
+      page,
+      limit,
+      assignedToUserId,
+      {
+        scope: this.normalizeJobScope(scope),
+        status,
+        excludeStatus: status ? undefined : excludeStatus,
+        coderId: this.parseOptionalPositiveInt(coderIdParam, 'coderId'),
+        jobName,
+        trainingId,
+        includeIssueSummary: includeIssueSummary === 'true',
+        sortBy: this.normalizeSortBy(sortBy),
+        sortDirection: this.normalizeSortDirection(sortDirection)
+      }
+    );
     return {
-      data: result.data.map(job => CodingJobDto.fromEntity(job, job.assignedCoders, job.assignedVariables, job.assignedVariableBundles)),
+      data: result.data.map(job => CodingJobDto.fromEntity(
+        job,
+        job.assignedCoders,
+        job.assignedVariables,
+        job.assignedVariableBundles
+      )
+      ),
       total: result.total,
       totalOpenUnits: result.totalOpenUnits,
       page: result.page,
@@ -246,7 +430,15 @@ export class WsgCodingJobController {
   ): Promise<CodingJobDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     const result = await this.codingJobService.getCodingJob(id, workspaceId);
-    return CodingJobDto.fromEntity(result.codingJob, result.assignedCoders, result.variables, result.variableBundles.map(vb => ({ name: vb.name, variables: vb.variables })));
+    return CodingJobDto.fromEntity(
+      result.codingJob,
+      result.assignedCoders,
+      result.variables,
+      result.variableBundles.map(vb => ({
+        name: vb.name,
+        variables: vb.variables
+      }))
+    );
   }
 
   @Post()
@@ -277,10 +469,12 @@ export class WsgCodingJobController {
       throw new BadRequestException('Request body is required');
     }
 
-    if (Object.prototype.hasOwnProperty.call(
-      createCodingJobDto as unknown as Record<string, unknown>,
-      'jobDefinitionId'
-    )) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        createCodingJobDto as unknown as Record<string, unknown>,
+        'jobDefinitionId'
+      )
+    ) {
       throw new BadRequestException(
         'jobDefinitionId cannot be set when creating a coding job directly. Use the job definition create-job endpoint.'
       );
@@ -293,7 +487,9 @@ export class WsgCodingJobController {
       );
       return CodingJobDto.fromEntity(codingJob);
     } catch (error) {
-      throw new BadRequestException(`Failed to create coding job: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to create coding job: ${error.message}`
+      );
     }
   }
 
@@ -345,7 +541,8 @@ export class WsgCodingJobController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Start a coding job',
-    description: 'Finds all responses matching assigned variables and prepares replay data with URLs'
+    description:
+      'Finds all responses matching assigned variables and prepares replay data with URLs'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -380,7 +577,9 @@ export class WsgCodingJobController {
     const onlyOpen = job.codingJob.status === 'open';
 
     if (!['completed', 'results_applied'].includes(job.codingJob.status)) {
-      await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
+      await this.codingJobService.updateCodingJob(id, workspaceId, {
+        status: 'active'
+      });
     }
 
     return this.prepareCodingJobReplay(workspaceId, id, req, onlyOpen);
@@ -391,7 +590,8 @@ export class WsgCodingJobController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Prepare a coding job review',
-    description: 'Prepares replay data for read-only review without changing job state'
+    description:
+      'Prepares replay data for read-only review without changing job state'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -467,7 +667,8 @@ export class WsgCodingJobController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Save coding progress',
-    description: 'Saves partial coding progress for a specific unit-variable combination'
+    description:
+      'Saves partial coding progress for a specific unit-variable combination'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -494,12 +695,16 @@ export class WsgCodingJobController {
   async saveCodingProgress(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true })) saveCodingProgressDto: SaveCodingProgressDto,
-      @Req() req: Request
+      @Body(new ValidationPipe({ transform: true, whitelist: true }))
+                   saveCodingProgressDto: SaveCodingProgressDto,
+                   @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
-    const codingJob = await this.codingJobService.saveCodingProgress(id, saveCodingProgressDto);
+    const codingJob = await this.codingJobService.saveCodingProgress(
+      id,
+      saveCodingProgressDto
+    );
     return CodingJobDto.fromEntity(codingJob);
   }
 
@@ -508,7 +713,8 @@ export class WsgCodingJobController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Save coding notes',
-    description: 'Saves coder notes without changing the selected code or coding progress'
+    description:
+      'Saves coder notes without changing the selected code or coding progress'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -535,12 +741,16 @@ export class WsgCodingJobController {
   async saveCodingNotes(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true })) saveCodingNotesDto: SaveCodingNotesDto,
-      @Req() req: Request
+      @Body(new ValidationPipe({ transform: true, whitelist: true }))
+                   saveCodingNotesDto: SaveCodingNotesDto,
+                   @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
-    const codingJob = await this.codingJobService.saveCodingNotes(id, saveCodingNotesDto);
+    const codingJob = await this.codingJobService.saveCodingNotes(
+      id,
+      saveCodingNotesDto
+    );
     return CodingJobDto.fromEntity(codingJob);
   }
 
@@ -579,7 +789,10 @@ export class WsgCodingJobController {
       @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
-    const codingJob = await this.codingJobService.restartCodingJobWithOpenUnits(id, workspaceId);
+    const codingJob = await this.codingJobService.restartCodingJobWithOpenUnits(
+      id,
+      workspaceId
+    );
     return CodingJobDto.fromEntity(codingJob);
   }
 
@@ -627,7 +840,8 @@ export class WsgCodingJobController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get bulk coding progress',
-    description: 'Retrieves saved partial coding progress for multiple coding jobs in bulk'
+    description:
+      'Retrieves saved partial coding progress for multiple coding jobs in bulk'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -663,7 +877,8 @@ export class WsgCodingJobController {
       throw new BadRequestException('Invalid job IDs provided');
     }
 
-    const jobIds = jobIdsParam.split(',')
+    const jobIds = jobIdsParam
+      .split(',')
       .map(id => parseInt(id.trim(), 10))
       .filter(id => Number.isFinite(id) && id > 0);
 
@@ -671,7 +886,9 @@ export class WsgCodingJobController {
       throw new BadRequestException('Invalid job IDs provided');
     }
 
-    await Promise.all(jobIds.map(jobId => this.assertCodingJobAccess(workspaceId, jobId, req)));
+    await Promise.all(
+      jobIds.map(jobId => this.assertCodingJobAccess(workspaceId, jobId, req))
+    );
 
     return this.codingJobService.getBulkCodingProgress(jobIds, workspaceId);
   }
@@ -681,7 +898,8 @@ export class WsgCodingJobController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get coding job units',
-    description: 'Retrieves all units assigned to a coding job without starting it'
+    description:
+      'Retrieves all units assigned to a coding job without starting it'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -729,7 +947,8 @@ export class WsgCodingJobController {
       @Param('id', ParseIntPipe) id: number,
       @Req() req: Request,
       @Query('onlyOpen') onlyOpen?: string
-  ): Promise<Array<{
+  ): Promise<
+      Array<{
         responseId: number;
         unitName: string;
         unitAlias: string | null;
@@ -742,7 +961,8 @@ export class WsgCodingJobController {
         personGroup: string;
         isDoubleCoded: boolean;
         otherCoders: string[];
-      }>> {
+      }>
+      > {
     await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
     return this.codingJobService.getCodingJobUnits(id, onlyOpen === 'true');

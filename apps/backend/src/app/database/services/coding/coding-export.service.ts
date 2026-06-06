@@ -19,6 +19,7 @@ import {
 } from '../../../utils/coding-utils';
 import { generateUniqueWorksheetName } from '../../../utils/excel-utils';
 import { CodingListService, CodingItem } from './coding-list.service';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
@@ -124,7 +125,9 @@ export class CodingExportService {
     private workspaceCoreService: WorkspaceCoreService,
     private workspaceExclusionService: WorkspaceExclusionService,
     @Optional()
-    private missingsProfilesService?: MissingsProfilesService
+    private missingsProfilesService?: MissingsProfilesService,
+    @Optional()
+    private replayAnchorService?: CodingReplayAnchorService
   ) { }
 
   private readonly manualMissingExportValueCache = new Map<string, ResolvedMissingValue>();
@@ -332,10 +335,12 @@ export class CodingExportService {
   }
 
   private variablePageMapsCache = new Map<string, Map<string, string>>();
+  private variableAnchorMapsCache = new Map<string, Map<string, string>>();
   private currentWorkspaceId: number | null = null;
 
   private clearPageMapsCache(): void {
     this.variablePageMapsCache.clear();
+    this.variableAnchorMapsCache.clear();
     this.currentWorkspaceId = null;
   }
 
@@ -351,6 +356,24 @@ export class CodingExportService {
     }
 
     return this.variablePageMapsCache.get(unitName)?.get(variableId) || '0';
+  }
+
+  private async getVariableAnchor(unitName: string, variableId: string, workspaceId: number): Promise<string> {
+    if (!this.replayAnchorService) {
+      return variableId;
+    }
+
+    if (this.currentWorkspaceId !== workspaceId) {
+      this.clearPageMapsCache();
+      this.currentWorkspaceId = workspaceId;
+    }
+
+    if (!this.variableAnchorMapsCache.has(unitName)) {
+      const anchorMap = await this.replayAnchorService.getVariableAnchorMap(unitName, workspaceId);
+      this.variableAnchorMapsCache.set(unitName, anchorMap);
+    }
+
+    return this.variableAnchorMapsCache.get(unitName)?.get(variableId) || variableId;
   }
 
   async exportCodingListAsCsv(
@@ -584,7 +607,10 @@ export class CodingExportService {
     authToken: string,
     serverUrl?: string
   ): Promise<string> {
-    const variablePage = await this.getVariablePage(unitName, variableId, workspaceId);
+    const [variablePage, variableAnchor] = await Promise.all([
+      this.getVariablePage(unitName, variableId, workspaceId),
+      this.getVariableAnchor(unitName, variableId, workspaceId)
+    ]);
     if (req) {
       return generateReplayUrlFromRequest(req, {
         loginName,
@@ -593,7 +619,7 @@ export class CodingExportService {
         bookletId,
         unitId: unitName,
         variablePage,
-        variableAnchor: variableId,
+        variableAnchor,
         authToken
       });
     }
@@ -610,7 +636,7 @@ export class CodingExportService {
       bookletId,
       unitId: unitName,
       variablePage,
-      variableAnchor: variableId,
+      variableAnchor,
       authToken
     });
   }

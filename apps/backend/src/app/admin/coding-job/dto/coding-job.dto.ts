@@ -4,6 +4,13 @@ import { MissingsProfile } from '../../../database/entities/missings-profile.ent
 import { VariableDto } from '../../variable-bundle/dto/variable.dto';
 import { CodingJobFreshnessStatus } from '../../../../../../../api-dto/coding/job-refresh.dto';
 
+interface CodingJobIssueSummary {
+  total: number;
+  open: number;
+  codeAssignmentUncertain: number;
+  newCodeNeeded: number;
+}
+
 /**
  * DTO for a coding job
  */
@@ -62,7 +69,8 @@ export class CodingJobDto {
     allowComments?: boolean;
 
   @ApiProperty({
-    description: 'Whether general variable instructions are hidden in the code selector',
+    description:
+      'Whether general variable instructions are hidden in the code selector',
     example: false,
     required: false
   })
@@ -89,15 +97,20 @@ export class CodingJobDto {
     assigned_coders?: number[];
 
   @ApiProperty({
-    description: 'Variables assigned to the coding job with unit and variable IDs',
+    description:
+      'Variables assigned to the coding job with unit and variable IDs',
     type: [Object],
-    example: [{ unitName: 'Unit1', variableId: 'var1' }, { unitName: 'Unit2', variableId: 'var2' }],
+    example: [
+      { unitName: 'Unit1', variableId: 'var1' },
+      { unitName: 'Unit2', variableId: 'var2' }
+    ],
     required: false
   })
     assigned_variables?: { unitName: string; variableId: string }[];
 
   @ApiProperty({
-    description: 'Variable bundles assigned to the coding job with their variables',
+    description:
+      'Variable bundles assigned to the coding job with their variables',
     type: [Object],
     example: [
       {
@@ -110,7 +123,10 @@ export class CodingJobDto {
     ],
     required: false
   })
-    assigned_variable_bundles?: { name: string; variables: { unitName: string; variableId: string }[] }[];
+    assigned_variable_bundles?: {
+    name: string;
+    variables: { unitName: string; variableId: string }[];
+  }[];
 
   @ApiProperty({
     description: 'Variables assigned to the coding job',
@@ -193,14 +209,16 @@ export class CodingJobDto {
     workspaceId?: number;
 
   @ApiProperty({
-    description: 'Date and time when the coding job was created (camelCase alias)',
+    description:
+      'Date and time when the coding job was created (camelCase alias)',
     example: '2025-08-06T10:05:00.000Z',
     required: false
   })
     createdAt?: Date;
 
   @ApiProperty({
-    description: 'Date and time when the coding job was last updated (camelCase alias)',
+    description:
+      'Date and time when the coding job was last updated (camelCase alias)',
     example: '2025-08-06T10:05:00.000Z',
     required: false
   })
@@ -215,7 +233,8 @@ export class CodingJobDto {
     assignedCoders?: number[];
 
   @ApiProperty({
-    description: 'Variables assigned to the coding job with unit and variable IDs (camelCase alias)',
+    description:
+      'Variables assigned to the coding job with unit and variable IDs (camelCase alias)',
     type: [Object],
     example: [{ unitName: 'Unit1', variableId: 'var1' }],
     required: false
@@ -223,29 +242,41 @@ export class CodingJobDto {
     assignedVariables?: { unitName: string; variableId: string }[];
 
   @ApiProperty({
-    description: 'Variable bundles assigned to the coding job with their variables (camelCase alias)',
+    description:
+      'Variable bundles assigned to the coding job with their variables (camelCase alias)',
     type: [Object],
-    example: [{ name: 'Bundle A', variables: [{ unitName: 'Unit1', variableId: 'var1' }] }],
+    example: [
+      {
+        name: 'Bundle A',
+        variables: [{ unitName: 'Unit1', variableId: 'var1' }]
+      }
+    ],
     required: false
   })
-    assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[];
+    assignedVariableBundles?: {
+    name: string;
+    variables: { unitName: string; variableId: string }[];
+  }[];
 
   @ApiProperty({
-    description: 'ID of the job definition this coding job was created from (camelCase alias)',
+    description:
+      'ID of the job definition this coding job was created from (camelCase alias)',
     example: 1,
     required: false
   })
     jobDefinitionId?: number;
 
   @ApiProperty({
-    description: 'Whether response aggregation was enabled when this coding job was created',
+    description:
+      'Whether response aggregation was enabled when this coding job was created',
     example: true,
     required: false
   })
     aggregationEnabled?: boolean;
 
   @ApiProperty({
-    description: 'Duplicate aggregation threshold captured when this coding job was created',
+    description:
+      'Duplicate aggregation threshold captured when this coding job was created',
     example: 2,
     required: false,
     nullable: true
@@ -253,7 +284,8 @@ export class CodingJobDto {
     aggregationThreshold?: number | null;
 
   @ApiProperty({
-    description: 'Response matching flags captured when this coding job was created',
+    description:
+      'Response matching flags captured when this coding job was created',
     example: ['IGNORE_CASE'],
     required: false,
     type: [String]
@@ -261,7 +293,8 @@ export class CodingJobDto {
     responseMatchingFlags?: string[] | null;
 
   @ApiProperty({
-    description: 'Version of the aggregation settings snapshot captured for this coding job',
+    description:
+      'Version of the aggregation settings snapshot captured for this coding job',
     example: 1,
     required: false,
     nullable: true
@@ -269,7 +302,8 @@ export class CodingJobDto {
     aggregationSettingsVersion?: number | null;
 
   @ApiProperty({
-    description: 'Whether this coding job still matches the current test-result source state',
+    description:
+      'Whether this coding job still matches the current test-result source state',
     example: 'current',
     enum: ['current', 'stale_source', 'review_required'],
     required: false
@@ -277,7 +311,8 @@ export class CodingJobDto {
     freshnessStatus?: CodingJobFreshnessStatus;
 
   @ApiProperty({
-    description: 'Reason why this coding job was marked stale or review-required',
+    description:
+      'Reason why this coding job was marked stale or review-required',
     example: 'RESULT_UPDATED',
     required: false,
     nullable: true
@@ -305,6 +340,25 @@ export class CodingJobDto {
   })
     freshnessAffectedResponses?: number;
 
+  @ApiProperty({
+    description: 'Whether this coding job has coding issues requiring review',
+    example: true,
+    required: false
+  })
+    hasIssues?: boolean;
+
+  @ApiProperty({
+    description: 'Aggregated coding issue summary for the job list',
+    example: {
+      total: 2,
+      open: 1,
+      codeAssignmentUncertain: 1,
+      newCodeNeeded: 1
+    },
+    required: false
+  })
+    issueSummary?: CodingJobIssueSummary;
+
   /**
    * Create a CodingJobDto from a CodingJob entity
    * @param entity The CodingJob entity
@@ -314,10 +368,20 @@ export class CodingJobDto {
    * @returns A CodingJobDto
    */
   static fromEntity(
-    entity: CodingJob & { progress?: number; codedUnits?: number; totalUnits?: number; openUnits?: number },
+    entity: CodingJob & {
+      progress?: number;
+      codedUnits?: number;
+      totalUnits?: number;
+      openUnits?: number;
+      hasIssues?: boolean;
+      issueSummary?: CodingJobIssueSummary;
+    },
     assignedCoders?: number[],
     assignedVariables?: { unitName: string; variableId: string }[],
-    assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[]
+    assignedVariableBundles?: {
+      name: string;
+      variables: { unitName: string; variableId: string }[];
+    }[]
   ): CodingJobDto {
     const dto = new CodingJobDto();
     dto.id = entity.id;
@@ -359,6 +423,10 @@ export class CodingJobDto {
     if (entity.openUnits !== undefined) {
       dto.open_units = entity.openUnits;
       dto.openUnits = entity.openUnits; // camelCase alias
+    }
+    if (entity.issueSummary !== undefined) {
+      dto.issueSummary = entity.issueSummary;
+      dto.hasIssues = entity.hasIssues ?? entity.issueSummary.total > 0;
     }
 
     if (entity.missingsProfile) {

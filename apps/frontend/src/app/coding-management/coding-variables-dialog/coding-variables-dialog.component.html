@@ -124,6 +124,36 @@
             </td>
           </ng-container>
 
+          <!-- Replay Anchor Column -->
+          <ng-container matColumnDef="replayAnchor">
+            <th mat-header-cell *matHeaderCellDef>Replay-Anchor</th>
+            <td mat-cell *matCellDef="let element">
+              <div class="replay-anchor-cell">
+                <mat-form-field class="replay-anchor-field" subscriptSizing="dynamic">
+                  <mat-label>Anchor</mat-label>
+                  <input matInput
+                         [(ngModel)]="element.replayAnchor"
+                         [placeholder]="element.variableId"
+                         [disabled]="element.isSavingReplayAnchor"
+                         (keyup.enter)="saveReplayAnchor(element)">
+                </mat-form-field>
+                <button mat-icon-button
+                        color="primary"
+                        [disabled]="element.isSavingReplayAnchor || !hasReplayAnchorChanges(element)"
+                        (click)="saveReplayAnchor(element)"
+                        matTooltip="Replay-Anchor speichern">
+                  <mat-icon>save</mat-icon>
+                </button>
+                <button mat-icon-button
+                        [disabled]="element.isSavingReplayAnchor || !element.savedReplayAnchor"
+                        (click)="clearReplayAnchor(element)"
+                        matTooltip="Replay-Anchor zurücksetzen">
+                  <mat-icon>restart_alt</mat-icon>
+                </button>
+              </div>
+            </td>
+          </ng-container>
+
           <!-- Actions Column -->
           <ng-container matColumnDef="actions">
             <th mat-header-cell *matHeaderCellDef>Aktionen</th>

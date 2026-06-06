@@ -1,8 +1,12 @@
 import {
   BadRequestException,
+  Body,
   Controller,
+  Delete,
   Get,
   Param,
+  Put,
+  Query,
   UseGuards
 } from '@nestjs/common';
 import {
@@ -17,6 +21,10 @@ import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceFilesService } from '../../database/services/workspace';
+import {
+  type CodingReplayAnchorOverride,
+  CodingReplayAnchorService
+} from '../../database/services/coding/coding-replay-anchor.service';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 
@@ -24,7 +32,8 @@ import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 @Controller('admin/workspace')
 export class WorkspaceFilesInfoController {
   constructor(
-    private readonly workspaceFilesService: WorkspaceFilesService
+    private readonly workspaceFilesService: WorkspaceFilesService,
+    private readonly replayAnchorService: CodingReplayAnchorService
   ) { }
 
   @Get(':workspace_id/files/units-with-file-ids')
@@ -134,6 +143,91 @@ export class WorkspaceFilesInfoController {
     }
 
     return this.workspaceFilesService.getUnitVariableDetails(workspace_id);
+  }
+
+  @Get(':workspace_id/files/replay-anchor-overrides')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({
+    summary: 'Get replay anchor overrides',
+    description: 'Retrieves workspace-specific replay anchor overrides for unit variables.'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiOkResponse({
+    description: 'Replay anchor overrides retrieved successfully'
+  })
+  async getReplayAnchorOverrides(
+    @Param('workspace_id') workspace_id: number
+  ): Promise<CodingReplayAnchorOverride[]> {
+    if (!workspace_id) {
+      throw new BadRequestException('Workspace ID is required.');
+    }
+
+    return this.replayAnchorService.getOverrides(workspace_id);
+  }
+
+  @Put(':workspace_id/files/replay-anchor-overrides')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({
+    summary: 'Set replay anchor override',
+    description: 'Creates or updates a workspace-specific replay anchor override for a unit variable.'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiOkResponse({
+    description: 'Replay anchor override saved successfully'
+  })
+  async saveReplayAnchorOverride(
+    @Param('workspace_id') workspace_id: number,
+      @Body() override: CodingReplayAnchorOverride
+  ): Promise<CodingReplayAnchorOverride> {
+    if (!workspace_id) {
+      throw new BadRequestException('Workspace ID is required.');
+    }
+
+    try {
+      return await this.replayAnchorService.upsertOverride(workspace_id, override);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  @Delete(':workspace_id/files/replay-anchor-overrides')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({
+    summary: 'Delete replay anchor override',
+    description: 'Deletes a workspace-specific replay anchor override for a unit variable.'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiOkResponse({
+    description: 'Replay anchor override deleted successfully'
+  })
+  async deleteReplayAnchorOverride(
+    @Param('workspace_id') workspace_id: number,
+      @Query('unitName') unitName: string,
+      @Query('variableId') variableId: string
+  ): Promise<{ deleted: boolean }> {
+    if (!workspace_id) {
+      throw new BadRequestException('Workspace ID is required.');
+    }
+    if (!unitName || !variableId) {
+      throw new BadRequestException('unitName and variableId are required.');
+    }
+
+    return this.replayAnchorService.deleteOverride(workspace_id, unitName, variableId);
   }
 
   @Get(':workspace_id/files/variable-info/:scheme_file_id')

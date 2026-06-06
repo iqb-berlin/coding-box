@@ -8,6 +8,7 @@ export { CodingListQueryService } from './coding-list-query.service';
 export { CodingListStreamService } from './coding-list-stream.service';
 export { CodingProcessService } from './coding-process.service';
 export { CodingProgressService } from './coding-progress.service';
+export { CodingReplayAnchorService } from './coding-replay-anchor.service';
 export { CodingReplayService } from './coding-replay.service';
 export { CodingResponseQueryService } from './coding-response-query.service';
 export { CodingResultsService } from './coding-results.service';

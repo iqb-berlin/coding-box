@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   statusNumberToString,
@@ -10,6 +10,7 @@ import {
   extractGeoGebraBase64,
   suppressedGeoGebraValuePlaceholder
 } from './geogebra-export.util';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 
 export interface CodingItem {
   unit_key: string;
@@ -39,7 +40,10 @@ export interface CodingItem {
 export class CodingItemBuilderService {
   private readonly logger = new Logger(CodingItemBuilderService.name);
 
-  constructor(private readonly fileCacheService: CodingFileCacheService) {}
+  constructor(
+    private readonly fileCacheService: CodingFileCacheService,
+    @Optional() private readonly replayAnchorService?: CodingReplayAnchorService
+  ) {}
 
   private formatStatus(status: number | string | null | undefined): string {
     if (status === null || status === undefined || status === '') {
@@ -98,7 +102,11 @@ export class CodingItemBuilderService {
       const loginGroup = person?.group || '';
       const bookletId = bookletInfo?.name || '';
       const unitAlias = unit.alias || '';
-      const variableAnchor = variableId;
+      const variableAnchor = await this.resolveVariableAnchor(
+        workspaceId,
+        unitKey,
+        variableId
+      );
 
       const url = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
 
@@ -162,7 +170,11 @@ export class CodingItemBuilderService {
       const loginGroup = person?.group || '';
       const bookletId = bookletInfo?.name || '';
       const unitAlias = unit.alias || '';
-      const variableAnchor = variableId;
+      const variableAnchor = await this.resolveVariableAnchor(
+        workspaceId,
+        unitKey,
+        variableId
+      );
 
       const url = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
 
@@ -272,5 +284,15 @@ export class CodingItemBuilderService {
       'code_v3',
       'score_v3'
     ];
+  }
+
+  private async resolveVariableAnchor(
+    workspaceId: number,
+    unitName: string,
+    variableId: string
+  ): Promise<string> {
+    return this.replayAnchorService ?
+      this.replayAnchorService.resolveVariableAnchor(workspaceId, unitName, variableId) :
+      variableId;
   }
 }

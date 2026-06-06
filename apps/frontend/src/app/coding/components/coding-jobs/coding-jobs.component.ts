@@ -1,8 +1,6 @@
 import {
   Component,
   OnInit,
-  ViewChild,
-  AfterViewInit,
   OnDestroy,
   inject,
   Output,
@@ -10,16 +8,27 @@ import {
   Input
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { firstValueFrom } from 'rxjs';
-import { MatSort, MatSortModule } from '@angular/material/sort';
-import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
+import {
+  debounceTime,
+  distinctUntilChanged,
+  firstValueFrom,
+  Subject,
+  Subscription
+} from 'rxjs';
+import { MatSortModule, Sort } from '@angular/material/sort';
+import {
+  MatPaginatorModule,
+  PageEvent
+} from '@angular/material/paginator';
 import {
   MatFormField,
   MatLabel,
   MatOption,
   MatSelect
 } from '@angular/material/select';
+import { MatInputModule } from '@angular/material/input';
 import {
   MatCell,
   MatCellDef,
@@ -53,7 +62,6 @@ import { CodingTrainingBackendService } from '../../services/coding-training-bac
 
 import {
   CodingJob,
-  CodingJobIssueSummary,
   Variable,
   VariableBundle
 } from '../../models/coding-job.model';
@@ -99,17 +107,12 @@ interface BulkApplyResultItem {
   };
 }
 
-interface SavedCode {
-  id: number;
-  code?: string;
-  label?: string;
-  score?: number;
-  description?: string;
-  codingIssueOption?: number;
-  [key: string]: unknown;
-}
-
-type JobPrimaryAction = 'start' | 'review' | 'results' | 'apply' | 'notAssigned';
+type JobPrimaryAction =
+  | 'start'
+  | 'review'
+  | 'results'
+  | 'apply'
+  | 'notAssigned';
 type CodingJobScope = 'all' | 'training' | 'productive';
 
 @Component({
@@ -119,6 +122,7 @@ type CodingJobScope = 'all' | 'training' | 'productive';
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     TranslateModule,
     MatIcon,
     MatHeaderCell,
@@ -144,11 +148,12 @@ type CodingJobScope = 'all' | 'training' | 'productive';
     MatCheckbox,
     MatFormField,
     MatLabel,
+    MatInputModule,
     MatSelect,
     MatOption
   ]
 })
-export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
+export class CodingJobsComponent implements OnInit, OnDestroy {
   appService = inject(AppService);
   codingJobBackendService = inject(CodingJobBackendService);
   codingTrainingBackendService = inject(CodingTrainingBackendService);
@@ -196,17 +201,19 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   selectedCoderId: number | null = null;
   selectedJobName: string | null = null;
   originalData: CodingJob[] = [];
+  jobsTotal = 0;
+  pageSize = 50;
+  pageIndex = 0;
+  sortBy: 'name' | 'description' | 'status' | 'createdAt' | 'updatedAt' =
+    'createdAt';
 
-  @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild(MatPaginator) set paginator(value: MatPaginator | undefined) {
-    if (!value) {
-      return;
-    }
-    this.dataSource.paginator = value;
-    this.lastKnownPaginator = value;
-  }
+  sortDirection: 'asc' | 'desc' = 'desc';
 
-  private lastKnownPaginator?: MatPaginator;
+  private loadJobsSubscription?: Subscription;
+  private jobNameFilterSubscription?: Subscription;
+  private readonly jobNameFilterChanges = new Subject<string>();
+  private readonly windowFocusReloadThrottleMs = 10000;
+  private lastWindowFocusReloadAt = 0;
 
   @Output() jobsChanged = new EventEmitter<void>();
   @Input() jobScope: CodingJobScope = 'all';
@@ -218,9 +225,15 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() autoReloadOnFocus = true;
 
   private handleWindowFocus = () => {
-    if (this.autoReloadOnFocus) {
-      this.loadCodingJobs();
+    if (!this.autoReloadOnFocus || this.isLoading) {
+      return;
     }
+    const now = Date.now();
+    if (now - this.lastWindowFocusReloadAt < this.windowFocusReloadThrottleMs) {
+      return;
+    }
+    this.lastWindowFocusReloadAt = now;
+    this.loadCodingJobs();
   };
 
   ngOnInit(): void {
@@ -228,6 +241,13 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
       this.allCoders = coders;
       this.updateCoderNamesMap(this.dataSource.data);
     });
+
+    this.jobNameFilterSubscription = this.jobNameFilterChanges
+      .pipe(debounceTime(300), distinctUntilChanged())
+      .subscribe(() => {
+        this.selection.clear();
+        this.reloadFirstPage();
+      });
 
     this.updateCodingJobPermissions();
     this.loadCoderTrainings();
@@ -246,19 +266,16 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.userBackendService.getUsers(workspaceId).subscribe(users => {
       const currentUser = users.find(u => u.id === userId);
       this.canApplyResults = (currentUser?.accessLevel ?? 0) >= 3;
-      this.canReviewCodingJobs = currentUser ? hasManagementWorkspaceAccess(currentUser) : false;
+      this.canReviewCodingJobs = currentUser ?
+        hasManagementWorkspaceAccess(currentUser) :
+        false;
     });
-  }
-
-  ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
-    if (this.lastKnownPaginator) {
-      this.dataSource.paginator = this.lastKnownPaginator;
-    }
   }
 
   ngOnDestroy(): void {
     window.removeEventListener('focus', this.handleWindowFocus);
+    this.loadJobsSubscription?.unsubscribe();
+    this.jobNameFilterSubscription?.unsubscribe();
   }
 
   loadCodingJobs(): void {
@@ -272,209 +289,82 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    this.codingJobBackendService
-      .getCodingIncompleteVariables(workspaceId)
+    this.loadJobsSubscription?.unsubscribe();
+    this.loadJobsSubscription = this.codingJobBackendService
+      .getCodingJobs(
+        workspaceId,
+        this.pageIndex + 1,
+        this.pageSize,
+        this.getListOptions()
+      )
       .subscribe({
-        next: variables => {
-          this.preloadedVariables = variables;
+        next: response => {
+          const processedData = this.normalizeCodingJobs(response.data);
+          this.originalData = [...processedData];
+          this.dataSource.data = processedData;
+          this.jobsTotal = response.total ?? processedData.length;
+          this.updateCoderNamesMap(processedData);
 
-          this.codingJobBackendService.getCodingJobs(workspaceId).subscribe({
-            next: async response => {
-              this.coderNamesByJobId.clear();
-              const processedData = response.data.map((job: CodingJob) => ({
-                ...job,
-                createdAt: job.created_at ?
-                  new Date(job.created_at) :
-                  new Date(),
-                updatedAt: job.updated_at ?
-                  new Date(job.updated_at) :
-                  new Date(),
-                assignedVariableBundles:
-                  job.assignedVariableBundles ?? job.variableBundles ?? []
-              }));
-
-              const jobIds = processedData.map(job => job.id);
-              try {
-                let bulkProgressResult:
-                | Record<number, Record<string, unknown>>
-                | undefined;
-                if (jobIds.length > 0) {
-                  bulkProgressResult = await firstValueFrom(
-                    this.codingJobBackendService.getBulkCodingProgress(
-                      workspaceId,
-                      jobIds
-                    )
-                  );
-                }
-
-                processedData.forEach(job => {
-                  this.applyIssueSummary(job, bulkProgressResult?.[job.id]);
-                });
-              } catch (error) {
-                processedData.forEach(job => {
-                  this.applyIssueSummary(job);
-                });
-              }
-
-              this.originalData = [...processedData];
-              this.dataSource.data = processedData;
-              this.updateCoderNamesMap(processedData);
-
-              this.jobDetailsCache.clear();
-              this.isLoading = false;
-              this.applyAllFilters();
-            },
-            error: () => {
-              this.snackBar.open(
-                'Fehler beim Laden der Kodierjobs',
-                'Schließen',
-                { duration: 3000 }
-              );
-              this.isLoading = false;
-            }
-          });
+          this.jobDetailsCache.clear();
+          this.isLoading = false;
         },
         error: () => {
-          this.codingJobBackendService.getCodingJobs(workspaceId).subscribe({
-            next: async response => {
-              this.coderNamesByJobId.clear();
-              const processedData = response.data.map((job: CodingJob) => ({
-                ...job,
-                createdAt: job.created_at ?
-                  new Date(job.created_at) :
-                  new Date(),
-                updatedAt: job.updated_at ?
-                  new Date(job.updated_at) :
-                  new Date(),
-                assignedVariableBundles:
-                  job.assignedVariableBundles ?? job.variableBundles ?? []
-              }));
-
-              const fallbackJobIds = processedData.map(job => job.id);
-              try {
-                let fallbackBulkProgressResult:
-                | Record<number, Record<string, unknown>>
-                | undefined;
-                if (fallbackJobIds.length > 0) {
-                  fallbackBulkProgressResult = await firstValueFrom(
-                    this.codingJobBackendService.getBulkCodingProgress(
-                      workspaceId,
-                      fallbackJobIds
-                    )
-                  );
-                }
-
-                processedData.forEach(job => {
-                  this.applyIssueSummary(
-                    job,
-                    fallbackBulkProgressResult?.[job.id]
-                  );
-                });
-              } catch (fallbackError) {
-                // If bulk fetch fails, fall back to individual calls as a last resort
-                processedData.forEach(job => {
-                  this.applyIssueSummary(job);
-                });
-              }
-
-              this.originalData = [...processedData];
-              this.dataSource.data = processedData;
-              this.updateCoderNamesMap(processedData);
-
-              this.jobDetailsCache.clear();
-              this.isLoading = false;
-              this.applyAllFilters();
-            },
-            error: () => {
-              this.snackBar.open(
-                'Fehler beim Laden der Kodierjobs',
-                'Schließen',
-                { duration: 3000 }
-              );
-              this.isLoading = false;
-            }
+          this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', {
+            duration: 3000
           });
+          this.isLoading = false;
         }
       });
   }
 
-  private applyIssueSummary(
-    job: CodingJob,
-    progressResult?: Record<string, unknown>
-  ): void {
-    const issueSummary = this.getCodingIssueSummary(progressResult);
-    job.issueSummary = issueSummary;
-    job.hasIssues = issueSummary.total > 0;
-  }
-
-  private getCodingIssueSummary(
-    progressResult?: Record<string, unknown>
-  ): CodingJobIssueSummary {
-    const summary: CodingJobIssueSummary = {
-      total: 0,
-      open: 0,
-      codeAssignmentUncertain: 0,
-      newCodeNeeded: 0
+  private getListOptions() {
+    return {
+      scope: this.jobScope,
+      status: this.selectedStatus || undefined,
+      coderId: this.selectedCoderId || undefined,
+      jobName: this.normalizeJobNameFilter(),
+      trainingId: this.showTrainingFilter ?
+        ((this.selectedTrainingId ?? undefined) as
+            | number
+            | 'none'
+            | undefined) :
+        undefined,
+      includeIssueSummary: true,
+      sortBy: this.sortBy,
+      sortDirection: this.sortDirection
     };
-
-    Object.entries(progressResult ?? {}).forEach(([key, progress]) => {
-      if (!this.isSavedCode(progress)) {
-        return;
-      }
-
-      if (this.isOpenProgressEntry(key, progress)) {
-        summary.open += 1;
-        return;
-      }
-
-      const issueOption = this.getReviewIssueOption(progress);
-      if (issueOption === -1) {
-        summary.codeAssignmentUncertain += 1;
-        summary.total += 1;
-      } else if (issueOption === -2) {
-        summary.newCodeNeeded += 1;
-        summary.total += 1;
-      }
-    });
-
-    return summary;
   }
 
-  private isSavedCode(progress: unknown): progress is SavedCode {
-    return (
-      !!progress &&
-      typeof progress === 'object' &&
-      'id' in progress &&
-      typeof (progress as SavedCode).id === 'number'
-    );
+  private normalizeJobNameFilter(): string | undefined {
+    const normalized = this.selectedJobName?.trim();
+    return normalized || undefined;
   }
 
-  private isOpenProgressEntry(key: string, progress: SavedCode): boolean {
-    return key.endsWith(':open') || progress.label === 'OPEN';
-  }
-
-  private getReviewIssueOption(progress: SavedCode): number | null {
-    if (
-      progress.codingIssueOption === -1 ||
-      progress.codingIssueOption === -2
-    ) {
-      return progress.codingIssueOption;
-    }
-
-    if (progress.id === -1 || progress.id === -2) {
-      return progress.id;
-    }
-
-    return null;
+  private normalizeCodingJobs(jobs: CodingJob[]): CodingJob[] {
+    return jobs.map((job: CodingJob) => ({
+      ...job,
+      createdAt: job.created_at ? new Date(job.created_at) : new Date(),
+      updatedAt: job.updated_at ? new Date(job.updated_at) : new Date(),
+      assignedVariableBundles:
+        job.assignedVariableBundles ?? job.variableBundles ?? [],
+      issueSummary: job.issueSummary ?? {
+        total: 0,
+        open: 0,
+        codeAssignmentUncertain: 0,
+        newCodeNeeded: 0
+      },
+      hasIssues: job.hasIssues ?? (job.issueSummary?.total ?? 0) > 0
+    }));
   }
 
   getCodingIssueTooltip(job: CodingJob): string {
     const summary = job.issueSummary;
     if (!summary || summary.total === 0) {
       if (summary?.open) {
-        const key = summary.open === 1 ?
-          'coding.jobs.issue-tooltip.open-no-review-issues-singular' :
-          'coding.jobs.issue-tooltip.open-no-review-issues-plural';
+        const key =
+          summary.open === 1 ?
+            'coding.jobs.issue-tooltip.open-no-review-issues-singular' :
+            'coding.jobs.issue-tooltip.open-no-review-issues-plural';
         return this.translateService.instant(key, { count: summary.open });
       }
       return this.translateService.instant(
@@ -504,75 +394,65 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   applyFilter(): void {
-    this.applyAllFilters();
+    this.reloadFirstPage();
   }
 
   onStatusFilterChange(): void {
     this.selection.clear();
-    this.applyAllFilters();
+    this.reloadFirstPage();
   }
 
   onCoderFilterChange(): void {
     this.selection.clear();
-    this.applyAllFilters();
+    this.reloadFirstPage();
   }
 
   onJobNameFilterChange(): void {
-    this.selection.clear();
-    this.applyAllFilters();
+    this.jobNameFilterChanges.next(this.selectedJobName ?? '');
   }
 
-  private applyAllFilters(): void {
-    let filteredData = this.originalData || [];
-
-    if (this.jobScope === 'training') {
-      filteredData = filteredData.filter(
-        job => !!job.training_id || !!job.training
-      );
-    } else if (this.jobScope === 'productive') {
-      filteredData = filteredData.filter(
-        job => !job.training_id && !job.training
-      );
+  onSortChange(sort: Sort): void {
+    if (!this.isSupportedServerSort(sort.active) || !sort.direction) {
+      this.sortBy = 'createdAt';
+      this.sortDirection = 'desc';
+    } else {
+      this.sortBy = sort.active;
+      this.sortDirection = sort.direction;
     }
+    this.selection.clear();
+    this.reloadFirstPage();
+  }
 
-    if (this.selectedStatus !== null && this.selectedStatus !== 'all') {
-      filteredData = filteredData.filter(
-        job => job.status === this.selectedStatus
-      );
-    }
+  onPageChange(event: PageEvent): void {
+    this.pageIndex = event.pageIndex;
+    this.pageSize = event.pageSize;
+    this.selection.clear();
+    this.loadCodingJobs();
+  }
 
-    if (this.selectedCoderId !== null) {
-      filteredData = filteredData.filter(
-        job => job.assignedCoders &&
-          job.assignedCoders.includes(this.selectedCoderId!)
-      );
-    }
+  private reloadFirstPage(): void {
+    this.pageIndex = 0;
+    this.loadCodingJobs();
+  }
 
-    if (this.selectedJobName !== null && this.selectedJobName !== 'all') {
-      filteredData = filteredData.filter(
-        job => job.name === this.selectedJobName
-      );
-    }
+  private isSupportedServerSort(
+    sortBy: string
+  ): sortBy is 'name' | 'description' | 'status' | 'createdAt' | 'updatedAt' {
+    return [
+      'name',
+      'description',
+      'status',
+      'createdAt',
+      'updatedAt'
+    ].includes(sortBy);
+  }
 
-    if (this.selectedTrainingId === 'none') {
-      filteredData = filteredData.filter(
-        job => !job.training_id && !job.training
-      );
-    } else if (
-      this.selectedTrainingId !== null &&
-      this.selectedTrainingId !== undefined
-    ) {
-      const searchId = Number(this.selectedTrainingId);
-      filteredData = filteredData.filter(
-        job => (job.training_id && Number(job.training_id) === searchId) ||
-          (job.training &&
-            job.training.id &&
-            Number(job.training.id) === searchId)
-      );
-    }
-
-    this.dataSource.data = filteredData;
-    this.lastKnownPaginator?.firstPage();
+  private reloadCurrentOrPreviousPageAfterDelete(deletedCount: number): void {
+    const remainingTotal = Math.max(0, this.jobsTotal - deletedCount);
+    const maxPageIndex =
+      remainingTotal > 0 ? Math.ceil(remainingTotal / this.pageSize) - 1 : 0;
+    this.pageIndex = Math.min(this.pageIndex, maxPageIndex);
+    this.loadCodingJobs();
   }
 
   getVariables(job: CodingJob): string {
@@ -694,12 +574,44 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   createCodingJob(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+        duration: 3000
+      });
+      return;
+    }
+
+    if (this.preloadedVariables) {
+      this.openCreateCodingJobDialog(this.preloadedVariables);
+      return;
+    }
+
+    this.codingJobBackendService
+      .getCodingIncompleteVariables(workspaceId)
+      .subscribe({
+        next: variables => {
+          this.preloadedVariables = variables;
+          this.openCreateCodingJobDialog(variables);
+        },
+        error: () => {
+          this.snackBar.open(
+            'Fehler beim Laden der kodierpflichtigen Variablen',
+            'Schließen',
+            { duration: 3000 }
+          );
+          this.openCreateCodingJobDialog([]);
+        }
+      });
+  }
+
+  private openCreateCodingJobDialog(preloadedVariables: Variable[]): void {
     const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
       width: '95vw',
       maxWidth: '1600px',
       data: {
         isEdit: false,
-        preloadedVariables: this.preloadedVariables || []
+        preloadedVariables
       } as CodingJobDefinitionDialogData
     });
 
@@ -766,7 +678,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
                   'Schließen',
                   { duration: 3000 }
                 );
-                this.loadCodingJobs();
+                this.reloadCurrentOrPreviousPageAfterDelete(1);
                 this.jobsChanged.emit();
               } else {
                 this.snackBar.open(
@@ -814,11 +726,12 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
       return 'apply';
     }
 
-    if (this.canReviewCodingJob(job) && (
-      job.status === 'completed' ||
-      job.status === 'results_applied' ||
-      !this.canStartCodingJob(job)
-    )) {
+    if (
+      this.canReviewCodingJob(job) &&
+      (job.status === 'completed' ||
+        job.status === 'results_applied' ||
+        !this.canStartCodingJob(job))
+    ) {
       return 'review';
     }
 
@@ -1167,7 +1080,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   onTrainingFilterChange(): void {
     this.selection.clear();
-    this.applyAllFilters();
+    this.reloadFirstPage();
   }
 
   restartCodingJob(job: CodingJob): void {
@@ -1483,7 +1396,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
       );
     }
 
-    this.loadCodingJobs();
+    this.reloadCurrentOrPreviousPageAfterDelete(successCount);
     if (successCount > 0) {
       this.jobsChanged.emit();
     }
