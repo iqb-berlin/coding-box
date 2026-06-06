@@ -5,6 +5,7 @@ import {
   statusStringToNumber
 } from '../../utils/response-status-converter';
 import { mapCodeForExport } from '../../../utils/coding-utils';
+import { generateReplayUrl } from '../../../utils/replay-url.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import {
   extractGeoGebraBase64,
@@ -26,6 +27,8 @@ export interface CodingItem {
   value?: string;
   url?: string;
 }
+
+export type CodingVariableAnchorMaps = Map<string, Map<string, string>>;
 
 /**
  * Service responsible for building CodingItem objects from ResponseEntity data.
@@ -75,7 +78,8 @@ export class CodingItemBuilderService {
     response: ResponseEntity,
     authToken: string,
     serverUrl: string,
-    workspaceId: number
+    workspaceId: number,
+    variableAnchorMaps?: CodingVariableAnchorMaps
   ): Promise<CodingItem | null> {
     try {
       const unit = response.unit;
@@ -105,10 +109,21 @@ export class CodingItemBuilderService {
       const variableAnchor = await this.resolveVariableAnchor(
         workspaceId,
         unitKey,
-        variableId
+        variableId,
+        variableAnchorMaps
       );
 
-      const url = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+      const url = generateReplayUrl({
+        serverUrl,
+        loginName,
+        loginCode,
+        loginGroup,
+        bookletId,
+        unitId: unitKey,
+        variablePage,
+        variableAnchor,
+        authToken
+      });
 
       return {
         unit_key: unitKey,
@@ -143,7 +158,8 @@ export class CodingItemBuilderService {
     workspaceId: number,
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    variableAnchorMaps?: CodingVariableAnchorMaps
   ): Promise<CodingItem | null> {
     try {
       const unit = response.unit;
@@ -173,10 +189,21 @@ export class CodingItemBuilderService {
       const variableAnchor = await this.resolveVariableAnchor(
         workspaceId,
         unitKey,
-        variableId
+        variableId,
+        variableAnchorMaps
       );
 
-      const url = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+      const url = generateReplayUrl({
+        serverUrl,
+        loginName,
+        loginCode,
+        loginGroup,
+        bookletId,
+        unitId: unitKey,
+        variablePage,
+        variableAnchor,
+        authToken
+      });
 
       const baseItem: CodingItem & Record<string, unknown> = {
         unit_key: unitKey,
@@ -289,8 +316,13 @@ export class CodingItemBuilderService {
   private async resolveVariableAnchor(
     workspaceId: number,
     unitName: string,
-    variableId: string
+    variableId: string,
+    variableAnchorMaps?: CodingVariableAnchorMaps
   ): Promise<string> {
+    if (variableAnchorMaps) {
+      return variableAnchorMaps.get(unitName)?.get(variableId) || variableId;
+    }
+
     return this.replayAnchorService ?
       this.replayAnchorService.resolveVariableAnchor(workspaceId, unitName, variableId) :
       variableId;

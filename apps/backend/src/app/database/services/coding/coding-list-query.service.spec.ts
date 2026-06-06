@@ -5,6 +5,7 @@ import { statusStringToNumber } from '../../utils/response-status-converter';
 import { WorkspaceFilesService, WorkspaceCoreService } from '../workspace';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 import { CodingListQueryService } from './coding-list-query.service';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 
@@ -32,6 +33,7 @@ type CreateServiceOptions = {
   unitVariableMap?: Map<string, Set<string>>;
   trainingRequiredMap?: Map<string, Set<string>>;
   derivedVariablesBySourceMap?: Map<string, Set<string>>;
+  replayAnchorMap?: Map<string, string>;
 };
 
 describe('CodingListQueryService', () => {
@@ -116,13 +118,24 @@ describe('CodingListQueryService', () => {
         testletIgnoredUnits: []
       })
     } as unknown as WorkspaceExclusionService;
+    const replayAnchorService = {
+      getVariableAnchorMaps: jest.fn().mockImplementation(
+        async (unitNames: string[]) => new Map(
+          unitNames.map(unitName => [
+            unitName,
+            options.replayAnchorMap ?? new Map<string, string>()
+          ])
+        )
+      )
+    } as unknown as CodingReplayAnchorService;
 
     return new CodingListQueryService(
       responseRepository,
       fileCacheService,
       workspaceFilesService,
       {} as unknown as WorkspaceCoreService,
-      workspaceExclusionService
+      workspaceExclusionService,
+      replayAnchorService
     );
   }
 
@@ -225,6 +238,50 @@ describe('CodingListQueryService', () => {
       variable_page: '0',
       variable_anchor: 'VAR_ON_ONLY_PAGE',
       url: 'https://iqb-kodierbox.de/#/replay/login@code@group@BOOKLET/UNIT/0/VAR_ON_ONLY_PAGE?auth=token'
+    });
+  });
+
+  it('encodes replay anchor overrides in coding-list replay URLs', async () => {
+    const fileRepository = createFileRepository({
+      'UNIT.VOUD': createFile('UNIT.VOUD', {
+        pages: [
+          { sections: [{ elements: [{ id: 'VAR_WITH_OVERRIDE' }] }] }
+        ]
+      })
+    });
+    const response = {
+      id: 1,
+      variableid: 'VAR_WITH_OVERRIDE',
+      value: 'Antwort',
+      status_v1: statusStringToNumber('CODING_INCOMPLETE'),
+      unit: {
+        name: 'UNIT',
+        alias: 'Unit Alias',
+        booklet: {
+          person: {
+            login: 'login',
+            code: 'code',
+            group: 'group'
+          },
+          bookletinfo: {
+            name: 'BOOKLET'
+          }
+        }
+      }
+    } as unknown as ResponseEntity;
+    const service = createService([response], fileRepository, {
+      replayAnchorMap: new Map([['VAR_WITH_OVERRIDE', 'TEXT/Anchor 1']])
+    });
+
+    const result = await service.getCodingList(
+      1,
+      'token',
+      'https://iqb-kodierbox.de'
+    );
+
+    expect(result.items[0]).toMatchObject({
+      variable_anchor: 'TEXT/Anchor 1',
+      url: 'https://iqb-kodierbox.de/#/replay/login@code@group@BOOKLET/UNIT/0/TEXT%2FAnchor%201?auth=token'
     });
   });
 

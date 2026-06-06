@@ -33,6 +33,7 @@ describe('CodingReplayService', () => {
 
   const mockReplayAnchorService = {
     getVariableAnchorMap: jest.fn(),
+    getVariableAnchorMaps: jest.fn(),
     resolveVariableAnchor: jest.fn()
   };
 
@@ -64,6 +65,7 @@ describe('CodingReplayService', () => {
     jest.clearAllMocks();
     mockCodingJobUnitQueryBuilder.getOne.mockResolvedValue(null);
     mockReplayAnchorService.getVariableAnchorMap.mockResolvedValue(new Map());
+    mockReplayAnchorService.getVariableAnchorMaps.mockResolvedValue(new Map());
     mockReplayAnchorService.resolveVariableAnchor.mockImplementation(
       async (_workspaceId, _unitName, _variableId, fallbackAnchor) => fallbackAnchor
     );
@@ -650,8 +652,8 @@ describe('CodingReplayService', () => {
       mockCodingListService.getVariablePageMap.mockResolvedValue(new Map([
         ['VAR', '0']
       ]));
-      mockReplayAnchorService.getVariableAnchorMap.mockResolvedValue(new Map([
-        ['VAR', 'TEXT_ANCHOR']
+      mockReplayAnchorService.getVariableAnchorMaps.mockResolvedValue(new Map([
+        ['UNIT', new Map([['VAR', 'TEXT_ANCHOR']])]
       ]));
       (replayUrlUtil.generateReplayUrl as jest.Mock).mockImplementation(params => (
         `${params.serverUrl}/#/replay/${params.loginName}@${params.loginCode}@${params.loginGroup}@${params.bookletId}/${params.unitId}/${params.variablePage}/${params.variableAnchor}?auth=${params.authToken}`
@@ -663,7 +665,7 @@ describe('CodingReplayService', () => {
         'http://example.com'
       );
 
-      expect(mockReplayAnchorService.getVariableAnchorMap).toHaveBeenCalledWith('UNIT', 7);
+      expect(mockReplayAnchorService.getVariableAnchorMaps).toHaveBeenCalledWith(['UNIT'], 7);
       expect(result[0].replayUrl).toBe(
         'http://example.com/#/replay/login@code@group@BOOKLET/UNIT/0/TEXT_ANCHOR'
       );

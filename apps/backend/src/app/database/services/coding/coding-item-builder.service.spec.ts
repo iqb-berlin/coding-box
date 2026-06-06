@@ -1,14 +1,20 @@
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { CodingItemBuilderService } from './coding-item-builder.service';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 
 describe('CodingItemBuilderService', () => {
-  const createService = () => {
+  const createService = (replayAnchor?: string) => {
     const fileCacheService = {
       loadVoudData: jest.fn().mockResolvedValue(new Map())
     } as unknown as CodingFileCacheService;
+    const replayAnchorService = replayAnchor ?
+      {
+        resolveVariableAnchor: jest.fn().mockResolvedValue(replayAnchor)
+      } as unknown as CodingReplayAnchorService :
+      undefined;
 
-    return new CodingItemBuilderService(fileCacheService);
+    return new CodingItemBuilderService(fileCacheService, replayAnchorService);
   };
 
   const createResponse = (value: string): ResponseEntity => ({
@@ -57,5 +63,46 @@ describe('CodingItemBuilderService', () => {
     ).resolves.toMatchObject({
       value: 'UEsDBA=='
     });
+  });
+
+  it('encodes replay anchor overrides in replay URLs', async () => {
+    await expect(
+      createService('TEXT/Anchor 1').buildCodingItem(
+        createResponse('Antwort'),
+        'token',
+        'http://server',
+        1
+      )
+    ).resolves.toMatchObject({
+      variable_anchor: 'TEXT/Anchor 1',
+      url: 'http://server/#/replay/login@code@group@BOOKLET1/UNIT1/0/TEXT%2FAnchor%201?auth=token'
+    });
+  });
+
+  it('uses provided replay anchor maps without resolving anchors per item', async () => {
+    const fileCacheService = {
+      loadVoudData: jest.fn().mockResolvedValue(new Map())
+    } as unknown as CodingFileCacheService;
+    const replayAnchorService = {
+      resolveVariableAnchor: jest.fn().mockResolvedValue('SHOULD_NOT_BE_USED')
+    } as unknown as CodingReplayAnchorService;
+    const service = new CodingItemBuilderService(fileCacheService, replayAnchorService);
+    const variableAnchorMaps = new Map([
+      ['UNIT1', new Map([['VAR1', 'BATCH/Anchor 1']])]
+    ]);
+
+    await expect(
+      service.buildCodingItem(
+        createResponse('Antwort'),
+        'token',
+        'http://server',
+        1,
+        variableAnchorMaps
+      )
+    ).resolves.toMatchObject({
+      variable_anchor: 'BATCH/Anchor 1',
+      url: 'http://server/#/replay/login@code@group@BOOKLET1/UNIT1/0/BATCH%2FAnchor%201?auth=token'
+    });
+    expect(replayAnchorService.resolveVariableAnchor).not.toHaveBeenCalled();
   });
 });

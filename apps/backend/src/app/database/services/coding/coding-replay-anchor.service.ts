@@ -12,7 +12,6 @@ export interface CodingReplayAnchorOverride {
 @Injectable()
 export class CodingReplayAnchorService {
   private readonly logger = new Logger(CodingReplayAnchorService.name);
-  private readonly cache = new Map<number, CodingReplayAnchorOverride[]>();
 
   constructor(
     @InjectRepository(Setting)
@@ -20,31 +19,60 @@ export class CodingReplayAnchorService {
   ) {}
 
   async getOverrides(workspaceId: number): Promise<CodingReplayAnchorOverride[]> {
-    const cached = this.cache.get(workspaceId);
-    if (cached) {
-      return cached;
-    }
-
     const setting = await this.settingRepository.findOne({
       where: { key: this.getSettingKey(workspaceId) }
     });
-    const overrides = this.parseOverrides(setting?.content);
-    this.cache.set(workspaceId, overrides);
-    return overrides;
+    return this.parseOverrides(setting?.content);
   }
 
   async getVariableAnchorMap(
     unitName: string,
     workspaceId: number
   ): Promise<Map<string, string>> {
-    const normalizedUnitName = this.normalizeValue(unitName);
-    const overrides = await this.getOverrides(workspaceId);
+    return (await this.getVariableAnchorMaps([unitName], workspaceId))
+      .get(unitName) ?? new Map<string, string>();
+  }
 
-    return new Map(
-      overrides
-        .filter(override => override.unitName === normalizedUnitName)
-        .map(override => [override.variableId, override.replayAnchor])
-    );
+  async getVariableAnchorMaps(
+    unitNames: string[],
+    workspaceId: number
+  ): Promise<Map<string, Map<string, string>>> {
+    const result = new Map<string, Map<string, string>>();
+    const normalizedUnitNames = new Map<string, string>();
+
+    unitNames.forEach(unitName => {
+      const normalizedUnitName = this.normalizeValue(unitName);
+      result.set(unitName, new Map<string, string>());
+      if (normalizedUnitName) {
+        normalizedUnitNames.set(unitName, normalizedUnitName);
+      }
+    });
+
+    if (!normalizedUnitNames.size) {
+      return result;
+    }
+
+    const overrides = await this.getOverrides(workspaceId);
+    const overridesByUnit = new Map<string, Map<string, string>>();
+
+    overrides.forEach(override => {
+      if (!overridesByUnit.has(override.unitName)) {
+        overridesByUnit.set(override.unitName, new Map<string, string>());
+      }
+      overridesByUnit.get(override.unitName)!.set(
+        override.variableId,
+        override.replayAnchor
+      );
+    });
+
+    normalizedUnitNames.forEach((normalizedUnitName, unitName) => {
+      result.set(
+        unitName,
+        overridesByUnit.get(normalizedUnitName) ?? new Map<string, string>()
+      );
+    });
+
+    return result;
   }
 
   async resolveVariableAnchor(
@@ -178,7 +206,5 @@ export class CodingReplayAnchorService {
         })
       );
     }
-
-    this.cache.set(workspaceId, sortedOverrides);
   }
 }
