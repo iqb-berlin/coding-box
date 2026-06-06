@@ -409,4 +409,49 @@ describe('CodeSelectorComponent', () => {
     expect(pauseButton.disabled).toBe(true);
     expect(pauseSpy).not.toHaveBeenCalled();
   });
+
+  it('disables and ignores navigation while navigation is blocked', () => {
+    const unitChangedSpy = jest.spyOn(component.unitChanged, 'emit');
+    const navigateSpy = jest.spyOn(component.openNavigateDialog, 'emit');
+    component.showProgress = true;
+    component.isNavigationDisabled = true;
+    component.unitsData = {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_1',
+          alias: 'UNIT_1',
+          bookletId: 0,
+          variableId: 'VAR1'
+        },
+        {
+          id: 2,
+          name: 'UNIT_2',
+          alias: 'UNIT_2',
+          bookletId: 0,
+          variableId: 'VAR2'
+        }
+      ]
+    };
+
+    fixture.detectChanges();
+    component.toggleVariablePanel();
+    component.nextUnit();
+    component.onNavigateClick();
+    component.selectVariable('UNIT_2::VAR2');
+    component.jumpToVariable('UNIT_2::VAR2');
+
+    const nextButton = fixture.nativeElement.querySelector('.next-button') as HTMLButtonElement;
+    const navigateButton = fixture.nativeElement.querySelector('.navigate-button') as HTMLButtonElement;
+    const variableButton = fixture.nativeElement.querySelector('.variable-trigger-btn') as HTMLButtonElement;
+    expect(nextButton.disabled).toBe(true);
+    expect(navigateButton.disabled).toBe(true);
+    expect(variableButton.disabled).toBe(true);
+    expect(component.isVariablePanelOpen).toBe(false);
+    expect(unitChangedSpy).not.toHaveBeenCalled();
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
 });

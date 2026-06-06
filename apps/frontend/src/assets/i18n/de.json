@@ -1006,6 +1006,7 @@
     "failed-to-submit-coding-job": "Fehler beim Einreichen des Kodierungsauftrags",
     "failed-to-save-coding-progress": "Die Kodierung konnte nicht gespeichert werden. Bitte erneut auswählen oder die Verbindung prüfen.",
     "failed-to-save-coding-notes": "Die Notiz konnte nicht gespeichert werden. Bitte Verbindung prüfen und erneut versuchen.",
+    "reauthentication-required": "Bitte melden Sie sich erneut an, bevor Sie mit der Kodierung fortfahren.",
     "coding-progress-message": "Kodierfortschritt: {{completed}}/{{total}} abgeschlossen ({{percentage}}%)",
     "close": "Schließen",
     "job-switcher": {

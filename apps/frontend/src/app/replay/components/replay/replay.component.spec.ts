@@ -1,10 +1,13 @@
 // eslint-disable-next-line max-classes-per-file
 import { ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, Subject, throwError } from 'rxjs';
+import {
+  BehaviorSubject, of, Subject, throwError
+} from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import * as jwtDecodeModule from 'jwt-decode';
 import { ReplayComponent } from './replay.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -19,6 +22,14 @@ import { CodingJob } from '../../../coding/models/coding-job.model';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 import { CodingScheme } from '../../../models/coding-interfaces';
+
+function createUnsignedJwt(payload: Record<string, unknown>): string {
+  const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/u, '');
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(payload)}.`;
+}
 
 // Beispielhafte Mocks für Services, die im Component per inject() genutzt werden
 class FileServiceMock {
@@ -67,15 +78,23 @@ class AppServiceMock {
   };
 
   private authDataSubject = new Subject<AppServiceAuthDataMock>();
+  private authBootstrapStatusSubject = new BehaviorSubject<string>('ready');
 
   authData$ = this.authDataSubject.asObservable();
+  authBootstrapStatus$ = this.authBootstrapStatusSubject.asObservable();
   postMessage$ = of({ data: {} });
+  needsReAuthentication = false;
 
   createOwnToken = jest.fn().mockReturnValue(of('workspace-token'));
+  hasStoredAuthToken = jest.fn().mockReturnValue(true);
 
   emitAuthData(authData: AppServiceAuthDataMock = this.authData): void {
     this.authData = authData;
     this.authDataSubject.next(authData);
+  }
+
+  emitAuthBootstrapStatus(status: string): void {
+    this.authBootstrapStatusSubject.next(status);
   }
 }
 
@@ -423,6 +442,56 @@ describe('ReplayComponent', () => {
     expect(saveNotesSpy).not.toHaveBeenCalled();
   });
 
+  it('should block coding interactions while reauthentication is required', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const handleCodeSelectedSpy = jest.spyOn(component.codingService, 'handleCodeSelected');
+    const saveNotesSpy = jest.spyOn(component.codingService, 'saveNotes');
+    const submitSpy = jest.spyOn(component.codingService, 'submitCodingJob').mockResolvedValue();
+
+    component.isCodingMode = true;
+    component.workspaceId = 5;
+    component.page = '0';
+    component.unitId = 'UNIT_1';
+    component.testPerson = 'valid@test@person';
+    component.codingService.codingJobId = 77;
+    component.codingService.currentVariableId = 'VAR1';
+    appService.needsReAuthentication = true;
+
+    expect(component.isCodingReadOnly()).toBe(true);
+    expect(component.isCodingInteractionBlockedByReAuthentication()).toBe(true);
+
+    await component.onCodeSelected({
+      variableId: 'VAR1',
+      code: {
+        id: 7,
+        label: 'Code 7',
+        score: 2
+      }
+    });
+    component.onNotesChanged('note');
+    await component.handleUnitChanged({
+      id: 2,
+      name: 'UNIT_2',
+      alias: null,
+      bookletId: 0,
+      variableId: 'VAR2',
+      variableAnchor: 'VAR2',
+      variablePage: '1'
+    });
+    await component.submitCodingJob();
+
+    expect(handleCodeSelectedSpy).not.toHaveBeenCalled();
+    expect(saveNotesSpy).not.toHaveBeenCalled();
+    expect(submitSpy).not.toHaveBeenCalled();
+    expect(component.unitId).toBe('UNIT_1');
+    expect(component.page).toBe('0');
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'replay.reauthentication-required',
+      'close',
+      { duration: 4000, panelClass: ['snackbar-error'] }
+    );
+  });
+
   it('should dismiss page error when null is passed', () => {
     // First create an error
     component.checkPageError('notInList');
@@ -661,6 +730,254 @@ describe('ReplayComponent', () => {
     });
 
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', true);
+  });
+
+  it('should replace an expired replay auth token before loading coding job units', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const expiredToken = createUnsignedJwt({
+      workspace: '47',
+      exp: Math.floor(Date.now() / 1000) - 60
+    });
+    fixture.destroy();
+    (tokenUtils.validateToken as jest.Mock).mockImplementation((token: string) => (
+      token === expiredToken ?
+        { isValid: false, errorType: 'token_expired' } :
+        { isValid: true }
+    ));
+    (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({ workspace: '47' });
+    appService.createOwnToken.mockReturnValueOnce(of('fresh-workspace-token'));
+    window.history.pushState(
+      {},
+      '',
+      `/#/replay/valid%40test%40person/unit-123/0/VAR1?auth=${expiredToken}&mode=coding&codingJobId=77&workspaceId=47`
+    );
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: expiredToken,
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'unit-123',
+      unitAlias: 'Unit 123',
+      variableId: 'VAR1',
+      variableAnchor: 'VAR1',
+      bookletName: 'Booklet 1',
+      personLogin: 'valid',
+      personCode: 'test',
+      personGroup: '',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(appService.createOwnToken).toHaveBeenCalledWith(47, 1);
+    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'fresh-workspace-token', false);
+    expect(window.location.href).toContain('auth=fresh-workspace-token');
+  });
+
+  it('should not replace an invalid replay auth token before loading coding job units', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    fixture.destroy();
+    (tokenUtils.validateToken as jest.Mock).mockReturnValue({ isValid: false, errorType: 'token_invalid' });
+    appService.createOwnToken.mockClear();
+    window.history.pushState(
+      {},
+      '',
+      '/#/replay/valid%40test%40person/unit-123/0/VAR1?auth=invalid-token&mode=coding&codingJobId=77&workspaceId=47'
+    );
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'invalid-token',
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(appService.createOwnToken).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'invalid-token', false);
+    expect(window.location.href).toContain('auth=invalid-token');
+  });
+
+  it('should not replace an expired replay auth token for a different workspace', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const expiredTokenFromOtherWorkspace = createUnsignedJwt({
+      workspace: '48',
+      exp: Math.floor(Date.now() / 1000) - 60
+    });
+    fixture.destroy();
+    (tokenUtils.validateToken as jest.Mock).mockReturnValue({ isValid: false, errorType: 'token_expired' });
+    (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({ workspace: '48' });
+    appService.createOwnToken.mockClear();
+    window.history.pushState(
+      {},
+      '',
+      `/#/replay/valid%40test%40person/unit-123/0/VAR1?auth=${expiredTokenFromOtherWorkspace}&mode=coding&codingJobId=77&workspaceId=47`
+    );
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: expiredTokenFromOtherWorkspace,
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(appService.createOwnToken).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(
+      47,
+      77,
+      expiredTokenFromOtherWorkspace,
+      false
+    );
+    expect(window.location.href).toContain(`auth=${expiredTokenFromOtherWorkspace}`);
+  });
+
+  it('should not replace an expired replay auth token when its workspace cannot be decoded', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const expiredTokenWithoutWorkspace = createUnsignedJwt({
+      exp: Math.floor(Date.now() / 1000) - 60
+    });
+    fixture.destroy();
+    (tokenUtils.validateToken as jest.Mock).mockReturnValue({ isValid: false, errorType: 'token_expired' });
+    (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({});
+    appService.createOwnToken.mockClear();
+    window.history.pushState(
+      {},
+      '',
+      `/#/replay/valid%40test%40person/unit-123/0/VAR1?auth=${expiredTokenWithoutWorkspace}&mode=coding&codingJobId=77&workspaceId=47`
+    );
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: expiredTokenWithoutWorkspace,
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(appService.createOwnToken).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(
+      47,
+      77,
+      expiredTokenWithoutWorkspace,
+      false
+    );
+    expect(window.location.href).toContain(`auth=${expiredTokenWithoutWorkspace}`);
+  });
+
+  it('should refresh the replay auth token after successful reauthentication', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const privateComponent = component as unknown as { authToken: string };
+    const oldToken = createUnsignedJwt({
+      workspace: '47',
+      exp: Math.floor(Date.now() / 1000) + 60
+    });
+    window.history.pushState(
+      {},
+      '',
+      `/#/replay/valid%40test%40person/unit-123/0/VAR1?auth=${oldToken}&mode=coding&codingJobId=77&workspaceId=47`
+    );
+
+    component.isCodingMode = true;
+    component.workspaceId = 47;
+    privateComponent.authToken = oldToken;
+    component.codingService.setAuthToken(oldToken);
+    (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({ workspace: '47' });
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+    appService.createOwnToken.mockClear();
+    appService.createOwnToken.mockReturnValueOnce(of('fresh-token-after-login'));
+
+    appService.emitAuthBootstrapStatus('session-expired');
+    appService.emitAuthBootstrapStatus('ready');
+    await Promise.resolve();
+
+    expect(appService.createOwnToken).toHaveBeenCalledWith(47, 1);
+    expect(privateComponent.authToken).toBe('fresh-token-after-login');
+    expect(window.location.href).toContain('auth=fresh-token-after-login');
+  });
+
+  it('should not refresh an invalid replay auth token after successful reauthentication', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const privateComponent = component as unknown as { authToken: string };
+    (tokenUtils.validateToken as jest.Mock).mockReturnValue({ isValid: false, errorType: 'token_invalid' });
+    window.history.pushState(
+      {},
+      '',
+      '/#/replay/valid%40test%40person/unit-123/0/VAR1?auth=invalid-token&mode=coding&codingJobId=77&workspaceId=47'
+    );
+
+    component.isCodingMode = true;
+    component.workspaceId = 47;
+    privateComponent.authToken = 'invalid-token';
+    component.codingService.setAuthToken('invalid-token');
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+    appService.createOwnToken.mockClear();
+
+    appService.emitAuthBootstrapStatus('session-expired');
+    appService.emitAuthBootstrapStatus('ready');
+    await Promise.resolve();
+
+    expect(appService.createOwnToken).not.toHaveBeenCalled();
+    expect(privateComponent.authToken).toBe('invalid-token');
+    expect(window.location.href).toContain('auth=invalid-token');
   });
 
   it('should load coding-review mode as read-only without coding job status side effects', async () => {
