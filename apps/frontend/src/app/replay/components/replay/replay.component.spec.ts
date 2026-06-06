@@ -1,7 +1,7 @@
 // eslint-disable-next-line max-classes-per-file
 import { ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -51,8 +51,32 @@ class ReplayBackendServiceMock {
   storeReplayStatistics = jest.fn().mockReturnValue(of({ success: true }));
 }
 
+interface AppServiceAuthDataMock {
+  userId: number;
+  workspaces: { id: number; name: string }[];
+}
+
 class AppServiceMock {
   selectedWorkspaceId = 42;
+  authData: AppServiceAuthDataMock = {
+    userId: 1,
+    workspaces: [
+      { id: 47, name: 'Workspace 47' },
+      { id: 48, name: 'Workspace 48' }
+    ]
+  };
+
+  private authDataSubject = new Subject<AppServiceAuthDataMock>();
+
+  authData$ = this.authDataSubject.asObservable();
+  postMessage$ = of({ data: {} });
+
+  createOwnToken = jest.fn().mockReturnValue(of('workspace-token'));
+
+  emitAuthData(authData: AppServiceAuthDataMock = this.authData): void {
+    this.authData = authData;
+    this.authDataSubject.next(authData);
+  }
 }
 
 class MatSnackBarMock {
@@ -88,14 +112,17 @@ describe('ReplayComponent', () => {
   let component: ReplayComponent;
   let fixture: ComponentFixture<ReplayComponent>;
   let snackBar: MatSnackBarMock;
+  let fileService: FileServiceMock;
   let replayBackendService: ReplayBackendServiceMock;
   let codingJobBackendServiceMock: {
+    getCodingJobs: jest.Mock;
     getCodingJobUnits: jest.Mock;
     updateCodingJob: jest.Mock;
     getCodingProgress: jest.Mock;
     getCodingNotes: jest.Mock;
     getCodingJob: jest.Mock;
     saveCodingProgress: jest.Mock;
+    saveCodingNotes: jest.Mock;
     updateCodingJobKeepalive: jest.Mock;
   };
 
@@ -107,18 +134,27 @@ describe('ReplayComponent', () => {
 
     // Spy on token validation
     jest.spyOn(tokenUtils, 'validateToken').mockReturnValue({ isValid: true });
-    jest.spyOn(tokenUtils, 'isTestperson').mockImplementation(testperson => testperson === 'valid@test@person');
+    jest.spyOn(tokenUtils, 'isTestperson').mockImplementation(
+      testperson => testperson === 'valid@test@person' || testperson.startsWith('valid@test@')
+    );
 
     // Spy on DOM utils
     jest.spyOn(domUtils, 'scrollToElementByAlias').mockReturnValue(true);
 
     codingJobBackendServiceMock = {
+      getCodingJobs: jest.fn().mockReturnValue(of({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: undefined
+      })),
       getCodingJobUnits: jest.fn().mockReturnValue(of([])),
       updateCodingJob: jest.fn().mockReturnValue(of({})),
       getCodingProgress: jest.fn().mockReturnValue(of({})),
       getCodingNotes: jest.fn().mockReturnValue(of({})),
       getCodingJob: jest.fn().mockReturnValue(of({})),
       saveCodingProgress: jest.fn().mockReturnValue(of({})),
+      saveCodingNotes: jest.fn().mockReturnValue(of({})),
       updateCodingJobKeepalive: jest.fn()
     };
 
@@ -141,6 +177,7 @@ describe('ReplayComponent', () => {
     fixture = TestBed.createComponent(ReplayComponent);
     component = fixture.componentInstance;
     snackBar = TestBed.inject(MatSnackBar) as unknown as MatSnackBarMock;
+    fileService = TestBed.inject(FileService) as unknown as FileServiceMock;
     replayBackendService = TestBed.inject(ReplayBackendService) as unknown as ReplayBackendServiceMock;
     fixture.detectChanges();
     await fixture.whenStable();
@@ -359,6 +396,33 @@ describe('ReplayComponent', () => {
     );
   });
 
+  it('should block code and note edits while a coding job switch is running', async () => {
+    const handleCodeSelectedSpy = jest.spyOn(component.codingService, 'handleCodeSelected');
+    const saveNotesSpy = jest.spyOn(component.codingService, 'saveNotes');
+    const privateComponent = component as unknown as { isSwitchingCodingJob: boolean };
+
+    component.workspaceId = 5;
+    component.testPerson = 'valid@test@person';
+    component.unitId = 'unit-123';
+    component.codingService.currentVariableId = 'VAR1';
+    privateComponent.isSwitchingCodingJob = true;
+
+    expect(component.isCodingReadOnly()).toBe(true);
+
+    await component.onCodeSelected({
+      variableId: 'VAR1',
+      code: {
+        id: 7,
+        label: 'Code 7',
+        score: 2
+      }
+    });
+    component.onNotesChanged('note');
+
+    expect(handleCodeSelectedSpy).not.toHaveBeenCalled();
+    expect(saveNotesSpy).not.toHaveBeenCalled();
+  });
+
   it('should dismiss page error when null is passed', () => {
     // First create an error
     component.checkPageError('notInList');
@@ -403,6 +467,71 @@ describe('ReplayComponent', () => {
     expect(component.page).toBe('1');
     expect(component.anchor).toBe('ANCHOR_2');
     expect(component.codingService.currentVariableId).toBe('VAR_2');
+  });
+
+  it('should ignore external unit changes while a coding job switch is running', async () => {
+    const privateComponent = component as ReplayComponent & {
+      isSwitchingCodingJob: boolean;
+      unitsData: {
+        id: number;
+        name: string;
+        units: {
+          id: number;
+          name: string;
+          alias: string;
+          bookletId: number;
+          testPerson: string;
+          variableId: string;
+          variableAnchor: string;
+          variablePage: string;
+        }[];
+        currentUnitIndex: number;
+      };
+    };
+
+    component.isCodingMode = true;
+    component.page = '0';
+    component.unitId = 'UNIT_1';
+    component.currentUnitIndex = 1;
+    component.codingService.currentVariableId = 'VAR_1';
+    privateComponent.unitsData = {
+      id: 77,
+      name: 'Current Job',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_1',
+          alias: 'UNIT_1',
+          bookletId: 0,
+          testPerson: 'valid@test@group@BOOKLET',
+          variableId: 'VAR_1',
+          variableAnchor: 'VAR_1',
+          variablePage: '0'
+        },
+        {
+          id: 2,
+          name: 'UNIT_2',
+          alias: 'UNIT_2',
+          bookletId: 0,
+          testPerson: 'valid@test@group@BOOKLET',
+          variableId: 'VAR_2',
+          variableAnchor: 'VAR_2',
+          variablePage: '1'
+        }
+      ]
+    };
+    privateComponent.isSwitchingCodingJob = true;
+    replayBackendService.getReplayPayload.mockClear();
+
+    await component.handleUnitChanged(privateComponent.unitsData.units[1]);
+
+    expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
+    expect(component.unitId).toBe('UNIT_1');
+    expect(component.page).toBe('0');
+    expect(component.currentUnitIndex).toBe(1);
+    expect(privateComponent.unitsData.currentUnitIndex).toBe(0);
+    expect(component.codingService.currentVariableId).toBe('VAR_1');
   });
 
   it('should retry anchor highlighting after the player reports visible content', () => {
@@ -813,6 +942,48 @@ describe('ReplayComponent', () => {
       expect(handleUnitChangedSpy).toHaveBeenCalledWith(unitsData.units[1]);
     });
 
+    it('should block keyboard unit navigation while a coding job switch is running', () => {
+      const privateComponent = component as ReplayComponent & { isSwitchingCodingJob: boolean };
+
+      component.isCodingMode = true;
+      const unitsData = {
+        id: 123,
+        name: 'job',
+        currentUnitIndex: 0,
+        units: [
+          {
+            id: 1,
+            name: 'UNIT1',
+            alias: 'UNIT1',
+            bookletId: 0,
+            testPerson: 'tp1@code1@grp@booklet',
+            variableId: 'V1',
+            variableAnchor: 'V1'
+          },
+          {
+            id: 2,
+            name: 'UNIT2',
+            alias: 'UNIT2',
+            bookletId: 0,
+            testPerson: 'tp1@code1@grp@booklet',
+            variableId: 'V2',
+            variableAnchor: 'V2'
+          }
+        ]
+      };
+      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
+      replayComponent.unitsData = unitsData;
+      privateComponent.isSwitchingCodingJob = true;
+      const handleUnitChangedSpy = jest.spyOn(component, 'handleUnitChanged').mockResolvedValue();
+      const event = new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight' });
+      const preventDefaultSpy = jest.spyOn(event, 'preventDefault');
+
+      component.onKeyDown(event);
+
+      expect(preventDefaultSpy).toHaveBeenCalled();
+      expect(handleUnitChangedSpy).not.toHaveBeenCalled();
+    });
+
     it('should ignore digit shortcuts for regular codes without manual instructions', () => {
       component.isCodingMode = true;
       const unitsData = {
@@ -986,6 +1157,945 @@ describe('ReplayComponent', () => {
       component.onBeforeUnload();
 
       expect(pauseOnUnloadSpy).toHaveBeenCalledWith(42, 123);
+    });
+  });
+
+  describe('Coding Job Switcher', () => {
+    function createJob(id: number, workspaceId: number, name: string, status: string): CodingJob {
+      return {
+        id,
+        workspace_id: workspaceId,
+        name,
+        status,
+        created_at: new Date('2026-01-01T00:00:00Z'),
+        updated_at: new Date('2026-01-02T00:00:00Z'),
+        assignedCoders: [1],
+        progress: 0,
+        codedUnits: 0,
+        totalUnits: 1
+      };
+    }
+
+    function createReplayPayload(name: string): {
+      unitDef: { data: string; file_id: string }[];
+      response: { responses: { id: string; content: string }[] };
+      vocs: { data: string; file_id: string }[];
+      player: { data: string; file_id: string }[];
+      serverTimings: { responseTotalMs: number };
+    } {
+      return {
+        unitDef: [{ data: `${name} unitDef`, file_id: `${name}.VOUD` }],
+        response: { responses: [{ id: name, content: `${name} response` }] },
+        vocs: [],
+        player: [{ data: `${name} player`, file_id: `${name}.js` }],
+        serverTimings: {
+          responseTotalMs: 5
+        }
+      };
+    }
+
+    function createCodingScheme(variableId: string): CodingScheme {
+      return {
+        version: '1.0',
+        variableCodings: [{
+          id: variableId,
+          alias: variableId,
+          label: variableId,
+          sourceType: 'manual',
+          processing: [],
+          codeModel: 'manual',
+          codes: [],
+          manualInstruction: ''
+        }]
+      };
+    }
+
+    it('switches to an assigned coding job in another workspace', async () => {
+      const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+      const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const currentJob = createJob(77, 47, 'Current Job', 'active');
+      const targetJob = createJob(88, 48, 'Target Job', 'active');
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        selectedCodingJobKey: string;
+        authToken: string;
+        unitsData: { id: number; units: unknown[] } | null;
+        onCodingJobSelectionChange: (jobKey: string) => Promise<void>;
+      };
+
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.codingService.codingJobId = 77;
+      component.codingService.setAuthToken('valid-token');
+      privateComponent.authToken = 'valid-token';
+      privateComponent.assignedCodingJobs = [currentJob, targetJob];
+      privateComponent.selectedCodingJobKey = '47:77';
+      codingJobBackendServiceMock.getCodingJobUnits.mockReturnValueOnce(of([{
+        responseId: 1,
+        unitName: 'UNIT_TARGET',
+        unitAlias: 'Target Unit',
+        variableId: 'VAR_TARGET',
+        variableAnchor: 'VAR_TARGET',
+        variablePage: '2',
+        bookletName: 'BOOKLET_TARGET',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: 'group',
+        isDoubleCoded: false,
+        otherCoders: []
+      }]));
+      codingJobBackendServiceMock.getCodingJob.mockReturnValue(of(targetJob));
+
+      await privateComponent.onCodingJobSelectionChange('48:88');
+
+      expect(appService.createOwnToken).toHaveBeenCalledWith(48, 1);
+      expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(48, 88, 'workspace-token', false);
+      expect(saveAllSpy).toHaveBeenCalledWith(47, 77);
+      expect(component.workspaceId).toBe(48);
+      expect(component.codingService.codingJobId).toBe(88);
+      expect(privateComponent.unitsData?.id).toBe(88);
+      expect(privateComponent.selectedCodingJobKey).toBe('48:88');
+      expect(window.location.href).toContain('codingJobId=88');
+    });
+
+    it('keeps switched completed coding jobs read-only', async () => {
+      const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+      const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const handleCodeSelectedSpy = jest.spyOn(component.codingService, 'handleCodeSelected');
+      const saveNotesSpy = jest.spyOn(component.codingService, 'saveNotes');
+      const currentJob = createJob(77, 47, 'Current Job', 'active');
+      const completedJob = createJob(88, 48, 'Completed Job', 'completed');
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        selectedCodingJobKey: string;
+        authToken: string;
+        onCodingJobSelectionChange: (jobKey: string) => Promise<void>;
+      };
+
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.codingService.codingJobId = 77;
+      component.codingService.setAuthToken('valid-token');
+      privateComponent.authToken = 'valid-token';
+      privateComponent.assignedCodingJobs = [currentJob, completedJob];
+      privateComponent.selectedCodingJobKey = '47:77';
+      appService.createOwnToken.mockReturnValueOnce(of('workspace-token'));
+      codingJobBackendServiceMock.getCodingProgress.mockReturnValueOnce(throwError(() => new Error('Progress error')));
+      codingJobBackendServiceMock.updateCodingJob.mockClear();
+      codingJobBackendServiceMock.getCodingJobUnits.mockReturnValueOnce(of([{
+        responseId: 1,
+        unitName: 'UNIT_COMPLETED',
+        unitAlias: 'Completed Unit',
+        variableId: 'VAR_COMPLETED',
+        variableAnchor: 'VAR_COMPLETED',
+        variablePage: '2',
+        bookletName: 'BOOKLET_COMPLETED',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: 'completed',
+        isDoubleCoded: false,
+        otherCoders: []
+      }]));
+      codingJobBackendServiceMock.getCodingJob.mockReturnValue(of(completedJob));
+
+      await privateComponent.onCodingJobSelectionChange('48:88');
+
+      expect(saveAllSpy).toHaveBeenCalledWith(47, 77);
+      expect(component.codingService.isCompletedJobReview).toBe(true);
+      expect(component.isCodingReadOnly()).toBe(true);
+      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+
+      await component.onCodeSelected({
+        variableId: 'VAR_COMPLETED',
+        code: {
+          id: 1,
+          label: 'Code 1'
+        }
+      });
+      component.onNotesChanged('should not be saved');
+
+      expect(handleCodeSelectedSpy).not.toHaveBeenCalled();
+      expect(saveNotesSpy).not.toHaveBeenCalled();
+    });
+
+    it('rolls back to the previous coding job when the target replay payload fails', async () => {
+      const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+      const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const currentToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ3b3Jrc3BhY2UiOiI0NyJ9.sig';
+      const targetToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ3b3Jrc3BhY2UiOiI0OCJ9.sig';
+      const currentJob = createJob(77, 47, 'Current Job', 'active');
+      const targetJob = createJob(88, 48, 'Target Job', 'active');
+      const currentUnitsData = {
+        id: 77,
+        name: 'Current Job',
+        units: [{
+          id: 0,
+          name: 'UNIT_CURRENT',
+          alias: 'Current Unit',
+          bookletId: 0,
+          testPerson: 'valid@test@current@BOOKLET_CURRENT',
+          variableId: 'VAR_CURRENT',
+          variableAnchor: 'VAR_CURRENT',
+          variablePage: '1'
+        }],
+        currentUnitIndex: 0
+      };
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        selectedCodingJobKey: string;
+        authToken: string;
+        unitsData: typeof currentUnitsData | null;
+        onCodingJobSelectionChange: (jobKey: string) => Promise<void>;
+      };
+
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.testPerson = 'valid@test@current@BOOKLET_CURRENT';
+      component.unitId = 'UNIT_CURRENT';
+      component.player = 'current player';
+      component.unitDef = 'current unitDef';
+      component.responses = { responses: [{ id: 'current', content: 'current response' }] };
+      component.codingService.codingJobId = 77;
+      component.codingService.currentVariableId = 'VAR_CURRENT';
+      component.codingService.selectedCodes.set('current-key', { id: 1, code: '1', label: 'Current Code' });
+      component.codingService.notes.set('current-note-key', 'Current Note');
+      component.codingService.setAuthToken(currentToken);
+      privateComponent.authToken = currentToken;
+      privateComponent.unitsData = currentUnitsData;
+      privateComponent.assignedCodingJobs = [currentJob, targetJob];
+      privateComponent.selectedCodingJobKey = '47:77';
+      appService.createOwnToken.mockReturnValueOnce(of(targetToken));
+      codingJobBackendServiceMock.getCodingJobUnits.mockReturnValueOnce(of([{
+        responseId: 1,
+        unitName: 'UNIT_TARGET',
+        unitAlias: 'Target Unit',
+        variableId: 'VAR_TARGET',
+        variableAnchor: 'VAR_TARGET',
+        variablePage: '2',
+        bookletName: 'BOOKLET_TARGET',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: 'target',
+        isDoubleCoded: false,
+        otherCoders: []
+      }]));
+      replayBackendService.getReplayPayload.mockClear();
+      replayBackendService.getReplayPayload.mockReturnValueOnce(throwError(() => new Error('Payload error')));
+
+      await privateComponent.onCodingJobSelectionChange('48:88');
+
+      expect(saveAllSpy).toHaveBeenCalledWith(47, 77);
+      expect(component.workspaceId).toBe(47);
+      expect(component.codingService.codingJobId).toBe(77);
+      expect(privateComponent.selectedCodingJobKey).toBe('47:77');
+      expect(privateComponent.unitsData).toBe(currentUnitsData);
+      expect(component.testPerson).toBe('valid@test@current@BOOKLET_CURRENT');
+      expect(component.unitId).toBe('UNIT_CURRENT');
+      expect(component.player).toBe('current player');
+      expect(component.unitDef).toBe('current unitDef');
+      expect(component.responses).toEqual({ responses: [{ id: 'current', content: 'current response' }] });
+      expect(component.codingService.currentVariableId).toBe('VAR_CURRENT');
+      expect(component.codingService.selectedCodes.get('current-key')).toEqual({ id: 1, code: '1', label: 'Current Code' });
+      expect(component.codingService.notes.get('current-note-key')).toBe('Current Note');
+      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalledWith(48, 88, { status: 'active' }, targetToken);
+      expect(snackBar.open).toHaveBeenCalledWith(
+        'replay.job-switcher.switch-error',
+        'close',
+        { duration: 4000, panelClass: ['snackbar-error'] }
+      );
+    });
+
+    it('clears notes from the previous coding job when the target job has none', async () => {
+      const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+      jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const currentJob = createJob(77, 47, 'Current Job', 'active');
+      const targetJob = createJob(88, 48, 'Target Job', 'active');
+      const staleTargetNoteKey = component.codingService.generateCompositeKey(
+        'valid@test@target@BOOKLET_TARGET',
+        'UNIT_TARGET',
+        'VAR_TARGET'
+      );
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        selectedCodingJobKey: string;
+        authToken: string;
+        onCodingJobSelectionChange: (jobKey: string) => Promise<void>;
+      };
+
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.codingService.codingJobId = 77;
+      component.codingService.notes.set(staleTargetNoteKey, 'Note from previous job');
+      component.codingService.setAuthToken('valid-token');
+      privateComponent.authToken = 'valid-token';
+      privateComponent.assignedCodingJobs = [currentJob, targetJob];
+      privateComponent.selectedCodingJobKey = '47:77';
+      appService.createOwnToken.mockReturnValueOnce(of('workspace-token'));
+      codingJobBackendServiceMock.getCodingNotes.mockReturnValueOnce(of(null));
+      codingJobBackendServiceMock.getCodingJob.mockReturnValueOnce(of(targetJob));
+      codingJobBackendServiceMock.getCodingJobUnits.mockReturnValueOnce(of([{
+        responseId: 1,
+        unitName: 'UNIT_TARGET',
+        unitAlias: 'Target Unit',
+        variableId: 'VAR_TARGET',
+        variableAnchor: 'VAR_TARGET',
+        variablePage: '2',
+        bookletName: 'BOOKLET_TARGET',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: 'target',
+        isDoubleCoded: false,
+        otherCoders: []
+      }]));
+
+      await privateComponent.onCodingJobSelectionChange('48:88');
+
+      expect(privateComponent.selectedCodingJobKey).toBe('48:88');
+      expect(component.testPerson).toBe('valid@test@target@BOOKLET_TARGET');
+      expect(component.unitId).toBe('UNIT_TARGET');
+      expect(component.codingService.currentVariableId).toBe('VAR_TARGET');
+      expect(component.getCoderNotes()).toBe('');
+    });
+
+    it('ignores stale replay payloads after switching coding jobs', async () => {
+      const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+      const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const currentToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ3b3Jrc3BhY2UiOiI0NyJ9.sig';
+      const targetToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ3b3Jrc3BhY2UiOiI0OCJ9.sig';
+      const stalePayload = new Subject<ReturnType<typeof createReplayPayload>>();
+      const targetPayload = new Subject<ReturnType<typeof createReplayPayload>>();
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        selectedCodingJobKey: string;
+        authToken: string;
+        onCodingJobSelectionChange: (jobKey: string) => Promise<void>;
+      };
+
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.codingService.codingJobId = 77;
+      component.codingService.setAuthToken(currentToken);
+      privateComponent.authToken = currentToken;
+      replayBackendService.getReplayPayload.mockClear();
+      privateComponent.assignedCodingJobs = [
+        createJob(77, 47, 'Current Job', 'active'),
+        createJob(88, 48, 'Target Job', 'active')
+      ];
+      privateComponent.selectedCodingJobKey = '47:77';
+      appService.createOwnToken.mockReturnValueOnce(of(targetToken));
+      replayBackendService.getReplayPayload
+        .mockReturnValueOnce(stalePayload.asObservable())
+        .mockReturnValueOnce(targetPayload.asObservable());
+      codingJobBackendServiceMock.getCodingJobUnits.mockReturnValueOnce(of([{
+        responseId: 1,
+        unitName: 'UNIT_TARGET',
+        unitAlias: 'Target Unit',
+        variableId: 'VAR_TARGET',
+        variableAnchor: 'VAR_TARGET',
+        variablePage: '2',
+        bookletName: 'BOOKLET_TARGET',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: 'target',
+        isDoubleCoded: false,
+        otherCoders: []
+      }]));
+      codingJobBackendServiceMock.getCodingJob.mockReturnValue(of(createJob(88, 48, 'Target Job', 'active')));
+
+      const staleLoad = component.handleUnitChanged({
+        id: 0,
+        name: 'UNIT_STALE',
+        alias: 'Stale Unit',
+        bookletId: 0,
+        testPerson: 'valid@test@stale@BOOKLET_STALE',
+        variableId: 'VAR_STALE',
+        variableAnchor: 'VAR_STALE',
+        variablePage: '1'
+      });
+      const switchPromise = privateComponent.onCodingJobSelectionChange('48:88');
+      await new Promise(resolve => {
+        setTimeout(resolve, 0);
+      });
+      expect(replayBackendService.getReplayPayload).toHaveBeenCalledTimes(2);
+
+      targetPayload.next(createReplayPayload('target'));
+      targetPayload.complete();
+      await switchPromise;
+
+      expect(saveAllSpy).toHaveBeenCalledWith(47, 77);
+      expect(component.workspaceId).toBe(48);
+      expect(component.unitDef).toBe('target unitDef');
+      expect(component.player).toBe('target player');
+      expect(component.responses).toEqual({ responses: [{ id: 'target', content: 'target response' }] });
+
+      stalePayload.next(createReplayPayload('stale'));
+      stalePayload.complete();
+      await staleLoad;
+
+      expect(component.unitDef).toBe('target unitDef');
+      expect(component.player).toBe('target player');
+      expect(component.responses).toEqual({ responses: [{ id: 'target', content: 'target response' }] });
+    });
+
+    it('does not update the unit index from stale unit navigation', async () => {
+      const currentToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ3b3Jrc3BhY2UiOiI0NyJ9.sig';
+      const stalePayload = new Subject<ReturnType<typeof createReplayPayload>>();
+      const targetPayload = new Subject<ReturnType<typeof createReplayPayload>>();
+      const staleUnit = {
+        id: 0,
+        name: 'UNIT_STALE',
+        alias: 'Stale Unit',
+        bookletId: 0,
+        testPerson: 'valid@test@stale@BOOKLET_STALE',
+        variableId: 'VAR_STALE',
+        variableAnchor: 'VAR_STALE',
+        variablePage: '1'
+      };
+      const targetUnit = {
+        id: 1,
+        name: 'UNIT_TARGET',
+        alias: 'Target Unit',
+        bookletId: 0,
+        testPerson: 'valid@test@target@BOOKLET_TARGET',
+        variableId: 'VAR_TARGET',
+        variableAnchor: 'VAR_TARGET',
+        variablePage: '2'
+      };
+      const privateComponent = component as unknown as {
+        authToken: string;
+        unitsData: {
+          id: number;
+          name: string;
+          units: typeof staleUnit[];
+          currentUnitIndex: number;
+        } | null;
+      };
+
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.codingService.setAuthToken(currentToken);
+      privateComponent.authToken = currentToken;
+      privateComponent.unitsData = {
+        id: 77,
+        name: 'Current Job',
+        units: [staleUnit, targetUnit],
+        currentUnitIndex: 0
+      };
+      replayBackendService.getReplayPayload.mockClear();
+      replayBackendService.getReplayPayload
+        .mockReturnValueOnce(stalePayload.asObservable())
+        .mockReturnValueOnce(targetPayload.asObservable());
+
+      const staleLoad = component.handleUnitChanged(staleUnit);
+      const targetLoad = component.handleUnitChanged(targetUnit);
+      await new Promise(resolve => {
+        setTimeout(resolve, 0);
+      });
+      expect(replayBackendService.getReplayPayload).toHaveBeenCalledTimes(2);
+
+      targetPayload.next(createReplayPayload('target'));
+      targetPayload.complete();
+      await targetLoad;
+
+      expect(component.currentUnitIndex).toBe(2);
+      expect(privateComponent.unitsData?.currentUnitIndex).toBe(1);
+
+      stalePayload.next(createReplayPayload('stale'));
+      stalePayload.complete();
+      await staleLoad;
+
+      expect(component.currentUnitIndex).toBe(2);
+      expect(privateComponent.unitsData?.currentUnitIndex).toBe(1);
+    });
+
+    it('ignores stale fallback coding schemes after a newer unit payload applied', async () => {
+      const currentToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ3b3Jrc3BhY2UiOiI0NyJ9.sig';
+      const stalePayload = new Subject<ReturnType<typeof createReplayPayload>>();
+      const targetPayload = new Subject<ReturnType<typeof createReplayPayload>>();
+      const staleCodingSchemeFile = new Subject<{ base64Data: string } | null>();
+      const staleScheme = createCodingScheme('VAR_STALE');
+      const targetScheme = createCodingScheme('VAR_TARGET');
+      const privateComponent = component as unknown as { authToken: string };
+
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.codingService.setAuthToken(currentToken);
+      privateComponent.authToken = currentToken;
+      fileService.getCodingSchemeFile.mockReturnValueOnce(staleCodingSchemeFile.asObservable());
+      replayBackendService.getReplayPayload.mockClear();
+      replayBackendService.getReplayPayload
+        .mockReturnValueOnce(stalePayload.asObservable())
+        .mockReturnValueOnce(targetPayload.asObservable());
+
+      const staleLoad = component.handleUnitChanged({
+        id: 0,
+        name: 'UNIT_STALE',
+        alias: 'Stale Unit',
+        bookletId: 0,
+        testPerson: 'valid@test@stale@BOOKLET_STALE',
+        variableId: 'VAR_STALE',
+        variableAnchor: 'VAR_STALE',
+        variablePage: '1'
+      });
+      await new Promise(resolve => {
+        setTimeout(resolve, 0);
+      });
+      stalePayload.next({
+        ...createReplayPayload('stale'),
+        unitDef: [{
+          data: '<Unit><CodingSchemeRef>stale.vocs</CodingSchemeRef></Unit>',
+          file_id: 'stale.VOUD'
+        }]
+      });
+      stalePayload.complete();
+      await staleLoad;
+      expect(fileService.getCodingSchemeFile).toHaveBeenCalledWith(47, 'stale.vocs');
+
+      const targetLoad = component.handleUnitChanged({
+        id: 1,
+        name: 'UNIT_TARGET',
+        alias: 'Target Unit',
+        bookletId: 0,
+        testPerson: 'valid@test@target@BOOKLET_TARGET',
+        variableId: 'VAR_TARGET',
+        variableAnchor: 'VAR_TARGET',
+        variablePage: '2'
+      });
+      await new Promise(resolve => {
+        setTimeout(resolve, 0);
+      });
+      targetPayload.next({
+        ...createReplayPayload('target'),
+        vocs: [{
+          data: JSON.stringify(targetScheme),
+          file_id: 'target.vocs'
+        }]
+      });
+      targetPayload.complete();
+      await targetLoad;
+
+      expect(component.codingService.codingScheme).toEqual(targetScheme);
+
+      staleCodingSchemeFile.next({ base64Data: JSON.stringify(staleScheme) });
+      staleCodingSchemeFile.complete();
+
+      expect(component.codingService.codingScheme).toEqual(targetScheme);
+    });
+
+    it('renders the coding job switcher even when no coding scheme is available', () => {
+      const currentJob = createJob(77, 47, 'Current Job', 'active');
+      const targetJob = createJob(88, 47, 'Target Job', 'open');
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        selectedCodingJobKey: string;
+      };
+
+      component.isCodingMode = true;
+      component.codingService.codingScheme = null;
+      component.codingService.currentVariableId = '';
+      privateComponent.assignedCodingJobs = [currentJob, targetJob];
+      privateComponent.selectedCodingJobKey = '47:77';
+
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.coding-job-switcher')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('app-code-selector')).toBeNull();
+    });
+
+    it('does not render or use the coding job switcher in review mode', async () => {
+      const currentJob = createJob(77, 47, 'Current Job', 'completed');
+      const targetJob = createJob(88, 48, 'Target Job', 'active');
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        selectedCodingJobKey: string;
+        onCodingJobSelectionChange: (jobKey: string) => Promise<void>;
+      };
+
+      component.isCodingMode = true;
+      component.isReviewMode = true;
+      component.codingService.isReviewMode = true;
+      component.workspaceId = 47;
+      component.codingService.codingJobId = 77;
+      component.codingService.codingScheme = createCodingScheme('VAR_TARGET');
+      component.codingService.currentVariableId = 'VAR_TARGET';
+      privateComponent.assignedCodingJobs = [currentJob, targetJob];
+      privateComponent.selectedCodingJobKey = '47:77';
+      codingJobBackendServiceMock.getCodingJobUnits.mockClear();
+
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.coding-job-switcher')).toBeNull();
+      expect(fixture.nativeElement.querySelector('app-code-selector')).not.toBeNull();
+
+      await privateComponent.onCodingJobSelectionChange('48:88');
+
+      expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
+      expect(component.isReviewMode).toBe(true);
+      expect(component.codingService.isReviewMode).toBe(true);
+      expect(privateComponent.selectedCodingJobKey).toBe('47:77');
+    });
+
+    it('keeps assigned coding jobs load failures retryable', async () => {
+      const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        assignedCodingJobsLoaded: boolean;
+        hasAssignedCodingJobsLoadError: boolean;
+        loadAssignedCodingJobs: () => Promise<void>;
+        retryLoadAssignedCodingJobs: () => Promise<void>;
+      };
+
+      appService.authData = {
+        ...appService.authData,
+        workspaces: [{ id: 47, name: 'Workspace 47' }]
+      };
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.codingService.codingJobId = 77;
+      codingJobBackendServiceMock.getCodingJobs
+        .mockReturnValueOnce(throwError(() => new Error('Network error')))
+        .mockReturnValueOnce(of({
+          data: [createJob(77, 47, 'Current Job', 'active')],
+          total: 1,
+          page: 1,
+          limit: undefined
+        }));
+
+      await privateComponent.loadAssignedCodingJobs();
+      fixture.detectChanges();
+
+      expect(privateComponent.hasAssignedCodingJobsLoadError).toBe(true);
+      expect(privateComponent.assignedCodingJobsLoaded).toBe(false);
+      expect(fixture.nativeElement.querySelector('.coding-job-switcher-error')).not.toBeNull();
+
+      await privateComponent.retryLoadAssignedCodingJobs();
+
+      expect(privateComponent.hasAssignedCodingJobsLoadError).toBe(false);
+      expect(privateComponent.assignedCodingJobsLoaded).toBe(true);
+      expect(privateComponent.assignedCodingJobs).toHaveLength(1);
+      expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenCalledTimes(2);
+    });
+
+    it('reloads all assigned coding jobs when auth data arrives during a fallback load', async () => {
+      const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+      const currentJob = createJob(77, 47, 'Current Job', 'active');
+      const targetJob = createJob(88, 48, 'Target Job', 'active');
+      const fallbackWorkspaceLoad = new Subject<{
+        data: CodingJob[];
+        total: number;
+        page: number;
+        limit?: number;
+      }>();
+      const workspace47Reload = new Subject<{
+        data: CodingJob[];
+        total: number;
+        page: number;
+        limit?: number;
+      }>();
+      const workspace48Reload = new Subject<{
+        data: CodingJob[];
+        total: number;
+        page: number;
+        limit?: number;
+      }>();
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        loadAssignedCodingJobs: () => Promise<void>;
+      };
+
+      appService.authData = {
+        ...appService.authData,
+        workspaces: []
+      };
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.codingService.codingJobId = 77;
+      codingJobBackendServiceMock.getCodingJobs.mockReset();
+      codingJobBackendServiceMock.getCodingJobs
+        .mockReturnValueOnce(fallbackWorkspaceLoad.asObservable())
+        .mockReturnValueOnce(workspace47Reload.asObservable())
+        .mockReturnValueOnce(workspace48Reload.asObservable());
+
+      const loadPromise = privateComponent.loadAssignedCodingJobs();
+      await new Promise(resolve => {
+        setTimeout(resolve, 0);
+      });
+      expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenCalledTimes(1);
+      expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenNthCalledWith(
+        1,
+        47,
+        undefined,
+        undefined,
+        { assignedTo: 'me' }
+      );
+
+      appService.emitAuthData({
+        ...appService.authData,
+        workspaces: [
+          { id: 47, name: 'Workspace 47' },
+          { id: 48, name: 'Workspace 48' }
+        ]
+      });
+      await new Promise(resolve => {
+        setTimeout(resolve, 0);
+      });
+      expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenCalledTimes(1);
+
+      fallbackWorkspaceLoad.next({
+        data: [currentJob],
+        total: 1,
+        page: 1
+      });
+      fallbackWorkspaceLoad.complete();
+      await new Promise(resolve => {
+        setTimeout(resolve, 0);
+      });
+
+      expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenCalledTimes(3);
+      expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenNthCalledWith(
+        2,
+        47,
+        undefined,
+        undefined,
+        { assignedTo: 'me' }
+      );
+      expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenNthCalledWith(
+        3,
+        48,
+        undefined,
+        undefined,
+        { assignedTo: 'me' }
+      );
+
+      workspace47Reload.next({
+        data: [currentJob],
+        total: 1,
+        page: 1
+      });
+      workspace47Reload.complete();
+      workspace48Reload.next({
+        data: [targetJob],
+        total: 1,
+        page: 1
+      });
+      workspace48Reload.complete();
+      await loadPromise;
+
+      expect(privateComponent.assignedCodingJobs.map(job => `${job.workspace_id}:${job.id}`))
+        .toEqual(['47:77', '48:88']);
+    });
+
+    it('does not switch coding jobs while a save error is active', async () => {
+      const targetJob = createJob(88, 48, 'Target Job', 'active');
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        selectedCodingJobKey: string;
+        authToken: string;
+        onCodingJobSelectionChange: (jobKey: string) => Promise<void>;
+      };
+
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.codingService.codingJobId = 77;
+      component.codingService.hasSaveError = true;
+      privateComponent.authToken = 'valid-token';
+      privateComponent.assignedCodingJobs = [createJob(77, 47, 'Current Job', 'active'), targetJob];
+      privateComponent.selectedCodingJobKey = '47:77';
+      codingJobBackendServiceMock.getCodingJobUnits.mockClear();
+
+      await privateComponent.onCodingJobSelectionChange('48:88');
+
+      expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
+      expect(privateComponent.selectedCodingJobKey).toBe('47:77');
+      expect(snackBar.open).toHaveBeenCalledWith(
+        'replay.job-switcher.save-error',
+        'close',
+        { duration: 4000, panelClass: ['snackbar-error'] }
+      );
+    });
+
+    it('does not switch coding jobs after a note save failed', async () => {
+      const targetJob = createJob(88, 48, 'Target Job', 'active');
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        selectedCodingJobKey: string;
+        authToken: string;
+        onCodingJobSelectionChange: (jobKey: string) => Promise<void>;
+      };
+
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.testPerson = 'valid@test@BOOKLET_CURRENT';
+      component.unitId = 'UNIT_CURRENT';
+      component.codingService.currentVariableId = 'VAR_CURRENT';
+      component.codingService.codingJobId = 77;
+      component.codingService.setAuthToken('valid-token');
+      privateComponent.authToken = 'valid-token';
+      privateComponent.assignedCodingJobs = [createJob(77, 47, 'Current Job', 'active'), targetJob];
+      privateComponent.selectedCodingJobKey = '47:77';
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValueOnce(throwError(() => new Error('note save failed')));
+      codingJobBackendServiceMock.getCodingJobUnits.mockClear();
+
+      component.onNotesChanged('unsaved note');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(component.codingService.hasSaveError).toBe(true);
+
+      await privateComponent.onCodingJobSelectionChange('48:88');
+
+      expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
+      expect(privateComponent.selectedCodingJobKey).toBe('47:77');
+      expect(snackBar.open).toHaveBeenCalledWith(
+        'replay.job-switcher.save-error',
+        'close',
+        { duration: 4000, panelClass: ['snackbar-error'] }
+      );
+    });
+
+    it('waits for pending saves and aborts switching when one fails', async () => {
+      const pendingSave = new Subject<CodingJob>();
+      const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress');
+      const currentJob = createJob(77, 47, 'Current Job', 'active');
+      const targetJob = createJob(88, 48, 'Target Job', 'active');
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        selectedCodingJobKey: string;
+        authToken: string;
+        onCodingJobSelectionChange: (jobKey: string) => Promise<void>;
+      };
+
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.testPerson = 'valid@test@BOOKLET_CURRENT';
+      component.unitId = 'UNIT_CURRENT';
+      component.codingService.codingJobId = 77;
+      component.codingService.setAuthToken('valid-token');
+      privateComponent.authToken = 'valid-token';
+      privateComponent.assignedCodingJobs = [currentJob, targetJob];
+      privateComponent.selectedCodingJobKey = '47:77';
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValueOnce(pendingSave.asObservable());
+      codingJobBackendServiceMock.getCodingJobUnits.mockReturnValueOnce(of([{
+        responseId: 1,
+        unitName: 'UNIT_TARGET',
+        unitAlias: 'Target Unit',
+        variableId: 'VAR_TARGET',
+        variableAnchor: 'VAR_TARGET',
+        variablePage: '2',
+        bookletName: 'BOOKLET_TARGET',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: 'group',
+        isDoubleCoded: false,
+        otherCoders: []
+      }]));
+      replayBackendService.getReplayPayload.mockClear();
+
+      const codeSavePromise = component.onCodeSelected({
+        variableId: 'VAR_CURRENT',
+        code: {
+          id: 1,
+          label: 'Code 1',
+          score: 1
+        }
+      });
+      await Promise.resolve();
+      const switchPromise = privateComponent.onCodingJobSelectionChange('48:88');
+      await Promise.resolve();
+
+      pendingSave.error(new Error('pending save failed'));
+      await codeSavePromise;
+      await switchPromise;
+
+      expect(saveAllSpy).not.toHaveBeenCalled();
+      expect(component.workspaceId).toBe(47);
+      expect(component.codingService.codingJobId).toBe(77);
+      expect(privateComponent.selectedCodingJobKey).toBe('47:77');
+      expect(component.codingService.hasSaveError).toBe(true);
+      expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
+      expect(snackBar.open).toHaveBeenCalledWith(
+        'replay.job-switcher.switch-error',
+        'close',
+        { duration: 4000, panelClass: ['snackbar-error'] }
+      );
+    });
+
+    it('does not switch after a pending save fails before switch flushing starts', async () => {
+      const pendingNotesSave = new Subject<CodingJob>();
+      const targetUnits = new Subject<{
+        responseId: number;
+        unitName: string;
+        unitAlias: string;
+        variableId: string;
+        variableAnchor: string;
+        variablePage: string;
+        bookletName: string;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        isDoubleCoded: boolean;
+        otherCoders: never[];
+      }[]>();
+      const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress');
+      const currentJob = createJob(77, 47, 'Current Job', 'active');
+      const targetJob = createJob(88, 48, 'Target Job', 'active');
+      const privateComponent = component as unknown as {
+        assignedCodingJobs: CodingJob[];
+        selectedCodingJobKey: string;
+        authToken: string;
+        onCodingJobSelectionChange: (jobKey: string) => Promise<void>;
+      };
+
+      component.isCodingMode = true;
+      component.workspaceId = 47;
+      component.testPerson = 'valid@test@BOOKLET_CURRENT';
+      component.unitId = 'UNIT_CURRENT';
+      component.codingService.currentVariableId = 'VAR_CURRENT';
+      component.codingService.codingJobId = 77;
+      component.codingService.setAuthToken('valid-token');
+      privateComponent.authToken = 'valid-token';
+      privateComponent.assignedCodingJobs = [currentJob, targetJob];
+      privateComponent.selectedCodingJobKey = '47:77';
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValueOnce(pendingNotesSave.asObservable());
+      codingJobBackendServiceMock.getCodingJobUnits.mockReturnValueOnce(targetUnits.asObservable());
+      replayBackendService.getReplayPayload.mockClear();
+
+      component.onNotesChanged('unsaved note');
+      await Promise.resolve();
+      const switchPromise = privateComponent.onCodingJobSelectionChange('48:88');
+      await Promise.resolve();
+
+      pendingNotesSave.error(new Error('pending note save failed'));
+      await Promise.resolve();
+      await Promise.resolve();
+      targetUnits.next([{
+        responseId: 1,
+        unitName: 'UNIT_TARGET',
+        unitAlias: 'Target Unit',
+        variableId: 'VAR_TARGET',
+        variableAnchor: 'VAR_TARGET',
+        variablePage: '2',
+        bookletName: 'BOOKLET_TARGET',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: 'group',
+        isDoubleCoded: false,
+        otherCoders: []
+      }]);
+      targetUnits.complete();
+      await switchPromise;
+
+      expect(saveAllSpy).not.toHaveBeenCalled();
+      expect(component.workspaceId).toBe(47);
+      expect(component.codingService.codingJobId).toBe(77);
+      expect(privateComponent.selectedCodingJobKey).toBe('47:77');
+      expect(component.codingService.hasSaveError).toBe(true);
+      expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
+      expect(snackBar.open).toHaveBeenCalledWith(
+        'replay.job-switcher.switch-error',
+        'close',
+        { duration: 4000, panelClass: ['snackbar-error'] }
+      );
     });
   });
 

@@ -315,6 +315,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   onPauseClick(): void {
+    if (this.isReadOnly) return;
     this.pauseCodingJob.emit();
   }
 
