@@ -252,6 +252,65 @@ describe('TestResultsComponent', () => {
       .toBe('DERIVE_ERROR bedeutet: Ableitung/Solver fehlgeschlagen, z. B. Typkonflikt im Kodierschema. Keine inhaltlich falsche Antwort.');
   });
 
+  it('should show clearer overview labels and formatted counts without translating technical statuses', () => {
+    component.overview = {
+      testPersons: 135,
+      testGroups: 6,
+      uniqueBooklets: 48,
+      uniqueUnits: 338,
+      uniqueResponses: 63653,
+      responseStatusCounts: {
+        DISPLAYED: 40962,
+        VALUE_CHANGED: 16681,
+        NOT_REACHED: 3726,
+        UNSET: 2284
+      },
+      sessionBrowserCounts: {},
+      sessionOsCounts: {},
+      sessionScreenCounts: {}
+    };
+
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent;
+    expect(text).toContain('Testergebnis-Übersicht');
+    expect(text).toContain('Verschiedene Aufgaben');
+    expect(text).toContain('Verschiedene Testhefte');
+    expect(text).toContain('Antwortwerte gesamt');
+    expect(text).toMatch(/63[.,]653/);
+    expect(text).toContain('DISPLAYED');
+    expect(text).toMatch(/64[.,]4%/);
+    expect(text).not.toContain('Angezeigt');
+  });
+
+  it('should open the flat table filtered by the selected technical response status', () => {
+    component.overview = {
+      testPersons: 135,
+      testGroups: 6,
+      uniqueBooklets: 48,
+      uniqueUnits: 338,
+      uniqueResponses: 63653,
+      responseStatusCounts: {
+        DISPLAYED: 40962
+      },
+      sessionBrowserCounts: {},
+      sessionOsCounts: {},
+      sessionScreenCounts: {}
+    };
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const statusButton = Array.from(
+      root.querySelectorAll('.status-chip') as NodeListOf<HTMLButtonElement>
+    ).find(button => button.textContent?.includes('DISPLAYED')) as HTMLButtonElement;
+
+    statusButton.click();
+
+    expect(component.quickSearchTableFilters).toEqual({ responseStatus: 'DISPLAYED' });
+    expect(component.forceShowLogAnomalyTableColumn).toBe(false);
+    expect(component.isTableView).toBe(true);
+  });
+
   it('should show log quality when enabled by workspace setting', () => {
     component.showTestResultsLogAnomalies = true;
     fixture.detectChanges();

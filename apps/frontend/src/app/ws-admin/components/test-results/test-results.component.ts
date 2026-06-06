@@ -1563,13 +1563,26 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  get overviewStatusCounts(): Array<{ status: string; count: number }> {
+  get overviewResponseStatusTotal(): number {
+    return Object.values(this.overview?.responseStatusCounts || {})
+      .reduce((sum, count) => sum + (Number(count) || 0), 0);
+  }
+
+  get overviewStatusCounts(): Array<{ status: string; count: number; percent: number }> {
     const map = (this.overview?.responseStatusCounts || {}) as Record<
     string,
     number
     >;
+    const total = this.overviewResponseStatusTotal;
     return Object.entries(map)
-      .map(([status, count]) => ({ status, count: Number(count) }))
+      .map(([status, count]) => {
+        const normalizedCount = Number(count) || 0;
+        return {
+          status,
+          count: normalizedCount,
+          percent: this.getPercent(normalizedCount, total)
+        };
+      })
       .sort((a, b) => b.count - a.count);
   }
 
@@ -1822,6 +1835,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         screenCounts: this.overview.sessionScreenCounts || {}
       }
     });
+  }
+
+  openResponseStatusInTable(status: string): void {
+    this.quickSearchTableFilters = { responseStatus: status };
+    this.forceShowLogAnomalyTableColumn = false;
+    this.isTableView = true;
+    this.isLoading = false;
+    this.isUploadingResults = false;
   }
 
   getResponseStatusTooltip(status: string): string {
