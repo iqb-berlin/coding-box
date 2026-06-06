@@ -393,4 +393,20 @@ describe('CodeSelectorComponent', () => {
 
     expect(fixture.nativeElement.querySelector('.pause-button')).toBeNull();
   });
+
+  it('disables and ignores pause while read-only', () => {
+    const pauseSpy = jest.spyOn(component.pauseCodingJob, 'emit');
+    component.showProgress = true;
+    component.hasCodingJob = true;
+    component.isCodingJobCompleted = false;
+    component.isCompletedJobReview = false;
+    component.isReadOnly = true;
+
+    fixture.detectChanges();
+    component.onPauseClick();
+
+    const pauseButton = fixture.nativeElement.querySelector('.pause-button') as HTMLButtonElement;
+    expect(pauseButton.disabled).toBe(true);
+    expect(pauseSpy).not.toHaveBeenCalled();
+  });
 });

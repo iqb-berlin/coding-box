@@ -1008,6 +1008,16 @@
     "failed-to-save-coding-notes": "Die Notiz konnte nicht gespeichert werden. Bitte Verbindung prüfen und erneut versuchen.",
     "coding-progress-message": "Kodierfortschritt: {{completed}}/{{total}} abgeschlossen ({{percentage}}%)",
     "close": "Schließen",
+    "job-switcher": {
+      "label": "Kodierjob",
+      "loading": "Zugewiesene Kodierjobs werden geladen...",
+      "load-error": "Zugewiesene Kodierjobs konnten nicht geladen werden.",
+      "retry": "Erneut laden",
+      "save-error": "Der Kodierjob kann erst gewechselt werden, wenn der aktuelle Speicherfehler behoben ist.",
+      "no-units": "Für diesen Kodierjob sind keine Replays verfügbar.",
+      "switch-error": "Der Kodierjob konnte nicht gewechselt werden.",
+      "switched": "Kodierjob gewechselt: {{name}}"
+    },
     "navigate-dialog": {
       "title": "Kodierte Fälle navigieren",
       "position": "Position",
