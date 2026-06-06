@@ -7,15 +7,12 @@
       <div class="fx-row-center-center fx-gap-16 filters-row">
         <mat-form-field appearance="outline" class="filter-field">
           <mat-label>Name filtern</mat-label>
-          <mat-select
-            [(value)]="selectedJobName"
-            (selectionChange)="onJobNameFilterChange()"
-          >
-            <mat-option [value]="null">Alle Namen</mat-option>
-            <mat-option *ngFor="let job of originalData" [value]="job.name">
-              {{ job.name }}
-            </mat-option>
-          </mat-select>
+          <input
+            matInput
+            type="text"
+            [(ngModel)]="selectedJobName"
+            (input)="onJobNameFilterChange()"
+          />
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="filter-field">
@@ -123,7 +120,14 @@
       </div>
     </div>
 
-    <mat-table [dataSource]="dataSource" matSort class="coding-jobs-table">
+    <mat-table
+      [dataSource]="dataSource"
+      matSort
+      [matSortActive]="sortBy"
+      [matSortDirection]="sortDirection"
+      (matSortChange)="onSortChange($event)"
+      class="coding-jobs-table"
+    >
       <mat-header-row
         *matHeaderRowDef="displayedColumns; sticky: true"
       ></mat-header-row>
@@ -361,9 +365,7 @@
       </ng-container>
 
       <ng-container matColumnDef="assignedCoders">
-        <mat-header-cell *matHeaderCellDef mat-sort-header
-          >Zugewiesene Kodierer</mat-header-cell
-        >
+        <mat-header-cell *matHeaderCellDef>Zugewiesene Kodierer</mat-header-cell>
         <mat-cell
           *matCellDef="let element"
           class="assigned-coders-cell"
@@ -374,9 +376,7 @@
       </ng-container>
 
       <ng-container matColumnDef="variables">
-        <mat-header-cell *matHeaderCellDef mat-sort-header
-          >Variablen</mat-header-cell
-        >
+        <mat-header-cell *matHeaderCellDef>Variablen</mat-header-cell>
         <mat-cell
           *matCellDef="let element"
           class="variables-cell"
@@ -387,9 +387,7 @@
       </ng-container>
 
       <ng-container matColumnDef="variableBundles">
-        <mat-header-cell *matHeaderCellDef mat-sort-header
-          >Variablenbündel</mat-header-cell
-        >
+        <mat-header-cell *matHeaderCellDef>Variablenbündel</mat-header-cell>
         <mat-cell
           *matCellDef="let element"
           class="variable-bundles-cell"
@@ -400,9 +398,7 @@
       </ng-container>
 
       <ng-container matColumnDef="progress">
-        <mat-header-cell *matHeaderCellDef mat-sort-header
-          >Fortschritt</mat-header-cell
-        >
+        <mat-header-cell *matHeaderCellDef>Fortschritt</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{ getProgress(element) }}
         </mat-cell>
@@ -427,9 +423,7 @@
       </ng-container>
 
       <ng-container matColumnDef="hasIssues">
-        <mat-header-cell *matHeaderCellDef mat-sort-header
-          >Probleme</mat-header-cell
-        >
+        <mat-header-cell *matHeaderCellDef>Probleme</mat-header-cell>
         <mat-cell
           *matCellDef="let element"
           [class.has-issues]="element.hasIssues"
@@ -460,8 +454,11 @@
     <mat-paginator
       [pageSizeOptions]="[10, 25, 50, 100]"
       showFirstLastButtons
-      [length]="dataSource.data.length"
-      *ngIf="dataSource.data.length > 0"
+      [length]="jobsTotal"
+      [pageIndex]="pageIndex"
+      [pageSize]="pageSize"
+      (page)="onPageChange($event)"
+      *ngIf="jobsTotal > 0"
     >
     </mat-paginator>
 

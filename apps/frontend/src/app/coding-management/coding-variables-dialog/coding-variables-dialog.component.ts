@@ -27,9 +27,12 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
-import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
+import { forkJoin } from 'rxjs';
 import { FileService } from '../../shared/services/file/file.service';
-import { FileBackendService } from '../../shared/services/file/file-backend.service';
+import {
+  FileBackendService,
+  ReplayAnchorOverride
+} from '../../shared/services/file/file-backend.service';
 import { UnitInfoDialogComponent } from '../../ws-admin/components/unit-info-dialog/unit-info-dialog.component';
 import { SchemeEditorDialogComponent } from '../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
 import { UnitInfoDto } from '../../../../../../api-dto/unit-info/unit-info.dto';
@@ -59,6 +62,9 @@ export interface FlattenedVariable {
   hasManualInstruction?: boolean;
   hasClosedCoding?: boolean;
   coderTrainingRequired?: boolean;
+  replayAnchor?: string;
+  savedReplayAnchor?: string;
+  isSavingReplayAnchor?: boolean;
 }
 
 @Component({
@@ -87,7 +93,7 @@ export interface FlattenedVariable {
 })
 export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   dataSource = new MatTableDataSource<FlattenedVariable>([]);
-  displayedColumns: string[] = ['unitName', 'variableId', 'variableType', 'actions'];
+  displayedColumns: string[] = ['unitName', 'variableId', 'variableType', 'replayAnchor', 'actions'];
 
   unitNameFilter = '';
   variableIdFilter = '';
@@ -211,8 +217,12 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   private loadData(): void {
     this.isLoading = true;
 
-    this.fileBackendService.getUnitVariables(this.data.workspaceId).subscribe({
-      next: (unitVariableDetails: UnitVariableDetailsDto[]) => {
+    forkJoin({
+      unitVariableDetails: this.fileBackendService.getUnitVariables(this.data.workspaceId),
+      replayAnchorOverrides: this.fileBackendService.getReplayAnchorOverrides(this.data.workspaceId)
+    }).subscribe({
+      next: ({ unitVariableDetails, replayAnchorOverrides }) => {
+        const replayAnchorByVariable = this.toReplayAnchorMap(replayAnchorOverrides);
         const flattenedData: FlattenedVariable[] = [];
 
         unitVariableDetails.forEach(unit => {
@@ -228,6 +238,9 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
             hasClosedCoding?: boolean;
             coderTrainingRequired?: boolean;
           }) => {
+            const savedReplayAnchor = replayAnchorByVariable.get(
+              this.getVariableKey(unit.unitName, variable.id)
+            ) || '';
             flattenedData.push({
               unitName: unit.unitName,
               unitId: unit.unitId,
@@ -240,7 +253,9 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
               isDerived: variable.isDerived,
               hasManualInstruction: variable.hasManualInstruction,
               hasClosedCoding: variable.hasClosedCoding,
-              coderTrainingRequired: variable.coderTrainingRequired
+              coderTrainingRequired: variable.coderTrainingRequired,
+              replayAnchor: savedReplayAnchor,
+              savedReplayAnchor
             });
           });
         });
@@ -260,6 +275,81 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
         this.isLoading = false;
       }
     });
+  }
+
+  saveReplayAnchor(variable: FlattenedVariable): void {
+    const replayAnchor = (variable.replayAnchor || '').trim();
+    if (!replayAnchor) {
+      this.clearReplayAnchor(variable);
+      return;
+    }
+
+    variable.isSavingReplayAnchor = true;
+    this.fileBackendService.saveReplayAnchorOverride(this.data.workspaceId, {
+      unitName: variable.unitName,
+      variableId: variable.variableId,
+      replayAnchor
+    }).subscribe({
+      next: saved => {
+        variable.replayAnchor = saved.replayAnchor;
+        variable.savedReplayAnchor = saved.replayAnchor;
+        variable.isSavingReplayAnchor = false;
+        this.snackBar.open('Replay-Anchor gespeichert', 'Schließen', {
+          duration: 2500
+        });
+      },
+      error: () => {
+        variable.isSavingReplayAnchor = false;
+        this.snackBar.open('Replay-Anchor konnte nicht gespeichert werden', 'Schließen', {
+          duration: 5000,
+          panelClass: ['error-snackbar']
+        });
+      }
+    });
+  }
+
+  clearReplayAnchor(variable: FlattenedVariable): void {
+    variable.isSavingReplayAnchor = true;
+    this.fileBackendService.deleteReplayAnchorOverride(
+      this.data.workspaceId,
+      variable.unitName,
+      variable.variableId
+    ).subscribe({
+      next: () => {
+        variable.replayAnchor = '';
+        variable.savedReplayAnchor = '';
+        variable.isSavingReplayAnchor = false;
+        this.snackBar.open('Replay-Anchor zurückgesetzt', 'Schließen', {
+          duration: 2500
+        });
+      },
+      error: () => {
+        variable.isSavingReplayAnchor = false;
+        this.snackBar.open('Replay-Anchor konnte nicht zurückgesetzt werden', 'Schließen', {
+          duration: 5000,
+          panelClass: ['error-snackbar']
+        });
+      }
+    });
+  }
+
+  hasReplayAnchorChanges(variable: FlattenedVariable): boolean {
+    return (variable.replayAnchor || '').trim() !== (variable.savedReplayAnchor || '');
+  }
+
+  private toReplayAnchorMap(
+    overrides: ReplayAnchorOverride[]
+  ): Map<string, string> {
+    return new Map(
+      overrides.map(override => [
+        this.getVariableKey(override.unitName, override.variableId),
+        override.replayAnchor
+      ])
+    );
+  }
+
+  private getVariableKey(unitName: string, variableId: string): string {
+    return `${unitName}\u001F${variableId}`;
   }
 
   applyFilter(): void {

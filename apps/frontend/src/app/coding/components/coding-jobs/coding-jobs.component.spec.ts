@@ -68,11 +68,20 @@ describe('CodingJobsComponent', () => {
   beforeEach(async () => {
     codingJobBackendServiceMock = {
       getCodingIncompleteVariables: jest.fn().mockReturnValue(of([])),
-      getCodingJobs: jest.fn().mockReturnValue(of({ data: mockCodingJobs })),
+      getCodingJobs: jest.fn().mockReturnValue(
+        of({
+          data: mockCodingJobs,
+          total: mockCodingJobs.length,
+          page: 1,
+          limit: 50
+        })
+      ),
       getBulkCodingProgress: jest.fn().mockReturnValue(of({})),
       deleteCodingJob: jest.fn().mockReturnValue(of({ success: true })),
       startCodingJob: jest.fn().mockReturnValue(of({ items: [], total: 0 })),
-      prepareCodingJobReview: jest.fn().mockReturnValue(of({ total: 0, firstReplayUrl: '' })),
+      prepareCodingJobReview: jest
+        .fn()
+        .mockReturnValue(of({ total: 0, firstReplayUrl: '' })),
       restartCodingJobWithOpenUnits: jest.fn().mockReturnValue(of({})),
       transferCodingCases: jest.fn().mockReturnValue(
         of({
@@ -199,8 +208,7 @@ describe('CodingJobsComponent', () => {
               '{{count}} offene Aufgabe, keine prüfpflichtigen Kodierungsprobleme',
             'open-no-review-issues-plural':
               '{{count}} offene Aufgaben, keine prüfpflichtigen Kodierungsprobleme',
-            'code-assignment-uncertain':
-              '{{count}}x Code-Vergabe unsicher',
+            'code-assignment-uncertain': '{{count}}x Code-Vergabe unsicher',
             'new-code-needed': '{{count}}x neuer Code benötigt'
           }
         }
@@ -219,10 +227,19 @@ describe('CodingJobsComponent', () => {
   });
 
   it('should load coding jobs and coders on init', () => {
-    expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenCalledWith(1);
+    expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenCalledWith(
+      1,
+      1,
+      50,
+      expect.objectContaining({
+        scope: 'all',
+        includeIssueSummary: true
+      })
+    );
     expect(coderServiceMock.getCoders).toHaveBeenCalled();
     expect(component.dataSource.data.length).toBe(2);
     expect(component.allCoders.length).toBe(2);
+    expect(component.jobsTotal).toBe(2);
   });
 
   it('should not emit jobsChanged for a plain reload', fakeAsync(() => {
@@ -260,17 +277,23 @@ describe('CodingJobsComponent', () => {
 
   it('does not flag open progress entries as coding issues', async () => {
     await fixture.whenStable();
-    (
-      codingJobBackendServiceMock.getBulkCodingProgress as jest.Mock
-    ).mockReturnValue(
+    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(
       of({
-        1: {
-          'person::booklet::UNIT::VAR:open': {
-            id: -1,
-            code: '',
-            label: 'OPEN'
+        data: [
+          {
+            ...mockCodingJobs[0],
+            hasIssues: false,
+            issueSummary: {
+              total: 0,
+              open: 1,
+              codeAssignmentUncertain: 0,
+              newCodeNeeded: 0
+            }
           }
-        }
+        ],
+        total: 1,
+        page: 1,
+        limit: 50
       })
     );
 
@@ -294,19 +317,23 @@ describe('CodingJobsComponent', () => {
 
   it('builds specific coding issue summaries for review issues', async () => {
     await fixture.whenStable();
-    (
-      codingJobBackendServiceMock.getBulkCodingProgress as jest.Mock
-    ).mockReturnValue(
+    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(
       of({
-        1: {
-          uncertain: {
-            id: 4,
-            codingIssueOption: -1
-          },
-          newCode: {
-            id: -2
+        data: [
+          {
+            ...mockCodingJobs[0],
+            hasIssues: true,
+            issueSummary: {
+              total: 2,
+              open: 0,
+              codeAssignmentUncertain: 1,
+              newCodeNeeded: 1
+            }
           }
-        }
+        ],
+        total: 1,
+        page: 1,
+        limit: 50
       })
     );
 
@@ -328,46 +355,54 @@ describe('CodingJobsComponent', () => {
     );
   });
 
-  it('should filter jobs by status, coder, and job name', () => {
-    component.originalData = [...(mockCodingJobs as CodingJob[])];
+  it('should reload jobs with server-side status, coder, and job name filters', fakeAsync(() => {
+    const getCodingJobs =
+      codingJobBackendServiceMock.getCodingJobs as jest.Mock;
 
-    // Filter by Coder
     component.selectedCoderId = 1;
     component.onCoderFilterChange();
-    expect(component.dataSource.data.length).toBe(1);
-    expect(component.dataSource.data[0].id).toBe(1);
+    expect(getCodingJobs).toHaveBeenLastCalledWith(
+      1,
+      1,
+      50,
+      expect.objectContaining({ coderId: 1 })
+    );
 
-    // Reset Coder, Filter by Job Name
     component.selectedCoderId = null;
     component.selectedJobName = 'Job 2';
     component.onJobNameFilterChange();
-    expect(component.dataSource.data.length).toBe(1);
-    expect(component.dataSource.data[0].id).toBe(2);
+    tick(300);
+    expect(getCodingJobs).toHaveBeenLastCalledWith(
+      1,
+      1,
+      50,
+      expect.objectContaining({ jobName: 'Job 2' })
+    );
 
-    // Reset Name, Filter by Status
     component.selectedJobName = null;
     component.selectedStatus = 'active';
     component.onStatusFilterChange();
-    expect(component.dataSource.data.length).toBe(1);
-    expect(component.dataSource.data[0].id).toBe(1);
-  });
+    expect(getCodingJobs).toHaveBeenLastCalledWith(
+      1,
+      1,
+      50,
+      expect.objectContaining({ status: 'active' })
+    );
+  }));
 
-  it('should handle fallback when loading coding jobs fails initially', fakeAsync(() => {
-    // Initial fail
+  it('should handle loading coding jobs failure', fakeAsync(() => {
     (
       codingJobBackendServiceMock.getCodingJobs as jest.Mock
     ).mockReturnValueOnce(throwError(() => new Error('Error')));
 
-    // Fallback success
-    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(
-      of({ data: mockCodingJobs })
-    );
-
     component.loadCodingJobs();
     tick();
 
-    expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenCalledTimes(2); // Initial try + retry
-    expect(component.dataSource.data.length).toBe(2);
+    expect(matSnackBarMock.open).toHaveBeenCalledWith(
+      'Fehler beim Laden der Kodierjobs',
+      'Schließen',
+      expect.objectContaining({})
+    );
   }));
 
   it('should view coding results', () => {
@@ -509,10 +544,12 @@ describe('CodingJobsComponent', () => {
     expect(component.getPrimaryJobAction(mockCodingJobs[0] as CodingJob)).toBe(
       'start'
     );
-    expect(component.getPrimaryJobAction({
-      ...mockCodingJobs[1],
-      assignedCoders: [1]
-    } as CodingJob)).toBe('results');
+    expect(
+      component.getPrimaryJobAction({
+        ...mockCodingJobs[1],
+        assignedCoders: [1]
+      } as CodingJob)
+    ).toBe('results');
   });
 
   it('does not start coding jobs that are assigned to another coder', () => {
@@ -701,7 +738,9 @@ describe('CodingJobsComponent', () => {
       ...mockCodingJobs[0],
       assignedCoders: [2]
     } as CodingJob;
-    (codingJobBackendServiceMock.prepareCodingJobReview as jest.Mock).mockReturnValue(
+    (
+      codingJobBackendServiceMock.prepareCodingJobReview as jest.Mock
+    ).mockReturnValue(
       of({
         total: 1,
         firstReplayUrl: 'http://localhost:3333/#/replay/person/unit/0/var'
@@ -712,10 +751,9 @@ describe('CodingJobsComponent', () => {
     component.openCodingJobReview(job);
 
     expect(codingJobBackendServiceMock.startCodingJob).not.toHaveBeenCalled();
-    expect(codingJobBackendServiceMock.prepareCodingJobReview).toHaveBeenCalledWith(
-      1,
-      job.id
-    );
+    expect(
+      codingJobBackendServiceMock.prepareCodingJobReview
+    ).toHaveBeenCalledWith(1, job.id);
     expect(window.open).toHaveBeenCalledWith(
       'http://localhost/#/replay/person/unit/0/var?auth=token&mode=coding-review&codingJobId=1&workspaceId=1',
       '_blank'

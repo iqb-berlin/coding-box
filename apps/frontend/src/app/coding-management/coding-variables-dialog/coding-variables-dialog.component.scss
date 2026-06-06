@@ -112,7 +112,7 @@
 // Table styles
 .variables-table {
   width: 100%;
-  min-width: 600px;
+  min-width: 900px;
 
   th, td {
     padding: 14px 18px;
@@ -155,6 +155,17 @@
       }
     }
   }
+}
+
+.replay-anchor-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 260px;
+}
+
+.replay-anchor-field {
+  width: 180px;
 }
 
 // Unit link styling

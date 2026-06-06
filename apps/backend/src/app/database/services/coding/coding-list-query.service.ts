@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -21,6 +21,7 @@ import {
   INTENDED_INCOMPLETE_STATUS,
   MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
 } from '../../utils/manual-coding-candidate.util';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 
 const PAGE_MAP_LOOKUP_BATCH_SIZE = 8;
 
@@ -42,7 +43,8 @@ export class CodingListQueryService {
     private readonly fileCacheService: CodingFileCacheService,
     private readonly workspaceFilesService: WorkspaceFilesService,
     private readonly workspaceCoreService: WorkspaceCoreService,
-    private readonly workspaceExclusionService: WorkspaceExclusionService
+    private readonly workspaceExclusionService: WorkspaceExclusionService,
+    @Optional() private readonly replayAnchorService?: CodingReplayAnchorService
   ) { }
 
   async getValidVariablePairKeys(workspaceId: number): Promise<string[]> {
@@ -166,6 +168,10 @@ export class CodingListQueryService {
         unitKeys,
         workspace_id
       );
+      const variableAnchorMap = await this.loadVariableAnchorMaps(
+        unitKeys,
+        workspace_id
+      );
 
       const result = filtered.map(response => {
         const unit = response.unit;
@@ -181,7 +187,8 @@ export class CodingListQueryService {
         const variableId = response.variableid || '';
         const unitVarPages = variablePageMap.get(unitKey);
         const variablePage = unitVarPages?.get(variableId) || '0';
-        const variableAnchor = variableId;
+        const unitVarAnchors = variableAnchorMap.get(unitKey);
+        const variableAnchor = unitVarAnchors?.get(variableId) || variableId;
 
         const url = `${server}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
 
@@ -245,6 +252,39 @@ export class CodingListQueryService {
     }
 
     return variablePageMap;
+  }
+
+  private async loadVariableAnchorMaps(
+    unitKeys: string[],
+    workspaceId: number
+  ): Promise<Map<string, Map<string, string>>> {
+    const variableAnchorMap = new Map<string, Map<string, string>>();
+
+    if (!this.replayAnchorService) {
+      unitKeys.forEach(unitKey => variableAnchorMap.set(unitKey, new Map()));
+      return variableAnchorMap;
+    }
+
+    for (let start = 0; start < unitKeys.length; start += PAGE_MAP_LOOKUP_BATCH_SIZE) {
+      const batch = unitKeys.slice(start, start + PAGE_MAP_LOOKUP_BATCH_SIZE);
+      await Promise.all(
+        batch.map(async unitKey => {
+          try {
+            variableAnchorMap.set(
+              unitKey,
+              await this.replayAnchorService.getVariableAnchorMap(unitKey, workspaceId)
+            );
+          } catch (error) {
+            this.logger.warn(
+              `Error loading variable anchor map for unit ${unitKey}: ${error.message}`
+            );
+            variableAnchorMap.set(unitKey, new Map<string, string>());
+          }
+        })
+      );
+    }
+
+    return variableAnchorMap;
   }
 
   /**

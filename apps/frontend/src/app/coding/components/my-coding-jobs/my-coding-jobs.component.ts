@@ -2,19 +2,19 @@ import {
   Component,
   OnInit,
   OnDestroy,
-  ViewChild,
-  AfterViewInit,
   inject,
   ChangeDetectorRef,
   Input,
-  OnChanges
+  OnChanges,
+  ViewChild
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { MatSort, MatSortModule } from '@angular/material/sort';
 import {
   MatPaginator,
   MatPaginatorModule,
-  MatPaginatorIntl
+  MatPaginatorIntl,
+  PageEvent
 } from '@angular/material/paginator';
 import {
   MatCell,
@@ -35,6 +35,7 @@ import {
   MatOption,
   MatSelect
 } from '@angular/material/select';
+import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SelectionModel } from '@angular/cdk/collections';
@@ -42,7 +43,9 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIconButton } from '@angular/material/button';
 import { DatePipe, NgClass, NgFor } from '@angular/common';
-import { forkJoin, Subscription } from 'rxjs';
+import {
+  debounceTime, distinctUntilChanged, forkJoin, Subject, Subscription
+} from 'rxjs';
 import { map } from 'rxjs/operators';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { AppService } from '../../../core/services/app.service';
@@ -58,6 +61,7 @@ import { normalizeReplayUrlToCurrentOrigin } from '../../utils/replay-url.util';
   standalone: true,
   imports: [
     TranslateModule,
+    FormsModule,
     DatePipe,
     NgClass,
     NgFor,
@@ -73,19 +77,19 @@ import { normalizeReplayUrlToCurrentOrigin } from '../../utils/replay-url.util';
     MatHeaderRowDef,
     MatRowDef,
     MatColumnDef,
-    MatSortModule,
     MatPaginatorModule,
     MatIconButton,
     MatTooltipModule,
     MatFormField,
     MatLabel,
+    MatInputModule,
     MatSelect,
     MatOption
   ],
   providers: [{ provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }]
 })
 export class MyCodingJobsComponent
-implements OnInit, AfterViewInit, OnDestroy, OnChanges {
+implements OnInit, OnDestroy, OnChanges {
   appService = inject(AppService);
   codingJobBackendService = inject(CodingJobBackendService);
   private snackBar = inject(MatSnackBar);
@@ -120,66 +124,48 @@ implements OnInit, AfterViewInit, OnDestroy, OnChanges {
   selectedJobName: string | null = null;
   selectedWorkspaceIds: number[] = [];
   originalData: CodingJob[] = [];
-  availableJobNames: string[] = [];
   currentWorkspaces: WorkspaceFullDto[] = [];
+  jobsTotal = 0;
+  pageSize = 50;
+  pageIndex = 0;
+  serverPagingEnabled = false;
   private authWorkspaces: WorkspaceFullDto[] = [];
   private loadJobsSubscription?: Subscription;
+  private jobNameFilterSubscription?: Subscription;
+  private workspaceToggleInProgress = false;
+  private workspaceSelectionInitialized = false;
+  private paginator?: MatPaginator;
+  private readonly jobNameFilterChanges = new Subject<string>();
+  private readonly windowFocusReloadThrottleMs = 10000;
+  private lastWindowFocusReloadAt = 0;
 
   @Input() workspaceId: number | null = null;
 
-  @ViewChild(MatSort) set sort(sort: MatSort) {
-    this.dataSource.sort = sort;
-  }
-
-  @ViewChild(MatPaginator) set paginator(paginator: MatPaginator) {
-    this.dataSource.paginator = paginator;
+  @ViewChild(MatPaginator) set paginatorRef(
+    paginator: MatPaginator | undefined
+  ) {
+    this.paginator = paginator;
+    this.configureClientPaginator();
   }
 
   private handleWindowFocus = () => {
-    if (this.isAuthorized) {
-      this.appService.authData$
-        .subscribe(authData => {
-          if (authData.workspaces && authData.workspaces.length > 0) {
-            this.authWorkspaces = authData.workspaces;
-            this.loadMyCodingJobs(authData.workspaces);
-          }
-        })
-        .unsubscribe();
+    if (!this.isAuthorized || this.isLoading) {
+      return;
+    }
+    const now = Date.now();
+    if (now - this.lastWindowFocusReloadAt < this.windowFocusReloadThrottleMs) {
+      return;
+    }
+    this.lastWindowFocusReloadAt = now;
+    if (this.authWorkspaces.length > 0) {
+      this.loadMyCodingJobs(this.authWorkspaces);
     }
   };
 
   ngOnInit(): void {
-    this.dataSource.sortingDataAccessor = (
-      item: CodingJob,
-      property: string
-    ) => {
-      switch (property) {
-        case 'variables':
-          return item.assignedVariables?.length || item.variables?.length || 0;
-        case 'variableBundles':
-          return (
-            item.assignedVariableBundles?.length ||
-            item.variableBundles?.length ||
-            0
-          );
-        case 'progress':
-          return item.progress || 0;
-        case 'created_at':
-          return item.created_at ? new Date(item.created_at).getTime() : 0;
-        case 'updated_at':
-          return item.updated_at ? new Date(item.updated_at).getTime() : 0;
-        case 'status':
-          return item.status;
-        case 'name':
-          return item.name.toLowerCase();
-        case 'description':
-          return (item.description || '').toLowerCase();
-        default:
-          return (item as unknown as Record<string, unknown>)[property] as
-            | string
-            | number;
-      }
-    };
+    this.jobNameFilterSubscription = this.jobNameFilterChanges
+      .pipe(debounceTime(300), distinctUntilChanged())
+      .subscribe(() => this.reloadFirstPage());
 
     this.appService.authData$.subscribe(authData => {
       this.currentUserId = authData.userId;
@@ -194,17 +180,14 @@ implements OnInit, AfterViewInit, OnDestroy, OnChanges {
 
   ngOnChanges(): void {
     if (this.authWorkspaces.length > 0) {
-      this.loadMyCodingJobs(this.authWorkspaces);
+      this.reloadFirstPage();
     }
-  }
-
-  ngAfterViewInit(): void {
-    // ViewChildren are handled via setters
   }
 
   ngOnDestroy(): void {
     window.removeEventListener('focus', this.handleWindowFocus);
     this.loadJobsSubscription?.unsubscribe();
+    this.jobNameFilterSubscription?.unsubscribe();
   }
 
   loadMyCodingJobs(workspaces: [] | WorkspaceFullDto[]): void {
@@ -214,28 +197,52 @@ implements OnInit, AfterViewInit, OnDestroy, OnChanges {
     this.loadJobsSubscription?.unsubscribe();
 
     if (targetWorkspaces.length > 0) {
-      const workspaceJobsObservables = targetWorkspaces.map(workspace => this.codingJobBackendService
-        .getCodingJobs(workspace.id, undefined, undefined, {
-          assignedTo: 'me'
-        })
-        .pipe(map(response => response.data))
+      if (this.shouldResetWorkspaceFilter()) {
+        this.selectedWorkspaceIds = this.currentWorkspaces.map(ws => ws.id);
+        this.workspaceSelectionInitialized = true;
+      }
+      const selectedWorkspaces = this.getSelectedWorkspaces();
+      if (selectedWorkspaces.length === 0) {
+        this.clearLoadedJobData();
+        this.isLoading = false;
+        return;
+      }
+
+      this.serverPagingEnabled = selectedWorkspaces.length === 1;
+      this.configureClientPaginator();
+      const workspaceJobsObservables = selectedWorkspaces.map(workspace => this.codingJobBackendService
+        .getCodingJobs(
+          workspace.id,
+          this.serverPagingEnabled ? this.pageIndex + 1 : undefined,
+          this.serverPagingEnabled ? this.pageSize : undefined,
+          {
+            assignedTo: 'me',
+            status: this.selectedStatus || undefined,
+            excludeStatus: this.selectedStatus ? undefined : 'review',
+            jobName: this.normalizeJobNameFilter()
+          }
+        )
+        .pipe(map(response => ({
+          data: response.data,
+          total: response.total ?? response.data.length
+        })))
       );
 
       this.loadJobsSubscription = forkJoin(workspaceJobsObservables).subscribe({
-        next: allJobsArrays => {
-          const assignedJobs = allJobsArrays.flat();
+        next: workspaceJobResponses => {
+          const assignedJobs = workspaceJobResponses.flatMap(
+            response => response.data
+          );
           this.originalData = [...assignedJobs];
           this.dataSource.data = assignedJobs;
-          if (this.shouldResetWorkspaceFilter()) {
-            this.selectedWorkspaceIds = this.currentWorkspaces.map(
-              ws => ws.id
-            );
-          }
-          this.updateAvailableJobNames();
-          this.applyAllFilters();
+          this.jobsTotal = workspaceJobResponses.reduce(
+            (sum, response) => sum + response.total,
+            0
+          );
           this.calculateTotalProgress(assignedJobs);
-          this.cdr.detectChanges();
           this.isLoading = false;
+          this.cdr.detectChanges();
+          this.configureClientPaginator();
         },
         error: () => {
           const errorMessage = this.translateService.instant(
@@ -256,16 +263,29 @@ implements OnInit, AfterViewInit, OnDestroy, OnChanges {
     }
   }
 
-  private clearLoadedJobs(): void {
+  private clearLoadedJobData(): void {
     this.dataSource.data = [];
     this.originalData = [];
-    this.selectedWorkspaceIds = [];
-    this.availableJobNames = [];
+    this.jobsTotal = 0;
+    this.serverPagingEnabled = false;
     this.totalProgress = 0;
     this.totalCodedUnits = 0;
     this.totalUnits = 0;
     this.incompleteJobs = 0;
     this.completedJobs = 0;
+    this.configureClientPaginator();
+  }
+
+  private clearLoadedJobs(): void {
+    this.clearLoadedJobData();
+    this.selectedWorkspaceIds = [];
+    this.workspaceSelectionInitialized = false;
+  }
+
+  private configureClientPaginator(): void {
+    this.dataSource.paginator = !this.serverPagingEnabled ?
+      this.paginator ?? null :
+      null;
   }
 
   private getTargetWorkspaces(
@@ -278,27 +298,46 @@ implements OnInit, AfterViewInit, OnDestroy, OnChanges {
     return workspaces.filter(workspace => workspace.id === this.workspaceId);
   }
 
+  private getSelectedWorkspaces(): WorkspaceFullDto[] {
+    const selectedWorkspaceIds = this.selectedWorkspaceIds.filter(
+      id => id !== -1
+    );
+    return this.currentWorkspaces.filter(workspace => selectedWorkspaceIds.includes(workspace.id)
+    );
+  }
+
+  private normalizeJobNameFilter(): string | undefined {
+    const normalized = this.selectedJobName?.trim();
+    return normalized || undefined;
+  }
+
   private shouldResetWorkspaceFilter(): boolean {
     const currentWorkspaceIds = this.currentWorkspaces.map(
       workspace => workspace.id
     );
+    const selectedWorkspaceIds = this.selectedWorkspaceIds.filter(
+      workspaceId => workspaceId !== -1
+    );
     return (
-      this.selectedWorkspaceIds.length === 0 ||
-      this.selectedWorkspaceIds
-        .filter(workspaceId => workspaceId !== -1)
-        .some(workspaceId => !currentWorkspaceIds.includes(workspaceId))
+      !this.workspaceSelectionInitialized ||
+      selectedWorkspaceIds.some(
+        workspaceId => !currentWorkspaceIds.includes(workspaceId)
+      )
     );
   }
 
   onStatusFilterChange(): void {
-    this.applyAllFilters();
+    this.reloadFirstPage();
   }
 
   onJobNameFilterChange(): void {
-    this.applyAllFilters();
+    this.jobNameFilterChanges.next(this.selectedJobName ?? '');
   }
 
   onWorkspaceFilterChange(): void {
+    if (this.workspaceToggleInProgress) {
+      return;
+    }
     if (this.isAllWorkspacesSelected()) {
       if (!this.selectedWorkspaceIds.includes(-1)) {
         this.selectedWorkspaceIds = [...this.selectedWorkspaceIds, -1];
@@ -308,8 +347,7 @@ implements OnInit, AfterViewInit, OnDestroy, OnChanges {
         id => id !== -1
       );
     }
-    this.updateAvailableJobNames();
-    this.applyAllFilters();
+    this.reloadFirstPage();
   }
 
   isAllWorkspacesSelected(): boolean {
@@ -319,6 +357,7 @@ implements OnInit, AfterViewInit, OnDestroy, OnChanges {
   }
 
   toggleAllWorkspaces(): void {
+    this.workspaceToggleInProgress = true;
     if (this.isAllWorkspacesSelected()) {
       this.selectedWorkspaceIds = [];
     } else {
@@ -327,57 +366,25 @@ implements OnInit, AfterViewInit, OnDestroy, OnChanges {
         -1
       ];
     }
-    this.updateAvailableJobNames();
-    this.applyAllFilters();
+    this.reloadFirstPage();
+    queueMicrotask(() => {
+      this.workspaceToggleInProgress = false;
+    });
   }
 
-  private updateAvailableJobNames(): void {
-    const workspaceIds = this.selectedWorkspaceIds.filter(id => id !== -1);
-
-    if (workspaceIds.length === 0) {
-      this.availableJobNames = [];
-    } else {
-      const relevantJobs = this.originalData.filter(job => workspaceIds.includes(job.workspace_id)
-      );
-      this.availableJobNames = [
-        ...new Set(relevantJobs.map(job => job.name))
-      ].sort();
-    }
-
-    // If selected job name is no longer available, reset it
-    if (
-      this.selectedJobName &&
-      !this.availableJobNames.includes(this.selectedJobName)
-    ) {
-      this.selectedJobName = null;
+  onPageChange(event: PageEvent): void {
+    this.pageIndex = event.pageIndex;
+    this.pageSize = event.pageSize;
+    this.selection.clear();
+    if (this.serverPagingEnabled) {
+      this.loadMyCodingJobs(this.authWorkspaces);
     }
   }
 
-  private applyAllFilters(): void {
-    let filteredData = this.originalData || [];
-    const workspaceIds = this.selectedWorkspaceIds.filter(id => id !== -1);
-    if (workspaceIds.length === 0) {
-      filteredData = [];
-    } else {
-      filteredData = filteredData.filter(job => workspaceIds.includes(job.workspace_id)
-      );
-    }
-
-    if (this.selectedStatus !== null && this.selectedStatus !== 'all') {
-      filteredData = filteredData.filter(
-        job => job.status === this.selectedStatus
-      );
-    } else if (this.selectedStatus !== 'all') {
-      filteredData = filteredData.filter(job => job.status !== 'review');
-    }
-
-    if (this.selectedJobName !== null && this.selectedJobName !== 'all') {
-      filteredData = filteredData.filter(
-        job => job.name === this.selectedJobName
-      );
-    }
-
-    this.dataSource.data = filteredData;
+  private reloadFirstPage(): void {
+    this.pageIndex = 0;
+    this.selection.clear();
+    this.loadMyCodingJobs(this.authWorkspaces);
   }
 
   selectRow(row: CodingJob): void {

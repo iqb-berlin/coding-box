@@ -3,7 +3,8 @@ import {
   HttpException,
   Injectable,
   Logger,
-  NotFoundException
+  NotFoundException,
+  Optional
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,6 +12,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { generateReplayUrl } from '../../../utils/replay-url.util';
 import { CodingListService } from './coding-list.service';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 
 interface ReplayMetadata {
   unitName: string;
@@ -31,7 +33,8 @@ export class CodingReplayService {
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
-    private codingListService: CodingListService
+    private codingListService: CodingListService,
+    @Optional() private readonly replayAnchorService?: CodingReplayAnchorService
   ) { }
 
   async generateReplayUrlForResponse(
@@ -177,6 +180,7 @@ export class CodingReplayService {
     > {
     const uniqueUnitNames = [...new Set(items.map(i => i.unitName))];
     const variablePageMaps = new Map<string, Map<string, string>>();
+    const variableAnchorMaps = new Map<string, Map<string, string>>();
     await Promise.all(
       uniqueUnitNames.map(async unitName => {
         try {
@@ -186,18 +190,29 @@ export class CodingReplayService {
           this.logger.warn(`Failed to get variable page map for unit '${unitName}': ${error.message}`);
           variablePageMaps.set(unitName, new Map());
         }
+        try {
+          const anchorMap = this.replayAnchorService ?
+            await this.replayAnchorService.getVariableAnchorMap(unitName, workspaceId) :
+            new Map<string, string>();
+          variableAnchorMaps.set(unitName, anchorMap);
+        } catch (error) {
+          this.logger.warn(`Failed to get variable anchor map for unit '${unitName}': ${error.message}`);
+          variableAnchorMaps.set(unitName, new Map());
+        }
       })
     );
 
     return items.map(item => {
       try {
         const pageMap = variablePageMaps.get(item.unitName) ?? new Map<string, string>();
+        const anchorMap = variableAnchorMaps.get(item.unitName) ?? new Map<string, string>();
         const variablePage = pageMap.get(item.variableId) || '0';
+        const variableAnchor = anchorMap.get(item.variableId) || item.variableAnchor;
         const replayUrl = this.createReplayUrl(
           {
             unitName: item.unitName,
             variableId: item.variableId,
-            variableAnchor: item.variableAnchor,
+            variableAnchor,
             bookletName: item.bookletName,
             personLogin: item.personLogin,
             personCode: item.personCode,
@@ -285,8 +300,19 @@ export class CodingReplayService {
       metadata.unitName,
       metadata.variableId
     );
+    const variableAnchor = await this.resolveVariableAnchor(
+      workspaceId,
+      metadata.unitName,
+      metadata.variableId,
+      metadata.variableAnchor
+    );
 
-    return this.createReplayUrl(metadata, serverUrl, variablePage, authToken);
+    return this.createReplayUrl(
+      { ...metadata, variableAnchor },
+      serverUrl,
+      variablePage,
+      authToken
+    );
   }
 
   private async resolveVariablePage(
@@ -337,5 +363,30 @@ export class CodingReplayService {
       variableAnchor: metadata.variableAnchor,
       authToken
     });
+  }
+
+  private async resolveVariableAnchor(
+    workspaceId: number,
+    unitName: string,
+    variableId: string,
+    fallbackAnchor: string
+  ): Promise<string> {
+    if (!this.replayAnchorService) {
+      return fallbackAnchor;
+    }
+
+    try {
+      return await this.replayAnchorService.resolveVariableAnchor(
+        workspaceId,
+        unitName,
+        variableId,
+        fallbackAnchor
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to resolve variableAnchor for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}: ${error.message}`
+      );
+      return fallbackAnchor;
+    }
   }
 }

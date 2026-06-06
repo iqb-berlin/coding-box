@@ -4,6 +4,7 @@ import { CodingReplayService } from './coding-replay.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CodingListService } from './coding-list.service';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 import * as replayUrlUtil from '../../../utils/replay-url.util';
 
 jest.mock('../../../utils/replay-url.util');
@@ -30,6 +31,11 @@ describe('CodingReplayService', () => {
     getVariablePageMap: jest.fn()
   };
 
+  const mockReplayAnchorService = {
+    getVariableAnchorMap: jest.fn(),
+    resolveVariableAnchor: jest.fn()
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -45,6 +51,10 @@ describe('CodingReplayService', () => {
         {
           provide: CodingListService,
           useValue: mockCodingListService
+        },
+        {
+          provide: CodingReplayAnchorService,
+          useValue: mockReplayAnchorService
         }
       ]
     }).compile();
@@ -53,6 +63,10 @@ describe('CodingReplayService', () => {
 
     jest.clearAllMocks();
     mockCodingJobUnitQueryBuilder.getOne.mockResolvedValue(null);
+    mockReplayAnchorService.getVariableAnchorMap.mockResolvedValue(new Map());
+    mockReplayAnchorService.resolveVariableAnchor.mockImplementation(
+      async (_workspaceId, _unitName, _variableId, fallbackAnchor) => fallbackAnchor
+    );
   });
 
   it('should be defined', () => {
@@ -615,6 +629,43 @@ describe('CodingReplayService', () => {
       expect(mockCodingListService.getVariablePageMap).toHaveBeenCalledWith('UNIT', 7);
       expect(result[0].replayUrl).toBe(
         'http://example.com/#/replay/login@code@group@BOOKLET/UNIT/1/VAR_WITH_OVERRIDE'
+      );
+    });
+
+    it('should use replay anchor overrides for coding job replay URLs', async () => {
+      const items = [
+        {
+          responseId: 1,
+          unitName: 'UNIT',
+          unitAlias: null,
+          variableId: 'VAR',
+          variableAnchor: 'VAR',
+          bookletName: 'BOOKLET',
+          personLogin: 'login',
+          personCode: 'code',
+          personGroup: 'group'
+        }
+      ];
+
+      mockCodingListService.getVariablePageMap.mockResolvedValue(new Map([
+        ['VAR', '0']
+      ]));
+      mockReplayAnchorService.getVariableAnchorMap.mockResolvedValue(new Map([
+        ['VAR', 'TEXT_ANCHOR']
+      ]));
+      (replayUrlUtil.generateReplayUrl as jest.Mock).mockImplementation(params => (
+        `${params.serverUrl}/#/replay/${params.loginName}@${params.loginCode}@${params.loginGroup}@${params.bookletId}/${params.unitId}/${params.variablePage}/${params.variableAnchor}?auth=${params.authToken}`
+      ));
+
+      const result = await service.generateReplayUrlsForItemsBulk(
+        7,
+        items,
+        'http://example.com'
+      );
+
+      expect(mockReplayAnchorService.getVariableAnchorMap).toHaveBeenCalledWith('UNIT', 7);
+      expect(result[0].replayUrl).toBe(
+        'http://example.com/#/replay/login@code@group@BOOKLET/UNIT/0/TEXT_ANCHOR'
       );
     });
   });

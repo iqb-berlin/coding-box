@@ -45,7 +45,12 @@ describe('CodingVariablesDialogComponent', () => {
   ];
 
   const fileBackendServiceMock = {
-    getUnitVariables: jest.fn(() => of(unitVariables))
+    getUnitVariables: jest.fn(() => of(unitVariables)),
+    getReplayAnchorOverrides: jest.fn(() => of([
+      { unitName: 'Unit A', variableId: 'INTERNAL_2', replayAnchor: 'TEXT_ANCHOR' }
+    ])),
+    saveReplayAnchorOverride: jest.fn(),
+    deleteReplayAnchorOverride: jest.fn()
   };
 
   const fileServiceMock = {
@@ -115,6 +120,13 @@ describe('CodingVariablesDialogComponent', () => {
 
     expect(variableCell.querySelector('.variable-alias')?.textContent?.trim()).toBe('Alias_1');
     expect(variableCell.querySelector('.variable-id')?.textContent?.trim()).toBe('ID: INTERNAL_1');
+  });
+
+  it('should attach saved replay anchors to variables', () => {
+    const variable = component.dataSource.data.find(item => item.variableId === 'INTERNAL_2');
+
+    expect(variable?.replayAnchor).toBe('TEXT_ANCHOR');
+    expect(variable?.savedReplayAnchor).toBe('TEXT_ANCHOR');
   });
 
   it('should filter derived variables', () => {

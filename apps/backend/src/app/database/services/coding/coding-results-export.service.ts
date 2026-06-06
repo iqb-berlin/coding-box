@@ -18,6 +18,7 @@ import {
 } from '../../../utils/coding-utils';
 import { generateUniqueWorksheetName } from '../../../utils/excel-utils';
 import { CodingListService } from './coding-list.service';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
@@ -41,6 +42,7 @@ export class CodingResultsExportService {
   private readonly logger = new Logger(CodingResultsExportService.name);
 
   private variablePageMapsCache = new Map<string, Map<string, string>>();
+  private variableAnchorMapsCache = new Map<string, Map<string, string>>();
   private currentWorkspaceId: number | null = null;
 
   constructor(
@@ -56,7 +58,9 @@ export class CodingResultsExportService {
     private workspaceCoreService: WorkspaceCoreService,
     private workspaceExclusionService: WorkspaceExclusionService,
     @Optional()
-    private missingsProfilesService?: MissingsProfilesService
+    private missingsProfilesService?: MissingsProfilesService,
+    @Optional()
+    private replayAnchorService?: CodingReplayAnchorService
   ) { }
 
   private readonly manualMissingExportValueCache = new Map<string, ResolvedMissingValue>();
@@ -151,6 +155,7 @@ export class CodingResultsExportService {
 
   clearPageMapsCache(): void {
     this.variablePageMapsCache.clear();
+    this.variableAnchorMapsCache.clear();
     this.currentWorkspaceId = null;
   }
 
@@ -166,6 +171,24 @@ export class CodingResultsExportService {
     }
 
     return this.variablePageMapsCache.get(unitName)?.get(variableId) || '0';
+  }
+
+  async getVariableAnchor(unitName: string, variableId: string, workspaceId: number): Promise<string> {
+    if (!this.replayAnchorService) {
+      return variableId;
+    }
+
+    if (this.currentWorkspaceId !== workspaceId) {
+      this.clearPageMapsCache();
+      this.currentWorkspaceId = workspaceId;
+    }
+
+    if (!this.variableAnchorMapsCache.has(unitName)) {
+      const anchorMap = await this.replayAnchorService.getVariableAnchorMap(unitName, workspaceId);
+      this.variableAnchorMapsCache.set(unitName, anchorMap);
+    }
+
+    return this.variableAnchorMapsCache.get(unitName)?.get(variableId) || variableId;
   }
 
   async exportCodingResultsByVersionAsCsv(
@@ -241,7 +264,10 @@ export class CodingResultsExportService {
     workspaceId: number,
     authToken: string
   ): Promise<string> {
-    const variablePage = await this.getVariablePage(unitName, variableId, workspaceId);
+    const [variablePage, variableAnchor] = await Promise.all([
+      this.getVariablePage(unitName, variableId, workspaceId),
+      this.getVariableAnchor(unitName, variableId, workspaceId)
+    ]);
     return generateReplayUrlFromRequest(req, {
       loginName,
       loginCode,
@@ -249,7 +275,7 @@ export class CodingResultsExportService {
       bookletId,
       unitId: unitName,
       variablePage,
-      variableAnchor: variableId,
+      variableAnchor,
       authToken
     });
   }
