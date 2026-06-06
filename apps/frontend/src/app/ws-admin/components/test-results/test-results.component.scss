@@ -242,6 +242,8 @@
     }
 
     .status-chip {
+      appearance: none;
+      cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 10px;
@@ -249,6 +251,29 @@
       border-radius: 999px;
       background-color: #f9fafc;
       border: 1px solid rgba(0, 0, 0, 0.06);
+      font: inherit;
+      transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+
+      &:hover {
+        background-color: #eef5ff;
+        border-color: rgba(25, 118, 210, 0.22);
+        box-shadow: 0 2px 6px rgba(25, 118, 210, 0.12);
+      }
+
+      &:focus-visible {
+        outline: 2px solid rgba(25, 118, 210, 0.45);
+        outline-offset: 2px;
+      }
+
+      &.is-active {
+        background-color: #eef5ff;
+        border-color: rgba(25, 118, 210, 0.55);
+        box-shadow: 0 0 0 1px rgba(25, 118, 210, 0.12);
+
+        .status {
+          color: #0d47a1;
+        }
+      }
 
       .status {
         font-size: 12px;
@@ -265,6 +290,12 @@
         border-radius: 999px;
       }
 
+      .percent {
+        color: rgba(0, 0, 0, 0.56);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
       &.skeleton-chip {
         width: 100px;
         height: 32px;
@@ -274,8 +305,21 @@
     }
   }
 
+  .overview-scope-note {
+    color: rgba(0, 0, 0, 0.56);
+    font-size: 12px;
+    line-height: 1.4;
+    margin: 14px 0 0;
+  }
+
   .overview-distributions {
     margin-top: 18px;
+
+    button {
+      mat-icon {
+        margin-right: 6px;
+      }
+    }
 
     .dist-grid {
       display: grid;
@@ -1155,29 +1199,15 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
-  margin: 8px 0;
+  margin: 8px 0 12px;
   overflow: visible;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-
-  .menu-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-
-    .menu-button-label {
-      display: inline-block;
-      line-height: 44px;
-    }
-
-    .menu-button-chevron {
-      margin-right: -6px;
-      opacity: 0.9;
-    }
-  }
+  align-items: stretch;
 
   button[mat-raised-button],
+  button[mat-stroked-button],
   a[mat-raised-button] {
     width: 100%;
     min-width: 0;
@@ -1193,6 +1223,22 @@
     letter-spacing: 0;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
     transition: all 0.2s ease;
+
+    &.action-button {
+      align-items: center;
+      display: inline-flex;
+      gap: 8px;
+      justify-content: center;
+
+      span {
+        overflow-wrap: normal;
+        word-break: normal;
+      }
+    }
+
+    &.maintenance-action {
+      box-shadow: none;
+    }
 
     .rotating-icon {
       animation: rotate 2s linear infinite;
@@ -1234,7 +1280,7 @@
 
     mat-icon {
       flex: 0 0 auto;
-      margin-right: 10px;
+      margin-right: 0;
       font-size: 20px;
       height: 20px;
       width: 20px;
