@@ -61,7 +61,8 @@ describe('ExportToastComponent', () => {
           'by-variable-compact': 'Nach Variable, kompakt',
           detailed: 'Detailliertes Kodierprotokoll',
           'coding-times': 'Kodierzeiten-Bericht',
-          'results-by-version': 'Finale Ergebnisdaten'
+          'results-by-version': 'Finale Ergebnisdaten',
+          'item-matrix': 'Itemmatrix'
         },
         errors: {
           'too-many-worksheets-title': 'Export zu groß',
@@ -93,6 +94,7 @@ describe('ExportToastComponent', () => {
     expect(component.getExportTypeLabel('aggregated')).toBe('Aggregierte Ansicht');
     expect(component.getExportTypeLabel('detailed')).toBe('Detailliertes Kodierprotokoll');
     expect(component.getExportTypeLabel('results-by-version')).toBe('Finale Ergebnisdaten');
+    expect(component.getExportTypeLabel('item-matrix')).toBe('Itemmatrix');
     expect(component.getExportTypeLabel('by-variable-compact')).toBe('Nach Variable, kompakt');
     expect(component.getExportTypeLabel('custom')).toBe('custom');
     expect(component.getErrorTitle(jobs[3])).toBe('Export fehlgeschlagen');

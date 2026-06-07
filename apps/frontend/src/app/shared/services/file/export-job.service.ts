@@ -38,10 +38,12 @@ export interface ExportJobConfig {
   | 'by-variable-compact'
   | 'detailed'
   | 'coding-times'
-  | 'results-by-version';
+  | 'results-by-version'
+  | 'item-matrix';
   userId?: number;
   version?: 'v1' | 'v2' | 'v3';
   format?: 'csv' | 'excel';
+  matrixValue?: 'code' | 'score';
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;
