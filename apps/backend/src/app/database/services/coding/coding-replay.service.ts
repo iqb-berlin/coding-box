@@ -132,10 +132,9 @@ export class CodingReplayService {
             serverUrl,
             ''
           );
-          const replayUrlWithoutAuth = result.replayUrl.replace('?auth=', '');
           return {
             ...item,
-            replayUrl: replayUrlWithoutAuth
+            replayUrl: result.replayUrl
           };
         } catch (error) {
           this.logger.warn(
@@ -222,10 +221,11 @@ export class CodingReplayService {
             personCode: item.personCode,
             personGroup: item.personGroup
           },
+          workspaceId,
           serverUrl,
           variablePage,
           ''
-        ).replace('?auth=', '');
+        );
         return { ...item, replayUrl };
       } catch (error) {
         this.logger.warn(`Failed to generate replay URL for response ${item.responseId}: ${error.message}`);
@@ -313,6 +313,7 @@ export class CodingReplayService {
 
     return this.createReplayUrl(
       { ...metadata, variableAnchor },
+      workspaceId,
       serverUrl,
       variablePage,
       authToken
@@ -352,6 +353,7 @@ export class CodingReplayService {
 
   private createReplayUrl(
     metadata: ReplayMetadata,
+    workspaceId: number,
     serverUrl: string,
     variablePage: string,
     authToken: string
@@ -365,7 +367,8 @@ export class CodingReplayService {
       unitId: metadata.unitName,
       variablePage,
       variableAnchor: metadata.variableAnchor,
-      authToken
+      authToken,
+      workspaceId
     });
   }
 
