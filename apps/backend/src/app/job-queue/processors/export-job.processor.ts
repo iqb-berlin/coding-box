@@ -62,6 +62,34 @@ export class ExportJobProcessor {
         'GeoGebra file packages require response values because links are written to the value column'
       );
     }
+
+    if (
+      job.data.exportType === 'item-matrix' &&
+      job.data.format !== undefined &&
+      job.data.format !== 'csv' &&
+      job.data.format !== 'excel'
+    ) {
+      throw new Error('item-matrix exports support only "csv" or "excel" format');
+    }
+
+    if (
+      job.data.exportType === 'item-matrix' &&
+      job.data.matrixValue !== undefined &&
+      job.data.matrixValue !== 'code' &&
+      job.data.matrixValue !== 'score'
+    ) {
+      throw new Error('item-matrix exports support only "code" or "score" matrix values');
+    }
+
+    if (
+      job.data.exportType === 'item-matrix' &&
+      job.data.version !== undefined &&
+      job.data.version !== 'v1' &&
+      job.data.version !== 'v2' &&
+      job.data.version !== 'v3'
+    ) {
+      throw new Error('item-matrix exports support only "v1", "v2" or "v3" versions');
+    }
   }
 
   private async checkCancellation(
@@ -122,7 +150,8 @@ export class ExportJobProcessor {
       'test-results',
       'test-logs',
       'results-by-version',
-      'coding-list'
+      'coding-list',
+      'item-matrix'
     ];
     if (!validExportTypes.includes(job.data.exportType)) {
       const errorMessage = `Unknown export type: ${job.data.exportType}`;
@@ -149,6 +178,9 @@ export class ExportJobProcessor {
         (job.data.exportType === 'results-by-version' &&
           job.data.format !== 'excel') ||
         (job.data.exportType === 'coding-list' &&
+          job.data.format !== 'excel' &&
+          job.data.format !== 'json') ||
+        (job.data.exportType === 'item-matrix' &&
           job.data.format !== 'excel');
       let fileExt = isCsv ? 'csv' : 'xlsx';
       if (job.data.exportType === 'coding-list' && job.data.format === 'json') {
@@ -250,6 +282,37 @@ export class ExportJobProcessor {
               onProgress,
               job.data.trainingRequired
             );
+
+            await this.writeStreamToFile(stream, filePath, {
+              prependUtf8Bom: true
+            });
+          }
+          break;
+        }
+
+        case 'item-matrix': {
+          const onProgress = async (percentage: number) => {
+            const jobProgress = 20 + Math.round((percentage / 100) * 70);
+            await job.progress(jobProgress);
+            await checkCancellation();
+          };
+
+          if (job.data.format === 'excel') {
+            buffer = await this.codingExportOrchestratorService.exportItemMatrixAsExcel({
+              workspaceId: job.data.workspaceId,
+              matrixValue: job.data.matrixValue || 'score',
+              version: job.data.version || 'v2',
+              onProgress,
+              checkCancellation
+            });
+          } else {
+            const stream = await this.codingExportOrchestratorService.exportItemMatrixAsCsv({
+              workspaceId: job.data.workspaceId,
+              matrixValue: job.data.matrixValue || 'score',
+              version: job.data.version || 'v2',
+              onProgress,
+              checkCancellation
+            });
 
             await this.writeStreamToFile(stream, filePath, {
               prependUtf8Bom: true

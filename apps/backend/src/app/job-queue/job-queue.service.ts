@@ -149,9 +149,11 @@ export interface ExportJobData {
   | 'test-results'
   | 'test-logs'
   | 'results-by-version'
-  | 'coding-list';
+  | 'coding-list'
+  | 'item-matrix';
   version?: 'v1' | 'v2' | 'v3';
   format?: 'csv' | 'json' | 'excel';
+  matrixValue?: 'code' | 'score';
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;

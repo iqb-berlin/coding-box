@@ -96,6 +96,33 @@ describe('ExportComponent', () => {
     expect(snackOpen).toHaveBeenCalledWith('Datenexport gestartet', 'Schließen', { duration: 3000 });
   });
 
+  it('starts item matrix exports with matrix options', () => {
+    component.selectedFormat = 'item-matrix';
+    component.resultsVersion = 'v2';
+    component.resultsFormat = 'csv';
+    component.matrixValue = 'score';
+    component.includeResponseValues = true;
+    component.includeGeoGebraResponseValues = true;
+    component.includeGeoGebraFiles = true;
+
+    component.onSelectedFormatChange();
+    component.onExport();
+
+    expect(startJob).toHaveBeenCalledWith(5, expect.objectContaining({
+      exportType: 'item-matrix',
+      userId: 2,
+      version: 'v2',
+      format: 'csv',
+      matrixValue: 'score'
+    }));
+    const config = startJob.mock.calls[0][1];
+    expect(config).not.toHaveProperty('includeResponseValues');
+    expect(config).not.toHaveProperty('includeGeoGebraResponseValues');
+    expect(config).not.toHaveProperty('includeGeoGebraFiles');
+    expect(component.includeGeoGebraResponseValues).toBe(false);
+    expect(component.includeGeoGebraFiles).toBe(false);
+  });
+
   it('includes GeoGebra package option only for Excel result exports', () => {
     component.resultsVersion = 'v2';
     component.resultsFormat = 'excel';

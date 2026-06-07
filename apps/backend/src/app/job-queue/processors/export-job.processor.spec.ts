@@ -36,7 +36,9 @@ describe('ExportJobProcessor', () => {
     const codingExportOrchestratorService = {
       exportResultsByVersionAsCsv: jest.fn(),
       exportResultsByVersionAsExcel: jest.fn(),
-      exportDetailed: jest.fn()
+      exportDetailed: jest.fn(),
+      exportItemMatrixAsCsv: jest.fn(),
+      exportItemMatrixAsExcel: jest.fn()
     };
     const cacheService = {
       set: jest.fn().mockResolvedValue(undefined)
@@ -191,6 +193,76 @@ describe('ExportJobProcessor', () => {
     } finally {
       cleanup(filePath);
     }
+  });
+
+  it('routes item matrix CSV exports through the orchestrator', async () => {
+    const { processor, codingExportOrchestratorService } = createProcessor();
+    codingExportOrchestratorService.exportItemMatrixAsCsv.mockResolvedValue(Readable.from(['matrix']));
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'item-matrix',
+        version: 'v2',
+        format: 'csv',
+        matrixValue: 'score'
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportOrchestratorService.exportItemMatrixAsCsv).toHaveBeenCalledWith({
+        workspaceId: 7,
+        matrixValue: 'score',
+        version: 'v2',
+        onProgress: expect.any(Function),
+        checkCancellation: expect.any(Function)
+      });
+      expect(result.fileName).toMatch(/\.csv$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('\uFEFFmatrix');
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('routes item matrix Excel exports through the orchestrator', async () => {
+    const { processor, codingExportOrchestratorService } = createProcessor();
+    codingExportOrchestratorService.exportItemMatrixAsExcel.mockResolvedValue(Buffer.from('xlsx'));
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'item-matrix',
+        version: 'v3',
+        format: 'excel',
+        matrixValue: 'code'
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportOrchestratorService.exportItemMatrixAsExcel).toHaveBeenCalledWith({
+        workspaceId: 7,
+        matrixValue: 'code',
+        version: 'v3',
+        onProgress: expect.any(Function),
+        checkCancellation: expect.any(Function)
+      });
+      expect(result.fileName).toMatch(/\.xlsx$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('xlsx');
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('rejects invalid item matrix versions before exporting', async () => {
+    const { processor, codingExportOrchestratorService } = createProcessor();
+
+    await expect(processor.process(createJob({
+      exportType: 'item-matrix',
+      version: 'v4' as never,
+      format: 'csv',
+      matrixValue: 'score'
+    }))).rejects.toThrow('item-matrix exports support only "v1", "v2" or "v3" versions');
+
+    expect(codingExportOrchestratorService.exportItemMatrixAsCsv).not.toHaveBeenCalled();
+    expect(codingExportOrchestratorService.exportItemMatrixAsExcel).not.toHaveBeenCalled();
   });
 
   it('rejects GeoGebra package exports without response values', async () => {
