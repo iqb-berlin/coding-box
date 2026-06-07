@@ -79,11 +79,15 @@ export class ReplayBackendService {
       errorMessage?: string;
       clientTimings?: ReplayClientTimings;
       serverTimings?: ReplayServerTimings;
-    }
+    },
+    authToken?: string
   ): Observable<ReplayStatisticsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics`;
+    const headers = authToken ?
+      { Authorization: `Bearer ${authToken}` } :
+      this.authHeader;
     return this.http.post<ReplayStatisticsResponse>(url, data, {
-      headers: this.authHeader,
+      headers,
       context: suppressGlobalHttpErrorContext()
     });
   }

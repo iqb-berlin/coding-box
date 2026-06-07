@@ -814,37 +814,33 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           const serializedBooklet = this.serializeUnitsData(bookletReplay);
           const firstUnit = bookletReplay.units[0];
 
-          this.appService
-            .createOwnToken(this.appService.selectedWorkspaceId, 1)
-            .subscribe(token => {
-              const queryParams = {
-                auth: token,
-                mode: 'booklet-view',
-                unitsData: serializedBooklet
-              };
+          const queryParams = {
+            mode: 'booklet-view',
+            unitsData: serializedBooklet,
+            workspaceId: this.appService.selectedWorkspaceId
+          };
 
-              const url = this.router.serializeUrl(
-                this.router.createUrlTree(
-                  [
-                    `replay/${testPerson}/${firstUnit.name}/0/0`
-                  ],
-                  { queryParams: queryParams }
-                )
-              );
+          const url = this.router.serializeUrl(
+            this.router.createUrlTree(
+              [
+                `replay/${testPerson}/${firstUnit.name}/0/0`
+              ],
+              { queryParams: queryParams }
+            )
+          );
 
-              window.open(`${window.location.origin}/#${url}`, '_blank');
+          window.open(`${window.location.origin}/#${url}`, '_blank');
 
-              if (
-                bookletReplay.skippedUnits &&
-                bookletReplay.skippedUnits > 0
-              ) {
-                this.snackBar.open(
-                  `${bookletReplay.skippedUnits} nicht replaybare Booklet-Units wurden übersprungen.`,
-                  'Info',
-                  { duration: 5000 }
-                );
-              }
-            });
+          if (
+            bookletReplay.skippedUnits &&
+            bookletReplay.skippedUnits > 0
+          ) {
+            this.snackBar.open(
+              `${bookletReplay.skippedUnits} nicht replaybare Booklet-Units wurden übersprungen.`,
+              'Info',
+              { duration: 5000 }
+            );
+          }
         },
         error: () => {
           loadingSnackBar.dismiss();
@@ -896,49 +892,23 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     const firstResponse = this.responses[0];
 
-    this.appService
-      .createOwnToken(this.appService.selectedWorkspaceId, 1)
+    this.statisticsService
+      .getReplayUrl(this.appService.selectedWorkspaceId, firstResponse.id)
       .subscribe({
-        next: token => {
-          if (!token) {
+        next: result => {
+          if (result && result.replayUrl) {
+            window.open(result.replayUrl, '_blank');
+          } else {
             this.snackBar.open(
-              'Fehler beim Erzeugen des Authentifizierungs-Tokens',
+              'Replay-URL konnte nicht erzeugt werden',
               'Fehler',
               { duration: 3000 }
             );
-            return;
           }
-
-          this.statisticsService
-            .getReplayUrl(
-              this.appService.selectedWorkspaceId,
-              firstResponse.id,
-              token
-            )
-            .subscribe({
-              next: result => {
-                if (result && result.replayUrl) {
-                  window.open(result.replayUrl, '_blank');
-                } else {
-                  this.snackBar.open(
-                    'Replay-URL konnte nicht erzeugt werden',
-                    'Fehler',
-                    { duration: 3000 }
-                  );
-                }
-              },
-              error: () => {
-                this.snackBar.open(
-                  'Fehler beim Laden der Replay-URL',
-                  'Fehler',
-                  { duration: 3000 }
-                );
-              }
-            });
         },
         error: () => {
           this.snackBar.open(
-            'Fehler beim Erzeugen des Authentifizierungs-Tokens',
+            'Fehler beim Laden der Replay-URL',
             'Fehler',
             { duration: 3000 }
           );

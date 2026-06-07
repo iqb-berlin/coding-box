@@ -29,7 +29,6 @@ import { Router } from '@angular/router';
 import { FileService } from '../../../../shared/services/file/file.service';
 import { CodingJobBackendService } from '../../../services/coding-job-backend.service';
 import { MissingsProfileService } from '../../../services/missings-profile.service';
-import { AppService } from '../../../../core/services/app.service';
 import { CodingJob } from '../../../models/coding-job.model';
 import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
 import { base64ToUtf8, utf8ToBase64 } from '../../../../shared/utils/common-utils';
@@ -123,7 +122,6 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   private codingJobBackendService = inject(CodingJobBackendService);
   private missingsProfileService = inject(MissingsProfileService);
   private fileService = inject(FileService);
-  private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
   private router = inject(Router);
@@ -813,55 +811,43 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    const loadingSnackBar = this.snackBar.open('Öffne Kodierungs-Interface...', '', { duration: 3000 });
+    const testPerson = this.getCodingTestPerson(result);
 
-    this.appService.createOwnToken(this.data.workspaceId, 1).subscribe({
-      next: (token: string) => {
-        loadingSnackBar.dismiss();
+    const reviewUnit: UnitsReplayUnit = {
+      id: 0, // Not needed for replay
+      name: result.unitName,
+      alias: result.unitAlias,
+      bookletId: 0, // Not needed for replay
+      testPerson: testPerson,
+      variableId: result.variableId,
+      variableAnchor: result.variableAnchor,
+      variablePage: result.variablePage || '0'
+    };
 
-        const testPerson = this.getCodingTestPerson(result);
+    const unitsData: UnitsReplay = {
+      id: this.data.codingJob.id, // Use original coding job ID
+      name: `${this.data.codingJob.name} - Review: ${result.variableId}`,
+      units: [reviewUnit],
+      currentUnitIndex: 0
+    };
 
-        const reviewUnit: UnitsReplayUnit = {
-          id: 0, // Not needed for replay
-          name: result.unitName,
-          alias: result.unitAlias,
-          bookletId: 0, // Not needed for replay
-          testPerson: testPerson,
-          variableId: result.variableId,
-          variableAnchor: result.variableAnchor,
-          variablePage: result.variablePage || '0'
-        };
+    const serializedUnits = this.serializeUnitsData(unitsData);
 
-        const unitsData: UnitsReplay = {
-          id: this.data.codingJob.id, // Use original coding job ID
-          name: `${this.data.codingJob.name} - Review: ${result.variableId}`,
-          units: [reviewUnit],
-          currentUnitIndex: 0
-        };
+    const queryParams = {
+      mode: 'coding',
+      unitsData: serializedUnits,
+      workspaceId: this.data.workspaceId
+    };
 
-        const serializedUnits = this.serializeUnitsData(unitsData);
+    const unitName = result.unitAlias || result.unitName || '';
+    const url = this.router
+      .serializeUrl(
+        this.router.createUrlTree(
+          [`replay/${testPerson}/${unitName}/${result.variablePage || '0'}/${result.variableId}`],
+          { queryParams: queryParams })
+      );
 
-        const queryParams = {
-          auth: token,
-          mode: 'coding',
-          unitsData: serializedUnits
-        };
-
-        const unitName = result.unitAlias || result.unitName || '';
-        const url = this.router
-          .serializeUrl(
-            this.router.createUrlTree(
-              [`replay/${testPerson}/${unitName}/${result.variablePage || '0'}/${result.variableId}`],
-              { queryParams: queryParams })
-          );
-
-        window.open(`${window.location.origin}/#${url}`, '_blank');
-      },
-      error: () => {
-        loadingSnackBar.dismiss();
-        this.snackBar.open('Fehler beim Erstellen des Authentisierungs-Tokens', 'Schließen', { duration: 3000 });
-      }
-    });
+    window.open(`${window.location.origin}/#${url}`, '_blank');
   }
 
   editCodingScheme(result: CodingResult): void {

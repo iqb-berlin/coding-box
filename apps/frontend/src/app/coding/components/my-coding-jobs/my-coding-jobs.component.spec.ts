@@ -299,7 +299,7 @@ describe('MyCodingJobsComponent', () => {
     component.startCodingJob(completedJob);
 
     expect(window.open).toHaveBeenCalledWith(
-      'http://localhost/#/replay/person/unit/0/var?auth=token&mode=coding&codingJobId=10&workspaceId=1',
+      'http://localhost/#/replay/person/unit/0/var?mode=coding&codingJobId=10&workspaceId=1',
       '_blank'
     );
   });

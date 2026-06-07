@@ -63,6 +63,21 @@ describe('ReplayBackendService', () => {
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-statistics`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(data);
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
+      expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+      req.flush({});
+    });
+
+    it('should use the replay auth token when supplied', () => {
+      const data = {
+        unitId: 'u1',
+        durationMilliseconds: 1000
+      };
+      service.storeReplayStatistics(1, data, 'url-token').subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-statistics`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
       expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       req.flush({});
     });

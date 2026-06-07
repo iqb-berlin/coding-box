@@ -84,7 +84,10 @@ import {
   ApplyCodingResultsDialogComponent,
   ApplyCodingResultsDialogResult
 } from './apply-coding-results-dialog.component';
-import { normalizeReplayUrlToCurrentOrigin } from '../../utils/replay-url.util';
+import {
+  appendReplayUrlParams,
+  normalizeReplayUrlToCurrentOrigin
+} from '../../utils/replay-url.util';
 import { hasManagementWorkspaceAccess } from '../../../shared/utils/workspace-access';
 
 interface BulkApplyResultItem {
@@ -867,17 +870,21 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             return;
           }
 
-          this.appService.createOwnToken(workspaceId, 1).subscribe(token => {
-            const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(selectedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}`;
-            const replayUrl = `${normalizeReplayUrlToCurrentOrigin(startResult.firstReplayUrl)}?${queryParams}`;
+          const replayUrl = appendReplayUrlParams(
+            normalizeReplayUrlToCurrentOrigin(startResult.firstReplayUrl),
+            {
+              mode: 'coding',
+              codingJobId: selectedJob.id,
+              workspaceId
+            }
+          );
 
-            window.open(replayUrl, '_blank');
-            this.snackBar.open(
-              `Kodierjob "${selectedJob.name}" gestartet`,
-              'Schließen',
-              { duration: 3000 }
-            );
-          });
+          window.open(replayUrl, '_blank');
+          this.snackBar.open(
+            `Kodierjob "${selectedJob.name}" gestartet`,
+            'Schließen',
+            { duration: 3000 }
+          );
         },
         error: (error: { status?: number }) => {
           loadingSnack.dismiss();
@@ -928,17 +935,21 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             return;
           }
 
-          this.appService.createOwnToken(workspaceId, 1).subscribe(token => {
-            const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding-review&codingJobId=${encodeURIComponent(selectedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}`;
-            const replayUrl = `${normalizeReplayUrlToCurrentOrigin(reviewResult.firstReplayUrl)}?${queryParams}`;
+          const replayUrl = appendReplayUrlParams(
+            normalizeReplayUrlToCurrentOrigin(reviewResult.firstReplayUrl),
+            {
+              mode: 'coding-review',
+              codingJobId: selectedJob.id,
+              workspaceId
+            }
+          );
 
-            window.open(replayUrl, '_blank');
-            this.snackBar.open(
-              `Review für Kodierjob "${selectedJob.name}" geöffnet`,
-              'Schließen',
-              { duration: 3000 }
-            );
-          });
+          window.open(replayUrl, '_blank');
+          this.snackBar.open(
+            `Review für Kodierjob "${selectedJob.name}" geöffnet`,
+            'Schließen',
+            { duration: 3000 }
+          );
         },
         error: (error: { status?: number }) => {
           loadingSnack.dismiss();
@@ -1139,19 +1150,22 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
                       return;
                     }
 
-                    this.appService
-                      .createOwnToken(workspaceId, 1)
-                      .subscribe(token => {
-                        const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(restartedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}&onlyOpen=true`;
-                        const replayUrl = `${normalizeReplayUrlToCurrentOrigin(restartResult.firstReplayUrl)}?${queryParams}`;
+                    const replayUrl = appendReplayUrlParams(
+                      normalizeReplayUrlToCurrentOrigin(restartResult.firstReplayUrl),
+                      {
+                        mode: 'coding',
+                        codingJobId: restartedJob.id,
+                        workspaceId,
+                        onlyOpen: true
+                      }
+                    );
 
-                        window.open(replayUrl, '_blank');
-                        this.snackBar.open(
-                          `${restartResult.total} offene Einheiten für Replay vorbereitet`,
-                          'Schließen',
-                          { duration: 3000 }
-                        );
-                      });
+                    window.open(replayUrl, '_blank');
+                    this.snackBar.open(
+                      `${restartResult.total} offene Einheiten für Replay vorbereitet`,
+                      'Schließen',
+                      { duration: 3000 }
+                    );
                   },
                   error: () => {
                     loadingSnack.dismiss();

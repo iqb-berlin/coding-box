@@ -230,9 +230,8 @@ describe('CodingResultsComparisonComponent', () => {
 
   it('should open replay for the row response with coding context', () => {
     const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
-    appService.createOwnToken.mockReturnValue(of('token-123'));
     codingStatisticsService.getReplayUrl.mockReturnValue(of({
-      replayUrl: 'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?auth=token-123'
+      replayUrl: 'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1'
     }));
 
     component.openReplay({
@@ -246,17 +245,16 @@ describe('CodingResultsComparisonComponent', () => {
       coders: []
     } as never);
 
-    expect(appService.createOwnToken).toHaveBeenCalledWith(1, 1);
-    expect(codingStatisticsService.getReplayUrl).toHaveBeenCalledWith(1, 77, 'token-123');
+    expect(appService.createOwnToken).not.toHaveBeenCalled();
+    expect(codingStatisticsService.getReplayUrl).toHaveBeenCalledWith(1, 77);
     expect(openSpy).toHaveBeenCalledWith(
-      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?auth=token-123&mode=coding&originResponseId=77',
+      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding&originResponseId=77',
       '_blank'
     );
   });
 
   it('should show feedback when no replay URL is returned', () => {
     const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
-    appService.createOwnToken.mockReturnValue(of('token-123'));
     codingStatisticsService.getReplayUrl.mockReturnValue(of({ replayUrl: '' }));
 
     component.openReplay({
