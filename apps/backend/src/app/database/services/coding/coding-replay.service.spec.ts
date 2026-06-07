@@ -130,7 +130,8 @@ describe('CodingReplayService', () => {
         unitId: 'unit1',
         variablePage: '2',
         variableAnchor: 'var1',
-        authToken: 'token123'
+        authToken: 'token123',
+        workspaceId: 1
       });
       expect(mockCodingJobUnitRepository.createQueryBuilder).not.toHaveBeenCalled();
     });
@@ -217,7 +218,8 @@ describe('CodingReplayService', () => {
         unitId: 'unit1',
         variablePage: '3',
         variableAnchor: 'anchor1',
-        authToken: 'token'
+        authToken: 'token',
+        workspaceId: 1
       });
     });
 
@@ -518,8 +520,8 @@ describe('CodingReplayService', () => {
         .mockResolvedValueOnce(mockResponse2);
       mockCodingListService.getVariablePageMap.mockResolvedValue(new Map());
       (replayUrlUtil.generateReplayUrl as jest.Mock)
-        .mockReturnValueOnce('http://example.com/replay1?auth=')
-        .mockReturnValueOnce('http://example.com/replay2?auth=');
+        .mockReturnValueOnce('http://example.com/replay1?workspaceId=1')
+        .mockReturnValueOnce('http://example.com/replay2?workspaceId=1');
 
       const result = await service.generateReplayUrlsForItems(
         1,
@@ -530,11 +532,11 @@ describe('CodingReplayService', () => {
       expect(result).toHaveLength(2);
       expect(result[0]).toMatchObject({
         responseId: 1,
-        replayUrl: 'http://example.com/replay1'
+        replayUrl: 'http://example.com/replay1?workspaceId=1'
       });
       expect(result[1]).toMatchObject({
         responseId: 2,
-        replayUrl: 'http://example.com/replay2'
+        replayUrl: 'http://example.com/replay2?workspaceId=1'
       });
     });
 
@@ -583,7 +585,7 @@ describe('CodingReplayService', () => {
       ];
 
       mockCodingListService.getVariablePageMap.mockResolvedValue(new Map([['var1', '4']]));
-      (replayUrlUtil.generateReplayUrl as jest.Mock).mockReturnValue('http://example.com/replay?auth=');
+      (replayUrlUtil.generateReplayUrl as jest.Mock).mockReturnValue('http://example.com/replay?workspaceId=1');
 
       const result = await service.generateReplayUrlsForItemsBulk(
         1,
@@ -591,7 +593,7 @@ describe('CodingReplayService', () => {
         'http://example.com'
       );
 
-      expect(result[0].replayUrl).toBe('http://example.com/replay');
+      expect(result[0].replayUrl).toBe('http://example.com/replay?workspaceId=1');
       expect(replayUrlUtil.generateReplayUrl).toHaveBeenCalledWith(
         expect.objectContaining({
           variablePage: '4',
@@ -619,7 +621,7 @@ describe('CodingReplayService', () => {
         ['VAR_WITH_OVERRIDE', '1']
       ]));
       (replayUrlUtil.generateReplayUrl as jest.Mock).mockImplementation(params => (
-        `${params.serverUrl}/#/replay/${params.loginName}@${params.loginCode}@${params.loginGroup}@${params.bookletId}/${params.unitId}/${params.variablePage}/${params.variableAnchor}?auth=${params.authToken}`
+        `${params.serverUrl}/#/replay/${params.loginName}@${params.loginCode}@${params.loginGroup}@${params.bookletId}/${params.unitId}/${params.variablePage}/${params.variableAnchor}?workspaceId=${params.workspaceId}`
       ));
 
       const result = await service.generateReplayUrlsForItemsBulk(
@@ -630,7 +632,7 @@ describe('CodingReplayService', () => {
 
       expect(mockCodingListService.getVariablePageMap).toHaveBeenCalledWith('UNIT', 7);
       expect(result[0].replayUrl).toBe(
-        'http://example.com/#/replay/login@code@group@BOOKLET/UNIT/1/VAR_WITH_OVERRIDE'
+        'http://example.com/#/replay/login@code@group@BOOKLET/UNIT/1/VAR_WITH_OVERRIDE?workspaceId=7'
       );
     });
 
@@ -656,7 +658,7 @@ describe('CodingReplayService', () => {
         ['UNIT', new Map([['VAR', 'TEXT_ANCHOR']])]
       ]));
       (replayUrlUtil.generateReplayUrl as jest.Mock).mockImplementation(params => (
-        `${params.serverUrl}/#/replay/${params.loginName}@${params.loginCode}@${params.loginGroup}@${params.bookletId}/${params.unitId}/${params.variablePage}/${params.variableAnchor}?auth=${params.authToken}`
+        `${params.serverUrl}/#/replay/${params.loginName}@${params.loginCode}@${params.loginGroup}@${params.bookletId}/${params.unitId}/${params.variablePage}/${params.variableAnchor}?workspaceId=${params.workspaceId}`
       ));
 
       const result = await service.generateReplayUrlsForItemsBulk(
@@ -667,7 +669,7 @@ describe('CodingReplayService', () => {
 
       expect(mockReplayAnchorService.getVariableAnchorMaps).toHaveBeenCalledWith(['UNIT'], 7);
       expect(result[0].replayUrl).toBe(
-        'http://example.com/#/replay/login@code@group@BOOKLET/UNIT/0/TEXT_ANCHOR'
+        'http://example.com/#/replay/login@code@group@BOOKLET/UNIT/0/TEXT_ANCHOR?workspaceId=7'
       );
     });
   });
