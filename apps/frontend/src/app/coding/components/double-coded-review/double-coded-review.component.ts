@@ -21,7 +21,7 @@ import {
 } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  Subject, debounceTime, distinctUntilChanged, takeUntil, map, merge, catchError, of, forkJoin, switchMap, take, finalize
+  Subject, debounceTime, distinctUntilChanged, takeUntil, map, merge, catchError, of, forkJoin, take, finalize
 } from 'rxjs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
@@ -613,15 +613,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     }
 
     this.replayLoadingByResponseId[responseId] = true;
-    this.appService.createOwnToken(workspaceId, 1).pipe(
+    this.codingStatisticsService.getReplayUrl(workspaceId, responseId).pipe(
       take(1),
-      switchMap(token => {
-        if (!token) {
-          this.showError(this.translateService.instant('coding-management.descriptions.missing-token'));
-          return of({ replayUrl: '' });
-        }
-        return this.codingStatisticsService.getReplayUrl(workspaceId, responseId, token).pipe(take(1));
-      }),
       finalize(() => {
         this.replayLoadingByResponseId[responseId] = false;
       })

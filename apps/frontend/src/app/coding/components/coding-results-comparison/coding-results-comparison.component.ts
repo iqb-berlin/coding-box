@@ -1041,23 +1041,16 @@ export class CodingResultsComparisonComponent implements OnInit {
 
     const workspaceId = this.data.workspaceId;
 
-    this.appService.createOwnToken(workspaceId, 1).subscribe({
-      next: token => {
-        this.codingStatisticsService.getReplayUrl(workspaceId, responseId, token).subscribe({
-          next: result => {
-            if (result.replayUrl) {
-              window.open(this.buildReplayUrl(result.replayUrl, responseId), '_blank');
-            } else {
-              this.snackBar.open('Replay-URL konnte nicht erzeugt werden.', this.translate.instant('common.close'), { duration: 3000 });
-            }
-          },
-          error: () => {
-            this.snackBar.open('Replay konnte nicht geöffnet werden.', this.translate.instant('common.close'), { duration: 3000 });
-          }
-        });
+    this.codingStatisticsService.getReplayUrl(workspaceId, responseId).subscribe({
+      next: result => {
+        if (result.replayUrl) {
+          window.open(this.buildReplayUrl(result.replayUrl, responseId), '_blank');
+        } else {
+          this.snackBar.open('Replay-URL konnte nicht erzeugt werden.', this.translate.instant('common.close'), { duration: 3000 });
+        }
       },
       error: () => {
-        this.snackBar.open('Replay-Token konnte nicht erzeugt werden.', this.translate.instant('common.close'), { duration: 3000 });
+        this.snackBar.open('Replay konnte nicht geöffnet werden.', this.translate.instant('common.close'), { duration: 3000 });
       }
     });
   }

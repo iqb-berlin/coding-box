@@ -1596,51 +1596,25 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       duration: 3000
     });
 
-    this.appService
-      .createOwnToken(this.appService.selectedWorkspaceId, 1)
+    this.statisticsService
+      .getReplayUrl(this.appService.selectedWorkspaceId, row.responseId)
       .subscribe({
-        next: token => {
+        next: result => {
           loadingSnackBar.dismiss();
-          if (!token) {
+          if (result && result.replayUrl) {
+            window.open(result.replayUrl, '_blank');
+          } else {
             this.snackBar.open(
-              'Fehler beim Erzeugen des Authentifizierungs-Tokens',
+              'Replay-URL konnte nicht erzeugt werden',
               'Fehler',
               { duration: 3000 }
             );
-            return;
           }
-
-          this.statisticsService
-            .getReplayUrl(
-              this.appService.selectedWorkspaceId,
-              row.responseId,
-              token
-            )
-            .subscribe({
-              next: result => {
-                if (result && result.replayUrl) {
-                  window.open(result.replayUrl, '_blank');
-                } else {
-                  this.snackBar.open(
-                    'Replay-URL konnte nicht erzeugt werden',
-                    'Fehler',
-                    { duration: 3000 }
-                  );
-                }
-              },
-              error: () => {
-                this.snackBar.open(
-                  'Fehler beim Laden der Replay-URL',
-                  'Fehler',
-                  { duration: 3000 }
-                );
-              }
-            });
         },
         error: () => {
           loadingSnackBar.dismiss();
           this.snackBar.open(
-            'Fehler beim Erzeugen des Authentifizierungs-Tokens',
+            'Fehler beim Laden der Replay-URL',
             'Fehler',
             { duration: 3000 }
           );

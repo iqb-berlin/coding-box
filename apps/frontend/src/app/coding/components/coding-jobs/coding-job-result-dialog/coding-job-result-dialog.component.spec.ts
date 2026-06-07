@@ -7,7 +7,6 @@ import { of, throwError } from 'rxjs';
 import { CodingJobResultDialogComponent } from './coding-job-result-dialog.component';
 import { CodingJobBackendService } from '../../../services/coding-job-backend.service';
 import { FileService } from '../../../../shared/services/file/file.service';
-import { AppService } from '../../../../core/services/app.service';
 import { MissingsProfileService } from '../../../services/missings-profile.service';
 
 class MatSnackBarMock {
@@ -37,11 +36,6 @@ describe('CodingJobResultDialogComponent', () => {
 
   const mockFileService = {
     getCodingSchemeFile: jest.fn()
-  };
-
-  const mockAppService = {
-    createOwnToken: jest.fn(() => of('test-token')),
-    loggedUser: { sub: 'test-user' }
   };
 
   const mockRouter = {
@@ -114,7 +108,6 @@ describe('CodingJobResultDialogComponent', () => {
         { provide: CodingJobBackendService, useValue: mockCodingJobBackendService },
         { provide: MissingsProfileService, useValue: mockMissingsProfileService },
         { provide: FileService, useValue: mockFileService },
-        { provide: AppService, useValue: mockAppService },
         { provide: Router, useValue: mockRouter },
         { provide: MatDialog, useValue: mockMatDialog }
       ]
@@ -394,6 +387,17 @@ describe('CodingJobResultDialogComponent', () => {
       ['replay/login@code@group@BOOKLET_A/UNIT_1/2/VAR_1'],
       expect.any(Object)
     );
+    const createUrlTreeCalls = mockRouter.createUrlTree.mock.calls as unknown as Array<[
+      string[],
+      { queryParams: Record<string, unknown> }
+    ]>;
+    const queryParams = createUrlTreeCalls[0][1].queryParams;
+    expect(queryParams).toEqual(expect.objectContaining({
+      mode: 'coding',
+      workspaceId: 123,
+      unitsData: expect.any(String)
+    }));
+    expect(queryParams.auth).toBeUndefined();
 
     windowOpenSpy.mockRestore();
   });

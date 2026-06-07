@@ -198,8 +198,8 @@ export class CodingFacadeService {
     return this.codingStatisticsService.getResponsesByStatus(workspaceId, status, version, page, limit);
   }
 
-  getReplayUrl(workspaceId: number, responseId: number, authToken: string): Observable<{ replayUrl: string }> {
-    return this.codingStatisticsService.getReplayUrl(workspaceId, responseId, authToken);
+  getReplayUrl(workspaceId: number, responseId: number): Observable<{ replayUrl: string }> {
+    return this.codingStatisticsService.getReplayUrl(workspaceId, responseId);
   }
 
   getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {

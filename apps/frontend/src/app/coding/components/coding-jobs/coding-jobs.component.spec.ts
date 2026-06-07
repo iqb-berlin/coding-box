@@ -711,7 +711,7 @@ describe('CodingJobsComponent', () => {
       1,
       job.id
     );
-    expect(appServiceMock.createOwnToken).toHaveBeenCalled();
+    expect(appServiceMock.createOwnToken).not.toHaveBeenCalled();
     expect(window.open).toHaveBeenCalled();
   });
 
@@ -728,7 +728,7 @@ describe('CodingJobsComponent', () => {
     component.startCodingJob(job);
 
     expect(window.open).toHaveBeenCalledWith(
-      'http://localhost/#/replay/person/unit/0/var?auth=token&mode=coding&codingJobId=1&workspaceId=1',
+      'http://localhost/#/replay/person/unit/0/var?mode=coding&codingJobId=1&workspaceId=1',
       '_blank'
     );
   });
@@ -755,7 +755,7 @@ describe('CodingJobsComponent', () => {
       codingJobBackendServiceMock.prepareCodingJobReview
     ).toHaveBeenCalledWith(1, job.id);
     expect(window.open).toHaveBeenCalledWith(
-      'http://localhost/#/replay/person/unit/0/var?auth=token&mode=coding-review&codingJobId=1&workspaceId=1',
+      'http://localhost/#/replay/person/unit/0/var?mode=coding-review&codingJobId=1&workspaceId=1',
       '_blank'
     );
   });

@@ -52,7 +52,10 @@ import { AppService } from '../../../core/services/app.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingJob, Variable } from '../../models/coding-job.model';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
-import { normalizeReplayUrlToCurrentOrigin } from '../../utils/replay-url.util';
+import {
+  appendReplayUrlParams,
+  normalizeReplayUrlToCurrentOrigin
+} from '../../utils/replay-url.util';
 
 @Component({
   selector: 'coding-box-my-coding-jobs',
@@ -425,23 +428,25 @@ implements OnInit, OnDestroy, OnChanges {
             return;
           }
 
-          this.appService
-            .createOwnToken(job.workspace_id, 1)
-            .subscribe(token => {
-              const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(job.id)}&workspaceId=${encodeURIComponent(job.workspace_id)}`;
-              const replayUrl = `${normalizeReplayUrlToCurrentOrigin(result.firstReplayUrl)}?${queryParams}`;
+          const replayUrl = appendReplayUrlParams(
+            normalizeReplayUrlToCurrentOrigin(result.firstReplayUrl),
+            {
+              mode: 'coding',
+              codingJobId: job.id,
+              workspaceId: job.workspace_id
+            }
+          );
 
-              window.open(replayUrl, '_blank');
-              const preparedMessage = this.translateService.instant(
-                'coding.my-coding-jobs.preparing-replay',
-                { count: result.total }
-              );
-              this.snackBar.open(
-                preparedMessage,
-                this.translateService.instant('close'),
-                { duration: 3000 }
-              );
-            });
+          window.open(replayUrl, '_blank');
+          const preparedMessage = this.translateService.instant(
+            'coding.my-coding-jobs.preparing-replay',
+            { count: result.total }
+          );
+          this.snackBar.open(
+            preparedMessage,
+            this.translateService.instant('close'),
+            { duration: 3000 }
+          );
         },
         error: () => {
           loadingSnack.dismiss();

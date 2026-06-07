@@ -299,7 +299,8 @@ describe('ReplayComponent', () => {
         serverTimings: {
           responseTotalMs: 5
         }
-      })
+      }),
+      'valid-token'
     );
   });
 
@@ -329,7 +330,8 @@ describe('ReplayComponent', () => {
       expect.any(Number),
       expect.objectContaining({
         replayUrl: expect.stringContaining('mode=booklet-view')
-      })
+      }),
+      'valid-token'
     );
     const replayUrl = replayBackendService.storeReplayStatistics.mock.calls[0][1].replayUrl as string;
     expect(replayUrl).not.toContain('auth=');
@@ -787,7 +789,8 @@ describe('ReplayComponent', () => {
 
     expect(appService.createOwnToken).toHaveBeenCalledWith(47, 1);
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'fresh-workspace-token', false);
-    expect(window.location.href).toContain('auth=fresh-workspace-token');
+    expect(window.location.href).toContain('workspaceId=47');
+    expect(window.location.href).not.toContain('auth=');
   });
 
   it('should not replace an invalid replay auth token before loading coding job units', async () => {
@@ -948,7 +951,8 @@ describe('ReplayComponent', () => {
 
     expect(appService.createOwnToken).toHaveBeenCalledWith(47, 1);
     expect(privateComponent.authToken).toBe('fresh-token-after-login');
-    expect(window.location.href).toContain('auth=fresh-token-after-login');
+    expect(window.location.href).toContain('workspaceId=47');
+    expect(window.location.href).not.toContain('auth=');
   });
 
   it('should not refresh an invalid replay auth token after successful reauthentication', async () => {

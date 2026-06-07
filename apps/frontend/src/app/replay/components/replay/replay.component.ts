@@ -291,6 +291,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return Number(queryParams.workspaceId) || 0;
   }
 
+  private getReplayRequestAuthToken(): string | undefined {
+    return this.authToken || undefined;
+  }
+
+  private canLoadReplayWithCurrentAuth(workspaceId: number): boolean {
+    return Number.isFinite(workspaceId) &&
+      workspaceId > 0 &&
+      (!!this.authToken || this.appService.hasStoredAuthToken());
+  }
+
   private canRefreshReplayAuthTokenForWorkspace(
     workspaceId: number,
     tokenValidation: ReturnType<typeof validateToken> = this.authToken ?
@@ -348,7 +358,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.authToken = token;
       this.workspaceId = workspaceId;
       this.codingService.setAuthToken(token);
-      this.replaceReplayAuthTokenInUrl(token);
+      this.removeReplayAuthTokenFromUrl(token);
       return true;
     } catch (error) {
       return false;
@@ -357,7 +367,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  private replaceReplayAuthTokenInUrl(authToken: string): void {
+  private removeReplayAuthTokenFromUrl(authToken: string): void {
     try {
       const url = new URL(window.location.href);
       if (!url.hash) {
@@ -366,8 +376,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
       const [hashPath, hashQuery = ''] = url.hash.split('?');
       const hashParams = new URLSearchParams(hashQuery);
-      hashParams.set('auth', authToken);
-      url.hash = `${hashPath}?${hashParams.toString()}`;
+      hashParams.delete('auth');
+      const workspaceId = this.workspaceId || this.getWorkspaceIdFromAuthToken(authToken);
+      if (workspaceId) {
+        hashParams.set('workspaceId', String(workspaceId));
+      }
+      const query = hashParams.toString();
+      url.hash = query ? `${hashPath}?${query}` : hashPath;
       window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
     } catch (error) {
       // Keep the refreshed token in memory even if the browser URL cannot be rewritten.
@@ -534,13 +549,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
           if (this.isPrintMode && params.unitId) {
             this.unitId = params.unitId;
-            await this.loadAndApplyUnitData(Number(workspace), this.authToken);
+            if (this.canLoadReplayWithCurrentAuth(Number(workspace))) {
+              await this.loadAndApplyUnitData(Number(workspace), this.getReplayRequestAuthToken());
+            } else {
+              this.storeErrorInStatistics('QueryError');
+              ReplayComponent.throwError('QueryError');
+            }
           } else if (Object.keys(params).length >= 3 && Object.keys(params).length <= 4) {
             this.setUnitParams(params);
-            if (this.authToken) {
-              if (workspace) {
-                await this.loadAndApplyUnitData(Number(workspace), this.authToken);
-              }
+            if (this.canLoadReplayWithCurrentAuth(Number(workspace))) {
+              await this.loadAndApplyUnitData(Number(workspace), this.getReplayRequestAuthToken());
             } else {
               this.storeErrorInStatistics('QueryError');
               ReplayComponent.throwError('QueryError');
@@ -630,7 +648,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.routeStartTime = 0;
         this.unitId = unitIdInput.currentValue;
         this.setTestPerson(this.testPersonInput() || '');
-        await this.loadAndApplyUnitData(this.appService.selectedWorkspaceId, this.authToken);
+        await this.loadAndApplyUnitData(this.appService.selectedWorkspaceId, this.getReplayRequestAuthToken());
       } catch (error) {
         this.setIsLoaded();
         this.catchError(error as HttpErrorResponse);
@@ -847,7 +865,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       errorMessage,
       clientTimings: this.getClientTimings(visibleTime),
       serverTimings: this.serverTimings ?? undefined
-    }).subscribe({
+    }, this.getReplayRequestAuthToken()).subscribe({
       error: () => undefined
     });
   }
@@ -948,17 +966,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitId = unit.name;
 
     let isCurrentUnitPayload = true;
-    if (this.authToken) {
-      let workspace: string | undefined;
-      try {
-        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-        workspace = decoded?.workspace;
-      } catch (error) {
-        workspace = undefined;
-      }
-      if (workspace) {
-        isCurrentUnitPayload = await this.loadAndApplyUnitData(Number(workspace), this.authToken);
-      }
+    const workspaceId = this.workspaceId || this.getWorkspaceIdFromAuthToken(this.authToken);
+    if (this.canLoadReplayWithCurrentAuth(workspaceId)) {
+      isCurrentUnitPayload = await this.loadAndApplyUnitData(workspaceId, this.getReplayRequestAuthToken());
     }
 
     if (!isCurrentUnitPayload) {
@@ -1702,7 +1712,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       switchSnapshot = this.captureCodingJobSwitchSnapshot();
       await this.activateCodingJob(targetJob, nextUnitsData, targetAuthToken, onlyOpen);
       didActivateTargetJob = true;
-      this.updateReplayUrlForCodingJob(targetJob, nextUnitsData.units[0], targetAuthToken, onlyOpen);
+      this.updateReplayUrlForCodingJob(targetJob, nextUnitsData.units[0], onlyOpen);
       this.errorSnackBar.open(
         this.translateService.instant('replay.job-switcher.switched', { name: targetJob.name }),
         this.translateService.instant('close'),
@@ -1947,7 +1957,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private updateReplayUrlForCodingJob(
     job: CodingJob,
     unit: UnitsReplayUnit,
-    authToken: string,
     onlyOpen: boolean
   ): void {
     const unitAny = unit as UnitsReplayUnit & { variablePage?: string };
@@ -1959,7 +1968,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       encodeURIComponent(unit.variableAnchor || unit.variableId || '0')
     ].join('/');
     const queryParams = new URLSearchParams({
-      auth: authToken,
       mode: 'coding',
       codingJobId: String(job.id),
       workspaceId: String(job.workspace_id)
