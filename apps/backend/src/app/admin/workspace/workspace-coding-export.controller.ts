@@ -108,6 +108,40 @@ export class WorkspaceCodingExportController {
         'GeoGebra file packages require response values because links are written to the value column'
       );
     }
+
+    if (
+      body.exportType === 'item-matrix' &&
+      body.format !== undefined &&
+      body.format !== 'csv' &&
+      body.format !== 'excel'
+    ) {
+      throw new BadRequestException(
+        'item-matrix exports support only "csv" or "excel" format'
+      );
+    }
+
+    if (
+      body.exportType === 'item-matrix' &&
+      body.matrixValue !== undefined &&
+      body.matrixValue !== 'code' &&
+      body.matrixValue !== 'score'
+    ) {
+      throw new BadRequestException(
+        'item-matrix exports support only "code" or "score" matrix values'
+      );
+    }
+
+    if (
+      body.exportType === 'item-matrix' &&
+      body.version !== undefined &&
+      body.version !== 'v1' &&
+      body.version !== 'v2' &&
+      body.version !== 'v3'
+    ) {
+      throw new BadRequestException(
+        'item-matrix exports support only "v1", "v2" or "v3" versions'
+      );
+    }
   }
 
   private getRequestUserId(req: Request): number {
@@ -1122,7 +1156,8 @@ export class WorkspaceCodingExportController {
             'detailed',
             'coding-times',
             'coding-list',
-            'results-by-version'
+            'results-by-version',
+            'item-matrix'
           ],
           description: 'Type of export to generate'
         },
@@ -1136,6 +1171,11 @@ export class WorkspaceCodingExportController {
           enum: ['csv', 'excel', 'json'],
           description:
             'File format for exports that support multiple formats. results-by-version supports csv and excel; coding-list supports csv, excel and json.'
+        },
+        matrixValue: {
+          type: 'string',
+          enum: ['code', 'score'],
+          description: 'Cell value for item-matrix exports'
         },
         outputCommentsInsteadOfCodes: { type: 'boolean' },
         includeReplayUrl: { type: 'boolean' },

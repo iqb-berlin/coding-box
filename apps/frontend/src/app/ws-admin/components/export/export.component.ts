@@ -15,9 +15,10 @@ import { AppService } from '../../../core/services/app.service';
 import { ExportJobConfig, ExportJobService } from '../../../shared/services/file/export-job.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
 
-export type ExportFormat = 'results-by-version';
+export type ExportFormat = 'results-by-version' | 'item-matrix';
 type ResultsVersion = 'v1' | 'v2' | 'v3';
 type ResultsExportFormat = 'csv' | 'excel';
+type MatrixValue = 'code' | 'score';
 
 @Component({
   selector: 'coding-box-export',
@@ -54,6 +55,7 @@ export class ExportComponent {
   hasGeoGebraResponses = false;
   resultsVersion: ResultsVersion = 'v2';
   resultsFormat: ResultsExportFormat = 'csv';
+  matrixValue: MatrixValue = 'score';
 
   constructor() {
     this.loadOptions();
@@ -73,6 +75,10 @@ export class ExportComponent {
     this.clearUnsupportedResultsOptions();
   }
 
+  onSelectedFormatChange(): void {
+    this.clearUnsupportedResultsOptions();
+  }
+
   onIncludeResponseValuesChange(): void {
     this.clearUnsupportedResultsOptions();
   }
@@ -83,6 +89,7 @@ export class ExportComponent {
 
   private clearUnsupportedResultsOptions(): void {
     if (
+      this.selectedFormat !== 'results-by-version' ||
       this.resultsFormat !== 'excel' ||
       !this.includeResponseValues ||
       !this.hasGeoGebraResponses
@@ -91,6 +98,7 @@ export class ExportComponent {
     }
 
     if (
+      this.selectedFormat !== 'results-by-version' ||
       !this.includeResponseValues ||
       !this.hasGeoGebraResponses ||
       this.includeGeoGebraFiles
@@ -133,6 +141,16 @@ export class ExportComponent {
   }
 
   private buildExportConfig(): ExportJobConfig {
+    if (this.selectedFormat === 'item-matrix') {
+      return {
+        exportType: 'item-matrix',
+        userId: this.appService.userId,
+        version: this.resultsVersion,
+        format: this.resultsFormat,
+        matrixValue: this.matrixValue
+      };
+    }
+
     return {
       exportType: this.selectedFormat,
       userId: this.appService.userId,
