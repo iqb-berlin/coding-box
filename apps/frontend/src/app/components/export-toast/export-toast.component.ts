@@ -38,7 +38,8 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     'by-variable-compact': 'export-toast.types.by-variable-compact',
     detailed: 'export-toast.types.detailed',
     'coding-times': 'export-toast.types.coding-times',
-    'results-by-version': 'export-toast.types.results-by-version'
+    'results-by-version': 'export-toast.types.results-by-version',
+    'item-matrix': 'export-toast.types.item-matrix'
   };
 
   jobs: ExportJob[] = [];

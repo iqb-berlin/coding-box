@@ -184,6 +184,32 @@ describe('WorkspaceCodingExportController', () => {
     expect(jobQueueService.addExportJob).not.toHaveBeenCalled();
   });
 
+  it('rejects invalid item matrix versions before starting a background export job', async () => {
+    const jobQueueService = {
+      addExportJob: jest.fn()
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingResultsExportService,
+      {} as CodingExportService,
+      {} as CodingTimesExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.startExportJob(
+      5,
+      { user: { id: 2 } } as never,
+      {
+        exportType: 'item-matrix',
+        version: 'v4' as never
+      }
+    )).rejects.toThrow(BadRequestException);
+
+    expect(jobQueueService.addExportJob).not.toHaveBeenCalled();
+  });
+
   it('normalizes authenticated user IDs before starting background export jobs', async () => {
     const jobQueueService = {
       addExportJob: jest.fn().mockResolvedValue({ id: 'job-1' })
