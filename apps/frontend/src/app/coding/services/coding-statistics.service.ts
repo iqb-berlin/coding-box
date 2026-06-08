@@ -76,13 +76,13 @@ export class CodingStatisticsService {
       );
   }
 
-  getReplayUrl(workspaceId: number, responseId: number, authToken: string): Observable<{ replayUrl: string }> {
-    const params = new HttpParams().set('authToken', authToken);
-
+  getReplayUrl(workspaceId: number, responseId: number): Observable<{ replayUrl: string }> {
     return this.http
       .get<{ replayUrl: string }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/responses/${responseId}/replay-url`,
-      { params }
+      {
+        context: suppressGlobalHttpErrorContext()
+      }
     )
       .pipe(
         catchError(() => of({ replayUrl: '' }))

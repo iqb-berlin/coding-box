@@ -19,8 +19,8 @@ describe('coding freshness text utils', () => {
         affectedResponseCount: 5397
       }
     ])).toBe(
-      'Auto-Coding 1 muss für 704 Aufgabenbearbeitungen ausgeführt werden. ' +
-      'Das betrifft 5397 Antwortwerte.'
+      '704 Aufgabenbearbeitungen benötigen Auto-Coding 1. ' +
+      'Dabei werden 5397 Antwortwerte berücksichtigt.'
     );
   });
 
@@ -79,8 +79,8 @@ describe('coding freshness text utils', () => {
         affectedResponseCount: 3
       }
     ])).toBe(
-      'Auto-Coding 1 muss für 3 Aufgabenbearbeitungen ausgeführt oder aktualisiert werden. ' +
-      'Das betrifft 9 Antwortwerte.'
+      '3 Aufgabenbearbeitungen benötigen Auto-Coding 1 oder eine Aktualisierung davon. ' +
+      'Dabei werden 9 Antwortwerte berücksichtigt.'
     );
   });
 
@@ -99,7 +99,7 @@ describe('coding freshness text utils', () => {
     };
 
     expect(getCodingFreshnessChipLabel(item)).toBe(
-      'Auto-Coding 1: 1 Aufgabenbearbeitung kodieren'
+      'Auto-Coding 1: 1 Aufgabenbearbeitung starten'
     );
     expect(getCodingFreshnessAutoCodingButtonLabel([item], 'v1')).toBe(
       'Auto-Coding 1 für 1 Aufgabenbearbeitung starten'
@@ -115,8 +115,8 @@ describe('coding freshness text utils', () => {
     };
 
     expect(getCodingFreshnessSummaryText([item])).toBe(
-      'Auto-Coding 1 muss für 2 Aufgabenbearbeitungen aktualisiert werden. ' +
-      'Das betrifft 4 Antwortwerte.'
+      '2 Aufgabenbearbeitungen benötigen eine Aktualisierung von Auto-Coding 1. ' +
+      'Dabei werden 4 Antwortwerte berücksichtigt.'
     );
     expect(getCodingFreshnessAutoCodingButtonLabel([item], 'v1')).toBe(
       'Auto-Coding 1 für 2 Aufgabenbearbeitungen aktualisieren'
@@ -131,7 +131,7 @@ describe('coding freshness text utils', () => {
         unitCount: 1,
         affectedResponseCount: 2
       }
-    ])).toBe('Auto-Coding aktualisieren');
+    ])).toBe('Auto-Coding starten');
 
     expect(getCodingFreshnessAttentionTitle([
       {

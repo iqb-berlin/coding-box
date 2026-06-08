@@ -32,7 +32,7 @@ describe('JobQueueService', () => {
   let service: JobQueueService;
 
   beforeEach(() => {
-    queues = Array.from({ length: 11 }, () => createQueue());
+    queues = Array.from({ length: 12 }, () => createQueue());
     validationTaskRepository = {
       find: jest.fn().mockResolvedValue([{ id: 7, workspace_id: 1 }])
     };
@@ -48,6 +48,7 @@ describe('JobQueueService', () => {
       queues[8] as never,
       queues[9] as never,
       queues[10] as never,
+      queues[11] as never,
       validationTaskRepository as never
     );
   });
@@ -185,6 +186,22 @@ describe('JobQueueService', () => {
     expect(exportJob.discard).toHaveBeenCalled();
     expect(exportJob.remove).not.toHaveBeenCalled();
 
+    const databaseExportJob = createJob({
+      requestedByUserId: 3,
+      scope: 'workspace',
+      workspaceId: 1
+    }, 'active');
+    queues[11].getJob.mockResolvedValue(databaseExportJob);
+    await expect(service.cancelWorkspaceJob(1, 'database-export', 'job-1')).resolves.toBe(true);
+    expect(databaseExportJob.update).toHaveBeenCalledWith({
+      requestedByUserId: 3,
+      scope: 'workspace',
+      workspaceId: 1,
+      isCancelled: true
+    });
+    expect(databaseExportJob.discard).toHaveBeenCalled();
+    expect(databaseExportJob.remove).not.toHaveBeenCalled();
+
     const unsupportedActiveJob = createJob({ workspaceId: 1 }, 'active');
     queues[1].getJob.mockResolvedValue(unsupportedActiveJob);
     await expect(service.cancelWorkspaceJob(1, 'coding-statistics', 'job-1')).resolves.toBe(false);
@@ -197,6 +214,12 @@ describe('JobQueueService', () => {
 
     await expect(service.cancelWorkspaceJob(1, 'coding-statistics', 'job-1')).resolves.toBe(true);
     expect(pausedJob.remove).toHaveBeenCalled();
+
+    const cancelledJob = createJob({ workspaceId: 1 }, 'cancelled');
+    queues[1].getJob.mockResolvedValue(cancelledJob);
+
+    await expect(service.cancelWorkspaceJob(1, 'coding-statistics', 'job-1')).resolves.toBe(true);
+    expect(cancelledJob.remove).toHaveBeenCalled();
   });
 
   it('handles missing jobs and failing queue operations', async () => {
@@ -226,6 +249,174 @@ describe('JobQueueService', () => {
     await expect(service.getActiveResetCodingVersionJob(1)).resolves.toHaveProperty('id', 'job-1');
   });
 
+  it('covers all registered process overview queues', async () => {
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs.map(job => job.queueName).sort()).toEqual([
+      'codebook-generation',
+      'coding-statistics',
+      'data-export',
+      'database-export',
+      'external-coding-import',
+      'flat-response-filter-options',
+      'reset-coding-version',
+      'response-analysis',
+      'test-person-coding',
+      'test-results-upload',
+      'validation-task',
+      'variable-analysis'
+    ]);
+  });
+
+  it('uses validation task progress and metadata from the task entity in the process overview', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[7].getJobs.mockResolvedValue([
+      createJob({ taskId: 7 }, 'active')
+    ]);
+    validationTaskRepository.find.mockResolvedValueOnce([{
+      id: 7,
+      workspace_id: 1,
+      validation_type: 'testFiles',
+      status: 'processing',
+      progress: 65,
+      progress_message: 'Testdateien werden geprüft...',
+      error: 'Schema validation failed'
+    }]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toEqual([
+      expect.objectContaining({
+        queueName: 'validation-task',
+        status: 'active',
+        progress: 65,
+        failedReason: undefined,
+        data: {
+          taskId: 7,
+          validationType: 'testFiles',
+          progressMessage: 'Testdateien werden geprüft...'
+        }
+      })
+    ]);
+  });
+
+  it('shows cancelled validation task entity statuses in the process overview', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[7].getJobs.mockResolvedValue([
+      createJob({ taskId: 7 }, 'completed')
+    ]);
+    validationTaskRepository.find.mockResolvedValueOnce([{
+      id: 7,
+      workspace_id: 1,
+      validation_type: 'testFiles',
+      status: 'cancelled',
+      progress: 30,
+      progress_message: 'Validierung abgebrochen.',
+      error: 'Cancelled by user'
+    }]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toEqual([
+      expect.objectContaining({
+        queueName: 'validation-task',
+        status: 'cancelled',
+        progress: 30,
+        failedReason: undefined,
+        data: {
+          taskId: 7,
+          validationType: 'testFiles',
+          progressMessage: 'Validierung abgebrochen.'
+        }
+      })
+    ]);
+  });
+
+  it('keeps active Bull validation tasks active even when the task entity is cancelled', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[7].getJobs.mockResolvedValue([
+      createJob({ taskId: 7 }, 'active')
+    ]);
+    validationTaskRepository.find.mockResolvedValueOnce([{
+      id: 7,
+      workspace_id: 1,
+      validation_type: 'testFiles',
+      status: 'cancelled',
+      progress: 30,
+      progress_message: 'Validierung abgebrochen.',
+      error: 'Cancelled by user'
+    }]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toEqual([
+      expect.objectContaining({
+        queueName: 'validation-task',
+        status: 'active',
+        progress: 30,
+        failedReason: undefined,
+        data: {
+          taskId: 7,
+          validationType: 'testFiles',
+          progressMessage: 'Validierung abgebrochen.'
+        }
+      })
+    ]);
+  });
+
+  it('uses the validation task entity status even when Bull completed the job', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[7].getJobs.mockResolvedValue([
+      createJob({ taskId: 7 }, 'completed')
+    ]);
+    validationTaskRepository.find.mockResolvedValueOnce([{
+      id: 7,
+      workspace_id: 1,
+      validation_type: 'testFiles',
+      status: 'failed',
+      progress: 100,
+      progress_message: 'Validierung fehlgeschlagen.',
+      error: 'Schema validation failed'
+    }]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toEqual([
+      expect.objectContaining({
+        queueName: 'validation-task',
+        status: 'failed',
+        progress: 100,
+        failedReason: 'Schema validation failed',
+        data: {
+          taskId: 7,
+          validationType: 'testFiles',
+          progressMessage: 'Validierung fehlgeschlagen.'
+        }
+      })
+    ]);
+  });
+
+  it('shows completed paused auto-coding jobs as paused in the process overview', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[0].getJobs.mockResolvedValue([
+      createJob({ workspaceId: 1, isPaused: true }, 'completed')
+    ]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toEqual([
+      expect.objectContaining({
+        queueName: 'test-person-coding',
+        status: 'paused',
+        progress: 40,
+        data: {
+          workspaceId: 1,
+          isPaused: true
+        }
+      })
+    ]);
+  });
+
   it('sanitizes workspace job data before exposing process metadata', async () => {
     queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
     queues[2].getJobs.mockResolvedValue([
@@ -249,6 +440,33 @@ describe('JobQueueService', () => {
     });
     expect(JSON.stringify(workspaceJobs[0].data)).not.toContain('secret-token');
     expect(JSON.stringify(workspaceJobs[0].data)).not.toContain('example.test');
+  });
+
+  it('lists workspace-scoped database export jobs in the process overview', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[11].getJobs.mockResolvedValue([
+      createJob({
+        requestedByUserId: 9,
+        scope: 'workspace',
+        workspaceId: 1,
+        isCancelled: false
+      })
+    ]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toHaveLength(1);
+    expect(workspaceJobs[0]).toMatchObject({
+      queueName: 'database-export',
+      status: 'waiting',
+      progress: 40,
+      data: {
+        scope: 'workspace',
+        workspaceId: 1,
+        isCancelled: false
+      }
+    });
+    expect(JSON.stringify(workspaceJobs[0].data)).not.toContain('requestedByUserId');
   });
 
   it('ignores stale null jobs returned by Bull when listing workspace jobs', async () => {

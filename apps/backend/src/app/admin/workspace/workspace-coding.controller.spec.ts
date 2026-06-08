@@ -1,4 +1,9 @@
+import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { AccessLevelGuard } from './access-level.guard';
+import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceCodingController } from './workspace-coding.controller';
 
 describe('WorkspaceCodingController', () => {
@@ -23,6 +28,17 @@ describe('WorkspaceCodingController', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('requires study-manager access to apply empty response coding', () => {
+    const handler = WorkspaceCodingController.prototype.applyEmptyResponseCoding;
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtAuthGuard,
+      WorkspaceGuard,
+      AccessLevelGuard
+    ]);
+    expect(Reflect.getMetadata('accessLevel', handler)).toBe(3);
   });
 
   it('rejects unsupported autocoder run values before queue checks', async () => {

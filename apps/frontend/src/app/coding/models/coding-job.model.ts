@@ -25,6 +25,7 @@ export interface CodingJob {
   totalUnits?: number;
   openUnits?: number;
   missings_profile_id?: number;
+  missingsProfileId?: number | null;
   missings_profile?: MissingsProfilesDto;
   training_id?: number;
   training?: CoderTraining;
@@ -38,6 +39,7 @@ export interface CodingJob {
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
   hasIssues?: boolean;
+  issueSummary?: CodingJobIssueSummary;
   aggregationEnabled?: boolean;
   aggregationThreshold?: number | null;
   responseMatchingFlags?: string[] | null;
@@ -49,6 +51,13 @@ export interface CodingJob {
   freshnessAffectedResponses?: number;
 }
 
+export interface CodingJobIssueSummary {
+  total: number;
+  open: number;
+  codeAssignmentUncertain: number;
+  newCodeNeeded: number;
+}
+
 export interface JobDefinitionCoderConfig {
   coderId: number;
   capacityPercent: number;
@@ -58,11 +67,15 @@ export interface Variable {
   unitName: string;
   variableId: string;
   responseCount?: number;
+  deriveErrorResponseCount?: number;
   casesInJobs?: number;
   availableCases?: number;
   uniqueCasesAfterAggregation?: number;
+  availableCasesWithDeriveError?: number;
+  uniqueCasesAfterAggregationWithDeriveError?: number;
   isDerived?: boolean;
   coderTrainingRequired?: boolean;
+  includeDeriveError?: boolean;
 }
 
 export interface VariableBundle {

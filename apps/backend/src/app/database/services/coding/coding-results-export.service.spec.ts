@@ -1,5 +1,6 @@
 import { Readable } from 'stream';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
+import * as ExcelJS from 'exceljs';
 import { CodingResultsExportService } from './coding-results-export.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -32,6 +33,7 @@ type TestCodingJobUnit = {
   person_group?: string;
   coding_job?: {
     training_id?: number | null;
+    missings_profile_id?: number | null;
     codingJobCoders?: Array<{
       user?: {
         id?: number;
@@ -101,6 +103,9 @@ const createCodingJobUnitQueryBuilder = (units: TestCodingJobUnit[]) => {
     leftJoin: jest.fn().mockReturnThis(),
     innerJoinAndSelect: jest.fn().mockReturnThis(),
     leftJoinAndSelect: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    distinct: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
@@ -114,6 +119,16 @@ const createCodingJobUnitQueryBuilder = (units: TestCodingJobUnit[]) => {
       return queryBuilder;
     }),
     getCount: jest.fn().mockImplementation(async () => queryVisibleUnits(units).length),
+    getRawMany: jest.fn().mockImplementation(async () => Array.from(
+      new Map(
+        queryVisibleUnits(units)
+          .filter(unit => unit.unit_name && unit.variable_id)
+          .map(unit => [`${unit.unit_name}|${unit.variable_id}`, {
+            unitName: unit.unit_name,
+            variableId: unit.variable_id
+          }])
+      ).values()
+    )),
     getMany: jest.fn().mockImplementation(async () => queryVisibleUnits(units)
       .slice(skipValue, skipValue + takeValue))
   };
@@ -147,6 +162,7 @@ function createService(overrides: {
     ignoredBooklets: string[];
     testletIgnoredUnits: Array<{ bookletId: string; unitId: string }>;
   };
+  missingsProfilesService?: { getMissingByIdForProfileOrDefault: jest.Mock };
 } = {}) {
   const responseRepository: MockedRepo<ResponseEntity> = {
     createQueryBuilder: jest.fn()
@@ -172,6 +188,7 @@ function createService(overrides: {
     getVariablePageMap: jest.fn().mockResolvedValue(overrides.pageMap ?? new Map([['VAR1', '3']])),
     getCodingResultsByVersionCsvStream: jest.fn().mockResolvedValue(Readable.from(['csv'])),
     getCodingResultsByVersionAsExcel: jest.fn().mockResolvedValue(Buffer.from('xlsx')),
+    getCodingResultsByVersionAsGeoGebraZip: jest.fn().mockResolvedValue(Buffer.from('zip')),
     getCodingListVariables: jest.fn().mockResolvedValue(overrides.codingListVariables ?? [{ unitName: 'UNIT1', variableId: 'VAR1' }])
   } as unknown as CodingListService;
   const workspaceExclusionService = {
@@ -189,7 +206,8 @@ function createService(overrides: {
     codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
     codingListService,
     {} as WorkspaceCoreService,
-    workspaceExclusionService
+    workspaceExclusionService,
+    overrides.missingsProfilesService as never
   );
 
   return {
@@ -204,6 +222,15 @@ function createService(overrides: {
   };
 }
 
+const expectProductionJobUnitFilter = (where: unknown) => {
+  expect(where).toEqual(expect.objectContaining({
+    coding_job: expect.objectContaining({
+      workspace_id: 1
+    })
+  }));
+  expect((where as { coding_job?: { training_id?: unknown } }).coding_job?.training_id).toEqual(IsNull());
+};
+
 describe('CodingResultsExportService', () => {
   it('delegates versioned CSV and Excel exports with fallback strings', async () => {
     const { service, codingListService } = createService();
@@ -211,8 +238,44 @@ describe('CodingResultsExportService', () => {
     await expect(service.exportCodingResultsByVersionAsCsv(1, 'v2', '', '', true)).resolves.toBeInstanceOf(Readable);
     await expect(service.exportCodingResultsByVersionAsExcel(1, 'v3', '', '', false)).resolves.toEqual(Buffer.from('xlsx'));
 
-    expect(codingListService.getCodingResultsByVersionCsvStream).toHaveBeenCalledWith(1, 'v2', '', '', true, undefined, true);
-    expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(1, 'v3', '', '', false, undefined, true);
+    expect(codingListService.getCodingResultsByVersionCsvStream).toHaveBeenCalledWith(
+      1,
+      'v2',
+      '',
+      '',
+      true,
+      undefined,
+      true,
+      false
+    );
+    expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(
+      1,
+      'v3',
+      '',
+      '',
+      false,
+      undefined,
+      true,
+      false
+    );
+  });
+
+  it('delegates versioned GeoGebra ZIP exports', async () => {
+    const { service, codingListService } = createService();
+    const onProgress = jest.fn();
+
+    await expect(
+      service.exportCodingResultsByVersionAsGeoGebraZip(1, 'v2', '', '', true, onProgress)
+    ).resolves.toEqual(Buffer.from('zip'));
+
+    expect(codingListService.getCodingResultsByVersionAsGeoGebraZip).toHaveBeenCalledWith(
+      1,
+      'v2',
+      '',
+      '',
+      true,
+      onProgress
+    );
   });
 
   it('caches variable page maps per workspace and falls back to page zero', async () => {
@@ -245,6 +308,29 @@ describe('CodingResultsExportService', () => {
     expect(csv).toContain('"0";""');
     expect(csv).toContain('"zero-code note"');
     expect(csv).not.toContain('skipped');
+  });
+
+  it('does not resolve manual missing profiles for regular detailed export codes', async () => {
+    const missingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn().mockRejectedValue(new Error('unexpected missing lookup'))
+    };
+    const { service } = createService({
+      missingsProfilesService,
+      codingJobUnits: [{
+        ...baseUnit,
+        code: 7,
+        score: 2,
+        coding_job: {
+          ...baseUnit.coding_job,
+          missings_profile_id: 77
+        }
+      }]
+    });
+
+    const csv = (await service.exportCodingResultsDetailed(1)).toString('utf-8');
+
+    expect(csv).toContain('"7";"Code-Vergabe unsicher"');
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).not.toHaveBeenCalled();
   });
 
   it('uses comments, replay URLs and pseudo coder names when requested', async () => {
@@ -390,5 +476,198 @@ describe('CodingResultsExportService', () => {
     )).toString('utf-8');
 
     expect(csv).toContain('"VAR1"');
+  });
+
+  it('includes DERIVE_ERROR job-only variables in manual-only aggregated export', async () => {
+    const { service } = createService({
+      codingListVariables: [],
+      codingJobUnits: [{
+        ...baseUnit,
+        variable_id: 'DERIVE_ONLY',
+        response: {
+          ...baseUnit.response,
+          status_v1: 4
+        }
+      }]
+    });
+
+    const buffer = await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'most-frequent',
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.worksheets[0];
+    const cellValues = worksheet.getSheetValues().flat().map(value => String(value ?? ''));
+
+    expect(cellValues.some(value => value.includes('DERIVE_ONLY'))).toBe(true);
+    expect(worksheet.getRow(1).getCell(5).value).toBeNull();
+  });
+
+  it('adds modal tie metadata to most-frequent aggregated export variables', async () => {
+    const { service } = createService({
+      codingJobUnits: [
+        {
+          ...baseUnit,
+          id: 1,
+          code: 7,
+          coding_issue_option: 1,
+          coding_job: {
+            ...baseUnit.coding_job,
+            codingJobCoders: [{ user: { id: 11, username: 'coder-a' } }]
+          }
+        },
+        {
+          ...baseUnit,
+          id: 2,
+          code: 8,
+          coding_issue_option: null,
+          coding_job: {
+            ...baseUnit.coding_job,
+            codingJobCoders: [{ user: { id: 12, username: 'coder-b' } }]
+          }
+        }
+      ]
+    });
+
+    const buffer = await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'most-frequent',
+      false,
+      true,
+      '',
+      undefined,
+      true
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.worksheets[0];
+
+    expect(worksheet.getRow(1).getCell(4).value).toBe('UNIT1_VAR1');
+    expect(worksheet.getRow(1).getCell(5).value).toBe('UNIT1_VAR1 Modalwert-Gleichstand');
+    expect(worksheet.getRow(1).getCell(6).value).toBe('UNIT1_VAR1 Modalwert-Kandidaten');
+    expect(worksheet.getRow(2).getCell(4).value).toBe(7);
+    expect(worksheet.getRow(2).getCell(5).value).toBe('Ja');
+    expect(worksheet.getRow(2).getCell(6).value).toBe('7,8');
+  });
+
+  it('includes DERIVE_ERROR job-only variables in manual-only by-variable export', async () => {
+    const { service } = createService({
+      codingListVariables: [],
+      codingJobUnits: [{
+        ...baseUnit,
+        variable_id: 'DERIVE_VAR',
+        response: {
+          ...baseUnit.response,
+          status_v1: 4
+        }
+      }]
+    });
+
+    const buffer = await service.exportCodingResultsByVariable(
+      1,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheetNames = workbook.worksheets.map(worksheet => worksheet.name);
+
+    expect(worksheetNames.some(name => name.includes('DERIVE_VAR'))).toBe(true);
+  });
+
+  it('limits repository-backed export reads to non-training jobs', async () => {
+    const {
+      service,
+      codingJobUnitRepository,
+      codingJobRepository
+    } = createService();
+    await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'most-frequent',
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'new-row-per-variable',
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'new-column-per-coder',
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    await service.exportCodingResultsByVariable(
+      1,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    await expect(service.exportCodingResultsByCoder(1)).rejects.toThrow('No coding jobs found');
+
+    const unitFindWheres = (codingJobUnitRepository.find as jest.Mock).mock.calls
+      .map(([options]) => options?.where)
+      .filter(Boolean);
+
+    expect(unitFindWheres.length).toBeGreaterThanOrEqual(4);
+    unitFindWheres.forEach(expectProductionJobUnitFilter);
+    expect(codingJobRepository.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        workspace_id: 1,
+        training_id: IsNull()
+      })
+    }));
   });
 });

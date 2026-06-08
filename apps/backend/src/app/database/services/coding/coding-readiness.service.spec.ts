@@ -85,11 +85,13 @@ const createCodingScheme = (variableId: string): string => JSON.stringify({
 const createResponse = (
   id: number,
   unitid: number,
-  variableid: string
+  variableid: string,
+  value: string | null = 'value'
 ): ResponseEntity => ({
   id,
   unitid,
-  variableid
+  variableid,
+  value
 } as ResponseEntity);
 
 const createService = (fixture: ReadinessFixture): CodingReadinessService => {
@@ -202,6 +204,37 @@ describe('CodingReadinessService', () => {
     ]));
   });
 
+  it('ignores helper variables when building readiness diagnostics', async () => {
+    const service = createService({
+      units: [
+        createUnit(1, 'UNIT_OK')
+      ],
+      rawResponsesTotal: 4,
+      candidateRows: [
+        { unitid: 1, variableid: 'image_1', response_count: 1 },
+        { unitid: 1, variableid: 'text_1', response_count: 1 },
+        { unitid: 1, variableid: 'frame_1', response_count: 1 },
+        { unitid: 1, variableid: 'var1', response_count: 1 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])]
+      ])
+    });
+
+    const readiness = await service.getReadiness(1, { forceRefresh: true });
+
+    expect(readiness.readiness).toBe('READY');
+    expect(readiness.codeableResponses).toBe(1);
+    expect(readiness.validResponses).toBe(1);
+    expect(readiness.invalidVariableSamples).toEqual([]);
+  });
+
   it('filters out valid-variable responses without usable coding scheme', async () => {
     const units = [
       createUnit(1, 'UNIT_OK'),
@@ -234,6 +267,41 @@ describe('CodingReadinessService', () => {
     );
 
     expect(filteredResponses.map(response => response.id)).toEqual([1]);
+  });
+
+  it('filters helper responses but keeps valid empty responses before autocoding', async () => {
+    const units = [
+      createUnit(1, 'UNIT_OK')
+    ];
+    const service = createService({
+      units,
+      rawResponsesTotal: 0,
+      candidateRows: [],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1', 'image_1', 'text_1', 'frame_1'])]
+      ])
+    });
+
+    const filteredResponses = await service.filterResponsesCodeable(
+      1,
+      [
+        createResponse(1, 1, 'var1'),
+        createResponse(2, 1, 'image_1'),
+        createResponse(3, 1, 'text_1'),
+        createResponse(4, 1, 'frame_1'),
+        createResponse(5, 1, 'var1', '   '),
+        createResponse(6, 1, 'var1', null)
+      ],
+      units
+    );
+
+    expect(filteredResponses.map(response => response.id)).toEqual([1, 5, 6]);
   });
 
   it('blocks coding scheme files that the autocoder cannot parse', async () => {

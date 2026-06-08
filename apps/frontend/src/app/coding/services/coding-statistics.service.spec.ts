@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { AppService } from '../../core/services/app.service';
 import { SERVER_URL } from '../../injection-tokens';
+import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../../core/interceptors/http-error-context';
 
 describe('CodingStatisticsService', () => {
   let service: CodingStatisticsService;
@@ -88,12 +89,13 @@ describe('CodingStatisticsService', () => {
 
   it('should get replay URL', () => {
     const mockRes = { replayUrl: 'http://replay' };
-    service.getReplayUrl(1, 123, 'token').subscribe(res => {
+    service.getReplayUrl(1, 123).subscribe(res => {
       expect(res.replayUrl).toBe('http://replay');
     });
 
-    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/responses/123/replay-url?authToken=token`);
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/responses/123/replay-url`);
     expect(req.request.method).toBe('GET');
+    expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
     req.flush(mockRes);
   });
 

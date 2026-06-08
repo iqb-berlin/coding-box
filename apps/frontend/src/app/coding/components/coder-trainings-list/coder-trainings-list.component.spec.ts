@@ -13,6 +13,7 @@ import { CoderTraining } from '../../models/coder-training.model';
 describe('CoderTrainingsListComponent', () => {
   let fixture: ComponentFixture<CoderTrainingsListComponent>;
   let component: CoderTrainingsListComponent;
+  let matDialogMock: { open: jest.Mock };
 
   const trainings: CoderTraining[] = [
     {
@@ -42,6 +43,8 @@ describe('CoderTrainingsListComponent', () => {
   ];
 
   beforeEach(async () => {
+    matDialogMock = { open: jest.fn(() => ({ afterClosed: () => of(null) })) };
+
     await TestBed.configureTestingModule({
       imports: [
         CoderTrainingsListComponent,
@@ -60,12 +63,13 @@ describe('CoderTrainingsListComponent', () => {
         { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
         { provide: BackendMessageTranslatorService, useValue: { translateMessage: jest.fn((message: string) => message) } },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
-        { provide: MatDialog, useValue: { open: jest.fn(() => ({ afterClosed: () => of(null) })) } }
+        { provide: MatDialog, useValue: matDialogMock }
       ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(CoderTrainingsListComponent);
     component = fixture.componentInstance;
+    (component as unknown as { dialog: MatDialog }).dialog = matDialogMock as unknown as MatDialog;
     component.originalData = trainings;
     component.coderTrainings = trainings;
     component.rebuildTrainingNameFilterOptions();
@@ -100,5 +104,35 @@ describe('CoderTrainingsListComponent', () => {
     expect(component.getTrainingActionAriaLabel('edit', trainings[0])).toBe(`Schulung bearbeiten: ${actionTarget}`);
     expect(component.getTrainingActionAriaLabel('delete', trainings[0])).toBe(`Schulung löschen: ${actionTarget}`);
     expect(component.getTrainingActionAriaLabel('more', trainings[0])).toBe(`Weitere Aktionen: ${actionTarget}`);
+  });
+
+  it('opens the comparison dialog with an explicit initial mode', () => {
+    component.openResultsComparison(undefined, 'between-trainings');
+
+    expect(matDialogMock.open).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        data: {
+          workspaceId: 1,
+          selectedTraining: undefined,
+          initialMode: 'between-trainings'
+        }
+      })
+    );
+  });
+
+  it('opens row comparisons in within-training mode for the selected training', () => {
+    component.openResultsComparison(trainings[0], 'between-trainings');
+
+    expect(matDialogMock.open).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        data: {
+          workspaceId: 1,
+          selectedTraining: trainings[0],
+          initialMode: 'within-training'
+        }
+      })
+    );
   });
 });

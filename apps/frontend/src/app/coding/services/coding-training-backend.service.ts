@@ -96,11 +96,18 @@ export class CodingTrainingBackendService {
       variableId: string;
       unitId: string;
       sampleCount: number;
+      includeDeriveError?: boolean;
     }[],
     trainingLabel: string,
     missingsProfileId?: number,
-    assignedVariables?: { unitName: string; variableId: string; sampleCount: number }[],
-    assignedVariableBundles?: { id: number; name: string; sampleCount?: number; caseOrderingMode?: 'continuous' | 'alternating' }[],
+    assignedVariables?: { unitName: string; variableId: string; sampleCount: number; includeDeriveError?: boolean }[],
+    assignedVariableBundles?: {
+      id: number;
+      name: string;
+      sampleCount?: number;
+      caseOrderingMode?: 'continuous' | 'alternating';
+      variables?: { unitName: string; variableId: string; sampleCount?: number; includeDeriveError?: boolean }[];
+    }[],
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
@@ -133,10 +140,16 @@ export class CodingTrainingBackendService {
     trainingId: number,
     label: string,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    variableConfigs: { variableId: string; unitId: string; sampleCount: number; includeDeriveError?: boolean }[],
     missingsProfileId?: number,
-    assignedVariables?: { unitName: string; variableId: string; sampleCount: number }[],
-    assignedVariableBundles?: { id: number; name: string; sampleCount?: number; caseOrderingMode?: 'continuous' | 'alternating' }[],
+    assignedVariables?: { unitName: string; variableId: string; sampleCount: number; includeDeriveError?: boolean }[],
+    assignedVariableBundles?: {
+      id: number;
+      name: string;
+      sampleCount?: number;
+      caseOrderingMode?: 'continuous' | 'alternating';
+      variables?: { unitName: string; variableId: string; sampleCount?: number; includeDeriveError?: boolean }[];
+    }[],
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
@@ -203,9 +216,23 @@ export class CodingTrainingBackendService {
     responseId: number,
     code: number | null,
     score: number | null
-  ): Observable<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }> {
+  ): Observable<{
+      success: boolean;
+      code: number | null;
+      score: number | null;
+      source: 'manual' | 'auto_agreement' | null;
+      managerUserId: number | null;
+      managerName: string | null;
+    }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/discussion-result`;
-    return this.http.post<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }>(
+    return this.http.post<{
+      success: boolean;
+      code: number | null;
+      score: number | null;
+      source: 'manual' | 'auto_agreement' | null;
+      managerUserId: number | null;
+      managerName: string | null;
+    }>(
       url,
       { responseId, code, score },
       { headers: this.authHeader }
@@ -229,6 +256,11 @@ export class CodingTrainingBackendService {
       variables: Array<{
         unitName: string;
         variableId: string;
+        meanKappa: number | null;
+        meanAgreement: number | null;
+        caseCount: number;
+        validPairCount: number;
+        coderPairCount: number;
         coderPairs: Array<{
           coder1Id: number;
           coder1Name: string;
@@ -256,6 +288,11 @@ export class CodingTrainingBackendService {
       variables: Array<{
         unitName: string;
         variableId: string;
+        meanKappa: number | null;
+        meanAgreement: number | null;
+        caseCount: number;
+        validPairCount: number;
+        coderPairCount: number;
         coderPairs: Array<{
           coder1Id: number;
           coder1Name: string;

@@ -22,7 +22,7 @@ export class CodingManagementUiService {
   private snackBar = inject(MatSnackBar);
 
   /**
-     * Opens replay for a response by creating a token and generating replay URL
+     * Opens replay for a response by generating an internal replay URL.
      */
   openReplayForResponse(response: Success): Observable<string> {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -35,12 +35,11 @@ export class CodingManagementUiService {
       return of('');
     }
 
-    return this.appService
-      .createOwnToken(workspaceId, 1)
-      .pipe(
-        catchError(() => {
+    return this.statisticsService.getReplayUrl(workspaceId, response.id).pipe(
+      switchMap(result => {
+        if (!result.replayUrl) {
           this.snackBar.open(
-            'Fehler beim Abrufen des Tokens für Replay',
+            'Fehler beim Generieren der Replay-URL',
             'Schließen',
             {
               duration: 5000,
@@ -48,29 +47,21 @@ export class CodingManagementUiService {
             }
           );
           return of('');
-        }),
-        switchMap(token => {
-          if (!token) {
-            return of('');
+        }
+        return of(result.replayUrl);
+      }),
+      catchError(() => {
+        this.snackBar.open(
+          'Fehler beim Generieren der Replay-URL',
+          'Schließen',
+          {
+            duration: 5000,
+            panelClass: ['error-snackbar']
           }
-          return this.statisticsService.getReplayUrl(workspaceId, response.id, token).pipe(
-            switchMap(result => {
-              if (!result.replayUrl) {
-                this.snackBar.open(
-                  'Fehler beim Generieren der Replay-URL',
-                  'Schließen',
-                  {
-                    duration: 5000,
-                    panelClass: ['error-snackbar']
-                  }
-                );
-                return of('');
-              }
-              return of(result.replayUrl);
-            })
-          );
-        })
-      );
+        );
+        return of('');
+      })
+    );
   }
 
   /**

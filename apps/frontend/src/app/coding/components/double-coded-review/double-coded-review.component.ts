@@ -21,7 +21,7 @@ import {
 } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  Subject, debounceTime, distinctUntilChanged, takeUntil, map, merge, catchError, of, forkJoin, switchMap, take, finalize
+  Subject, debounceTime, distinctUntilChanged, takeUntil, map, merge, catchError, of, forkJoin, take, finalize
 } from 'rxjs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
@@ -61,10 +61,12 @@ interface DoubleCodedItem {
 interface CoderColumnMeta {
   columnId: string;
   coderId: number;
-  jobId: number;
   label: string;
-  jobName: string;
+  coderNames: string[];
+  jobNames: string[];
 }
+
+type ConflictType = 'none' | 'inter-coder' | 'same-coder' | 'mixed';
 
 @Component({
   selector: 'coding-box-double-coded-review',
@@ -398,22 +400,34 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
     items.forEach(item => {
       item.coderResults.forEach(result => {
-        const columnId = `coder_${result.jobId}`;
+        const columnId = `coder_${result.coderId}`;
+        const coderName = this.getCoderDisplayName(result);
         if (!meta[columnId]) {
           meta[columnId] = {
             columnId,
             coderId: result.coderId,
-            jobId: result.jobId,
-            label: result.coderName,
-            jobName: result.jobName
+            label: coderName,
+            coderNames: [],
+            jobNames: []
           };
+        }
+
+        if (!meta[columnId].coderNames.includes(coderName)) {
+          meta[columnId].coderNames.push(coderName);
+        }
+
+        if (result.jobName && !meta[columnId].jobNames.includes(result.jobName)) {
+          meta[columnId].jobNames.push(result.jobName);
         }
       });
     });
 
     this.coderColumnMeta = meta;
     this.dynamicCoderColumns = Object.values(meta)
-      .sort((a, b) => a.label.localeCompare(b.label, 'de', { sensitivity: 'base' }))
+      .sort((a, b) => {
+        const labelComparison = a.label.localeCompare(b.label, 'de', { sensitivity: 'base' });
+        return labelComparison || a.coderId - b.coderId;
+      })
       .map(column => column.columnId);
 
     this.displayedColumns = [...this.staticColumns, ...this.dynamicCoderColumns, 'selection'];
@@ -432,13 +446,60 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   getCoderColumnTooltip(columnId: string): string {
     const meta = this.coderColumnMeta[columnId];
     if (!meta) return '';
-    return meta.jobName ? `${meta.label} (${meta.jobName})` : meta.label;
+
+    const details: string[] = [];
+    const alternativeCoderNames = meta.coderNames.filter(name => name !== meta.label);
+
+    if (alternativeCoderNames.length > 0) {
+      const namesSummary = this.getVisibleValueSummary(alternativeCoderNames);
+      const translatedAlternativeNames = this.translateService.instant(
+        'double-coded-review.columns.alternative-coder-names',
+        { names: namesSummary }
+      );
+      details.push(
+        translatedAlternativeNames === 'double-coded-review.columns.alternative-coder-names' ?
+          `Weitere Namen: ${namesSummary}` :
+          translatedAlternativeNames
+      );
+    }
+
+    if (meta.jobNames.length > 0) {
+      details.push(this.getVisibleValueSummary(meta.jobNames));
+    }
+
+    if (details.length === 0) {
+      return meta.label;
+    }
+
+    return `${meta.label} (${details.join('; ')})`;
   }
 
-  getCoderResultForColumn(item: DoubleCodedItem, columnId: string): CoderResult | undefined {
+  getCoderResultsForColumn(item: DoubleCodedItem, columnId: string): CoderResult[] {
     const meta = this.coderColumnMeta[columnId];
-    if (!meta) return undefined;
-    return item.coderResults.find(result => result.jobId === meta.jobId);
+    if (!meta) return [];
+
+    return item.coderResults
+      .filter(result => result.coderId === meta.coderId)
+      .sort((a, b) => {
+        const jobNameComparison = a.jobName.localeCompare(b.jobName, 'de', { sensitivity: 'base' });
+        return jobNameComparison || a.jobId - b.jobId;
+      });
+  }
+
+  getCoderResultSourceLabel(result: CoderResult): string {
+    return result.jobName ? `${result.jobName} (#${result.jobId})` : `#${result.jobId}`;
+  }
+
+  hasMultipleResultsForCoder(item: DoubleCodedItem, result: Pick<CoderResult, 'coderId'>): boolean {
+    return item.coderResults.filter(coderResult => coderResult.coderId === result.coderId).length > 1;
+  }
+
+  getDecisionResultSourceLabel(item: DoubleCodedItem, result: CoderResult): string {
+    if (!this.hasMultipleResultsForCoder(item, result)) {
+      return this.getCoderDisplayName(result);
+    }
+
+    return `${this.getCoderDisplayName(result)} - ${this.getCoderResultSourceLabel(result)}`;
   }
 
   getSelectedDecisionResult(item: DoubleCodedItem): CoderResult | undefined {
@@ -455,7 +516,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       return 'resolved';
     }
 
-    if (this.hasConflict(item)) {
+    if (this.getConflictType(item) !== 'none') {
       return 'conflict';
     }
 
@@ -484,7 +545,29 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       return this.translateService.instant('double-coded-review.applied');
     }
 
+    const conflictType = this.getConflictType(item);
+    if (conflictType !== 'none') {
+      return this.translateService.instant(`double-coded-review.decision.status-${conflictType}-conflict`);
+    }
+
     return this.translateService.instant(`double-coded-review.decision.status-${statusClass}`);
+  }
+
+  getDecisionStatusTooltip(item: DoubleCodedItem): string {
+    if (item.isResolved) {
+      return this.translateService.instant('double-coded-review.applied');
+    }
+
+    const progressText = `${this.getCodedCount(item)}/${this.getCoderCount(item)} ${
+      this.translateService.instant('double-coded-review.coders-done')
+    }`;
+    const conflictType = this.getConflictType(item);
+
+    if (conflictType === 'none') {
+      return progressText;
+    }
+
+    return `${this.translateService.instant(`double-coded-review.decision.tooltip-${conflictType}-conflict`)} - ${progressText}`;
   }
 
   shouldShowDecisionComment(item: DoubleCodedItem): boolean {
@@ -530,15 +613,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     }
 
     this.replayLoadingByResponseId[responseId] = true;
-    this.appService.createOwnToken(workspaceId, 1).pipe(
+    this.codingStatisticsService.getReplayUrl(workspaceId, responseId).pipe(
       take(1),
-      switchMap(token => {
-        if (!token) {
-          this.showError(this.translateService.instant('coding-management.descriptions.missing-token'));
-          return of({ replayUrl: '' });
-        }
-        return this.codingStatisticsService.getReplayUrl(workspaceId, responseId, token).pipe(take(1));
-      }),
       finalize(() => {
         this.replayLoadingByResponseId[responseId] = false;
       })
@@ -558,16 +634,47 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   hasConflict(item: DoubleCodedItem): boolean {
-    const validResultSignatures = item.coderResults
-      .map(result => this.getCoderResultSignature(result))
-      .filter((signature): signature is string => signature !== null);
+    // Keep same-coder deviations actionable; the detailed conflict type decides how they are labelled.
+    return this.getConflictType(item) !== 'none';
+  }
 
-    if (validResultSignatures.length < 2) {
-      return false;
+  getConflictType(item: DoubleCodedItem): ConflictType {
+    const validResults = item.coderResults
+      .map(result => ({
+        coderId: result.coderId,
+        signature: this.getCoderResultSignature(result)
+      }))
+      .filter((result): result is { coderId: number; signature: string } => result.signature !== null);
+
+    if (validResults.length < 2) {
+      return 'none';
     }
 
-    const firstSignature = validResultSignatures[0];
-    return validResultSignatures.some(signature => signature !== firstSignature);
+    const signaturesByCoderId = new Map<number, Set<string>>();
+    validResults.forEach(result => {
+      const signatures = signaturesByCoderId.get(result.coderId) || new Set<string>();
+      signatures.add(result.signature);
+      signaturesByCoderId.set(result.coderId, signatures);
+    });
+
+    const hasSameCoderConflict = Array.from(signaturesByCoderId.values())
+      .some(signatures => signatures.size > 1);
+    const hasInterCoderConflict = validResults.some((result, index) => (
+      validResults.slice(index + 1).some(otherResult => (
+        otherResult.coderId !== result.coderId &&
+        otherResult.signature !== result.signature
+      ))
+    ));
+
+    if (hasSameCoderConflict && hasInterCoderConflict) {
+      return 'mixed';
+    }
+
+    if (hasSameCoderConflict) {
+      return 'same-coder';
+    }
+
+    return hasInterCoderConflict ? 'inter-coder' : 'none';
   }
 
   private getCoderResultSignature(result: Pick<CoderResult, 'code' | 'score'>): string | null {
@@ -578,12 +685,42 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return `${result.code}:${result.score ?? 'NULL'}`;
   }
 
+  private getCoderDisplayName(result: Pick<CoderResult, 'coderId' | 'coderName'>): string {
+    return result.coderName?.trim() || `Coder ${result.coderId}`;
+  }
+
+  private getVisibleValueSummary(values: string[], visibleCount = 3): string {
+    const visibleValues = values.slice(0, visibleCount);
+    const remainingValueCount = values.length - visibleValues.length;
+
+    return remainingValueCount > 0 ?
+      `${visibleValues.join(', ')} (+${remainingValueCount})` :
+      visibleValues.join(', ');
+  }
+
   isAllCodersDone(item: DoubleCodedItem): boolean {
     return item.coderResults.every(cr => cr.code !== null);
   }
 
+  getCoderCount(item: DoubleCodedItem): number {
+    return this.getCoderCompletionStates(item).length;
+  }
+
   getCodedCount(item: DoubleCodedItem): number {
-    return item.coderResults.filter(cr => cr.code !== null).length;
+    return this.getCoderCompletionStates(item).filter(isDone => isDone).length;
+  }
+
+  getCoderCompletionStates(item: DoubleCodedItem): boolean[] {
+    const resultsByCoderId = new Map<number, CoderResult[]>();
+
+    item.coderResults.forEach(result => {
+      const results = resultsByCoderId.get(result.coderId) || [];
+      results.push(result);
+      resultsByCoderId.set(result.coderId, results);
+    });
+
+    return Array.from(resultsByCoderId.values())
+      .map(results => results.every(result => result.code !== null));
   }
 
   onFilterChange(): void {
@@ -850,10 +987,6 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       case -1:
       case -2:
         return '';
-      case -3:
-        return '-98';
-      case -4:
-        return '-97';
       default:
         return code.toString();
     }

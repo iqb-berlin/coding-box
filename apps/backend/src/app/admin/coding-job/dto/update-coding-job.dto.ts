@@ -3,6 +3,7 @@ import {
   IsString,
   IsOptional,
   IsArray,
+  ArrayUnique,
   IsEnum,
   IsNumber,
   IsBoolean,
@@ -51,6 +52,7 @@ export class UpdateCodingJobDto {
     required: false
   })
   @IsArray()
+  @ArrayUnique()
   @IsNumber({}, { each: true })
   @IsOptional()
     assignedCoders?: number[];

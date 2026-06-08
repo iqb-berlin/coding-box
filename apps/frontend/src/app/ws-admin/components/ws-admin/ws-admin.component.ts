@@ -6,7 +6,6 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
 import { catchError, of } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
-import { MyCodingJobsComponent } from '../../../coding/components/my-coding-jobs/my-coding-jobs.component';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { getEffectiveCanCode } from '../../../shared/utils/workspace-access';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
@@ -27,8 +26,7 @@ interface WsAdminNavLink {
     RouterLink,
     MatTabNavPanel,
     RouterOutlet,
-    TranslateModule,
-    MyCodingJobsComponent]
+    TranslateModule]
 })
 export class WsAdminComponent implements OnInit {
   private route = inject(ActivatedRoute);
@@ -40,8 +38,8 @@ export class WsAdminComponent implements OnInit {
   private allNavLinks: WsAdminNavLink[] = [
     { path: 'test-files', label: 'ws-admin.test-files' },
     { path: 'test-results', label: 'ws-admin.test-results' },
-    { path: 'coding', label: 'ws-admin.coding' },
-    { path: 'cleaning', label: 'ws-admin.cleaning' },
+    { path: 'coding/management', label: 'ws-admin.coding-overview' },
+    { path: 'coding/manual', label: 'ws-admin.manual-coding' },
     { path: 'export', label: 'ws-admin.export' },
     { path: 'settings', label: 'ws-admin.settings' }
   ];
@@ -49,7 +47,7 @@ export class WsAdminComponent implements OnInit {
   private myCodingJobsLink: WsAdminNavLink = { path: 'coding/my-jobs', label: 'ws-admin.my-coding-jobs' };
 
   private baseCodingManagerLinks: WsAdminNavLink[] = [
-    { path: 'coding/statistics', label: 'ws-admin.coding-statistics' },
+    { path: 'coding/statistics', label: 'ws-admin.coding-overview' },
     { path: 'coding/manual', label: 'ws-admin.manual-coding' },
     { path: 'coding/export', label: 'ws-admin.export' }
   ];
@@ -136,8 +134,8 @@ export class WsAdminComponent implements OnInit {
       this.navLinks = showMyCodingJobs ? [this.myCodingJobsLink] : [];
     } else if (this.accessLevel < 3) {
       this.navLinks = showMyCodingJobs ?
-        [this.myCodingJobsLink, { path: 'coding', label: 'ws-admin.coding' }] :
-        [{ path: 'coding', label: 'ws-admin.coding' }];
+        [this.myCodingJobsLink, ...this.baseCodingManagerLinks] :
+        [...this.baseCodingManagerLinks];
     } else {
       this.navLinks = showMyCodingJobs ?
         [this.myCodingJobsLink, ...this.allNavLinks] :
@@ -183,7 +181,7 @@ export class WsAdminComponent implements OnInit {
       `/workspace-admin/${workspaceId}/coding/management`
     ];
 
-    // If Coding Manager (level 2) is on the default coding route, redirect to statistics
+    // If Coding Manager (level 2) is on the default coding route, redirect to the accessible coding overview
     if (this.accessLevel === 2 && defaultCodingRoutes.some(route => currentUrl.endsWith(route))) {
       this.router.navigate([`/workspace-admin/${workspaceId}/coding/statistics`]);
       return;

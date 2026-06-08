@@ -13,11 +13,13 @@ export interface ReplayUrlParams {
   variablePage: string;
   variableAnchor: string;
   authToken: string;
+  workspaceId?: number | string;
 }
 
 /**
  * Generates a replay URL with proper encoding
- * URL Format: {serverUrl}/#/replay/{loginName}@{loginCode}@{loginGroup}@{bookletId}/{unitId}/{variablePage}/{variableAnchor}?auth={authToken}
+ * URL Format: {serverUrl}/#/replay/{loginName}@{loginCode}@{loginGroup}@{bookletId}/{unitId}/{variablePage}/{variableAnchor}?workspaceId={workspaceId}
+ * External replay URLs may additionally include auth={authToken}.
  *
  * @param params - The parameters needed to build the replay URL
  * @returns The complete replay URL or empty string if required params are missing
@@ -32,7 +34,8 @@ export function generateReplayUrl(params: ReplayUrlParams): string {
     unitId,
     variablePage,
     variableAnchor,
-    authToken
+    authToken,
+    workspaceId
   } = params;
 
   const encodedLoginName = encodeURIComponent(loginName);
@@ -42,9 +45,16 @@ export function generateReplayUrl(params: ReplayUrlParams): string {
   const encodedUnitId = encodeURIComponent(unitId);
   const encodedVariablePage = encodeURIComponent(variablePage || '0');
   const encodedVariableAnchor = encodeURIComponent(variableAnchor);
-  const encodedAuthToken = encodeURIComponent(authToken || '');
+  const queryParams = new URLSearchParams();
+  if (authToken) {
+    queryParams.set('auth', authToken);
+  }
+  if (workspaceId) {
+    queryParams.set('workspaceId', String(workspaceId));
+  }
+  const query = queryParams.toString();
 
-  return `${serverUrl}/#/replay/${encodedLoginName}@${encodedLoginCode}@${encodedLoginGroup}@${encodedBookletId}/${encodedUnitId}/${encodedVariablePage}/${encodedVariableAnchor}?auth=${encodedAuthToken}`;
+  return `${serverUrl}/#/replay/${encodedLoginName}@${encodedLoginCode}@${encodedLoginGroup}@${encodedBookletId}/${encodedUnitId}/${encodedVariablePage}/${encodedVariableAnchor}${query ? `?${query}` : ''}`;
 }
 
 /**

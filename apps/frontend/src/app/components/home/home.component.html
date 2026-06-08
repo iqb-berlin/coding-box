@@ -1,7 +1,9 @@
 <div class="home-body app-container">
   <coding-box-user-workspaces-area
     class="home-panel"
-    [workspaces]="workspaces">
+    [workspaces]="workspaces"
+    [authBootstrapStatus]="authBootstrapStatus"
+    [authDataLoaded]="Number(authData.userId) > 0">
   </coding-box-user-workspaces-area>
 
   <coding-box-app-info
@@ -9,7 +11,7 @@
     [appTitle]="'Web application for coding'"
     [introHtml]="'appService.appConfig.introHtml'"
     [appName]="'IQB-Kodierbox'"
-    [appVersion]="'1.15.1'"
+    [appVersion]="'1.16.0'"
     [userName]="authData.userName"
     [userLongName]="appService.userProfile.firstName + ' ' + appService.userProfile.lastName"
     [isUserLoggedIn]="Number(authData.userId) > 0"

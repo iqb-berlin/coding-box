@@ -35,13 +35,15 @@ import {
   CodingResultsService,
   CodingExportService,
   CodingProcessService,
+  CodingReplayAnchorService,
   CoderTrainingService,
   MissingsProfilesService,
   ExternalCodingImportService,
   CodingValidationService,
   CodingAnalysisService,
   CodingFreshnessService,
-  CodingReadinessService
+  CodingReadinessService,
+  CodingItemMatrixExportService
 } from '../database/services/coding';
 import { JobDefinitionService } from '../database/services/jobs';
 // eslint-disable-next-line import/no-cycle
@@ -99,10 +101,12 @@ import { UserModule } from '../user/user.module';
     CodingResultsService,
     CodingExportService,
     CodingProcessService,
+    CodingReplayAnchorService,
     CodingValidationService,
     CodingAnalysisService,
     CodingFreshnessService,
-    CodingReadinessService
+    CodingReadinessService,
+    CodingItemMatrixExportService
   ],
   exports: [
     CodingJobService,
@@ -120,10 +124,12 @@ import { UserModule } from '../user/user.module';
     CodingResultsService,
     CodingExportService,
     CodingProcessService,
+    CodingReplayAnchorService,
     CodingValidationService,
     CodingAnalysisService,
     CodingFreshnessService,
-    CodingReadinessService
+    CodingReadinessService,
+    CodingItemMatrixExportService
   ]
 })
 export class CodingModule { }

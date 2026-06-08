@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository
@@ -18,6 +18,13 @@ import {
   buildAggregationGroups,
   summarizeAggregationGroups
 } from './aggregation-metrics.util';
+import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
+import {
+  getCoveredSourceKeysForManualDerivedVariables,
+  isCoveredSourceVariable,
+  ManualCodingExcludedSourceSummary,
+  summarizeCoveredSourceVariables
+} from '../../utils/manual-coding-scope.util';
 
 type ResponseMatchingFlag =
   | 'NO_AGGREGATION'
@@ -31,6 +38,13 @@ interface CoverageResponse {
   value: string | null;
   codeV2: number | null;
   statusV2: number | null;
+  statusV1: number | null;
+}
+
+interface CoverageResponseScope {
+  allResponses: CoverageResponse[];
+  manualResponses: CoverageResponse[];
+  excludedSourceSummary: ManualCodingExcludedSourceSummary;
 }
 
 interface EffectiveCaseCoverage {
@@ -48,6 +62,19 @@ interface EffectiveCaseProgress {
   aggregationActive: boolean;
   aggregationThreshold: number | null;
   aggregatedDuplicateCases: number;
+}
+
+interface DeriveErrorManualProgress {
+  deriveErrorTotalResponses: number;
+  deriveErrorAppliedResponses: number;
+  deriveErrorRemainingResponses: number;
+  deriveErrorRawTotalResponses: number;
+  deriveErrorRawAppliedResponses: number;
+}
+
+interface ManualProgressStatusQuery {
+  where: (condition: string | Brackets, parameters?: Record<string, unknown>) => unknown;
+  andWhere: (condition: string | Brackets, parameters?: Record<string, unknown>) => unknown;
 }
 
 interface VariableDefinitionReference {
@@ -79,8 +106,23 @@ export class CodingProgressService {
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
     private workspaceFilesService: WorkspaceFilesService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    @Optional()
+    private missingsProfilesService?: MissingsProfilesService
   ) { }
+
+  private async getDefaultMirCode(workspaceId: number): Promise<number> {
+    if (!this.missingsProfilesService) {
+      return IQB_STANDARD_MISSING_CODES.mir;
+    }
+
+    const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+      workspaceId,
+      null,
+      'mir'
+    );
+    return missing.code;
+  }
 
   async getCodingProgressOverview(workspaceId: number): Promise<{
     totalCasesToCode: number;
@@ -92,44 +134,26 @@ export class CodingProgressService {
     aggregationActive: boolean;
     aggregationThreshold: number | null;
     aggregatedDuplicateCases: number;
+    statusTotalCasesToCode: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
   }> {
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const rawTotalCasesQuery = this.responseRepository
-      .createQueryBuilder('response')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere(new Brackets(qb => {
-        qb.where('response.code_v2 IS NULL')
-          .orWhere(subQuery => {
-            const exists = subQuery
-              .subQuery()
-              .select('1')
-              .from('coding_job_unit', 'cju')
-              .where('cju.response_id = response.id')
-              .getQuery();
-            return `EXISTS (${exists})`;
-          });
-      }));
-    applyResolvedExclusionsToQuery(rawTotalCasesQuery, exclusions);
-    const rawTotalCasesToCode = await rawTotalCasesQuery.getCount();
+    const responseScope = await this.getCoverageResponseScope(workspaceId);
+    const rawTotalCasesToCode = responseScope.manualResponses.length;
+    const manualResponseIds = new Set(
+      responseScope.manualResponses.map(response => response.responseId)
+    );
 
     const completedResponseIds = await this.getCompletedCoverageResponseIds(workspaceId);
-    const completedCases = completedResponseIds.size;
+    const completedCases = Array.from(completedResponseIds)
+      .filter(responseId => manualResponseIds.has(responseId))
+      .length;
     const rawCompletionPercentage =
       rawTotalCasesToCode > 0 ? (completedCases / rawTotalCasesToCode) * 100 : 0;
     const effectiveProgress = await this.getEffectiveCaseProgress(
       workspaceId,
-      completedResponseIds
+      completedResponseIds,
+      responseScope.manualResponses
     );
     const completionPercentage =
       effectiveProgress.effectiveTotalCasesToCode > 0 ?
@@ -145,7 +169,12 @@ export class CodingProgressService {
       rawCompletionPercentage,
       aggregationActive: effectiveProgress.aggregationActive,
       aggregationThreshold: effectiveProgress.aggregationThreshold,
-      aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases
+      aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases,
+      statusTotalCasesToCode: responseScope.allResponses.length,
+      coveredSourceVariableCount:
+        responseScope.excludedSourceSummary.coveredSourceVariableCount,
+      coveredSourceResponseCount:
+        responseScope.excludedSourceSummary.coveredSourceResponseCount
     };
   }
 
@@ -160,8 +189,17 @@ export class CodingProgressService {
     aggregationActive: boolean;
     aggregationThreshold: number | null;
     aggregatedDuplicateCases: number;
+    statusTotalIncompleteResponses: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
+    deriveErrorTotalResponses: number;
+    deriveErrorAppliedResponses: number;
+    deriveErrorRemainingResponses: number;
+    deriveErrorRawTotalResponses: number;
+    deriveErrorRawAppliedResponses: number;
   }> {
-    const responses = await this.getCoverageResponses(workspaceId);
+    const responseScope = await this.getCoverageResponseScope(workspaceId);
+    const responses = responseScope.manualResponses;
     const appliedResponseIds = new Set(
       responses
         .filter(response => this.isAppliedResultResponse(response))
@@ -178,6 +216,11 @@ export class CodingProgressService {
         0;
     const rawCompletionPercentage =
       responses.length > 0 ? (appliedResponseIds.size / responses.length) * 100 : 0;
+    const deriveErrorProgress = await this.getDeriveErrorManualProgress(
+      workspaceId,
+      responses,
+      appliedResponseIds
+    );
 
     return {
       totalIncompleteResponses: effectiveProgress.effectiveTotalCasesToCode,
@@ -192,7 +235,13 @@ export class CodingProgressService {
       rawCompletionPercentage,
       aggregationActive: effectiveProgress.aggregationActive,
       aggregationThreshold: effectiveProgress.aggregationThreshold,
-      aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases
+      aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases,
+      statusTotalIncompleteResponses: responseScope.allResponses.length,
+      coveredSourceVariableCount:
+        responseScope.excludedSourceSummary.coveredSourceVariableCount,
+      coveredSourceResponseCount:
+        responseScope.excludedSourceSummary.coveredSourceResponseCount,
+      ...deriveErrorProgress
     };
   }
 
@@ -210,109 +259,21 @@ export class CodingProgressService {
     aggregationActive: boolean;
     aggregationThreshold: number | null;
     aggregatedDuplicateCases: number;
+    statusTotalCasesToCode: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
   }> {
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const totalCasesQuery = this.responseRepository
-      .createQueryBuilder('response')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      // Exclude pre-processed responses (not in manual coding pool)
-      .andWhere(new Brackets(qb => {
-        qb.where('response.code_v2 IS NULL')
-          .orWhere(subQuery => {
-            const exists = subQuery
-              .subQuery()
-              .select('1')
-              .from('coding_job_unit', 'cju')
-              .where('cju.response_id = response.id')
-              .getQuery();
-            return `EXISTS (${exists})`;
-          });
-      }));
-    applyResolvedExclusionsToQuery(totalCasesQuery, exclusions);
-    const totalCasesToCode = await totalCasesQuery.getCount();
-
-    const casesInJobsQuery = this.codingJobUnitRepository
-      .createQueryBuilder('cju')
-      .innerJoin('cju.response', 'response')
-      .leftJoin('cju.coding_job', 'coding_job')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('coding_job.training_id IS NULL')
-      // Exclude pre-processed responses (not in manual coding pool)
-      .andWhere(new Brackets(qb => {
-        qb.where('response.code_v2 IS NULL')
-          .orWhere(subQuery => {
-            const exists = subQuery
-              .subQuery()
-              .select('1')
-              .from('coding_job_unit', 'cju')
-              .where('cju.response_id = response.id')
-              .getQuery();
-            return `EXISTS (${exists})`;
-          });
-      }));
-    applyResolvedExclusionsToQuery(casesInJobsQuery, exclusions, { parameterPrefix: 'caseCoverageJobs' });
-    const casesInJobs = await casesInJobsQuery.getCount();
-
-    const uniqueCasesInJobsQuery = this.codingJobUnitRepository
-      .createQueryBuilder('cju')
-      .innerJoin('cju.response', 'response')
-      .leftJoin('cju.coding_job', 'coding_job')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('coding_job.training_id IS NULL')
-      // Exclude pre-processed responses (not in manual coding pool)
-      .andWhere(new Brackets(qb => {
-        qb.where('response.code_v2 IS NULL')
-          .orWhere(subQuery => {
-            const exists = subQuery
-              .subQuery()
-              .select('1')
-              .from('coding_job_unit', 'cju')
-              .where('cju.response_id = response.id')
-              .getQuery();
-            return `EXISTS (${exists})`;
-          });
-      }))
-      .select('COUNT(DISTINCT cju.response_id)', 'count');
-    applyResolvedExclusionsToQuery(uniqueCasesInJobsQuery, exclusions, { parameterPrefix: 'caseCoverageUniqueJobs' });
-    const uniqueCasesInJobsResult = await uniqueCasesInJobsQuery.getRawOne();
-
-    const uniqueCasesInJobs = parseInt(
-      uniqueCasesInJobsResult?.count || '0',
-      10
+    const responseScope = await this.getCoverageResponseScope(workspaceId);
+    const totalCasesToCode = responseScope.manualResponses.length;
+    const manualResponseIds = new Set(
+      responseScope.manualResponses.map(response => response.responseId)
     );
+    const assignedCoverageResponseRows = await this.getAssignedCoverageResponseRows(workspaceId);
+    const assignedManualResponseRows = assignedCoverageResponseRows.filter(
+      responseId => manualResponseIds.has(responseId)
+    );
+    const casesInJobs = assignedManualResponseRows.length;
+    const uniqueCasesInJobs = new Set(assignedManualResponseRows).size;
 
     const doubleCodedCases = casesInJobs - uniqueCasesInJobs;
 
@@ -320,7 +281,10 @@ export class CodingProgressService {
     const unassignedCases = totalCasesToCode - uniqueCasesInJobs;
     const rawCoveragePercentage =
       totalCasesToCode > 0 ? (uniqueCasesInJobs / totalCasesToCode) * 100 : 0;
-    const effectiveCoverage = await this.getEffectiveCaseCoverage(workspaceId);
+    const effectiveCoverage = await this.getEffectiveCaseCoverage(
+      workspaceId,
+      responseScope.manualResponses
+    );
     const coveragePercentage =
       effectiveCoverage.effectiveTotalCasesToCode > 0 ?
         (effectiveCoverage.effectiveCasesInJobs / effectiveCoverage.effectiveTotalCasesToCode) * 100 :
@@ -339,12 +303,20 @@ export class CodingProgressService {
       rawCoveragePercentage,
       aggregationActive: effectiveCoverage.aggregationActive,
       aggregationThreshold: effectiveCoverage.aggregationThreshold,
-      aggregatedDuplicateCases: effectiveCoverage.aggregatedDuplicateCases
+      aggregatedDuplicateCases: effectiveCoverage.aggregatedDuplicateCases,
+      statusTotalCasesToCode: responseScope.allResponses.length,
+      coveredSourceVariableCount:
+        responseScope.excludedSourceSummary.coveredSourceVariableCount,
+      coveredSourceResponseCount:
+        responseScope.excludedSourceSummary.coveredSourceResponseCount
     };
   }
 
-  private async getEffectiveCaseCoverage(workspaceId: number): Promise<EffectiveCaseCoverage> {
-    const responses = await this.getCoverageResponses(workspaceId);
+  private async getEffectiveCaseCoverage(
+    workspaceId: number,
+    providedResponses?: CoverageResponse[]
+  ): Promise<EffectiveCaseCoverage> {
+    const responses = providedResponses || (await this.getCoverageResponseScope(workspaceId)).manualResponses;
     const assignedResponseIds = await this.getAssignedCoverageResponseIds(workspaceId);
     const effectiveProgress = await this.getEffectiveCaseProgress(
       workspaceId,
@@ -361,6 +333,102 @@ export class CodingProgressService {
       aggregationThreshold: effectiveProgress.aggregationThreshold,
       aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases
     };
+  }
+
+  private async getCoverageResponseScope(workspaceId: number): Promise<CoverageResponseScope> {
+    const [allResponses, manualPoolResponses] = await Promise.all([
+      this.getCoverageResponses(workspaceId),
+      this.getCoverageResponses(workspaceId, true)
+    ]);
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    const derivedVariablesBySourceMap =
+      await this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId);
+    const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
+      manualPoolResponses
+        .filter(response => response.statusV1 === codingIncompleteStatus)
+        .map(response => ({
+          unitName: response.unitName,
+          variableId: response.variableId
+        })),
+      derivedVariablesBySourceMap
+    );
+    const manualResponses = manualPoolResponses.filter(response => (
+      response.statusV1 === codingIncompleteStatus ||
+      !isCoveredSourceVariable(response, coveredSourceKeys)
+    ));
+    const excludedSourceSummary = summarizeCoveredSourceVariables(
+      manualPoolResponses
+        .filter(response => response.statusV1 !== codingIncompleteStatus)
+        .map(response => ({
+          unitName: response.unitName,
+          variableId: response.variableId,
+          responseCount: 1
+        })),
+      coveredSourceKeys,
+      derivedVariablesBySourceMap
+    );
+
+    return {
+      allResponses,
+      manualResponses,
+      excludedSourceSummary
+    };
+  }
+
+  private async getDeriveErrorManualProgress(
+    workspaceId: number,
+    responses: CoverageResponse[],
+    appliedResponseIds: Set<number>
+  ): Promise<DeriveErrorManualProgress> {
+    const deriveErrorStatus = statusStringToNumber('DERIVE_ERROR');
+    const deriveErrorResponses = responses.filter(response => response.statusV1 === deriveErrorStatus);
+    const deriveErrorAppliedResponseIds = new Set(
+      deriveErrorResponses
+        .filter(response => appliedResponseIds.has(response.responseId))
+        .map(response => response.responseId)
+    );
+    const effectiveProgress = await this.getEffectiveCaseProgress(
+      workspaceId,
+      deriveErrorAppliedResponseIds,
+      deriveErrorResponses
+    );
+
+    return {
+      deriveErrorTotalResponses: effectiveProgress.effectiveTotalCasesToCode,
+      deriveErrorAppliedResponses: effectiveProgress.effectiveCompletedCases,
+      deriveErrorRemainingResponses: Math.max(
+        0,
+        effectiveProgress.effectiveTotalCasesToCode - effectiveProgress.effectiveCompletedCases
+      ),
+      deriveErrorRawTotalResponses: deriveErrorResponses.length,
+      deriveErrorRawAppliedResponses: deriveErrorAppliedResponseIds.size
+    };
+  }
+
+  private applyManualProgressStatusFilter(
+    query: ManualProgressStatusQuery,
+    method: 'where' | 'andWhere' = 'where'
+  ): void {
+    const deriveErrorStatus = statusStringToNumber('DERIVE_ERROR');
+    query[method](new Brackets(qb => {
+      qb.where('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      }).orWhere(
+        `response.status_v1 = :deriveErrorStatus
+          AND EXISTS (
+            SELECT 1
+            FROM coding_job_unit manual_derive_cju
+            INNER JOIN coding_job manual_derive_cj
+              ON manual_derive_cj.id = manual_derive_cju.coding_job_id
+            WHERE manual_derive_cju.response_id = response.id
+              AND manual_derive_cj.training_id IS NULL
+          )`,
+        { deriveErrorStatus }
+      );
+    }));
   }
 
   private async getEffectiveCaseProgress(
@@ -428,7 +496,10 @@ export class CodingProgressService {
     };
   }
 
-  private async getCoverageResponses(workspaceId: number): Promise<CoverageResponse[]> {
+  private async getCoverageResponses(
+    workspaceId: number,
+    manualPoolOnly = false
+  ): Promise<CoverageResponse[]> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const query = this.responseRepository
       .createQueryBuilder('response')
@@ -436,23 +507,49 @@ export class CodingProgressService {
       .addSelect('response.value', 'value')
       .addSelect('response.code_v2', 'codeV2')
       .addSelect('response.status_v2', 'statusV2')
+      .addSelect('response.status_v1', 'statusV1')
       .addSelect('response.variableid', 'variableId')
       .addSelect('unit.name', 'unitName')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))')
       .orderBy('response.id', 'ASC');
-    applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: 'coverageResponses' });
+    this.applyManualProgressStatusFilter(query, 'andWhere');
+
+    if (manualPoolOnly) {
+      query.andWhere(new Brackets(qb => {
+        qb.where('response.code_v2 IS NULL')
+          .orWhere(subQuery => {
+            const exists = subQuery
+              .subQuery()
+              .select('1')
+              .from('coding_job_unit', 'manual_cju')
+              .innerJoin('coding_job', 'manual_cj', 'manual_cj.id = manual_cju.coding_job_id')
+              .where('manual_cju.response_id = response.id')
+              .andWhere('manual_cj.training_id IS NULL')
+              .getQuery();
+            return `EXISTS (${exists})`;
+          });
+      }));
+    } else {
+      query.andWhere(
+        '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
+        { aggregatedCode: -111, defaultMirCode: await this.getDefaultMirCode(workspaceId) }
+      );
+    }
+
+    applyResolvedExclusionsToQuery(
+      query,
+      exclusions,
+      {
+        parameterPrefix: manualPoolOnly ?
+          'coverageResponsesManualPool' :
+          'coverageResponses'
+      }
+    );
     const raw = await query.getRawMany();
 
     return raw.map(row => ({
@@ -460,9 +557,44 @@ export class CodingProgressService {
       value: row.value ?? null,
       codeV2: row.codeV2 === null || row.codeV2 === undefined ? null : Number(row.codeV2),
       statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
+      statusV1: row.statusV1 === null || row.statusV1 === undefined ? null : Number(row.statusV1),
       variableId: row.variableId,
       unitName: row.unitName
     }));
+  }
+
+  private async getAssignedCoverageResponseRows(workspaceId: number): Promise<number[]> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .select('cju.response_id', 'responseId')
+      .innerJoin('cju.response', 'response')
+      .leftJoin('cju.coding_job', 'coding_job')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .leftJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('coding_job.training_id IS NULL')
+      .andWhere(new Brackets(qb => {
+        qb.where('response.code_v2 IS NULL')
+          .orWhere(subQuery => {
+            const exists = subQuery
+              .subQuery()
+              .select('1')
+              .from('coding_job_unit', 'cju')
+              .where('cju.response_id = response.id')
+              .getQuery();
+            return `EXISTS (${exists})`;
+          });
+      }));
+    this.applyManualProgressStatusFilter(query, 'andWhere');
+    applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: 'assignedCoverageRows' });
+    const raw = await query.getRawMany();
+    return raw
+      .map(row => Number(row.responseId))
+      .filter(responseId => Number.isFinite(responseId));
   }
 
   private async getCompletedCoverageResponseIds(workspaceId: number): Promise<Set<number>> {
@@ -479,13 +611,8 @@ export class CodingProgressService {
       .andWhere('coding_job.training_id IS NULL')
       .andWhere('cju.code IS NOT NULL')
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
       .select('DISTINCT cju.response_id', 'responseId');
+    this.applyManualProgressStatusFilter(query, 'andWhere');
     applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: 'completedCoverage' });
     const raw = await query.getRawMany();
 
@@ -517,13 +644,7 @@ export class CodingProgressService {
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('coding_job.training_id IS NULL')
       .andWhere(new Brackets(qb => {
@@ -538,6 +659,7 @@ export class CodingProgressService {
             return `EXISTS (${exists})`;
           });
       }));
+    this.applyManualProgressStatusFilter(query, 'andWhere');
     applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: 'assignedCoverage' });
     const raw = await query.getRawMany();
 
@@ -616,6 +738,9 @@ export class CodingProgressService {
         }>;
       }>;
     };
+    statusTotalVariables: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
   }> {
     try {
       this.logger.log(
@@ -627,6 +752,7 @@ export class CodingProgressService {
         .createQueryBuilder('response')
         .select('unit.name', 'unitName')
         .addSelect('response.variableid', 'variableId')
+        .addSelect('response.status_v1', 'statusV1')
         .addSelect('COUNT(response.id)', 'caseCount')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
@@ -647,16 +773,47 @@ export class CodingProgressService {
               const exists = subQuery
                 .subQuery()
                 .select('1')
-                .from('coding_job_unit', 'cju')
-                .where('cju.response_id = response.id')
+                .from('coding_job_unit', 'manual_cju')
+                .innerJoin('coding_job', 'manual_cj', 'manual_cj.id = manual_cju.coding_job_id')
+                .where('manual_cju.response_id = response.id')
+                .andWhere('manual_cj.training_id IS NULL')
                 .getQuery();
               return `EXISTS (${exists})`;
             });
         }))
         .groupBy('unit.name')
-        .addGroupBy('response.variableid');
+        .addGroupBy('response.variableid')
+        .addGroupBy('response.status_v1');
       applyResolvedExclusionsToQuery(incompleteVariablesQuery, exclusions, { parameterPrefix: 'variableCoverage' });
       const incompleteVariablesResult = await incompleteVariablesQuery.getRawMany();
+
+      const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+      const derivedVariablesBySourceMap =
+        await this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId);
+      const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
+        incompleteVariablesResult
+          .filter(row => Number(row.statusV1) === codingIncompleteStatus)
+          .map(row => ({
+            unitName: row.unitName,
+            variableId: row.variableId
+          })),
+        derivedVariablesBySourceMap
+      );
+      const filteredIncompleteVariablesResult = incompleteVariablesResult.filter(row => (
+        Number(row.statusV1) === codingIncompleteStatus ||
+        !isCoveredSourceVariable(row, coveredSourceKeys)
+      ));
+      const excludedSourceSummary = summarizeCoveredSourceVariables(
+        incompleteVariablesResult
+          .filter(row => Number(row.statusV1) !== codingIncompleteStatus)
+          .map(row => ({
+            unitName: row.unitName,
+            variableId: row.variableId,
+            responseCount: row.caseCount
+          })),
+        coveredSourceKeys,
+        derivedVariablesBySourceMap
+      );
 
       const variablesNeedingCoding = new Set<string>();
       const variableCaseCounts: {
@@ -664,15 +821,30 @@ export class CodingProgressService {
         variableId: string;
         caseCount: number;
       }[] = [];
+      const variableCaseCountMap = new Map<string, {
+        unitName: string;
+        variableId: string;
+        caseCount: number;
+      }>();
 
-      incompleteVariablesResult.forEach(row => {
+      filteredIncompleteVariablesResult.forEach(row => {
         const variableKey = `${row.unitName}:${row.variableId}`;
-        variablesNeedingCoding.add(variableKey);
-        variableCaseCounts.push({
+        const existing = variableCaseCountMap.get(variableKey);
+        if (existing) {
+          existing.caseCount += parseInt(row.caseCount, 10);
+          return;
+        }
+        variableCaseCountMap.set(variableKey, {
           unitName: row.unitName,
           variableId: row.variableId,
           caseCount: parseInt(row.caseCount, 10)
         });
+      });
+
+      variableCaseCountMap.forEach(row => {
+        const variableKey = `${row.unitName}:${row.variableId}`;
+        variablesNeedingCoding.add(variableKey);
+        variableCaseCounts.push(row);
       });
 
       const jobDefinitions = await this.jobDefinitionRepository.find({
@@ -822,7 +994,14 @@ export class CodingProgressService {
               conflictingDefinitions: definitions
             })
           )
-        }
+        },
+        statusTotalVariables: new Set(
+          incompleteVariablesResult.map(row => `${row.unitName}:${row.variableId}`)
+        ).size,
+        coveredSourceVariableCount:
+          excludedSourceSummary.coveredSourceVariableCount,
+        coveredSourceResponseCount:
+          excludedSourceSummary.coveredSourceResponseCount
       };
     } catch (error) {
       this.logger.error(

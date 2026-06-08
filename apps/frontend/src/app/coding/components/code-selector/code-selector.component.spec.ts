@@ -1,6 +1,8 @@
+import { SimpleChange } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
+import { CodingScheme } from '../../../models/coding-interfaces';
 import { CodeSelectorComponent } from './code-selector.component';
 
 describe('CodeSelectorComponent', () => {
@@ -42,6 +44,85 @@ describe('CodeSelectorComponent', () => {
     ]
   };
 
+  const mixedCodingScheme: CodingScheme = {
+    version: '1.0',
+    variableCodings: [
+      {
+        id: 'VAR1',
+        alias: 'VAR1',
+        label: 'Variable 1',
+        sourceType: 'BASE',
+        processing: [],
+        codeModel: 'MANUAL_AND_RULES',
+        manualInstruction: '<p>General instruction</p>',
+        codes: [
+          {
+            id: 1,
+            type: 'FULL_CREDIT',
+            label: 'Manual code',
+            score: 1,
+            ruleSetOperatorAnd: false,
+            ruleSets: [],
+            manualInstruction: '<p>Manual instruction</p>'
+          },
+          {
+            id: 2,
+            type: 'RESIDUAL',
+            label: 'Auto code',
+            score: 0,
+            ruleSetOperatorAnd: false,
+            ruleSets: [],
+            manualInstruction: ''
+          },
+          {
+            id: 3,
+            type: 'RESIDUAL',
+            label: 'Whitespace code',
+            score: 0,
+            ruleSetOperatorAnd: false,
+            ruleSets: [],
+            manualInstruction: '   '
+          }
+        ]
+      }
+    ]
+  };
+
+  const issueOnlyCodingScheme: CodingScheme = {
+    version: '1.0',
+    variableCodings: [
+      {
+        id: 'VAR2',
+        alias: 'VAR2',
+        label: 'Variable 2',
+        sourceType: 'BASE',
+        processing: [],
+        codeModel: 'MANUAL_AND_RULES',
+        manualInstruction: '<p>Only general instruction</p>',
+        codes: [
+          {
+            id: 4,
+            type: 'RESIDUAL',
+            label: 'Auto code',
+            score: 0,
+            ruleSetOperatorAnd: false,
+            ruleSets: [],
+            manualInstruction: ''
+          },
+          {
+            id: 5,
+            type: 'RESIDUAL',
+            label: 'Whitespace code',
+            score: 0,
+            ruleSetOperatorAnd: false,
+            ruleSets: [],
+            manualInstruction: '   '
+          }
+        ]
+      }
+    ]
+  };
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [FormsModule, TranslateModule.forRoot(), CodeSelectorComponent]
@@ -55,6 +136,202 @@ describe('CodeSelectorComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('filters regular codes without manual instructions from manual selection', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+
+    expect(component.regularCodes.map(code => code.id)).toEqual([1]);
+    expect(component.codingIssueOptionCodes).toHaveLength(4);
+  });
+
+  it('keeps coding issue options and general instructions visible without regular manual codes', () => {
+    component.codingScheme = issueOnlyCodingScheme;
+    component.variableId = 'VAR2';
+    const emitSpy = jest.spyOn(component.codeSelected, 'emit');
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, issueOnlyCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR2', false)
+    });
+    fixture.detectChanges();
+
+    expect(component.regularCodes).toEqual([]);
+    expect(component.codingIssueOptionCodes.map(code => code.id)).toEqual([-1, -3, -4, -2]);
+    expect(fixture.nativeElement.querySelector('.general-instruction-row').textContent).toContain(
+      'Only general instruction'
+    );
+    expect(fixture.nativeElement.querySelectorAll('.uncertain-codes-section .code-row')).toHaveLength(4);
+
+    component.onSelect(-1);
+    expect(emitSpy).toHaveBeenLastCalledWith({
+      variableId: 'VAR2',
+      code: null,
+      codingIssueOption: expect.objectContaining({ code: -1 })
+    });
+
+    component.onSelect(-2);
+    expect(emitSpy).toHaveBeenLastCalledWith({
+      variableId: 'VAR2',
+      code: null,
+      codingIssueOption: expect.objectContaining({ code: -2 })
+    });
+  });
+
+  it('keeps manual codes selectable when mixed with empty manual instructions', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    const emitSpy = jest.spyOn(component.codeSelected, 'emit');
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    component.onSelect(1);
+
+    expect(component.selectedCode).toBe(1);
+    expect(emitSpy).toHaveBeenCalledWith({
+      variableId: 'VAR1',
+      code: mixedCodingScheme.variableCodings[0].codes[0],
+      codingIssueOption: null
+    });
+  });
+
+  it('shows a stored legacy code without making it regularly selectable', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.preSelectedCodeId = 2;
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false),
+      preSelectedCodeId: new SimpleChange(null, 2, false)
+    });
+    fixture.detectChanges();
+
+    expect(component.regularCodes.map(code => code.id)).toEqual([1]);
+    expect(component.selectedCode).toBeNull();
+    expect(component.legacySelectedCode?.id).toBe(2);
+    expect(fixture.nativeElement.querySelector('.legacy-code-row')).toBeTruthy();
+  });
+
+  it('shows a stored code missing from the current coding scheme', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.preSelectedCodeId = 99;
+    component.unitsData = {
+      ...interleavedUnitsData,
+      currentUnitIndex: 0
+    };
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false),
+      preSelectedCodeId: new SimpleChange(null, 99, false)
+    });
+    fixture.detectChanges();
+    component.nextUnit();
+
+    expect(component.regularCodes.map(code => code.id)).toEqual([1]);
+    expect(component.selectedCode).toBeNull();
+    expect(component.legacySelectedCode).toEqual({
+      id: 99,
+      label: '',
+      type: 'missingLegacyCode'
+    });
+    expect(fixture.nativeElement.querySelector('.legacy-code-row')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.legacy-code-note').textContent).toContain(
+      'code-selector.legacy-code-missing-note'
+    );
+    expect(component.hasNextUnit()).toBe(true);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+  });
+
+  it('counts a stored legacy code as current selection for navigation', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.preSelectedCodeId = 2;
+    component.unitsData = {
+      ...interleavedUnitsData,
+      currentUnitIndex: 0
+    };
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false),
+      preSelectedCodeId: new SimpleChange(null, 2, false)
+    });
+    component.nextUnit();
+
+    expect(component.hasNextUnit()).toBe(true);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+  });
+
+  it('clears stored legacy code when selecting a current manual code', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.preSelectedCodeId = 2;
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false),
+      preSelectedCodeId: new SimpleChange(null, 2, false)
+    });
+    component.onSelect(1);
+
+    expect(component.legacySelectedCode).toBeNull();
+    expect(component.selectedCode).toBe(1);
+  });
+
+  it('clears stored legacy code when selecting a coding issue option', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.preSelectedCodeId = 2;
+    const emitSpy = jest.spyOn(component.codeSelected, 'emit');
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false),
+      preSelectedCodeId: new SimpleChange(null, 2, false)
+    });
+    component.onSelect(-1);
+
+    expect(component.legacySelectedCode).toBeNull();
+    expect(component.selectedCodingIssueOption).toBe(-1);
+    expect(emitSpy).toHaveBeenCalledWith({
+      variableId: 'VAR1',
+      code: null,
+      codingIssueOption: expect.objectContaining({ code: -1 })
+    });
+  });
+
+  it('clears stored legacy code when removing the selection', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.preSelectedCodeId = 2;
+    const emitSpy = jest.spyOn(component.codeSelected, 'emit');
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false),
+      preSelectedCodeId: new SimpleChange(null, 2, false)
+    });
+    component.deselectAll();
+
+    expect(component.legacySelectedCode).toBeNull();
+    expect(emitSpy).toHaveBeenCalledWith({
+      variableId: 'VAR1',
+      code: null,
+      codingIssueOption: null
+    });
   });
 
   it('nextUnit should navigate to immediate next case for interleaved variables', () => {
@@ -115,5 +392,66 @@ describe('CodeSelectorComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.pause-button')).toBeNull();
+  });
+
+  it('disables and ignores pause while read-only', () => {
+    const pauseSpy = jest.spyOn(component.pauseCodingJob, 'emit');
+    component.showProgress = true;
+    component.hasCodingJob = true;
+    component.isCodingJobCompleted = false;
+    component.isCompletedJobReview = false;
+    component.isReadOnly = true;
+
+    fixture.detectChanges();
+    component.onPauseClick();
+
+    const pauseButton = fixture.nativeElement.querySelector('.pause-button') as HTMLButtonElement;
+    expect(pauseButton.disabled).toBe(true);
+    expect(pauseSpy).not.toHaveBeenCalled();
+  });
+
+  it('disables and ignores navigation while navigation is blocked', () => {
+    const unitChangedSpy = jest.spyOn(component.unitChanged, 'emit');
+    const navigateSpy = jest.spyOn(component.openNavigateDialog, 'emit');
+    component.showProgress = true;
+    component.isNavigationDisabled = true;
+    component.unitsData = {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_1',
+          alias: 'UNIT_1',
+          bookletId: 0,
+          variableId: 'VAR1'
+        },
+        {
+          id: 2,
+          name: 'UNIT_2',
+          alias: 'UNIT_2',
+          bookletId: 0,
+          variableId: 'VAR2'
+        }
+      ]
+    };
+
+    fixture.detectChanges();
+    component.toggleVariablePanel();
+    component.nextUnit();
+    component.onNavigateClick();
+    component.selectVariable('UNIT_2::VAR2');
+    component.jumpToVariable('UNIT_2::VAR2');
+
+    const nextButton = fixture.nativeElement.querySelector('.next-button') as HTMLButtonElement;
+    const navigateButton = fixture.nativeElement.querySelector('.navigate-button') as HTMLButtonElement;
+    const variableButton = fixture.nativeElement.querySelector('.variable-trigger-btn') as HTMLButtonElement;
+    expect(nextButton.disabled).toBe(true);
+    expect(navigateButton.disabled).toBe(true);
+    expect(variableButton.disabled).toBe(true);
+    expect(component.isVariablePanelOpen).toBe(false);
+    expect(unitChangedSpy).not.toHaveBeenCalled();
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 });

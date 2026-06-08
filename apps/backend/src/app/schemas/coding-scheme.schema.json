@@ -1,5 +1,5 @@
 {
-  "$id": "coding-scheme@iqb-standard@3.2",
+  "$id": "coding-scheme@iqb-standard@3.4",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Coding Scheme",
   "description": "Data structure to specify all processing steps of response data in order to get coded and scored data for analyses.",
@@ -19,12 +19,12 @@
           "id": {
             "type": "string",
             "description": "Identifier for the variable. In case of a scheme for a base variable, this id is identical with the source variable's id. All ids of a response scheme should be unique.",
-            "pattern": "^[0-9a-zA-Z_]+$"
+            "pattern": "^[0-9a-zA-Z_-]+$"
           },
           "alias": {
             "type": "string",
             "description": "Alternative identifier for the variable. In case of a scheme for a base variable, this id is identical with the source variable's alternative id. All alternative ids of a response scheme should be unique.",
-            "pattern": "^[0-9a-zA-Z_]+$"
+            "pattern": "^[0-9a-zA-Z_-]+$"
           },
           "label": {
             "type": "string",
@@ -73,13 +73,14 @@
                   ]
                 }
               }
-            }
+            },
+            "additionalProperties": false
           },
           "deriveSources": {
             "type": "array",
             "items": {
               "type": "string",
-              "pattern": "^[0-9a-zA-Z_]+$"
+              "pattern": "^[0-9a-zA-Z_-]+$"
             }
           },
           "processing": {
@@ -93,6 +94,7 @@
                 "IGNORE_DISPENSABLE_SPACES",
                 "SORT_ARRAY",
                 "REPLAY_REQUIRED",
+                "CODER_TRAINING_REQUIRED",
                 "ATTACHMENT"
               ]
             }
@@ -108,7 +110,6 @@
           "codeModel": {
             "type": "string",
             "enum": [
-              "NONE",
               "MANUAL_AND_RULES",
               "RULES_ONLY",
               "MANUAL_ONLY"
@@ -230,24 +231,28 @@
                               }
                             }
                           },
+                          "additionalProperties": false,
                           "required": [
                             "method"
                           ]
                         }
                       }
                     },
-                    "required": [
+                     "additionalProperties": false,
+                     "required": [
                       "rules"
                     ]
                   }
                 }
               },
+              "additionalProperties": false,
               "required": [
                 "id"
               ]
             }
           }
         },
+        "additionalProperties": false,
         "required": [
           "id",
           "sourceType"
@@ -255,6 +260,7 @@
       }
     }
   },
+  "additionalProperties": false,
   "required": [
     "version",
     "variableCodings"

@@ -58,6 +58,9 @@
       @if (isNotesUnavailable) {
       <span class="summary-warning">Notizen nicht geladen</span>
       }
+      @if (isMissingProfileUnavailable) {
+      <span class="summary-warning">Missing-Profil nicht vollständig auflösbar</span>
+      }
       @if (hasActiveFilters()) {
       <button mat-button type="button" (click)="clearAllFilters()">
         <mat-icon>filter_alt_off</mat-icon>

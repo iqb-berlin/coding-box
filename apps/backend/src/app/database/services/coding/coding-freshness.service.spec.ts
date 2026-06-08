@@ -364,6 +364,61 @@ describe('CodingFreshnessService', () => {
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
   });
 
+  it('reopens existing auto-coding freshness rows in the reset response scope', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
+
+    const scopeQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([
+        { unitId: 10, version: 'v1' },
+        { unitId: 10, version: 'v3' }
+      ])
+    });
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '4' }])
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(scopeQb)
+      .mockReturnValueOnce(responseCountsQb);
+
+    await service.markExistingAutoCodingVersionsPendingAfterResetScope(
+      1,
+      ['v1', 'v2', 'v3'],
+      ['UNIT_A'],
+      ['VAR_A']
+    );
+
+    expect(scopeQb.andWhere).toHaveBeenCalledWith(
+      'unit.name IN (:...unitNames)',
+      { unitNames: ['UNIT_A'] }
+    );
+    expect(scopeQb.andWhere).toHaveBeenCalledWith(
+      'response.variableid IN (:...variableIds)',
+      { variableIds: ['VAR_A'] }
+    );
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v1',
+          state: 'PENDING',
+          reason: 'RESET',
+          affected_response_count: 4,
+          source_revision: 9,
+          coded_revision: null
+        }),
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v3',
+          state: 'PENDING',
+          reason: 'RESET',
+          affected_response_count: 4
+        })
+      ]),
+      ['workspace_id', 'unit_id', 'version']
+    );
+    expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(2);
+  });
+
   it('marks only v1 reset units as stale source for manual jobs', async () => {
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
 
@@ -667,6 +722,63 @@ describe('CodingFreshnessService', () => {
     expect(connection.query).toHaveBeenCalledWith(
       expect.stringContaining('variable_bundle.variables @>'),
       [1, [10], 'stale_source', 'RESULT_ADDED']
+    );
+  });
+
+  it('marks newly imported responses in existing units as RESULT_ADDED', async () => {
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([{ revision: 9 }])
+      .mockResolvedValueOnce({});
+
+    const importedResponsesQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([
+        { responseId: '100', unitId: '10' },
+        { responseId: '101', unitId: '10' },
+        { responseId: '102', unitId: '20' }
+      ])
+    });
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: true, v2: false, v3: true })
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(importedResponsesQb)
+      .mockReturnValueOnce(workspacePresenceQb);
+
+    await service.markResponsesPendingAfterImport(1, [100, 101, 102, 100, -1]);
+
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v1',
+          state: 'PENDING',
+          reason: 'RESULT_ADDED',
+          affected_response_count: 2,
+          source_revision: 9
+        }),
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v3',
+          state: 'PENDING',
+          reason: 'RESULT_ADDED',
+          affected_response_count: 2,
+          source_revision: 9
+        }),
+        expect.objectContaining({
+          unit_id: 20,
+          version: 'v1',
+          state: 'PENDING',
+          reason: 'RESULT_ADDED',
+          affected_response_count: 1,
+          source_revision: 9
+        })
+      ]),
+      ['workspace_id', 'unit_id', 'version']
+    );
+    expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('response.id = ANY($2::int[])'),
+      [1, [100, 101, 102], 'stale_source', 'RESULT_ADDED']
     );
   });
 

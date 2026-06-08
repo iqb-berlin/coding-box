@@ -3,12 +3,13 @@ export interface MissingDto {
   label: string;
   description: string;
   code: number;
+  score: number;
 }
 
 export class MissingsProfilesDto {
   id?: number;
   label!: string;
-  missings!: string;
+  missings!: string | MissingDto[];
 
   parseMissings(): MissingDto[] {
     try {
@@ -31,7 +32,7 @@ export class MissingsProfilesDto {
     }
   }
 
-  setMissings(missings: MissingDto[]): void {
+  setMissings(missings: MissingDto[] | string): void {
     if (typeof missings === 'string') {
       this.missings = missings;
     } else {

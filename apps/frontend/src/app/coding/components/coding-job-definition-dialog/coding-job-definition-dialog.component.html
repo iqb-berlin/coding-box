@@ -43,6 +43,20 @@
           }
         </mat-form-field>
 
+        @if (data.mode === 'definition') {
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>{{ 'coding-job-definition-dialog.form-fields.missings-profile-label' | translate }}</mat-label>
+          <mat-select formControlName="missingsProfileId">
+            @for (profile of missingsProfiles; track profile.id) {
+            <mat-option [value]="profile.id">{{ profile.label }}</mat-option>
+            }
+          </mat-select>
+          @if (isLoadingMissingsProfiles) {
+          <mat-hint>{{ 'coding-job-definition-dialog.form-fields.missings-profile-loading' | translate }}</mat-hint>
+          }
+        </mat-form-field>
+        }
+
         <div class="double-coding-section">
           <h4>{{ 'coding-job-definition-dialog.sections.double-coding.title' | translate }}</h4>
           <p class="section-description">{{ 'coding-job-definition-dialog.sections.double-coding.description' |
@@ -231,6 +245,9 @@
                   variable.variableId) {
                   <span class="selection-chip">
                     {{ variable.unitName }}: {{ variable.variableId }}
+                    @if (variable.includeDeriveError) {
+                    <span class="selection-chip-suffix">DERIVE_ERROR</span>
+                    }
                   </span>
                   }
                   @if (selectedVariables.selected.length > 10) {
@@ -396,6 +413,18 @@
             </div>
             }
 
+            @if (!isLoadingVariableAnalysis && manualCodingScopeSummary && manualCodingScopeSummary.coveredSourceResponseCount > 0) {
+            <div class="manual-scope-note">
+              <mat-icon>info</mat-icon>
+              <span>
+                {{ 'coding-job-definition-dialog.manual-scope-note' | translate:{
+                  responseCount: manualCodingScopeSummary.coveredSourceResponseCount,
+                  variableCount: manualCodingScopeSummary.coveredSourceVariableCount
+                } }}
+              </span>
+            </div>
+            }
+
             @if (!isLoadingVariableAnalysis && variables.length > 0) {
             <div class="quick-selection-tools">
               <button mat-stroked-button color="primary" type="button" (click)="masterToggle()"
@@ -431,8 +460,8 @@
                           matTooltipPosition="above">block</mat-icon>
                         }
                       </div>
-                      @if (variable.coderTrainingRequired || variable.isDerived) {
-                      <div class="variable-badges">
+	                      @if (variable.coderTrainingRequired || variable.isDerived) {
+	                      <div class="variable-badges">
                         @if (variable.coderTrainingRequired) {
                         <mat-chip class="training-required-chip" matTooltip="Erhöhter Schulungsaufwand" matTooltipPosition="above">
                           <mat-icon>school</mat-icon>
@@ -445,10 +474,20 @@
                           Abgeleitet
                         </mat-chip>
                         }
-                      </div>
-                      }
-                    </div>
-                  </div>
+	                      </div>
+	                      }
+                        @if (data.mode === 'definition' && hasDeriveErrorResponses(variable)) {
+                        <div class="derive-error-option" (click)="$event.stopPropagation()">
+                          <mat-checkbox
+                            [checked]="isDeriveErrorIncluded(variable)"
+                            [disabled]="isReadOnly || isVariableDisabled(variable) || !selectedVariables.isSelected(variable)"
+                            (change)="setDeriveErrorIncluded(variable, $event.checked)">
+                            DERIVE_ERROR einbeziehen
+                          </mat-checkbox>
+                        </div>
+                        }
+	                    </div>
+	                  </div>
                 </div>
                 }
               </div>

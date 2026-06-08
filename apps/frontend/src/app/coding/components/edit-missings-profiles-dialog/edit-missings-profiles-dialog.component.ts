@@ -43,13 +43,15 @@ import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/co
   ]
 })
 export class EditMissingsProfilesDialogComponent implements OnInit {
+  private readonly requiredMissingIds = ['mir', 'mci'];
+
   missingsProfiles: { label: string; id: number }[] = [];
   selectedProfile: MissingsProfilesDto | null = null;
   editMode = false;
   loading = false;
   saving = false;
   editMissings: MissingDto[] = [];
-  displayedColumns: string[] = ['id', 'label', 'description', 'code', 'actions'];
+  displayedColumns: string[] = ['id', 'label', 'description', 'code', 'score', 'actions'];
 
   constructor(
     public dialogRef: MatDialogRef<EditMissingsProfilesDialogComponent>,
@@ -115,7 +117,8 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   createProfile(): void {
     this.selectedProfile = new MissingsProfilesDto();
     this.selectedProfile.label = '';
-    this.selectedProfile.setMissings([]);
+    this.editMissings = this.createRequiredMissings();
+    this.selectedProfile.setMissings(this.editMissings);
     this.editMode = true;
   }
 
@@ -142,17 +145,28 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
 
       this.saving = true;
 
-      const existingProfile = this.missingsProfiles.find(p => p.label === this.selectedProfile?.label);
+      const existingProfile = this.selectedProfile.id ?
+        this.missingsProfiles.find(p => p.id === this.selectedProfile?.id) :
+        undefined;
+
+      if (this.selectedProfile.id && !existingProfile) {
+        this.saving = false;
+        this.snackBar.open(this.translateService.instant('workspace.error-updating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
+        return;
+      }
 
       if (existingProfile) {
         this.missingsProfileService.updateMissingsProfile(workspaceId, existingProfile.label, this.selectedProfile).subscribe({
           next: profile => {
-            const missingsProfile = new MissingsProfilesDto();
-            if (profile) {
-              missingsProfile.id = profile.id;
-              missingsProfile.label = profile.label;
-              missingsProfile.missings = profile.missings;
+            if (!profile) {
+              this.saving = false;
+              this.snackBar.open(this.translateService.instant('workspace.error-updating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
+              return;
             }
+            const missingsProfile = new MissingsProfilesDto();
+            missingsProfile.id = profile.id;
+            missingsProfile.label = profile.label;
+            missingsProfile.missings = profile.missings;
             this.selectedProfile = missingsProfile;
             this.saving = false;
             this.editMode = false;
@@ -161,28 +175,30 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
           },
           error: () => {
             this.saving = false;
-            this.snackBar.open('Error updating missings profile', 'Close', { duration: 3000 });
+            this.snackBar.open(this.translateService.instant('workspace.error-updating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
           }
         });
       } else {
         this.missingsProfileService.createMissingsProfile(workspaceId, this.selectedProfile).subscribe({
           next: profile => {
-            // Convert plain object to MissingsProfilesDto instance
-            const missingsProfile = new MissingsProfilesDto();
-            if (profile) {
-              missingsProfile.id = profile.id;
-              missingsProfile.label = profile.label;
-              missingsProfile.missings = profile.missings;
+            if (!profile) {
+              this.saving = false;
+              this.snackBar.open(this.translateService.instant('workspace.error-creating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
+              return;
             }
+            const missingsProfile = new MissingsProfilesDto();
+            missingsProfile.id = profile.id;
+            missingsProfile.label = profile.label;
+            missingsProfile.missings = profile.missings;
             this.selectedProfile = missingsProfile;
             this.saving = false;
             this.editMode = false;
             this.loadMissingsProfiles();
-            this.snackBar.open('Profile created successfully', 'Close', { duration: 3000 });
+            this.snackBar.open(this.translateService.instant('workspace.profile-created-successfully'), this.translateService.instant('close'), { duration: 3000 });
           },
           error: () => {
             this.saving = false;
-            this.snackBar.open('Error creating missings profile', 'Close', { duration: 3000 });
+            this.snackBar.open(this.translateService.instant('workspace.error-creating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
           }
         });
       }
@@ -226,13 +242,12 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   addMissing(): void {
     const missings = this.editMode ? this.editMissings : (this.selectedProfile?.parseMissings() || []);
 
-    const highestCode = missings.reduce((max, missing) => Math.max(max, missing.code), 0);
-
     missings.push({
       id: `missing-${Date.now()}`,
       label: 'New Missing',
       description: 'Description',
-      code: highestCode > 900 ? highestCode - 1 : 998
+      code: this.getNextNegativeMissingCode(missings),
+      score: 0
     });
 
     if (this.editMode) {
@@ -267,11 +282,67 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       return missings.filter(missing => missing.id !== undefined && missing.id !== null &&
         missing.id.trim() !== '' && missing.label !== undefined && missing.label !== null &&
         missing.label.trim() !== '' && missing.description !== undefined && missing.description !== null &&
-        missing.code !== undefined && missing.code !== null && !Number.isNaN(missing.code));
+        this.hasExplicitFiniteNumber(missing.code) &&
+        this.hasExplicitFiniteNumber(missing.score));
     } catch (error) {
       // Error occurred while parsing missings
       return [];
     }
+  }
+
+  private hasExplicitFiniteNumber(value: unknown): boolean {
+    if (typeof value === 'number') {
+      return Number.isFinite(value);
+    }
+
+    if (typeof value === 'string') {
+      const trimmedValue = value.trim();
+      return trimmedValue !== '' && Number.isFinite(Number(trimmedValue));
+    }
+
+    return false;
+  }
+
+  private isValidMissingCode(code: unknown): boolean {
+    const numericCode = Number(code);
+    return this.hasExplicitFiniteNumber(code) &&
+      Number.isInteger(numericCode) &&
+      numericCode < 0;
+  }
+
+  private getNextNegativeMissingCode(missings: MissingDto[]): number {
+    const negativeCodes = missings
+      .map(missing => Number(missing.code))
+      .filter(code => Number.isInteger(code) && code < 0);
+
+    if (negativeCodes.length === 0) {
+      return -1;
+    }
+
+    return Math.min(...negativeCodes) - 1;
+  }
+
+  private createRequiredMissings(): MissingDto[] {
+    return [
+      {
+        id: 'mir',
+        label: 'missing invalid response',
+        description: '',
+        code: -98,
+        score: 0
+      },
+      {
+        id: 'mci',
+        label: 'missing coding impossible',
+        description: '',
+        code: -97,
+        score: 0
+      }
+    ];
+  }
+
+  private isNonBlankString(value: unknown): value is string {
+    return typeof value === 'string' && value.trim() !== '';
   }
 
   close(): void {
@@ -279,9 +350,27 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   isProfileValid(missings: MissingDto[]): boolean {
-    return missings.every(missing => missing.id !== undefined && missing.id !== null &&
-      missing.id.trim() !== '' && missing.label !== undefined && missing.label !== null &&
-      missing.label.trim() !== '' && missing.description !== undefined && missing.description !== null &&
-      missing.code !== undefined && missing.code !== null && !Number.isNaN(missing.code));
+    const ids = new Set<string>();
+    const codes = new Set<number>();
+
+    for (const missing of missings) {
+      if (!this.isNonBlankString(missing.id) ||
+        !this.isNonBlankString(missing.label) ||
+        missing.description === undefined || missing.description === null ||
+        !this.isValidMissingCode(missing.code) ||
+        !this.hasExplicitFiniteNumber(missing.score)) {
+        return false;
+      }
+
+      const id = missing.id.trim();
+      const code = Number(missing.code);
+      if (ids.has(id) || codes.has(code)) {
+        return false;
+      }
+      ids.add(id);
+      codes.add(code);
+    }
+
+    return this.requiredMissingIds.every(requiredId => ids.has(requiredId));
   }
 }

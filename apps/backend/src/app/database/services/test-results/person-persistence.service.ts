@@ -26,9 +26,30 @@ import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/te
 export interface TestResultsMutationSummary {
   addedUnitIds: number[];
   changedUnitIds: number[];
+  skippedExistingUnitIds?: number[];
+  addedResponseIds?: number[];
   addedResponseCount: number;
   changedResponseCount: number;
+  savedResponseCount?: number;
+  deletedResponseCount?: number;
+  skippedExistingResponseCount?: number;
 }
+
+type ResponseProcessingResult = {
+  success: boolean;
+  saved: number;
+  skipped: number;
+  deleted: number;
+  addedResponseIds: number[];
+};
+
+type ResponseInsertEntry = {
+  unitid: number;
+  variableid: string;
+  status: number;
+  value: string | null;
+  subform: string;
+};
 
 /**
  * PersonPersistenceService
@@ -253,8 +274,7 @@ export class PersonPersistenceService {
       this.logger.error(`Failed to process person booklets: ${error.message}`);
     }
 
-    mutationSummary.addedUnitIds = Array.from(new Set(mutationSummary.addedUnitIds));
-    mutationSummary.changedUnitIds = Array.from(new Set(mutationSummary.changedUnitIds));
+    this.dedupeMutationSummaryUnitIds(mutationSummary);
     return mutationSummary;
   }
 
@@ -322,6 +342,10 @@ export class PersonPersistenceService {
               });
 
               if (existingUnit && overwriteMode === 'skip') {
+                mutationSummary.skippedExistingUnitIds?.push(existingUnit.id);
+                mutationSummary.skippedExistingResponseCount =
+                  (mutationSummary.skippedExistingResponseCount || 0) +
+                  this.countUnitResponses(unit);
                 return;
               }
 
@@ -340,9 +364,17 @@ export class PersonPersistenceService {
                   this.processChunks(unit, targetUnit, booklet)
                 ]);
                 const responseResult = await this.processSubforms(unit, targetUnit, overwriteMode);
+                mutationSummary.savedResponseCount =
+                  (mutationSummary.savedResponseCount || 0) + responseResult.saved;
+                mutationSummary.deletedResponseCount =
+                  (mutationSummary.deletedResponseCount || 0) + responseResult.deleted;
+                mutationSummary.skippedExistingResponseCount =
+                  (mutationSummary.skippedExistingResponseCount || 0) + responseResult.skipped;
                 if (isNewUnit) {
                   mutationSummary.addedUnitIds.push(targetUnit.id);
                   mutationSummary.addedResponseCount += responseResult.saved;
+                } else if (overwriteMode === 'merge' && responseResult.saved > 0) {
+                  mutationSummary.addedResponseIds?.push(...responseResult.addedResponseIds);
                 } else if (
                   responseResult.saved > 0 ||
                   responseResult.deleted > 0 ||
@@ -363,8 +395,7 @@ export class PersonPersistenceService {
       }
     }
 
-    mutationSummary.addedUnitIds = Array.from(new Set(mutationSummary.addedUnitIds));
-    mutationSummary.changedUnitIds = Array.from(new Set(mutationSummary.changedUnitIds));
+    this.dedupeMutationSummaryUnitIds(mutationSummary);
     return mutationSummary;
   }
 
@@ -411,19 +442,19 @@ export class PersonPersistenceService {
     unit: TcMergeUnit,
     savedUnit: Unit,
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip'
-  ): Promise<{ success: boolean; saved: number; skipped: number; deleted: number }> {
+  ): Promise<ResponseProcessingResult> {
     try {
       const subforms = unit.subforms;
       if (subforms && subforms.length > 0) {
         return await this.saveSubformResponsesForUnit(savedUnit, subforms, overwriteMode);
       }
       return {
-        success: true, saved: 0, skipped: 0, deleted: 0
+        success: true, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
       };
     } catch (error) {
       this.logger.error(`Failed to process subform responses for unit: ${unit.id}: ${error.message}`);
       return {
-        success: false, saved: 0, skipped: 0, deleted: 0
+        success: false, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
       };
     }
   }
@@ -504,14 +535,15 @@ export class PersonPersistenceService {
     savedUnit: Unit,
     subforms: TcMergeSubForms[],
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip'
-  ): Promise<{ success: boolean; saved: number; skipped: number; deleted: number }> {
+  ): Promise<ResponseProcessingResult> {
     try {
       let totalResponsesSaved = 0;
       let totalResponsesSkipped = 0;
       let totalResponsesDeleted = 0;
+      const addedResponseIds: number[] = [];
       for (const subform of subforms) {
         if (subform.responses && subform.responses.length > 0) {
-          const responseEntries = subform.responses.map(response => {
+          const responseEntries: ResponseInsertEntry[] = subform.responses.map(response => {
             let value: string | null;
             if (response.value === null) {
               value = null;
@@ -571,7 +603,10 @@ export class PersonPersistenceService {
             const BATCH_SIZE = 1000;
             for (let i = 0; i < filteredEntries.length; i += BATCH_SIZE) {
               const batch = filteredEntries.slice(i, i + BATCH_SIZE);
-              await this.responseRepository.save(batch);
+              const savedResponses = await this.responseRepository.save(batch);
+              addedResponseIds.push(
+                ...(await this.collectSavedResponseIds(savedResponses, batch))
+              );
             }
             totalResponsesSaved += filteredEntries.length;
           }
@@ -582,7 +617,8 @@ export class PersonPersistenceService {
         success: true,
         saved: totalResponsesSaved,
         skipped: totalResponsesSkipped,
-        deleted: totalResponsesDeleted
+        deleted: totalResponsesDeleted,
+        addedResponseIds: Array.from(new Set(addedResponseIds))
       };
     } catch (error) {
       this.logger.error(`Failed to save responses for unit: ${savedUnit.id}: ${error.message}`);
@@ -590,17 +626,80 @@ export class PersonPersistenceService {
         success: false,
         saved: 0,
         skipped: 0,
-        deleted: 0
+        deleted: 0,
+        addedResponseIds: []
       };
     }
+  }
+
+  private async collectSavedResponseIds(
+    savedResponses: Array<Partial<ResponseEntity>>,
+    entries: ResponseInsertEntry[]
+  ): Promise<number[]> {
+    const savedIds = this.uniquePositiveIds(
+      (savedResponses || []).map(response => Number(response.id))
+    );
+
+    if (savedIds.length >= entries.length) {
+      return savedIds;
+    }
+
+    try {
+      const fallbackIds = await this.findResponseIdsForEntries(entries);
+      return this.uniquePositiveIds([...savedIds, ...fallbackIds]);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Could not resolve saved response ids after import: ${detail}`);
+      return savedIds;
+    }
+  }
+
+  private async findResponseIdsForEntries(entries: ResponseInsertEntry[]): Promise<number[]> {
+    const unitIds = this.uniquePositiveIds(entries.map(entry => entry.unitid));
+    const variableIds = Array.from(new Set(
+      entries
+        .map(entry => entry.variableid)
+        .filter((variableId): variableId is string => Boolean(variableId))
+    ));
+    if (unitIds.length === 0 || variableIds.length === 0) {
+      return [];
+    }
+
+    const targetKeys = new Set(entries.map(entry => this.responseEntryKey(entry)));
+    const rows = await this.responseRepository.find({
+      where: {
+        unitid: In(unitIds),
+        variableid: In(variableIds)
+      },
+      select: ['id', 'unitid', 'variableid', 'subform']
+    });
+
+    if (!Array.isArray(rows)) {
+      return [];
+    }
+
+    return this.uniquePositiveIds(
+      rows
+        .filter(row => targetKeys.has(this.responseEntryKey(row)))
+        .map(row => Number(row.id))
+    );
+  }
+
+  private responseEntryKey(entry: Pick<ResponseEntity, 'unitid' | 'variableid' | 'subform'>): string {
+    return `${Number(entry.unitid)}@@${entry.variableid}@@${entry.subform || ''}`;
   }
 
   private createMutationSummary(): TestResultsMutationSummary {
     return {
       addedUnitIds: [],
       changedUnitIds: [],
+      skippedExistingUnitIds: [],
+      addedResponseIds: [],
       addedResponseCount: 0,
-      changedResponseCount: 0
+      changedResponseCount: 0,
+      savedResponseCount: 0,
+      deletedResponseCount: 0,
+      skippedExistingResponseCount: 0
     };
   }
 
@@ -610,8 +709,39 @@ export class PersonPersistenceService {
   ): void {
     target.addedUnitIds.push(...source.addedUnitIds);
     target.changedUnitIds.push(...source.changedUnitIds);
+    target.skippedExistingUnitIds?.push(...(source.skippedExistingUnitIds || []));
+    target.addedResponseIds?.push(...(source.addedResponseIds || []));
     target.addedResponseCount += source.addedResponseCount;
     target.changedResponseCount += source.changedResponseCount;
+    target.savedResponseCount =
+      (target.savedResponseCount || 0) + (source.savedResponseCount || 0);
+    target.deletedResponseCount =
+      (target.deletedResponseCount || 0) + (source.deletedResponseCount || 0);
+    target.skippedExistingResponseCount =
+      (target.skippedExistingResponseCount || 0) +
+      (source.skippedExistingResponseCount || 0);
+  }
+
+  private dedupeMutationSummaryUnitIds(summary: TestResultsMutationSummary): void {
+    summary.addedUnitIds = Array.from(new Set(summary.addedUnitIds));
+    summary.changedUnitIds = Array.from(new Set(summary.changedUnitIds));
+    summary.skippedExistingUnitIds = Array.from(new Set(summary.skippedExistingUnitIds || []));
+    summary.addedResponseIds = Array.from(new Set(summary.addedResponseIds || []));
+  }
+
+  private uniquePositiveIds(ids: number[]): number[] {
+    return Array.from(new Set(
+      ids
+        .map(id => Number(id))
+        .filter(id => Number.isInteger(id) && id > 0)
+    ));
+  }
+
+  private countUnitResponses(unit: TcMergeUnit): number {
+    return (unit.subforms || []).reduce(
+      (count, subform) => count + (subform.responses?.length || 0),
+      0
+    );
   }
 
   /**

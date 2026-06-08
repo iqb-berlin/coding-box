@@ -7,7 +7,7 @@ import { of, throwError } from 'rxjs';
 import { CodingJobResultDialogComponent } from './coding-job-result-dialog.component';
 import { CodingJobBackendService } from '../../../services/coding-job-backend.service';
 import { FileService } from '../../../../shared/services/file/file.service';
-import { AppService } from '../../../../core/services/app.service';
+import { MissingsProfileService } from '../../../services/missings-profile.service';
 
 class MatSnackBarMock {
   open = jest.fn(() => ({
@@ -38,11 +38,6 @@ describe('CodingJobResultDialogComponent', () => {
     getCodingSchemeFile: jest.fn()
   };
 
-  const mockAppService = {
-    createOwnToken: jest.fn(() => of('test-token')),
-    loggedUser: { sub: 'test-user' }
-  };
-
   const mockRouter = {
     createUrlTree: jest.fn(() => ({})),
     serializeUrl: jest.fn(() => '/replay/path')
@@ -52,11 +47,57 @@ describe('CodingJobResultDialogComponent', () => {
     open: jest.fn()
   };
 
+  const mockMissingsProfileService = {
+    getMissingsProfiles: jest.fn(() => of([{ id: 1, label: 'IQB-Standard' }])) as jest.Mock,
+    getMissingsProfileDetails: jest.fn(() => of({
+      id: 1,
+      label: 'IQB-Standard',
+      missings: JSON.stringify([
+        {
+          id: 'mir',
+          label: 'missing invalid response',
+          description: '',
+          code: -98,
+          score: 0
+        },
+        {
+          id: 'mci',
+          label: 'missing coding impossible',
+          description: '',
+          code: -97,
+          score: 0
+        }
+      ])
+    })) as jest.Mock
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDialogData.codingJob = { id: 1, name: 'Test Job' };
     mockCodingJobBackendService.getCodingJobUnits.mockReturnValue(of([]));
     mockCodingJobBackendService.getCodingProgress.mockReturnValue(of({}));
     mockCodingJobBackendService.getCodingNotes.mockReturnValue(of({}));
+    mockMissingsProfileService.getMissingsProfiles.mockReturnValue(of([{ id: 1, label: 'IQB-Standard' }]));
+    mockMissingsProfileService.getMissingsProfileDetails.mockReturnValue(of({
+      id: 1,
+      label: 'IQB-Standard',
+      missings: JSON.stringify([
+        {
+          id: 'mir',
+          label: 'missing invalid response',
+          description: '',
+          code: -98,
+          score: 0
+        },
+        {
+          id: 'mci',
+          label: 'missing coding impossible',
+          description: '',
+          code: -97,
+          score: 0
+        }
+      ])
+    }));
 
     await TestBed.configureTestingModule({
       imports: [CodingJobResultDialogComponent, TranslateModule.forRoot()],
@@ -65,8 +106,8 @@ describe('CodingJobResultDialogComponent', () => {
         { provide: MAT_DIALOG_DATA, useValue: mockDialogData },
         { provide: MatSnackBar, useClass: MatSnackBarMock },
         { provide: CodingJobBackendService, useValue: mockCodingJobBackendService },
+        { provide: MissingsProfileService, useValue: mockMissingsProfileService },
         { provide: FileService, useValue: mockFileService },
-        { provide: AppService, useValue: mockAppService },
         { provide: Router, useValue: mockRouter },
         { provide: MatDialog, useValue: mockMatDialog }
       ]
@@ -125,6 +166,7 @@ describe('CodingJobResultDialogComponent', () => {
       unitAlias: 'UNIT_1',
       variableId: 'VAR_1',
       variableAnchor: 'VAR_1',
+      variablePage: '2',
       bookletName: 'BOOKLET_A',
       personLogin: 'login',
       personCode: 'code',
@@ -142,6 +184,169 @@ describe('CodingJobResultDialogComponent', () => {
     expect(component.dataSource.data).toHaveLength(1);
     expect(component.dataSource.data[0].code).toBe(1);
     expect(component.isNotesUnavailable).toBe(true);
+  });
+
+  it('should resolve manually selected missing codes from the coding job missing profile', () => {
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      missings_profile_id: 77
+    };
+    mockMissingsProfileService.getMissingsProfileDetails.mockReturnValue(of({
+      id: 77,
+      label: 'Custom',
+      missings: JSON.stringify([
+        {
+          id: 'mir',
+          label: 'Custom MIR',
+          description: '',
+          code: -123,
+          score: 7
+        },
+        {
+          id: 'mci',
+          label: 'Custom MCI',
+          description: '',
+          code: -124,
+          score: 8
+        }
+      ])
+    }));
+    mockCodingJobBackendService.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'UNIT_1',
+      unitAlias: 'UNIT_1',
+      variableId: 'VAR_1',
+      variableAnchor: 'VAR_1',
+      bookletName: 'BOOKLET_A',
+      personLogin: 'login',
+      personCode: 'code',
+      personGroup: 'group',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+    mockCodingJobBackendService.getCodingProgress.mockReturnValue(of({
+      'login@code@group@BOOKLET_A::BOOKLET_A::UNIT_1::VAR_1': {
+        id: -3,
+        label: 'MIR'
+      }
+    }));
+
+    component.loadCodingResults();
+
+    expect(mockMissingsProfileService.getMissingsProfileDetails).toHaveBeenLastCalledWith(123, 77);
+    expect(component.dataSource.data[0]).toMatchObject({
+      code: -123,
+      score: 7,
+      codeLabel: 'Custom MIR',
+      unresolvedMissing: false
+    });
+    expect(component.getCodedResultCount()).toBe(1);
+  });
+
+  it('should block applying results when a manual missing cannot be resolved from the profile', () => {
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      status: 'completed',
+      missings_profile_id: 77
+    };
+    mockMissingsProfileService.getMissingsProfileDetails.mockReturnValue(of({
+      id: 77,
+      label: 'Incomplete',
+      missings: JSON.stringify([
+        {
+          id: 'mci',
+          label: 'Custom MCI',
+          description: '',
+          code: -124,
+          score: 8
+        }
+      ])
+    }));
+    mockCodingJobBackendService.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'UNIT_1',
+      unitAlias: 'UNIT_1',
+      variableId: 'VAR_1',
+      variableAnchor: 'VAR_1',
+      bookletName: 'BOOKLET_A',
+      personLogin: 'login',
+      personCode: 'code',
+      personGroup: 'group',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+    mockCodingJobBackendService.getCodingProgress.mockReturnValue(of({
+      'login@code@group@BOOKLET_A::BOOKLET_A::UNIT_1::VAR_1': {
+        id: -3,
+        label: 'MIR'
+      }
+    }));
+
+    component.loadCodingResults();
+
+    const result = component.dataSource.data[0];
+    expect(result.unresolvedMissing).toBe(true);
+    expect(component.getCodeDisplay(result)).toBe('Missing nicht auflösbar');
+    expect(component.canApplyCodingResults()).toBe(false);
+    expect(component.getApplyButtonTooltip()).toContain('Missing-Kodierung');
+  });
+
+  it.each([
+    ['null', null],
+    ['empty string', ''],
+    ['blank string', '   ']
+  ])('should block applying results when a manual missing score is %s', (_label, score) => {
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      status: 'completed',
+      missings_profile_id: 77
+    };
+    mockMissingsProfileService.getMissingsProfileDetails.mockReturnValue(of({
+      id: 77,
+      label: 'Incomplete',
+      missings: JSON.stringify([
+        {
+          id: 'mir',
+          label: 'Custom MIR',
+          description: '',
+          code: -123,
+          score
+        },
+        {
+          id: 'mci',
+          label: 'Custom MCI',
+          description: '',
+          code: -124,
+          score: 8
+        }
+      ])
+    }));
+    mockCodingJobBackendService.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'UNIT_1',
+      unitAlias: 'UNIT_1',
+      variableId: 'VAR_1',
+      variableAnchor: 'VAR_1',
+      bookletName: 'BOOKLET_A',
+      personLogin: 'login',
+      personCode: 'code',
+      personGroup: 'group',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+    mockCodingJobBackendService.getCodingProgress.mockReturnValue(of({
+      'login@code@group@BOOKLET_A::BOOKLET_A::UNIT_1::VAR_1': {
+        id: -3,
+        label: 'MIR'
+      }
+    }));
+
+    component.loadCodingResults();
+
+    const result = component.dataSource.data[0];
+    expect(result.unresolvedMissing).toBe(true);
+    expect(result.score).toBeUndefined();
+    expect(component.canApplyCodingResults()).toBe(false);
   });
 
   it('should identify new-code cases by stable issue option id', () => {
@@ -164,6 +369,7 @@ describe('CodingJobResultDialogComponent', () => {
       unitAlias: 'UNIT_1',
       variableId: 'VAR_1',
       variableAnchor: 'VAR_1',
+      variablePage: '2',
       bookletName: 'BOOKLET_A',
       personLogin: 'login',
       personCode: 'code',
@@ -177,6 +383,21 @@ describe('CodingJobResultDialogComponent', () => {
     const openedUrl = windowOpenSpy.mock.calls[0][0] as string;
     expect(openedUrl).toContain('/#/replay/path');
     expect(openedUrl).not.toContain('#//replay');
+    expect(mockRouter.createUrlTree).toHaveBeenCalledWith(
+      ['replay/login@code@group@BOOKLET_A/UNIT_1/2/VAR_1'],
+      expect.any(Object)
+    );
+    const createUrlTreeCalls = mockRouter.createUrlTree.mock.calls as unknown as Array<[
+      string[],
+      { queryParams: Record<string, unknown> }
+    ]>;
+    const queryParams = createUrlTreeCalls[0][1].queryParams;
+    expect(queryParams).toEqual(expect.objectContaining({
+      mode: 'coding',
+      workspaceId: 123,
+      unitsData: expect.any(String)
+    }));
+    expect(queryParams.auth).toBeUndefined();
 
     windowOpenSpy.mockRestore();
   });

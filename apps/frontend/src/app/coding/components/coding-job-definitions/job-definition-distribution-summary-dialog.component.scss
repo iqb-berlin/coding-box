@@ -1,0 +1,161 @@
+.distribution-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.distribution-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: min(980px, 82vw);
+  max-width: 100%;
+}
+
+.definition-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: rgba(0, 0, 0, 0.62);
+  font-size: 0.9rem;
+}
+
+.missing-history {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: #eef6ff;
+  border: 1px solid rgba(25, 118, 210, 0.18);
+  border-radius: 6px;
+  color: rgba(0, 0, 0, 0.78);
+}
+
+.missing-history p {
+  margin: 0;
+}
+
+.snapshot-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.snapshot-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.snapshot-switcher button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.snapshot-switcher button.selected {
+  border-color: #1976d2;
+  color: #1976d2;
+}
+
+.snapshot-switcher span {
+  color: rgba(0, 0, 0, 0.58);
+  font-size: 0.78rem;
+}
+
+.summary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #fafafa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+}
+
+.summary-stat span {
+  color: rgba(0, 0, 0, 0.62);
+  font-size: 0.82rem;
+}
+
+.summary-stat strong {
+  color: #1976d2;
+  font-size: 1.2rem;
+}
+
+.summary-stat.positive strong {
+  color: #2e7d32;
+}
+
+.distribution-matrix {
+  overflow-x: auto;
+}
+
+.matrix-row {
+  display: grid;
+  grid-template-columns: var(--distribution-columns);
+  min-width: max-content;
+}
+
+.matrix-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+
+.matrix-header .matrix-cell,
+.total-row .matrix-cell {
+  font-weight: 600;
+  background: #f5f5f5;
+}
+
+.item-cell {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.coder-cell {
+  gap: 6px;
+}
+
+.coder-cell mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.total-cell {
+  font-weight: 600;
+}
+
+.value-cell {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.added-value,
+.added-total-cell {
+  color: #2e7d32;
+  font-weight: 700;
+}
+
+.added-value {
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+@media (max-width: 720px) {
+  .distribution-content {
+    min-width: 0;
+  }
+
+  .snapshot-summary {
+    grid-template-columns: 1fr;
+  }
+}

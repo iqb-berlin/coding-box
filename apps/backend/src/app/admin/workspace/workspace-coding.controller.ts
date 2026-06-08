@@ -21,6 +21,7 @@ import { CodingStatistics } from '../../database/services/shared';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   CodingFreshnessService,
   CodingJobService,
@@ -119,14 +120,21 @@ export class WorkspaceCodingController {
   @Get(':workspace_id/coding/manual')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'codedStatus',
+    required: false,
+    description: 'Optional response status_v1 filter, e.g. DERIVE_ERROR'
+  })
   async getManualTestPersons(
     @Query('testPersons') testPersons: string,
+      @Query('codedStatus') codedStatus: string,
       @WorkspaceId() /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
                           workspace_id: number
   ): Promise<Array<ResponseEntity & { unitname: string }>> {
     return this.codingResponseQueryService.getManualTestPersons(
       workspace_id,
-      testPersons
+      testPersons,
+      codedStatus
     );
   }
 
@@ -245,7 +253,8 @@ export class WorkspaceCodingController {
   }
 
   @Post(':workspace_id/coding/apply-empty-responses')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({

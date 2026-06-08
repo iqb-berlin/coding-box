@@ -149,6 +149,96 @@
     .kappa-card {
       margin-bottom: 24px;
 
+      .kappa-detail-actions {
+        display: flex;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 0 16px 12px;
+
+        button {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 148px;
+        }
+      }
+
+      .kappa-table-section {
+        margin-top: 20px;
+
+        h3 {
+          margin: 0 0 12px;
+          color: #333;
+          font-size: 16px;
+          font-weight: 600;
+        }
+      }
+
+      .kappa-table-container {
+        overflow: auto;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+      }
+
+      .kappa-summary-table {
+        width: 100%;
+        min-width: 880px;
+        border-collapse: collapse;
+        font-size: 14px;
+
+        th,
+        td {
+          padding: 10px 12px;
+          border-bottom: 1px solid #eeeeee;
+          text-align: left;
+          white-space: nowrap;
+        }
+
+        th {
+          position: sticky;
+          top: 0;
+          z-index: 1;
+          background: #f5f5f5;
+          color: #333;
+          font-weight: 600;
+        }
+
+        tr:last-child td {
+          border-bottom: 0;
+        }
+      }
+
+      .kappa-cell {
+        display: inline-block;
+        min-width: 56px;
+        font-weight: 700;
+
+        &.kappa-poor {
+          color: #d32f2f;
+        }
+
+        &.kappa-fair,
+        &.kappa-moderate {
+          color: #f57c00;
+        }
+
+        &.kappa-substantial,
+        &.kappa-good {
+          color: #388e3c;
+        }
+
+        &.kappa-perfect,
+        &.kappa-excellent {
+          color: #1976d2;
+        }
+
+        &.kappa-na {
+          color: #777;
+          font-style: italic;
+        }
+      }
+
       .kappa-info {
         p {
           margin-bottom: 16px;
@@ -192,11 +282,65 @@
             border-radius: 8px;
             border: 1px solid #e9ecef;
 
-            h4 {
-              margin: 0 0 16px 0;
-              color: #1976d2;
-              font-size: 16px;
-              font-weight: 600;
+            .kappa-variable-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 16px;
+              margin-bottom: 16px;
+
+              h4 {
+                margin: 0;
+                color: #1976d2;
+                font-size: 16px;
+                font-weight: 600;
+              }
+
+              .variable-mean-kappa {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 10px;
+                background-color: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
+
+                .label {
+                  color: #666;
+                  font-size: 12px;
+                  font-weight: 500;
+                }
+
+                .value {
+                  font-size: 16px;
+                  font-weight: 700;
+
+                  &.kappa-poor {
+                    color: #d32f2f;
+                  }
+
+                  &.kappa-fair {
+                    color: #f57c00;
+                  }
+
+                  &.kappa-moderate {
+                    color: #fbc02d;
+                  }
+
+                  &.kappa-substantial,
+                  &.kappa-good {
+                    color: #388e3c;
+                  }
+
+                  &.kappa-perfect {
+                    color: #1976d2;
+                  }
+
+                  &.kappa-na {
+                    color: #999;
+                  }
+                }
+              }
             }
 
             .kappa-pairs {
@@ -237,6 +381,7 @@
 
                   .kappa-value,
                   .agreement-value,
+                  .valid-pairs-value,
                   .interpretation {
                     display: flex;
                     flex-direction: column;
@@ -266,6 +411,10 @@
                       }
 
                       &.kappa-substantial {
+                        color: #388e3c;
+                      }
+
+                      &.kappa-good {
                         color: #388e3c;
                       }
 
@@ -403,6 +552,16 @@
     .kappa-card {
       .kappa-results {
         .kappa-unit-variable {
+          .kappa-variable-header {
+            flex-direction: column;
+            align-items: flex-start;
+
+            .variable-mean-kappa {
+              width: 100%;
+              justify-content: space-between;
+            }
+          }
+
           .kappa-pairs {
             .kappa-pair {
               flex-direction: column;

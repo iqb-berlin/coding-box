@@ -13,7 +13,13 @@ import { TestPersonCodingService } from '../../coding/services/test-person-codin
 describe('TestResultsUploadStateService', () => {
   let service: TestResultsUploadStateService;
   let fileServiceMock: { getUploadJobStatus: jest.Mock };
-  let testResultServiceMock: { invalidateCache: jest.Mock; getWorkspaceOverview: jest.Mock };
+  let testResultServiceMock: {
+    invalidateCache: jest.Mock;
+    getWorkspaceOverview: jest.Mock;
+    getLogAnomalySummary: jest.Mock;
+    getLogAnomalyDetails: jest.Mock;
+    requestFlatResponseFilters: jest.Mock;
+  };
   let testPersonCodingServiceMock: { getAppliedResultsOverview: jest.Mock; getCodingFreshness: jest.Mock };
   let dialogMock: { open: jest.Mock };
   let snackBarMock: { open: jest.Mock };
@@ -31,7 +37,22 @@ describe('TestResultsUploadStateService', () => {
         uniqueUnits: 20,
         uniqueResponses: 100,
         responseStatusCounts: {}
-      }))
+      })),
+      getLogAnomalySummary: jest.fn().mockReturnValue(of({
+        totalBooklets: 0,
+        affectedBooklets: 0,
+        criticalBooklets: 0,
+        warningBooklets: 0,
+        infoBooklets: 0,
+        totalAnomalyRules: 0,
+        totalAnomalyEvents: 0,
+        byCode: {}
+      })),
+      getLogAnomalyDetails: jest.fn().mockReturnValue(of({
+        total: 0,
+        data: []
+      })),
+      requestFlatResponseFilters: jest.fn()
     };
     testPersonCodingServiceMock = {
       getCodingFreshness: jest.fn().mockReturnValue(of({
@@ -56,7 +77,10 @@ describe('TestResultsUploadStateService', () => {
       open: jest.fn()
     };
     snackBarMock = {
-      open: jest.fn()
+      open: jest.fn().mockReturnValue({
+        dismiss: jest.fn(),
+        onAction: jest.fn().mockReturnValue(of(undefined))
+      })
     };
 
     TestBed.configureTestingModule({
@@ -72,6 +96,90 @@ describe('TestResultsUploadStateService', () => {
 
     // Clear localStorage before each test
     localStorage.clear();
+  });
+
+  it('should show explicit feedback when log anomaly summary loading fails', () => {
+    service = TestBed.inject(TestResultsUploadStateService);
+    testResultServiceMock.getLogAnomalySummary.mockReturnValue(
+      throwError(() => new Error('summary failed'))
+    );
+
+    (service as unknown as {
+      showLogUploadAnomalyFeedback: (workspaceId: number) => void;
+    }).showLogUploadAnomalyFeedback(1);
+
+    expect(snackBarMock.open).toHaveBeenCalledWith(
+      'Logs importiert. Die Log-Qualität konnte nicht geprüft werden.',
+      'OK',
+      { duration: 6000 }
+    );
+  });
+
+  it('should close the loading snackbar when log anomaly details fail', () => {
+    service = TestBed.inject(TestResultsUploadStateService);
+    const loadingSnackBar = { dismiss: jest.fn() };
+    snackBarMock.open
+      .mockReturnValueOnce(loadingSnackBar)
+      .mockReturnValue({
+        dismiss: jest.fn(),
+        onAction: jest.fn().mockReturnValue(of(undefined))
+      });
+    testResultServiceMock.getLogAnomalyDetails.mockReturnValue(
+      throwError(() => new Error('details failed'))
+    );
+
+    (service as unknown as {
+      openLogAnomalyDetailsDialog: (
+        workspaceId: number,
+        affectedBooklets: number
+      ) => void;
+    }).openLogAnomalyDetailsDialog(1, 2);
+
+    expect(loadingSnackBar.dismiss).toHaveBeenCalled();
+    expect(snackBarMock.open).toHaveBeenLastCalledWith(
+      'Log-Auffälligkeiten konnten nicht geladen werden.',
+      'OK',
+      { duration: 4000 }
+    );
+  });
+
+  it('should force the log anomaly column when details request the table view', () => {
+    service = TestBed.inject(TestResultsUploadStateService);
+    testResultServiceMock.getLogAnomalyDetails.mockReturnValue(of({
+      total: 1,
+      data: [{
+        bookletId: 1,
+        booklet: 'Booklet 1',
+        personId: 1,
+        code: 'P1',
+        group: 'G1',
+        login: 'L1',
+        maxSeverity: 'critical',
+        anomalies: [{
+          code: 'controller_error',
+          severity: 'critical',
+          label: 'Controller-Fehler',
+          evidence: 'Fehler',
+          count: 1
+        }]
+      }]
+    }));
+    dialogMock.open.mockReturnValue({
+      afterClosed: () => of({ showTable: true })
+    });
+
+    (service as unknown as {
+      openLogAnomalyDetailsDialog: (
+        workspaceId: number,
+        affectedBooklets: number
+      ) => void;
+    }).openLogAnomalyDetailsDialog(1, 1);
+
+    expect(testResultServiceMock.requestFlatResponseFilters).toHaveBeenCalledWith(
+      1,
+      { logAnomalies: 'any' },
+      { forceShowLogAnomalies: true }
+    );
   });
 
   it('should register a batch and start polling', fakeAsync(() => {
@@ -659,4 +767,47 @@ describe('TestResultsUploadStateService', () => {
 
     discardPeriodicTasks();
   }));
+
+  it('should merge response import mode counters across completed jobs', () => {
+    service = TestBed.inject(TestResultsUploadStateService);
+
+    const result = (service as unknown as {
+      mergeImportSummaries: (
+        results: Array<{ importSummary?: unknown }>
+      ) => unknown;
+    }).mergeImportSummaries([
+      {
+        importSummary: {
+          totalRows: 1,
+          responseRows: 1,
+          overwriteMode: 'skip',
+          scope: 'person',
+          savedResponses: 0,
+          skippedExistingUnits: 1,
+          skippedExistingResponses: 2
+        }
+      },
+      {
+        importSummary: {
+          totalRows: 2,
+          responseRows: 2,
+          overwriteMode: 'skip',
+          scope: 'person',
+          savedResponses: 1,
+          skippedExistingUnits: 2,
+          skippedExistingResponses: 3
+        }
+      }
+    ]);
+
+    expect(result).toMatchObject({
+      totalRows: 3,
+      responseRows: 3,
+      overwriteMode: 'skip',
+      scope: 'person',
+      savedResponses: 1,
+      skippedExistingUnits: 3,
+      skippedExistingResponses: 5
+    });
+  });
 });

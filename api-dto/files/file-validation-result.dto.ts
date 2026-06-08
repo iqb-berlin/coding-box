@@ -5,6 +5,7 @@ type FileStatus = {
   exists: boolean;
   schemaValid?: boolean;
   schemaErrors?: string[];
+  schemaWarnings?: string[];
   ignored?: boolean;
   parents?: string[];
 };
@@ -62,6 +63,14 @@ export type GeoGebraValidationResult = {
   packageStatus: GeoGebraPackageStatus;
 };
 
+export type ReplayCompatibilityWarning = {
+  unit: string;
+  requestedPlayer: string;
+  resolvedPlayer?: string;
+  requiredPlayer: string;
+  message: string;
+};
+
 export class FileValidationResultDto {
   @ApiProperty({ type: Boolean, description: 'Indicates whether test takers were found' })
     testTakersFound!: boolean;
@@ -77,6 +86,9 @@ export class FileValidationResultDto {
 
   @ApiProperty({ type: Object, description: 'GeoGebra usage and package availability' })
     geogebra?: GeoGebraValidationResult;
+
+  @ApiProperty({ type: [Object], description: 'Replay compatibility warnings for referenced players' })
+    replayCompatibilityWarnings?: ReplayCompatibilityWarning[];
 
   @ApiProperty({ type: [Object], description: 'Array of validation results for each test taker' })
     validationResults!: {

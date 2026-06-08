@@ -85,6 +85,99 @@ export class WorkspaceSettingsService {
     );
   }
 
+  getAutoRefreshManualCodingJobs(workspaceId: number): Observable<boolean> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(workspaceId, 'auto-refresh-manual-coding-jobs', true)
+        .subscribe({
+          next: setting => {
+            try {
+              const parsed = JSON.parse(setting.value);
+              observer.next(parsed.enabled ?? true);
+            } catch {
+              observer.next(true);
+            }
+            observer.complete();
+          },
+          error: () => {
+            observer.next(true);
+            observer.complete();
+          }
+        });
+    });
+  }
+
+  setAutoRefreshManualCodingJobs(workspaceId: number, enabled: boolean): Observable<WorkspaceSettings> {
+    const value = JSON.stringify({ enabled });
+    return this.setWorkspaceSetting(
+      workspaceId,
+      'auto-refresh-manual-coding-jobs',
+      value,
+      'Controls whether manual coding job tables refresh automatically when the browser window regains focus'
+    );
+  }
+
+  getShowTestResultsLogAnomalies(workspaceId: number): Observable<boolean> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(workspaceId, 'show-test-results-log-anomalies', true)
+        .subscribe({
+          next: setting => {
+            try {
+              const parsed = JSON.parse(setting.value);
+              observer.next(parsed.enabled ?? false);
+            } catch {
+              observer.next(false);
+            }
+            observer.complete();
+          },
+          error: () => {
+            observer.next(false);
+            observer.complete();
+          }
+        });
+    });
+  }
+
+  setShowTestResultsLogAnomalies(workspaceId: number, enabled: boolean): Observable<WorkspaceSettings> {
+    const value = JSON.stringify({ enabled });
+    return this.setWorkspaceSetting(
+      workspaceId,
+      'show-test-results-log-anomalies',
+      value,
+      'Controls whether log anomaly information is shown on the test results page'
+    );
+  }
+
+  getIncludeDeriveErrorInManualCoding(workspaceId: number): Observable<boolean> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(workspaceId, 'include-derive-error-in-manual-coding', true)
+        .subscribe({
+          next: setting => {
+            try {
+              const parsed = JSON.parse(setting.value);
+              observer.next(parsed.enabled ?? false);
+            } catch {
+              observer.next(false);
+            }
+            observer.complete();
+          },
+          error: () => {
+            observer.next(false);
+            observer.complete();
+          }
+        });
+    });
+  }
+
+  setIncludeDeriveErrorInManualCoding(workspaceId: number, enabled: boolean): Observable<WorkspaceSettings> {
+    const value = JSON.stringify({ enabled });
+    return this.setWorkspaceSetting(
+      workspaceId,
+      'include-derive-error-in-manual-coding',
+      value,
+      'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
+    );
+  }
+
   getResponseMatchingMode(workspaceId: number): Observable<ResponseMatchingFlag[]> {
     return new Observable(observer => {
       this.getWorkspaceSetting(workspaceId, 'response-matching-mode')

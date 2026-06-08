@@ -112,7 +112,7 @@
 // Table styles
 .variables-table {
   width: 100%;
-  min-width: 600px;
+  min-width: 900px;
 
   th, td {
     padding: 14px 18px;
@@ -157,6 +157,17 @@
   }
 }
 
+.replay-anchor-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 260px;
+}
+
+.replay-anchor-field {
+  width: 180px;
+}
+
 // Unit link styling
 .unit-link {
   color: #1976d2;
@@ -180,6 +191,23 @@
   margin-top: 4px;
   font-size: 12px;
   color: #777;
+}
+
+.training-required-chip {
+  margin-top: 8px;
+  min-height: 24px;
+  width: fit-content;
+  background-color: #fff4e5 !important;
+  color: #a84900 !important;
+  border: 1px solid #ffcc80;
+
+  mat-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
+    font-size: 14px;
+    color: #e65100;
+  }
 }
 
 // Type chip styling

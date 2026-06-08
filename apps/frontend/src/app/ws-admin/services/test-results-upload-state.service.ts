@@ -57,6 +57,12 @@ type ImportSummaryNumberKey =
   | 'logRows'
   | 'bookletLogRows'
   | 'unitLogRows'
+  | 'savedResponses'
+  | 'deletedResponses'
+  | 'skippedExistingUnits'
+  | 'skippedExistingResponses'
+  | 'addedUnits'
+  | 'changedUnits'
   | 'savedLogs'
   | 'skippedRows'
   | 'skippedLogs';
@@ -473,20 +479,29 @@ export class TestResultsUploadStateService {
   }
 
   private showLogUploadAnomalyFeedback(workspaceId: number): void {
-    this.testResultService.getLogAnomalySummary(workspaceId).subscribe(summary => {
-      const affectedBooklets = Number(summary?.affectedBooklets || 0);
-      const snackBarRef = this.snackBar.open(
-        affectedBooklets > 0 ?
-          `Logs importiert. ${affectedBooklets} auffällige Testhefte erkannt.` :
-          'Logs importiert. Keine auffälligen Testhefte erkannt.',
-        affectedBooklets > 0 ? 'anzeigen' : 'OK',
-        { duration: affectedBooklets > 0 ? 8000 : 5000 }
-      );
+    this.testResultService.getLogAnomalySummary(workspaceId).subscribe({
+      next: summary => {
+        const affectedBooklets = Number(summary?.affectedBooklets || 0);
+        const snackBarRef = this.snackBar.open(
+          affectedBooklets > 0 ?
+            `Logs importiert. ${affectedBooklets} auffällige Testhefte erkannt.` :
+            'Logs importiert. Keine auffälligen Testhefte erkannt.',
+          affectedBooklets > 0 ? 'anzeigen' : 'OK',
+          { duration: affectedBooklets > 0 ? 8000 : 5000 }
+        );
 
-      if (affectedBooklets > 0) {
-        snackBarRef.onAction().subscribe(() => {
-          this.openLogAnomalyDetailsDialog(workspaceId, affectedBooklets);
-        });
+        if (affectedBooklets > 0) {
+          snackBarRef.onAction().subscribe(() => {
+            this.openLogAnomalyDetailsDialog(workspaceId, affectedBooklets);
+          });
+        }
+      },
+      error: () => {
+        this.snackBar.open(
+          'Logs importiert. Die Log-Qualität konnte nicht geprüft werden.',
+          'OK',
+          { duration: 6000 }
+        );
       }
     });
   }
@@ -501,42 +516,54 @@ export class TestResultsUploadStateService {
       { duration: undefined }
     );
 
-    this.testResultService.getLogAnomalyDetails(workspaceId).subscribe(details => {
-      loadingSnackBar.dismiss();
-      if (!details.data.length) {
+    this.testResultService.getLogAnomalyDetails(workspaceId).subscribe({
+      next: details => {
+        loadingSnackBar.dismiss();
+        if (!details.data.length) {
+          this.snackBar.open(
+            'Keine Log-Auffälligkeiten gefunden.',
+            'OK',
+            { duration: 4000 }
+          );
+          return;
+        }
+
+        const dialogRef = this.dialog.open<
+        TestResultsLogAnomalyDetailsDialogComponent,
+        {
+          affectedBooklets: number;
+          rows: typeof details.data;
+          truncated: boolean;
+        },
+        TestResultsLogAnomalyDetailsDialogResult | undefined
+        >(TestResultsLogAnomalyDetailsDialogComponent, {
+          width: '900px',
+          maxWidth: '95vw',
+          data: {
+            affectedBooklets,
+            rows: details.data,
+            truncated: details.total > details.data.length
+          }
+        });
+
+        dialogRef.afterClosed().subscribe(result => {
+          if (result?.showTable) {
+            this.testResultService.requestFlatResponseFilters(
+              workspaceId,
+              { logAnomalies: 'any' },
+              { forceShowLogAnomalies: true }
+            );
+          }
+        });
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
         this.snackBar.open(
-          'Keine Log-Auffälligkeiten gefunden.',
+          'Log-Auffälligkeiten konnten nicht geladen werden.',
           'OK',
           { duration: 4000 }
         );
-        return;
       }
-
-      const dialogRef = this.dialog.open<
-      TestResultsLogAnomalyDetailsDialogComponent,
-      {
-        affectedBooklets: number;
-        rows: typeof details.data;
-        truncated: boolean;
-      },
-      TestResultsLogAnomalyDetailsDialogResult | undefined
-      >(TestResultsLogAnomalyDetailsDialogComponent, {
-        width: '900px',
-        maxWidth: '95vw',
-        data: {
-          affectedBooklets,
-          rows: details.data,
-          truncated: details.total > details.data.length
-        }
-      });
-
-      dialogRef.afterClosed().subscribe(result => {
-        if (result?.showTable) {
-          this.testResultService.requestFlatResponseFilters(workspaceId, {
-            logAnomalies: 'any'
-          });
-        }
-      });
     });
   }
 
@@ -876,10 +903,18 @@ export class TestResultsUploadStateService {
 
     return {
       totalRows: summaries.reduce((sum, summary) => sum + Number(summary.totalRows || 0), 0),
+      overwriteMode: this.mergeSingleValue(summaries, 'overwriteMode'),
+      scope: this.mergeSingleValue(summaries, 'scope'),
       responseRows: this.sumOptional(summaries, 'responseRows'),
       logRows: this.sumOptional(summaries, 'logRows'),
       bookletLogRows: this.sumOptional(summaries, 'bookletLogRows'),
       unitLogRows: this.sumOptional(summaries, 'unitLogRows'),
+      savedResponses: this.sumOptional(summaries, 'savedResponses'),
+      deletedResponses: this.sumOptional(summaries, 'deletedResponses'),
+      skippedExistingUnits: this.sumOptional(summaries, 'skippedExistingUnits'),
+      skippedExistingResponses: this.sumOptional(summaries, 'skippedExistingResponses'),
+      addedUnits: this.sumOptional(summaries, 'addedUnits'),
+      changedUnits: this.sumOptional(summaries, 'changedUnits'),
       savedLogs: this.sumOptional(summaries, 'savedLogs'),
       skippedRows: this.sumOptional(summaries, 'skippedRows'),
       skippedLogs: this.sumOptional(summaries, 'skippedLogs'),
@@ -896,6 +931,21 @@ export class TestResultsUploadStateService {
     const hasValue = summaries.some(summary => summary[key] !== undefined);
     if (!hasValue) return undefined;
     return summaries.reduce((sum, summary) => sum + Number(summary[key] || 0), 0);
+  }
+
+  private mergeSingleValue<
+    K extends 'overwriteMode' | 'scope'
+  >(
+    summaries: NonNullable<TestResultsUploadResultDto['importSummary']>[],
+    key: K
+  ): NonNullable<TestResultsUploadResultDto['importSummary']>[K] | undefined {
+    const values = Array.from(new Set(
+      summaries
+        .map(summary => summary[key])
+        .filter((value): value is NonNullable<NonNullable<TestResultsUploadResultDto['importSummary']>[K]> => !!value)
+    ));
+
+    return values.length === 1 ? values[0] : undefined;
   }
 
   private mergeLogMetrics(

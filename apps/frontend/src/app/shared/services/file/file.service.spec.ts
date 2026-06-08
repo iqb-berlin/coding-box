@@ -93,13 +93,91 @@ describe('FileService', () => {
       const req1 = httpMock.expectOne(req => req.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/files` && req.method === 'DELETE');
       const firstBatchIds = req1.request.params.get('fileIds');
       expect(firstBatchIds?.split(',').length).toBe(100);
-      req1.flush({});
+      req1.flush(true);
 
       // Second batch (100-150) - Only appears after first one resolves
       const req2 = httpMock.expectOne(req => req.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/files` && req.method === 'DELETE');
       const secondBatchIds = req2.request.params.get('fileIds');
       expect(secondBatchIds?.split(',').length).toBe(50);
-      req2.flush({});
+      req2.flush(true);
+
+      expect(validationTaskStateServiceMock.invalidateWorkspace).toHaveBeenCalledWith(mockWorkspaceId);
+    });
+
+    it('should invalidate validation state when the backend handles the request but reports false', () => {
+      const fileIds = [1, 2, 3];
+
+      service.deleteFiles(mockWorkspaceId, fileIds).subscribe(result => {
+        expect(result).toBe(false);
+      });
+
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/files` &&
+        request.method === 'DELETE'
+      );
+      expect(req.request.params.get('fileIds')).toBe('1,2,3');
+      req.flush(false);
+
+      expect(validationTaskStateServiceMock.invalidateWorkspace).toHaveBeenCalledWith(mockWorkspaceId);
+    });
+
+    it('should expose whether a failed delete response was handled by the backend', () => {
+      service.deleteFilesWithResult(mockWorkspaceId, [1, 2, 3]).subscribe(result => {
+        expect(result).toEqual({
+          success: false,
+          requestHandled: true
+        });
+      });
+
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/files` &&
+        request.method === 'DELETE'
+      );
+      req.flush(false);
+
+      expect(validationTaskStateServiceMock.invalidateWorkspace).toHaveBeenCalledWith(mockWorkspaceId);
+    });
+
+    it('should stop deleting further batches after a failed batch', () => {
+      const fileIds = Array.from({ length: 150 }, (_, i) => i + 1);
+
+      service.deleteFiles(mockWorkspaceId, fileIds).subscribe(result => {
+        expect(result).toBe(false);
+      });
+
+      const req1 = httpMock.expectOne(req => req.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/files` && req.method === 'DELETE');
+      req1.flush('failed', { status: 500, statusText: 'Server Error' });
+
+      httpMock.expectNone(req => req.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/files` && req.method === 'DELETE');
+      expect(validationTaskStateServiceMock.invalidateWorkspace).not.toHaveBeenCalled();
+    });
+
+    it('should isolate handled delete state per subscription', () => {
+      const request$ = service.deleteFiles(mockWorkspaceId, [1]);
+
+      request$.subscribe(result => {
+        expect(result).toBe(true);
+      });
+      const firstReq = httpMock.expectOne(req => req.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/files` && req.method === 'DELETE');
+      firstReq.flush(true);
+      expect(validationTaskStateServiceMock.invalidateWorkspace).toHaveBeenCalledWith(mockWorkspaceId);
+
+      validationTaskStateServiceMock.invalidateWorkspace.mockClear();
+
+      request$.subscribe(result => {
+        expect(result).toBe(false);
+      });
+      const secondReq = httpMock.expectOne(req => req.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/files` && req.method === 'DELETE');
+      secondReq.flush('failed', { status: 500, statusText: 'Server Error' });
+
+      expect(validationTaskStateServiceMock.invalidateWorkspace).not.toHaveBeenCalled();
+    });
+
+    it('should return false without a request when no file IDs are provided', () => {
+      service.deleteFiles(mockWorkspaceId, []).subscribe(result => {
+        expect(result).toBe(false);
+      });
+
+      httpMock.expectNone(req => req.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/files`);
+      expect(validationTaskStateServiceMock.invalidateWorkspace).not.toHaveBeenCalled();
     });
   });
 

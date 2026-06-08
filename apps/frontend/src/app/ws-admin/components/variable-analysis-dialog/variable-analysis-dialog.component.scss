@@ -1,9 +1,11 @@
 .dialog-container {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   padding: 16px;
   max-height: 80vh;
-  min-width: 600px;
+  min-width: 0;
+  width: 100%;
 }
 
 .dialog-title {
@@ -94,6 +96,16 @@
     }
   }
 
+  .page-window-message {
+    background-color: #fff3cd;
+    border: 1px solid #ffe08a;
+    margin-top: -8px;
+
+    mat-icon {
+      color: #8a5a00;
+    }
+  }
+
   mat-paginator {
     margin-top: 16px;
   }
@@ -163,7 +175,8 @@
 .table-container {
   overflow-x: auto;
 
-  .frequency-table {
+  .frequency-table,
+  .analysis-table {
     width: 100%;
 
     .mat-mdc-header-cell {
@@ -181,7 +194,67 @@
   }
 }
 
+.analysis-table-container {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  max-height: 55vh;
+}
+
+.analysis-table {
+  min-width: 1260px;
+
+  .mat-mdc-header-row {
+    background: #f7f7f7;
+  }
+
+  .mat-mdc-cell,
+  .mat-mdc-header-cell {
+    padding-left: 10px;
+    padding-right: 10px;
+    vertical-align: top;
+  }
+
+  .mat-column-unitName,
+  .mat-column-variableId {
+    min-width: 140px;
+    max-width: 220px;
+    overflow-wrap: anywhere;
+  }
+
+  .mat-column-value,
+  .mat-column-label {
+    min-width: 150px;
+    max-width: 220px;
+    overflow-wrap: anywhere;
+  }
+
+  .mat-column-score,
+  .mat-column-count,
+  .mat-column-validOccurrenceCount,
+  .mat-column-percentageTotal,
+  .mat-column-percentageValid,
+  .mat-column-totalCount,
+  .mat-column-validCount,
+  .mat-column-emptyCount,
+  .mat-column-metric {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .mat-column-statusSummary {
+    min-width: 160px;
+    max-width: 240px;
+  }
+
+  .mat-column-emptyCount {
+    min-width: 120px;
+  }
+}
+
 .value-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   max-width: 400px;
   word-break: break-word;
 
@@ -189,6 +262,29 @@
     font-style: italic;
     color: #888;
   }
+
+  .value-label {
+    color: #666;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+}
+
+.schema-chip {
+  align-self: flex-start;
+  background-color: #eeeeee;
+  border: 1px solid #d6d6d6;
+  border-radius: 4px;
+  color: #555;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 2px 5px;
+}
+
+.status-summary-cell {
+  color: #555;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .values-hidden-note {

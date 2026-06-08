@@ -1,0 +1,75 @@
+<h2 mat-dialog-title class="dialog-title">
+  <mat-icon>cleaning_services</mat-icon>
+  <span>Antworten bereinigen</span>
+</h2>
+
+<div mat-dialog-content class="cleanup-content">
+  @if (isLoading) {
+  <div class="loading-state">
+    <mat-spinner diameter="32"></mat-spinner>
+    <span>Daten werden geladen...</span>
+  </div>
+  }
+
+  @if (!isLoading && loadFailed) {
+  <div class="message-state">
+    <mat-icon color="warn">warning</mat-icon>
+    <span>Auswahldaten konnten nicht geladen werden.</span>
+  </div>
+  }
+
+  @if (!isLoading && !loadFailed) {
+  <mat-form-field appearance="outline">
+    <mat-label>Aufgaben</mat-label>
+    <mat-select
+      multiple
+      [(ngModel)]="selectedUnitNames"
+      (selectionChange)="onUnitsChanged()"
+    >
+      @for (unit of availableUnits; track unit) {
+      <mat-option [value]="unit">{{ unit }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <div class="date-grid">
+    <mat-form-field appearance="outline">
+      <mat-label>Von</mat-label>
+      <input matInput type="datetime-local" [(ngModel)]="answeredFrom">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Vor</mat-label>
+      <input matInput type="datetime-local" [(ngModel)]="answeredBefore" required>
+    </mat-form-field>
+  </div>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Variablen</mat-label>
+    <mat-select multiple [(ngModel)]="selectedVariableIds">
+      @for (variable of availableVariables; track variable.unitName + variable.value) {
+      <mat-option [value]="variable.value">{{ variable.label }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Subforms</mat-label>
+    <input matInput [(ngModel)]="subformsText">
+  </mat-form-field>
+  }
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cancel()">Abbrechen</button>
+  <button
+    mat-flat-button
+    color="primary"
+    type="button"
+    [disabled]="!canSubmit || isLoading || loadFailed"
+    (click)="submit()"
+  >
+    <mat-icon>preview</mat-icon>
+    Vorschau
+  </button>
+</div>

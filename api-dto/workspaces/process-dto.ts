@@ -1,7 +1,7 @@
 export interface ProcessDto {
   id: string | number;
   queueName: string;
-  status: 'active' | 'waiting' | 'delayed' | 'completed' | 'failed' | 'paused' | 'unknown';
+  status: 'active' | 'waiting' | 'delayed' | 'completed' | 'failed' | 'paused' | 'cancelled' | 'unknown';
   progress: number | unknown;
   data?: Record<string, unknown>; // Sanitized job metadata payload
   failedReason?: string;

@@ -217,7 +217,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   resourcePackagesModified = false;
   contentPoolSettings: ContentPoolSettings = {
     enabled: false,
-    baseUrl: ''
+    baseUrl: '',
+    hasApplicationToken: false
   };
 
   textFilterValue: string = '';
@@ -384,13 +385,15 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         next: settings => {
           this.contentPoolSettings = {
             enabled: !!settings.enabled,
-            baseUrl: (settings.baseUrl || '').trim()
+            baseUrl: (settings.baseUrl || '').trim(),
+            hasApplicationToken: !!settings.hasApplicationToken
           };
         },
         error: () => {
           this.contentPoolSettings = {
             enabled: false,
-            baseUrl: ''
+            baseUrl: '',
+            hasApplicationToken: false
           };
         }
       });
@@ -401,6 +404,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       !this.isLoadingContentPoolConfig &&
       this.contentPoolSettings.enabled &&
       this.contentPoolSettings.baseUrl &&
+      this.contentPoolSettings.hasApplicationToken &&
       this.tableCheckboxSelection.selected.length > 0
     );
   }
@@ -418,6 +422,15 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     if (!this.contentPoolSettings.baseUrl) {
       this.snackBar.open(
         'In den Systemeinstellungen ist keine Content-Pool URL hinterlegt.',
+        'OK',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    if (!this.contentPoolSettings.hasApplicationToken) {
+      this.snackBar.open(
+        'In den Systemeinstellungen ist kein Content-Pool Application-Token hinterlegt.',
         'OK',
         { duration: 4000 }
       );
@@ -468,6 +481,15 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     if (!this.contentPoolSettings.baseUrl) {
       this.snackBar.open(
         'In den Systemeinstellungen ist keine Content-Pool URL hinterlegt.',
+        'OK',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    if (!this.contentPoolSettings.hasApplicationToken) {
+      this.snackBar.open(
+        'In den Systemeinstellungen ist kein Content-Pool Application-Token hinterlegt.',
         'OK',
         { duration: 4000 }
       );
@@ -533,8 +555,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           .length;
         this.contentPoolIntegrationService
           .importAcp(this.appService.selectedWorkspaceId, {
-            username: payload.username,
-            password: payload.password,
             acpId: payload.acpId,
             overwriteExisting: true,
             overwriteFileIds: resultChoice.overwriteFileIds
@@ -856,15 +876,15 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     const fileIds = this.tableCheckboxSelection.selected.map(file => file.id);
     this.isDeleting = true;
     this.fileService
-      .deleteFiles(this.appService.selectedWorkspaceId, fileIds)
+      .deleteFilesWithResult(this.appService.selectedWorkspaceId, fileIds)
       .pipe(
         finalize(() => {
           this.isDeleting = false;
         })
       )
       .subscribe({
-        next: respOk => {
-          this.handleDeleteResponse(respOk);
+        next: result => {
+          this.handleDeleteResponse(result.success, result.requestHandled);
         },
         error: () => {
           this.snackBar.open(
@@ -1121,7 +1141,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         `Validierung wird durchgeführt (${this.validationProgress}%)...`;
   }
 
-  private handleDeleteResponse(success: boolean): void {
+  private handleDeleteResponse(
+    success: boolean,
+    requestHandled: boolean
+  ): void {
     this.snackBar.open(
       success ?
         this.translate.instant('ws-admin.files-deleted') :
@@ -1129,7 +1152,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       success ? '' : this.translate.instant('error'),
       { duration: 1000 }
     );
-    if (success) {
+    if (requestHandled) {
       this.tableCheckboxSelection.clear();
       this.loadTestFiles();
     }

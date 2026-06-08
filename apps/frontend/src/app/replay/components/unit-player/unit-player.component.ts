@@ -80,6 +80,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       this.handleUnitDefChange(unitDefChange.currentValue, unitPlayerChange, unitResponsesChange);
     } else if (unitResponsesChange?.currentValue &&
       unitResponsesChange.previousValue !== unitResponsesChange.currentValue) {
+      this.hasEmittedResponseVisible = false;
       this.handleResponsesChange(unitResponsesChange.currentValue);
       this.sendUnitData();
     }
@@ -206,31 +207,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       this.validPages.pipe(debounceTime(2000))
     ]).subscribe({
       next: ([pageId, validPages]) => {
-        // Don't emit error if pageId is empty - it might still be initializing
-        if (!pageId) {
-          return;
-        }
-
-        // Only emit errors if we have valid pages to compare against
-        if (validPages.pages.length > 0) {
-          let newPageError: 'notInList' | 'notCurrent' | null = null;
-
-          if (!validPages.pages.includes(pageId)) {
-            newPageError = 'notInList';
-          } else if (validPages.current !== pageId) {
-            newPageError = 'notCurrent';
-          }
-
-          // Only emit if the error state has changed to prevent flickering
-          if (newPageError !== this.lastPageError) {
-            this.lastPageError = newPageError;
-            this.invalidPage.emit(newPageError);
-
-            if (newPageError === null) {
-              this.cleanupValidPagesSubscription();
-            }
-          }
-        }
+        this.evaluatePageError(pageId, validPages);
       },
       error: () => {
         // Only emit if the error state has changed
@@ -240,6 +217,39 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
         }
       }
     });
+  }
+
+  private evaluatePageError(
+    pageId: string,
+    validPages: { pages: string[], current: string }
+  ): void {
+    // Don't emit error if pageId is empty - it might still be initializing
+    if (!pageId) {
+      return;
+    }
+
+    // Only emit errors if we have valid pages to compare against
+    if (validPages.pages.length === 0) {
+      return;
+    }
+
+    let newPageError: 'notInList' | 'notCurrent' | null = null;
+
+    if (!validPages.pages.includes(pageId)) {
+      newPageError = 'notInList';
+    } else if (validPages.current !== pageId) {
+      newPageError = 'notCurrent';
+    }
+
+    // Only emit if the error state has changed to prevent flickering
+    if (newPageError !== this.lastPageError) {
+      this.lastPageError = newPageError;
+      this.invalidPage.emit(newPageError);
+
+      if (newPageError === null) {
+        this.cleanupValidPagesSubscription();
+      }
+    }
   }
 
   private cleanupValidPagesSubscription(): void {

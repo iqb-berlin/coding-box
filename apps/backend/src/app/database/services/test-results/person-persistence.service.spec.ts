@@ -395,6 +395,21 @@ describe('PersonPersistenceService', () => {
   });
 
   it('imports a new person in an existing test group by matching the full person key', async () => {
+    const existingPersonInSameGroup = {
+      id: 40,
+      group: 'existing-group',
+      login: 'existing-login',
+      code: 'existing-code',
+      workspace_id: 1,
+      booklets: [
+        {
+          id: 'BOOKLET_OLD',
+          logs: [],
+          sessions: [],
+          units: []
+        }
+      ]
+    } as unknown as Persons;
     const importedPerson = {
       id: 41,
       group: 'existing-group',
@@ -410,8 +425,11 @@ describe('PersonPersistenceService', () => {
         }
       ]
     } as unknown as Persons;
+    const requestedKeys: Array<{ group: string; login: string; code: string }> = [];
     const bracketQb = {
-      where: jest.fn(),
+      where: jest.fn((_clause: string, params: { g0: string; l0: string; c0: string }) => {
+        requestedKeys.push({ group: params.g0, login: params.l0, code: params.c0 });
+      }),
       orWhere: jest.fn()
     };
     const qb = {
@@ -420,7 +438,13 @@ describe('PersonPersistenceService', () => {
         brackets.whereFactory(bracketQb);
         return qb;
       }),
-      getMany: jest.fn().mockResolvedValue([importedPerson])
+      getMany: jest.fn().mockImplementation(async () => (
+        [existingPersonInSameGroup, importedPerson].filter(person => requestedKeys.some(key => (
+          person.group === key.group &&
+          person.login === key.login &&
+          person.code === key.code
+        )))
+      ))
     };
     jest.spyOn(personsRepository, 'upsert').mockResolvedValue({} as never);
     jest.spyOn(personsRepository, 'createQueryBuilder').mockReturnValue(qb as never);
@@ -462,6 +486,13 @@ describe('PersonPersistenceService', () => {
     expect(processBookletSpy).toHaveBeenCalledWith(
       importedPerson.booklets[0],
       importedPerson,
+      'merge',
+      []
+    );
+    expect(processBookletSpy).toHaveBeenCalledTimes(1);
+    expect(processBookletSpy).not.toHaveBeenCalledWith(
+      existingPersonInSameGroup.booklets[0],
+      existingPersonInSameGroup,
       'merge',
       []
     );
@@ -528,7 +559,81 @@ describe('PersonPersistenceService', () => {
       addedUnitIds: [99],
       changedUnitIds: [],
       addedResponseCount: 1,
-      changedResponseCount: 0
+      changedResponseCount: 0,
+      savedResponseCount: 1,
+      skippedExistingResponseCount: 0
+    });
+  });
+
+  it('adds a new unit for an existing person/booklet in merge mode without replacing existing data', async () => {
+    jest.spyOn(bookletInfoRepository, 'findOne').mockResolvedValue({ id: 20, name: 'BOOKLET_1' } as BookletInfo);
+    jest.spyOn(bookletRepository, 'findOne').mockResolvedValue({ id: 30, personid: 10, infoid: 20 } as Booklet);
+    const unitFindSpy = jest.spyOn(unitRepository, 'findOne').mockResolvedValue(null);
+    jest.spyOn(unitRepository, 'save').mockResolvedValue({
+      id: 99, name: 'UNIT_NEW', alias: 'UNIT_NEW', bookletid: 30
+    } as Unit);
+    jest.spyOn(responseRepository, 'find').mockResolvedValue([]);
+    jest.spyOn(responseRepository, 'save').mockResolvedValue([] as never);
+
+    const result = await service.processBookletWithTransaction(
+      {
+        id: 'BOOKLET_1',
+        logs: [],
+        sessions: [],
+        units: [
+          {
+            id: 'UNIT_NEW',
+            alias: 'UNIT_NEW',
+            laststate: [],
+            chunks: [],
+            subforms: [
+              {
+                id: '',
+                responses: [
+                  {
+                    id: 'VAR_1',
+                    status: 'VALUE_CHANGED',
+                    value: 'answer'
+                  }
+                ]
+              }
+            ],
+            logs: []
+          }
+        ]
+      },
+      {
+        id: 10, group: 'G', login: 'L', code: 'C', workspace_id: 1
+      } as Persons,
+      'merge'
+    );
+
+    expect(unitFindSpy).toHaveBeenCalledWith({
+      where: { alias: 'UNIT_NEW', name: 'UNIT_NEW', bookletid: 30 }
+    });
+    expect(unitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      alias: 'UNIT_NEW',
+      name: 'UNIT_NEW',
+      bookletid: 30
+    }));
+    expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(responseRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        unitid: 99,
+        variableid: 'VAR_1',
+        value: 'answer',
+        subform: ''
+      })
+    ]);
+    expect(result).toMatchObject({
+      addedUnitIds: [99],
+      changedUnitIds: [],
+      skippedExistingUnitIds: [],
+      addedResponseCount: 1,
+      changedResponseCount: 0,
+      savedResponseCount: 1,
+      deletedResponseCount: 0,
+      skippedExistingResponseCount: 0
     });
   });
 
@@ -541,7 +646,16 @@ describe('PersonPersistenceService', () => {
     jest.spyOn(responseRepository, 'find').mockResolvedValue([
       { variableid: 'VAR_OLD', subform: '' } as ResponseEntity
     ]);
-    jest.spyOn(responseRepository, 'save').mockResolvedValue([] as never);
+    jest.spyOn(responseRepository, 'save').mockResolvedValue([
+      {
+        id: 501,
+        unitid: 40,
+        variableid: 'VAR_NEW',
+        status: 3,
+        value: 'new',
+        subform: ''
+      } as ResponseEntity
+    ] as never);
 
     const result = await service.processBookletWithTransaction(
       {
@@ -593,9 +707,94 @@ describe('PersonPersistenceService', () => {
     ]);
     expect(result).toMatchObject({
       addedUnitIds: [],
-      changedUnitIds: [40],
+      changedUnitIds: [],
+      addedResponseIds: [501],
       addedResponseCount: 0,
-      changedResponseCount: 1
+      changedResponseCount: 0,
+      savedResponseCount: 1,
+      deletedResponseCount: 0,
+      skippedExistingResponseCount: 1
+    });
+  });
+
+  it('resolves added response ids from the repository when save omits generated ids', async () => {
+    jest.spyOn(bookletInfoRepository, 'findOne').mockResolvedValue({ id: 20, name: 'BOOKLET_1' } as BookletInfo);
+    jest.spyOn(bookletRepository, 'findOne').mockResolvedValue({ id: 30, personid: 10, infoid: 20 } as Booklet);
+    jest.spyOn(unitRepository, 'findOne').mockResolvedValue({
+      id: 40, name: 'UNIT_1', alias: 'UNIT_1', bookletid: 30
+    } as Unit);
+    const responseFindSpy = jest.spyOn(responseRepository, 'find')
+      .mockResolvedValueOnce([
+        { variableid: 'VAR_OLD', subform: '' } as ResponseEntity
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 502,
+          unitid: 40,
+          variableid: 'VAR_NEW',
+          subform: ''
+        } as ResponseEntity
+      ]);
+    jest.spyOn(responseRepository, 'save').mockResolvedValue([
+      {
+        unitid: 40,
+        variableid: 'VAR_NEW',
+        status: 3,
+        value: 'new',
+        subform: ''
+      } as unknown as ResponseEntity
+    ] as never);
+
+    const result = await service.processBookletWithTransaction(
+      {
+        id: 'BOOKLET_1',
+        logs: [],
+        sessions: [],
+        units: [
+          {
+            id: 'UNIT_1',
+            alias: 'UNIT_1',
+            laststate: [],
+            chunks: [],
+            subforms: [
+              {
+                id: '',
+                responses: [
+                  {
+                    id: 'VAR_OLD',
+                    status: 'VALUE_CHANGED',
+                    value: 'old'
+                  },
+                  {
+                    id: 'VAR_NEW',
+                    status: 'VALUE_CHANGED',
+                    value: 'new'
+                  }
+                ]
+              }
+            ],
+            logs: []
+          }
+        ]
+      },
+      {
+        id: 10, group: 'G', login: 'L', code: 'C', workspace_id: 1
+      } as Persons,
+      'merge'
+    );
+
+    expect(responseFindSpy).toHaveBeenCalledTimes(2);
+    expect(responseFindSpy).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      select: ['id', 'unitid', 'variableid', 'subform']
+    }));
+    expect(result).toMatchObject({
+      addedUnitIds: [],
+      changedUnitIds: [],
+      addedResponseIds: [502],
+      addedResponseCount: 0,
+      changedResponseCount: 0,
+      savedResponseCount: 1,
+      skippedExistingResponseCount: 1
     });
   });
 
@@ -607,6 +806,8 @@ describe('PersonPersistenceService', () => {
     } as Unit);
     const responseSaveSpy = jest.spyOn(responseRepository, 'save');
     const chunkDeleteSpy = jest.spyOn(chunkRepository, 'delete');
+    const lastStateSpy = jest.spyOn(service, 'saveUnitLastState');
+    const processSubformsSpy = jest.spyOn(service, 'processSubforms');
 
     const result = await service.processBookletWithTransaction(
       {
@@ -643,11 +844,16 @@ describe('PersonPersistenceService', () => {
 
     expect(responseSaveSpy).not.toHaveBeenCalled();
     expect(chunkDeleteSpy).not.toHaveBeenCalled();
+    expect(lastStateSpy).not.toHaveBeenCalled();
+    expect(processSubformsSpy).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       addedUnitIds: [],
       changedUnitIds: [],
+      skippedExistingUnitIds: [40],
       addedResponseCount: 0,
-      changedResponseCount: 0
+      changedResponseCount: 0,
+      savedResponseCount: 0,
+      skippedExistingResponseCount: 1
     });
   });
 });

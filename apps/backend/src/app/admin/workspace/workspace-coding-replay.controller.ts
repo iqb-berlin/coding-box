@@ -4,7 +4,6 @@ import {
   InternalServerErrorException,
   Logger,
   Param,
-  Query,
   Res,
   Req,
   UseGuards
@@ -13,7 +12,6 @@ import { ConfigService } from '@nestjs/config';
 import {
   ApiOkResponse,
   ApiParam,
-  ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
@@ -80,12 +78,6 @@ export class WorkspaceCodingReplayController {
     type: Number,
     description: 'ID of the response'
   })
-  @ApiQuery({
-    name: 'authToken',
-    required: true,
-    description: 'Authentication token for the replay URL',
-    type: String
-  })
   @ApiOkResponse({
     description: 'Replay URL generated successfully.',
     schema: {
@@ -98,7 +90,6 @@ export class WorkspaceCodingReplayController {
   async getReplayUrl(
     @WorkspaceId() workspace_id: number,
       @Param('responseId') responseId: number,
-      @Query('authToken') authToken: string,
       @Req() req: Request
   ): Promise<{ replayUrl: string }> {
     // Use x-forwarded-proto header if present (set by reverse proxy) to ensure
@@ -109,7 +100,7 @@ export class WorkspaceCodingReplayController {
       workspace_id,
       responseId,
       serverUrl,
-      authToken
+      ''
     );
   }
 

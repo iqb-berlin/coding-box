@@ -2,7 +2,6 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
-import { CacheService } from '../../../cache/cache.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
@@ -14,6 +13,8 @@ import {
 } from './coding-progress-key.util';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { CodingValidationService } from './coding-validation.service';
+import { MissingsProfilesService } from './missings-profiles.service';
 
 export interface ApplyCodingResultsOptions {
   overwriteExisting?: boolean;
@@ -32,14 +33,19 @@ export interface ApplyCodingResultsResult {
 @Injectable()
 export class CodingResultsService {
   private readonly logger = new Logger(CodingResultsService.name);
+  private readonly manualMissingIdsByIssueOptionId = new Map<number, string>([
+    [-3, 'mir'],
+    [-4, 'mci']
+  ]);
 
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    private cacheService: CacheService,
     private codingStatisticsService: CodingStatisticsService,
     private codingJobService: CodingJobService,
+    private codingValidationService: CodingValidationService,
     private codingAnalysisService: CodingAnalysisService,
+    private missingsProfilesService: MissingsProfilesService,
     @Optional()
     private codingFreshnessService?: CodingFreshnessService
   ) { }
@@ -184,12 +190,15 @@ export class CodingResultsService {
           // Handle uncertain options (negative IDs)
           if (progress.id === -1) {
             status = statusStringToNumber('CODING_INCOMPLETE');
-          } else if (progress.id === -3) {
-            code = -98;
-            score = 0;
-          } else if (progress.id === -4) {
-            code = -97;
-            score = 0;
+          } else if (this.manualMissingIdsByIssueOptionId.has(progress.id)) {
+            const missingId = this.manualMissingIdsByIssueOptionId.get(progress.id) as string;
+            const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+              workspaceId,
+              codingJob.missings_profile_id,
+              missingId
+            );
+            code = missing.code;
+            score = missing.score;
           } else if (progress.id === -2) {
             skippedReviewCount += 1;
             continue;
@@ -375,6 +384,7 @@ export class CodingResultsService {
 
           await this.invalidateIncompleteVariablesCache(workspaceId);
           await this.codingStatisticsService.invalidateCache(workspaceId);
+          await this.codingAnalysisService.invalidateCache(workspaceId);
         }
 
         return {
@@ -445,6 +455,7 @@ export class CodingResultsService {
 
         await this.invalidateIncompleteVariablesCache(workspaceId);
         await this.codingStatisticsService.invalidateCache(workspaceId);
+        await this.codingAnalysisService.invalidateCache(workspaceId);
 
         return {
           success: true,
@@ -529,8 +540,7 @@ export class CodingResultsService {
   }
 
   private async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
-    const cacheKey = `coding_incomplete_variables_v3:${workspaceId}`;
-    await this.cacheService.delete(cacheKey);
+    await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
     this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }
 
@@ -612,7 +622,7 @@ export class CodingResultsService {
 
   /**
    * Apply coding to all empty responses in a workspace
-   * Sets status_v2 = CODING_COMPLETE (5), code_v2 = -98, score_v2 = 0
+   * Sets status_v2 = CODING_COMPLETE and resolves MIR code/score from the default missings profile.
    * Only updates responses where value is null or empty and status_v2 is not already set
    */
   async applyEmptyResponseCoding(workspaceId: number): Promise<{
@@ -655,6 +665,11 @@ export class CodingResultsService {
       }
 
       this.logger.log(`Found ${emptyResponses.length} empty responses to code`);
+      const emptyResponseMissing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+        workspaceId,
+        null,
+        'mir'
+      );
       const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
       await queryRunner.connect();
       await queryRunner.startTransaction('READ COMMITTED');
@@ -670,8 +685,8 @@ export class CodingResultsService {
             ResponseEntity,
             response.id,
             {
-              code_v2: -98,
-              score_v2: 0,
+              code_v2: emptyResponseMissing.code,
+              score_v2: emptyResponseMissing.score,
               status_v2: statusStringToNumber('CODING_COMPLETE') // 5
             }
           )

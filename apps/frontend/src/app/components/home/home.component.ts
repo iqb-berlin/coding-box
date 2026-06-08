@@ -53,8 +53,8 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   workspaces: WorkspaceFullDto[] = [];
   authData = AppService.defaultAuthData;
+  authBootstrapStatus: AuthBootstrapStatus = 'checking';
   private isPersonalCodingJobsRedirectChecked = false;
-  private authBootstrapStatus: AuthBootstrapStatus = 'checking';
   private authDataRefreshRequested = false;
   private authDataFailedQueryParamActive = false;
   private authDataFailedMessageShown = false;

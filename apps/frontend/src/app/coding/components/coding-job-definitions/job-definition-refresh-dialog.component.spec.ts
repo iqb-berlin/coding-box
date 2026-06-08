@@ -49,4 +49,61 @@ describe('JobDefinitionRefreshDialogComponent', () => {
       }
     ]);
   });
+
+  it('exposes newly available cases as a positive refresh preview stat', () => {
+    const component = createComponent({ addedCases: 3 });
+
+    expect(component.getCaseStats()).toEqual(expect.arrayContaining([
+      {
+        labelKey: 'coding-job-definitions.refresh-dialog.stats.added-cases',
+        value: 3,
+        tone: 'positive'
+      }
+    ]));
+  });
+
+  it('lists item-level deltas for newly added cases', () => {
+    const component = createComponent({
+      itemDeltas: [
+        {
+          itemKey: 'Unit 1::Var 1',
+          itemLabel: 'Unit 1::Var 1',
+          existingCases: 4,
+          plannedCases: 6,
+          retainedCases: 4,
+          addedCases: 2,
+          removedCases: 0,
+          existingCodingTasks: 4,
+          plannedCodingTasks: 7,
+          retainedCodingTasks: 4,
+          addedCodingTasks: 3,
+          removedCodingTasks: 0,
+          codingTasksByCoderId: {}
+        },
+        {
+          itemKey: 'Unit 2::Var 2',
+          itemLabel: 'Unit 2::Var 2',
+          existingCases: 3,
+          plannedCases: 3,
+          retainedCases: 3,
+          addedCases: 0,
+          removedCases: 0,
+          existingCodingTasks: 3,
+          plannedCodingTasks: 3,
+          retainedCodingTasks: 3,
+          addedCodingTasks: 0,
+          removedCodingTasks: 0,
+          codingTasksByCoderId: {}
+        }
+      ]
+    });
+
+    expect(component.getAddedItemDeltas()).toEqual([
+      expect.objectContaining({
+        itemKey: 'Unit 1::Var 1',
+        addedCases: 2,
+        addedCodingTasks: 3
+      })
+    ]);
+  });
 });

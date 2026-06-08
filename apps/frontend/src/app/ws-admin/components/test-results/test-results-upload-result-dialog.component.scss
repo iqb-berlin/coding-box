@@ -98,6 +98,60 @@
   border-color: rgba(25, 118, 210, 0.16);
 }
 
+.import-outcome-section {
+  background: rgba(46, 125, 50, 0.06);
+  border-color: rgba(46, 125, 50, 0.18);
+
+  &.has-issues {
+    background: rgba(25, 118, 210, 0.06);
+    border-color: rgba(25, 118, 210, 0.18);
+
+    .outcome-header mat-icon {
+      color: #1565c0;
+    }
+  }
+}
+
+.outcome-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+
+  mat-icon {
+    color: #2e7d32;
+    flex: 0 0 auto;
+  }
+}
+
+.outcome-copy {
+  min-width: 0;
+}
+
+.outcome-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.metric-chip {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  color: rgba(0, 0, 0, 0.72);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 4px;
+  line-height: 1.2;
+  padding: 5px 8px;
+
+  strong {
+    color: rgba(0, 0, 0, 0.82);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 .note-text {
   color: rgba(0, 0, 0, 0.72);
   font-size: 13px;
@@ -165,6 +219,17 @@
   border: 1px solid rgba(15, 92, 98, 0.16);
   border-radius: 8px;
   color: rgba(0, 0, 0, 0.72);
+  font-size: 13px;
+  line-height: 1.4;
+  margin-top: 10px;
+  padding: 9px 10px;
+}
+
+.summary-note {
+  background: rgba(15, 92, 98, 0.06);
+  border: 1px solid rgba(15, 92, 98, 0.14);
+  border-radius: 8px;
+  color: rgba(0, 0, 0, 0.68);
   font-size: 13px;
   line-height: 1.4;
   margin-top: 10px;

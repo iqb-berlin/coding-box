@@ -1,9 +1,28 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
+import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { generateReplayUrl } from '../../../utils/replay-url.util';
 import { CodingListService } from './coding-list.service';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
+
+interface ReplayMetadata {
+  unitName: string;
+  variableId: string;
+  variableAnchor: string;
+  bookletName: string;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+}
 
 @Injectable()
 export class CodingReplayService {
@@ -12,7 +31,10 @@ export class CodingReplayService {
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    private codingListService: CodingListService
+    @InjectRepository(CodingJobUnit)
+    private codingJobUnitRepository: Repository<CodingJobUnit>,
+    private codingListService: CodingListService,
+    @Optional() private readonly replayAnchorService?: CodingReplayAnchorService
   ) { }
 
   async generateReplayUrlForResponse(
@@ -33,52 +55,29 @@ export class CodingReplayService {
       });
 
       if (!response) {
-        throw new Error(`Response with id ${responseId} not found`);
+        throw new NotFoundException(`Response with id ${responseId} not found`);
       }
 
       const person = response.unit?.booklet?.person;
-      if (!person || Number(person.workspace_id) !== Number(workspaceId)) {
-        throw new Error(
+      if (person && Number(person.workspace_id) !== Number(workspaceId)) {
+        throw new ForbiddenException(
           `Response ${responseId} does not belong to workspace ${workspaceId}`
         );
       }
 
-      const unitName = response.unit?.name || '';
-      const variableId = response.variableid || '';
-      const loginName = person.login || '';
-      const loginCode = person.code || '';
-      const loginGroup = person.group || '';
-      const bookletId = response.unit?.booklet?.bookletinfo?.name || '';
+      const responseMetadata = this.getMetadataFromResponse(response);
+      const codingJobUnit = this.hasRequiredReplayMetadata(responseMetadata) ?
+        null :
+        await this.findCodingJobUnitForResponse(workspaceId, responseId);
+      const metadata = this.mergeReplayMetadata(responseMetadata, codingJobUnit);
 
-      // Get the variable page from VOUD data
-      this.logger.log(
-        `Looking up variablePage for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}`
-      );
-      const variablePageMap = await this.codingListService.getVariablePageMap(
-        unitName,
-        workspaceId
-      );
-      this.logger.log(
-        `VOUD lookup result: variablePageMap has ${variablePageMap.size} entries for unit '${unitName}'`
-      );
-      const variablePage = variablePageMap.get(variableId) || '0';
-      this.logger.log(
-        `Variable '${variableId}' resolved to page '${variablePage}' (found in map: ${variablePageMap.has(
-          variableId
-        )})`
-      );
+      if (!this.hasRequiredReplayMetadata(metadata)) {
+        throw new NotFoundException(
+          `Replay metadata for response ${responseId} in workspace ${workspaceId} not found`
+        );
+      }
 
-      const replayUrl = generateReplayUrl({
-        serverUrl,
-        loginName,
-        loginCode,
-        loginGroup,
-        bookletId,
-        unitId: unitName,
-        variablePage,
-        variableAnchor: variableId,
-        authToken
-      });
+      const replayUrl = await this.buildReplayUrl(workspaceId, metadata, serverUrl, authToken);
 
       this.logger.log(
         `Generated replay URL for response ${responseId} in workspace ${workspaceId}`
@@ -86,7 +85,7 @@ export class CodingReplayService {
 
       return { replayUrl };
     } catch (error) {
-      if (!(error instanceof Error && (error.message.includes('not found') || error.message.includes('does not belong')))) {
+      if (!(error instanceof HttpException) && error instanceof Error) {
         this.logger.error(
           `Error generating replay URL for response ${responseId}: ${error.message}`,
           error.stack
@@ -133,10 +132,9 @@ export class CodingReplayService {
             serverUrl,
             ''
           );
-          const replayUrlWithoutAuth = result.replayUrl.replace('?auth=', '');
           return {
             ...item,
-            replayUrl: replayUrlWithoutAuth
+            replayUrl: result.replayUrl
           };
         } catch (error) {
           this.logger.warn(
@@ -181,6 +179,20 @@ export class CodingReplayService {
     > {
     const uniqueUnitNames = [...new Set(items.map(i => i.unitName))];
     const variablePageMaps = new Map<string, Map<string, string>>();
+    let variableAnchorMaps = new Map<string, Map<string, string>>();
+    if (this.replayAnchorService) {
+      try {
+        variableAnchorMaps = await this.replayAnchorService.getVariableAnchorMaps(
+          uniqueUnitNames,
+          workspaceId
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Failed to get variable anchor maps for workspace ${workspaceId}: ${error.message}`
+        );
+      }
+    }
+
     await Promise.all(
       uniqueUnitNames.map(async unitName => {
         try {
@@ -196,23 +208,192 @@ export class CodingReplayService {
     return items.map(item => {
       try {
         const pageMap = variablePageMaps.get(item.unitName) ?? new Map<string, string>();
+        const anchorMap = variableAnchorMaps.get(item.unitName) ?? new Map<string, string>();
         const variablePage = pageMap.get(item.variableId) || '0';
-        const replayUrl = generateReplayUrl({
+        const variableAnchor = anchorMap.get(item.variableId) || item.variableAnchor;
+        const replayUrl = this.createReplayUrl(
+          {
+            unitName: item.unitName,
+            variableId: item.variableId,
+            variableAnchor,
+            bookletName: item.bookletName,
+            personLogin: item.personLogin,
+            personCode: item.personCode,
+            personGroup: item.personGroup
+          },
+          workspaceId,
           serverUrl,
-          loginName: item.personLogin,
-          loginCode: item.personCode,
-          loginGroup: item.personGroup,
-          bookletId: item.bookletName,
-          unitId: item.unitName,
           variablePage,
-          variableAnchor: item.variableId,
-          authToken: ''
-        }).replace('?auth=', '');
+          ''
+        );
         return { ...item, replayUrl };
       } catch (error) {
         this.logger.warn(`Failed to generate replay URL for response ${item.responseId}: ${error.message}`);
         return { ...item, replayUrl: '' };
       }
     });
+  }
+
+  private getMetadataFromResponse(response: ResponseEntity): ReplayMetadata {
+    const person = response.unit?.booklet?.person;
+    return {
+      unitName: response.unit?.name || '',
+      variableId: response.variableid || '',
+      variableAnchor: response.variableid || '',
+      bookletName: response.unit?.booklet?.bookletinfo?.name || '',
+      personLogin: person?.login || '',
+      personCode: person?.code || '',
+      personGroup: person?.group || ''
+    };
+  }
+
+  private mergeReplayMetadata(
+    responseMetadata: ReplayMetadata,
+    codingJobUnit: CodingJobUnit | null
+  ): ReplayMetadata {
+    if (!codingJobUnit) {
+      return responseMetadata;
+    }
+
+    return {
+      unitName: responseMetadata.unitName || codingJobUnit.unit_name || '',
+      variableId: responseMetadata.variableId || codingJobUnit.variable_id || '',
+      variableAnchor: codingJobUnit.variable_anchor || responseMetadata.variableAnchor || codingJobUnit.variable_id || '',
+      bookletName: responseMetadata.bookletName || codingJobUnit.booklet_name || '',
+      personLogin: responseMetadata.personLogin || codingJobUnit.person_login || '',
+      personCode: responseMetadata.personLogin ? responseMetadata.personCode : codingJobUnit.person_code || '',
+      personGroup: responseMetadata.personLogin ? responseMetadata.personGroup : codingJobUnit.person_group || ''
+    };
+  }
+
+  private hasRequiredReplayMetadata(metadata: ReplayMetadata): boolean {
+    return Boolean(
+      metadata.unitName &&
+      metadata.variableId &&
+      metadata.variableAnchor &&
+      metadata.bookletName &&
+      metadata.personLogin
+    );
+  }
+
+  private async findCodingJobUnitForResponse(
+    workspaceId: number,
+    responseId: number
+  ): Promise<CodingJobUnit | null> {
+    return this.codingJobUnitRepository
+      .createQueryBuilder('codingJobUnit')
+      .innerJoinAndSelect(
+        'codingJobUnit.coding_job',
+        'codingJob',
+        'codingJob.workspace_id = :workspaceId',
+        { workspaceId }
+      )
+      .where('codingJobUnit.response_id = :responseId', { responseId })
+      .orderBy('codingJobUnit.id', 'ASC')
+      .getOne();
+  }
+
+  private async buildReplayUrl(
+    workspaceId: number,
+    metadata: ReplayMetadata,
+    serverUrl: string,
+    authToken: string
+  ): Promise<string> {
+    const variablePage = await this.resolveVariablePage(
+      workspaceId,
+      metadata.unitName,
+      metadata.variableId
+    );
+    const variableAnchor = await this.resolveVariableAnchor(
+      workspaceId,
+      metadata.unitName,
+      metadata.variableId,
+      metadata.variableAnchor
+    );
+
+    return this.createReplayUrl(
+      { ...metadata, variableAnchor },
+      workspaceId,
+      serverUrl,
+      variablePage,
+      authToken
+    );
+  }
+
+  private async resolveVariablePage(
+    workspaceId: number,
+    unitName: string,
+    variableId: string
+  ): Promise<string> {
+    try {
+      this.logger.log(
+        `Looking up variablePage for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}`
+      );
+      const variablePageMap = await this.codingListService.getVariablePageMap(
+        unitName,
+        workspaceId
+      );
+      this.logger.log(
+        `VOUD lookup result: variablePageMap has ${variablePageMap.size} entries for unit '${unitName}'`
+      );
+      const variablePage = variablePageMap.get(variableId) || '0';
+      this.logger.log(
+        `Variable '${variableId}' resolved to page '${variablePage}' (found in map: ${variablePageMap.has(
+          variableId
+        )})`
+      );
+      return variablePage;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to resolve variablePage for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}: ${error.message}`
+      );
+      return '0';
+    }
+  }
+
+  private createReplayUrl(
+    metadata: ReplayMetadata,
+    workspaceId: number,
+    serverUrl: string,
+    variablePage: string,
+    authToken: string
+  ): string {
+    return generateReplayUrl({
+      serverUrl,
+      loginName: metadata.personLogin,
+      loginCode: metadata.personCode,
+      loginGroup: metadata.personGroup,
+      bookletId: metadata.bookletName,
+      unitId: metadata.unitName,
+      variablePage,
+      variableAnchor: metadata.variableAnchor,
+      authToken,
+      workspaceId
+    });
+  }
+
+  private async resolveVariableAnchor(
+    workspaceId: number,
+    unitName: string,
+    variableId: string,
+    fallbackAnchor: string
+  ): Promise<string> {
+    if (!this.replayAnchorService) {
+      return fallbackAnchor;
+    }
+
+    try {
+      return await this.replayAnchorService.resolveVariableAnchor(
+        workspaceId,
+        unitName,
+        variableId,
+        fallbackAnchor
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to resolve variableAnchor for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}: ${error.message}`
+      );
+      return fallbackAnchor;
+    }
   }
 }

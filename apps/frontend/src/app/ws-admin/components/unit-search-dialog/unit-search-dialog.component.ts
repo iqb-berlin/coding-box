@@ -328,20 +328,13 @@ export class UnitSearchDialogComponent implements OnInit {
   }
 
   replayUnit(item: UnitSearchResult | ResponseSearchResult): void {
-    this.appService
-      .createOwnToken(this.appService.selectedWorkspaceId, 1)
-      .subscribe(token => {
-        const queryParams = {
-          auth: token
-        };
-        const url = this.router
-          .serializeUrl(
-            this.router.createUrlTree(
-              [`replay/${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}/${item.unitAlias}/0/0`],
-              { queryParams: queryParams })
-          );
-        window.open(`#/${url}`, '_blank');
-      });
+    const url = this.router
+      .serializeUrl(
+        this.router.createUrlTree(
+          [`replay/${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}/${item.unitAlias}/0/0`],
+          { queryParams: { workspaceId: this.appService.selectedWorkspaceId } })
+      );
+    window.open(`${window.location.origin}/#${url}`, '_blank');
   }
 
   deleteUnit(unit: UnitSearchResult): void {

@@ -1,46 +1,50 @@
 <h2 mat-dialog-title>
-  Zentrale Prozess-Übersicht
+  {{ 'process-overview.title' | translate }}
 </h2>
 
 <mat-dialog-content>
   <div class="process-overview-container">
     <div class="filter-row">
       <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>Status</mat-label>
+        <mat-label>{{ 'process-overview.filters.status' | translate }}</mat-label>
         <mat-select [(ngModel)]="statusFilter" (selectionChange)="applyFilter()">
-          <mat-option value="">Alle Status</mat-option>
+          <mat-option value="">{{ 'process-overview.filters.all-status' | translate }}</mat-option>
           <mat-option *ngFor="let status of statusOptions" [value]="status">
-            {{ status | uppercase }}
+            {{ getStatusLabel(status) }}
           </mat-option>
         </mat-select>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>Typ (Queue)</mat-label>
+        <mat-label>{{ 'process-overview.filters.type' | translate }}</mat-label>
         <mat-select [(ngModel)]="typeFilter" (selectionChange)="applyFilter()">
-          <mat-option value="">Alle Typen</mat-option>
+          <mat-option value="">{{ 'process-overview.filters.all-types' | translate }}</mat-option>
           <mat-option *ngFor="let type of availableTypes" [value]="type">
-            {{ type }}
+            {{ getQueueLabel(type) }}
           </mat-option>
         </mat-select>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="filter-field search-field">
-        <mat-label>Suchen...</mat-label>
-        <input matInput [(ngModel)]="searchFilter" (keyup)="applyFilter()" placeholder="ID oder Name">
+        <mat-label>{{ 'process-overview.filters.search' | translate }}</mat-label>
+        <input
+          matInput
+          [(ngModel)]="searchFilter"
+          (keyup)="applyFilter()"
+          [placeholder]="'process-overview.filters.search-placeholder' | translate">
         <mat-icon matSuffix>search</mat-icon>
       </mat-form-field>
 
       <div class="filter-actions">
         <button mat-button (click)="clearFilters()" [disabled]="!statusFilter && !typeFilter && !searchFilter">
-          <mat-icon>filter_list_off</mat-icon> Filter leeren
+          <mat-icon>filter_list_off</mat-icon> {{ 'process-overview.filters.clear' | translate }}
         </button>
       </div>
     </div>
 
     <div class="table-actions">
       <button mat-raised-button color="primary" (click)="loadProcesses()">
-        <mat-icon>refresh</mat-icon> Aktualisieren
+        <mat-icon>refresh</mat-icon> {{ 'process-overview.refresh' | translate }}
       </button>
     </div>
 
@@ -53,45 +57,99 @@
         <table mat-table [dataSource]="processes" class="mat-table" [class.loading-table]="isLoading">
           
           <ng-container matColumnDef="queueName">
-            <th mat-header-cell *matHeaderCellDef> Typ (Queue) </th>
-            <td mat-cell *matCellDef="let element"> {{ element.queueName }} </td>
+            <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.type' | translate }}</th>
+            <td mat-cell *matCellDef="let element">
+              <div class="queue-cell" [matTooltip]="getQueueDescription(element.queueName)">
+                <span class="queue-label">{{ getQueueLabel(element.queueName) }}</span>
+                <span class="queue-name">{{ element.queueName }}</span>
+              </div>
+            </td>
           </ng-container>
 
           <ng-container matColumnDef="status">
-            <th mat-header-cell *matHeaderCellDef> Status </th>
-            <td mat-cell *matCellDef="let element" class="status-cell" [ngClass]="element.status">
-              {{ element.status | uppercase }}
+            <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.status' | translate }}</th>
+            <td mat-cell *matCellDef="let element" class="status-cell">
+              <span
+                class="status-chip"
+                [ngClass]="getStatusClass(element.status)"
+                [matTooltip]="getStatusTooltip(element.status)">
+                <mat-icon>{{ getStatusIcon(element.status) }}</mat-icon>
+                {{ getStatusLabel(element.status) }}
+              </span>
             </td>
           </ng-container>
 
           <ng-container matColumnDef="progress">
-            <th mat-header-cell *matHeaderCellDef> Fortschritt </th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.progress' | translate }}</th>
             <td mat-cell *matCellDef="let element">
-              <ng-container *ngIf="isNumber(element.progress); else defaultProgress">
-                {{ element.progress }} %
+              <ng-container *ngIf="hasProgressPercent(element); else progressTextOnly">
+                <div class="progress-cell">
+                  <mat-progress-bar mode="determinate" [value]="getProgressPercent(element) || 0"></mat-progress-bar>
+                  <span>{{ getProgressLabel(element) }}</span>
+                </div>
               </ng-container>
-              <ng-template #defaultProgress>
-                {{ element.progress | json }}
+              <ng-template #progressTextOnly>
+                <span class="muted-text">{{ getProgressLabel(element) }}</span>
               </ng-template>
             </td>
           </ng-container>
 
-          <ng-container matColumnDef="timestamp">
-            <th mat-header-cell *matHeaderCellDef> Erstellt / Aktualisiert </th>
-            <td mat-cell *matCellDef="let element"> 
-              {{ element.timestamp | date:'short' }} 
+          <ng-container matColumnDef="time">
+            <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.time' | translate }}</th>
+            <td mat-cell *matCellDef="let element">
+              <div class="time-cell">
+                <div>
+                  <span>{{ 'process-overview.time.created' | translate }}</span>
+                  <strong>{{ element.timestamp | date:'short' }}</strong>
+                </div>
+                <div *ngIf="element.processedOn">
+                  <span>{{ 'process-overview.time.started' | translate }}</span>
+                  <strong>{{ element.processedOn | date:'short' }}</strong>
+                </div>
+                <div *ngIf="element.finishedOn">
+                  <span>{{ 'process-overview.time.finished' | translate }}</span>
+                  <strong>{{ element.finishedOn | date:'short' }}</strong>
+                </div>
+                <div *ngIf="getDurationLabel(element) as duration">
+                  <span>{{ 'process-overview.time.duration' | translate }}</span>
+                  <strong>{{ duration }}</strong>
+                </div>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="details">
+            <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.details' | translate }}</th>
+            <td mat-cell *matCellDef="let element">
+              <div class="details-cell">
+                <div *ngIf="element.failedReason" class="failed-reason">
+                  <mat-icon>error</mat-icon>
+                  <span>{{ element.failedReason }}</span>
+                </div>
+                <div *ngIf="getProcessDetailItems(element).length > 0; else noDetails" class="detail-list">
+                  <span class="detail-item" *ngFor="let detail of getProcessDetailItems(element)">
+                    <span class="detail-label">{{ detail.label }}</span>
+                    <span class="detail-value">{{ detail.value }}</span>
+                  </span>
+                </div>
+                <ng-template #noDetails>
+                  <span *ngIf="!element.failedReason" class="muted-text">
+                    {{ 'process-overview.details.none' | translate }}
+                  </span>
+                </ng-template>
+              </div>
             </td>
           </ng-container>
 
           <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef> Aktionen </th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.actions' | translate }}</th>
             <td mat-cell *matCellDef="let element">
               <span class="action-tooltip-wrapper" [matTooltip]="getActionTooltip(element)">
                 <button mat-icon-button
                         color="warn"
                         (click)="deleteProcess(element)"
                         [disabled]="!canRemoveProcess(element)">
-                  <mat-icon>delete</mat-icon>
+                  <mat-icon>{{ getActionIcon(element) }}</mat-icon>
                 </button>
               </span>
             </td>
@@ -107,7 +165,11 @@
         </mat-paginator>
 
         <div *ngIf="processes.filteredData.length === 0 && !isLoading" class="no-data">
-          {{ processes.data.length === 0 ? 'Keine Prozesse in der Warteschlange.' : 'Keine Prozesse für die aktuellen Filter.' }}
+          {{
+            processes.data.length === 0 ?
+              ('process-overview.no-data' | translate) :
+              ('process-overview.no-filter-data' | translate)
+          }}
         </div>
       </div>
     </div>
@@ -115,5 +177,5 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button mat-dialog-close>Schließen</button>
+  <button mat-button mat-dialog-close>{{ 'close' | translate }}</button>
 </mat-dialog-actions>

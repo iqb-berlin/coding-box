@@ -4,14 +4,29 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog } from '@angular/material/dialog';
+import { Observable, of, throwError } from 'rxjs';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
+import { ResponseMatchingFlag } from '../../../ws-admin/services/workspace-settings.service';
+import { CoderService } from '../../services/coder.service';
+import { ExportJobService } from '../../../shared/services/file/export-job.service';
+import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
+import { ManualCodingExportDialogComponent } from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
 
-type VariableCoverageOverview = NonNullable<CodingManagementManualComponent['variableCoverageOverview']>;
-type CaseCoverageOverview = NonNullable<CodingManagementManualComponent['caseCoverageOverview']>;
-type CodingProgressOverview = NonNullable<CodingManagementManualComponent['codingProgressOverview']>;
-type ManualAppliedResultsOverview = NonNullable<CodingManagementManualComponent['appliedResultsOverview']>;
+type VariableCoverageOverview = NonNullable<
+CodingManagementManualComponent['variableCoverageOverview']
+>;
+type CaseCoverageOverview = NonNullable<
+CodingManagementManualComponent['caseCoverageOverview']
+>;
+type CodingProgressOverview = NonNullable<
+CodingManagementManualComponent['codingProgressOverview']
+>;
+type ManualAppliedResultsOverview = NonNullable<
+CodingManagementManualComponent['appliedResultsOverview']
+>;
 
 describe('CodingManagementManualComponent', () => {
   let component: CodingManagementManualComponent;
@@ -38,6 +53,21 @@ describe('CodingManagementManualComponent', () => {
           useValue: { open: jest.fn() }
         },
         {
+          provide: MatDialog,
+          useValue: { open: jest.fn().mockReturnValue({ afterClosed: () => of(undefined) }) }
+        },
+        {
+          provide: CoderService,
+          useValue: {
+            getCoders: jest.fn().mockReturnValue(of([])),
+            getCodersForExport: jest.fn().mockReturnValue(of([]))
+          }
+        },
+        {
+          provide: ExportJobService,
+          useValue: { startJob: jest.fn().mockReturnValue(of({ jobId: 'export-1' })) }
+        },
+        {
           provide: Router,
           useValue: { navigate: jest.fn() }
         },
@@ -49,10 +79,33 @@ describe('CodingManagementManualComponent', () => {
     const translateService = TestBed.inject(TranslateService);
     translateService.setTranslation('de', {
       'coding-management-manual': {
+        'coding-progress': {
+          'info-tooltip':
+            'Erklärung zur Berechnung der Fortschrittswerte anzeigen',
+          'info-total-title': 'Gesamt zu kodierende Fälle',
+          'info-total-desc': 'Zählt die Basisanzahl eindeutiger Antworten.',
+          'info-completed-title': 'Abgeschlossene Fälle',
+          'info-completed-desc':
+            'Zählt die Anzahl der eindeutigen abgeschlossenen Fälle.',
+          'info-aggregation-title': 'Antwortwert-Aggregation, falls aktiv',
+          'info-aggregation-desc':
+            'Wenn Antwortwert-Aggregation aktiv ist, werden gleiche Antwortwerte pro Aufgabe/Variable gruppiert. Pro Gruppe wird ein Repräsentant in den Kodierjob gegeben; die Kodierung gilt anschließend für die zugehörigen Rohantworten. Abgeleitete Variablen werden nicht aggregiert.',
+          'aggregation-note':
+            'Antwortwert-Aggregation ist aktiv: {{rawCases}} Rohantworten werden zu {{effectiveCases}} effektiven Kodierfällen zusammengefasst. Dadurch müssen bei Schwelle {{threshold}} {{collapsedCases}} gleichwertige Rohantworten nicht separat manuell kodiert werden.',
+          'analysis-aggregation-note':
+            'Antwort-Analyse: {{rawCases}} Rohantworten ergeben {{effectiveCases}} effektive Kodierfälle.',
+          'analysis-aggregation-savings':
+            '{{collapsedCases}} gleichwertige Rohantworten werden in dieser Analyse nicht separat als Kodierfälle gezählt.'
+        },
         freshness: {
           'second-autocoding-ready-title': 'Auto-Coding 2 bereit',
-          'second-autocoding-ready-summary': 'Die manuelle Kodierung ist abgeschlossen. Auto-Coding 2 kann nun für {{taskResults}} gestartet oder aktualisiert werden. Das betrifft {{responses}}.',
-          'second-autocoding-ready-help': 'Starten Sie Auto-Coding 2 in der Kodierübersicht. {{taskResultHelp}}'
+          'second-autocoding-ready-summary':
+            'Die manuelle Kodierung ist abgeschlossen. Auto-Coding 2 kann nun für {{taskResults}} gestartet oder aktualisiert werden. Das betrifft {{responses}}.',
+          'second-autocoding-ready-help':
+            'Starten Sie Auto-Coding 2 in der Kodierübersicht. {{taskResultHelp}}'
+        },
+        'completed-jobs': {
+          'readonly-note': 'Nur lesbar'
         }
       }
     });
@@ -91,6 +144,169 @@ describe('CodingManagementManualComponent', () => {
 
     expect(component.hasDuplicateFindingsWithoutAggregation).toBe(true);
     expect(component.hasPreparationWarnings()).toBe(true);
+  });
+
+  it('debounces response matching changes into one analysis restart', () => {
+    jest.useFakeTimers();
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
+      };
+    };
+    const appService = componentInternals.appService;
+    const testPersonCodingService = componentInternals.testPersonCodingService;
+
+    appService.selectedWorkspaceId = 5;
+    component.duplicateAggregationThreshold = 2;
+
+    const saveSpy = jest
+      .spyOn(testPersonCodingService, 'saveAggregationSettings')
+      .mockReturnValue(
+        of({
+          success: true,
+          threshold: 2,
+          flags: [
+            ResponseMatchingFlag.IGNORE_CASE,
+            ResponseMatchingFlag.IGNORE_WHITESPACE
+          ],
+          aggregationActive: true,
+          revertedResponses: 0,
+          message: 'saved'
+        })
+      );
+    const restartSpy = jest
+      .spyOn(component, 'restartAnalysis')
+      .mockImplementation(() => undefined);
+    const refreshSpy = jest
+      .spyOn(
+        component as unknown as {
+          refreshAggregationDependentViews: (
+            includeResponseAnalysis?: boolean
+          ) => void;
+        },
+        'refreshAggregationDependentViews'
+      )
+      .mockImplementation(() => undefined);
+
+    component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
+    component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE);
+
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(500);
+
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(saveSpy).toHaveBeenCalledWith(5, 2, [
+      ResponseMatchingFlag.IGNORE_CASE,
+      ResponseMatchingFlag.IGNORE_WHITESPACE
+    ]);
+    expect(restartSpy).toHaveBeenCalledTimes(1);
+    expect(refreshSpy).toHaveBeenCalledWith(false);
+
+    jest.useRealTimers();
+  });
+
+  it('rolls response matching flags back when saving fails', () => {
+    jest.useFakeTimers();
+    try {
+      const componentInternals = component as unknown as {
+        appService: { selectedWorkspaceId: number };
+        persistedResponseMatchingFlags: ResponseMatchingFlag[];
+        testPersonCodingService: {
+          saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
+        };
+      };
+      const appService = componentInternals.appService;
+      const testPersonCodingService =
+        componentInternals.testPersonCodingService;
+
+      appService.selectedWorkspaceId = 5;
+      component.responseMatchingFlags = [ResponseMatchingFlag.NO_AGGREGATION];
+      componentInternals.persistedResponseMatchingFlags = [
+        ResponseMatchingFlag.NO_AGGREGATION
+      ];
+
+      jest
+        .spyOn(testPersonCodingService, 'saveAggregationSettings')
+        .mockReturnValue(throwError(() => new Error('save failed')));
+
+      component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
+
+      expect(component.responseMatchingFlags).toEqual([
+        ResponseMatchingFlag.IGNORE_CASE
+      ]);
+
+      jest.advanceTimersByTime(500);
+
+      expect(component.responseMatchingFlags).toEqual([
+        ResponseMatchingFlag.NO_AGGREGATION
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('allows retrying the same response matching flags after a failed save', () => {
+    jest.useFakeTimers();
+    try {
+      const componentInternals = component as unknown as {
+        appService: { selectedWorkspaceId: number };
+        persistedResponseMatchingFlags: ResponseMatchingFlag[];
+        testPersonCodingService: {
+          saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
+        };
+      };
+      const appService = componentInternals.appService;
+      const testPersonCodingService =
+        componentInternals.testPersonCodingService;
+
+      appService.selectedWorkspaceId = 5;
+      component.duplicateAggregationThreshold = 2;
+      component.responseMatchingFlags = [ResponseMatchingFlag.NO_AGGREGATION];
+      componentInternals.persistedResponseMatchingFlags = [
+        ResponseMatchingFlag.NO_AGGREGATION
+      ];
+
+      const saveSpy = jest
+        .spyOn(testPersonCodingService, 'saveAggregationSettings')
+        .mockReturnValueOnce(throwError(() => new Error('save failed')))
+        .mockReturnValueOnce(
+          of({
+            success: true,
+            threshold: 2,
+            flags: [ResponseMatchingFlag.IGNORE_CASE],
+            aggregationActive: true,
+            revertedResponses: 0,
+            message: 'saved'
+          })
+        );
+      const restartSpy = jest
+        .spyOn(component, 'restartAnalysis')
+        .mockImplementation(() => undefined);
+
+      component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
+      jest.advanceTimersByTime(500);
+
+      expect(saveSpy).toHaveBeenCalledTimes(1);
+      expect(component.responseMatchingFlags).toEqual([
+        ResponseMatchingFlag.NO_AGGREGATION
+      ]);
+
+      component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
+      jest.advanceTimersByTime(500);
+
+      expect(saveSpy).toHaveBeenCalledTimes(2);
+      expect(saveSpy).toHaveBeenLastCalledWith(5, 2, [
+        ResponseMatchingFlag.IGNORE_CASE
+      ]);
+      expect(component.responseMatchingFlags).toEqual([
+        ResponseMatchingFlag.IGNORE_CASE
+      ]);
+      expect(restartSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should not block preparation for duplicates when aggregation is active', () => {
@@ -165,7 +381,155 @@ describe('CodingManagementManualComponent', () => {
 
     expect(component.hasCompletedJobsReadyForApply()).toBe(true);
     expect(component.getCompletionActionTitle()).toContain('1 abgeschlossene');
-    expect(component.getCodingJobResultSummary(component.completedJobsReadyForApply[0])).toBe('5/5 Ergebnisse kodiert');
+    expect(
+      component.getCodingJobResultSummary(
+        component.completedJobsReadyForApply[0]
+      )
+    ).toBe('5/5 Ergebnisse kodiert');
+  });
+
+  it('should hide completed job apply actions without study-manager permission', () => {
+    component.completedJobsReadyForApply = [
+      {
+        id: 1,
+        workspace_id: 1,
+        name: 'Job 1',
+        status: 'completed',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 5,
+        codedUnits: 5
+      }
+    ];
+    component.codingJobsComponent = {
+      canApplyResults: false
+    } as unknown as CodingManagementManualComponent['codingJobsComponent'];
+
+    expect(component.canShowCompletedJobApplyActions()).toBe(false);
+
+    component.codingJobsComponent = {
+      canApplyResults: true
+    } as unknown as CodingManagementManualComponent['codingJobsComponent'];
+
+    expect(component.canShowCompletedJobApplyActions()).toBe(true);
+  });
+
+  it('should use parent apply permission when the coding jobs table is not rendered', () => {
+    component.completedJobsReadyForApply = [
+      {
+        id: 1,
+        workspace_id: 1,
+        name: 'Job 1',
+        status: 'completed',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 5,
+        codedUnits: 5
+      }
+    ];
+    component.codingJobsComponent = undefined;
+
+    component.canApplyManualCodingResults = false;
+    expect(component.canShowCompletedJobApplyActions()).toBe(false);
+
+    component.canApplyManualCodingResults = true;
+    expect(component.canShowCompletedJobApplyActions()).toBe(true);
+  });
+
+  it('should keep completed jobs visible as read-only without study-manager permission', () => {
+    component.selectedManualTabIndex = 4;
+    setAppliedResults(5, 0, 5);
+    component.completedJobsReadyForApply = [
+      {
+        id: 1,
+        workspace_id: 1,
+        name: 'Job 1',
+        status: 'completed',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 5,
+        codedUnits: 5
+      }
+    ];
+    jest.spyOn(component, 'canApplyCompletedJobResults').mockReturnValue(false);
+
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector(
+      '.completed-job-apply-row'
+    ) as HTMLElement | null;
+    const applyButtons = Array.from(
+      fixture.nativeElement.querySelectorAll('.completed-job-apply-row button')
+    ) as HTMLButtonElement[];
+    const readonlyNote = fixture.nativeElement.querySelector(
+      '.completed-job-readonly-note'
+    ) as HTMLElement | null;
+
+    expect(row?.textContent).toContain('Job 1');
+    expect(row?.textContent).toContain('5/5 Ergebnisse kodiert');
+    expect(
+      applyButtons.some(button => button.textContent?.includes('Ergebnisse anwenden')
+      )
+    ).toBe(false);
+    expect(readonlyNote?.textContent).toContain('Nur lesbar');
+  });
+
+  it('blocks transfer action without coding-manager permission', () => {
+    const openTransferCodingCasesDialog = jest.fn();
+    const snackBar = TestBed.inject(MatSnackBar);
+    (snackBar.open as jest.Mock).mockClear();
+    component.canApplyManualCodingResults = false;
+    component.canManageManualCodingJobs = false;
+    component.codingJobsComponent = {
+      openTransferCodingCasesDialog
+    } as unknown as CodingManagementManualComponent['codingJobsComponent'];
+
+    component.openExecutionTransferCases();
+
+    expect(openTransferCodingCasesDialog).not.toHaveBeenCalled();
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'Keine Berechtigung zum Verwalten von Kodierjobs.',
+      'Schließen',
+      {
+        duration: 5000,
+        panelClass: ['error-snackbar']
+      }
+    );
+  });
+
+  it('hides the execution transfer button without coding-manager permission', () => {
+    component.selectedManualTabIndex = 3;
+    component.canManageManualCodingJobs = false;
+
+    fixture.detectChanges();
+
+    const actionLabels = Array.from(
+      fixture.nativeElement.querySelectorAll('.manual-tab-actions button')
+    ).map(button => (button as HTMLButtonElement).textContent?.trim() ?? '');
+
+    expect(actionLabels.some(label => label.includes('Export'))).toBe(true);
+    expect(
+      actionLabels.some(label => label.includes('Fälle übertragen'))
+    ).toBe(false);
+  });
+
+  it('allows transfer action for coding managers without study-manager apply permission', () => {
+    const openTransferCodingCasesDialog = jest.fn();
+    const snackBar = TestBed.inject(MatSnackBar);
+    (snackBar.open as jest.Mock).mockClear();
+    component.canManageManualCodingJobs = true;
+    component.canApplyManualCodingResults = false;
+    component.codingJobsComponent = {
+      openTransferCodingCasesDialog
+    } as unknown as CodingManagementManualComponent['codingJobsComponent'];
+
+    component.openExecutionTransferCases();
+
+    expect(openTransferCodingCasesDialog).toHaveBeenCalled();
+    expect(snackBar.open).not.toHaveBeenCalled();
   });
 
   it('should describe complete planning with open coding work as ready for execution', () => {
@@ -175,7 +539,9 @@ describe('CodingManagementManualComponent', () => {
 
     expect(component.getPlanningStatusClass()).toBe('status-ready');
     expect(component.getPlanningStatusIcon()).toBe('play_circle');
-    expect(component.getPlanningStatusTitle()).toBe('Bereit für die Durchführung');
+    expect(component.getPlanningStatusTitle()).toBe(
+      'Bereit für die Durchführung'
+    );
     expect(component.getPlanningStatusDescription()).toBe(
       'Die Planung ist vollständig. Bearbeiten Sie nun die offenen Kodierfälle im Abschnitt Durchführung.'
     );
@@ -200,7 +566,9 @@ describe('CodingManagementManualComponent', () => {
 
     expect(component.getPlanningStatusClass()).toBe('status-attention');
     expect(component.getPlanningStatusIcon()).toBe('sync_problem');
-    expect(component.getPlanningStatusTitle()).toBe('Kodierfortschritt nicht verfügbar');
+    expect(component.getPlanningStatusTitle()).toBe(
+      'Kodierfortschritt nicht verfügbar'
+    );
     expect(component.getPlanningStatusDescription()).toBe(
       'Die Planung ist vollständig, der aktuelle Kodierfortschritt konnte aber nicht ermittelt werden. Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs.'
     );
@@ -219,6 +587,32 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
+  it('should not describe empty progress snapshots as ready for completion', () => {
+    setEmptyPlanningSnapshots();
+
+    expect(component.getPlanningStatusClass()).toBe('status-ready');
+    expect(component.getPlanningStatusIcon()).toBe('route');
+    expect(component.getPlanningStatusTitle()).toBe('Bereit für die Planung');
+    expect(component.getPlanningStatusDescription()).toBe(
+      'Prüfen Sie die Antwortanalyse und erstellen Sie danach passende Kodierjob-Definitionen.'
+    );
+    expect(component.getPlanningNextStepTitle()).toBe(
+      'Jobdefinition erstellen'
+    );
+    expect(component.getPlanningNextStepTargetTab()).toBe('planning');
+
+    component.appliedResultsOverview = {
+      ...component.appliedResultsOverview!,
+      completionPercentage: 100,
+      rawCompletionPercentage: 100
+    } satisfies ManualAppliedResultsOverview;
+
+    expect(component.getPlanningStatusTitle()).toBe('Bereit für die Planung');
+    expect(component.getPlanningStatusDescription()).toBe(
+      'Prüfen Sie die Antwortanalyse und erstellen Sie danach passende Kodierjob-Definitionen.'
+    );
+  });
+
   it('should describe applied results as complete', () => {
     setCompletePlanningState();
     setCodingProgress(582, 582);
@@ -226,7 +620,157 @@ describe('CodingManagementManualComponent', () => {
 
     expect(component.getPlanningStatusClass()).toBe('status-complete');
     expect(component.getPlanningStatusIcon()).toBe('check_circle');
-    expect(component.getPlanningStatusTitle()).toBe('Manuelle Kodierung abgeschlossen');
+    expect(component.getPlanningStatusTitle()).toBe(
+      'Manuelle Kodierung abgeschlossen'
+    );
+  });
+
+  it('should warn when manual variables have no regular selectable codes', () => {
+    setCompletePlanningState();
+    setCodingProgress(10, 4);
+    setAppliedResults(10, 0, 10);
+    component.manualCodeAvailabilityWarnings = [
+      {
+        unitName: 'UNIT1',
+        variableId: 'VAR1',
+        responseCount: 5,
+        casesInJobs: 0,
+        availableCases: 5,
+        uniqueCasesAfterAggregation: 5,
+        regularCodeCount: 2,
+        selectableRegularCodeCount: 0,
+        onlySpecialOptionsAvailable: true,
+        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
+      }
+    ];
+
+    expect(component.hasManualCodeAvailabilityWarnings).toBe(true);
+    expect(component.hasPlanningWarnings()).toBe(true);
+    expect(component.getPlanningStatusClass()).toBe('status-attention');
+    expect(component.getPlanningStatusIcon()).toBe('warning');
+    expect(component.getPlanningStatusTitle()).toBe(
+      'Reguläre Codes für manuelle Kodierung prüfen'
+    );
+    expect(component.getPlanningNextStepTitle()).toBe('Reguläre Codes ergänzen');
+    expect(component.getPlanningNextStepActionLabel()).toBe(
+      'Betroffene Variablen ansehen'
+    );
+    expect(component.getPlanningNextStepTargetSection()).toBe(
+      'manual-variable-coverage'
+    );
+
+    fixture.detectChanges();
+
+    const removedDuplicateBanner = fixture.nativeElement.querySelector(
+      '.manual-code-availability-banner'
+    ) as HTMLElement | null;
+    const statusBanner = fixture.nativeElement.querySelector(
+      '.planning-status-banner'
+    ) as HTMLElement | null;
+    expect(removedDuplicateBanner).toBeNull();
+    expect(statusBanner?.textContent).toContain('UNIT1 / VAR1');
+    expect(statusBanner?.textContent).toContain(
+      'Reguläre Codes für manuelle Kodierung prüfen'
+    );
+  });
+
+  it('should keep the affected variables scroll target while coverage is loading', () => {
+    component.selectedManualTabIndex = component.manualCodingTabs.indexOf('planning');
+    component.variableCoverageOverview = null;
+    component.manualCodeAvailabilityWarnings = [
+      {
+        unitName: 'UNIT1',
+        variableId: 'VAR1',
+        responseCount: 5,
+        casesInJobs: 0,
+        availableCases: 5,
+        uniqueCasesAfterAggregation: 5,
+        regularCodeCount: 2,
+        selectableRegularCodeCount: 0,
+        onlySpecialOptionsAvailable: true,
+        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
+      }
+    ];
+
+    fixture.detectChanges();
+
+    expect(component.getPlanningNextStepTargetSection()).toBe(
+      'manual-variable-coverage'
+    );
+    expect(
+      fixture.nativeElement.querySelector('#manual-variable-coverage')
+    ).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('.variable-coverage-section')
+    ).toBeNull();
+  });
+
+  it('should explain raw status responses versus effective manual cases', () => {
+    setCompletePlanningState();
+    setCodingProgress(145, 25);
+    component.codingProgressOverview = {
+      ...component.codingProgressOverview!,
+      statusTotalCasesToCode: 193
+    };
+
+    expect(component.getManualCaseScopeSummaryText()).toContain(
+      '193 Rohantworten im Statuspool -> 145 effektive Arbeitsfälle'
+    );
+    expect(component.getManualCaseScopeSummaryText()).toContain(
+      'davon 120 offen'
+    );
+    expect(component.getManualCaseScopeSummaryText()).toContain(
+      '48 Rohantworten'
+    );
+  });
+
+  it('should keep conflicts visually stronger than manual code availability warnings', () => {
+    setCompletePlanningState();
+    component.variableCoverageOverview = {
+      ...component.variableCoverageOverview!,
+      conflictedVariables: 1,
+      coverageByStatus: {
+        ...component.variableCoverageOverview!.coverageByStatus,
+        conflicted: [
+          {
+            variableKey: 'UNIT1:VAR1',
+            conflictingDefinitions: [
+              { id: 1, status: 'approved' },
+              { id: 2, status: 'approved' }
+            ]
+          }
+        ]
+      }
+    };
+    component.manualCodeAvailabilityWarnings = [
+      {
+        unitName: 'UNIT1',
+        variableId: 'VAR1',
+        responseCount: 5,
+        casesInJobs: 0,
+        availableCases: 5,
+        uniqueCasesAfterAggregation: 5,
+        regularCodeCount: 2,
+        selectableRegularCodeCount: 0,
+        onlySpecialOptionsAvailable: true,
+        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
+      }
+    ];
+
+    expect(component.getPlanningStatusClass()).toBe('status-warning');
+    expect(component.getPlanningStatusTitle()).toBe('Konflikte prüfen');
+    expect(component.getPlanningStatusDescription()).toContain(
+      '1 Variablenkonflikte'
+    );
+    expect(component.getPlanningNextStepTitle()).toBe(
+      'Konflikte zuerst klären'
+    );
+    expect(component.getPlanningNextStepActionLabel()).toBe(
+      'Zu den Jobdefinitionen'
+    );
+    expect(component.getPlanningNextStepTargetSection()).toBe(
+      'manual-planning'
+    );
   });
 
   it('should hide second auto-coding work while manual coding is still open', () => {
@@ -250,15 +794,19 @@ describe('CodingManagementManualComponent', () => {
     };
 
     expect(component.hasCodingFreshnessWarnings).toBe(true);
-    expect(component.manualCodingFreshnessPanelTitle).toBe('Auto-Coding aktualisieren');
+    expect(component.manualCodingFreshnessPanelTitle).toBe(
+      'Auto-Coding starten'
+    );
     expect(component.manualCodingFreshnessSummaryText).toBe(
-      'Auto-Coding 1 muss für 671 Aufgabenbearbeitungen ausgeführt werden. ' +
-      'Das betrifft 5098 Antwortwerte.'
+      '671 Aufgabenbearbeitungen benötigen Auto-Coding 1. ' +
+        'Dabei werden 5098 Antwortwerte berücksichtigt.'
     );
     expect(component.codingFreshnessWarnings).toHaveLength(1);
-    expect(component.getManualFreshnessChipLabel(component.codingFreshnessWarnings[0])).toBe(
-      'Auto-Coding 1: 671 Aufgabenbearbeitungen kodieren'
-    );
+    expect(
+      component.getManualFreshnessChipLabel(
+        component.codingFreshnessWarnings[0]
+      )
+    ).toBe('Auto-Coding 1: 671 Aufgabenbearbeitungen starten');
   });
 
   it('should not show second auto-coding as a manual planning warning before completion', () => {
@@ -276,7 +824,9 @@ describe('CodingManagementManualComponent', () => {
     };
 
     expect(component.hasCodingFreshnessWarnings).toBe(false);
-    expect(component.manualCodingFreshnessPanelTitle).toBe('Kodierstand aktuell');
+    expect(component.manualCodingFreshnessPanelTitle).toBe(
+      'Kodierstand aktuell'
+    );
   });
 
   it('should show second auto-coding as the next step after manual coding is complete', () => {
@@ -297,18 +847,22 @@ describe('CodingManagementManualComponent', () => {
     };
 
     expect(component.hasCodingFreshnessWarnings).toBe(true);
-    expect(component.manualCodingFreshnessPanelTitle).toBe('Auto-Coding 2 bereit');
+    expect(component.manualCodingFreshnessPanelTitle).toBe(
+      'Auto-Coding 2 bereit'
+    );
     expect(component.manualCodingFreshnessSummaryText).toBe(
       'Die manuelle Kodierung ist abgeschlossen. ' +
-      'Auto-Coding 2 kann nun für 671 Aufgabenbearbeitungen gestartet oder aktualisiert werden. ' +
-      'Das betrifft 5098 Antwortwerte.'
+        'Auto-Coding 2 kann nun für 671 Aufgabenbearbeitungen gestartet oder aktualisiert werden. ' +
+        'Das betrifft 5098 Antwortwerte.'
     );
     expect(component.manualCodingFreshnessExplanationText).toContain(
       'Starten Sie Auto-Coding 2 in der Kodierübersicht.'
     );
-    expect(component.getManualFreshnessChipLabel(component.codingFreshnessWarnings[0])).toBe(
-      'Auto-Coding 2: 671 Aufgabenbearbeitungen kodieren'
-    );
+    expect(
+      component.getManualFreshnessChipLabel(
+        component.codingFreshnessWarnings[0]
+      )
+    ).toBe('Auto-Coding 2: 671 Aufgabenbearbeitungen starten');
   });
 
   it('should ignore zero-count freshness warnings in the manual banner', () => {
@@ -326,7 +880,9 @@ describe('CodingManagementManualComponent', () => {
     };
 
     expect(component.hasCodingFreshnessWarnings).toBe(false);
-    expect(component.manualCodingFreshnessPanelTitle).toBe('Kodierstand aktuell');
+    expect(component.manualCodingFreshnessPanelTitle).toBe(
+      'Kodierstand aktuell'
+    );
   });
 
   it('should refresh coding freshness after applying coding results', () => {
@@ -334,6 +890,7 @@ describe('CodingManagementManualComponent', () => {
       refreshAfterApplyingCodingResults(): void;
       loadCodingFreshness(): void;
       refreshAllStatistics(): void;
+      loadResponseAnalysis(): void;
       reloadCodingJobsList(): void;
     };
     const loadCodingFreshnessSpy = jest
@@ -345,32 +902,462 @@ describe('CodingManagementManualComponent', () => {
     const reloadCodingJobsListSpy = jest
       .spyOn(componentInternals, 'reloadCodingJobsList')
       .mockImplementation();
+    const loadResponseAnalysisSpy = jest
+      .spyOn(componentInternals, 'loadResponseAnalysis')
+      .mockImplementation();
 
     componentInternals.refreshAfterApplyingCodingResults();
 
     expect(refreshAllStatisticsSpy).toHaveBeenCalled();
+    expect(loadResponseAnalysisSpy).toHaveBeenCalled();
     expect(loadCodingFreshnessSpy).toHaveBeenCalled();
     expect(reloadCodingJobsListSpy).toHaveBeenCalled();
   });
 
-  it('should not treat stale-source coding jobs as ready to apply', () => {
-    const isCodingJobReadyForApply = (component as unknown as {
-      isCodingJobReadyForApply(job: {
-        status: string;
-        freshnessStatus?: string;
-        training?: { id?: number };
-        training_id?: number;
-      }): boolean;
-    }).isCodingJobReadyForApply.bind(component);
+  it('should load all planning metrics when the planning tab is opened', () => {
+    const componentInternals = component as unknown as {
+      loadManualTabData(tab: 'planning'): void;
+      loadVariableCoverageOverview(): void;
+      loadCaseCoverageOverview(): void;
+      loadCodingProgressOverview(): void;
+      loadCodingIncompleteVariables(): void;
+      loadCodingFreshness(): void;
+      loadResponseAnalysis(): void;
+    };
+    const variableCoverageSpy = jest
+      .spyOn(componentInternals, 'loadVariableCoverageOverview')
+      .mockImplementation();
+    const caseCoverageSpy = jest
+      .spyOn(componentInternals, 'loadCaseCoverageOverview')
+      .mockImplementation();
+    const codingProgressSpy = jest
+      .spyOn(componentInternals, 'loadCodingProgressOverview')
+      .mockImplementation();
+    const incompleteVariablesSpy = jest
+      .spyOn(componentInternals, 'loadCodingIncompleteVariables')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    const loadResponseAnalysisSpy = jest
+      .spyOn(componentInternals, 'loadResponseAnalysis')
+      .mockImplementation();
 
-    expect(isCodingJobReadyForApply({
-      status: 'completed',
-      freshnessStatus: 'review_required'
-    })).toBe(true);
-    expect(isCodingJobReadyForApply({
-      status: 'completed',
-      freshnessStatus: 'stale_source'
-    })).toBe(false);
+    componentInternals.loadManualTabData('planning');
+
+    expect(variableCoverageSpy).toHaveBeenCalled();
+    expect(caseCoverageSpy).toHaveBeenCalled();
+    expect(codingProgressSpy).toHaveBeenCalled();
+    expect(incompleteVariablesSpy).toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).toHaveBeenCalled();
+    expect(loadResponseAnalysisSpy).toHaveBeenCalled();
+  });
+
+  it('should ignore duplicate tab change events for the active manual tab', () => {
+    component.selectedManualTabIndex = 1;
+    const componentInternals = component as unknown as {
+      loadManualTabData(tab: 'planning'): void;
+    };
+    const loadManualTabDataSpy = jest
+      .spyOn(componentInternals, 'loadManualTabData')
+      .mockImplementation();
+
+    component.onManualTabChanged(1);
+
+    expect(loadManualTabDataSpy).not.toHaveBeenCalled();
+  });
+
+  it('should refresh the active manual workflow tab when the window regains focus', () => {
+    component.selectedManualTabIndex = 1;
+    const componentInternals = component as unknown as {
+      loadManualTabData(tab: 'planning'): void;
+      loadCodingFreshness(): void;
+      reloadCodingJobsList(): void;
+    };
+    const loadManualTabDataSpy = jest
+      .spyOn(componentInternals, 'loadManualTabData')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    const reloadCodingJobsListSpy = jest
+      .spyOn(componentInternals, 'reloadCodingJobsList')
+      .mockImplementation();
+
+    window.dispatchEvent(new Event('focus'));
+
+    expect(loadManualTabDataSpy).toHaveBeenCalledWith(
+      'planning',
+      { reloadCodingJobs: false }
+    );
+    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+    expect(reloadCodingJobsListSpy).toHaveBeenCalled();
+  });
+
+  it('should not reload coding jobs twice when execution regains focus', () => {
+    component.selectedManualTabIndex = 3;
+    const componentInternals = component as unknown as {
+      loadCodingFreshness(): void;
+      loadCodingProgressOverview(): void;
+      loadCaseCoverageOverview(): void;
+      loadWorkspaceKappaSummary(): void;
+      reloadCodingJobsList(): void;
+    };
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    jest
+      .spyOn(componentInternals, 'loadCodingProgressOverview')
+      .mockImplementation();
+    jest
+      .spyOn(componentInternals, 'loadCaseCoverageOverview')
+      .mockImplementation();
+    jest
+      .spyOn(componentInternals, 'loadWorkspaceKappaSummary')
+      .mockImplementation();
+    const reloadCodingJobsListSpy = jest
+      .spyOn(componentInternals, 'reloadCodingJobsList')
+      .mockImplementation();
+
+    window.dispatchEvent(new Event('focus'));
+
+    expect(loadCodingFreshnessSpy).toHaveBeenCalled();
+    expect(reloadCodingJobsListSpy).not.toHaveBeenCalled();
+  });
+
+  it('should not refresh preparation on window focus', () => {
+    component.selectedManualTabIndex = 0;
+    const componentInternals = component as unknown as {
+      refreshManualStateAfterExternalChange(): void;
+    };
+    const refreshSpy = jest
+      .spyOn(componentInternals, 'refreshManualStateAfterExternalChange')
+      .mockImplementation();
+
+    window.dispatchEvent(new Event('focus'));
+
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('should open training reliability with a coder-training kappa scope', () => {
+    const dialog = { open: jest.fn() };
+    (component as unknown as { dialog: typeof dialog }).dialog = dialog;
+    component.coderTrainingsListComponent = {
+      originalData: [{ id: 7 }],
+      coderTrainings: [],
+      openResultsComparison: jest.fn()
+    } as unknown as CodingManagementManualComponent['coderTrainingsListComponent'];
+
+    component.openTrainingReliability();
+
+    expect(dialog.open).toHaveBeenCalledWith(
+      CohensKappaStatisticsComponent,
+      expect.objectContaining({
+        data: {
+          excludeTrainings: false,
+          scope: { coderTrainingIds: [7] }
+        }
+      })
+    );
+  });
+
+  it('should open execution reliability with cached job definitions when planning tab is not rendered', () => {
+    const dialog = { open: jest.fn() };
+    const componentInternals = component as unknown as {
+      dialog: typeof dialog;
+      jobDefinitionsForExport: Array<{
+        id: number;
+        status: 'approved';
+        assignedVariables: unknown[];
+        assignedVariableBundles: unknown[];
+      }>;
+      jobDefinitionsForExportWorkspaceId: number;
+      hasLoadedJobDefinitionsForExport: boolean;
+      appService: { selectedWorkspaceId: number };
+    };
+    componentInternals.dialog = dialog;
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.jobDefinitionsForExport = [
+      {
+        id: 11,
+        status: 'approved',
+        assignedVariables: [],
+        assignedVariableBundles: []
+      }
+    ];
+    componentInternals.jobDefinitionsForExportWorkspaceId = 5;
+    componentInternals.hasLoadedJobDefinitionsForExport = true;
+    component.codingJobDefinitionsComponent = undefined;
+
+    component.openExecutionReliability();
+
+    expect(dialog.open).toHaveBeenCalledWith(
+      CohensKappaStatisticsComponent,
+      expect.objectContaining({
+        data: {
+          excludeTrainings: true,
+          scope: { jobDefinitionIds: [11] }
+        }
+      })
+    );
+  });
+
+  it('should start execution exports with cached job definition scope when the dialog keeps defaults', () => {
+    const exportJobService = TestBed.inject(ExportJobService);
+    const dialog = {
+      open: jest.fn().mockReturnValue({
+        afterClosed: () => of({ exportType: 'detailed' })
+      })
+    };
+    const componentInternals = component as unknown as {
+      dialog: typeof dialog;
+      jobDefinitionsForExport: Array<{
+        id: number;
+        status: 'approved';
+        assignedVariables: unknown[];
+        assignedVariableBundles: unknown[];
+      }>;
+      jobDefinitionsForExportWorkspaceId: number;
+      hasLoadedJobDefinitionsForExport: boolean;
+      codersForExportWorkspaceId: number;
+      hasLoadedCodersForExport: boolean;
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+    };
+    componentInternals.dialog = dialog;
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    componentInternals.jobDefinitionsForExport = [
+      {
+        id: 11,
+        status: 'approved',
+        assignedVariables: [],
+        assignedVariableBundles: []
+      }
+    ];
+    componentInternals.jobDefinitionsForExportWorkspaceId = 5;
+    componentInternals.hasLoadedJobDefinitionsForExport = true;
+    componentInternals.codersForExportWorkspaceId = 5;
+    componentInternals.hasLoadedCodersForExport = true;
+    component.codingJobDefinitionsComponent = undefined;
+
+    component.openExecutionExport();
+
+    expect(dialog.open).toHaveBeenCalledWith(
+      ManualCodingExportDialogComponent,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          defaultJobDefinitionIds: [11],
+          jobDefinitions: [
+            expect.objectContaining({
+              id: 11
+            })
+          ]
+        })
+      })
+    );
+    expect(exportJobService.startJob).toHaveBeenCalledWith(
+      5,
+      expect.objectContaining({
+        exportType: 'detailed',
+        userId: 9,
+        excludeAutoCoded: true,
+        jobDefinitionIds: [11]
+      })
+    );
+  });
+
+  it('should wait for coder scope before opening execution export dialog', () => {
+    const dialog = { open: jest.fn() };
+    const componentInternals = component as unknown as {
+      dialog: typeof dialog;
+      jobDefinitionsForExport: Array<{
+        id: number;
+        status: 'approved';
+        assignedVariables: unknown[];
+        assignedVariableBundles: unknown[];
+      }>;
+      jobDefinitionsForExportWorkspaceId: number;
+      hasLoadedJobDefinitionsForExport: boolean;
+      codersForExportWorkspaceId?: number;
+      hasLoadedCodersForExport: boolean;
+      isLoadingCodersForExport: boolean;
+      appService: {
+        selectedWorkspaceId: number;
+      };
+    };
+    componentInternals.dialog = dialog;
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.jobDefinitionsForExport = [
+      {
+        id: 11,
+        status: 'approved',
+        assignedVariables: [],
+        assignedVariableBundles: []
+      }
+    ];
+    componentInternals.jobDefinitionsForExportWorkspaceId = 5;
+    componentInternals.hasLoadedJobDefinitionsForExport = true;
+    componentInternals.codersForExportWorkspaceId = 5;
+    componentInternals.hasLoadedCodersForExport = false;
+    componentInternals.isLoadingCodersForExport = false;
+    component.codingJobDefinitionsComponent = undefined;
+
+    component.openExecutionExport();
+
+    expect(dialog.open).not.toHaveBeenCalled();
+    expect(componentInternals.hasLoadedCodersForExport).toBe(true);
+  });
+
+  it('should open training discussion in within-training mode', () => {
+    const openResultsComparison = jest.fn();
+    component.coderTrainingsListComponent = {
+      originalData: [],
+      coderTrainings: [],
+      openResultsComparison
+    } as unknown as CodingManagementManualComponent['coderTrainingsListComponent'];
+
+    component.openTrainingDiscussion();
+
+    expect(openResultsComparison).toHaveBeenCalledWith(
+      undefined,
+      'within-training'
+    );
+  });
+
+  it('should open training comparison in between-trainings mode', () => {
+    const openResultsComparison = jest.fn();
+    component.coderTrainingsListComponent = {
+      openResultsComparison
+    } as unknown as CodingManagementManualComponent['coderTrainingsListComponent'];
+
+    component.openTrainingComparison();
+
+    expect(openResultsComparison).toHaveBeenCalledWith(
+      undefined,
+      'between-trainings'
+    );
+  });
+
+  it('should switch to the execution tab before scrolling to execution work', () => {
+    jest.useFakeTimers();
+    try {
+      setCompletePlanningState();
+      setCodingProgress(10, 4);
+      setAppliedResults(10, 0, 10);
+      component.selectedManualTabIndex = 1;
+
+      const componentInternals = component as unknown as {
+        loadManualTabData(tab: 'execution'): void;
+      };
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      component.performPlanningNextStep();
+
+      expect(component.getPlanningNextStepTargetTab()).toBe('execution');
+      expect(component.selectedManualTabIndex).toBe(3);
+      expect(loadManualTabDataSpy).toHaveBeenCalledWith('execution');
+      expect(scrollToSectionSpy).not.toHaveBeenCalled();
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-execution');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should switch to the completion tab before scrolling to completion work', () => {
+    jest.useFakeTimers();
+    try {
+      setCompletePlanningState();
+      setCodingProgress(582, 582);
+      setAppliedResults(581, 0, 581);
+      component.selectedManualTabIndex = 1;
+
+      const componentInternals = component as unknown as {
+        loadManualTabData(tab: 'completion'): void;
+      };
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      component.performPlanningNextStep();
+
+      expect(component.getPlanningNextStepTargetTab()).toBe('completion');
+      expect(component.selectedManualTabIndex).toBe(4);
+      expect(loadManualTabDataSpy).toHaveBeenCalledWith('completion');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-completion');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should switch from completion to execution when navigating to coding jobs', () => {
+    jest.useFakeTimers();
+    try {
+      component.selectedManualTabIndex = 4;
+
+      const componentInternals = component as unknown as {
+        loadManualTabData(tab: 'execution'): void;
+      };
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      component.goToManualTab('execution', 'manual-execution');
+
+      expect(component.selectedManualTabIndex).toBe(3);
+      expect(loadManualTabDataSpy).toHaveBeenCalledWith('execution');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-execution');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should not treat stale-source coding jobs as ready to apply', () => {
+    const isCodingJobReadyForApply = (
+      component as unknown as {
+        isCodingJobReadyForApply(job: {
+          status: string;
+          freshnessStatus?: string;
+          training?: { id?: number };
+          training_id?: number;
+        }): boolean;
+      }
+    ).isCodingJobReadyForApply.bind(component);
+
+    expect(
+      isCodingJobReadyForApply({
+        status: 'completed',
+        freshnessStatus: 'review_required'
+      })
+    ).toBe(true);
+    expect(
+      isCodingJobReadyForApply({
+        status: 'completed',
+        freshnessStatus: 'stale_source'
+      })
+    ).toBe(false);
   });
 
   it('should calculate cases available for new job definitions separately from effective open cases', () => {
@@ -411,6 +1398,53 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getAvailableCasesForNewJobs()).toBe(0);
   });
 
+  it('explains aggregation savings as avoided separate manual coding', () => {
+    component.selectedManualTabIndex = 3;
+    setCompletePlanningState();
+    setCodingProgress(16606, 12000);
+    component.codingProgressOverview = {
+      ...component.codingProgressOverview!,
+      rawTotalCasesToCode: 21606,
+      aggregationActive: true,
+      aggregationThreshold: 2,
+      aggregatedDuplicateCases: 5000
+    };
+    component.showProgressInfo = true;
+
+    fixture.detectChanges();
+
+    const pageText = fixture.nativeElement.textContent as string;
+    expect(pageText).toContain(
+      'Antwortwert-Aggregation ist aktiv: 21606 Rohantworten werden zu 16606 effektiven Kodierfällen zusammengefasst.'
+    );
+    expect(pageText).toContain(
+      'Dadurch müssen bei Schwelle 2 5000 gleichwertige Rohantworten nicht separat manuell kodiert werden.'
+    );
+    expect(pageText).toContain(
+      'Abgeleitete Variablen werden nicht aggregiert.'
+    );
+    expect(pageText).not.toContain('Kodierungen eingespart');
+  });
+
+  it('shows aggregation savings in the completion overview as a positive count', () => {
+    component.selectedManualTabIndex = 4;
+    setCompletePlanningState();
+    setAppliedResults(543, 415, 128);
+    component.appliedResultsOverview = {
+      ...component.appliedResultsOverview!,
+      rawTotalIncompleteResponses: 546,
+      aggregationActive: true,
+      aggregationThreshold: 4,
+      aggregatedDuplicateCases: 3
+    };
+
+    fixture.detectChanges();
+
+    const pageText = fixture.nativeElement.textContent as string;
+    expect(pageText).toContain('3');
+    expect(pageText).not.toContain('-3');
+  });
+
   it('should guide users from incomplete planning to job definitions with available-case context', () => {
     setCompletePlanningState();
     component.caseCoverageOverview = {
@@ -429,11 +1463,21 @@ describe('CodingManagementManualComponent', () => {
       }
     ];
 
-    expect(component.getPlanningNextStepTitle()).toBe('Kodierfälle in Jobs verteilen');
-    expect(component.getPlanningNextStepActionLabel()).toBe('Zu den Jobdefinitionen');
-    expect(component.getPlanningNextStepTargetSection()).toBe('manual-planning');
-    expect(component.getPlanningNextStepDescription()).toContain('3 Fälle sind noch nicht in Kodierjobs');
-    expect(component.getPlanningNextStepDescription()).toContain('8 Fälle verfügbar');
+    expect(component.getPlanningNextStepTitle()).toBe(
+      'Kodierfälle in Jobs verteilen'
+    );
+    expect(component.getPlanningNextStepActionLabel()).toBe(
+      'Zu den Jobdefinitionen'
+    );
+    expect(component.getPlanningNextStepTargetSection()).toBe(
+      'manual-planning'
+    );
+    expect(component.getPlanningNextStepDescription()).toContain(
+      '3 Fälle sind noch nicht in Kodierjobs'
+    );
+    expect(component.getPlanningNextStepDescription()).toContain(
+      '8 Fälle verfügbar'
+    );
     expect(component.getPlanningNextStepDescription()).toContain(
       '2 Fälle sind bereits in Jobs verteilt oder durch andere Definitionen reserviert'
     );
@@ -477,10 +1521,79 @@ describe('CodingManagementManualComponent', () => {
     } satisfies CaseCoverageOverview;
   }
 
+  function setEmptyPlanningSnapshots(): void {
+    component.variableCoverageOverview = {
+      totalVariables: 0,
+      coveredVariables: 0,
+      coveredByDraft: 0,
+      coveredByPendingReview: 0,
+      coveredByApproved: 0,
+      conflictedVariables: 0,
+      missingVariables: 0,
+      partiallyAbgedeckteVariablen: 0,
+      fullyAbgedeckteVariablen: 0,
+      coveragePercentage: 0,
+      variableCaseCounts: [],
+      coverageByStatus: {
+        draft: [],
+        pending_review: [],
+        approved: [],
+        conflicted: []
+      }
+    } satisfies VariableCoverageOverview;
+
+    component.caseCoverageOverview = {
+      totalCasesToCode: 0,
+      effectiveTotalCasesToCode: 0,
+      casesInJobs: 0,
+      effectiveCasesInJobs: 0,
+      doubleCodedCases: 0,
+      singleCodedCases: 0,
+      unassignedCases: 0,
+      effectiveUnassignedCases: 0,
+      coveragePercentage: 0,
+      rawCoveragePercentage: 0,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    } satisfies CaseCoverageOverview;
+
+    component.codingProgressOverview = {
+      totalCasesToCode: 0,
+      completedCases: 0,
+      completionPercentage: 0,
+      rawTotalCasesToCode: 0,
+      rawCompletedCases: 0,
+      rawCompletionPercentage: 0,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    } satisfies CodingProgressOverview;
+
+    component.appliedResultsOverview = {
+      totalIncompleteResponses: 0,
+      appliedResponses: 0,
+      remainingResponses: 0,
+      completionPercentage: 0,
+      rawTotalIncompleteResponses: 0,
+      rawAppliedResponses: 0,
+      rawCompletionPercentage: 0,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0,
+      totalIncompleteVariables: 0,
+      finalStatusBreakdown: {
+        codingComplete: 0,
+        invalid: 0,
+        codingError: 0,
+        other: 0
+      }
+    } satisfies ManualAppliedResultsOverview;
+  }
+
   function setCodingProgress(totalCases: number, completedCases: number): void {
-    const completionPercentage = totalCases > 0 ?
-      (completedCases / totalCases) * 100 :
-      100;
+    const completionPercentage =
+      totalCases > 0 ? (completedCases / totalCases) * 100 : 100;
 
     component.codingProgressOverview = {
       totalCasesToCode: totalCases,
@@ -498,11 +1611,15 @@ describe('CodingManagementManualComponent', () => {
   function setAppliedResults(
     totalResponses: number,
     appliedResponses: number,
-    remainingResponses: number
+    remainingResponses: number,
+    deriveErrorResponses: {
+      total: number;
+      applied: number;
+      remaining: number;
+    } = { total: 0, applied: 0, remaining: 0 }
   ): void {
-    const completionPercentage = totalResponses > 0 ?
-      (appliedResponses / totalResponses) * 100 :
-      100;
+    const completionPercentage =
+      totalResponses > 0 ? (appliedResponses / totalResponses) * 100 : 100;
 
     component.appliedResultsOverview = {
       totalIncompleteResponses: totalResponses,
@@ -515,6 +1632,11 @@ describe('CodingManagementManualComponent', () => {
       aggregationActive: false,
       aggregationThreshold: null,
       aggregatedDuplicateCases: 0,
+      deriveErrorTotalResponses: deriveErrorResponses.total,
+      deriveErrorAppliedResponses: deriveErrorResponses.applied,
+      deriveErrorRemainingResponses: deriveErrorResponses.remaining,
+      deriveErrorRawTotalResponses: deriveErrorResponses.total,
+      deriveErrorRawAppliedResponses: deriveErrorResponses.applied,
       totalIncompleteVariables: 1,
       finalStatusBreakdown: {
         codingComplete: appliedResponses,
@@ -524,4 +1646,14 @@ describe('CodingManagementManualComponent', () => {
       }
     } satisfies ManualAppliedResultsOverview;
   }
+
+  it('should expose DERIVE_ERROR additional manual progress separately', () => {
+    setAppliedResults(5, 3, 2, { total: 2, applied: 1, remaining: 1 });
+
+    expect(component.hasDeriveErrorManualCases).toBe(true);
+    expect(component.deriveErrorManualCases).toBe(2);
+    expect(component.deriveErrorAppliedCases).toBe(1);
+    expect(component.deriveErrorRemainingCases).toBe(1);
+    expect(component.isCompletionComplete()).toBe(false);
+  });
 });

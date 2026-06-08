@@ -3,6 +3,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { FormGroup } from '@angular/forms';
 import { of, throwError } from 'rxjs';
 import { CoderTrainingComponent } from './coder-training.component';
 import { CoderService } from '../../services/coder.service';
@@ -40,7 +41,12 @@ describe('CoderTrainingComponent', () => {
     ]));
     codingJobBackendService.getCodingIncompleteVariables.mockReturnValue(of([
       {
-        unitName: 'UNIT', variableId: 'VAR', responseCount: 10, uniqueCasesAfterAggregation: 8
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        responseCount: 10,
+        uniqueCasesAfterAggregation: 8,
+        uniqueCasesAfterAggregationWithDeriveError: 9,
+        deriveErrorResponseCount: 2
       },
       { unitName: 'UNIT2', variableId: 'VAR2', responseCount: 4 },
       {
@@ -105,7 +111,12 @@ describe('CoderTrainingComponent', () => {
     component = fixture.componentInstance;
     component.availableVariables = [
       {
-        unitName: 'UNIT', variableId: 'VAR', responseCount: 10, uniqueCasesAfterAggregation: 8
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        responseCount: 10,
+        uniqueCasesAfterAggregation: 8,
+        uniqueCasesAfterAggregationWithDeriveError: 9,
+        deriveErrorResponseCount: 2
       },
       { unitName: 'UNIT2', variableId: 'VAR2', responseCount: 4 },
       {
@@ -392,6 +403,127 @@ describe('CoderTrainingComponent', () => {
     expect(component.getPrimaryActionLabel()).toBe('Schulung wird aktualisiert...');
   });
 
+  it('preserves saved bundle ordering when editing and updating a training', () => {
+    component.editTraining = {
+      id: 77,
+      workspace_id: 1,
+      label: 'Existing training',
+      case_ordering_mode: 'continuous',
+      assigned_coders: [1],
+      assigned_variables: [],
+      assigned_variable_bundles: [
+        {
+          id: 5,
+          name: 'Bundle',
+          sampleCount: 4,
+          caseOrderingMode: 'alternating'
+        }
+      ],
+      jobsCount: 1,
+      created_at: new Date(),
+      updated_at: new Date()
+    } as never;
+
+    (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
+
+    expect(component.getSelectedBundleCount()).toBe(1);
+    expect(component.getBundleOrderingOverrides()).toEqual([
+      { name: 'Bundle', label: 'Abwechselnd' }
+    ]);
+    expect(component.variablesFormArray.at(0).get('bundleCaseOrderingMode')?.value).toBe('alternating');
+
+    component.onVariablesSelectionChange(['UNIT::VAR']);
+    component.onStartTraining();
+
+    expect(codingTrainingBackendService.updateCoderTraining).toHaveBeenCalled();
+    const updateCall = codingTrainingBackendService.updateCoderTraining.mock.calls[0];
+    expect(updateCall[7]).toEqual([
+      {
+        id: 5,
+        name: 'Bundle',
+        sampleCount: 4,
+        caseOrderingMode: 'alternating',
+        variables: [
+          { unitName: 'UNIT2', variableId: 'VAR2', sampleCount: 4 },
+          { unitName: 'UNIT3', variableId: 'DERIVED', sampleCount: 4 }
+        ]
+      }
+    ]);
+    expect(updateCall[8]).toBe('continuous');
+  });
+
+  it('preserves saved case selection and reference options when editing a training', () => {
+    component.editTraining = {
+      id: 78,
+      workspace_id: 1,
+      label: 'Reference training',
+      case_ordering_mode: 'continuous',
+      case_selection_mode: 'random_per_testgroup',
+      reference_training_ids: [99],
+      reference_mode: 'different',
+      assigned_coders: [1],
+      assigned_variables: [
+        {
+          unitName: 'UNIT',
+          variableId: 'VAR',
+          sampleCount: 2
+        }
+      ],
+      assigned_variable_bundles: [],
+      jobsCount: 1,
+      created_at: new Date(),
+      updated_at: new Date()
+    } as never;
+
+    (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
+
+    expect(component.trainingForm.get('caseSelectionMode')?.value).toBe('random_per_testgroup');
+    expect(component.trainingForm.get('referenceTrainingIds')?.value).toEqual([99]);
+    expect(component.trainingForm.get('referenceMode')?.value).toBe('different');
+
+    component.onStartTraining();
+
+    expect(codingTrainingBackendService.updateCoderTraining).toHaveBeenCalled();
+    const updateCall = codingTrainingBackendService.updateCoderTraining.mock.calls[0];
+    expect(updateCall[9]).toBe('random_per_testgroup');
+    expect(updateCall[10]).toEqual([99]);
+    expect(updateCall[11]).toBe('different');
+  });
+
+  it('submits an empty reference list when references are cleared while editing', () => {
+    component.editTraining = {
+      id: 79,
+      workspace_id: 1,
+      label: 'Clear references',
+      case_ordering_mode: 'continuous',
+      case_selection_mode: 'oldest_first',
+      reference_training_ids: [99],
+      reference_mode: 'same',
+      assigned_coders: [1],
+      assigned_variables: [
+        {
+          unitName: 'UNIT',
+          variableId: 'VAR',
+          sampleCount: 2
+        }
+      ],
+      assigned_variable_bundles: [],
+      jobsCount: 1,
+      created_at: new Date(),
+      updated_at: new Date()
+    } as never;
+
+    (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
+
+    component.trainingForm.get('referenceTrainingIds')?.setValue([]);
+    component.onStartTraining();
+
+    expect(codingTrainingBackendService.updateCoderTraining).toHaveBeenCalled();
+    const updateCall = codingTrainingBackendService.updateCoderTraining.mock.calls[0];
+    expect(updateCall[10]).toEqual([]);
+    expect(updateCall[11]).toBeUndefined();
+  });
+
   it('skips derived variables from bundles when disabled and submits only included variables', () => {
     component.trainingForm.get('includeDerivedVariables')?.setValue(false);
     component.onBundleSelectionChange([5]);
@@ -416,9 +548,92 @@ describe('CoderTrainingComponent', () => {
           id: 5,
           name: 'Bundle',
           sampleCount: 4,
-          caseOrderingMode: 'continuous'
+          caseOrderingMode: 'continuous',
+          variables: [
+            { unitName: 'UNIT2', variableId: 'VAR2', sampleCount: 4 }
+          ]
         }
       ],
+      'continuous',
+      'oldest_first',
+      undefined,
+      undefined,
+      false
+    );
+  });
+
+  it('submits manual variables and variable bundles together for training jobs', () => {
+    component.trainingForm.get('includeDerivedVariables')?.setValue(false);
+    component.onVariablesSelectionChange(['UNIT::VAR']);
+    component.onBundleSelectionChange([5]);
+    component.toggleCoderSelection(component.coders[0]);
+    component.trainingForm.get('trainingLabel')?.setValue('Mixed Selection');
+
+    expect(component.getManualVariablesCount()).toBe(1);
+    expect(component.getBundleVariablesCount()).toBe(1);
+    expect(component.canStartTraining()).toBe(true);
+
+    component.onStartTraining();
+
+    expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalledWith(
+      1,
+      [component.coders[0]],
+      [
+        { variableId: 'VAR', unitId: 'UNIT', sampleCount: 8 },
+        { variableId: 'VAR2', unitId: 'UNIT2', sampleCount: 4 }
+      ],
+      'Mixed Selection',
+      undefined,
+      [
+        { variableId: 'VAR', unitName: 'UNIT', sampleCount: 8 }
+      ],
+      [
+        {
+          id: 5,
+          name: 'Bundle',
+          sampleCount: 4,
+          caseOrderingMode: 'continuous',
+          variables: [
+            { unitName: 'UNIT2', variableId: 'VAR2', sampleCount: 4 }
+          ]
+        }
+      ],
+      'continuous',
+      'oldest_first',
+      undefined,
+      undefined,
+      false
+    );
+  });
+
+  it('submits DERIVE_ERROR opt-in for selected training variables', () => {
+    component.onVariablesSelectionChange(['UNIT::VAR']);
+    const variableControl = component.variablesFormArray.at(0) as FormGroup;
+    component.setDeriveErrorIncludedForControl(variableControl, true);
+    expect(component.getAvailableCount({ control: variableControl })).toBe(9);
+    component.toggleCoderSelection(component.coders[0]);
+    component.trainingForm.get('trainingLabel')?.setValue('Derive opt-in');
+
+    component.onStartTraining();
+
+    expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalledWith(
+      1,
+      [component.coders[0]],
+      [{
+        variableId: 'VAR',
+        unitId: 'UNIT',
+        sampleCount: 8,
+        includeDeriveError: true
+      }],
+      'Derive opt-in',
+      undefined,
+      [{
+        variableId: 'VAR',
+        unitName: 'UNIT',
+        sampleCount: 8,
+        includeDeriveError: true
+      }],
+      [],
       'continuous',
       'oldest_first',
       undefined,
@@ -445,14 +660,24 @@ describe('CoderTrainingComponent', () => {
       importJobDefinitionSelections: (
         jobDef: {
           assignedVariables?: never[];
-          assignedVariableBundles: Array<{ id: number; name: string; caseOrderingMode: 'continuous' | 'alternating' }>;
+          assignedVariableBundles: Array<{
+            id: number;
+            name: string;
+            caseOrderingMode: 'continuous' | 'alternating';
+            variables?: Array<{ unitName: string; variableId: string; includeDeriveError?: boolean }>;
+          }>;
         },
         defaultSampleCount: number
       ) => void;
     }).importJobDefinitionSelections({
       assignedVariables: [],
       assignedVariableBundles: [
-        { id: 5, name: 'Bundle', caseOrderingMode: 'alternating' }
+        {
+          id: 5,
+          name: 'Bundle',
+          caseOrderingMode: 'alternating',
+          variables: [{ unitName: 'UNIT2', variableId: 'VAR2', includeDeriveError: true }]
+        }
       ]
     }, 2);
 
@@ -461,5 +686,6 @@ describe('CoderTrainingComponent', () => {
       { name: 'Bundle', label: 'Abwechselnd' }
     ]);
     expect(component.variablesFormArray.at(0).get('bundleCaseOrderingMode')?.value).toBe('alternating');
+    expect(component.variablesFormArray.at(0).get('includeDeriveError')?.value).toBe(true);
   });
 });

@@ -184,45 +184,23 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.appService
-      .createOwnToken(this.appService.selectedWorkspaceId, 1)
+    this.statisticsService
+      .getReplayUrl(this.appService.selectedWorkspaceId, responseId)
       .subscribe({
-        next: token => {
-          if (!token) {
+        next: result => {
+          if (result?.replayUrl) {
+            window.open(result.replayUrl, '_blank');
+          } else {
             this.snackBar.open(
-              'Fehler beim Erzeugen des Authentifizierungs-Tokens',
+              'Replay-URL konnte nicht erzeugt werden',
               'Fehler',
               { duration: 3000 }
             );
-            return;
           }
-
-          this.statisticsService
-            .getReplayUrl(this.appService.selectedWorkspaceId, responseId, token)
-            .subscribe({
-              next: result => {
-                if (result?.replayUrl) {
-                  window.open(result.replayUrl, '_blank');
-                } else {
-                  this.snackBar.open(
-                    'Replay-URL konnte nicht erzeugt werden',
-                    'Fehler',
-                    { duration: 3000 }
-                  );
-                }
-              },
-              error: () => {
-                this.snackBar.open(
-                  'Fehler beim Laden der Replay-URL',
-                  'Fehler',
-                  { duration: 3000 }
-                );
-              }
-            });
         },
         error: () => {
           this.snackBar.open(
-            'Fehler beim Erzeugen des Authentifizierungs-Tokens',
+            'Fehler beim Laden der Replay-URL',
             'Fehler',
             { duration: 3000 }
           );

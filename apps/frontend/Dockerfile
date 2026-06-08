@@ -31,6 +31,8 @@ USER nginx
 
 COPY --chown=nginx:root config/frontend/default.conf.http-template /etc/nginx/templates/default.conf.template
 COPY --chown=nginx:root --from=base /usr/src/coding-box-base/dist/apps/${PROJECT} /usr/share/nginx/html
+COPY --chown=nginx:root config/frontend/50x.html /usr/share/nginx/html/50x.html
+COPY --chown=nginx:root config/frontend/iqb-logo-red.svg /usr/share/nginx/html/iqb-logo-red.svg
 
 EXPOSE 8080 8443
 

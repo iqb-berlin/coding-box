@@ -18,6 +18,7 @@ export interface UnitsReplayUnit {
   testPerson?: string;
   variableId?: string;
   variableAnchor?: string;
+  variablePage?: string;
 }
 
 export interface UnitsReplay {

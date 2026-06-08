@@ -128,21 +128,38 @@ export class CodebookGenerator {
   }
 
   private static isManual(variableCoding: VariableCodingData): boolean {
-    return variableCoding.codes.some(codeData => codeData.manualInstruction);
+    return variableCoding.codes.some(codeData => this.hasManualInstruction(codeData));
   }
 
   private static isManualWithoutClosed(variableCoding: VariableCodingData): boolean {
-    return variableCoding.codes.some(codeData => codeData.manualInstruction &&
+    return variableCoding.codes.some(codeData => this.hasManualInstruction(codeData) &&
       (codeData.type !== 'RESIDUAL_AUTO' && codeData.type !== 'INTENDED_INCOMPLETE'));
   }
 
   private static isClosedWithoutManual(variableCoding: VariableCodingData): boolean {
     return variableCoding.codes
-      .some(codeData => (codeData.type === 'RESIDUAL_AUTO' || codeData.type === 'INTENDED_INCOMPLETE') && !codeData.manualInstruction);
+      .some(codeData => (codeData.type === 'RESIDUAL_AUTO' || codeData.type === 'INTENDED_INCOMPLETE') &&
+        !this.hasManualInstruction(codeData));
+  }
+
+  private static hasManualInstruction(codeData: CodeData): boolean {
+    return !!codeData.manualInstruction?.trim();
+  }
+
+  private static shouldHideCodeInManualCodebook(
+    code: CodeData,
+    contentSetting: CodeBookContentSetting
+  ): boolean {
+    return contentSetting.hasOnlyManualCoding &&
+      !contentSetting.hasClosedVars &&
+      !this.hasManualInstruction(code);
   }
 
   private static getCodes(codes: CodeData[], contentSetting: CodeBookContentSetting): CodeInfo[] {
     return codes.reduce((codeInfos: CodeInfo[], code) => {
+      if (this.shouldHideCodeInManualCodebook(code, contentSetting)) {
+        return codeInfos;
+      }
       if (code.id) {
         try {
           const codeInfo = this.getCodeInfoFromCodeAsText(code, contentSetting);

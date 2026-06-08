@@ -34,7 +34,11 @@ import {
 } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
 import { Unit } from '../../entities/unit.entity';
-import { UnitVariableDetailsDto } from '../../../models/unit-variable-details.dto';
+import {
+  UnitVariableDetailsDto,
+  VariableDetailDto,
+  VariableValueInfo
+} from '../../../models/unit-variable-details.dto';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   MissingPersonDto,
@@ -59,6 +63,7 @@ import {
   normalizeExclusionUnitId,
   WorkspaceExclusionService
 } from './workspace-exclusion.service';
+import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 
 type WorkspaceUnitVisibility = {
   globalIgnoredUnits: Set<string>;
@@ -74,12 +79,26 @@ type UnitVariableType =
   | 'json'
   | 'no-value';
 
+interface ParsedVariableElement {
+  $?: {
+    id?: string;
+    alias?: string;
+    type?: UnitVariableType;
+    multiple?: string | boolean;
+    nullable?: string | boolean;
+  };
+  Values?: unknown;
+  ValuePositionLabels?: unknown;
+}
+
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
   private readonly resourceTypeLabel = 'Resource';
   private readonly detailedUnitCacheLogging =
     process.env.DEBUG_UNIT_CACHE === 'true';
+
+  private readonly unitVariableCacheRefreshes = new Map<number, Promise<void>>();
 
   private getCacheKey(workspaceId: number, type: string): string {
     return `workspace_files:${type}:${workspaceId}`;
@@ -360,9 +379,19 @@ export class WorkspaceFilesService implements OnModuleInit {
     fileIds: string[]
   ): Promise<boolean> {
     this.logger.log(`Delete test files for workspace ${workspace_id}`);
-    const numericIds = fileIds
-      .map(id => parseInt(id, 10))
-      .filter(id => !Number.isNaN(id));
+    const numericIds = Array.from(new Set(
+      fileIds
+        .filter(id => /^[1-9]\d*$/.test(id))
+        .map(id => Number(id))
+        .filter(id => Number.isSafeInteger(id))
+    ));
+
+    if (numericIds.length === 0) {
+      this.logger.warn(
+        `No valid test file IDs provided for workspace ${workspace_id}`
+      );
+      return false;
+    }
 
     const res = await this.fileUploadRepository
       .createQueryBuilder()
@@ -378,7 +407,15 @@ export class WorkspaceFilesService implements OnModuleInit {
     // Invalidate coding statistics cache since test files changed
     await this.codingStatisticsService.invalidateCache(workspace_id);
 
-    return !!res;
+    const deletedCount = res.affected ?? 0;
+    const success = deletedCount === numericIds.length;
+    if (!success) {
+      this.logger.warn(
+        `Requested deletion of ${numericIds.length} test files for workspace ${workspace_id}, but deleted ${deletedCount}`
+      );
+    }
+
+    return success;
   }
 
   async validateTestFiles(
@@ -2392,6 +2429,23 @@ ${bookletRefs}
   }
 
   async refreshUnitVariableCache(workspaceId: number): Promise<void> {
+    const activeRefresh = this.unitVariableCacheRefreshes.get(workspaceId);
+    if (activeRefresh) {
+      await activeRefresh;
+      return;
+    }
+
+    const refresh = this.refreshUnitVariableCacheInternal(workspaceId);
+    this.unitVariableCacheRefreshes.set(workspaceId, refresh);
+
+    try {
+      await refresh;
+    } finally {
+      this.unitVariableCacheRefreshes.delete(workspaceId);
+    }
+  }
+
+  private async refreshUnitVariableCacheInternal(workspaceId: number): Promise<void> {
     this.logger.log(
       `Refreshing unit variable cache for workspace ${workspaceId}`
     );
@@ -2414,8 +2468,14 @@ ${bookletRefs}
       const codingSchemeMap = new Map<string, Map<string, string>>();
       // Maps unitId → Map<schemeId, alias> for translating scheme IDs to response variableids
       const schemeIdToAliasMap = new Map<string, Map<string, string>>();
+      // Maps unitId → Map<alias, schemeId> for resolving XML aliases back to VOCS IDs
+      const schemeAliasToIdMap = new Map<string, Map<string, string>>();
       const intendedIncompleteByUnit = new Map<string, Set<string>>();
       const trainingRequiredByUnit = new Map<string, Set<string>>();
+      const derivedSourcesByUnit = new Map<
+      string,
+      Array<{ derivedId: string; derivedAlias?: string; sourceIds: string[] }>
+      >();
       for (const scheme of codingSchemes) {
         try {
           const unitId = scheme.file_id.replace('.VOCS', '');
@@ -2424,6 +2484,7 @@ ${bookletRefs}
               id: string;
               alias?: string;
               sourceType?: string;
+              deriveSources?: string[];
               processing?: string[];
               codes?: Array<{ type?: string }>;
             }[];
@@ -2434,11 +2495,17 @@ ${bookletRefs}
           ) {
             const variableSourceTypes = new Map<string, string>();
             const idToAlias = new Map<string, string>();
+            const aliasToId = new Map<string, string>();
             // Collect scheme variable IDs (not aliases!) that have INTENDED_INCOMPLETE code type.
             // These will be translated to aliases during unit XML parsing below.
             const intendedIncompleteSchemeIds = new Set<string>();
             // Collect scheme variable IDs that have CODER_TRAINING_REQUIRED processing property.
             const trainingRequiredSchemeIds = new Set<string>();
+            const derivedSourceEntries: Array<{
+              derivedId: string;
+              derivedAlias?: string;
+              sourceIds: string[];
+            }> = [];
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
                 variableSourceTypes.set(vc.id, vc.sourceType);
@@ -2446,6 +2513,7 @@ ${bookletRefs}
               // Map scheme id → alias for response variableid resolution
               if (vc.id && vc.alias) {
                 idToAlias.set(vc.id, vc.alias);
+                aliasToId.set(vc.alias, vc.id);
               }
               // Track variables where any code has type INTENDED_INCOMPLETE
               if (vc.id && vc.codes && Array.isArray(vc.codes)) {
@@ -2462,9 +2530,24 @@ ${bookletRefs}
                   trainingRequiredSchemeIds.add(vc.id);
                 }
               }
+              if (
+                vc.id &&
+                this.isDerivedSourceType(vc.sourceType) &&
+                Array.isArray(vc.deriveSources) &&
+                vc.deriveSources.length > 0
+              ) {
+                derivedSourceEntries.push({
+                  derivedId: vc.id,
+                  derivedAlias: vc.alias,
+                  sourceIds: vc.deriveSources
+                    .map(sourceId => String(sourceId || '').trim())
+                    .filter(sourceId => sourceId.length > 0)
+                });
+              }
             }
             codingSchemeMap.set(unitId, variableSourceTypes);
             schemeIdToAliasMap.set(unitId, idToAlias);
+            schemeAliasToIdMap.set(unitId, aliasToId);
             if (intendedIncompleteSchemeIds.size > 0) {
               this.logUnitCacheDebug(
                 `Coding scheme for unit "${unitId}" has INTENDED_INCOMPLETE code type for scheme IDs: [${Array.from(intendedIncompleteSchemeIds).join(', ')}]`
@@ -2477,6 +2560,9 @@ ${bookletRefs}
                 `Coding scheme for unit "${unitId}" has CODER_TRAINING_REQUIRED for scheme IDs: [${Array.from(trainingRequiredSchemeIds).join(', ')}]`
               );
               trainingRequiredByUnit.set(unitId, trainingRequiredSchemeIds);
+            }
+            if (derivedSourceEntries.length > 0) {
+              derivedSourcesByUnit.set(unitId, derivedSourceEntries);
             }
           }
         } catch (error) {
@@ -2493,6 +2579,7 @@ ${bookletRefs}
       const intendedIncompleteAliasByUnit = new Map<string, Set<string>>();
       // Tracks derived variable aliases per unit for derivedVariableCache
       const derivedVariablesByUnit = new Map<string, Set<string>>();
+      const derivedVariablesBySource = new Map<string, Set<string>>();
       // Maps unitId → alias-keyed set of variables with CODER_TRAINING_REQUIRED
       const trainingRequiredAliasByUnit = new Map<string, Set<string>>();
 
@@ -2509,6 +2596,8 @@ ${bookletRefs}
             parsedXml.Unit.Metadata.Id
           ) {
             const unitName = parsedXml.Unit.Metadata.Id;
+            const idToAlias = schemeIdToAliasMap.get(unitName);
+            const aliasToId = schemeAliasToIdMap.get(unitName);
             const variables = new Set<string>();
             // Scheme IDs that have INTENDED_INCOMPLETE code type (from the .VOCS file)
             const schemeIdsWithIntendedIncomplete =
@@ -2522,6 +2611,7 @@ ${bookletRefs}
             const aliasesWithTrainingRequired = new Set<string>();
             // Derived variable aliases for this unit
             const derivedAliases = new Set<string>();
+            const xmlIdToAlias = new Map<string, string>();
 
             if (
               parsedXml.Unit.BaseVariables &&
@@ -2535,12 +2625,20 @@ ${bookletRefs}
 
               for (const variable of baseVariables) {
                 if (variable.$.alias && variable.$.type !== 'no-value') {
+                  if (variable.$.id) {
+                    xmlIdToAlias.set(variable.$.id, variable.$.alias);
+                  }
                   // Use $.id to look up source type in scheme (scheme uses id), fall back to alias
-                  const schemeKey = variable.$.id || variable.$.alias;
+                  const schemeKey = variable.$.id ||
+                    aliasToId?.get(variable.$.alias) ||
+                    variable.$.alias;
                   const unitSourceTypes = codingSchemeMap.get(unitName);
                   const sourceType = unitSourceTypes?.get(schemeKey);
                   if (sourceType !== 'BASE_NO_VALUE') {
                     variables.add(variable.$.alias);
+                    if (this.isDerivedSourceType(sourceType)) {
+                      derivedAliases.add(variable.$.alias);
+                    }
                   }
                   // Check if this variable's scheme ID has INTENDED_INCOMPLETE code type
                   if (schemeIdsWithIntendedIncomplete?.has(schemeKey)) {
@@ -2577,7 +2675,7 @@ ${bookletRefs}
                 const alias = variable.$?.alias;
                 const id = variable.$?.id;
                 const type = variable.$?.type;
-                const schemeKey = id || alias;
+                const schemeKey = id || aliasToId?.get(alias) || alias;
                 const unitSourceTypes = codingSchemeMap.get(unitName);
                 const sourceType = unitSourceTypes?.get(schemeKey);
 
@@ -2588,6 +2686,9 @@ ${bookletRefs}
                 if (!alias) {
                   this.logUnitCacheDebug('Skipped derived variable: no alias');
                   continue;
+                }
+                if (id) {
+                  xmlIdToAlias.set(id, alias);
                 }
                 if (type === 'no-value') {
                   this.logUnitCacheDebug('Skipped derived variable: type is no-value');
@@ -2632,7 +2733,6 @@ ${bookletRefs}
             // This covers newly created derived variables that exist in the VOCS but haven't been
             // written back to the unit XML. Use the alias (= response variableid) as the key.
             const schemeVarTypes = codingSchemeMap.get(unitName);
-            const idToAlias = schemeIdToAliasMap.get(unitName);
             if (schemeVarTypes) {
               for (const [schemeId, sourceType] of schemeVarTypes.entries()) {
                 // Resolve to alias — alias is what response.variableid contains
@@ -2660,6 +2760,35 @@ ${bookletRefs}
                 }
               }
             }
+
+            const derivedSourceEntries = derivedSourcesByUnit.get(unitName) || [];
+            const resolveVariableAlias = (idOrAlias: string | undefined): string | null => {
+              const key = String(idOrAlias || '').trim();
+              if (!key) {
+                return null;
+              }
+              return idToAlias?.get(key) ?? xmlIdToAlias.get(key) ?? key;
+            };
+
+            derivedSourceEntries.forEach(entry => {
+              const derivedAlias = resolveVariableAlias(entry.derivedAlias || entry.derivedId);
+              if (!derivedAlias || !derivedAliases.has(derivedAlias)) {
+                return;
+              }
+
+              entry.sourceIds.forEach(sourceId => {
+                const sourceAlias = resolveVariableAlias(sourceId);
+                if (!sourceAlias) {
+                  return;
+                }
+
+                const sourceKey = getManualCodingScopeKey(unitName, sourceAlias);
+                const derivedAliasesForSource =
+                  derivedVariablesBySource.get(sourceKey) || new Set<string>();
+                derivedAliasesForSource.add(derivedAlias);
+                derivedVariablesBySource.set(sourceKey, derivedAliasesForSource);
+              });
+            });
 
             if (aliasesWithIntendedIncomplete.size > 0) {
               intendedIncompleteAliasByUnit.set(
@@ -2702,6 +2831,10 @@ ${bookletRefs}
         this.getCacheKey(workspaceId, 'derived_variables'),
         this.toRedisMap(derivedVariablesByUnit)
       );
+      await this.cacheService.set(
+        this.getCacheKey(workspaceId, 'derived_variables_by_source'),
+        this.toRedisMap(derivedVariablesBySource)
+      );
 
       this.logger.log(
         `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId} to Redis`
@@ -2710,7 +2843,8 @@ ${bookletRefs}
         `Unit variable cache summary for workspace ${workspaceId}: ` +
         `${intendedIncompleteAliasByUnit.size} units with intended-incomplete variables, ` +
         `${trainingRequiredAliasByUnit.size} units with training-required variables, ` +
-        `${derivedVariablesByUnit.size} units with derived variables`
+        `${derivedVariablesByUnit.size} units with derived variables, ` +
+        `${derivedVariablesBySource.size} source variables for derived variables`
       );
       this.logUnitCacheDebug(
         `intendedIncompleteSchemeCache (by alias) for workspace ${workspaceId}: ` +
@@ -2784,6 +2918,25 @@ ${bookletRefs}
   }
 
   /**
+   * Returns a map keyed by "UNIT␟sourceAlias" where each value is the set of
+   * derived variable aliases that use this source variable in the same unit.
+   */
+  async getDerivedVariablesBySourceMap(
+    workspaceId: number
+  ): Promise<Map<string, Set<string>>> {
+    const cacheKey = this.getCacheKey(workspaceId, 'derived_variables_by_source');
+    const cached =
+      await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!cached) {
+      await this.refreshUnitVariableCache(workspaceId);
+      return this.fromRedisMap(
+        await this.cacheService.get<Record<string, string[]>>(cacheKey)
+      );
+    }
+    return this.fromRedisMap(cached);
+  }
+
+  /**
    * Returns a map of unitName → Set of variable aliases that have CODER_TRAINING_REQUIRED
    * processing property in their coding scheme.
    */
@@ -2834,7 +2987,13 @@ ${bookletRefs}
       string,
       Map<
       string,
-      Array<{ id: string | number; label: string; score?: number }>
+      Array<{
+        id: string | number;
+        label: string;
+        score?: number;
+        manualInstruction?: string;
+        type?: string;
+      }>
       >
       >();
       const codingSchemeManualInstructionsMap = new Map<
@@ -2881,7 +3040,13 @@ ${bookletRefs}
             const variableTypes = new Map<string, UnitVariableType>();
             const variableCodes = new Map<
             string,
-            Array<{ id: string | number; label: string; score?: number }>
+            Array<{
+              id: string | number;
+              label: string;
+              score?: number;
+              manualInstruction?: string;
+              type?: string;
+            }>
             >();
             const variableManualInstructions = new Map<string, boolean>();
             const variableClosedCoding = new Map<string, boolean>();
@@ -2910,7 +3075,9 @@ ${bookletRefs}
                   .map(code => ({
                     id: code.id,
                     label: code.label || String(code.id),
-                    score: code.score
+                    score: code.score,
+                    manualInstruction: code.manualInstruction,
+                    type: code.type
                   }));
                 if (codes.length > 0) {
                   variableCodes.set(vc.id, codes);
@@ -2977,22 +3144,7 @@ ${bookletRefs}
             if (!this.isUnitVisibleInWorkspace(unitName, visibility)) {
               continue;
             }
-            const variables: Array<{
-              id: string;
-              alias: string;
-              type: UnitVariableType;
-              hasCodingScheme: boolean;
-              codingSchemeRef?: string;
-              codes?: Array<{
-                id: string | number;
-                label: string;
-                score?: number;
-              }>;
-              isDerived?: boolean;
-              hasManualInstruction?: boolean;
-              hasClosedCoding?: boolean;
-              coderTrainingRequired?: boolean;
-            }> = [];
+            const variables: VariableDetailDto[] = [];
             const seenSchemeIds = new Set<string>();
             const seenAliases = new Set<string>();
 
@@ -3041,16 +3193,26 @@ ${bookletRefs}
                   const coderTrainingRequired =
                     unitTrainingRequired?.get(variableId) || false;
                   const isDerived = this.isDerivedSourceType(sourceType);
+                  const variableMetadata = this.extractVariableMetadata(
+                    variable
+                  );
 
                   variables.push({
                     id: variableId,
                     alias: variableAlias,
                     type: variable.$.type as UnitVariableType,
+                    multiple: variableMetadata.multiple,
+                    nullable: variableMetadata.nullable,
                     hasCodingScheme,
                     codingSchemeRef: hasCodingScheme ?
                       codingSchemeMap.get(unitName) :
                       undefined,
+                    sourceType,
                     codes: variableCodes,
+                    values: variableMetadata.values,
+                    valuesComplete: variableMetadata.valuesComplete,
+                    valuePositionLabels:
+                      variableMetadata.valuePositionLabels,
                     isDerived,
                     hasManualInstruction,
                     hasClosedCoding,
@@ -3106,16 +3268,26 @@ ${bookletRefs}
                     codingSchemeTrainingRequiredMap.get(unitName);
                   const coderTrainingRequired =
                     unitTrainingRequired?.get(variableId) || false;
+                  const variableMetadata = this.extractVariableMetadata(
+                    variable
+                  );
 
                   variables.push({
                     id: variableId,
                     alias: variableAlias,
                     type: variable.$.type as UnitVariableType,
+                    multiple: variableMetadata.multiple,
+                    nullable: variableMetadata.nullable,
                     hasCodingScheme,
                     codingSchemeRef: hasCodingScheme ?
                       codingSchemeMap.get(unitName) :
                       undefined,
+                    sourceType,
                     codes: variableCodes,
+                    values: variableMetadata.values,
+                    valuesComplete: variableMetadata.valuesComplete,
+                    valuePositionLabels:
+                      variableMetadata.valuePositionLabels,
                     isDerived: true,
                     hasManualInstruction,
                     hasClosedCoding,
@@ -3164,6 +3336,7 @@ ${bookletRefs}
                   type: unitVariableTypes?.get(schemeId) || 'string',
                   hasCodingScheme: true,
                   codingSchemeRef: codingSchemeMap.get(unitName),
+                  sourceType,
                   codes: variableCodes,
                   isDerived: true,
                   hasManualInstruction,
@@ -3206,6 +3379,119 @@ ${bookletRefs}
     }
   }
 
+  private extractVariableMetadata(
+    variable: ParsedVariableElement
+  ): Pick<
+    VariableDetailDto,
+    | 'multiple'
+    | 'nullable'
+    | 'values'
+    | 'valuesComplete'
+    | 'valuePositionLabels'
+    > {
+    return {
+      multiple: this.parseOptionalBoolean(variable.$?.multiple),
+      nullable: this.parseOptionalBoolean(variable.$?.nullable),
+      values: this.extractVariableValues(variable.Values),
+      valuesComplete: this.extractValuesComplete(variable.Values),
+      valuePositionLabels: this.extractValuePositionLabels(
+        variable.ValuePositionLabels
+      )
+    };
+  }
+
+  private extractVariableValues(
+    valuesElement: unknown
+  ): VariableValueInfo[] | undefined {
+    const valuesRecord = this.asRecord(valuesElement);
+    const valueItems = this.toArray(valuesRecord?.Value)
+      .map(valueElement => {
+        const valueRecord = this.asRecord(valueElement);
+        const rawValue = this.readXmlText(valueRecord?.value);
+        const label = this.readXmlText(valueRecord?.label) || rawValue;
+
+        if (rawValue === undefined || rawValue === '') {
+          return undefined;
+        }
+
+        return {
+          value: rawValue,
+          label: label || rawValue
+        };
+      })
+      .filter((value): value is VariableValueInfo => Boolean(value));
+
+    return valueItems.length > 0 ? valueItems : undefined;
+  }
+
+  private extractValuesComplete(valuesElement: unknown): boolean | undefined {
+    const valuesRecord = this.asRecord(valuesElement);
+    const attributes = this.asRecord(valuesRecord?.$);
+    const complete = attributes?.complete;
+
+    return typeof complete === 'string' || typeof complete === 'boolean' ?
+      this.parseOptionalBoolean(complete) :
+      undefined;
+  }
+
+  private extractValuePositionLabels(
+    labelsElement: unknown
+  ): string[] | undefined {
+    const labelsRecord = this.asRecord(labelsElement);
+    const labels = this.toArray(labelsRecord?.ValuePositionLabel)
+      .map(label => this.readXmlText(label))
+      .filter((label): label is string => Boolean(label));
+
+    return labels.length > 0 ? labels : undefined;
+  }
+
+  private parseOptionalBoolean(value?: string | boolean): boolean | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    return value === 'true' || value === '1';
+  }
+
+  private toArray(value: unknown): unknown[] {
+    if (value === undefined || value === null) {
+      return [];
+    }
+
+    return Array.isArray(value) ? value : [value];
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | undefined {
+    return typeof value === 'object' && value !== null ?
+      value as Record<string, unknown> :
+      undefined;
+  }
+
+  private readXmlText(value: unknown): string | undefined {
+    if (Array.isArray(value)) {
+      return this.readXmlText(value[0]);
+    }
+
+    const record = this.asRecord(value);
+    if (record && record._ !== undefined) {
+      return this.readXmlText(record._);
+    }
+
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      return String(value);
+    }
+
+    return undefined;
+  }
+
   /**
    * Invalidates memory map caches for a given workspace. This is called when
    * files are uploaded or deleted to ensure that updated coding schemes, etc.
@@ -3222,6 +3508,9 @@ ${bookletRefs}
       ),
       this.cacheService.delete(
         this.getCacheKey(workspaceId, 'derived_variables')
+      ),
+      this.cacheService.delete(
+        this.getCacheKey(workspaceId, 'derived_variables_by_source')
       ),
       this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`)
     ]);

@@ -15,7 +15,10 @@ import {
   JobQueueService
 } from '../../../job-queue/job-queue.service';
 import { WorkspaceTestResultsService } from '../test-results';
-import { TestResultsDeleteRequestDto } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
+import {
+  TestResultsDeleteRequestDto,
+  TestResultsResponseCleanupRequestDto
+} from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 @Injectable()
 export class ValidationTaskService {
@@ -394,6 +397,25 @@ export class ValidationTaskService {
             throw new Error('No test result deletion scope provided');
           }
           break;
+        case 'deleteTestResultResponses':
+          if (
+            taskData &&
+            Array.isArray(taskData.unitNames) &&
+            taskData.answeredBefore !== undefined
+          ) {
+            result =
+              await this.testResultsService.deleteTestResultResponsesByRequest(
+                task.workspace_id,
+                taskData as unknown as TestResultsResponseCleanupRequestDto,
+                typeof taskData.userId === 'string' ? taskData.userId : '',
+                onProgress
+              );
+          } else {
+            throw new Error(
+              'No response cleanup unit names or cutoff timestamp provided'
+            );
+          }
+          break;
         case 'deleteTestLogs':
           if (taskData && typeof taskData.scope === 'string') {
             result = await this.testResultsService.deleteTestLogsByRequest(
@@ -440,6 +462,7 @@ export class ValidationTaskService {
     return validationType === 'deleteResponses' ||
       validationType === 'deleteAllResponses' ||
       validationType === 'deleteTestResults' ||
+      validationType === 'deleteTestResultResponses' ||
       validationType === 'deleteTestLogs';
   }
 }

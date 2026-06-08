@@ -1,11 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   statusNumberToString,
   statusStringToNumber
 } from '../../utils/response-status-converter';
 import { mapCodeForExport } from '../../../utils/coding-utils';
+import { generateReplayUrl } from '../../../utils/replay-url.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
+import {
+  extractGeoGebraBase64,
+  suppressedGeoGebraValuePlaceholder
+} from './geogebra-export.util';
+import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 
 export interface CodingItem {
   unit_key: string;
@@ -17,9 +23,12 @@ export interface CodingItem {
   variable_id: string;
   variable_page: string;
   variable_anchor: string;
+  status_v1?: string;
   value?: string;
   url?: string;
 }
+
+export type CodingVariableAnchorMaps = Map<string, Map<string, string>>;
 
 /**
  * Service responsible for building CodingItem objects from ResponseEntity data.
@@ -34,7 +43,10 @@ export interface CodingItem {
 export class CodingItemBuilderService {
   private readonly logger = new Logger(CodingItemBuilderService.name);
 
-  constructor(private readonly fileCacheService: CodingFileCacheService) {}
+  constructor(
+    private readonly fileCacheService: CodingFileCacheService,
+    @Optional() private readonly replayAnchorService?: CodingReplayAnchorService
+  ) {}
 
   private formatStatus(status: number | string | null | undefined): string {
     if (status === null || status === undefined || status === '') {
@@ -47,6 +59,17 @@ export class CodingItemBuilderService {
     return statusNumber === null ? '' : statusNumberToString(statusNumber) || '';
   }
 
+  private formatResponseValue(
+    value: string | null | undefined,
+    includeGeoGebraResponseValues: boolean
+  ): string {
+    if (!includeGeoGebraResponseValues && extractGeoGebraBase64(value)) {
+      return suppressedGeoGebraValuePlaceholder;
+    }
+
+    return value ?? '';
+  }
+
   /**
    * Build a basic CodingItem from a ResponseEntity.
    * Used for CODING_INCOMPLETE responses.
@@ -55,7 +78,8 @@ export class CodingItemBuilderService {
     response: ResponseEntity,
     authToken: string,
     serverUrl: string,
-    workspaceId: number
+    workspaceId: number,
+    variableAnchorMaps?: CodingVariableAnchorMaps
   ): Promise<CodingItem | null> {
     try {
       const unit = response.unit;
@@ -82,9 +106,24 @@ export class CodingItemBuilderService {
       const loginGroup = person?.group || '';
       const bookletId = bookletInfo?.name || '';
       const unitAlias = unit.alias || '';
-      const variableAnchor = variableId;
+      const variableAnchor = await this.resolveVariableAnchor(
+        workspaceId,
+        unitKey,
+        variableId,
+        variableAnchorMaps
+      );
 
-      const url = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+      const url = generateReplayUrl({
+        serverUrl,
+        loginName,
+        loginCode,
+        loginGroup,
+        bookletId,
+        unitId: unitKey,
+        variablePage,
+        variableAnchor,
+        authToken
+      });
 
       return {
         unit_key: unitKey,
@@ -96,6 +135,7 @@ export class CodingItemBuilderService {
         variable_id: variableId,
         variable_page: variablePage,
         variable_anchor: variableAnchor,
+        status_v1: this.formatStatus(response.status_v1),
         url
       };
     } catch (error) {
@@ -117,7 +157,9 @@ export class CodingItemBuilderService {
     serverUrl: string,
     workspaceId: number,
     includeReplayUrls: boolean = false,
-    includeResponseValues: boolean = true
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false,
+    variableAnchorMaps?: CodingVariableAnchorMaps
   ): Promise<CodingItem | null> {
     try {
       const unit = response.unit;
@@ -144,9 +186,24 @@ export class CodingItemBuilderService {
       const loginGroup = person?.group || '';
       const bookletId = bookletInfo?.name || '';
       const unitAlias = unit.alias || '';
-      const variableAnchor = variableId;
+      const variableAnchor = await this.resolveVariableAnchor(
+        workspaceId,
+        unitKey,
+        variableId,
+        variableAnchorMaps
+      );
 
-      const url = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+      const url = generateReplayUrl({
+        serverUrl,
+        loginName,
+        loginCode,
+        loginGroup,
+        bookletId,
+        unitId: unitKey,
+        variablePage,
+        variableAnchor,
+        authToken
+      });
 
       const baseItem: CodingItem & Record<string, unknown> = {
         unit_key: unitKey,
@@ -161,7 +218,10 @@ export class CodingItemBuilderService {
       };
 
       if (includeResponseValues) {
-        baseItem.value = response.value ?? '';
+        baseItem.value = this.formatResponseValue(
+          response.value,
+          includeGeoGebraResponseValues
+        );
       }
 
       // Add version-specific data (include all lower versions) and convert status numbers to strings
@@ -251,5 +311,20 @@ export class CodingItemBuilderService {
       'code_v3',
       'score_v3'
     ];
+  }
+
+  private async resolveVariableAnchor(
+    workspaceId: number,
+    unitName: string,
+    variableId: string,
+    variableAnchorMaps?: CodingVariableAnchorMaps
+  ): Promise<string> {
+    if (variableAnchorMaps) {
+      return variableAnchorMaps.get(unitName)?.get(variableId) || variableId;
+    }
+
+    return this.replayAnchorService ?
+      this.replayAnchorService.resolveVariableAnchor(workspaceId, unitName, variableId) :
+      variableId;
   }
 }

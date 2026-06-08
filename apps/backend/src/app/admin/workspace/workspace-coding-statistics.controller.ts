@@ -7,7 +7,8 @@ import {
   UseGuards,
   Body,
   Logger,
-  BadRequestException
+  BadRequestException,
+  Res
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -16,9 +17,13 @@ import {
   ApiTags,
   ApiBody
 } from '@nestjs/swagger';
+import { Response } from 'express';
+import * as fastCsv from 'fast-csv';
+import * as ExcelJS from 'exceljs';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   CodingStatisticsService,
   CodingJobService,
@@ -40,6 +45,7 @@ import {
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
 import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
+import { sanitizeCsvText } from '../../utils/csv.util';
 
 type CodingStatisticsJobStatusResponse = {
   status: string;
@@ -55,6 +61,7 @@ type DistributionDoubleCodingInfoResponse = {
   doubleCodedCases: number;
   singleCodedCasesAssigned: number;
   doubleCodedCasesPerCoder: Record<string, number>;
+  doubleCodedCasesPerCoderId?: Record<string, number>;
 };
 
 type DistributionCalculationResponse = {
@@ -90,6 +97,142 @@ type DistributedCodingJobsResponse = DistributionCalculationResponse & {
   }>;
 };
 
+type KappaMeanInput = {
+  kappa: number | null;
+  validPairs: number;
+};
+
+type KappaAgreementInput = {
+  agreement: number;
+  validPairs: number;
+};
+
+type KappaPairMetadata = {
+  jobNames: string[];
+  jobDefinitionIds: number[];
+  trainingIds: number[];
+  trainingLabels: string[];
+};
+
+type KappaCoderPairStatistics = KappaMeanInput & KappaPairMetadata & {
+  coder1Id: number;
+  coder1Name: string;
+  coder2Id: number;
+  coder2Name: string;
+  agreement: number;
+  totalItems: number;
+  interpretation: string;
+};
+
+type KappaStatisticsResponse = {
+  variables: Array<{
+    unitName: string;
+    variableId: string;
+    meanKappa: number | null;
+    meanAgreement: number | null;
+    caseCount: number;
+    doubleCodedCount: number;
+    doubleCodedRate: number | null;
+    validPairCount: number;
+    coderPairCount: number;
+    coderPairs: KappaCoderPairStatistics[];
+  }>;
+  workspaceSummary: {
+    totalCodedResponses: number;
+    totalDoubleCodedResponses: number;
+    totalCoderPairs: number;
+    averageKappa: number | null;
+    meanAgreement: number | null;
+    variablesIncluded: number;
+    codersIncluded: number;
+    weightingMethod: 'weighted' | 'unweighted';
+  };
+};
+
+type KappaStatisticsBuildResult = KappaStatisticsResponse & {
+  sourceItems: KappaSourceItem[];
+};
+
+type KappaStatisticsOptions = {
+  weightedMean: boolean;
+  excludeTrainings: boolean;
+  unitName?: string;
+  variableId?: string;
+  jobDefinitionIds: number[];
+  coderTrainingIds: number[];
+  coderIds: number[];
+};
+
+type KappaSourceItem = {
+  unitName: string;
+  variableId: string;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  coderResults: Array<{
+    coderId: number;
+    coderName: string;
+    jobId: number;
+    jobName: string;
+    jobDefinitionId?: number | null;
+    trainingId?: number | null;
+    trainingLabel?: string | null;
+    code: number | null;
+    score: number | null;
+    notes: string | null;
+    codedAt: Date;
+  }>;
+};
+
+const COHENS_KAPPA_EXPORT_HEADERS = [
+  'Variable',
+  'Unit',
+  'Variablen-ID',
+  'Job-Definition / Schulungsbezug',
+  'Job-Namen',
+  'Job-Definition-IDs',
+  'Training-IDs',
+  'Trainingslabels',
+  'Kodierer 1 ID',
+  'Kodierer 1',
+  'Kodierer 2 ID',
+  'Kodierer 2',
+  'Anzahl doppelt kodierter Antworten',
+  'Gueltige Paare',
+  'Kappa-Wert',
+  'Uebereinstimmung in Prozent',
+  'Interpretation',
+  'Trainings ausgeschlossen',
+  'Mittelwert-Methode',
+  'Unit-Filter',
+  'Variablen-Filter',
+  'Exportiert am'
+] as const;
+
+const COHENS_KAPPA_SUMMARY_EXPORT_HEADERS = [
+  'subunit',
+  'nCases',
+  'nDop',
+  'percDop',
+  'meankappa',
+  'meanagree'
+] as const;
+
+const COHENS_KAPPA_PAIRWISE_EXPORT_HEADERS = [
+  'subunit',
+  'nCases',
+  'nDop',
+  'percDop',
+  'Coder1',
+  'Coder2',
+  'N',
+  'kappa',
+  'Coder1.1',
+  'Coder2.1',
+  'N.1',
+  'agree'
+] as const;
+
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingStatisticsController {
@@ -105,6 +248,636 @@ export class WorkspaceCodingStatisticsController {
     private codingReadinessService: CodingReadinessService,
     private jobQueueService: JobQueueService
   ) { }
+
+  private calculateMeanKappa(
+    kappaResults: KappaMeanInput[],
+    weightedMean: boolean
+  ): number | null {
+    if (weightedMean) {
+      let totalWeightedKappa = 0;
+      let totalWeight = 0;
+
+      for (const result of kappaResults) {
+        if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+          totalWeightedKappa += result.kappa * result.validPairs;
+          totalWeight += result.validPairs;
+        }
+      }
+
+      return totalWeight > 0 ?
+        Math.round((totalWeightedKappa / totalWeight) * 1000) / 1000 :
+        null;
+    }
+
+    let totalKappa = 0;
+    let validKappaCount = 0;
+
+    for (const result of kappaResults) {
+      if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+        totalKappa += result.kappa;
+        validKappaCount += 1;
+      }
+    }
+
+    return validKappaCount > 0 ?
+      Math.round((totalKappa / validKappaCount) * 1000) / 1000 :
+      null;
+  }
+
+  private calculateMeanAgreement(
+    kappaResults: KappaAgreementInput[],
+    weightedMean: boolean
+  ): number | null {
+    if (weightedMean) {
+      let weightedAgreement = 0;
+      let totalWeight = 0;
+
+      for (const result of kappaResults) {
+        if (result.validPairs > 0) {
+          weightedAgreement += result.agreement * result.validPairs;
+          totalWeight += result.validPairs;
+        }
+      }
+
+      return totalWeight > 0 ?
+        Math.round((weightedAgreement / totalWeight) * 1000) / 1000 :
+        null;
+    }
+
+    let agreementSum = 0;
+    let agreementCount = 0;
+
+    for (const result of kappaResults) {
+      if (result.validPairs > 0) {
+        agreementSum += result.agreement;
+        agreementCount += 1;
+      }
+    }
+
+    return agreementCount > 0 ?
+      Math.round((agreementSum / agreementCount) * 1000) / 1000 :
+      null;
+  }
+
+  private getSubunit(unitName: string, variableId: string): string {
+    return `${unitName}_${variableId}`;
+  }
+
+  private getVariableKey(unitName: string, variableId: string): string {
+    return JSON.stringify([unitName, variableId]);
+  }
+
+  private toPercent(value: number | null): number | '' {
+    return value === null ? '' : Math.round(value * 10000) / 100;
+  }
+
+  private roundDecimal(value: number | null | undefined, digits = 3): number | '' {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '';
+    }
+    const factor = 10 ** digits;
+    return Math.round(value * factor) / factor;
+  }
+
+  private toPublicCohensKappaStatistics(
+    statistics: KappaStatisticsBuildResult
+  ): KappaStatisticsResponse {
+    return {
+      variables: statistics.variables,
+      workspaceSummary: statistics.workspaceSummary
+    };
+  }
+
+  private getCompletedCodeCount(item: KappaSourceItem): number {
+    return item.coderResults.filter(result => result.code !== null).length;
+  }
+
+  private getCoderPairKey(coder1Id: number, coder2Id: number): string {
+    return coder1Id < coder2Id ?
+      `${coder1Id}-${coder2Id}` :
+      `${coder2Id}-${coder1Id}`;
+  }
+
+  private emptyKappaPairMetadata(): KappaPairMetadata {
+    return {
+      jobNames: [],
+      jobDefinitionIds: [],
+      trainingIds: [],
+      trainingLabels: []
+    };
+  }
+
+  private addCoderResultMetadata(
+    metadata: {
+      jobNames: Set<string>;
+      jobDefinitionIds: Set<number>;
+      trainingIds: Set<number>;
+      trainingLabels: Set<string>;
+    },
+    result: KappaSourceItem['coderResults'][number]
+  ): void {
+    if (result.jobName) {
+      metadata.jobNames.add(result.jobName);
+    }
+    if (result.jobDefinitionId !== null && result.jobDefinitionId !== undefined) {
+      metadata.jobDefinitionIds.add(result.jobDefinitionId);
+    }
+    if (result.trainingId !== null && result.trainingId !== undefined) {
+      metadata.trainingIds.add(result.trainingId);
+    }
+    if (result.trainingLabel) {
+      metadata.trainingLabels.add(result.trainingLabel);
+    }
+  }
+
+  private toKappaPairMetadata(metadata: {
+    jobNames: Set<string>;
+    jobDefinitionIds: Set<number>;
+    trainingIds: Set<number>;
+    trainingLabels: Set<string>;
+  }): KappaPairMetadata {
+    return {
+      jobNames: Array.from(metadata.jobNames).sort((a, b) => a.localeCompare(b)),
+      jobDefinitionIds: Array.from(metadata.jobDefinitionIds).sort((a, b) => a - b),
+      trainingIds: Array.from(metadata.trainingIds).sort((a, b) => a - b),
+      trainingLabels: Array.from(metadata.trainingLabels).sort((a, b) => a.localeCompare(b))
+    };
+  }
+
+  private getKappaInterpretationLabel(interpretation: string): string {
+    const labels: Record<string, string> = {
+      'kappa.poor': 'Schlechte Uebereinstimmung',
+      'kappa.slight': 'Schwache Uebereinstimmung',
+      'kappa.fair': 'Maessige Uebereinstimmung',
+      'kappa.moderate': 'Akzeptable Uebereinstimmung',
+      'kappa.substantial': 'Substantielle Uebereinstimmung',
+      'kappa.good': 'Gute Uebereinstimmung',
+      'kappa.almost_perfect': 'Nahezu perfekte Uebereinstimmung',
+      'No valid coding pairs': 'Keine gueltigen Kodierpaare'
+    };
+
+    return labels[interpretation] ?? interpretation;
+  }
+
+  private formatKappaScope(pair: KappaPairMetadata): string {
+    const parts: string[] = [];
+
+    if (pair.jobDefinitionIds.length > 0) {
+      parts.push(`Job-Definitionen: ${pair.jobDefinitionIds.join(', ')}`);
+    }
+
+    if (pair.trainingLabels.length > 0) {
+      parts.push(`Trainings: ${pair.trainingLabels.join(', ')}`);
+    } else if (pair.trainingIds.length > 0) {
+      parts.push(`Trainings: ${pair.trainingIds.join(', ')}`);
+    }
+
+    return parts.length > 0 ? parts.join('; ') : 'Direkte Kodierung';
+  }
+
+  private createCohensKappaExportRows(
+    statistics: KappaStatisticsResponse,
+    options: Pick<KappaStatisticsOptions, 'weightedMean' | 'excludeTrainings' | 'unitName' | 'variableId'>
+  ): Record<string, string | number>[] {
+    const exportedAt = new Date().toISOString();
+    const weightingMethod = options.weightedMean ?
+      'gewichteter Mittelwert' :
+      'ungewichteter Mittelwert';
+
+    return statistics.variables.flatMap(variable => variable.coderPairs.map(pair => ({
+      Variable: sanitizeCsvText(`${variable.unitName} - ${variable.variableId}`),
+      Unit: sanitizeCsvText(variable.unitName),
+      'Variablen-ID': sanitizeCsvText(variable.variableId),
+      'Job-Definition / Schulungsbezug': sanitizeCsvText(this.formatKappaScope(pair)),
+      'Job-Namen': sanitizeCsvText(pair.jobNames.join(', ')),
+      'Job-Definition-IDs': pair.jobDefinitionIds.join(', '),
+      'Training-IDs': pair.trainingIds.join(', '),
+      Trainingslabels: sanitizeCsvText(pair.trainingLabels.join(', ')),
+      'Kodierer 1 ID': pair.coder1Id,
+      'Kodierer 1': sanitizeCsvText(pair.coder1Name),
+      'Kodierer 2 ID': pair.coder2Id,
+      'Kodierer 2': sanitizeCsvText(pair.coder2Name),
+      'Anzahl doppelt kodierter Antworten': pair.totalItems,
+      'Gueltige Paare': pair.validPairs,
+      'Kappa-Wert': pair.kappa ?? '',
+      'Uebereinstimmung in Prozent': Math.round(pair.agreement * 1000) / 10,
+      Interpretation: sanitizeCsvText(this.getKappaInterpretationLabel(pair.interpretation)),
+      'Trainings ausgeschlossen': options.excludeTrainings ? 'ja' : 'nein',
+      'Mittelwert-Methode': sanitizeCsvText(weightingMethod),
+      'Unit-Filter': sanitizeCsvText(options.unitName),
+      'Variablen-Filter': sanitizeCsvText(options.variableId),
+      'Exportiert am': exportedAt
+    })));
+  }
+
+  private createCohensKappaSummaryExportRows(
+    statistics: KappaStatisticsResponse
+  ): Record<string, string | number>[] {
+    return statistics.variables.map(variable => ({
+      subunit: sanitizeCsvText(this.getSubunit(variable.unitName, variable.variableId)),
+      nCases: variable.caseCount,
+      nDop: variable.doubleCodedCount,
+      percDop: this.toPercent(variable.doubleCodedRate),
+      meankappa: this.roundDecimal(variable.meanKappa),
+      meanagree: this.roundDecimal(variable.meanAgreement)
+    }));
+  }
+
+  private createCohensKappaPairwiseExportRows(
+    statistics: KappaStatisticsResponse
+  ): Record<string, string | number>[] {
+    return statistics.variables.flatMap(variable => variable.coderPairs.map(pair => ({
+      subunit: sanitizeCsvText(this.getSubunit(variable.unitName, variable.variableId)),
+      nCases: variable.caseCount,
+      nDop: variable.doubleCodedCount,
+      percDop: this.toPercent(variable.doubleCodedRate),
+      Coder1: sanitizeCsvText(pair.coder1Name),
+      Coder2: sanitizeCsvText(pair.coder2Name),
+      N: pair.validPairs,
+      kappa: this.roundDecimal(pair.kappa),
+      'Coder1.1': sanitizeCsvText(pair.coder1Name),
+      'Coder2.1': sanitizeCsvText(pair.coder2Name),
+      'N.1': pair.validPairs,
+      agree: this.roundDecimal(pair.agreement)
+    })));
+  }
+
+  private createCohensKappaCodingResultRows(
+    sourceItems: KappaSourceItem[]
+  ): {
+      headers: string[];
+      rows: Record<string, string | number>[];
+    } {
+    const coderNamesById = new Map<number, string>();
+    sourceItems.forEach(item => {
+      item.coderResults.forEach(result => {
+        if (!coderNamesById.has(result.coderId)) {
+          coderNamesById.set(result.coderId, result.coderName);
+        }
+      });
+    });
+
+    const coderNameCounts = new Map<string, number>();
+    coderNamesById.forEach(coderName => {
+      coderNameCounts.set(coderName, (coderNameCounts.get(coderName) ?? 0) + 1);
+    });
+
+    const coderColumnCandidates = Array.from(coderNamesById.entries())
+      .map(([coderId, coderName]) => ({
+        coderId,
+        baseLabel: (coderNameCounts.get(coderName) ?? 0) > 1 ?
+          `${coderName} (${coderId})` :
+          coderName
+      }))
+      .sort((a, b) => a.baseLabel.localeCompare(b.baseLabel) || a.coderId - b.coderId);
+    const usedCoderColumnLabels = new Set<string>();
+    const coderColumns = coderColumnCandidates.map(column => {
+      let label = column.baseLabel;
+      let suffix = 2;
+      while (usedCoderColumnLabels.has(label)) {
+        label = `${column.baseLabel} [${column.coderId}${suffix > 2 ? `-${suffix}` : ''}]`;
+        suffix += 1;
+      }
+      usedCoderColumnLabels.add(label);
+      return {
+        coderId: column.coderId,
+        label
+      };
+    });
+    const coderColumnLabelById = new Map(coderColumns.map(column => [column.coderId, column.label]));
+    const headers = [
+      'Test.Person.Login',
+      'Test.Person.Group',
+      'Unit',
+      'Variable',
+      'subunit',
+      ...coderColumns.flatMap(column => [`${column.label}.Code`, `${column.label}.Score`]),
+      'Kommentare',
+      'Häuf.W',
+      'Abw'
+    ];
+    const rows = sourceItems.map(item => {
+      const row: Record<string, string | number> = {
+        'Test.Person.Login': sanitizeCsvText(item.personLogin),
+        'Test.Person.Group': sanitizeCsvText(item.personGroup),
+        Unit: sanitizeCsvText(item.unitName),
+        Variable: sanitizeCsvText(item.variableId),
+        subunit: sanitizeCsvText(this.getSubunit(item.unitName, item.variableId))
+      };
+      const codeCounts = new Map<number, number>();
+      const comments: string[] = [];
+
+      coderColumns.forEach(column => {
+        row[`${column.label}.Code`] = '';
+        row[`${column.label}.Score`] = '';
+      });
+
+      item.coderResults.forEach(result => {
+        const columnLabel = coderColumnLabelById.get(result.coderId) ?? result.coderName;
+        row[`${columnLabel}.Code`] = result.code ?? '';
+        row[`${columnLabel}.Score`] = result.score ?? '';
+        if (result.code !== null) {
+          codeCounts.set(result.code, (codeCounts.get(result.code) ?? 0) + 1);
+        }
+        if (result.notes?.trim()) {
+          comments.push(`${columnLabel}: ${result.notes.trim()}`);
+        }
+      });
+
+      let modalCode: number | '' = '';
+      let modalCount = 0;
+      codeCounts.forEach((count, code) => {
+        if (count > modalCount) {
+          modalCount = count;
+          modalCode = code;
+        }
+      });
+      const codedCount = Array.from(codeCounts.values()).reduce((sum, count) => sum + count, 0);
+
+      row.Kommentare = sanitizeCsvText(comments.join(' | '));
+      row['Häuf.W'] = modalCode;
+      row.Abw = codedCount > 0 ? codedCount - modalCount : '';
+
+      return row;
+    });
+
+    return { headers, rows };
+  }
+
+  private applyWorksheetHeaderStyle(worksheet: ExcelJS.Worksheet): void {
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+    worksheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: worksheet.columnCount }
+    };
+  }
+
+  private addRowsWorksheet(
+    workbook: ExcelJS.Workbook,
+    sheetName: string,
+    headers: readonly string[],
+    rows: Record<string, string | number>[]
+  ): void {
+    const worksheet = workbook.addWorksheet(sheetName);
+    worksheet.columns = headers.map(header => ({
+      header,
+      key: header,
+      width: Math.max(12, Math.min(28, header.length + 4))
+    }));
+    rows.forEach(row => worksheet.addRow(row));
+    this.applyWorksheetHeaderStyle(worksheet);
+  }
+
+  private async createCohensKappaWorkbookBuffer(
+    statistics: KappaStatisticsResponse,
+    sourceItems: KappaSourceItem[]
+  ): Promise<Buffer> {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Kodierbox';
+    workbook.created = new Date();
+
+    this.addRowsWorksheet(
+      workbook,
+      'Übereinstimmung_gesamt',
+      COHENS_KAPPA_SUMMARY_EXPORT_HEADERS,
+      this.createCohensKappaSummaryExportRows(statistics)
+    );
+    this.addRowsWorksheet(
+      workbook,
+      'Übereinstimmung_paarweise',
+      COHENS_KAPPA_PAIRWISE_EXPORT_HEADERS,
+      this.createCohensKappaPairwiseExportRows(statistics)
+    );
+
+    const codingResults = this.createCohensKappaCodingResultRows(sourceItems);
+    this.addRowsWorksheet(
+      workbook,
+      'Kodierergebnisse',
+      codingResults.headers,
+      codingResults.rows
+    );
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  private async buildCohensKappaStatistics(
+    workspaceId: number,
+    options: KappaStatisticsOptions
+  ): Promise<KappaStatisticsBuildResult> {
+    this.logger.log(
+      `Calculating Cohen's Kappa for workspace ${workspaceId}${options.unitName ? `, unit: ${options.unitName}` : ''
+      }${options.variableId ? `, variable: ${options.variableId}` : ''}`
+    );
+
+    const allCodedItems = (await this.codingReviewService.getCodedVariablesForKappa(
+      workspaceId,
+      options.excludeTrainings,
+      options.jobDefinitionIds,
+      options.coderTrainingIds,
+      options.coderIds
+    )).map(item => ({
+      unitName: item.unitName,
+      variableId: item.variableId,
+      personLogin: item.personLogin,
+      personCode: item.personCode,
+      personGroup: item.personGroup,
+      coderResults: item.coderResults.map(result => ({
+        coderId: result.coderId,
+        coderName: result.coderName,
+        jobId: result.jobId,
+        jobName: result.jobName,
+        jobDefinitionId: result.jobDefinitionId ?? null,
+        trainingId: result.trainingId ?? null,
+        trainingLabel: result.trainingLabel ?? null,
+        code: result.code,
+        score: result.score,
+        notes: result.notes,
+        codedAt: result.codedAt
+      }))
+    }));
+
+    const groupedData = new Map<string, {
+      unitName: string;
+      variableId: string;
+      items: KappaSourceItem[];
+    }>();
+    const filteredCodedItems: KappaSourceItem[] = [];
+
+    allCodedItems.forEach(item => {
+      if (options.unitName && item.unitName !== options.unitName) return;
+      if (options.variableId && item.variableId !== options.variableId) return;
+
+      filteredCodedItems.push(item);
+      const key = this.getVariableKey(item.unitName, item.variableId);
+      if (!groupedData.has(key)) {
+        groupedData.set(key, {
+          unitName: item.unitName,
+          variableId: item.variableId,
+          items: []
+        });
+      }
+      groupedData.get(key)!.items.push(item);
+    });
+
+    const variables: KappaStatisticsResponse['variables'] = [];
+    const allKappaResults: KappaCoderPairStatistics[] = [];
+    const uniqueVariables = new Set<string>();
+    const uniqueCoders = new Set<number>();
+
+    for (const [key, group] of groupedData.entries()) {
+      const { unitName: unitNameKey, variableId: variableIdKey, items } = group;
+      const doubleCodedItems = items.filter(item => this.getCompletedCodeCount(item) >= 2);
+
+      uniqueVariables.add(key);
+
+      const allCoders = new Set<number>();
+      doubleCodedItems.forEach(item => {
+        item.coderResults.forEach(cr => {
+          allCoders.add(cr.coderId);
+          uniqueCoders.add(cr.coderId);
+        });
+      });
+
+      const coderArray = Array.from(allCoders);
+      const coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        unitName: string;
+        variableId: string;
+        codes: Array<{ code1: number | null; code2: number | null }>;
+      }> = [];
+      const pairMetadataByKey = new Map<string, KappaPairMetadata>();
+
+      for (let i = 0; i < coderArray.length; i++) {
+        for (let j = i + 1; j < coderArray.length; j++) {
+          const coder1Id = coderArray[i];
+          const coder2Id = coderArray[j];
+
+          let coder1Name = '';
+          let coder2Name = '';
+          items.forEach(item => {
+            item.coderResults.forEach(cr => {
+              if (cr.coderId === coder1Id) coder1Name = cr.coderName;
+              if (cr.coderId === coder2Id) coder2Name = cr.coderName;
+            });
+          });
+
+          const codes: Array<{ code1: number | null; code2: number | null }> = [];
+          const metadata = {
+            jobNames: new Set<string>(),
+            jobDefinitionIds: new Set<number>(),
+            trainingIds: new Set<number>(),
+            trainingLabels: new Set<string>()
+          };
+
+          doubleCodedItems.forEach(item => {
+            const coder1Result = item.coderResults.find(
+              cr => cr.coderId === coder1Id
+            );
+            const coder2Result = item.coderResults.find(
+              cr => cr.coderId === coder2Id
+            );
+
+            if (coder1Result && coder2Result) {
+              codes.push({
+                code1: coder1Result.code,
+                code2: coder2Result.code
+              });
+              this.addCoderResultMetadata(metadata, coder1Result);
+              this.addCoderResultMetadata(metadata, coder2Result);
+            }
+          });
+
+          if (codes.length > 0) {
+            const pairKey = this.getCoderPairKey(coder1Id, coder2Id);
+            pairMetadataByKey.set(pairKey, this.toKappaPairMetadata(metadata));
+            coderPairs.push({
+              coder1Id,
+              coder1Name,
+              coder2Id,
+              coder2Name,
+              unitName: unitNameKey,
+              variableId: variableIdKey,
+              codes
+            });
+          }
+        }
+      }
+
+      const kappaResults = coderPairs.length > 0 ?
+        this.codingStatisticsService
+          .calculateCohensKappa(coderPairs)
+          .map(result => ({
+            ...result,
+            ...(pairMetadataByKey.get(
+              this.getCoderPairKey(result.coder1Id, result.coder2Id)
+            ) ?? this.emptyKappaPairMetadata())
+          })) as KappaCoderPairStatistics[] :
+        [];
+
+      allKappaResults.push(...kappaResults);
+      const validPairCount = kappaResults.reduce(
+        (sum, result) => sum + (result.validPairs > 0 ? result.validPairs : 0),
+        0
+      );
+      const coderPairCount = kappaResults.filter(result => result.validPairs > 0).length;
+      const caseCount = items.length;
+      const doubleCodedCount = doubleCodedItems.length;
+
+      variables.push({
+        unitName: unitNameKey,
+        variableId: variableIdKey,
+        meanKappa: this.calculateMeanKappa(kappaResults, options.weightedMean),
+        meanAgreement: this.calculateMeanAgreement(kappaResults, options.weightedMean),
+        caseCount,
+        doubleCodedCount,
+        doubleCodedRate: caseCount > 0 ? doubleCodedCount / caseCount : null,
+        validPairCount,
+        coderPairCount,
+        coderPairs: kappaResults
+      });
+    }
+
+    let validKappaCount = 0;
+    allKappaResults.forEach(result => {
+      if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+        validKappaCount += 1;
+      }
+    });
+
+    const averageKappa = this.calculateMeanKappa(allKappaResults, options.weightedMean);
+    const totalCodedResponses = variables.reduce((sum, variable) => sum + variable.caseCount, 0);
+    const totalDoubleCodedResponses = variables.reduce((sum, variable) => sum + variable.doubleCodedCount, 0);
+    const workspaceSummary = {
+      totalCodedResponses,
+      totalDoubleCodedResponses,
+      totalCoderPairs: validKappaCount,
+      averageKappa,
+      meanAgreement: this.calculateMeanAgreement(allKappaResults, options.weightedMean),
+      variablesIncluded: uniqueVariables.size,
+      codersIncluded: uniqueCoders.size,
+      weightingMethod: (options.weightedMean ? 'weighted' : 'unweighted') as 'weighted' | 'unweighted'
+    };
+
+    this.logger.log(
+      `Calculated Cohen's Kappa for ${variables.length} unit/variable combinations in workspace ${workspaceId}, average kappa: ${averageKappa}`
+    );
+
+    return {
+      variables,
+      workspaceSummary,
+      sourceItems: filteredCodedItems
+    };
+  }
 
   @Get(':workspace_id/coding/statistics')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -395,6 +1168,38 @@ export class WorkspaceCodingStatisticsController {
       .filter(item => item !== '');
   }
 
+  private parseIdArrayQuery(value?: string | string[]): number[] {
+    return this.parseArrayQuery(value).map(item => {
+      const parsed = Number(item);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new BadRequestException('ID query values must be positive integers');
+      }
+      return parsed;
+    });
+  }
+
+  private buildKappaOptionsFromQuery(query: {
+    weightedMean?: string;
+    excludeTrainings?: string;
+    unitName?: string;
+    variableId?: string;
+    jobDefinitionIds?: string | string[];
+    coderTrainingIds?: string | string[];
+    coderIds?: string | string[];
+  }): KappaStatisticsOptions {
+    const coderTrainingIds = this.parseIdArrayQuery(query.coderTrainingIds);
+
+    return {
+      weightedMean: query.weightedMean !== 'false',
+      excludeTrainings: coderTrainingIds.length > 0 ? false : query.excludeTrainings !== 'false',
+      unitName: query.unitName,
+      variableId: query.variableId,
+      jobDefinitionIds: this.parseIdArrayQuery(query.jobDefinitionIds),
+      coderTrainingIds,
+      coderIds: this.parseIdArrayQuery(query.coderIds)
+    };
+  }
+
   @Get(':workspace_id/coding/groups')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
@@ -463,6 +1268,21 @@ export class WorkspaceCodingStatisticsController {
           type: 'number',
           description: 'Total number of cases that need to be coded'
         },
+        statusTotalCasesToCode: {
+          type: 'number',
+          description:
+            'Raw status total before covered source variables are excluded'
+        },
+        coveredSourceVariableCount: {
+          type: 'number',
+          description:
+            'Number of source variables represented by derived manual variables'
+        },
+        coveredSourceResponseCount: {
+          type: 'number',
+          description:
+            'Number of source responses excluded because their derived variables are coded manually'
+        },
         completedCases: {
           type: 'number',
           description:
@@ -504,6 +1324,9 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number
   ): Promise<{
         totalCasesToCode: number;
+        statusTotalCasesToCode: number;
+        coveredSourceVariableCount: number;
+        coveredSourceResponseCount: number;
         completedCases: number;
         completionPercentage: number;
         rawTotalCasesToCode: number;
@@ -517,7 +1340,8 @@ export class WorkspaceCodingStatisticsController {
   }
 
   @Get(':workspace_id/coding/applied-results-overview')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -528,6 +1352,21 @@ export class WorkspaceCodingStatisticsController {
         totalIncompleteResponses: {
           type: 'number',
           description: 'Total cases after duplicate aggregation'
+        },
+        statusTotalIncompleteResponses: {
+          type: 'number',
+          description:
+            'Raw status total before covered source variables are excluded'
+        },
+        coveredSourceVariableCount: {
+          type: 'number',
+          description:
+            'Number of source variables represented by derived manual variables'
+        },
+        coveredSourceResponseCount: {
+          type: 'number',
+          description:
+            'Number of source responses excluded because their derived variables are coded manually'
         },
         appliedResponses: {
           type: 'number',
@@ -565,6 +1404,26 @@ export class WorkspaceCodingStatisticsController {
         aggregatedDuplicateCases: {
           type: 'number',
           description: 'Number of raw responses collapsed by duplicate aggregation'
+        },
+        deriveErrorTotalResponses: {
+          type: 'number',
+          description: 'DERIVE_ERROR opt-in cases after duplicate aggregation'
+        },
+        deriveErrorAppliedResponses: {
+          type: 'number',
+          description: 'Applied DERIVE_ERROR opt-in cases after duplicate aggregation'
+        },
+        deriveErrorRemainingResponses: {
+          type: 'number',
+          description: 'Remaining DERIVE_ERROR opt-in cases after duplicate aggregation'
+        },
+        deriveErrorRawTotalResponses: {
+          type: 'number',
+          description: 'Raw DERIVE_ERROR opt-in responses before duplicate aggregation'
+        },
+        deriveErrorRawAppliedResponses: {
+          type: 'number',
+          description: 'Raw applied DERIVE_ERROR opt-in responses before duplicate aggregation'
         }
       }
     }
@@ -573,6 +1432,9 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number
   ): Promise<{
         totalIncompleteResponses: number;
+        statusTotalIncompleteResponses: number;
+        coveredSourceVariableCount: number;
+        coveredSourceResponseCount: number;
         appliedResponses: number;
         remainingResponses: number;
         completionPercentage: number;
@@ -582,6 +1444,11 @@ export class WorkspaceCodingStatisticsController {
         aggregationActive: boolean;
         aggregationThreshold: number | null;
         aggregatedDuplicateCases: number;
+        deriveErrorTotalResponses: number;
+        deriveErrorAppliedResponses: number;
+        deriveErrorRemainingResponses: number;
+        deriveErrorRawTotalResponses: number;
+        deriveErrorRawAppliedResponses: number;
       }> {
     return this.codingProgressService.getAppliedResultsOverview(workspace_id);
   }
@@ -598,6 +1465,21 @@ export class WorkspaceCodingStatisticsController {
         totalCasesToCode: {
           type: 'number',
           description: 'Raw total number of cases that need to be coded'
+        },
+        statusTotalCasesToCode: {
+          type: 'number',
+          description:
+            'Raw status total before covered source variables are excluded'
+        },
+        coveredSourceVariableCount: {
+          type: 'number',
+          description:
+            'Number of source variables represented by derived manual variables'
+        },
+        coveredSourceResponseCount: {
+          type: 'number',
+          description:
+            'Number of source responses excluded because their derived variables are coded manually'
         },
         effectiveTotalCasesToCode: {
           type: 'number',
@@ -653,6 +1535,9 @@ export class WorkspaceCodingStatisticsController {
   })
   async getCaseCoverageOverview(@WorkspaceId() workspace_id: number): Promise<{
     totalCasesToCode: number;
+    statusTotalCasesToCode: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
     effectiveTotalCasesToCode: number;
     casesInJobs: number;
     effectiveCasesInJobs: number;
@@ -681,6 +1566,21 @@ export class WorkspaceCodingStatisticsController {
         totalVariables: {
           type: 'number',
           description: 'Total number of potential variables from unit XML files'
+        },
+        statusTotalVariables: {
+          type: 'number',
+          description:
+            'Raw status variable total before covered source variables are excluded'
+        },
+        coveredSourceVariableCount: {
+          type: 'number',
+          description:
+            'Number of source variables represented by derived manual variables'
+        },
+        coveredSourceResponseCount: {
+          type: 'number',
+          description:
+            'Number of source responses excluded because their derived variables are coded manually'
         },
         coveredVariables: {
           type: 'number',
@@ -793,6 +1693,9 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number
   ): Promise<{
         totalVariables: number;
+        statusTotalVariables: number;
+        coveredSourceVariableCount: number;
+        coveredSourceResponseCount: number;
         coveredVariables: number;
         coveredByDraft: number;
         coveredByPendingReview: number;
@@ -853,6 +1756,24 @@ export class WorkspaceCodingStatisticsController {
     description: 'Exclude coder training jobs (default: true)',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'jobDefinitionIds',
+    required: false,
+    description: 'Limit statistics to one or more job definition IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderTrainingIds',
+    required: false,
+    description: 'Limit statistics to one or more coder training IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderIds',
+    required: false,
+    description: 'Limit statistics to one or more coder IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
   @ApiOkResponse({
     description:
       "Cohen's Kappa statistics for double-coded variables with workspace summary.",
@@ -866,6 +1787,37 @@ export class WorkspaceCodingStatisticsController {
             properties: {
               unitName: { type: 'string', description: 'Name of the unit' },
               variableId: { type: 'string', description: 'Variable ID' },
+              meanKappa: {
+                type: 'number',
+                nullable: true,
+                description: "Mean Cohen's Kappa for this variable, using the selected weighting method"
+              },
+              meanAgreement: {
+                type: 'number',
+                nullable: true,
+                description: 'Mean observed agreement for this variable, using the selected weighting method'
+              },
+              caseCount: {
+                type: 'number',
+                description: 'Total coded cases for this variable'
+              },
+              doubleCodedCount: {
+                type: 'number',
+                description: 'Number of double-coded cases for this variable'
+              },
+              doubleCodedRate: {
+                type: 'number',
+                nullable: true,
+                description: 'Share of coded cases that are double-coded'
+              },
+              validPairCount: {
+                type: 'number',
+                description: 'Total number of valid coder-pair comparisons for this variable'
+              },
+              coderPairCount: {
+                type: 'number',
+                description: 'Number of coder pairs with valid comparisons for this variable'
+              },
               coderPairs: {
                 type: 'array',
                 items: {
@@ -879,7 +1831,23 @@ export class WorkspaceCodingStatisticsController {
                     agreement: { type: 'number' },
                     totalItems: { type: 'number' },
                     validPairs: { type: 'number' },
-                    interpretation: { type: 'string' }
+                    interpretation: { type: 'string' },
+                    jobNames: {
+                      type: 'array',
+                      items: { type: 'string' }
+                    },
+                    jobDefinitionIds: {
+                      type: 'array',
+                      items: { type: 'number' }
+                    },
+                    trainingIds: {
+                      type: 'array',
+                      items: { type: 'number' }
+                    },
+                    trainingLabels: {
+                      type: 'array',
+                      items: { type: 'string' }
+                    }
                   }
                 }
               }
@@ -889,9 +1857,11 @@ export class WorkspaceCodingStatisticsController {
         workspaceSummary: {
           type: 'object',
           properties: {
+            totalCodedResponses: { type: 'number' },
             totalDoubleCodedResponses: { type: 'number' },
             totalCoderPairs: { type: 'number' },
             averageKappa: { type: 'number', nullable: true },
+            meanAgreement: { type: 'number', nullable: true },
             variablesIncluded: { type: 'number' },
             codersIncluded: { type: 'number' },
             weightingMethod: {
@@ -909,227 +1879,360 @@ export class WorkspaceCodingStatisticsController {
       @Query('weightedMean') weightedMean?: string,
       @Query('unitName') unitName?: string,
       @Query('variableId') variableId?: string,
-      @Query('excludeTrainings') excludeTrainings?: string
-  ): Promise<{
-        variables: Array<{
-          unitName: string;
-          variableId: string;
-          coderPairs: Array<{
-            coder1Id: number;
-            coder1Name: string;
-            coder2Id: number;
-            coder2Name: string;
-            kappa: number | null;
-            agreement: number;
-            totalItems: number;
-            validPairs: number;
-            interpretation: string;
-          }>;
-        }>;
-        workspaceSummary: {
-          totalDoubleCodedResponses: number;
-          totalCoderPairs: number;
-          averageKappa: number | null;
-          variablesIncluded: number;
-          codersIncluded: number;
-          weightingMethod: 'weighted' | 'unweighted';
-        };
-      }> {
+      @Query('excludeTrainings') excludeTrainings?: string,
+      @Query('jobDefinitionIds') jobDefinitionIds?: string | string[],
+      @Query('coderTrainingIds') coderTrainingIds?: string | string[],
+      @Query('coderIds') coderIds?: string | string[]
+  ): Promise<KappaStatisticsResponse> {
     try {
-      this.logger.log(
-        `Calculating Cohen's Kappa for workspace ${workspace_id}${unitName ? `, unit: ${unitName}` : ''
-        }${variableId ? `, variable: ${variableId}` : ''}`
-      );
-
-      // Get all double-coded data
-      const isExcludeTrainings = excludeTrainings !== 'false'; // Default true
-      const allDoubleCodedItems = [];
-      let currentPage = 1;
-      const batchSize = 1000;
-      let hasMore = true;
-      let totalItemsData = 0;
-
-      while (hasMore) {
-        const doubleCodedData = await this.codingReviewService.getDoubleCodedVariablesForReview(
-          workspace_id,
-          currentPage,
-          batchSize,
-          false, // onlyConflicts = false (needed for correct Kappa calculation)
-          isExcludeTrainings
-        );
-
-        if (currentPage === 1) {
-          totalItemsData = doubleCodedData.total;
-        }
-
-        if (doubleCodedData.data.length > 0) {
-          allDoubleCodedItems.push(...doubleCodedData.data);
-        }
-
-        if (allDoubleCodedItems.length >= totalItemsData || doubleCodedData.data.length === 0) {
-          hasMore = false;
-        } else {
-          currentPage += 1;
-        }
-      }
-
-      // Group by unit and variable
-      const groupedData = new Map<
-      string,
-      Array<{
-        unitName: string;
-        variableId: string;
-        personLogin: string;
-        personCode: string;
-        coderResults: Array<{
-          coderId: number;
-          coderName: string;
-          jobId: number;
-          code: number | null;
-          score: number | null;
-          notes: string | null;
-          codedAt: Date;
-        }>;
-      }>
-      >();
-
-      allDoubleCodedItems.forEach(item => {
-        // Apply filters if provided
-        if (unitName && item.unitName !== unitName) return;
-        if (variableId && item.variableId !== variableId) return;
-
-        const key = `${item.unitName}:${item.variableId}`;
-        if (!groupedData.has(key)) {
-          groupedData.set(key, []);
-        }
-        groupedData.get(key)!.push(item);
+      const options = this.buildKappaOptionsFromQuery({
+        weightedMean,
+        excludeTrainings,
+        unitName,
+        variableId,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds
       });
-
-      const variables = [];
-      const allKappaResults: Array<{ kappa: number | null }> = [];
-      const uniqueVariables = new Set<string>();
-      const uniqueCoders = new Set<number>();
-
-      for (const [key, items] of groupedData.entries()) {
-        const [unitNameKey, variableIdKey] = key.split(':');
-
-        uniqueVariables.add(key);
-
-        // Get all unique coders for this unit/variable combination
-        const allCoders = new Set<number>();
-        items.forEach(item => {
-          item.coderResults.forEach(cr => {
-            allCoders.add(cr.coderId);
-            uniqueCoders.add(cr.coderId);
-          });
-        });
-
-        const coderArray = Array.from(allCoders);
-        const coderPairs = [];
-
-        // Calculate Kappa for each pair of coders
-        for (let i = 0; i < coderArray.length; i++) {
-          for (let j = i + 1; j < coderArray.length; j++) {
-            const coder1Id = coderArray[i];
-            const coder2Id = coderArray[j];
-
-            // Find coder names
-            let coder1Name = '';
-            let coder2Name = '';
-            items.forEach(item => {
-              item.coderResults.forEach(cr => {
-                if (cr.coderId === coder1Id) coder1Name = cr.coderName;
-                if (cr.coderId === coder2Id) coder2Name = cr.coderName;
-              });
-            });
-
-            // Collect coding pairs for these two coders
-            const codes = [];
-            items.forEach(item => {
-              const coder1Result = item.coderResults.find(
-                cr => cr.coderId === coder1Id
-              );
-              const coder2Result = item.coderResults.find(
-                cr => cr.coderId === coder2Id
-              );
-
-              if (coder1Result && coder2Result) {
-                codes.push({
-                  code1: coder1Result.code,
-                  code2: coder2Result.code
-                });
-              }
-            });
-
-            if (codes.length > 0) {
-              coderPairs.push({
-                coder1Id,
-                coder1Name,
-                coder2Id,
-                coder2Name,
-                codes
-              });
-            }
-          }
-        }
-
-        if (coderPairs.length > 0) {
-          // Calculate Cohen's Kappa for all pairs
-          const kappaResults =
-            this.codingStatisticsService.calculateCohensKappa(coderPairs);
-
-          // Collect all kappa results for later averaging
-          allKappaResults.push(...kappaResults);
-
-          variables.push({
-            unitName: unitNameKey,
-            variableId: variableIdKey,
-            coderPairs: kappaResults
-          });
-        }
-      }
-
-      // Calculate workspace summary by averaging all collected kappa values
-      let totalKappa = 0;
-      let validKappaCount = 0;
-      allKappaResults.forEach(result => {
-        if (result.kappa !== null && !Number.isNaN(result.kappa)) {
-          totalKappa += result.kappa;
-          validKappaCount += 1;
-        }
-      });
-
-      // Calculate workspace summary - return 0 instead of null when no valid kappa values
-      const averageKappa =
-        validKappaCount > 0 ?
-          Math.round((totalKappa / validKappaCount) * 1000) / 1000 :
-          0;
-
-      const useWeightedMean = weightedMean !== 'false'; // Default true
-      const workspaceSummary = {
-        totalDoubleCodedResponses: totalItemsData,
-        totalCoderPairs: validKappaCount,
-        averageKappa,
-        variablesIncluded: uniqueVariables.size,
-        codersIncluded: uniqueCoders.size,
-        weightingMethod: (useWeightedMean ? 'weighted' : 'unweighted') as 'weighted' | 'unweighted'
-      };
-
-      this.logger.log(
-        `Calculated Cohen's Kappa for ${variables.length} unit/variable combinations in workspace ${workspace_id}, average kappa: ${averageKappa}`
-      );
-
-      return {
-        variables,
-        workspaceSummary
-      };
+      const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
+      return this.toPublicCohensKappaStatistics(statistics);
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       this.logger.error(
         `Error calculating Cohen's Kappa: ${error.message}`,
         error.stack
       );
       throw new Error(
         "Could not calculate Cohen's Kappa statistics. Please check the database connection."
+      );
+    }
+  }
+
+  @Get(':workspace_id/coding/cohens-kappa/export/csv')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'weightedMean',
+    required: false,
+    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
+    type: Boolean
+  })
+  @ApiQuery({
+    name: 'unitName',
+    required: false,
+    description: 'Filter by unit name',
+    type: String
+  })
+  @ApiQuery({
+    name: 'variableId',
+    required: false,
+    description: 'Filter by variable ID',
+    type: String
+  })
+  @ApiQuery({
+    name: 'excludeTrainings',
+    required: false,
+    description: 'Exclude coder training jobs (default: true)',
+    type: Boolean
+  })
+  @ApiQuery({
+    name: 'jobDefinitionIds',
+    required: false,
+    description: 'Limit export to one or more job definition IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderTrainingIds',
+    required: false,
+    description: 'Limit export to one or more coder training IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderIds',
+    required: false,
+    description: 'Limit export to one or more coder IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiOkResponse({
+    description: "Cohen's Kappa coder-pair details exported as CSV.",
+    content: {
+      'text/csv': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportCohensKappaStatisticsAsCsv(
+    @WorkspaceId() workspace_id: number,
+      @Query('weightedMean') weightedMean: string | undefined,
+      @Query('unitName') unitName: string | undefined,
+      @Query('variableId') variableId: string | undefined,
+      @Query('excludeTrainings') excludeTrainings: string | undefined,
+      @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
+      @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
+      @Query('coderIds') coderIds: string | string[] | undefined,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const options = this.buildKappaOptionsFromQuery({
+        weightedMean,
+        excludeTrainings,
+        unitName,
+        variableId,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds
+      });
+      const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
+      const rows = this.createCohensKappaExportRows(statistics, options);
+      const csvContent = await fastCsv.writeToString(rows, {
+        headers: [...COHENS_KAPPA_EXPORT_HEADERS],
+        alwaysWriteHeaders: true,
+        delimiter: ';',
+        quote: '"'
+      });
+      const exportDate = new Date().toISOString().slice(0, 10);
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="cohens-kappa-details-${workspace_id}-${exportDate}.csv"`
+      );
+      res.send(`\uFEFF${csvContent}`);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.error(
+        `Error exporting Cohen's Kappa CSV: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        "Could not export Cohen's Kappa statistics. Please check the database connection."
+      );
+    }
+  }
+
+  @Get(':workspace_id/coding/cohens-kappa/export/summary/csv')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'weightedMean',
+    required: false,
+    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
+    type: Boolean
+  })
+  @ApiQuery({
+    name: 'unitName',
+    required: false,
+    description: 'Filter by unit name',
+    type: String
+  })
+  @ApiQuery({
+    name: 'variableId',
+    required: false,
+    description: 'Filter by variable ID',
+    type: String
+  })
+  @ApiQuery({
+    name: 'excludeTrainings',
+    required: false,
+    description: 'Exclude coder training jobs (default: true)',
+    type: Boolean
+  })
+  @ApiQuery({
+    name: 'jobDefinitionIds',
+    required: false,
+    description: 'Limit export to one or more job definition IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderTrainingIds',
+    required: false,
+    description: 'Limit export to one or more coder training IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderIds',
+    required: false,
+    description: 'Limit export to one or more coder IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiOkResponse({
+    description: "Cohen's Kappa variable summary exported as CSV.",
+    content: {
+      'text/csv': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportCohensKappaSummaryAsCsv(
+    @WorkspaceId() workspace_id: number,
+      @Query('weightedMean') weightedMean: string | undefined,
+      @Query('unitName') unitName: string | undefined,
+      @Query('variableId') variableId: string | undefined,
+      @Query('excludeTrainings') excludeTrainings: string | undefined,
+      @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
+      @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
+      @Query('coderIds') coderIds: string | string[] | undefined,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const options = this.buildKappaOptionsFromQuery({
+        weightedMean,
+        excludeTrainings,
+        unitName,
+        variableId,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds
+      });
+      const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
+      const csvContent = await fastCsv.writeToString(
+        this.createCohensKappaSummaryExportRows(statistics),
+        {
+          headers: [...COHENS_KAPPA_SUMMARY_EXPORT_HEADERS],
+          alwaysWriteHeaders: true,
+          delimiter: ';',
+          quote: '"'
+        }
+      );
+      const exportDate = new Date().toISOString().slice(0, 10);
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="cohens-kappa-summary-${workspace_id}-${exportDate}.csv"`
+      );
+      res.send(`\uFEFF${csvContent}`);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.error(
+        `Error exporting Cohen's Kappa summary CSV: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        "Could not export Cohen's Kappa summary. Please check the database connection."
+      );
+    }
+  }
+
+  @Get(':workspace_id/coding/cohens-kappa/export/xlsx')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'weightedMean',
+    required: false,
+    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
+    type: Boolean
+  })
+  @ApiQuery({
+    name: 'unitName',
+    required: false,
+    description: 'Filter by unit name',
+    type: String
+  })
+  @ApiQuery({
+    name: 'variableId',
+    required: false,
+    description: 'Filter by variable ID',
+    type: String
+  })
+  @ApiQuery({
+    name: 'excludeTrainings',
+    required: false,
+    description: 'Exclude coder training jobs (default: true)',
+    type: Boolean
+  })
+  @ApiQuery({
+    name: 'jobDefinitionIds',
+    required: false,
+    description: 'Limit export to one or more job definition IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderTrainingIds',
+    required: false,
+    description: 'Limit export to one or more coder training IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderIds',
+    required: false,
+    description: 'Limit export to one or more coder IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiOkResponse({
+    description:
+      "Cohen's Kappa workbook exported as XLSX with summary, pairwise details and coding results sheets.",
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportCohensKappaStatisticsAsXlsx(
+    @WorkspaceId() workspace_id: number,
+      @Query('weightedMean') weightedMean: string | undefined,
+      @Query('unitName') unitName: string | undefined,
+      @Query('variableId') variableId: string | undefined,
+      @Query('excludeTrainings') excludeTrainings: string | undefined,
+      @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
+      @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
+      @Query('coderIds') coderIds: string | string[] | undefined,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const options = this.buildKappaOptionsFromQuery({
+        weightedMean,
+        excludeTrainings,
+        unitName,
+        variableId,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds
+      });
+      const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
+      const buffer = await this.createCohensKappaWorkbookBuffer(
+        statistics,
+        statistics.sourceItems
+      );
+      const exportDate = new Date().toISOString().slice(0, 10);
+
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="cohens-kappa-${workspace_id}-${exportDate}.xlsx"`
+      );
+      res.send(buffer);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.error(
+        `Error exporting Cohen's Kappa XLSX: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        "Could not export Cohen's Kappa workbook. Please check the database connection."
       );
     }
   }
@@ -1149,6 +2252,24 @@ export class WorkspaceCodingStatisticsController {
     required: false,
     description: 'Exclude coder training jobs (default: true)',
     type: Boolean
+  })
+  @ApiQuery({
+    name: 'jobDefinitionIds',
+    required: false,
+    description: 'Limit statistics to one or more job definition IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderTrainingIds',
+    required: false,
+    description: 'Limit statistics to one or more coder training IDs (comma-separated or repeated query parameters)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderIds',
+    required: false,
+    description: 'Limit statistics to one or more coder IDs (comma-separated or repeated query parameters)',
+    type: String
   })
   @ApiOkResponse({
     description:
@@ -1229,7 +2350,10 @@ export class WorkspaceCodingStatisticsController {
   async getWorkspaceCohensKappaSummary(
     @WorkspaceId() workspace_id: number,
       @Query('weightedMean') weightedMean?: string,
-      @Query('excludeTrainings') excludeTrainings?: string
+      @Query('excludeTrainings') excludeTrainings?: string,
+      @Query('jobDefinitionIds') jobDefinitionIds?: string | string[],
+      @Query('coderTrainingIds') coderTrainingIds?: string | string[],
+      @Query('coderIds') coderIds?: string | string[]
   ): Promise<{
         coderPairs: Array<{
           coder1Id: number;
@@ -1251,17 +2375,26 @@ export class WorkspaceCodingStatisticsController {
           weightingMethod: 'weighted' | 'unweighted';
         };
       }> {
-    const useWeightedMean = weightedMean !== 'false'; // Default true
-    const isExcludeTrainings = excludeTrainings !== 'false'; // Default true
+    const options = this.buildKappaOptionsFromQuery({
+      weightedMean,
+      excludeTrainings,
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds
+    });
     return this.codingReviewService.getWorkspaceCohensKappaSummary(
       workspace_id,
-      useWeightedMean,
-      isExcludeTrainings
+      options.weightedMean,
+      options.excludeTrainings,
+      options.jobDefinitionIds,
+      options.coderTrainingIds,
+      options.coderIds
     );
   }
 
   @Post(':workspace_id/coding/calculate-distribution')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -1275,7 +2408,8 @@ export class WorkspaceCodingStatisticsController {
             type: 'object',
             properties: {
               unitName: { type: 'string' },
-              variableId: { type: 'string' }
+              variableId: { type: 'string' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -1293,7 +2427,8 @@ export class WorkspaceCodingStatisticsController {
                   type: 'object',
                   properties: {
                     unitName: { type: 'string' },
-                    variableId: { type: 'string' }
+                    variableId: { type: 'string' },
+                    includeDeriveError: { type: 'boolean' }
                   }
                 }
               }
@@ -1355,6 +2490,10 @@ export class WorkspaceCodingStatisticsController {
               doubleCodedCasesPerCoder: {
                 type: 'object',
                 additionalProperties: { type: 'number' }
+              },
+              doubleCodedCasesPerCoderId: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
               }
             }
           }
@@ -1396,12 +2535,12 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number,
       @Body()
                    body: {
-                     selectedVariables: { unitName: string; variableId: string }[];
+                     selectedVariables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
                      selectedVariableBundles?: {
                        id: number;
                        name: string;
                        caseOrderingMode?: 'continuous' | 'alternating';
-                       variables: { unitName: string; variableId: string }[];
+                       variables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
                      }[];
                      selectedCoders: {
                        id: number;
@@ -1421,7 +2560,8 @@ export class WorkspaceCodingStatisticsController {
   }
 
   @Post(':workspace_id/coding/create-distributed-jobs')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -1435,7 +2575,8 @@ export class WorkspaceCodingStatisticsController {
             type: 'object',
             properties: {
               unitName: { type: 'string' },
-              variableId: { type: 'string' }
+              variableId: { type: 'string' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -1453,7 +2594,8 @@ export class WorkspaceCodingStatisticsController {
                   type: 'object',
                   properties: {
                     unitName: { type: 'string' },
-                    variableId: { type: 'string' }
+                    variableId: { type: 'string' },
+                    includeDeriveError: { type: 'boolean' }
                   }
                 }
               }
@@ -1521,6 +2663,10 @@ export class WorkspaceCodingStatisticsController {
               doubleCodedCasesPerCoder: {
                 type: 'object',
                 additionalProperties: { type: 'number' }
+              },
+              doubleCodedCasesPerCoderId: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
               }
             }
           }
@@ -1583,12 +2729,12 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number,
       @Body()
                    body: {
-                     selectedVariables: { unitName: string; variableId: string }[];
+                     selectedVariables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
                      selectedVariableBundles?: {
                        id: number;
                        name: string;
                        caseOrderingMode?: 'continuous' | 'alternating';
-                       variables: { unitName: string; variableId: string }[];
+                       variables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
                      }[];
                      selectedCoders: {
                        id: number;

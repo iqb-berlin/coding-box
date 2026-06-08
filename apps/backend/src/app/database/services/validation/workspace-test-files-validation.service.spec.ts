@@ -12,6 +12,7 @@ import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { ResourcePackageService } from '../workspace/resource-package.service';
+import { ReplayCompatibilityWarning } from '../../../../../../../api-dto/files/file-validation-result.dto';
 
 describe('WorkspaceTestFilesValidationService', () => {
   let service: WorkspaceTestFilesValidationService;
@@ -105,7 +106,7 @@ describe('WorkspaceTestFilesValidationService', () => {
 
     const expectedHash = crypto.createHash('sha256');
     expectedHash.update(JSON.stringify({
-      cacheVersion: 3,
+      cacheVersion: 5,
       exclusions: {
         ignoredUnits: [],
         ignoredBooklets: [],
@@ -115,8 +116,73 @@ describe('WorkspaceTestFilesValidationService', () => {
     }));
     expectedHash.update('\n');
 
-    expect(TEST_FILES_VALIDATION_CACHE_VERSION).toBe(3);
+    expect(TEST_FILES_VALIDATION_CACHE_VERSION).toBe(5);
     expect(fingerprint).toBe(expectedHash.digest('hex'));
+  });
+
+  describe('replay compatibility warnings', () => {
+    type ReplayCompatibilityDetector = {
+      detectReplayCompatibilityWarnings(
+        validationResults: unknown[],
+        unitMap: Map<string, unknown>,
+        resourceIdsArray: string[]
+      ): ReplayCompatibilityWarning[];
+    };
+
+    const createValidationResults = () => ([{
+      units: {
+        files: [{ filename: 'MV22064', exists: true }]
+      }
+    }]);
+
+    const createUnitMap = (playerRefs: string[]) => new Map<string, unknown>([
+      ['MV22064', { playerRefs }]
+    ]);
+
+    const detectWarnings = (
+      playerRefs: string[],
+      resourceIds: string[]
+    ): ReplayCompatibilityWarning[] => (
+      service as unknown as ReplayCompatibilityDetector
+    ).detectReplayCompatibilityWarnings(
+      createValidationResults(),
+      createUnitMap(playerRefs),
+      resourceIds
+    );
+
+    it('should warn for Aspect players without DOM element aliases', () => {
+      const warnings = detectWarnings(
+        ['IQB-PLAYER-ASPECT-2.9.3'],
+        ['IQB-PLAYER-ASPECT-2.9.3']
+      );
+
+      expect(warnings).toEqual([
+        expect.objectContaining({
+          unit: 'MV22064',
+          requestedPlayer: 'IQB-PLAYER-ASPECT-2.9.3',
+          resolvedPlayer: 'IQB-PLAYER-ASPECT-2.9.3',
+          requiredPlayer: 'IQB-PLAYER-ASPECT-2.9.4'
+        })
+      ]);
+    });
+
+    it('should not warn when a compatible patch version is available', () => {
+      const warnings = detectWarnings(
+        ['IQB-PLAYER-ASPECT-2.9.3'],
+        ['IQB-PLAYER-ASPECT-2.9.3', 'IQB-PLAYER-ASPECT-2.9.4']
+      );
+
+      expect(warnings).toEqual([]);
+    });
+
+    it('should not warn for non-Aspect players', () => {
+      const warnings = detectWarnings(
+        ['OTHER-PLAYER-1.0.0'],
+        ['OTHER-PLAYER-1.0.0']
+      );
+
+      expect(warnings).toEqual([]);
+    });
   });
 
   it('should include ignored test file settings in the validation fingerprint', async () => {
@@ -331,6 +397,170 @@ describe('WorkspaceTestFilesValidationService', () => {
     expect(schemerFileEntry?.schemaErrors).toEqual(expect.arrayContaining([
       expect.stringContaining('IQB-SCHEMER-1.1 ist veraltet')
     ]));
+  });
+
+  it('should validate coding schemes with current IQB processing properties', async () => {
+    const scheme = {
+      version: '3.4',
+      variableCodings: [
+        {
+          id: 'VAR-1',
+          alias: 'VAR_ALIAS-1',
+          sourceType: 'BASE',
+          processing: ['CODER_TRAINING_REQUIRED'],
+          codeModel: 'MANUAL_ONLY',
+          codes: [{ id: 1 }]
+        }
+      ]
+    };
+    fileUploadRepository.find.mockResolvedValue([{
+      file_id: 'UNIT_A.VOCS',
+      filename: 'UNIT_A.VOCS',
+      data: JSON.stringify(scheme),
+      file_type: 'Resource'
+    }]);
+
+    const validateCodingSchemes = (
+      service as unknown as {
+        validateAllCodingSchemes: (workspaceId: number) => Promise<Map<string, { schemaValid: boolean; errors: string[]; warnings?: string[] }>>;
+      }
+    ).validateAllCodingSchemes.bind(service);
+
+    const results = await validateCodingSchemes(1);
+    const result = results.get('UNIT_A.VOCS');
+
+    expect(result).toEqual({ schemaValid: true, errors: [], warnings: [] });
+  });
+
+  it('should tolerate legacy codeModel NONE as a validation warning', async () => {
+    const scheme = {
+      version: '3.4',
+      variableCodings: [
+        {
+          id: 'VAR_OLD',
+          sourceType: 'BASE',
+          codeModel: 'NONE',
+          codes: [{ id: 1 }]
+        }
+      ]
+    };
+    fileUploadRepository.find.mockResolvedValue([{
+      file_id: 'UNIT_LEGACY.VOCS',
+      filename: 'UNIT_LEGACY.VOCS',
+      data: JSON.stringify(scheme),
+      file_type: 'Resource'
+    }]);
+
+    const validateCodingSchemes = (
+      service as unknown as {
+        validateAllCodingSchemes: (workspaceId: number) => Promise<Map<string, { schemaValid: boolean; errors: string[]; warnings?: string[] }>>;
+      }
+    ).validateAllCodingSchemes.bind(service);
+
+    const results = await validateCodingSchemes(1);
+    const result = results.get('UNIT_LEGACY.VOCS');
+
+    expect(result).toEqual({
+      schemaValid: true,
+      errors: [],
+      warnings: [
+        'Legacy codeModel "NONE" wurde bei Variable "VAR_OLD" als fehlender Wert behandelt.'
+      ]
+    });
+    expect(scheme.variableCodings[0].codeModel).toBe('NONE');
+  });
+
+  it('should aggregate legacy codeModel NONE warnings per coding scheme file', async () => {
+    const scheme = {
+      version: '3.4',
+      variableCodings: [
+        {
+          id: 'VAR_ONE',
+          sourceType: 'BASE',
+          codeModel: 'NONE',
+          codes: [{ id: 1 }]
+        },
+        {
+          id: 'VAR_TWO',
+          sourceType: 'BASE',
+          codeModel: 'NONE',
+          codes: [{ id: 2 }]
+        },
+        {
+          id: 'VAR_THREE',
+          sourceType: 'BASE',
+          codeModel: 'NONE',
+          codes: [{ id: 3 }]
+        },
+        {
+          id: 'VAR_FOUR',
+          sourceType: 'BASE',
+          codeModel: 'NONE',
+          codes: [{ id: 4 }]
+        }
+      ]
+    };
+    fileUploadRepository.find.mockResolvedValue([{
+      file_id: 'UNIT_LEGACY_MULTI.VOCS',
+      filename: 'UNIT_LEGACY_MULTI.VOCS',
+      data: JSON.stringify(scheme),
+      file_type: 'Resource'
+    }]);
+
+    const validateCodingSchemes = (
+      service as unknown as {
+        validateAllCodingSchemes: (workspaceId: number) => Promise<Map<string, { schemaValid: boolean; errors: string[]; warnings?: string[] }>>;
+      }
+    ).validateAllCodingSchemes.bind(service);
+
+    const results = await validateCodingSchemes(1);
+    const result = results.get('UNIT_LEGACY_MULTI.VOCS');
+
+    expect(result).toEqual({
+      schemaValid: true,
+      errors: [],
+      warnings: [
+        'Legacy codeModel "NONE" wurde bei 4 Variablen als fehlender Wert behandelt (z. B. "VAR_ONE", "VAR_TWO", "VAR_THREE", ...).'
+      ]
+    });
+  });
+
+  it('should keep rejecting unsupported coding scheme properties after legacy normalization', async () => {
+    const scheme = {
+      version: '3.4',
+      variableCodings: [
+        {
+          id: 'VAR_OLD',
+          sourceType: 'BASE',
+          codeModel: 'NONE',
+          legacyComment: 'not part of the coding-scheme schema',
+          codes: [{ id: 1 }]
+        }
+      ]
+    };
+    fileUploadRepository.find.mockResolvedValue([{
+      file_id: 'UNIT_INVALID.VOCS',
+      filename: 'UNIT_INVALID.VOCS',
+      data: JSON.stringify(scheme),
+      file_type: 'Resource'
+    }]);
+
+    const validateCodingSchemes = (
+      service as unknown as {
+        validateAllCodingSchemes: (workspaceId: number) => Promise<Map<string, { schemaValid: boolean; errors: string[]; warnings?: string[] }>>;
+      }
+    ).validateAllCodingSchemes.bind(service);
+
+    const results = await validateCodingSchemes(1);
+    const result = results.get('UNIT_INVALID.VOCS');
+
+    expect(result?.schemaValid).toBe(false);
+    expect(result?.errors).toEqual(expect.arrayContaining([
+      expect.stringContaining('legacyComment')
+    ]));
+    expect(result?.warnings).toEqual([
+      'Legacy codeModel "NONE" wurde bei Variable "VAR_OLD" als fehlender Wert behandelt.'
+    ]);
   });
 
   it('should refresh GeoGebra package status without rerunning test file validation', async () => {

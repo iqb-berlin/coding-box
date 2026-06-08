@@ -26,7 +26,29 @@ import {
   getCodingStatisticsCacheKey,
   type CodingStatisticsVersion
 } from './coding-statistics-cache-key.util';
+import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
 import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
+
+export interface KappaCalculationResult {
+  coder1Id: number;
+  coder1Name: string;
+  coder2Id: number;
+  coder2Name: string;
+  unitName?: string;
+  variableId?: string;
+  kappa: number | null;
+  agreement: number;
+  totalItems: number;
+  validPairs: number;
+  interpretation: string;
+}
+
+export interface KappaVariableSummary {
+  meanKappa: number | null;
+  meanAgreement: number | null;
+  validPairCount: number;
+  coderPairCount: number;
+}
 
 @Injectable()
 export class CodingStatisticsService implements OnApplicationBootstrap {
@@ -276,7 +298,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {
-    const cacheKey = `coding_incomplete_variables_v3:${workspace_id}`;
+    const cacheKey = getCodingIncompleteVariablesCacheKey(workspace_id);
     await this.cacheService.delete(cacheKey);
     this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
   }
@@ -514,19 +536,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       scores?: Array<{ score1: number | null; score2: number | null }>;
     }>,
     level: 'code' | 'score' = 'code'
-  ): Array<{
-      coder1Id: number;
-      coder1Name: string;
-      coder2Id: number;
-      coder2Name: string;
-      unitName?: string;
-      variableId?: string;
-      kappa: number;
-      agreement: number;
-      totalItems: number;
-      validPairs: number;
-      interpretation: string;
-    }> {
+  ): KappaCalculationResult[] {
     const results = [];
 
     for (const pair of coderPairs) {
@@ -646,7 +656,36 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         interpretation
       });
     }
-
     return results;
+  }
+
+  calculateKappaVariableSummary(
+    kappaResults: Array<Pick<KappaCalculationResult, 'kappa' | 'agreement' | 'validPairs'>>
+  ): KappaVariableSummary {
+    let kappaSum = 0;
+    let kappaCount = 0;
+    let agreementSum = 0;
+    let agreementCount = 0;
+    let validPairCount = 0;
+
+    kappaResults.forEach(result => {
+      if (result.validPairs <= 0) return;
+
+      agreementSum += result.agreement;
+      agreementCount += 1;
+      validPairCount += result.validPairs;
+
+      if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+        kappaSum += result.kappa;
+        kappaCount += 1;
+      }
+    });
+
+    return {
+      meanKappa: kappaCount > 0 ? kappaSum / kappaCount : null,
+      meanAgreement: agreementCount > 0 ? agreementSum / agreementCount : null,
+      validPairCount,
+      coderPairCount: agreementCount
+    };
   }
 }

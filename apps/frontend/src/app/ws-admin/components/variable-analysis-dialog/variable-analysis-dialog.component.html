@@ -22,6 +22,14 @@
             <mat-icon>add</mat-icon>
             {{ 'variable-analysis.start-new-analysis' | translate }}
           </button>
+          <button mat-button (click)="downloadAnalysisResults('csv')" [disabled]="!canExportAnalysisResults()">
+            <mat-icon>download</mat-icon>
+            {{ 'variable-analysis.export-csv' | translate }}
+          </button>
+          <button mat-button (click)="downloadAnalysisResults('xlsx')" [disabled]="!canExportAnalysisResults()">
+            <mat-icon>download</mat-icon>
+            {{ 'variable-analysis.export-xlsx' | translate }}
+          </button>
           <button mat-button (click)="isInfoVisible = !isInfoVisible" class="info-toggle">
             <mat-icon>{{ isInfoVisible ? 'expand_less' : 'help_outline' }}</mat-icon>
             {{ (isInfoVisible ? 'variable-analysis.hide-info' : 'variable-analysis.show-info') | translate }}
@@ -82,15 +90,18 @@
           <mat-checkbox [(ngModel)]="onlyWithEmptyValues" (change)="onEmptyValuesFilterChange()">
             {{ 'variable-analysis.only-empty-values' | translate }}
           </mat-checkbox>
+          <mat-slide-toggle [(ngModel)]="includeSchemaCodes" (change)="onSchemaCodesToggleChange()" color="primary">
+            {{ 'variable-analysis.include-schema-codes' | translate }}
+          </mat-slide-toggle>
         </div>
 
-        @if (variableCombos.length === 0) {
+        @if (analysisRows.length === 0) {
         <div class="empty-state">
           <mat-icon class="empty-icon">info</mat-icon>
           <p>
-            {{ (allVariableCombos.length === 0 ? 'variable-analysis.no-results-yet' : 'variable-analysis.no-variables-found') | translate }}
+            {{ getEmptyStateMessageKey() | translate }}
           </p>
-          @if (allVariableCombos.length === 0 && !activeJob && !isStartingJob) {
+          @if (shouldShowStartAnalysisButton()) {
           <button mat-raised-button color="primary" (click)="startNewAnalysis()" [disabled]="isJobsLoading">
             <mat-icon>add</mat-icon>
             {{ 'variable-analysis.start-new-analysis' | translate }}
@@ -100,81 +111,145 @@
         } @else {
         <div class="variables-container">
           <div class="info-message">
-            <mat-icon>info</mat-icon>
-            <span>{{ 'variable-analysis.max-values-info' | translate:{max: MAX_VALUES_PER_VARIABLE} }}</span>
+            <mat-icon>table_chart</mat-icon>
+            <span>{{ 'variable-analysis.result-table-info' | translate:{max: MAX_VALUES_PER_VARIABLE} }}</span>
           </div>
-
-          @for (combo of variableCombos; track combo) {
-          <div class="variable-section">
-            <h3 class="variable-title">{{ combo.unitName }}: {{ combo.variableId }}</h3>
-            @let summary = getComboSummary(combo);
-            <div class="variable-summary">
-              <span class="summary-chip">
-                <strong>{{ 'variable-analysis.total-cases' | translate }}:</strong>
-                {{ summary.totalCount }}
-              </span>
-              <span class="summary-chip">
-                <strong>{{ 'variable-analysis.empty-values' | translate }}:</strong>
-                {{ summary.emptyCount }} ({{ formatPercentage(summary.emptyPercentage) }})
-              </span>
-              <div class="status-chip-list" [matTooltip]="summary.statusSummary">
-                <strong>{{ 'variable-analysis.status-distribution' | translate }}:</strong>
-                @if (getVisibleStatusCounts(combo).length > 0) {
-                @for (statusItem of getVisibleStatusCounts(combo); track statusItem.status) {
-                <span class="status-chip">
-                  {{ getStatusLabel(statusItem.status) }} {{ formatPercentage(statusItem.percentage) }}
-                </span>
-                }
-                } @else {
-                <span class="muted">{{ 'variable-analysis.no-status-data' | translate }}</span>
-                }
-              </div>
-            </div>
-
-            <div class="table-container">
-              <table mat-table [dataSource]="variableFrequencies[getComboKey(combo)]" matSort class="frequency-table">
-                <!-- Value Column -->
-                <ng-container matColumnDef="value">
-                  <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.value-column' | translate }}</th>
-                  <td mat-cell *matCellDef="let item">
-                    <div class="value-cell">
-                      @if (item.value === '') {
-                      <span class="empty-value">{{ 'variable-analysis.empty-value' | translate }}</span>
-                      } @else {
-                      <span>{{ item.value | slice:0:100 }}{{ item.value.length > 100 ? '...' : '' }}</span>
-                      }
-                    </div>
-                  </td>
-                </ng-container>
-
-                <!-- Count Column -->
-                <ng-container matColumnDef="count">
-                  <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.count-column' | translate }}</th>
-                  <td mat-cell *matCellDef="let item">{{ item.count }}</td>
-                </ng-container>
-
-                <!-- Percentage Column -->
-                <ng-container matColumnDef="percentage">
-                  <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.percentage-column' | translate }}</th>
-                  <td mat-cell *matCellDef="let item">{{ item.percentage | number:'1.1-1' }}%</td>
-                </ng-container>
-
-                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-              </table>
-            </div>
-            @let hiddenValueCount = getHiddenValueCount(combo);
-            @if (hiddenValueCount > 0) {
-            <div class="values-hidden-note">
-              +{{ hiddenValueCount }} {{ 'variable-analysis.more-values-hidden' | translate }}
-            </div>
-            }
+          @if (hasLimitedPageableRows()) {
+          <div class="info-message page-window-message">
+            <mat-icon>filter_list</mat-icon>
+            <span>
+              {{ 'variable-analysis.page-window-limit-info' | translate:getPageableRowLimitInfoParams() }}
+            </span>
           </div>
           }
 
+          <div class="table-container analysis-table-container">
+            <table mat-table [dataSource]="analysisRows" matSort matSortDisableClear
+              [matSortActive]="sortBy" [matSortDirection]="sortDirection"
+              (matSortChange)="onSortChange($event)" class="analysis-table">
+              <ng-container matColumnDef="unitName">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.unit-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ row.unitName }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="variableId">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.variable-id-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ row.variableId }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="value">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.code-category-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">
+                  <div class="value-cell">
+                    @if (row.value === '') {
+                    <span class="empty-value">{{ 'variable-analysis.empty-value' | translate }}</span>
+                    } @else {
+                    <span>{{ row.value | slice:0:100 }}{{ row.value.length > 100 ? '...' : '' }}</span>
+                    }
+                    @if (row.isSchemaOnly) {
+                    <span class="schema-chip">{{ 'variable-analysis.schema-only' | translate }}</span>
+                    }
+                  </div>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="label">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.label-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">
+                  {{ row.label || '-' }}
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="score">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.score-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ formatOptionalNumber(row.score) }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="count">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.count-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ row.count }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="validOccurrenceCount">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.valid-count-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ row.validOccurrenceCount ?? 0 }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="percentageTotal">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.percentage-total-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ row.percentageTotal | number:'1.1-1' }}%</td>
+              </ng-container>
+
+              <ng-container matColumnDef="percentageValid">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.percentage-valid-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ formatOptionalPercentage(row.percentageValid) }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="totalCount">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.total-cases' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ row.totalCount }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="validCount">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.valid-responses-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ row.validCount ?? 0 }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="emptyCount">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.empty-values' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">
+                  {{ row.emptyCount }} ({{ row.emptyPercentage | number:'1.1-1' }}%)
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="statusSummary">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                  {{ 'variable-analysis.status-distribution' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row" class="status-summary-cell" [matTooltip]="row.statusSummary">
+                  {{ row.statusSummary || ('variable-analysis.no-status-data' | translate) }}
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="metric">
+                <th mat-header-cell *matHeaderCellDef>
+                  {{ 'variable-analysis.metric-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ formatMetric(row) }}</td>
+              </ng-container>
+
+              <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+              <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+            </table>
+          </div>
+
           <mat-paginator [length]="getTotalFilteredVariables()" [pageSize]="pageSize"
             [pageSizeOptions]="pageSizeOptions" [pageIndex]="currentPage" (page)="onPageChange($event)"
-            aria-label="Variablen Seiten">
+            [attr.aria-label]="'variable-analysis.table-page-label' | translate">
           </mat-paginator>
         </div>
         }

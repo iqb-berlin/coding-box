@@ -11,16 +11,37 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ValidationResultDto } from '../../../../../../../api-dto/coding/validation-result.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
+import {
+  ManualCodeAvailabilityValidationDto,
+  ManualCodeAvailabilityWarningDto
+} from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 import { generateExpectedCombinationsHash } from '../../../utils/coding-utils';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { VariableDetailDto } from '../../../models/unit-variable-details.dto';
 import { WorkspacePlayerService } from '../workspace/workspace-player.service';
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
-import { buildAggregationGroups } from './aggregation-metrics.util';
+import {
+  buildAggregationGroups,
+  deduplicateManualCodingResponses,
+  getManualCodingDeduplicationKey,
+  ManualCodingDeduplicationResponse
+} from './aggregation-metrics.util';
+import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import {
+  getCoveredSourceKeysForManualDerivedVariables,
+  isCoveredSourceVariable,
+  ManualCodingExcludedSourceSummary,
+  summarizeCoveredSourceVariables
+} from '../../utils/manual-coding-scope.util';
+import {
+  createManualCodingVariableReferences,
+  DERIVE_ERROR_STATUS
+} from '../../utils/manual-coding-candidate.util';
 
 interface NormalizedExpectedCombination {
   unitKey: string;
@@ -38,6 +59,7 @@ type ManualCodingVariableCaseCounts = {
   unitName: string;
   variableId: string;
   responseCount: number;
+  deriveErrorResponseCount: number;
   isDerived: boolean;
   coderTrainingRequired: boolean;
 };
@@ -47,12 +69,42 @@ type SlimCodingResponse = {
   unitName: string;
   variableid: string;
   value: string | null;
+  statusV1?: number | null;
+  personLogin?: string | null;
+  personCode?: string | null;
+  personGroup?: string | null;
 };
 
 type VariableCaseInfo = {
   casesInJobs: number;
   availableCases: number;
   uniqueCasesAfterAggregation: number;
+  availableCasesWithDeriveError?: number;
+  uniqueCasesAfterAggregationWithDeriveError?: number;
+};
+
+type ManualCodingScopeFromDb = {
+  variables: ManualCodingVariableCaseCounts[];
+  excludedSourceSummary: ManualCodingExcludedSourceSummary;
+};
+
+export type ManualCodingScopeSummary = ManualCodingExcludedSourceSummary & {
+  manualVariableCount: number;
+  manualResponseCount: number;
+};
+
+type ManualCodingVariableWithCaseInfo = {
+  unitName: string;
+  variableId: string;
+  responseCount: number;
+  deriveErrorResponseCount: number;
+  casesInJobs: number;
+  availableCases: number;
+  uniqueCasesAfterAggregation: number;
+  availableCasesWithDeriveError?: number;
+  uniqueCasesAfterAggregationWithDeriveError?: number;
+  isDerived: boolean;
+  coderTrainingRequired: boolean;
 };
 
 @Injectable()
@@ -452,30 +504,39 @@ export class CodingValidationService {
   async getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    includeDeriveErrorOnly = false
   ): Promise<
     {
       unitName: string;
       variableId: string;
       responseCount: number;
+      deriveErrorResponseCount: number;
       casesInJobs: number;
       availableCases: number;
       uniqueCasesAfterAggregation: number;
+      availableCasesWithDeriveError?: number;
+      uniqueCasesAfterAggregationWithDeriveError?: number;
       isDerived: boolean;
       coderTrainingRequired: boolean;
     }[]
     > {
     try {
-      if (unitName || trainingRequired !== undefined) {
+      if (unitName || trainingRequired !== undefined || includeDeriveErrorOnly) {
         this.logger.log(
           `Querying manual coding variables for workspace ${workspaceId}${unitName ? ` and unit ${unitName}` : ''}${trainingRequired !== undefined ? ` (trainingRequired: ${trainingRequired})` : ''} (not cached)`
         );
         const variables = await this.fetchCodingIncompleteVariablesFromDb(
           workspaceId,
           unitName,
-          trainingRequired
+          trainingRequired,
+          includeDeriveErrorOnly
         );
-        return await this.enrichVariablesWithCaseInfo(workspaceId, variables);
+        return await this.enrichVariablesWithCaseInfo(
+          workspaceId,
+          variables,
+          includeDeriveErrorOnly
+        );
       }
       const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
       const cachedResult = await this.cacheService.get<
@@ -483,9 +544,12 @@ export class CodingValidationService {
         unitName: string;
         variableId: string;
         responseCount: number;
+        deriveErrorResponseCount: number;
         casesInJobs: number;
         availableCases: number;
         uniqueCasesAfterAggregation: number;
+        availableCasesWithDeriveError?: number;
+        uniqueCasesAfterAggregationWithDeriveError?: number;
         isDerived: boolean;
         coderTrainingRequired: boolean;
       }[]
@@ -500,7 +564,10 @@ export class CodingValidationService {
         `Cache miss: Querying manual coding variables for workspace ${workspaceId}`
       );
       const variables = await this.fetchCodingIncompleteVariablesFromDb(
-        workspaceId
+        workspaceId,
+        undefined,
+        undefined,
+        includeDeriveErrorOnly
       );
       const result = await this.enrichVariablesWithCaseInfo(
         workspaceId,
@@ -529,25 +596,114 @@ export class CodingValidationService {
     }
   }
 
+  async getManualCodingScopeSummary(
+    workspaceId: number,
+    unitName?: string,
+    trainingRequired?: boolean
+  ): Promise<ManualCodingScopeSummary> {
+    try {
+      const scope = await this.fetchManualCodingScopeFromDb(
+        workspaceId,
+        unitName,
+        trainingRequired
+      );
+
+      return {
+        manualVariableCount: scope.variables.length,
+        manualResponseCount: scope.variables.reduce(
+          (sum, variable) => sum + variable.responseCount,
+          0
+        ),
+        ...scope.excludedSourceSummary
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting manual coding scope summary: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not get manual coding scope summary. Please check the database connection.'
+      );
+    }
+  }
+
+  async validateManualCodeAvailability(
+    workspaceId: number,
+    unitName?: string,
+    trainingRequired?: boolean
+  ): Promise<ManualCodeAvailabilityValidationDto> {
+    try {
+      const [variables, variableDetailsByKey] = await Promise.all([
+        this.getCodingIncompleteVariables(
+          workspaceId,
+          unitName,
+          trainingRequired
+        ),
+        this.getManualCodeAvailabilityDetailsByKey(workspaceId)
+      ]);
+
+      const warnings = variables.reduce<ManualCodeAvailabilityWarningDto[]>(
+        (items, variable) => {
+          const detail = variableDetailsByKey.get(
+            this.getManualCodeAvailabilityKey(
+              variable.unitName,
+              variable.variableId
+            )
+          );
+          const counts = this.getManualCodeAvailabilityCounts(detail);
+
+          if (counts.selectableRegularCodeCount > 0) {
+            return items;
+          }
+
+          items.push({
+            unitName: variable.unitName,
+            variableId: variable.variableId,
+            responseCount: variable.responseCount,
+            casesInJobs: variable.casesInJobs,
+            availableCases: variable.availableCases,
+            uniqueCasesAfterAggregation:
+              variable.uniqueCasesAfterAggregation,
+            regularCodeCount: counts.regularCodeCount,
+            selectableRegularCodeCount: counts.selectableRegularCodeCount,
+            onlySpecialOptionsAvailable: true,
+            message:
+              'Variable hat keine regulaeren Codes mit manueller Instruktion. In der Kodierung bleiben nur Sonderoptionen wie "Code-Vergabe unsicher" oder "Neuer Code noetig" verfuegbar.'
+          });
+          return items;
+        },
+        []
+      );
+
+      return {
+        checkedVariables: variables.length,
+        warningCount: warnings.length,
+        warnings
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error validating manual code availability: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not validate manual code availability. Please check the coding schemes.'
+      );
+    }
+  }
+
   /**
      * Enrich variables with case information (cases in jobs, available cases, and unique cases after aggregation)
      */
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
-    variables: ManualCodingVariableCaseCounts[]
-  ): Promise<
-    {
-      unitName: string;
-      variableId: string;
-      responseCount: number;
-      casesInJobs: number;
-      availableCases: number;
-      uniqueCasesAfterAggregation: number;
-      isDerived: boolean;
-      coderTrainingRequired: boolean;
-    }[]
-    > {
-    const caseInfoMap = await this.computeVariableCaseInfo(workspaceId, variables);
+    variables: ManualCodingVariableCaseCounts[],
+    includeDeriveErrorInCaseInfo = false
+  ): Promise<ManualCodingVariableWithCaseInfo[]> {
+    const caseInfoMap = await this.computeVariableCaseInfo(
+      workspaceId,
+      variables,
+      includeDeriveErrorInCaseInfo
+    );
 
     return variables.map(variable => {
       const key = `${variable.unitName}::${variable.variableId}`;
@@ -571,7 +727,8 @@ export class CodingValidationService {
    */
   private async computeVariableCaseInfo(
     workspaceId: number,
-    variables: ManualCodingVariableCaseCounts[]
+    variables: ManualCodingVariableCaseCounts[],
+    includeDeriveErrorInCaseInfo = false
   ): Promise<Map<string, VariableCaseInfo>> {
     const result = new Map<string, VariableCaseInfo>();
 
@@ -579,34 +736,20 @@ export class CodingValidationService {
       return result;
     }
 
-    const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
     const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
 
-    if (aggregationThreshold === null) {
-      variables.forEach(v => {
-        const key = `${v.unitName}::${v.variableId}`;
-        const casesInJobs = casesInJobsMap.get(key) || 0;
-        result.set(key, {
-          casesInJobs,
-          availableCases: Math.max(0, v.responseCount - casesInJobs),
-          uniqueCasesAfterAggregation: v.responseCount
-        });
-      });
-      return result;
-    }
-
     const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
-    const baseVariables = variables.filter(v => !v.isDerived);
-    const baseVariableReferences = baseVariables.map(v => ({
+    const variableReferences = variables.map(v => ({
       unitName: v.unitName,
-      variableId: v.variableId
+      variableId: v.variableId,
+      ...(includeDeriveErrorInCaseInfo ? { includeDeriveError: true } : {})
     }));
     const [slimResponses, assignedResponseIdsByVariable] = await Promise.all([
       this.codingJobService.getSlimResponsesForVariables(
         workspaceId,
-        baseVariableReferences
+        variableReferences
       ) as Promise<SlimCodingResponse[]>,
-      this.getAssignedResponseIdsByVariable(workspaceId, baseVariableReferences)
+      this.getAssignedResponseIdsByVariable(workspaceId, variableReferences)
     ]);
 
     const derivedVariableMap = new Map<string, Set<string>>();
@@ -621,54 +764,79 @@ export class CodingValidationService {
 
     for (const variable of variables) {
       const key = `${variable.unitName}::${variable.variableId}`;
-      const rawCasesInJobs = casesInJobsMap.get(key) || 0;
 
-      if (variable.isDerived) {
-        result.set(key, {
-          casesInJobs: rawCasesInJobs,
-          availableCases: Math.max(0, variable.responseCount - rawCasesInJobs),
-          uniqueCasesAfterAggregation: variable.responseCount
-        });
-        continue;
-      }
-
-      const varResponses = slimResponses.filter(
+      const varResponsesWithRequestedStatuses = slimResponses.filter(
         r => r.unitName === variable.unitName && r.variableid === variable.variableId
       );
 
-      const aggregatedGroups = buildAggregationGroups(
-        varResponses.map(response => ({
-          ...response,
-          responseId: response.id,
-          variableId: response.variableid
-        })),
-        matchingFlags,
-        aggregationThreshold,
-        derivedVariableMap
-      );
-
-      let uniqueCases = 0;
-      let casesInJobs = 0;
-      const assignedResponseIds = assignedResponseIdsByVariable.get(key) || new Set<number>();
-
-      for (const group of aggregatedGroups) {
-        if (group.responses.length >= aggregationThreshold) {
-          uniqueCases += 1;
-          if (group.responses.some(response => assignedResponseIds.has(response.responseId))) {
-            casesInJobs += 1;
-          }
-        } else {
-          uniqueCases += group.responses.length;
-          casesInJobs += group.responses
+      const countAggregatedCases = (responses: SlimCodingResponse[]) => {
+        const responsesWithCaseFields: ManualCodingDeduplicationResponse[] =
+          responses.map(response => ({
+            ...response,
+            responseId: response.id,
+            variableId: response.variableid
+          }));
+        const assignedResponseIds = assignedResponseIdsByVariable.get(key) || new Set<number>();
+        const assignedDeduplicationKeys = new Set(
+          responsesWithCaseFields
             .filter(response => assignedResponseIds.has(response.responseId))
-            .length;
+            .map(response => getManualCodingDeduplicationKey(response))
+        );
+        const dedupedResponses = deduplicateManualCodingResponses(responsesWithCaseFields);
+        const assignedDedupedResponseIds = new Set(
+          dedupedResponses
+            .filter(response => (
+              assignedResponseIds.has(response.responseId) ||
+              assignedDeduplicationKeys.has(getManualCodingDeduplicationKey(response))
+            ))
+            .map(response => response.responseId)
+        );
+        const aggregatedGroups = buildAggregationGroups(
+          dedupedResponses,
+          matchingFlags,
+          aggregationThreshold,
+          derivedVariableMap
+        );
+
+        let uniqueCases = 0;
+        let casesInJobs = 0;
+
+        for (const group of aggregatedGroups) {
+          if (aggregationThreshold !== null && group.responses.length >= aggregationThreshold) {
+            uniqueCases += 1;
+            if (group.responses.some(response => assignedDedupedResponseIds.has(response.responseId))) {
+              casesInJobs += 1;
+            }
+          } else {
+            uniqueCases += group.responses.length;
+            casesInJobs += group.responses
+              .filter(response => assignedDedupedResponseIds.has(response.responseId))
+              .length;
+          }
         }
-      }
+
+        return { uniqueCases, casesInJobs };
+      };
+
+      const regularVarResponses = includeDeriveErrorInCaseInfo ?
+        varResponsesWithRequestedStatuses.filter(response => response.statusV1 !== DERIVE_ERROR_STATUS) :
+        varResponsesWithRequestedStatuses;
+      const regularCaseInfo = countAggregatedCases(regularVarResponses);
+      const deriveErrorCaseInfo = includeDeriveErrorInCaseInfo ?
+        countAggregatedCases(varResponsesWithRequestedStatuses) :
+        null;
 
       result.set(key, {
-        casesInJobs,
-        availableCases: Math.max(0, uniqueCases - casesInJobs),
-        uniqueCasesAfterAggregation: uniqueCases
+        casesInJobs: regularCaseInfo.casesInJobs,
+        availableCases: Math.max(0, regularCaseInfo.uniqueCases - regularCaseInfo.casesInJobs),
+        uniqueCasesAfterAggregation: regularCaseInfo.uniqueCases,
+        ...(deriveErrorCaseInfo ? {
+          availableCasesWithDeriveError: Math.max(
+            0,
+            deriveErrorCaseInfo.uniqueCases - deriveErrorCaseInfo.casesInJobs
+          ),
+          uniqueCasesAfterAggregationWithDeriveError: deriveErrorCaseInfo.uniqueCases
+        } : {})
       });
     }
 
@@ -677,6 +845,70 @@ export class CodingValidationService {
     );
 
     return result;
+  }
+
+  private async getManualCodeAvailabilityDetailsByKey(
+    workspaceId: number
+  ): Promise<Map<string, VariableDetailDto>> {
+    const unitVariableDetails =
+      await this.workspaceFilesService.getUnitVariableDetails(workspaceId);
+    const variableDetailsByKey = new Map<string, VariableDetailDto>();
+
+    unitVariableDetails.forEach(unitDetails => {
+      const unitKeys = [
+        unitDetails.unitName,
+        unitDetails.unitId
+      ].filter(Boolean);
+
+      unitDetails.variables.forEach(variable => {
+        const variableIds = [
+          variable.alias,
+          variable.id
+        ].filter(Boolean);
+
+        unitKeys.forEach(unitKey => {
+          variableIds.forEach(variableId => {
+            const key = this.getManualCodeAvailabilityKey(
+              unitKey,
+              variableId
+            );
+            if (!variableDetailsByKey.has(key)) {
+              variableDetailsByKey.set(key, variable);
+            }
+          });
+        });
+      });
+    });
+
+    return variableDetailsByKey;
+  }
+
+  private getManualCodeAvailabilityCounts(
+    variable: VariableDetailDto | undefined
+  ): { regularCodeCount: number; selectableRegularCodeCount: number } {
+    const regularCodes = (variable?.codes || []).filter(
+      code => code.id !== undefined && code.id !== null
+    );
+
+    return {
+      regularCodeCount: regularCodes.length,
+      selectableRegularCodeCount: regularCodes.filter(
+        code => this.hasManualInstruction(code)
+      ).length
+    };
+  }
+
+  private hasManualInstruction(
+    code: { manualInstruction?: string | null }
+  ): boolean {
+    return !!code.manualInstruction?.trim();
+  }
+
+  private getManualCodeAvailabilityKey(
+    unitName: string | null | undefined,
+    variableId: string | null | undefined
+  ): string {
+    return `${String(unitName || '').trim().toUpperCase()}::${String(variableId || '').trim()}`;
   }
 
   private async getAssignedResponseIdsByVariable(
@@ -737,10 +969,26 @@ export class CodingValidationService {
   private async fetchCodingIncompleteVariablesFromDb(
     workspaceId: number,
     unitName?: string,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    includeDeriveErrorOnly = false
   ): Promise<
-    { unitName: string; variableId: string; responseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
+    { unitName: string; variableId: string; responseCount: number; deriveErrorResponseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
     > {
+    const scope = await this.fetchManualCodingScopeFromDb(
+      workspaceId,
+      unitName,
+      trainingRequired,
+      includeDeriveErrorOnly
+    );
+    return scope.variables;
+  }
+
+  private async fetchManualCodingScopeFromDb(
+    workspaceId: number,
+    unitName?: string,
+    trainingRequired?: boolean,
+    includeDeriveErrorOnly = false
+  ): Promise<ManualCodingScopeFromDb> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     // Helper to build the base query for a given status
     const buildQuery = (status: number) => {
@@ -756,7 +1004,7 @@ export class CodingValidationService {
         .where('response.status_v1 = :status', { status })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
-        // Exclude special/auto codes (any negative code_v2, e.g. -111 for duplicates, -98 for empty)
+        // Exclude special/auto codes represented as negative code_v2 values.
         .andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)')
         .groupBy('unit.name')
         .addGroupBy('response.variableid');
@@ -769,9 +1017,10 @@ export class CodingValidationService {
     };
 
     // Run both queries in parallel
-    const [codingIncompleteRaw, intendedIncompleteRaw] = await Promise.all([
+    const [codingIncompleteRaw, intendedIncompleteRaw, deriveErrorCountsByKey] = await Promise.all([
       buildQuery(statusStringToNumber('CODING_INCOMPLETE')).getRawMany(),
-      buildQuery(statusStringToNumber('INTENDED_INCOMPLETE')).getRawMany()
+      buildQuery(statusStringToNumber('INTENDED_INCOMPLETE')).getRawMany(),
+      this.getDeriveErrorResponseCountsByVariable(workspaceId, unitName)
     ]);
 
     this.logger.debug(
@@ -784,10 +1033,16 @@ export class CodingValidationService {
     );
 
     // Load both lookup maps from the file service
-    const [unitVariableMap, derivedVariableMap, trainingRequiredMap] = await Promise.all([
+    const [
+      unitVariableMap,
+      derivedVariableMap,
+      trainingRequiredMap,
+      derivedVariablesBySourceMap
+    ] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
       this.workspaceFilesService.getDerivedVariableMap(workspaceId),
-      this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId)
+      this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId),
+      this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId)
     ]);
 
     // Build case-insensitive lookup structures
@@ -829,13 +1084,28 @@ export class CodingValidationService {
     };
 
     const filteredCodingIncomplete = codingIncompleteRaw.filter(filterFn);
-    const filteredIntendedIncomplete = intendedIncompleteRaw.filter(filterFn);
+    const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
+      filteredCodingIncomplete,
+      derivedVariablesBySourceMap
+    );
+    const filteredIntendedIncompleteBeforeSourceExclusion =
+      intendedIncompleteRaw.filter(filterFn);
+    const filteredIntendedIncomplete =
+      filteredIntendedIncompleteBeforeSourceExclusion.filter(
+        row => !isCoveredSourceVariable(row, coveredSourceKeys)
+      );
+    const excludedSourceSummary = summarizeCoveredSourceVariables(
+      filteredIntendedIncompleteBeforeSourceExclusion,
+      coveredSourceKeys,
+      derivedVariablesBySourceMap
+    );
 
     // Merge results, summing response counts for variables that appear in both
     const mergedMap = new Map<string, {
       unitName: string;
       variableId: string;
       responseCount: number;
+      deriveErrorResponseCount: number;
       isDerived: boolean;
       coderTrainingRequired: boolean;
     }>();
@@ -844,6 +1114,7 @@ export class CodingValidationService {
       const key = `${row.unitName}::${row.variableId}`;
       const existing = mergedMap.get(key);
       const count = parseInt(row.responseCount, 10);
+      const deriveErrorResponseCount = deriveErrorCountsByKey.get(key) || 0;
       const isDerived = derivedVariableSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
       const coderTrainingRequired = trainingRequiredSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
 
@@ -854,10 +1125,37 @@ export class CodingValidationService {
           unitName: row.unitName,
           variableId: row.variableId,
           responseCount: count,
+          deriveErrorResponseCount,
           isDerived,
           coderTrainingRequired
         });
       }
+    }
+
+    if (includeDeriveErrorOnly) {
+      deriveErrorCountsByKey.forEach((deriveErrorResponseCount, key) => {
+        if (mergedMap.has(key)) {
+          return;
+        }
+
+        const [deriveUnitName, variableId] = key.split('::');
+        if (!filterFn({
+          unitName: deriveUnitName,
+          variableId,
+          responseCount: String(deriveErrorResponseCount)
+        })) {
+          return;
+        }
+
+        mergedMap.set(key, {
+          unitName: deriveUnitName,
+          variableId,
+          responseCount: 0,
+          deriveErrorResponseCount,
+          isDerived: derivedVariableSets.get(deriveUnitName?.toUpperCase())?.has(variableId) ?? false,
+          coderTrainingRequired: trainingRequiredSets.get(deriveUnitName?.toUpperCase())?.has(variableId) ?? false
+        });
+      });
     }
 
     const result = Array.from(mergedMap.values());
@@ -867,11 +1165,59 @@ export class CodingValidationService {
       `filtered to ${result.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`
     );
 
-    return result;
+    return {
+      variables: result,
+      excludedSourceSummary
+    };
+  }
+
+  private async getDeriveErrorResponseCountsByVariable(
+    workspaceId: number,
+    unitName?: string
+  ): Promise<Map<string, number>> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.responseRepository
+      .createQueryBuilder('response')
+      .select('unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .addSelect('COUNT(response.id)', 'responseCount')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 = :status', {
+        status: statusStringToNumber('DERIVE_ERROR')
+      })
+      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)')
+      .groupBy('unit.name')
+      .addGroupBy('response.variableid');
+
+    if (unitName) {
+      query.andWhere('unit.name = :unitName', { unitName });
+    }
+
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      parameterPrefix: 'deriveErrorResponseCounts'
+    });
+
+    const rawResults = await query.getRawMany<{
+      unitName: string;
+      variableId: string;
+      responseCount: string;
+    }>();
+
+    return rawResults.reduce((counts, row) => {
+      if (row.unitName && row.variableId) {
+        counts.set(`${row.unitName}::${row.variableId}`, parseInt(row.responseCount, 10) || 0);
+      }
+      return counts;
+    }, new Map<string, number>());
   }
 
   generateIncompleteVariablesCacheKey(workspaceId: number): string {
-    return `coding_incomplete_variables_v4:${workspaceId}`;
+    return getCodingIncompleteVariablesCacheKey(workspaceId);
   }
 
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
@@ -921,24 +1267,73 @@ export class CodingValidationService {
     return casesInJobsMap;
   }
 
+  private async getDeriveErrorManualJobVariables(
+    workspaceId: number
+  ): Promise<Array<{ unitName: string; variableId: string }>> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .select('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .innerJoin('cju.coding_job', 'coding_job')
+      .innerJoin('cju.response', 'response')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
+      .andWhere('response.status_v1 = :deriveErrorStatus', {
+        deriveErrorStatus: statusStringToNumber('DERIVE_ERROR')
+      })
+      .distinct(true);
+
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'appliedResultsDeriveErrorVariables'
+    });
+
+    const rawResults = await query.getRawMany<{ unitName: string; variableId: string }>();
+    return rawResults.filter(row => row.unitName && row.variableId);
+  }
+
+  private async getAppliedResultsVariables(
+    workspaceId: number,
+    incompleteVariables: { unitName: string; variableId: string }[]
+  ): Promise<Array<{ unitName: string; variableId: string }>> {
+    const providedVariables = Array.isArray(incompleteVariables) ?
+      incompleteVariables :
+      [];
+    const deriveErrorManualVariables = await this.getDeriveErrorManualJobVariables(workspaceId);
+    return createManualCodingVariableReferences([
+      ...providedVariables,
+      ...deriveErrorManualVariables
+    ]);
+  }
+
   async getAppliedResultsCount(
     workspaceId: number,
     incompleteVariables: { unitName: string; variableId: string }[]
   ): Promise<number> {
     try {
+      const providedVariables = Array.isArray(incompleteVariables) ?
+        incompleteVariables :
+        [];
       this.logger.log(
-        `Getting applied results count for ${incompleteVariables.length} manual coding variables in workspace ${workspaceId}`
+        `Getting applied results count for ${providedVariables.length} manual coding variables in workspace ${workspaceId}`
       );
 
-      if (incompleteVariables.length === 0) {
+      const appliedResultsVariables = await this.getAppliedResultsVariables(
+        workspaceId,
+        providedVariables
+      );
+
+      if (appliedResultsVariables.length === 0) {
         return 0;
       }
 
       let totalAppliedCount = 0;
       const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
       const batchSize = 50;
-      for (let i = 0; i < incompleteVariables.length; i += batchSize) {
-        const batch = incompleteVariables.slice(i, i + batchSize);
+      for (let i = 0; i < appliedResultsVariables.length; i += batchSize) {
+        const batch = appliedResultsVariables.slice(i, i + batchSize);
 
         const query = this.responseRepository
           .createQueryBuilder('response')
@@ -948,12 +1343,25 @@ export class CodingValidationService {
           .innerJoin('booklet.person', 'person')
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('person.consider = :consider', { consider: true })
-          .andWhere('response.status_v1 IN (:...sourceStatuses)', {
-            sourceStatuses: [
-              statusStringToNumber('CODING_INCOMPLETE'),
-              statusStringToNumber('INTENDED_INCOMPLETE')
-            ]
-          })
+          .andWhere(new Brackets(qb => {
+            qb.where('response.status_v1 IN (:...sourceStatuses)', {
+              sourceStatuses: [
+                statusStringToNumber('CODING_INCOMPLETE'),
+                statusStringToNumber('INTENDED_INCOMPLETE')
+              ]
+            }).orWhere(
+              `response.status_v1 = :deriveErrorStatus
+                AND EXISTS (
+                  SELECT 1
+                  FROM coding_job_unit manual_derive_cju
+                  INNER JOIN coding_job manual_derive_cj
+                    ON manual_derive_cj.id = manual_derive_cju.coding_job_id
+                  WHERE manual_derive_cju.response_id = response.id
+                    AND manual_derive_cj.training_id IS NULL
+                )`,
+              { deriveErrorStatus: statusStringToNumber('DERIVE_ERROR') }
+            );
+          }))
           .andWhere('response.status_v2 IN (:...targetStatuses)', {
             targetStatuses: [
               statusStringToNumber('CODING_COMPLETE'),

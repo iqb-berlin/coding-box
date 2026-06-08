@@ -348,12 +348,22 @@ export class CodingManagementService {
     version: StatisticsVersion,
     format: CodingResultsExportFormat,
     includeReplayUrls: boolean,
-    includeResponseValues: boolean = true
+    includeResponseValues: boolean = true,
+    includeGeoGebraFiles: boolean = false,
+    includeGeoGebraResponseValues: boolean = false
   ): Promise<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return Promise.resolve();
 
-    return this.performBackgroundDownload(workspaceId, version, format, includeReplayUrls, includeResponseValues);
+    return this.performBackgroundDownload(
+      workspaceId,
+      version,
+      format,
+      includeReplayUrls,
+      includeResponseValues,
+      includeGeoGebraFiles,
+      includeGeoGebraResponseValues
+    );
   }
 
   downloadProgress$ = new BehaviorSubject<number | null>(null);
@@ -363,7 +373,9 @@ export class CodingManagementService {
     version: StatisticsVersion,
     format: CodingResultsExportFormat,
     includeReplayUrls: boolean,
-    includeResponseValues: boolean
+    includeResponseValues: boolean,
+    includeGeoGebraFiles: boolean,
+    includeGeoGebraResponseValues: boolean
   ): Promise<void> {
     this.downloadProgress$.next(0);
 
@@ -376,7 +388,9 @@ export class CodingManagementService {
         format,
         includeReplayUrls,
         undefined,
-        includeResponseValues
+        includeResponseValues,
+        includeGeoGebraFiles,
+        includeGeoGebraResponseValues
       ).toPromise();
 
       if (!jobStartResult) {
@@ -390,7 +404,7 @@ export class CodingManagementService {
       const blob = await this.pollJobAndProgress(workspaceId, jobId, this.downloadProgress$);
 
       // Handle file download
-      const ext = format === 'csv' ? 'csv' : 'xlsx';
+      const ext = this.getCodingResultsDownloadExtension(format, includeGeoGebraFiles);
       this.saveBlob(blob, `coding-results-${version}-${this.getDateString()}.${ext}`);
       this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
     } catch (error) {
@@ -401,6 +415,17 @@ export class CodingManagementService {
     } finally {
       this.downloadProgress$.next(null);
     }
+  }
+
+  private getCodingResultsDownloadExtension(
+    format: CodingResultsExportFormat,
+    includeGeoGebraFiles: boolean
+  ): 'csv' | 'xlsx' | 'zip' {
+    if (includeGeoGebraFiles) {
+      return 'zip';
+    }
+
+    return format === 'csv' ? 'csv' : 'xlsx';
   }
 
   codingListDownloadProgress$ = new BehaviorSubject<number | null>(null);

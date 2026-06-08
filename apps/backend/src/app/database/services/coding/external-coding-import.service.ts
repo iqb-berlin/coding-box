@@ -14,6 +14,7 @@ import { statusStringToNumber, statusNumberToString } from '../../utils/response
 import FileUpload from '../../entities/file_upload.entity';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
 
 interface ExternalCodingRow {
   unit_key?: string;
@@ -662,6 +663,22 @@ export class ExternalCodingImportService {
   private detectFormat(headers: string[]): ExternalCodingDetectedFormat {
     const has = (header: string) => headers.includes(header);
     const hasAny = (candidates: string[]) => candidates.some(candidate => has(candidate));
+    const hasCodingListIdentity =
+      has('variable_id') && (has('unit_key') || has('unit_alias'));
+    const hasUnversionedCodingValue = hasAny(['status', 'code', 'score']);
+    const hasVersionedCodeOrScore = hasAny([
+      'code_v1', 'score_v1',
+      'code_v2', 'score_v2',
+      'code_v3', 'score_v3'
+    ]);
+    const hasCodingListContext = hasAny([
+      'person_login',
+      'person_code',
+      'person_group',
+      'booklet_name',
+      'variable_page',
+      'variable_anchor'
+    ]);
 
     if (
       has('groupname') &&
@@ -687,6 +704,14 @@ export class ExternalCodingImportService {
     }
 
     if (
+      hasCodingListIdentity &&
+        (hasUnversionedCodingValue || hasCodingListContext) &&
+        !hasVersionedCodeOrScore
+    ) {
+      return hasCodingListContext ? 'coding-list' : 'external-coding';
+    }
+
+    if (
       has('variable_id') &&
         hasAny([
           'status_v1', 'code_v1', 'score_v1',
@@ -697,12 +722,12 @@ export class ExternalCodingImportService {
       return 'coding-results';
     }
 
-    if (has('variable_id') && (has('unit_key') || has('unit_alias'))) {
+    if (hasCodingListIdentity) {
       if (
-        hasAny(['status', 'code', 'score']) ||
-          hasAny(['person_login', 'person_code', 'person_group', 'booklet_name', 'variable_page', 'variable_anchor'])
+        hasUnversionedCodingValue ||
+          hasCodingListContext
       ) {
-        return hasAny(['variable_page', 'variable_anchor']) ? 'coding-list' : 'external-coding';
+        return hasCodingListContext ? 'coding-list' : 'external-coding';
       }
     }
 
@@ -1216,7 +1241,7 @@ export class ExternalCodingImportService {
   }
 
   private generateIncompleteVariablesCacheKey(workspaceId: number): string {
-    return `coding_incomplete_variables_v3:${workspaceId}`;
+    return getCodingIncompleteVariablesCacheKey(workspaceId);
   }
 
   /**

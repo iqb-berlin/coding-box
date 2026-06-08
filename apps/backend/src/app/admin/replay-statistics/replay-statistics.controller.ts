@@ -21,6 +21,7 @@ import {
   AccessLevelGuard,
   RequireAccessLevel
 } from '../workspace/access-level.guard';
+import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { ReplayStatisticsService } from '../../database/services/test-results';
 import { ReplayStatistics } from '../../database/entities/replay-statistics.entity';
 import { StoreReplayStatisticsDto } from './dto/store-replay-statistics.dto';
@@ -46,6 +47,7 @@ export class ReplayStatisticsController {
   })
   @ApiBody({ type: StoreReplayStatisticsDto })
   @Post()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async storeReplayStatistics(
     @Param('workspace_id') workspaceId: string,
       @Body(new ValidationPipe({ transform: true, whitelist: true }))
@@ -53,8 +55,42 @@ export class ReplayStatisticsController {
   ): Promise<ReplayStatistics> {
     return this.replayStatisticsService.storeReplayStatistics({
       workspaceId: Number(workspaceId),
-      ...data
+      ...data,
+      replayUrl: this.sanitizeReplayUrl(data.replayUrl)
     });
+  }
+
+  private sanitizeReplayUrl(replayUrl?: string): string | undefined {
+    if (!replayUrl) {
+      return replayUrl;
+    }
+
+    try {
+      const isAbsoluteUrl = /^[a-z][a-z\d+.-]*:/i.test(replayUrl);
+      const url = new URL(replayUrl, 'http://coding-box.local');
+      url.searchParams.delete('auth');
+      url.searchParams.delete('unitsData');
+
+      const hashQueryStart = url.hash.indexOf('?');
+      if (hashQueryStart >= 0) {
+        const hashPath = url.hash.slice(0, hashQueryStart);
+        const hashParams = new URLSearchParams(url.hash.slice(hashQueryStart + 1));
+        hashParams.delete('auth');
+        hashParams.delete('unitsData');
+        const query = hashParams.toString();
+        url.hash = query ? `${hashPath}?${query}` : hashPath;
+      }
+
+      const sanitizedUrl = isAbsoluteUrl ?
+        url.toString() :
+        `${url.pathname}${url.search}${url.hash}`;
+      return sanitizedUrl.slice(0, 2048);
+    } catch (error) {
+      return replayUrl
+        .replace(/([?&])auth=[^&]*/g, '$1')
+        .replace(/([?&])unitsData=[^&]*/g, '$1')
+        .slice(0, 2048);
+    }
   }
 
   /**

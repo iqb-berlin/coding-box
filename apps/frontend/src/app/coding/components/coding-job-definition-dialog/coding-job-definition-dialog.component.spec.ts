@@ -18,6 +18,8 @@ import { AppService } from '../../../core/services/app.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
+import { MissingsProfileService } from '../../services/missings-profile.service';
+import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 
@@ -29,6 +31,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
   let mockAppService: Partial<AppService>;
   let mockCoderService: Partial<CoderService>;
   let mockCodingJobService: Partial<CodingJobService>;
+  let mockMissingsProfileService: Partial<MissingsProfileService>;
+  let mockWorkspaceSettingsService: Partial<WorkspaceSettingsService>;
   let mockDialogRef: Partial<MatDialogRef<CodingJobDefinitionDialogComponent>>;
   let mockSnackBar: Partial<MatSnackBar>;
   let mockTranslateService: Partial<TranslateService>;
@@ -41,7 +45,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   const mockVariables: Variable[] = [
     {
-      unitName: 'Unit 1', variableId: 'Var 1', responseCount: 10, availableCases: 10, uniqueCasesAfterAggregation: 10
+      unitName: 'Unit 1', variableId: 'Var 1', responseCount: 10, deriveErrorResponseCount: 2, availableCases: 10, uniqueCasesAfterAggregation: 10
     },
     {
       unitName: 'Unit 2', variableId: 'Var 2', responseCount: 5, availableCases: 5, uniqueCasesAfterAggregation: 5
@@ -92,6 +96,13 @@ describe('CodingJobDefinitionDialogComponent', () => {
         }
       ])),
       getCodingIncompleteVariables: jest.fn().mockImplementation(() => of(cloneVariables())),
+      getManualCodingScopeSummary: jest.fn().mockReturnValue(of({
+        manualVariableCount: cloneVariables().length,
+        manualResponseCount: 18,
+        coveredSourceVariableCount: 0,
+        coveredSourceResponseCount: 0,
+        coveredSourceVariables: []
+      })),
       getVariableBundles: jest.fn().mockImplementation(() => of(cloneBundles())),
       updateCodingJob: jest.fn(),
       createJobDefinition: jest.fn(),
@@ -116,6 +127,17 @@ describe('CodingJobDefinitionDialogComponent', () => {
       assignCoder: jest.fn().mockImplementation((jobId: number, coderId: number) => of({ id: jobId, assignedCoders: [coderId] })),
       jobsCreatedEvent: new EventEmitter<void>()
     } as Partial<CodingJobService>;
+
+    mockMissingsProfileService = {
+      getMissingsProfiles: jest.fn().mockReturnValue(of([
+        { id: 7, label: 'IQB-Standard' },
+        { id: 9, label: 'Custom' }
+      ]))
+    } as Partial<MissingsProfileService>;
+
+    mockWorkspaceSettingsService = {
+      getIncludeDeriveErrorInManualCoding: jest.fn().mockReturnValue(of(false))
+    } as Partial<WorkspaceSettingsService>;
 
     mockDialogRef = {
       close: jest.fn()
@@ -151,6 +173,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
         { provide: AppService, useValue: mockAppService },
         { provide: CoderService, useValue: mockCoderService },
         { provide: CodingJobService, useValue: mockCodingJobService },
+        { provide: MissingsProfileService, useValue: mockMissingsProfileService },
+        { provide: WorkspaceSettingsService, useValue: mockWorkspaceSettingsService },
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: mockData },
         { provide: MatSnackBar, useValue: mockSnackBar },
@@ -166,7 +190,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
     }).compileComponents();
   });
 
-  const createComponent = (dataOverride?: Partial<CodingJobDefinitionDialogData>) => {
+  const createComponent = (
+    dataOverride?: Partial<CodingJobDefinitionDialogData>,
+    includeDeriveErrorInManualCoding = false
+  ) => {
+    (mockWorkspaceSettingsService.getIncludeDeriveErrorInManualCoding as jest.Mock)
+      .mockReturnValue(of(includeDeriveErrorInManualCoding));
     TestBed.overrideProvider(MAT_DIALOG_DATA, { useValue: { ...mockData, ...dataOverride } });
     fixture = TestBed.createComponent(CodingJobDefinitionDialogComponent);
     component = fixture.componentInstance;
@@ -193,13 +222,27 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.codingJobForm).toBeDefined();
     expect(component.codingJobForm.get('durationSeconds')?.value).toBe(1);
     expect(component.codingJobForm.get('caseOrderingMode')?.value).toBe('continuous');
+    expect(component.codingJobForm.get('missingsProfileId')?.value).toBe(7);
     expect(component.codingJobForm.get('showScore')?.value).toBe(false);
     expect(component.codingJobForm.get('allowComments')?.value).toBe(true);
   });
 
+  it('should initialize an edited definition with its camel-case missings profile id', () => {
+    createComponent({
+      mode: 'definition',
+      isEdit: true,
+      codingJob: {
+        id: 555,
+        missingsProfileId: 9
+      } as CodingJob
+    });
+
+    expect(component.codingJobForm.get('missingsProfileId')?.value).toBe(9);
+  });
+
   it('should load variables and coders on init', () => {
     createComponent();
-    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(1, undefined, undefined);
+    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(1, undefined, undefined, undefined);
     expect(mockCoderService.getCoders).toHaveBeenCalled();
     expect(component.variables.length).toBe(3);
     expect(component.availableCoders.length).toBe(2);
@@ -420,6 +463,56 @@ describe('CodingJobDefinitionDialogComponent', () => {
     }));
   });
 
+  it('should include DERIVE_ERROR opt-in only for selected definition variables', async () => {
+    createComponent(undefined, true);
+    (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedVariables.select(mockVariables[0]);
+    component.setDeriveErrorIncluded(mockVariables[0], true);
+
+    await component.onSubmit();
+
+    expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledWith(1, expect.objectContaining({
+      assignedVariables: [{
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        includeDeriveError: true
+      }]
+    }));
+  });
+
+  it('should show the DERIVE_ERROR opt-in only for variables with DERIVE_ERROR responses', () => {
+    createComponent(undefined, true);
+
+    expect(component.hasDeriveErrorResponses(component.variables[0])).toBe(true);
+    expect(component.hasDeriveErrorResponses(component.variables[1])).toBe(false);
+    expect(component.dataSource.data.filter(variable => component.hasDeriveErrorResponses(variable))).toHaveLength(1);
+  });
+
+  it('should not enable DERIVE_ERROR opt-in for variables without DERIVE_ERROR responses', () => {
+    createComponent(undefined, true);
+
+    component.setDeriveErrorIncluded(component.variables[1], true);
+
+    expect(component.variables[1].includeDeriveError).toBe(false);
+  });
+
+  it('should send the selected missings profile when creating a definition', async () => {
+    createComponent();
+    (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedVariables.select(mockVariables[0]);
+    component.codingJobForm.patchValue({ missingsProfileId: 9 });
+
+    await component.onSubmit();
+
+    expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledWith(1, expect.objectContaining({
+      missingsProfileId: 9
+    }));
+  });
+
   describe('Mode: Job (Create/Edit)', () => {
     it('should submit create calling createCodingJob and assignCoder when 1 variable selected', fakeAsync(() => {
       createComponent({ mode: 'job', isEdit: false });
@@ -510,7 +603,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
       expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.objectContaining({
         showScore: true,
         allowComments: false,
-        suppressGeneralInstructions: true
+        suppressGeneralInstructions: true,
+        missingsProfileId: 7
       }));
       expect(mockDialogRef.close).toHaveBeenCalled();
     }));
@@ -528,7 +622,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       isEdit: true,
       jobDefinitionId: 555,
       codingJob: definitionAsCodingJob as CodingJob
-    });
+    }, true);
 
     expect(mockCoderService.getCodersByJobId).not.toHaveBeenCalled();
     expect(component.selectedCoders.selected.map(coder => coder.id)).toEqual([1]);
@@ -547,7 +641,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       isEdit: true,
       jobDefinitionId: 555,
       codingJob: definitionAsCodingJob as CodingJob
-    });
+    }, true);
 
     component.selectedVariables.select(mockVariables[0]);
     component.updateCoderCapacityPercent(component.selectedCoders.selected[0], 150);
@@ -561,6 +655,54 @@ describe('CodingJobDefinitionDialogComponent', () => {
       assignedCoderConfigs: [{ coderId: 1, capacityPercent: 150 }]
     }));
   }));
+
+  it('should restore the DERIVE_ERROR opt-in when editing a definition', () => {
+    const definitionAsCodingJob = {
+      id: 555,
+      assignedVariables: [{
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        includeDeriveError: true
+      }]
+    } as Partial<CodingJob>;
+
+    createComponent({
+      mode: 'definition',
+      isEdit: true,
+      jobDefinitionId: 555,
+      codingJob: definitionAsCodingJob as CodingJob
+    }, true);
+
+    const restoredVariable = component.variables.find(variable => variable.unitName === 'Unit 1' && variable.variableId === 'Var 1');
+
+    expect(restoredVariable).toBeDefined();
+    expect(component.selectedVariables.selected).toContain(restoredVariable);
+    expect(restoredVariable?.includeDeriveError).toBe(true);
+  });
+
+  it('should not restore the DERIVE_ERROR opt-in when the workspace setting is disabled', () => {
+    const definitionAsCodingJob = {
+      id: 555,
+      assignedVariables: [{
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        includeDeriveError: true
+      }]
+    } as Partial<CodingJob>;
+
+    createComponent({
+      mode: 'definition',
+      isEdit: true,
+      jobDefinitionId: 555,
+      codingJob: definitionAsCodingJob as CodingJob
+    });
+
+    const restoredVariable = component.variables.find(variable => variable.unitName === 'Unit 1' && variable.variableId === 'Var 1');
+
+    expect(restoredVariable).toBeDefined();
+    expect(component.selectedVariables.selected).toContain(restoredVariable);
+    expect(restoredVariable?.includeDeriveError).toBe(false);
+  });
 
   it('should open locked definitions read-only without submitting changes', async () => {
     const definitionAsCodingJob = {

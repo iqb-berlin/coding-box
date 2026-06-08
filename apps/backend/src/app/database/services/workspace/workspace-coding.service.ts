@@ -509,14 +509,26 @@ export class WorkspaceCodingService {
 
   async getCodingProgressOverview(workspaceId: number): Promise<{
     totalCasesToCode: number;
+    statusTotalCasesToCode: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
     completedCases: number;
     completionPercentage: number;
+    rawTotalCasesToCode: number;
+    rawCompletedCases: number;
+    rawCompletionPercentage: number;
+    aggregationActive: boolean;
+    aggregationThreshold: number | null;
+    aggregatedDuplicateCases: number;
   }> {
     return this.codingProgressService.getCodingProgressOverview(workspaceId);
   }
 
   async getCaseCoverageOverview(workspaceId: number): Promise<{
     totalCasesToCode: number;
+    statusTotalCasesToCode: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
     effectiveTotalCasesToCode: number;
     casesInJobs: number;
     effectiveCasesInJobs: number;
@@ -535,6 +547,9 @@ export class WorkspaceCodingService {
 
   async getVariableCoverageOverview(workspaceId: number): Promise<{
     totalVariables: number;
+    statusTotalVariables: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
     coveredVariables: number;
     coveredByDraft: number;
     coveredByPendingReview: number;
@@ -585,6 +600,9 @@ export class WorkspaceCodingService {
           coderName: string;
           jobId: number;
           jobName: string;
+          jobDefinitionId: number | null;
+          trainingId: number | null;
+          trainingLabel: string | null;
           code: number | null;
           score: number | null;
           notes: string | null;

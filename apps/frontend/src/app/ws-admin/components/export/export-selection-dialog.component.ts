@@ -40,7 +40,7 @@ export interface ExportSelectionDialogResult {
 
     <mat-dialog-content class="dialog-content">
       <mat-tab-group>
-        <mat-tab label="Job-Definitionen">
+        <mat-tab label="Jobdefinitionen">
           <div class="section">
             <div class="list">
               <mat-expansion-panel *ngFor="let def of data.jobDefinitions" class="definition-panel">
@@ -76,7 +76,7 @@ export interface ExportSelectionDialogResult {
                 </div>
               </mat-expansion-panel>
 
-              <div *ngIf="!data.jobDefinitions?.length" class="empty">Keine Job-Definitionen vorhanden.</div>
+              <div *ngIf="!data.jobDefinitions?.length" class="empty">Keine Jobdefinitionen vorhanden.</div>
             </div>
           </div>
         </mat-tab>
