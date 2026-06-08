@@ -39,6 +39,7 @@ import {
   CodingJobService,
   CodingReplayService
 } from '../../database/services/coding';
+import { UsersService } from '../../database/services/users';
 import {
   CodingJobListSortBy,
   CodingJobListSortDirection
@@ -56,7 +57,8 @@ import { TransferCodingCasesResultDto } from '../../admin/coding-job/dto/transfe
 export class WsgCodingJobController {
   constructor(
     private readonly codingJobService: CodingJobService,
-    private readonly codingReplayService: CodingReplayService
+    private readonly codingReplayService: CodingReplayService,
+    private readonly usersService: UsersService
   ) {}
 
   private getRequestUserId(req: Request): number {
@@ -156,6 +158,23 @@ export class WsgCodingJobController {
       workspaceId,
       this.getRequestUserId(req)
     );
+  }
+
+  private async shouldRestrictJobListToCurrentUser(
+    workspaceId: number,
+    req: Request
+  ): Promise<boolean> {
+    const userId = this.getRequestUserId(req);
+    if (await this.usersService.getUserIsAdmin(userId)) {
+      return false;
+    }
+
+    const accessLevel = await this.usersService.getUserAccessLevel(
+      userId,
+      workspaceId
+    );
+
+    return (accessLevel ?? 0) < 2;
   }
 
   private async prepareCodingJobReplay(
@@ -359,6 +378,8 @@ export class WsgCodingJobController {
         throw new BadRequestException('assignedTo must be "me" when provided');
       }
       assignedToUserId = this.getRequestUserId(req);
+    } else if (await this.shouldRestrictJobListToCurrentUser(workspaceId, req)) {
+      assignedToUserId = this.getRequestUserId(req);
     }
 
     const trainingId =
@@ -442,7 +463,8 @@ export class WsgCodingJobController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Create a new coding job',
@@ -494,7 +516,8 @@ export class WsgCodingJobController {
   }
 
   @Put(':id')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Update a coding job',
@@ -625,7 +648,8 @@ export class WsgCodingJobController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Delete a coding job',
@@ -755,7 +779,8 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/restart-open-units')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Restart coding job with only open units',

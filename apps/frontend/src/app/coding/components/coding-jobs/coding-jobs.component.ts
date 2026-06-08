@@ -168,6 +168,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   canApplyResults = false;
   canReviewCodingJobs = false;
+  canManageCodingJobs = false;
 
   private coderNamesByJobId = new Map<number, string>();
   allCoders: Coder[] = [];
@@ -264,11 +265,14 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     if (this.appService.authData.isAdmin || !workspaceId || userId <= 0) {
       this.canApplyResults = this.appService.authData.isAdmin;
       this.canReviewCodingJobs = this.appService.authData.isAdmin;
+      this.canManageCodingJobs = this.appService.authData.isAdmin;
       return;
     }
     this.userBackendService.getUsers(workspaceId).subscribe(users => {
       const currentUser = users.find(u => u.id === userId);
-      this.canApplyResults = (currentUser?.accessLevel ?? 0) >= 3;
+      const accessLevel = currentUser?.accessLevel ?? 0;
+      this.canManageCodingJobs = accessLevel >= 2;
+      this.canApplyResults = accessLevel >= 3;
       this.canReviewCodingJobs = currentUser ?
         hasManagementWorkspaceAccess(currentUser) :
         false;
@@ -649,6 +653,15 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   deleteCodingJob(job: CodingJob): void {
+    if (!this.canManageCodingJobs) {
+      this.snackBar.open(
+        'Keine Berechtigung zum Verwalten von Kodierjobs.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
     const confirmMessage = `Möchten Sie den Kodierjob "${job.name}" wirklich löschen?`;
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
@@ -791,6 +804,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   canRestartCodingJob(job: CodingJob): boolean {
     return (
+      this.canManageCodingJobs &&
       (job.totalUnits || 0) > 0 &&
       (job.openUnits || 0) > 0 &&
       this.canStartCodingJob(job) &&
@@ -1254,6 +1268,15 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   openTransferCodingCasesDialog(): void {
+    if (!this.canManageCodingJobs) {
+      this.snackBar.open(
+        'Keine Berechtigung zum Verwalten von Kodierjobs.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
     if (!this.allCoders?.length) {
       this.snackBar.open('Keine Kodierer verfügbar', 'Schließen', {
         duration: 3000
@@ -1320,6 +1343,15 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   bulkDeleteCodingJobs(): void {
+    if (!this.canManageCodingJobs) {
+      this.snackBar.open(
+        'Keine Berechtigung zum Verwalten von Kodierjobs.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
     const selectedJobs = this.selection.selected;
     if (selectedJobs.length === 0) {
       this.snackBar.open('Keine Kodierjobs ausgewählt', 'Schließen', {

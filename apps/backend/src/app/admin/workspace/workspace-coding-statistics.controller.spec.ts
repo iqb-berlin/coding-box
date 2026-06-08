@@ -1,5 +1,10 @@
+import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import * as ExcelJS from 'exceljs';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { AccessLevelGuard } from './access-level.guard';
+import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceCodingStatisticsController } from './workspace-coding-statistics.controller';
 
 describe('WorkspaceCodingStatisticsController', () => {
@@ -63,6 +68,31 @@ describe('WorkspaceCodingStatisticsController', () => {
       codingReadinessService as never,
       {} as never
     );
+  });
+
+  it('requires coding-manager access for applied results overview', () => {
+    const handler = WorkspaceCodingStatisticsController.prototype.getAppliedResultsOverview;
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtAuthGuard,
+      WorkspaceGuard,
+      AccessLevelGuard
+    ]);
+    expect(Reflect.getMetadata('accessLevel', handler)).toBe(2);
+  });
+
+  it.each([
+    'calculateDistribution',
+    'createDistributedCodingJobs'
+  ] as const)('requires coding-manager access for %s', methodName => {
+    const handler = WorkspaceCodingStatisticsController.prototype[methodName];
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtAuthGuard,
+      WorkspaceGuard,
+      AccessLevelGuard
+    ]);
+    expect(Reflect.getMetadata('accessLevel', handler)).toBe(2);
   });
 
   it('rejects job definition ids on the generic distributed job endpoint', async () => {

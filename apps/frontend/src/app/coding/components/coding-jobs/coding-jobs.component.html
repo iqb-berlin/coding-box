@@ -81,7 +81,7 @@
               Alle Ergebnisse anwenden
             </button>
           }
-          @if (canApplyResults && showTransferAction) {
+          @if (canManageCodingJobs && showTransferAction) {
             <button mat-button (click)="openTransferCodingCasesDialog()">
               <mat-icon>swap_horiz</mat-icon>
               Fälle übertragen
@@ -104,7 +104,7 @@
             <mat-icon>refresh</mat-icon>
             Aktualisieren
           </button>
-          @if (showBulkDeleteAction) {
+          @if (canManageCodingJobs && showBulkDeleteAction) {
             <button
               mat-raised-button
               color="warn"
@@ -314,17 +314,19 @@
                   <span>Ergebnisse anwenden</span>
                 </button>
               }
-              <mat-divider class="menu-section-divider"></mat-divider>
-              <button
-                mat-menu-item
-                type="button"
-                class="danger-menu-item"
-                (click)="deleteCodingJob(element)"
-                [attr.aria-label]="getJobActionAriaLabel('delete', element)"
-              >
-                <mat-icon>delete</mat-icon>
-                <span>Kodierjob löschen</span>
-              </button>
+              @if (canManageCodingJobs && showBulkDeleteAction) {
+                <mat-divider class="menu-section-divider"></mat-divider>
+                <button
+                  mat-menu-item
+                  type="button"
+                  class="danger-menu-item"
+                  (click)="deleteCodingJob(element)"
+                  [attr.aria-label]="getJobActionAriaLabel('delete', element)"
+                >
+                  <mat-icon>delete</mat-icon>
+                  <span>Kodierjob löschen</span>
+                </button>
+              }
             </mat-menu>
           </div>
         </mat-cell>

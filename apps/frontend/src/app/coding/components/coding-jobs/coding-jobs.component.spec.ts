@@ -597,6 +597,20 @@ describe('CodingJobsComponent', () => {
     ).toBe(false);
   });
 
+  it('separates coding-manager and study-manager permissions', () => {
+    (userBackendServiceMock.getUsers as jest.Mock).mockReturnValue(
+      of([{ id: 1, accessLevel: 2 }])
+    );
+
+    (
+      component as unknown as { updateCodingJobPermissions: () => void }
+    ).updateCodingJobPermissions();
+
+    expect(component.canManageCodingJobs).toBe(true);
+    expect(component.canReviewCodingJobs).toBe(true);
+    expect(component.canApplyResults).toBe(false);
+  });
+
   it('should only show restart for non-training jobs with open units', () => {
     expect(component.canRestartCodingJob(mockCodingJobs[0] as CodingJob)).toBe(
       true
@@ -610,6 +624,25 @@ describe('CodingJobsComponent', () => {
         training_id: 1
       } as CodingJob)
     ).toBe(false);
+  });
+
+  it('hides job management actions without coding-manager access', async () => {
+    component.canManageCodingJobs = false;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelector('.bulk-delete-button')).toBeNull();
+    expect(component.canRestartCodingJob(mockCodingJobs[0] as CodingJob)).toBe(false);
+
+    const trigger = fixture.nativeElement.querySelector(
+      '.more-actions-button'
+    ) as HTMLButtonElement;
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const overlayElement = overlayContainer.getContainerElement();
+    expect(overlayElement.querySelector('.danger-menu-item')).toBeNull();
   });
 
   it('separates deleting a coding job from regular row actions', async () => {
@@ -659,6 +692,25 @@ describe('CodingJobsComponent', () => {
       expect.objectContaining({})
     );
   });
+
+  it('blocks direct management actions without coding-manager access', fakeAsync(() => {
+    component.canManageCodingJobs = false;
+    component.selection.select(component.dataSource.data[0]);
+
+    component.deleteCodingJob(mockCodingJobs[0] as CodingJob);
+    component.bulkDeleteCodingJobs();
+    component.openTransferCodingCasesDialog();
+    tick();
+
+    expect(matDialogMock.open).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.deleteCodingJob).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.transferCodingCases).not.toHaveBeenCalled();
+    expect(matSnackBarMock.open).toHaveBeenCalledWith(
+      'Keine Berechtigung zum Verwalten von Kodierjobs.',
+      'Schließen',
+      { duration: 4000 }
+    );
+  }));
 
   it('should handle bulk delete', fakeAsync(() => {
     const jobs = [component.dataSource.data[0]];

@@ -23,6 +23,7 @@ import * as ExcelJS from 'exceljs';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   CodingStatisticsService,
   CodingJobService,
@@ -1339,7 +1340,8 @@ export class WorkspaceCodingStatisticsController {
   }
 
   @Get(':workspace_id/coding/applied-results-overview')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -2391,7 +2393,8 @@ export class WorkspaceCodingStatisticsController {
   }
 
   @Post(':workspace_id/coding/calculate-distribution')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -2557,7 +2560,8 @@ export class WorkspaceCodingStatisticsController {
   }
 
   @Post(':workspace_id/coding/create-distributed-jobs')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
