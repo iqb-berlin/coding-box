@@ -1,4 +1,9 @@
+import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { AccessLevelGuard } from '../../admin/workspace/access-level.guard';
+import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WsgCodingJobController } from './coding-job.controller';
 
 jest.mock('../../database/services/coding', () => ({
@@ -22,6 +27,10 @@ describe('WsgCodingJobController', () => {
   };
   let codingReplayService: {
     generateReplayUrlsForItemsBulk: jest.Mock;
+  };
+  let usersService: {
+    getUserIsAdmin: jest.Mock;
+    getUserAccessLevel: jest.Mock;
   };
   const req = {
     user: { id: 5 },
@@ -53,11 +62,33 @@ describe('WsgCodingJobController', () => {
         .fn()
         .mockResolvedValue([{ replayUrl: 'http://localhost/#/replay/p/u/0/v' }])
     };
+    usersService = {
+      getUserIsAdmin: jest.fn().mockResolvedValue(false),
+      getUserAccessLevel: jest.fn().mockResolvedValue(2)
+    };
 
     controller = new WsgCodingJobController(
       codingJobService as never,
-      codingReplayService as never
+      codingReplayService as never,
+      usersService as never
     );
+  });
+
+  it.each([
+    'transferCodingCases',
+    'createCodingJob',
+    'updateCodingJob',
+    'deleteCodingJob',
+    'restartCodingJobWithOpenUnits'
+  ] as const)('requires coding-manager access for %s', methodName => {
+    const handler = WsgCodingJobController.prototype[methodName];
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtAuthGuard,
+      WorkspaceGuard,
+      AccessLevelGuard
+    ]);
+    expect(Reflect.getMetadata('accessLevel', handler)).toBe(2);
   });
 
   it('passes onlyOpen=true to the coding job service when requested', async () => {
@@ -227,6 +258,102 @@ describe('WsgCodingJobController', () => {
       1,
       undefined,
       5,
+      expect.objectContaining({
+        includeIssueSummary: false
+      })
+    );
+  });
+
+  it('limits level-1 coding job lists to the authenticated user by default', async () => {
+    usersService.getUserAccessLevel.mockResolvedValue(1);
+
+    await controller.getCodingJobs(
+      47,
+      1,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      req
+    );
+
+    expect(usersService.getUserIsAdmin).toHaveBeenCalledWith(5);
+    expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(5, 47);
+    expect(codingJobService.getCodingJobs).toHaveBeenCalledWith(
+      47,
+      1,
+      undefined,
+      5,
+      expect.objectContaining({
+        includeIssueSummary: false
+      })
+    );
+  });
+
+  it('keeps workspace-wide coding job lists for coding managers', async () => {
+    usersService.getUserAccessLevel.mockResolvedValue(2);
+
+    await controller.getCodingJobs(
+      47,
+      1,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      req
+    );
+
+    expect(codingJobService.getCodingJobs).toHaveBeenCalledWith(
+      47,
+      1,
+      undefined,
+      undefined,
+      expect.objectContaining({
+        includeIssueSummary: false
+      })
+    );
+  });
+
+  it('keeps workspace-wide coding job lists for system admins', async () => {
+    usersService.getUserIsAdmin.mockResolvedValue(true);
+
+    await controller.getCodingJobs(
+      47,
+      1,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      req
+    );
+
+    expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
+    expect(codingJobService.getCodingJobs).toHaveBeenCalledWith(
+      47,
+      1,
+      undefined,
+      undefined,
       expect.objectContaining({
         includeIssueSummary: false
       })

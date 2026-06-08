@@ -21,6 +21,7 @@ import { CodingStatistics } from '../../database/services/shared';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   CodingFreshnessService,
   CodingJobService,
@@ -252,7 +253,8 @@ export class WorkspaceCodingController {
   }
 
   @Post(':workspace_id/coding/apply-empty-responses')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({

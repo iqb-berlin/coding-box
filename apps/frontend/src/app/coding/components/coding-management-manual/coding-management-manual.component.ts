@@ -190,6 +190,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isLoading = false;
   autoRefreshManualCodingJobs = true;
   canApplyManualCodingResults = false;
+  canManageManualCodingJobs = false;
   selectedManualTabIndex = 0;
   readonly manualCodingTabs: ManualCodingTab[] = [
     'preparation',
@@ -1059,6 +1060,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   openExecutionTransferCases(): void {
+    if (!this.canManageManualCodingJobs) {
+      this.showError('Keine Berechtigung zum Verwalten von Kodierjobs.');
+      return;
+    }
+
     if (this.codingJobsComponent) {
       this.codingJobsComponent.openTransferCodingCasesDialog();
       return;
@@ -2256,6 +2262,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     if (this.appService.authData.isAdmin || !workspaceId || userId <= 0) {
       this.canApplyManualCodingResults = this.appService.authData.isAdmin === true;
+      this.canManageManualCodingJobs = this.appService.authData.isAdmin === true;
       return;
     }
 
@@ -2265,9 +2272,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe({
         next: users => {
           const currentUser = users.find(user => user.id === userId);
-          this.canApplyManualCodingResults = (currentUser?.accessLevel ?? 0) >= 3;
+          const accessLevel = currentUser?.accessLevel ?? 0;
+          this.canManageManualCodingJobs = accessLevel >= 2;
+          this.canApplyManualCodingResults = accessLevel >= 3;
         },
         error: () => {
+          this.canManageManualCodingJobs = false;
           this.canApplyManualCodingResults = false;
         }
       });

@@ -477,6 +477,61 @@ describe('CodingManagementManualComponent', () => {
     expect(readonlyNote?.textContent).toContain('Nur lesbar');
   });
 
+  it('blocks transfer action without coding-manager permission', () => {
+    const openTransferCodingCasesDialog = jest.fn();
+    const snackBar = TestBed.inject(MatSnackBar);
+    (snackBar.open as jest.Mock).mockClear();
+    component.canApplyManualCodingResults = false;
+    component.canManageManualCodingJobs = false;
+    component.codingJobsComponent = {
+      openTransferCodingCasesDialog
+    } as unknown as CodingManagementManualComponent['codingJobsComponent'];
+
+    component.openExecutionTransferCases();
+
+    expect(openTransferCodingCasesDialog).not.toHaveBeenCalled();
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'Keine Berechtigung zum Verwalten von Kodierjobs.',
+      'Schließen',
+      {
+        duration: 5000,
+        panelClass: ['error-snackbar']
+      }
+    );
+  });
+
+  it('hides the execution transfer button without coding-manager permission', () => {
+    component.selectedManualTabIndex = 3;
+    component.canManageManualCodingJobs = false;
+
+    fixture.detectChanges();
+
+    const actionLabels = Array.from(
+      fixture.nativeElement.querySelectorAll('.manual-tab-actions button')
+    ).map(button => (button as HTMLButtonElement).textContent?.trim() ?? '');
+
+    expect(actionLabels.some(label => label.includes('Export'))).toBe(true);
+    expect(
+      actionLabels.some(label => label.includes('Fälle übertragen'))
+    ).toBe(false);
+  });
+
+  it('allows transfer action for coding managers without study-manager apply permission', () => {
+    const openTransferCodingCasesDialog = jest.fn();
+    const snackBar = TestBed.inject(MatSnackBar);
+    (snackBar.open as jest.Mock).mockClear();
+    component.canManageManualCodingJobs = true;
+    component.canApplyManualCodingResults = false;
+    component.codingJobsComponent = {
+      openTransferCodingCasesDialog
+    } as unknown as CodingManagementManualComponent['codingJobsComponent'];
+
+    component.openExecutionTransferCases();
+
+    expect(openTransferCodingCasesDialog).toHaveBeenCalled();
+    expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
   it('should describe complete planning with open coding work as ready for execution', () => {
     setCompletePlanningState();
     setCodingProgress(10, 4);

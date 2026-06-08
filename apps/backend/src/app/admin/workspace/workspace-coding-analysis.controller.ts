@@ -18,6 +18,7 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { CodingValidationService, CodingAnalysisService, MissingsProfilesService } from '../../database/services/coding';
 import { VariableAnalysisReplayService } from '../../database/services/test-results';
 import { ExportValidationResultsService } from '../../database/services/validation';
@@ -40,7 +41,8 @@ export class WorkspaceCodingAnalysisController {
   ) { }
 
   @Get(':workspace_id/coding/variable-analysis')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -116,7 +118,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/validate-completeness')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -144,7 +147,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/validate-completeness/export-excel')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -185,7 +189,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Get(':workspace_id/coding/incomplete-variables')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -286,7 +291,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Get(':workspace_id/coding/incomplete-variables/scope-summary')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -347,7 +353,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Get(':workspace_id/coding/incomplete-variables/code-availability')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -411,7 +418,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/applied-results-count')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -455,7 +463,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Get(':workspace_id/coding/missings-profiles')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -480,7 +489,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Get(':workspace_id/coding/response-analysis')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -627,7 +637,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Get(':workspace_id/coding/aggregation-settings')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -640,7 +651,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/aggregation-settings')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -682,7 +694,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/apply-duplicate-aggregation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -745,7 +758,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/response-analysis')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
