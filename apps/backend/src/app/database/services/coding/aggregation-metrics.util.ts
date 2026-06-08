@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { AggregationSummaryDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 
 export type AggregationMatchingFlag =
@@ -16,6 +17,12 @@ export interface AggregationSourceResponse {
 export interface AggregationGroup<T extends AggregationSourceResponse> {
   key: string;
   responses: T[];
+}
+
+export interface ManualCodingDeduplicationResponse extends AggregationSourceResponse {
+  personLogin?: string | null;
+  personCode?: string | null;
+  personGroup?: string | null;
 }
 
 export function normalizeAggregationValue(
@@ -50,6 +57,36 @@ export function isDerivedAggregationVariable(
   variableId: string
 ): boolean {
   return derivedVariableMap.get(unitName.toUpperCase())?.has(variableId) ?? false;
+}
+
+export function getManualCodingDeduplicationKey(
+  response: ManualCodingDeduplicationResponse
+): string {
+  const valueHash = createHash('sha1').update(response.value || '').digest('hex');
+  return [
+    response.personLogin || '',
+    response.personCode || '',
+    response.personGroup || '',
+    response.unitName,
+    response.variableId,
+    valueHash
+  ].join('::');
+}
+
+export function deduplicateManualCodingResponses<T extends ManualCodingDeduplicationResponse>(
+  responses: T[]
+): T[] {
+  const dedupedByPersonValue = new Map<string, T>();
+
+  for (const response of responses) {
+    const key = getManualCodingDeduplicationKey(response);
+    const existing = dedupedByPersonValue.get(key);
+    if (!existing || response.responseId < existing.responseId) {
+      dedupedByPersonValue.set(key, response);
+    }
+  }
+
+  return Array.from(dedupedByPersonValue.values());
 }
 
 export function buildAggregationGroups<T extends AggregationSourceResponse>(

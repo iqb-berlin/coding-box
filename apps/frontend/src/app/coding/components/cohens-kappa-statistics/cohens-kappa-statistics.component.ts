@@ -9,25 +9,22 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { finalize } from 'rxjs';
+import {
+  CohensKappaScope,
+  CohensKappaCoderPair,
+  CohensKappaStatisticsResponse,
+  CohensKappaVariableSummary,
+  TestPersonCodingService
+} from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
 
-interface KappaStatistics {
-  unitName: string;
-  variableId: string;
-  coderPairs: Array<{
-    coder1Id: number;
-    coder1Name: string;
-    coder2Id: number;
-    coder2Name: string;
-    kappa: number | null;
-    agreement: number;
-    totalItems: number;
-    validPairs: number;
-    interpretation: string;
-  }>;
+export interface CohensKappaStatisticsDialogData {
+  scope?: CohensKappaScope;
+  excludeTrainings?: boolean;
 }
 
 @Component({
@@ -44,6 +41,7 @@ interface KappaStatistics {
     MatDialogModule,
     MatTooltipModule,
     MatSlideToggleModule,
+    MatSnackBarModule,
     FormsModule,
     TranslateModule
   ]
@@ -52,61 +50,32 @@ export class CohensKappaStatisticsComponent implements OnInit {
   private testPersonCodingService = inject(TestPersonCodingService);
   private appService: AppService = inject(AppService);
   private translateService = inject(TranslateService);
+  private snackBar = inject(MatSnackBar);
 
   constructor(
     @Optional() public dialogRef: MatDialogRef<CohensKappaStatisticsComponent>,
-    @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: unknown
-  ) { }
+    @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: CohensKappaStatisticsDialogData | null
+  ) {
+    this.kappaScope = dialogData?.scope;
+    this.excludeTrainings = dialogData?.excludeTrainings ?? !dialogData?.scope?.coderTrainingIds?.length;
+    this.excludeTrainingsLocked = !!dialogData?.scope?.coderTrainingIds?.length;
+  }
 
   isLoading = false;
-  kappaStatistics: KappaStatistics[] = [];
+  kappaStatistics: CohensKappaVariableSummary[] = [];
   showInterpretationScale = false;
   useWeightedMean = true; // Default to weighted mean (matching R reference implementation)
   excludeTrainings = true; // Default: exclude trainings
+  excludeTrainingsLocked = false;
+  private kappaScope?: CohensKappaScope;
+  exportInProgress: 'summary' | 'details' | 'xlsx' | null = null;
 
   workspaceKappaSummary: {
-    coderPairs: Array<{
-      coder1Id: number;
-      coder1Name: string;
-      coder2Id: number;
-      coder2Name: string;
-      kappa: number | null;
-      agreement: number;
-      totalSharedResponses: number;
-      validPairs: number;
-      interpretation: string;
-    }>;
-    workspaceSummary: {
-      totalDoubleCodedResponses: number;
-      totalCoderPairs: number;
-      averageKappa: number | null;
-      variablesIncluded: number;
-      codersIncluded: number;
-      weightingMethod: 'weighted' | 'unweighted';
-    };
+    workspaceSummary: CohensKappaStatisticsResponse['workspaceSummary'];
   } | null = null;
 
   ngOnInit(): void {
-    this.loadWorkspaceKappaSummary();
     this.loadKappaStatistics();
-  }
-
-  private loadWorkspaceKappaSummary(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return;
-    }
-
-    this.testPersonCodingService.getWorkspaceCohensKappaSummary(workspaceId, this.useWeightedMean, this.excludeTrainings)
-      .pipe()
-      .subscribe({
-        next: summary => {
-          this.workspaceKappaSummary = summary;
-        },
-        error: () => {
-          this.workspaceKappaSummary = null;
-        }
-      });
   }
 
   private loadKappaStatistics(): void {
@@ -118,26 +87,151 @@ export class CohensKappaStatisticsComponent implements OnInit {
       return;
     }
 
-    this.testPersonCodingService.getCohensKappaStatistics(workspaceId, this.useWeightedMean, this.excludeTrainings).subscribe({
-      next: response => {
-        this.kappaStatistics = response.variables;
-        this.isLoading = false;
-      },
-      error: () => {
-        this.kappaStatistics = [];
-        this.isLoading = false;
-      }
-    });
+    this.testPersonCodingService
+      .getCohensKappaStatistics(
+        workspaceId,
+        this.useWeightedMean,
+        this.excludeTrainings,
+        undefined,
+        undefined,
+        this.kappaScope
+      )
+      .subscribe({
+        next: response => {
+          this.kappaStatistics = response.variables;
+          this.workspaceKappaSummary = {
+            workspaceSummary: response.workspaceSummary
+          };
+          this.isLoading = false;
+        },
+        error: () => {
+          this.kappaStatistics = [];
+          this.workspaceKappaSummary = null;
+          this.isLoading = false;
+        }
+      });
   }
 
   toggleWeightingMethod(): void {
-    this.loadWorkspaceKappaSummary();
     this.loadKappaStatistics();
   }
 
   toggleExcludeTrainings(): void {
-    this.loadWorkspaceKappaSummary();
     this.loadKappaStatistics();
+  }
+
+  exportKappaSummaryCsv(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId || this.exportInProgress || this.kappaStatistics.length === 0) {
+      return;
+    }
+
+    this.exportInProgress = 'summary';
+    this.testPersonCodingService
+      .exportCohensKappaSummaryAsCsv(
+        workspaceId,
+        this.useWeightedMean,
+        this.excludeTrainings,
+        undefined,
+        undefined,
+        this.kappaScope
+      )
+      .pipe(finalize(() => {
+        this.exportInProgress = null;
+      }))
+      .subscribe({
+        next: blob => {
+          this.saveBlob(blob, `cohens-kappa-summary-${this.getDateString()}.csv`);
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translateService.instant('cohens-kappa-statistics.export-summary-error'),
+            this.translateService.instant('cohens-kappa-statistics.close'),
+            { duration: 5000, panelClass: ['error-snackbar'] }
+          );
+        }
+      });
+  }
+
+  exportKappaWorkbook(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId || this.exportInProgress || this.kappaStatistics.length === 0) {
+      return;
+    }
+
+    this.exportInProgress = 'xlsx';
+    this.testPersonCodingService
+      .exportCohensKappaStatisticsAsXlsx(
+        workspaceId,
+        this.useWeightedMean,
+        this.excludeTrainings,
+        undefined,
+        undefined,
+        this.kappaScope
+      )
+      .pipe(finalize(() => {
+        this.exportInProgress = null;
+      }))
+      .subscribe({
+        next: blob => {
+          this.saveBlob(blob, `cohens-kappa-${this.getDateString()}.xlsx`);
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translateService.instant('cohens-kappa-statistics.export-xlsx-error'),
+            this.translateService.instant('cohens-kappa-statistics.close'),
+            { duration: 5000, panelClass: ['error-snackbar'] }
+          );
+        }
+      });
+  }
+
+  exportKappaDetails(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId || this.exportInProgress || this.kappaStatistics.length === 0) {
+      return;
+    }
+
+    this.exportInProgress = 'details';
+    this.testPersonCodingService
+      .exportCohensKappaStatisticsAsCsv(
+        workspaceId,
+        this.useWeightedMean,
+        this.excludeTrainings,
+        undefined,
+        undefined,
+        this.kappaScope
+      )
+      .pipe(finalize(() => {
+        this.exportInProgress = null;
+      }))
+      .subscribe({
+        next: blob => {
+          this.saveBlob(blob, `cohens-kappa-details-${this.getDateString()}.csv`);
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translateService.instant('cohens-kappa-statistics.export-details-error'),
+            this.translateService.instant('cohens-kappa-statistics.close'),
+            { duration: 5000, panelClass: ['error-snackbar'] }
+          );
+        }
+      });
+  }
+
+  private saveBlob(blob: Blob, filename: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
+  private getDateString(): string {
+    return new Date().toISOString().slice(0, 10);
   }
 
   getKappaClass(kappa: number | null): string {
@@ -151,29 +245,37 @@ export class CohensKappaStatisticsComponent implements OnInit {
     return 'kappa-perfect';
   }
 
+  getVariableLabel(variable: Pick<CohensKappaVariableSummary, 'unitName' | 'variableId'>): string {
+    return `${variable.unitName} - ${variable.variableId}`;
+  }
+
+  getCoderPairLabel(pair: CohensKappaCoderPair): string {
+    return `${pair.coder1Name} ↔ ${pair.coder2Name}`;
+  }
+
   getKappaInterpretationText(kappa: number | null): string {
     if (kappa === null) {
-      return 'Keine Daten verfügbar';
+      return this.translateService.instant('cohens-kappa-statistics.no-data-available');
     }
     if (kappa < 0) {
-      return 'Schlechte Übereinstimmung (weniger als zufällig)';
+      return this.translateService.instant('cohens-kappa-statistics.interpretation-poor-negative');
     }
     if (kappa < 0.2) {
-      return 'Schwache Übereinstimmung';
+      return this.translateService.instant('kappa.slight');
     }
     if (kappa < 0.4) {
-      return 'Mäßige Übereinstimmung';
+      return this.translateService.instant('kappa.fair');
     }
     if (kappa < 0.6) {
-      return 'Akzeptable Übereinstimmung';
+      return this.translateService.instant('kappa.moderate');
     }
     if (kappa < 0.81) {
-      return 'Gute Übereinstimmung';
+      return this.translateService.instant('kappa.substantial');
     }
     if (kappa <= 0.95) {
-      return 'Gute Übereinstimmung';
+      return this.translateService.instant('kappa.good');
     }
-    return 'Nahezu perfekte Übereinstimmung';
+    return this.translateService.instant('kappa.almost_perfect');
   }
 
   getKappaInterpretationClass(kappa: number | null): string {
@@ -191,6 +293,9 @@ export class CohensKappaStatisticsComponent implements OnInit {
     }
     if (kappa < 0.6) {
       return 'kappa-moderate';
+    }
+    if (kappa < 0.81) {
+      return 'kappa-substantial';
     }
     if (kappa <= 0.95) {
       return 'kappa-good';

@@ -13,6 +13,7 @@ export type ValidationTaskType =
   | 'duplicateResponses'
   | 'deleteResponses'
   | 'deleteTestResults'
+  | 'deleteTestResultResponses'
   | 'deleteTestLogs'
   | 'deleteAllResponses';
 

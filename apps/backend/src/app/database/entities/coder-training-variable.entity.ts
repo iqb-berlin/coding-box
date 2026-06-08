@@ -27,6 +27,9 @@ export class CoderTrainingVariable {
   @Column({ default: 10 })
     sample_count: number;
 
+  @Column({ type: 'boolean', default: false })
+    include_derive_error: boolean;
+
   @ManyToOne(() => CoderTraining, training => training.variables, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coder_training_id' })
     training: CoderTraining;

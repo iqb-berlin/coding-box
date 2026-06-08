@@ -1,6 +1,7 @@
 import { ConsoleLogger, Logger } from '@nestjs/common';
 import { WorkspaceFilesService } from './workspace-files.service';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
+import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 
 describe('WorkspaceFilesService.handleFile', () => {
   beforeAll(() => {
@@ -197,6 +198,32 @@ describe('WorkspaceFilesService.onModuleInit', () => {
       'Skipping unit variable cache refresh for invalid workspace id: null'
     );
   });
+
+  it('should reuse one unit variable cache refresh for concurrent workspace requests', async () => {
+    const service = makeService();
+    let resolveRefresh: () => void = () => undefined;
+    const refreshSpy = jest
+      .spyOn(
+        service as unknown as {
+          refreshUnitVariableCacheInternal: (workspaceId: number) => Promise<void>;
+        },
+        'refreshUnitVariableCacheInternal'
+      )
+      .mockImplementation(
+        () => new Promise<void>(resolve => {
+          resolveRefresh = resolve;
+        })
+      );
+
+    const firstRefresh = service.refreshUnitVariableCache(4);
+    const secondRefresh = service.refreshUnitVariableCache(4);
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    expect(refreshSpy).toHaveBeenCalledWith(4);
+
+    resolveRefresh();
+    await Promise.all([firstRefresh, secondRefresh]);
+  });
 });
 
 describe('WorkspaceFilesService.deleteTestFiles', () => {
@@ -237,14 +264,16 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockQueryBuilder.execute.mockResolvedValue({ affected: 1 });
   });
 
   it('should use createQueryBuilder to delete files', async () => {
     const service = makeService();
     const workspaceId = 1;
     const fileIds = ['1', '2', '3'];
+    mockQueryBuilder.execute.mockResolvedValueOnce({ affected: 3 });
 
-    await service.deleteTestFiles(workspaceId, fileIds);
+    const result = await service.deleteTestFiles(workspaceId, fileIds);
 
     expect(mockFileUploadRepository.createQueryBuilder).toHaveBeenCalled();
     expect(mockQueryBuilder.delete).toHaveBeenCalled();
@@ -258,19 +287,22 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       { ids: [1, 2, 3] }
     );
     expect(mockQueryBuilder.execute).toHaveBeenCalled();
+    expect(result).toBe(true);
   });
 
   it('should filter out invalid IDs', async () => {
     const service = makeService();
     const workspaceId = 1;
-    const fileIds = ['1', 'nan', '3'];
+    const fileIds = ['1', 'nan', '3', '1e2', '0x10', '2.5', '03'];
+    mockQueryBuilder.execute.mockResolvedValueOnce({ affected: 2 });
 
-    await service.deleteTestFiles(workspaceId, fileIds);
+    const result = await service.deleteTestFiles(workspaceId, fileIds);
 
     expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
       'id IN (:...ids)',
       { ids: [1, 3] }
     );
+    expect(result).toBe(true);
   });
 
   it('should invalidate coding statistics cache', async () => {
@@ -280,6 +312,30 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
 
     await service.deleteTestFiles(workspaceId, fileIds);
 
+    expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+  });
+
+  it('should not execute delete query when no valid IDs are provided', async () => {
+    const service = makeService();
+    const workspaceId = 1;
+    const fileIds = ['nan', '0', '-1'];
+
+    const result = await service.deleteTestFiles(workspaceId, fileIds);
+
+    expect(result).toBe(false);
+    expect(mockFileUploadRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(mockCodingStatisticsService.invalidateCache).not.toHaveBeenCalled();
+  });
+
+  it('should return false when not all requested files were deleted', async () => {
+    const service = makeService();
+    const workspaceId = 1;
+    const fileIds = ['1', '2', '3'];
+    mockQueryBuilder.execute.mockResolvedValueOnce({ affected: 2 });
+
+    const result = await service.deleteTestFiles(workspaceId, fileIds);
+
+    expect(result).toBe(false);
     expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
   });
 });
@@ -533,12 +589,22 @@ describe('WorkspaceFilesService.downloadWorkspaceFilesAsZip', () => {
 
 describe('WorkspaceFilesService.getUnitVariableDetails', () => {
   type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+  const cacheStore = new Map<string, unknown>();
 
   const unitXml = `
     <Unit>
       <Metadata><Id>UnitA</Id></Metadata>
       <BaseVariables>
-        <Variable id="B1" alias="base_alias" type="string" />
+        <Variable id="B1" alias="base_alias" type="string" multiple="1" nullable="false">
+          <Values complete="1">
+            <Value><label>Alpha</label><value>A</value></Value>
+            <Value><label>Beta</label><value>B</value></Value>
+          </Values>
+          <ValuePositionLabels>
+            <ValuePositionLabel>First option</ValuePositionLabel>
+            <ValuePositionLabel>Second option</ValuePositionLabel>
+          </ValuePositionLabels>
+        </Variable>
         <Variable alias="derived_alias" type="integer" />
       </BaseVariables>
       <DerivedVariables>
@@ -562,7 +628,16 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
         alias: 'derived_alias',
         sourceType: 'MANUAL',
         type: 'integer',
+        deriveSources: ['B1'],
         codes: [{ id: 1, label: 'Code 1', score: 1 }]
+      },
+      {
+        id: 'DX',
+        alias: 'xml_derived_alias',
+        sourceType: 'MANUAL',
+        type: 'boolean',
+        deriveSources: ['base_alias'],
+        codes: []
       },
       {
         id: 'S1',
@@ -602,6 +677,17 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
   const mockFileUploadRepository = {
     find: jest.fn()
   };
+  const mockCacheService = {
+    get: jest.fn((key: string) => Promise.resolve(cacheStore.get(key) || null)),
+    set: jest.fn((key: string, value: unknown) => {
+      cacheStore.set(key, value);
+      return Promise.resolve(true);
+    }),
+    delete: jest.fn((key: string) => {
+      cacheStore.delete(key);
+      return Promise.resolve(true);
+    })
+  };
 
   function makeService(): WorkspaceFilesService {
     return new WorkspaceFilesService(
@@ -615,13 +701,14 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
       {} as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
-      { delete: jest.fn() } as unknown as CtorParams[10],
+      mockCacheService as unknown as CtorParams[10],
       { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
     );
   }
 
   beforeEach(() => {
     jest.clearAllMocks();
+    cacheStore.clear();
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
@@ -650,7 +737,15 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
     expect(baseVariable).toMatchObject({
       id: 'B1',
       alias: 'base_alias',
-      isDerived: false
+      isDerived: false,
+      multiple: true,
+      nullable: false,
+      valuesComplete: true,
+      values: [
+        { value: 'A', label: 'Alpha' },
+        { value: 'B', label: 'Beta' }
+      ],
+      valuePositionLabels: ['First option', 'Second option']
     });
     expect(derivedFromScheme).toMatchObject({
       id: 'D1',
@@ -680,5 +775,23 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
       isDerived: true
     });
     expect(excludedVariable).toBeUndefined();
+  });
+
+  it('should resolve derived variable source mappings from deriveSources', async () => {
+    const service = makeService();
+
+    const sourceMap = await service.getDerivedVariablesBySourceMap(1);
+
+    expect(sourceMap.get(getManualCodingScopeKey('UnitA', 'base_alias')))
+      .toEqual(new Set(['derived_alias', 'xml_derived_alias']));
+    expect(mockCacheService.set).toHaveBeenCalledWith(
+      'workspace_files:derived_variables_by_source:1',
+      {
+        [getManualCodingScopeKey('UnitA', 'base_alias')]: [
+          'derived_alias',
+          'xml_derived_alias'
+        ]
+      }
+    );
   });
 });

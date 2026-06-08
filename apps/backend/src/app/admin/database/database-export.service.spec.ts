@@ -127,6 +127,9 @@ describe('DatabaseExportService', () => {
       'coding_unit_freshness',
       'variable_bundle'
     ]));
+
+    const missingsProfileConfig = tables.find(table => table.name === 'missings_profile');
+    expect(missingsProfileConfig?.query).toContain('mp.workspace_id = $1');
   });
 
   it('exports workspace tables through a read-only repeatable-read query runner', async () => {

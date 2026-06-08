@@ -1,6 +1,14 @@
 import { CommonModule } from '@angular/common';
 import {
-  Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject
+  Component,
+  EventEmitter,
+  Input,
+  OnChanges,
+  OnDestroy,
+  OnInit,
+  Output,
+  SimpleChanges,
+  inject
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
@@ -36,6 +44,7 @@ import {
   BookletLogsForUnitResponse,
   FlatResponseFrequencyRequestCombo,
   FlatResponseFrequenciesResponse,
+  LogAnomalySummary,
   TestResultService
 } from '../../../shared/services/test-result/test-result.service';
 import {
@@ -67,6 +76,7 @@ interface FlatResponseRow {
   responseStatus: string;
   responseValue: string;
   tags: string[];
+  logAnomalies?: LogAnomalySummary[];
 }
 
 export interface FlatResponseFilters {
@@ -137,6 +147,7 @@ type FlatTableMediaFilter =
   | 'longLoading'
   | 'processingDuration'
   | 'unitProgressComplete'
+  | 'logAny'
   | 'logCritical'
   | 'logTechnical'
   | 'logIncomplete'
@@ -145,6 +156,17 @@ type FlatTableMediaFilter =
   | 'logFocus'
   | 'logDebug'
   | 'logReloads';
+
+const SPECIFIC_LOG_MEDIA_FILTERS: FlatTableMediaFilter[] = [
+  'logCritical',
+  'logTechnical',
+  'logIncomplete',
+  'logConnectionLost',
+  'logTimer',
+  'logFocus',
+  'logDebug',
+  'logReloads'
+];
 
 @Component({
   selector: 'coding-box-test-results-flat-table',
@@ -167,7 +189,7 @@ type FlatTableMediaFilter =
   templateUrl: './test-results-flat-table.component.html',
   styleUrls: ['./test-results-flat-table.component.scss']
 })
-export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
+export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestroy {
   private fileService = inject(FileService);
   private unitNoteService = inject(UnitNoteService);
   private statisticsService = inject(CodingStatisticsService);
@@ -220,7 +242,7 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
   private personTestResultsCacheOrder: number[] = [];
   private readonly PERSON_TEST_RESULTS_CACHE_MAX = 5;
 
-  flatDisplayedColumns: string[] = [
+  private readonly baseFlatDisplayedColumns: string[] = [
     'code',
     'group',
     'login',
@@ -234,6 +256,12 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
     'actions'
   ];
 
+  flatDisplayedColumns: string[] = [...this.baseFlatDisplayedColumns];
+  showLogAnomaliesInTable = false;
+  private logAnomalyTableSettingLoaded = false;
+  private tableInitialized = false;
+  private flatResponsesRequestSequence = 0;
+
   isLoadingFrequencies: boolean = false;
   private frequenciesByComboKey = new Map<
   string,
@@ -246,24 +274,7 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
   flatPageIndex: number = 0;
   isLoadingFlat: boolean = false;
 
-  flatFilters: FlatResponseFilters = {
-    code: '',
-    group: '',
-    login: '',
-    booklet: '',
-    unit: '',
-    response: '',
-    responseStatus: '',
-    responseValue: '',
-    tags: '',
-    geogebra: false,
-    audioLow: false,
-    nonEmptyResponse: false,
-    sessionFilter: false,
-    shortProcessing: false,
-    longLoading: false,
-    logAnomalies: ''
-  };
+  flatFilters: FlatResponseFilters = this.createDefaultFlatFilters();
 
   mediaFilters: FlatTableMediaFilter[] = [];
 
@@ -318,6 +329,8 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
   private suppressNextFlatFilterChange = false;
 
   @Input() initialFilters: Partial<FlatResponseFilters> | null = null;
+  @Input() showWorkspaceLogAnomalies = false;
+  @Input() forceShowLogAnomalies = false;
   @Output() responseDeleted = new EventEmitter<void>();
 
   constructor() {
@@ -456,35 +469,62 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
         }
       );
 
-    this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
-    this.fetchFlatResponseFilterOptions();
+    this.syncMediaFiltersFromFlatFilters();
+  }
 
+  ngOnInit(): void {
+    this.tableInitialized = true;
+    this.fetchFlatResponseFilterOptions();
+    this.logAnomalyTableSettingLoaded = true;
+    this.updateLogAnomalyTableVisibility();
+    this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
     this.syncMediaFiltersFromFlatFilters();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (!changes.initialFilters || !this.initialFilters) {
-      return;
+    let shouldFetch = false;
+
+    if (changes.showWorkspaceLogAnomalies || changes.forceShowLogAnomalies) {
+      shouldFetch = this.updateLogAnomalyTableVisibility() || shouldFetch;
     }
 
-    const hasFilterValues = Object.values(this.initialFilters).some(value => {
-      if (typeof value === 'boolean') {
-        return value;
-      }
-      return String(value || '').trim() !== '';
-    });
-
-    if (!hasFilterValues) {
-      return;
+    if (changes.initialFilters) {
+      this.flatFilters = {
+        ...this.createDefaultFlatFilters(),
+        ...(this.initialFilters || {})
+      };
+      this.processingDurationEnabled = false;
+      this.processingDurationsFilters = [];
+      this.unitProgressFilters = [];
+      this.flatPageIndex = 0;
+      this.syncMediaFiltersFromFlatFilters();
+      shouldFetch = true;
     }
 
-    this.flatFilters = {
-      ...this.flatFilters,
-      ...this.initialFilters
+    if (shouldFetch && this.tableInitialized && this.logAnomalyTableSettingLoaded) {
+      this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+    }
+  }
+
+  private createDefaultFlatFilters(): FlatResponseFilters {
+    return {
+      code: '',
+      group: '',
+      login: '',
+      booklet: '',
+      unit: '',
+      response: '',
+      responseStatus: '',
+      responseValue: '',
+      tags: '',
+      geogebra: false,
+      audioLow: false,
+      nonEmptyResponse: false,
+      sessionFilter: false,
+      shortProcessing: false,
+      longLoading: false,
+      logAnomalies: ''
     };
-    this.flatPageIndex = 0;
-    this.syncMediaFiltersFromFlatFilters();
-    this.fetchFlatResponses(0, this.flatPageSize);
   }
 
   private syncMediaFiltersFromFlatFilters(): void {
@@ -519,6 +559,9 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
         .map(v => v.trim())
         .filter(Boolean)
     );
+    if (selectedAnomalyGroups.has('any') || selectedAnomalyGroups.has('all')) {
+      next.push('logAny');
+    }
     if (selectedAnomalyGroups.has('critical')) {
       next.push('logCritical');
     }
@@ -551,6 +594,13 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
 
   onMediaFiltersChanged(): void {
     const selected = new Set(this.mediaFilters || []);
+    if (selected.has('logAny')) {
+      SPECIFIC_LOG_MEDIA_FILTERS.forEach(filter => selected.delete(filter));
+      this.mediaFilters = (this.mediaFilters || []).filter(filter => (
+        selected.has(filter)
+      ));
+    }
+
     this.flatFilters.geogebra = selected.has('geogebra');
     this.flatFilters.audioLow = selected.has('audioLow');
     this.flatFilters.nonEmptyResponse = selected.has('nonEmptyResponse');
@@ -571,29 +621,33 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
     }
 
     const anomalyGroups: string[] = [];
-    if (selected.has('logCritical')) {
-      anomalyGroups.push('critical');
-    }
-    if (selected.has('logTechnical')) {
-      anomalyGroups.push('technical');
-    }
-    if (selected.has('logIncomplete')) {
-      anomalyGroups.push('incomplete');
-    }
-    if (selected.has('logConnectionLost')) {
-      anomalyGroups.push('connection_lost');
-    }
-    if (selected.has('logTimer')) {
-      anomalyGroups.push('timer');
-    }
-    if (selected.has('logFocus')) {
-      anomalyGroups.push('focus');
-    }
-    if (selected.has('logDebug')) {
-      anomalyGroups.push('debug');
-    }
-    if (selected.has('logReloads')) {
-      anomalyGroups.push('reloads');
+    if (selected.has('logAny')) {
+      anomalyGroups.push('any');
+    } else {
+      if (selected.has('logCritical')) {
+        anomalyGroups.push('critical');
+      }
+      if (selected.has('logTechnical')) {
+        anomalyGroups.push('technical');
+      }
+      if (selected.has('logIncomplete')) {
+        anomalyGroups.push('incomplete');
+      }
+      if (selected.has('logConnectionLost')) {
+        anomalyGroups.push('connection_lost');
+      }
+      if (selected.has('logTimer')) {
+        anomalyGroups.push('timer');
+      }
+      if (selected.has('logFocus')) {
+        anomalyGroups.push('focus');
+      }
+      if (selected.has('logDebug')) {
+        anomalyGroups.push('debug');
+      }
+      if (selected.has('logReloads')) {
+        anomalyGroups.push('reloads');
+      }
     }
     this.flatFilters.logAnomalies = anomalyGroups.join(',');
 
@@ -1077,24 +1131,7 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
   }
 
   clearFlatFilters(): void {
-    this.flatFilters = {
-      code: '',
-      group: '',
-      login: '',
-      booklet: '',
-      unit: '',
-      response: '',
-      responseStatus: '',
-      responseValue: '',
-      tags: '',
-      geogebra: false,
-      audioLow: false,
-      nonEmptyResponse: false,
-      sessionFilter: false,
-      shortProcessing: false,
-      longLoading: false,
-      logAnomalies: ''
-    };
+    this.flatFilters = this.createDefaultFlatFilters();
     this.syncMediaFiltersFromFlatFilters();
 
     this.processingDurationEnabled = false;
@@ -1341,6 +1378,34 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
       });
   }
 
+  private updateLogAnomalyTableVisibility(): boolean {
+    return this.setShowLogAnomaliesInTable(this.showWorkspaceLogAnomalies);
+  }
+
+  private setShowLogAnomaliesInTable(enabled: boolean): boolean {
+    const changed = this.showLogAnomaliesInTable !== enabled;
+    this.showLogAnomaliesInTable = enabled;
+    if (enabled) {
+      this.flatDisplayedColumns = [
+        'code',
+        'group',
+        'login',
+        'booklet',
+        'unit',
+        'response',
+        'responseStatus',
+        'logStatus',
+        'responseValue',
+        'frequencies',
+        'tags',
+        'actions'
+      ];
+      return changed;
+    }
+    this.flatDisplayedColumns = [...this.baseFlatDisplayedColumns];
+    return changed;
+  }
+
   onFlatPaginatorChange(event: PageEvent): void {
     this.flatPageSize = event.pageSize;
     this.flatPageIndex = event.pageIndex;
@@ -1351,7 +1416,12 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
+    if (!this.logAnomalyTableSettingLoaded) {
+      return;
+    }
     const validPage = Math.max(0, page);
+    this.flatResponsesRequestSequence += 1;
+    const requestSequence = this.flatResponsesRequestSequence;
     this.isLoadingFlat = true;
 
     const sessionFilterActive = this.flatFilters.sessionFilter;
@@ -1400,34 +1470,90 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
         sessionScreens: sessionFilterActive ?
           this.parseCsv(this.sessionScreensAllowlist) :
           '',
-        logAnomalies: this.flatFilters.logAnomalies
+        logAnomalies: this.flatFilters.logAnomalies,
+        includeLogAnomalies: this.showLogAnomaliesInTable ? 'true' : ''
       })
-      .subscribe(resp => {
-        this.isLoadingFlat = false;
-        this.flatTotalRecords = resp.total;
-        this.flatData = (resp.data || []).map(r => ({
-          bookletId: r.bookletId,
-          responseId: r.responseId,
-          unitId: r.unitId,
-          personId: r.personId,
-          code: r.code,
-          group: r.group,
-          login: r.login,
-          booklet: r.booklet,
-          unit: r.unit,
-          response: r.response,
-          responseStatus: r.responseStatus,
-          responseValue: r.responseValue,
-          tags: Array.isArray(r.tags) ? r.tags : []
-        }));
+      .subscribe({
+        next: resp => {
+          if (requestSequence !== this.flatResponsesRequestSequence) {
+            return;
+          }
+          this.isLoadingFlat = false;
+          this.flatTotalRecords = resp.total;
+          this.flatData = (resp.data || []).map(r => ({
+            bookletId: r.bookletId,
+            responseId: r.responseId,
+            unitId: r.unitId,
+            personId: r.personId,
+            code: r.code,
+            group: r.group,
+            login: r.login,
+            booklet: r.booklet,
+            unit: r.unit,
+            response: r.response,
+            responseStatus: r.responseStatus,
+            responseValue: r.responseValue,
+            tags: Array.isArray(r.tags) ? r.tags : [],
+            logAnomalies: Array.isArray(r.logAnomalies) ? r.logAnomalies : []
+          }));
 
-        this.loadFrequenciesForCurrentPage();
-        this.loadNotesPresenceForCurrentPage();
+          this.loadFrequenciesForCurrentPage();
+          this.loadNotesPresenceForCurrentPage();
+        },
+        error: () => {
+          if (requestSequence === this.flatResponsesRequestSequence) {
+            this.isLoadingFlat = false;
+          }
+        }
       });
   }
 
   hasNotesForRow(row: FlatResponseRow): boolean {
     return this.unitIdsWithNotes.has(row.unitId);
+  }
+
+  hasLogAnomaliesForRow(row: FlatResponseRow): boolean {
+    return (row.logAnomalies || []).length > 0;
+  }
+
+  getLogAnomalySeverity(row: FlatResponseRow): LogAnomalySummary['severity'] | '' {
+    const anomalies = row.logAnomalies || [];
+    if (anomalies.some(anomaly => anomaly.severity === 'critical')) {
+      return 'critical';
+    }
+    if (anomalies.some(anomaly => anomaly.severity === 'warning')) {
+      return 'warning';
+    }
+    if (anomalies.some(anomaly => anomaly.severity === 'info')) {
+      return 'info';
+    }
+    return '';
+  }
+
+  getLogAnomalySeverityLabel(row: FlatResponseRow): string {
+    switch (this.getLogAnomalySeverity(row)) {
+      case 'critical':
+        return 'kritisch';
+      case 'warning':
+        return 'Warnung';
+      case 'info':
+        return 'Info';
+      default:
+        return 'unauffällig';
+    }
+  }
+
+  getLogAnomalyTooltip(row: FlatResponseRow): string {
+    const anomalies = row.logAnomalies || [];
+    if (anomalies.length === 0) {
+      return 'Keine Log-Auffälligkeiten für dieses Testheft erkannt.';
+    }
+    return anomalies
+      .map(anomaly => {
+        const count = anomaly.count > 1 ? ` (${anomaly.count}x)` : '';
+        return `${anomaly.label}${count}: ${anomaly.evidence}`;
+      })
+      .join('\n');
   }
 
   private loadNotesPresenceForCurrentPage(): void {
@@ -1470,51 +1596,25 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
       duration: 3000
     });
 
-    this.appService
-      .createOwnToken(this.appService.selectedWorkspaceId, 1)
+    this.statisticsService
+      .getReplayUrl(this.appService.selectedWorkspaceId, row.responseId)
       .subscribe({
-        next: token => {
+        next: result => {
           loadingSnackBar.dismiss();
-          if (!token) {
+          if (result && result.replayUrl) {
+            window.open(result.replayUrl, '_blank');
+          } else {
             this.snackBar.open(
-              'Fehler beim Erzeugen des Authentifizierungs-Tokens',
+              'Replay-URL konnte nicht erzeugt werden',
               'Fehler',
               { duration: 3000 }
             );
-            return;
           }
-
-          this.statisticsService
-            .getReplayUrl(
-              this.appService.selectedWorkspaceId,
-              row.responseId,
-              token
-            )
-            .subscribe({
-              next: result => {
-                if (result && result.replayUrl) {
-                  window.open(result.replayUrl, '_blank');
-                } else {
-                  this.snackBar.open(
-                    'Replay-URL konnte nicht erzeugt werden',
-                    'Fehler',
-                    { duration: 3000 }
-                  );
-                }
-              },
-              error: () => {
-                this.snackBar.open(
-                  'Fehler beim Laden der Replay-URL',
-                  'Fehler',
-                  { duration: 3000 }
-                );
-              }
-            });
         },
         error: () => {
           loadingSnackBar.dismiss();
           this.snackBar.open(
-            'Fehler beim Erzeugen des Authentifizierungs-Tokens',
+            'Fehler beim Laden der Replay-URL',
             'Fehler',
             { duration: 3000 }
           );

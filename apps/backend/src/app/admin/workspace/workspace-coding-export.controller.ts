@@ -31,6 +31,7 @@ import { CacheService } from '../../cache/cache.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   CodingExportService,
   CodingExportOrchestratorService,
@@ -59,6 +60,7 @@ type ByVariableExportEstimateResponse = {
 };
 
 @ApiTags('Admin Workspace Coding')
+@RequireAccessLevel(2)
 @Controller('admin/workspace')
 export class WorkspaceCodingExportController {
   private readonly logger = new Logger(WorkspaceCodingExportController.name);
@@ -84,6 +86,60 @@ export class WorkspaceCodingExportController {
     ) {
       throw new BadRequestException(
         'results-by-version exports support only "csv" or "excel" format'
+      );
+    }
+
+    if (
+      body.exportType === 'results-by-version' &&
+      body.includeGeoGebraFiles &&
+      body.format !== 'excel'
+    ) {
+      throw new BadRequestException(
+        'GeoGebra file packages are supported only for Excel result exports'
+      );
+    }
+
+    if (
+      body.exportType === 'results-by-version' &&
+      body.includeGeoGebraFiles &&
+      body.includeResponseValues === false
+    ) {
+      throw new BadRequestException(
+        'GeoGebra file packages require response values because links are written to the value column'
+      );
+    }
+
+    if (
+      body.exportType === 'item-matrix' &&
+      body.format !== undefined &&
+      body.format !== 'csv' &&
+      body.format !== 'excel'
+    ) {
+      throw new BadRequestException(
+        'item-matrix exports support only "csv" or "excel" format'
+      );
+    }
+
+    if (
+      body.exportType === 'item-matrix' &&
+      body.matrixValue !== undefined &&
+      body.matrixValue !== 'code' &&
+      body.matrixValue !== 'score'
+    ) {
+      throw new BadRequestException(
+        'item-matrix exports support only "code" or "score" matrix values'
+      );
+    }
+
+    if (
+      body.exportType === 'item-matrix' &&
+      body.version !== undefined &&
+      body.version !== 'v1' &&
+      body.version !== 'v2' &&
+      body.version !== 'v3'
+    ) {
+      throw new BadRequestException(
+        'item-matrix exports support only "v1", "v2" or "v3" versions'
       );
     }
   }
@@ -160,7 +216,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/coding-list')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -203,7 +259,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/coding-list/excel')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -258,7 +314,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/coding-list/json')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -327,7 +383,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/results-by-version')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -360,6 +416,12 @@ export class WorkspaceCodingExportController {
     description: 'Include response values in the export',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'includeGeoGebraResponseValues',
+    required: false,
+    description: 'Include GeoGebra response values as raw strings instead of placeholders',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as CSV',
     content: {
@@ -380,6 +442,8 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
       @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
+      @Query('includeGeoGebraResponseValues', { transform: value => value === 'true' })
+                   includeGeoGebraResponseValues: boolean,
                    @Res() res: Response
   ): Promise<void> {
     try {
@@ -389,7 +453,8 @@ export class WorkspaceCodingExportController {
         authToken: authToken || '',
         serverUrl,
         includeReplayUrl: includeReplayUrls,
-        includeResponseValues
+        includeResponseValues,
+        includeGeoGebraResponseValues
       });
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -422,7 +487,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/results-by-version/excel')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -455,10 +520,28 @@ export class WorkspaceCodingExportController {
     description: 'Include response values in the export',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'includeGeoGebraResponseValues',
+    required: false,
+    description: 'Include GeoGebra response values as raw strings instead of placeholders',
+    type: Boolean
+  })
+  @ApiQuery({
+    name: 'includeGeoGebraFiles',
+    required: false,
+    description: 'Return a ZIP package with GeoGebra responses as .ggb files and Excel hyperlinks',
+    type: Boolean
+  })
   @ApiOkResponse({
-    description: 'Coding results for specified version exported as Excel',
+    description: 'Coding results for specified version exported as Excel or as ZIP when GeoGebra files are included',
     content: {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      },
+      'application/zip': {
         schema: {
           type: 'string',
           format: 'binary'
@@ -475,33 +558,47 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
       @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
+      @Query('includeGeoGebraResponseValues', { transform: value => value === 'true' })
+                   includeGeoGebraResponseValues: boolean,
+      @Query('includeGeoGebraFiles', { transform: value => value === 'true' })
+                   includeGeoGebraFiles: boolean,
                    @Res() res: Response
   ): Promise<void> {
+    if (includeGeoGebraFiles && !includeResponseValues) {
+      throw new BadRequestException(
+        'GeoGebra file packages require response values because links are written to the value column'
+      );
+    }
+
     const buffer = await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
       workspaceId: workspace_id,
       version,
       authToken: authToken || '',
       serverUrl,
       includeReplayUrl: includeReplayUrls,
-      includeResponseValues
+      includeResponseValues,
+      includeGeoGebraResponseValues,
+      includeGeoGebraFiles
     });
 
     res.setHeader(
       'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      includeGeoGebraFiles ?
+        'application/zip' :
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
     res.setHeader(
       'Content-Disposition',
       `attachment; filename="coding-results-${version}-${new Date()
         .toISOString()
-        .slice(0, 10)}.xlsx"`
+        .slice(0, 10)}.${includeGeoGebraFiles ? 'zip' : 'xlsx'}"`
     );
 
     res.send(buffer);
   }
 
   @Get(':workspace_id/coding/export/aggregated')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -551,7 +648,7 @@ export class WorkspaceCodingExportController {
     name: 'includeModalValue',
     required: false,
     type: Boolean,
-    description: 'Include modal value and deviation count columns'
+    description: 'Include modal value, deviation count, modal tie and modal candidate columns'
   })
   @ApiQuery({
     name: 'excludeAutoCoded',
@@ -632,7 +729,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/by-coder')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -730,14 +827,14 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/by-variable')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
     name: 'includeModalValue',
     required: false,
     type: Boolean,
-    description: 'Include modal value and deviation count columns'
+    description: 'Include modal value, deviation count, modal tie and modal candidate columns'
   })
   @ApiQuery({
     name: 'includeDoubleCoded',
@@ -855,7 +952,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/detailed')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -950,7 +1047,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/coding-times')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -1015,7 +1112,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Post(':workspace_id/coding/export/estimate')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   async estimateExportJob(
@@ -1040,7 +1137,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Post(':workspace_id/coding/export/start')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -1059,7 +1156,8 @@ export class WorkspaceCodingExportController {
             'detailed',
             'coding-times',
             'coding-list',
-            'results-by-version'
+            'results-by-version',
+            'item-matrix'
           ],
           description: 'Type of export to generate'
         },
@@ -1074,9 +1172,16 @@ export class WorkspaceCodingExportController {
           description:
             'File format for exports that support multiple formats. results-by-version supports csv and excel; coding-list supports csv, excel and json.'
         },
+        matrixValue: {
+          type: 'string',
+          enum: ['code', 'score'],
+          description: 'Cell value for item-matrix exports'
+        },
         outputCommentsInsteadOfCodes: { type: 'boolean' },
         includeReplayUrl: { type: 'boolean' },
         includeResponseValues: { type: 'boolean' },
+        includeGeoGebraResponseValues: { type: 'boolean' },
+        includeGeoGebraFiles: { type: 'boolean' },
         anonymizeCoders: { type: 'boolean' },
         usePseudoCoders: { type: 'boolean' },
         doubleCodingMethod: {
@@ -1142,7 +1247,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/job/:jobId')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -1248,7 +1353,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/job/:jobId/download')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -1300,11 +1405,14 @@ export class WorkspaceCodingExportController {
         normalizedFileName.endsWith('.csv') ||
         metadata.exportType === 'detailed';
       const isJson = normalizedFileName.endsWith('.json');
+      const isZip = normalizedFileName.endsWith('.zip');
       let contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       if (isCsv) {
         contentType = 'text/csv; charset=utf-8';
       } else if (isJson) {
         contentType = 'application/json; charset=utf-8';
+      } else if (isZip) {
+        contentType = 'application/zip';
       }
       res.setHeader('Content-Type', contentType);
       res.setHeader(
@@ -1329,7 +1437,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Get(':workspace_id/coding/export/jobs')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -1384,7 +1492,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Delete(':workspace_id/coding/export/job/:jobId')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -1458,7 +1566,7 @@ export class WorkspaceCodingExportController {
   }
 
   @Post(':workspace_id/coding/export/job/:jobId/cancel')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({

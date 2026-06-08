@@ -28,10 +28,17 @@ describe('WorkspaceGuard (Backend)', () => {
     authService = module.get(AuthService);
   });
 
-  const createMockExecutionContext = (userId: number, workspaceId: string): ExecutionContext => ({
+  const createMockExecutionContext = (
+    userId: number,
+    workspaceId: string,
+    tokenWorkspaceId?: string | number
+  ): ExecutionContext => ({
     switchToHttp: () => ({
       getRequest: () => ({
-        user: { id: userId },
+        user: {
+          id: userId,
+          ...(tokenWorkspaceId === undefined ? {} : { workspace: tokenWorkspaceId })
+        },
         params: { workspace_id: workspaceId }
       })
     })
@@ -45,7 +52,7 @@ describe('WorkspaceGuard (Backend)', () => {
       const result = await guard.canActivate(context);
 
       expect(result).toBe(true);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, '123');
+      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
     });
 
     it('should deny access when user cannot access workspace', async () => {
@@ -53,7 +60,7 @@ describe('WorkspaceGuard (Backend)', () => {
       const context = createMockExecutionContext(1, '123');
 
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, '123');
+      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
     });
 
     it('should validate both user ID and workspace ID', async () => {
@@ -62,7 +69,7 @@ describe('WorkspaceGuard (Backend)', () => {
 
       await guard.canActivate(context);
 
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(42, '789');
+      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(42, 789);
     });
   });
 
@@ -85,8 +92,8 @@ describe('WorkspaceGuard (Backend)', () => {
       await expect(guard.canActivate(context2)).rejects.toThrow(UnauthorizedException);
 
       expect(authService.canAccessWorkSpace).toHaveBeenCalledTimes(2);
-      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(1, 1, '123');
-      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(2, 1, '456');
+      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(1, 1, 123);
+      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(2, 1, 456);
     });
 
     it('should not allow cross-user workspace access', async () => {
@@ -94,7 +101,7 @@ describe('WorkspaceGuard (Backend)', () => {
       const context = createMockExecutionContext(2, '123');
 
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(2, '123');
+      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(2, 123);
     });
   });
 
@@ -172,32 +179,29 @@ describe('WorkspaceGuard (Backend)', () => {
 
       await guard.canActivate(context);
 
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, '123');
+      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
     });
 
-    it('should handle string workspace ID', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(true);
+    it('should reject non-numeric workspace ID', async () => {
       const context = createMockExecutionContext(1, 'workspace-abc');
 
-      await guard.canActivate(context);
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
 
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 'workspace-abc');
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
     });
 
     it('should handle zero workspace ID', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(1, '0');
 
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, '0');
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
     });
 
     it('should handle negative workspace ID', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(1, '-1');
 
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, '-1');
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
     });
 
     it('should handle very large workspace ID', async () => {
@@ -206,15 +210,46 @@ describe('WorkspaceGuard (Backend)', () => {
 
       await guard.canActivate(context);
 
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, '999999999999');
+      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 999999999999);
     });
 
     it('should handle workspace ID with special characters', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(1, 'ws-123-abc');
 
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 'ws-123-abc');
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+    });
+
+    it.each(['1e2', '0x10', '1.5', '123abc', '00123'])(
+      'should reject ambiguous workspace ID format %s',
+      async workspaceId => {
+        const context = createMockExecutionContext(1, workspaceId);
+
+        await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+        expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+      }
+    );
+
+    it('should accept a matching workspace claim', async () => {
+      authService.canAccessWorkSpace.mockResolvedValue(true);
+      const context = createMockExecutionContext(1, '123', 123);
+
+      await expect(guard.canActivate(context)).resolves.toBe(true);
+      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
+    });
+
+    it('should reject a mismatching workspace claim before service lookup', async () => {
+      const context = createMockExecutionContext(1, '123', 456);
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+    });
+
+    it('should reject ambiguous token workspace claims before service lookup', async () => {
+      const context = createMockExecutionContext(1, '123', '1e2');
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
     });
   });
 
@@ -224,7 +259,7 @@ describe('WorkspaceGuard (Backend)', () => {
       const context = createMockExecutionContext(0, '123');
 
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(0, '123');
+      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(0, 123);
     });
 
     it('should handle negative user ID', async () => {
@@ -232,7 +267,7 @@ describe('WorkspaceGuard (Backend)', () => {
       const context = createMockExecutionContext(-1, '123');
 
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(-1, '123');
+      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(-1, 123);
     });
 
     it('should handle very large user ID', async () => {
@@ -241,7 +276,7 @@ describe('WorkspaceGuard (Backend)', () => {
 
       await guard.canActivate(context);
 
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(Number.MAX_SAFE_INTEGER, '123');
+      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(Number.MAX_SAFE_INTEGER, 123);
     });
   });
 
@@ -308,9 +343,9 @@ describe('WorkspaceGuard (Backend)', () => {
       await guard.canActivate(createMockExecutionContext(1, '789'));
 
       expect(authService.canAccessWorkSpace).toHaveBeenCalledTimes(3);
-      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(1, 1, '123');
-      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(2, 1, '456');
-      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(3, 1, '789');
+      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(1, 1, 123);
+      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(2, 1, 456);
+      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(3, 1, 789);
     });
   });
 

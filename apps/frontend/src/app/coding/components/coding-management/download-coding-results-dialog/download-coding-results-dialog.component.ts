@@ -15,6 +15,7 @@ export type CodingResultsExportFormat = 'csv' | 'excel';
 
 export interface DownloadCodingResultsDialogData {
   currentVersion: 'v1' | 'v2' | 'v3';
+  hasGeoGebraResponses?: boolean;
 }
 
 @Component({
@@ -80,7 +81,7 @@ export interface DownloadCodingResultsDialogData {
           <mat-card-title>{{ 'coding-management.download-dialog.select-format' | translate }}</mat-card-title>
         </mat-card-header>
         <mat-card-content>
-          <mat-radio-group [(ngModel)]="selectedFormat" class="radio-group format-group">
+          <mat-radio-group [(ngModel)]="selectedFormat" (ngModelChange)="onSelectedFormatChange()" class="radio-group format-group">
             <mat-radio-button value="csv" class="radio-option">
               <div class="radio-content">
                 <mat-icon>table_chart</mat-icon>
@@ -112,13 +113,37 @@ export interface DownloadCodingResultsDialogData {
             </p>
           </div>
           <div class="option-item">
-            <mat-checkbox [(ngModel)]="includeResponseValues" class="option-checkbox">
+            <mat-checkbox [(ngModel)]="includeResponseValues" (ngModelChange)="onIncludeResponseValuesChange()"
+              class="option-checkbox">
               {{ 'coding-management.download-dialog.include-response-values' | translate }}
             </mat-checkbox>
             <p class="option-description">
               {{ 'coding-management.download-dialog.response-values-description' | translate }}
             </p>
           </div>
+          @if (data.hasGeoGebraResponses) {
+            <div class="option-item">
+              <mat-checkbox [(ngModel)]="includeGeoGebraResponseValues"
+                [disabled]="!includeResponseValues || includeGeoGebraFiles"
+                class="option-checkbox">
+                {{ 'coding-management.download-dialog.include-geogebra-response-values' | translate }}
+              </mat-checkbox>
+              <p class="option-description">
+                {{ 'coding-management.download-dialog.geogebra-response-values-description' | translate }}
+              </p>
+            </div>
+            <div class="option-item">
+              <mat-checkbox [(ngModel)]="includeGeoGebraFiles"
+                [disabled]="selectedFormat !== 'excel' || !includeResponseValues"
+                (ngModelChange)="onIncludeGeoGebraFilesChange()"
+                class="option-checkbox">
+                {{ 'coding-management.download-dialog.include-geogebra-files' | translate }}
+              </mat-checkbox>
+              <p class="option-description">
+                {{ 'coding-management.download-dialog.geogebra-files-description' | translate }}
+              </p>
+            </div>
+          }
         </mat-card-content>
       </mat-card>
 
@@ -329,6 +354,8 @@ export class DownloadCodingResultsDialogComponent {
   selectedFormat: CodingResultsExportFormat = 'csv';
   includeReplayUrls: boolean = false;
   includeResponseValues: boolean = true;
+  includeGeoGebraFiles: boolean = false;
+  includeGeoGebraResponseValues: boolean = false;
 
   constructor(
     public dialogRef: MatDialogRef<DownloadCodingResultsDialogComponent>,
@@ -337,12 +364,36 @@ export class DownloadCodingResultsDialogComponent {
     this.selectedVersion = data.currentVersion;
   }
 
+  onIncludeResponseValuesChange(): void {
+    this.clearUnsupportedGeoGebraOption();
+  }
+
+  onSelectedFormatChange(): void {
+    this.clearUnsupportedGeoGebraOption();
+  }
+
+  onIncludeGeoGebraFilesChange(): void {
+    this.clearUnsupportedGeoGebraOption();
+  }
+
+  private clearUnsupportedGeoGebraOption(): void {
+    if (this.selectedFormat !== 'excel' || !this.includeResponseValues || !this.data.hasGeoGebraResponses) {
+      this.includeGeoGebraFiles = false;
+    }
+    if (!this.includeResponseValues || !this.data.hasGeoGebraResponses || this.includeGeoGebraFiles) {
+      this.includeGeoGebraResponseValues = false;
+    }
+  }
+
   onDownload(): void {
+    this.clearUnsupportedGeoGebraOption();
     this.dialogRef.close({
       version: this.selectedVersion,
       format: this.selectedFormat,
       includeReplayUrls: this.includeReplayUrls,
-      includeResponseValues: this.includeResponseValues
+      includeResponseValues: this.includeResponseValues,
+      includeGeoGebraFiles: this.includeGeoGebraFiles,
+      includeGeoGebraResponseValues: this.includeGeoGebraResponseValues
     });
   }
 

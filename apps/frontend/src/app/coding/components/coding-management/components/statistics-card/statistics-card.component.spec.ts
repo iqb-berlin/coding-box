@@ -174,6 +174,12 @@ describe('StatisticsCardComponent', () => {
     expect(component.statusClick.emit).toHaveBeenCalledWith('200');
   });
 
+  it('should keep DERIVE_ERROR visible and provide the explanatory tooltip key', () => {
+    expect(component.mapStatusToString(4)).toBe('DERIVE_ERROR');
+    expect(component.getStatusTooltipKey('4')).toBe('response-status.tooltips.DERIVE_ERROR');
+    expect(component.getStatusTooltipKey('DERIVE_ERROR')).toBe('response-status.tooltips.DERIVE_ERROR');
+  });
+
   it('should emit derivedClick when derived answers are clicked', () => {
     jest.spyOn(component.derivedClick, 'emit');
     component.onDerivedClick();

@@ -5,6 +5,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import { ImportOptionsDto as ImportOptions, ImportResultDto as Result } from '../../../../../../../api-dto/files/import-options.dto';
 import { ImportWorkspaceFilesProgressDto } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
+import { TestGroupsLoadProgressDto } from '../../../../../../../api-dto/files/test-groups-load-progress.dto';
 
 export { ImportOptions, Result };
 
@@ -83,18 +84,36 @@ export class ImportService {
     testCenterWorkspace: string,
     server: string,
     url: string,
-    authToken: string
+    authToken: string,
+    importRunId?: string
   ): Observable<TestGroupsInfoDto[]> {
-    const params = new HttpParams()
+    let params = new HttpParams()
       .set('tc_workspace', testCenterWorkspace)
       .set('server', server)
       .set('url', encodeURIComponent(url))
       .set('token', authToken);
+
+    if (importRunId) {
+      params = params.set('importRunId', importRunId);
+    }
 
     return this.http
       .get<TestGroupsInfoDto[]>(
       `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups`,
       { params }
     );
+  }
+
+  getTestGroupsLoadProgress(
+    workspace_id: number,
+    importRunId: string
+  ): Observable<TestGroupsLoadProgressDto | null> {
+    const params = new HttpParams().set('importRunId', importRunId);
+    return this.http
+      .get<TestGroupsLoadProgressDto>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups/progress`,
+      { params }
+    )
+      .pipe(catchError(() => of(null)));
   }
 }

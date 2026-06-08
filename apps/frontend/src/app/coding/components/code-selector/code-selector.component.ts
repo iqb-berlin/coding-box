@@ -24,6 +24,7 @@ import {
   CodingIssueDto,
   VariableCoding
 } from '../../../models/coding-interfaces';
+import { hasManualInstruction } from '../../utils/manual-coding.util';
 
 @Component({
   selector: 'app-code-selector',
@@ -54,6 +55,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() allowComments: boolean = true;
   @Input() suppressGeneralInstructions: boolean = false;
   @Input() isReadOnly: boolean = false;
+  @Input() isNavigationDisabled: boolean = false;
   @Input() hasSaveError: boolean = false;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
@@ -68,6 +70,9 @@ export class CodeSelectorComponent implements OnChanges {
   selectedCode: number | null = null;
   selectedCodingIssueOption: number | null = null;
   variableManualInstruction: string | null = null;
+  legacySelectedCode: SelectableItem | null = null;
+  private allRegularCodeItems: SelectableItem[] = [];
+  private hasResolvedCodingScheme = false;
   constructor(private sanitizer: DomSanitizer, private translateService: TranslateService, private elementRef: ElementRef) { }
 
   @HostListener('document:click', ['$event'])
@@ -89,7 +94,10 @@ export class CodeSelectorComponent implements OnChanges {
   private loadCodes(): void {
     if (!this.codingScheme || !this.variableId) {
       this.selectableItems = [];
+      this.allRegularCodeItems = [];
+      this.hasResolvedCodingScheme = false;
       this.variableManualInstruction = null;
+      this.legacySelectedCode = null;
       return;
     }
 
@@ -99,25 +107,33 @@ export class CodeSelectorComponent implements OnChanges {
         scheme = JSON.parse(this.codingScheme);
       } catch (e) {
         this.selectableItems = [];
+        this.allRegularCodeItems = [];
+        this.hasResolvedCodingScheme = false;
+        this.variableManualInstruction = null;
+        this.legacySelectedCode = null;
         return;
       }
     } else {
       scheme = this.codingScheme;
     }
+    this.hasResolvedCodingScheme = true;
 
     const variableCoding = scheme.variableCodings.find(
       (v: VariableCoding) => v.alias === this.variableId || v.id === this.variableId
     );
     if (variableCoding) {
       this.variableManualInstruction = variableCoding.manualInstruction || null;
-      const codeItems: SelectableItem[] = variableCoding.codes.map((code: Code) => ({
-        id: code.id,
-        label: code.label,
-        type: code.type,
-        score: code.score,
-        manualInstruction: code.manualInstruction,
-        originalCode: code
-      }));
+      this.allRegularCodeItems = variableCoding.codes
+        .map((code: Code) => ({
+          id: code.id,
+          label: code.label,
+          type: code.type,
+          score: code.score,
+          manualInstruction: code.manualInstruction,
+          originalCode: code
+        }));
+      const codeItems: SelectableItem[] = this.allRegularCodeItems
+        .filter((code: SelectableItem) => hasManualInstruction(code));
 
       const codingIssueOptions: SelectableItem[] = [
         {
@@ -146,15 +162,19 @@ export class CodeSelectorComponent implements OnChanges {
       setTimeout(() => this.selectPreSelectedCode(), 0);
     } else {
       this.selectableItems = [];
+      this.allRegularCodeItems = [];
       this.variableManualInstruction = null;
+      this.legacySelectedCode = null;
+      setTimeout(() => this.selectPreSelectedCode(), 0);
     }
   }
 
   private selectPreSelectedCode(): void {
     this.selectedCode = null;
     this.selectedCodingIssueOption = null;
+    this.legacySelectedCode = null;
 
-    if (this.selectableItems.length === 0) {
+    if (this.selectableItems.length === 0 && !this.hasResolvedCodingScheme) {
       return;
     }
 
@@ -166,6 +186,11 @@ export class CodeSelectorComponent implements OnChanges {
         } else {
           this.selectedCode = this.preSelectedCodeId;
         }
+      } else {
+        const legacyCodeInScheme = this.allRegularCodeItems.find(
+          item => item.id === this.preSelectedCodeId && !hasManualInstruction(item)
+        );
+        this.legacySelectedCode = legacyCodeInScheme || this.createMissingLegacyCode(this.preSelectedCodeId);
       }
     }
 
@@ -176,6 +201,7 @@ export class CodeSelectorComponent implements OnChanges {
         // Clear regular code selection when pre-selecting -3 or -4
         if (this.preSelectedCodingIssueOptionId === -3 || this.preSelectedCodingIssueOptionId === -4) {
           this.selectedCode = null;
+          this.legacySelectedCode = null;
         }
       }
     }
@@ -183,6 +209,20 @@ export class CodeSelectorComponent implements OnChanges {
 
   getSafeHtml(instructions: string): string {
     return this.sanitizer.sanitize(SecurityContext.HTML, instructions) || '';
+  }
+
+  private createMissingLegacyCode(codeId: number): SelectableItem {
+    return {
+      id: codeId,
+      label: '',
+      type: 'missingLegacyCode'
+    };
+  }
+
+  get legacyCodeNoteTranslationKey(): string {
+    return this.legacySelectedCode?.type === 'missingLegacyCode' ?
+      'code-selector.legacy-code-missing-note' :
+      'code-selector.legacy-code-note';
   }
 
   private createCodeOrCodingIssueOption(item: SelectableItem): Code | CodingIssueDto {
@@ -210,12 +250,14 @@ export class CodeSelectorComponent implements OnChanges {
 
     if (selectedItem.type === 'codingIssueOption') {
       this.selectedCodingIssueOption = codeId;
+      this.legacySelectedCode = null;
       // Clear regular code selection when selecting -3 or -4
       if (codeId === -3 || codeId === -4) {
         this.selectedCode = null;
       }
     } else {
       this.selectedCode = codeId;
+      this.legacySelectedCode = null;
     }
     const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
       this.selectableItems.find(item => item.id === this.selectedCode)!
@@ -238,18 +280,25 @@ export class CodeSelectorComponent implements OnChanges {
     return this.selectableItems.filter(item => item.type === 'codingIssueOption');
   }
 
+  get hasVariableManualInstruction(): boolean {
+    return !this.suppressGeneralInstructions && !!this.variableManualInstruction?.trim();
+  }
+
   get isRegularSelectionDisabled(): boolean {
     return this.selectedCodingIssueOption === -3 || this.selectedCodingIssueOption === -4;
   }
 
   private hasCurrentSelection(): boolean {
-    return this.selectedCode !== null || this.selectedCodingIssueOption !== null;
+    return this.selectedCode !== null ||
+      this.selectedCodingIssueOption !== null ||
+      this.legacySelectedCode !== null;
   }
 
   deselectAll(): void {
     if (this.isReadOnly) return;
     this.selectedCode = null;
     this.selectedCodingIssueOption = null;
+    this.legacySelectedCode = null;
     this.codeSelected.emit({
       variableId: this.variableId,
       code: null,
@@ -258,14 +307,17 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   onNavigateClick(): void {
+    if (this.isNavigationDisabled) return;
     this.openNavigateDialog.emit();
   }
 
   onCommentClick(): void {
+    if (this.isReadOnly) return;
     this.openCommentDialog.emit();
   }
 
   onPauseClick(): void {
+    if (this.isReadOnly) return;
     this.pauseCodingJob.emit();
   }
 
@@ -278,6 +330,7 @@ export class CodeSelectorComponent implements OnChanges {
     const data = this.unitsData;
     if (!data) return;
 
+    if (this.isNavigationDisabled) return;
     if (this.hasSaveError) return;
     if (!this.isReadOnly && !this.hasCurrentSelection()) return;
 
@@ -290,6 +343,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   previousUnit(): void {
     const data = this.unitsData;
+    if (this.isNavigationDisabled) return;
     if (!data || !this.hasPreviousUnit()) return;
 
     const currentIndex = data.currentUnitIndex;
@@ -301,6 +355,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   hasNextUnit(): boolean {
     const data = this.unitsData;
+    if (this.isNavigationDisabled) return false;
     if (!data || !data.units.length) return false;
 
     const currentIndex = data.currentUnitIndex;
@@ -312,6 +367,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   hasPreviousUnit(): boolean {
     const data = this.unitsData;
+    if (this.isNavigationDisabled) return false;
     if (!data) return false;
 
     return data.currentUnitIndex > 0;
@@ -381,6 +437,7 @@ export class CodeSelectorComponent implements OnChanges {
   isVariablePanelOpen = false;
 
   toggleVariablePanel(): void {
+    if (this.isNavigationDisabled) return;
     this.isVariablePanelOpen = !this.isVariablePanelOpen;
     if (this.isVariablePanelOpen) {
       setTimeout(() => this.focusCurrentVariableInPanel(), 0);
@@ -392,6 +449,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   selectVariable(key: string): void {
+    if (this.isNavigationDisabled) return;
     this.isVariablePanelOpen = false;
     this.jumpToVariable(key);
   }
@@ -468,6 +526,7 @@ export class CodeSelectorComponent implements OnChanges {
    * Falls back to the first matching unit if all are coded.
    */
   jumpToVariable(key: string): void {
+    if (this.isNavigationDisabled) return;
     if (!this.unitsData?.units) return;
     const [unitName, variableId] = key.split('::');
     const variableUnits = this.unitsData.units

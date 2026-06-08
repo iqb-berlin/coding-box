@@ -18,6 +18,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 import { ImportOptionsDto as ImportOptions } from '../../../../../../api-dto/files/import-options.dto';
 import { ImportWorkspaceFilesProgressDto } from '../../../../../../api-dto/files/import-workspace-progress.dto';
+import { TestGroupsLoadProgressDto } from '../../../../../../api-dto/files/test-groups-load-progress.dto';
 
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
@@ -238,6 +239,34 @@ export class WorkspaceTestCenterController {
     );
   }
 
+  @Get(':workspace_id/importWorkspaceFiles/testGroups/progress')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({
+    summary: 'Get running test group load progress',
+    description:
+      'Returns live progress for retrieving and annotating test groups from a test center.'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    required: true,
+    description: 'ID of the workspace'
+  })
+  @ApiQuery({
+    name: 'importRunId',
+    required: true,
+    description: 'Run id used when starting test group retrieval'
+  })
+  @ApiOkResponse({ type: Object })
+  async getImportTestcenterGroupsProgress(
+    @Param('workspace_id') workspace_id: string,
+      @Query('importRunId') importRunId: string
+  ): Promise<TestGroupsLoadProgressDto> {
+    return this.testCenterService.getTestGroupsLoadProgress(
+      workspace_id,
+      importRunId
+    );
+  }
+
   @Get(':workspace_id/importWorkspaceFiles/testGroups')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiOperation({
@@ -265,6 +294,11 @@ export class WorkspaceTestCenterController {
     required: true,
     description: 'Authentication token'
   })
+  @ApiQuery({
+    name: 'importRunId',
+    required: false,
+    description: 'Optional run id to provide progress while loading test groups'
+  })
   @ApiOkResponse({
     description: 'Test groups retrieved successfully',
     type: [TestGroupsInfoDto]
@@ -275,7 +309,8 @@ export class WorkspaceTestCenterController {
       @Query('server') server: string,
       @Query('url') url: string,
       @Query('tc_workspace') tc_workspace: string,
-      @Query('token') token: string
+      @Query('token') token: string,
+      @Query('importRunId') importRunId: string
   ): Promise<TestGroupsInfoDto[]> {
     try {
       return await this.testCenterService.getTestgroups(
@@ -283,7 +318,8 @@ export class WorkspaceTestCenterController {
         tc_workspace,
         server,
         decodeURIComponent(url),
-        token
+        token,
+        importRunId
       );
     } catch (error) {
       throw new BadRequestException(

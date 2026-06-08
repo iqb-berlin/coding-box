@@ -2,6 +2,7 @@ import {
   CanActivate, ExecutionContext, Injectable, UnauthorizedException
 } from '@nestjs/common';
 import { AuthService } from '../../auth/service/auth.service';
+import { parseWorkspaceId } from './workspace-id.util';
 
 @Injectable()
 export class WorkspaceGuard implements CanActivate {
@@ -15,7 +16,27 @@ export class WorkspaceGuard implements CanActivate {
     const req = context.switchToHttp().getRequest();
     const userId = req.user.id;
     const params = req.params;
-    const canAccess = await this.authService.canAccessWorkSpace(userId, params.workspace_id);
+    const workspaceId = parseWorkspaceId(params.workspace_id ?? params.workspaceId);
+
+    if (!workspaceId) {
+      throw new UnauthorizedException();
+    }
+
+    const rawTokenWorkspaceId = req.user.workspace;
+    const tokenWorkspaceId = parseWorkspaceId(rawTokenWorkspaceId);
+    if (
+      rawTokenWorkspaceId !== undefined &&
+      rawTokenWorkspaceId !== null &&
+      rawTokenWorkspaceId !== '' &&
+      !tokenWorkspaceId
+    ) {
+      throw new UnauthorizedException();
+    }
+    if (tokenWorkspaceId && tokenWorkspaceId !== workspaceId) {
+      throw new UnauthorizedException();
+    }
+
+    const canAccess = await this.authService.canAccessWorkSpace(userId, workspaceId);
     if (!canAccess) {
       throw new UnauthorizedException();
     }

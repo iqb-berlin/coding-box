@@ -295,6 +295,17 @@
             border-radius: 16px;
             padding: 4px 12px;
             font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+          }
+
+          .selection-chip-suffix {
+            background: rgba(0, 0, 0, 0.12);
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 2px 6px;
           }
 
           .more-chip {
@@ -339,6 +350,24 @@
   .selection-count {
     font-weight: 500;
     color: #1976d2;
+  }
+}
+
+.manual-scope-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-left: 4px solid #1976d2;
+  border-radius: 4px;
+  background-color: #e3f2fd;
+  color: rgba(0, 0, 0, 0.87);
+  line-height: 1.4;
+
+  mat-icon {
+    color: #1976d2;
+    flex: 0 0 auto;
   }
 }
 
@@ -602,6 +631,22 @@
             flex-wrap: wrap;
             gap: 6px;
             min-width: 0;
+          }
+
+          .derive-error-option {
+            align-items: center;
+            display: flex;
+            min-height: 28px;
+
+            ::ng-deep .mat-mdc-checkbox {
+              --mdc-checkbox-state-layer-size: 28px;
+            }
+
+            ::ng-deep .mdc-label {
+              color: rgba(0, 0, 0, 0.7);
+              font-size: 0.78rem;
+              line-height: 1.2;
+            }
           }
 
           .training-required-chip,

@@ -1,0 +1,32 @@
+.dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cleanup-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: min(560px, 86vw);
+}
+
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.loading-state,
+.message-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+}
+
+@media (max-width: 640px) {
+  .date-grid {
+    grid-template-columns: 1fr;
+  }
+}

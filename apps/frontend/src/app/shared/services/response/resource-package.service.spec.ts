@@ -50,6 +50,24 @@ describe('ResourcePackageService', () => {
       expect(req.request.method).toBe('GET');
       req.flush([]);
     });
+
+    it('should propagate backend errors', () => {
+      let status: number | undefined;
+
+      service.getResourcePackages(mockWorkspaceId).subscribe({
+        error: error => {
+          status = error.status;
+        }
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/resource-packages`);
+      req.flush(
+        { message: 'Unauthorized' },
+        { status: 401, statusText: 'Unauthorized' }
+      );
+
+      expect(status).toBe(401);
+    });
   });
 
   describe('deleteResourcePackages', () => {

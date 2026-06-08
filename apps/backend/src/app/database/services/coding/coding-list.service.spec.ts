@@ -131,6 +131,79 @@ describe('CodingListService', () => {
     });
   });
 
+  it('should replace GeoGebra response values with a placeholder by default', async () => {
+    const fileCacheService = {
+      loadVoudData: jest.fn().mockResolvedValue(new Map())
+    } as unknown as CodingFileCacheService;
+    const itemBuilderService = new CodingItemBuilderService(fileCacheService);
+    const response = {
+      id: 1,
+      variableid: 'VAR1',
+      value: 'UEsDBA==',
+      status_v1: null,
+      code_v1: null,
+      score_v1: null,
+      unit: {
+        name: 'UNIT1',
+        alias: 'Unit 1',
+        booklet: {
+          person: { login: 'login', code: 'code', group: 'group' },
+          bookletinfo: { name: 'BOOKLET1' }
+        }
+      }
+    } as unknown as ResponseEntity;
+
+    await expect(
+      itemBuilderService.buildCodingItemWithVersions(
+        response,
+        'v1',
+        'token',
+        'http://server',
+        1
+      )
+    ).resolves.toMatchObject({
+      value: '[GeoGebra]'
+    });
+  });
+
+  it('should include raw GeoGebra response values when explicitly enabled', async () => {
+    const fileCacheService = {
+      loadVoudData: jest.fn().mockResolvedValue(new Map())
+    } as unknown as CodingFileCacheService;
+    const itemBuilderService = new CodingItemBuilderService(fileCacheService);
+    const response = {
+      id: 1,
+      variableid: 'VAR1',
+      value: 'UEsDBA==',
+      status_v1: null,
+      code_v1: null,
+      score_v1: null,
+      unit: {
+        name: 'UNIT1',
+        alias: 'Unit 1',
+        booklet: {
+          person: { login: 'login', code: 'code', group: 'group' },
+          bookletinfo: { name: 'BOOKLET1' }
+        }
+      }
+    } as unknown as ResponseEntity;
+
+    await expect(
+      itemBuilderService.buildCodingItemWithVersions(
+        response,
+        'v1',
+        'token',
+        'http://server',
+        1,
+        false,
+        true,
+        true
+      )
+    ).resolves.toMatchObject({
+      value: 'UEsDBA=='
+    });
+  });
+
   it('should omit response value in versioned coding items when disabled', async () => {
     const fileCacheService = {
       loadVoudData: jest.fn().mockResolvedValue(new Map())

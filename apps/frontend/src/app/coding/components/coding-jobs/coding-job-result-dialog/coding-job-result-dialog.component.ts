@@ -5,7 +5,7 @@ import {
   HostListener
 } from '@angular/core';
 import {
-  Subject, debounceTime, forkJoin, of, catchError, finalize, takeUntil
+  Subject, debounceTime, forkJoin, of, catchError, finalize, takeUntil, map, Observable, switchMap
 } from 'rxjs';
 import {
   MAT_DIALOG_DATA, MatDialogModule, MatDialogRef, MatDialog
@@ -28,10 +28,11 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { Router } from '@angular/router';
 import { FileService } from '../../../../shared/services/file/file.service';
 import { CodingJobBackendService } from '../../../services/coding-job-backend.service';
-import { AppService } from '../../../../core/services/app.service';
+import { MissingsProfileService } from '../../../services/missings-profile.service';
 import { CodingJob } from '../../../models/coding-job.model';
 import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
 import { base64ToUtf8, utf8ToBase64 } from '../../../../shared/utils/common-utils';
+import { MissingDto, MissingsProfilesDto } from '../../../../../../../../api-dto/coding/missings-profiles.dto';
 import {
   ApplyCodingResultsDialogComponent,
   ApplyCodingResultsDialogResult
@@ -44,6 +45,7 @@ interface CodingResult {
   unitAlias: string | null;
   variableId: string;
   variableAnchor: string;
+  variablePage?: string;
   bookletName: string;
   personLogin: string;
   personCode: string;
@@ -60,6 +62,7 @@ interface CodingResult {
   notes?: string;
   isDoubleCoded?: boolean;
   otherCoders?: string[];
+  unresolvedMissing?: boolean;
 }
 
 interface CodingProgressEntry {
@@ -75,12 +78,19 @@ interface CodingJobUnitResult {
   unitAlias: string | null;
   variableId: string;
   variableAnchor: string;
+  variablePage?: string;
   bookletName: string;
   personLogin: string;
   personCode: string;
   personGroup: string;
   isDoubleCoded: boolean;
   otherCoders: string[];
+}
+
+interface ResolvedMissingPreview {
+  code: number;
+  score: number;
+  label?: string;
 }
 
 @Component({
@@ -110,8 +120,8 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   @ViewChild(MatPaginator) paginator?: MatPaginator;
 
   private codingJobBackendService = inject(CodingJobBackendService);
+  private missingsProfileService = inject(MissingsProfileService);
   private fileService = inject(FileService);
-  private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
   private router = inject(Router);
@@ -119,6 +129,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   isLoading = true;
   isNotesUnavailable = false;
+  isMissingProfileUnavailable = false;
   dataSource = new MatTableDataSource<CodingResult>([]);
   displayedColumns: string[] = [
     'unitName',
@@ -134,6 +145,11 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   private refreshSubject = new Subject<void>();
   private destroy$ = new Subject<void>();
+  private readonly defaultMissingProfileLabel = 'IQB-Standard';
+  private readonly manualMissingIdsByIssueOptionId = new Map<number, string>([
+    [-3, 'mir'],
+    [-4, 'mci']
+  ]);
 
   readonly pageSize = 50;
   readonly pageSizeOptions = [25, 50, 100];
@@ -182,10 +198,12 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   loadCodingResults(): void {
     this.isLoading = true;
     this.isNotesUnavailable = false;
+    this.isMissingProfileUnavailable = false;
 
     forkJoin({
       units: this.codingJobBackendService.getCodingJobUnits(this.data.workspaceId, this.data.codingJob.id),
       progress: this.codingJobBackendService.getCodingProgress(this.data.workspaceId, this.data.codingJob.id),
+      missingProfile: this.getMissingProfileForJob(),
       notes: this.codingJobBackendService.getCodingNotes(this.data.workspaceId, this.data.codingJob.id).pipe(
         catchError(() => {
           this.isNotesUnavailable = true;
@@ -199,12 +217,17 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
         this.isLoading = false;
       })
     ).subscribe({
-      next: ({ units, progress, notes }) => {
+      next: ({
+        units, progress, notes, missingProfile
+      }) => {
+        const manualMissingLookup = this.getManualMissingLookup(missingProfile);
         this.dataSource.data = (units || []).map(unit => this.mapCodingResult(
           unit as CodingJobUnitResult,
           progress as Record<string, CodingProgressEntry>,
-          notes as Record<string, string>
+          notes as Record<string, string>,
+          manualMissingLookup
         ));
+        this.isMissingProfileUnavailable = this.getUnresolvedMissingCount() > 0;
         this.applyFilters();
         this.paginator?.firstPage();
       },
@@ -218,22 +241,27 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   private mapCodingResult(
     unit: CodingJobUnitResult,
     progressResult: Record<string, CodingProgressEntry>,
-    notesResult: Record<string, string>
+    notesResult: Record<string, string>,
+    manualMissingLookup: Map<number, ResolvedMissingPreview>
   ): CodingResult {
     const progressKey = this.getCodingProgressKey(unit);
     const progress = progressResult[progressKey];
     const notes = notesResult ? notesResult[progressKey] : undefined;
-    const mappedCode = this.getMappedResultCode(progress);
-    const mappedScore = this.getMappedResultScore(progress);
+    const mappedCode = this.getMappedResultCode(progress, manualMissingLookup);
+    const mappedScore = this.getMappedResultScore(progress, manualMissingLookup);
     const reviewIssueOption = this.getReviewIssueOption(progress);
     const testPerson = this.getTestPersonLabel(unit);
     const otherCoders = (unit.otherCoders || []).filter(Boolean);
+    const progressCode = this.toNumericCode(progress?.id);
+    const missingPreview = progressCode === null ? undefined : manualMissingLookup.get(progressCode);
+    const unresolvedMissing = this.isManualMissingIssueOption(progressCode) && !missingPreview;
 
     return {
       unitName: unit.unitName,
       unitAlias: unit.unitAlias,
       variableId: unit.variableId,
       variableAnchor: unit.variableAnchor,
+      variablePage: unit.variablePage,
       bookletName: unit.bookletName,
       personLogin: unit.personLogin,
       personCode: unit.personCode,
@@ -247,7 +275,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
         unit.bookletName
       ].filter(Boolean).join(' '),
       code: mappedCode,
-      codeLabel: progress?.label,
+      codeLabel: missingPreview?.label ?? progress?.label,
       score: mappedScore,
       codingIssueOption: reviewIssueOption ?? undefined,
       codingIssueOptionLabel: reviewIssueOption !== null ? this.getCodingIssueOption(reviewIssueOption) : undefined,
@@ -255,8 +283,80 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       givenScore: reviewIssueOption !== null && progress?.score !== undefined && progress?.score !== null ? progress.score : undefined,
       notes: notes,
       isDoubleCoded: otherCoders.length > 0,
-      otherCoders
+      otherCoders,
+      unresolvedMissing
     };
+  }
+
+  private getMissingProfileForJob(): Observable<MissingsProfilesDto | null> {
+    if (this.data.codingJob.missings_profile) {
+      return of(this.toMissingProfileDto(this.data.codingJob.missings_profile));
+    }
+
+    const profileId = this.data.codingJob.missings_profile_id ?? this.data.codingJob.missingsProfileId;
+    if (profileId && profileId > 0) {
+      return this.missingsProfileService.getMissingsProfileDetails(this.data.workspaceId, profileId);
+    }
+
+    return this.missingsProfileService.getMissingsProfiles(this.data.workspaceId).pipe(
+      map(profiles => profiles.find(profile => profile.label === this.defaultMissingProfileLabel)?.id),
+      switchMap(defaultProfileId => this.missingsProfileService.getMissingsProfileDetails(
+        this.data.workspaceId,
+        defaultProfileId || this.defaultMissingProfileLabel
+      ))
+    );
+  }
+
+  private toMissingProfileDto(profile: MissingsProfilesDto): MissingsProfilesDto {
+    return Object.assign(new MissingsProfilesDto(), profile);
+  }
+
+  private getManualMissingLookup(profile: MissingsProfilesDto | null): Map<number, ResolvedMissingPreview> {
+    const lookup = new Map<number, ResolvedMissingPreview>();
+    if (!profile) {
+      return lookup;
+    }
+
+    const missings = this.toMissingProfileDto(profile).parseMissings();
+    this.manualMissingIdsByIssueOptionId.forEach((missingId, issueOptionId) => {
+      const missing = missings.find(entry => entry.id === missingId);
+      const resolved = this.toResolvedMissingPreview(missing);
+      if (resolved) {
+        lookup.set(issueOptionId, resolved);
+      }
+    });
+
+    return lookup;
+  }
+
+  private toResolvedMissingPreview(missing?: MissingDto): ResolvedMissingPreview | null {
+    if (!missing) {
+      return null;
+    }
+
+    const code = Number(missing.code);
+    if (!Number.isInteger(code) || !this.hasExplicitFiniteScore(missing.score)) {
+      return null;
+    }
+
+    return {
+      code,
+      score: Number(missing.score),
+      label: missing.label
+    };
+  }
+
+  private hasExplicitFiniteScore(score: unknown): boolean {
+    if (typeof score === 'number') {
+      return Number.isFinite(score);
+    }
+
+    if (typeof score === 'string') {
+      const trimmedScore = score.trim();
+      return trimmedScore !== '' && Number.isFinite(Number(trimmedScore));
+    }
+
+    return false;
   }
 
   private getCodingProgressKey(unit: CodingJobUnitResult): string {
@@ -429,12 +529,17 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return this.dataSource.data.filter(result => this.isCodingIssueOption(result)).length;
   }
 
+  getUnresolvedMissingCount(): number {
+    return this.dataSource.data.filter(result => result.unresolvedMissing).length;
+  }
+
   canApplyCodingResults(): boolean {
     return !this.isLoading &&
       this.data.codingJob.status !== 'results_applied' &&
       this.isCodingJobFreshnessApplyable() &&
       !this.data.codingJob.training?.id &&
       !this.data.codingJob.training_id &&
+      this.getUnresolvedMissingCount() === 0 &&
       this.getCodedResultCount() > 0;
   }
 
@@ -447,6 +552,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     }
     if (this.data.codingJob.training?.id || this.data.codingJob.training_id) {
       return 'Trainingsergebnisse können nicht auf Antwortdaten angewendet werden';
+    }
+    if (this.getUnresolvedMissingCount() > 0) {
+      return `${this.getUnresolvedMissingCount()} Missing-Kodierung(en) können nicht aus dem Missing-Profil aufgelöst werden`;
     }
     if (this.getCodedResultCount() === 0) {
       return 'Keine kodierten Ergebnisse zum Anwenden vorhanden';
@@ -561,6 +669,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   }
 
   getCodeDisplay(result: CodingResult): string {
+    if (result.unresolvedMissing) {
+      return 'Missing nicht auflösbar';
+    }
     if (result.code !== undefined && result.code !== null) {
       if (this.isCodingIssueOption(result)) {
         if (result.givenCode !== undefined && result.givenCode !== null) {
@@ -574,6 +685,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   }
 
   getScoreDisplay(result: CodingResult): string {
+    if (result.unresolvedMissing) {
+      return '';
+    }
     if (this.isCodingIssueOption(result)) {
       if (result.givenScore !== undefined && result.givenScore !== null) {
         return `${result.givenScore} (unsicher)`;
@@ -612,23 +726,36 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return Number.isNaN(parsed) ? null : parsed;
   }
 
-  private getMappedResultCode(progress?: CodingProgressEntry): number | null {
+  private getMappedResultCode(
+    progress: CodingProgressEntry | undefined,
+    manualMissingLookup: Map<number, ResolvedMissingPreview>
+  ): number | null {
     const code = this.toNumericCode(progress?.id);
-    if (code === -3) {
-      return -98;
+    if (code !== null && manualMissingLookup.has(code)) {
+      return manualMissingLookup.get(code)?.code ?? null;
     }
-    if (code === -4) {
-      return -97;
+    if (this.isManualMissingIssueOption(code)) {
+      return null;
     }
     return code;
   }
 
-  private getMappedResultScore(progress?: CodingProgressEntry): number | undefined {
+  private getMappedResultScore(
+    progress: CodingProgressEntry | undefined,
+    manualMissingLookup: Map<number, ResolvedMissingPreview>
+  ): number | undefined {
     const code = this.toNumericCode(progress?.id);
-    if (code === -3 || code === -4) {
-      return 0;
+    if (code !== null && manualMissingLookup.has(code)) {
+      return manualMissingLookup.get(code)?.score;
+    }
+    if (this.isManualMissingIssueOption(code)) {
+      return undefined;
     }
     return progress?.score;
+  }
+
+  private isManualMissingIssueOption(code: number | null): boolean {
+    return code !== null && this.manualMissingIdsByIssueOptionId.has(code);
   }
 
   private getReviewIssueOption(progress?: CodingProgressEntry): number | null {
@@ -684,54 +811,43 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    const loadingSnackBar = this.snackBar.open('Öffne Kodierungs-Interface...', '', { duration: 3000 });
+    const testPerson = this.getCodingTestPerson(result);
 
-    this.appService.createOwnToken(this.data.workspaceId, 1).subscribe({
-      next: (token: string) => {
-        loadingSnackBar.dismiss();
+    const reviewUnit: UnitsReplayUnit = {
+      id: 0, // Not needed for replay
+      name: result.unitName,
+      alias: result.unitAlias,
+      bookletId: 0, // Not needed for replay
+      testPerson: testPerson,
+      variableId: result.variableId,
+      variableAnchor: result.variableAnchor,
+      variablePage: result.variablePage || '0'
+    };
 
-        const testPerson = this.getCodingTestPerson(result);
+    const unitsData: UnitsReplay = {
+      id: this.data.codingJob.id, // Use original coding job ID
+      name: `${this.data.codingJob.name} - Review: ${result.variableId}`,
+      units: [reviewUnit],
+      currentUnitIndex: 0
+    };
 
-        const reviewUnit: UnitsReplayUnit = {
-          id: 0, // Not needed for replay
-          name: result.unitName,
-          alias: result.unitAlias,
-          bookletId: 0, // Not needed for replay
-          testPerson: testPerson,
-          variableId: result.variableId,
-          variableAnchor: result.variableAnchor
-        };
+    const serializedUnits = this.serializeUnitsData(unitsData);
 
-        const unitsData: UnitsReplay = {
-          id: this.data.codingJob.id, // Use original coding job ID
-          name: `${this.data.codingJob.name} - Review: ${result.variableId}`,
-          units: [reviewUnit],
-          currentUnitIndex: 0
-        };
+    const queryParams = {
+      mode: 'coding',
+      unitsData: serializedUnits,
+      workspaceId: this.data.workspaceId
+    };
 
-        const serializedUnits = this.serializeUnitsData(unitsData);
+    const unitName = result.unitAlias || result.unitName || '';
+    const url = this.router
+      .serializeUrl(
+        this.router.createUrlTree(
+          [`replay/${testPerson}/${unitName}/${result.variablePage || '0'}/${result.variableId}`],
+          { queryParams: queryParams })
+      );
 
-        const queryParams = {
-          auth: token,
-          mode: 'coding',
-          unitsData: serializedUnits
-        };
-
-        const unitName = result.unitAlias || result.unitName || '';
-        const url = this.router
-          .serializeUrl(
-            this.router.createUrlTree(
-              [`replay/${testPerson}/${unitName}/0/${result.variableId}`],
-              { queryParams: queryParams })
-          );
-
-        window.open(`${window.location.origin}/#${url}`, '_blank');
-      },
-      error: () => {
-        loadingSnackBar.dismiss();
-        this.snackBar.open('Fehler beim Erstellen des Authentisierungs-Tokens', 'Schließen', { duration: 3000 });
-      }
-    });
+    window.open(`${window.location.origin}/#${url}`, '_blank');
   }
 
   editCodingScheme(result: CodingResult): void {

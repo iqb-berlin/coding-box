@@ -12,6 +12,11 @@ import { ValidationTask } from '../database/entities/validation-task.entity';
 import { ProcessDto } from '../../../../../api-dto/workspaces/process-dto';
 import { CodebookExportFormat } from '../../../../../api-dto/coding/codebook-content-setting';
 
+type ProcessOverviewValidationTask = Pick<
+ValidationTask,
+'id' | 'workspace_id' | 'validation_type' | 'status' | 'progress' | 'progress_message' | 'error'
+>;
+
 export interface TestResultsUploadJobData {
   workspaceId: number;
   file: FileIo;
@@ -85,12 +90,33 @@ export interface CodingAnalysisJobData {
   matchingFlags: string[]; // passed as string array, converted in processor if needed or kept as is
   threshold: number;
   cacheKey: string;
+  runId?: string;
 }
 
 export interface VariableAnalysisJobData {
   workspaceId: number;
   unitId?: number;
   variableId?: string;
+  cacheKey?: string;
+}
+
+export interface VariableAnalysisJobResult {
+  cacheKey: string;
+  workspaceId: number;
+  total: number;
+  storage: 'chunked';
+  variableComboChunks: number;
+  frequencyChunks: number;
+  storedAt: string;
+}
+
+export interface VariableAnalysisResultCacheManifest {
+  storage: 'chunked';
+  workspaceId: number;
+  total: number;
+  variableComboChunks: number;
+  frequencyChunks: number;
+  storedAt: string;
 }
 
 export interface ExternalCodingImportJobData {
@@ -101,6 +127,13 @@ export interface ExternalCodingImportJobData {
   sourceVersion?: 'v1' | 'v2' | 'v3';
   scoreMode?: 'import' | 'derive';
   existingCodingMode?: 'skip-conflicts' | 'fill-empty' | 'overwrite';
+}
+
+export interface DatabaseExportJobData {
+  requestedByUserId: number;
+  scope?: 'system' | 'workspace';
+  workspaceId?: number;
+  isCancelled?: boolean;
 }
 
 export interface ExportJobData {
@@ -116,12 +149,16 @@ export interface ExportJobData {
   | 'test-results'
   | 'test-logs'
   | 'results-by-version'
-  | 'coding-list';
+  | 'coding-list'
+  | 'item-matrix';
   version?: 'v1' | 'v2' | 'v3';
   format?: 'csv' | 'json' | 'excel';
+  matrixValue?: 'code' | 'score';
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;
+  includeGeoGebraResponseValues?: boolean;
+  includeGeoGebraFiles?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   doubleCodingMethod?:
@@ -221,6 +258,7 @@ export class JobQueueService {
     @InjectQueue('response-analysis') private responseAnalysisQueue: Queue,
     @InjectQueue('variable-analysis') private variableAnalysisQueue: Queue,
     @InjectQueue('external-coding-import') private externalCodingImportQueue: Queue,
+    @InjectQueue('database-export') private databaseExportQueue: Queue<DatabaseExportJobData>,
     @InjectRepository(ValidationTask)
     private readonly validationTaskRepository: Repository<ValidationTask>
   ) { }
@@ -241,8 +279,72 @@ export class JobQueueService {
       ['validation-task', this.validationTaskQueue],
       ['response-analysis', this.responseAnalysisQueue],
       ['variable-analysis', this.variableAnalysisQueue],
-      ['external-coding-import', this.externalCodingImportQueue]
+      ['external-coding-import', this.externalCodingImportQueue],
+      ['database-export', this.databaseExportQueue]
     ]);
+  }
+
+  private mapBullStateToProcessStatus(state: string): ProcessDto['status'] {
+    if (
+      state === 'active' ||
+      state === 'waiting' ||
+      state === 'delayed' ||
+      state === 'completed' ||
+      state === 'failed' ||
+      state === 'paused' ||
+      state === 'cancelled'
+    ) {
+      return state;
+    }
+
+    return 'unknown';
+  }
+
+  private mapValidationTaskStatus(
+    status: string | undefined,
+    fallbackBullState: string
+  ): ProcessDto['status'] {
+    if (fallbackBullState === 'active') return 'active';
+    if (status === 'pending') return 'waiting';
+    if (status === 'processing') return 'active';
+    if (status === 'completed') return 'completed';
+    if (status === 'failed') return 'failed';
+    if (status === 'paused') return 'paused';
+    if (status === 'cancelled') return 'cancelled';
+
+    return this.mapBullStateToProcessStatus(fallbackBullState);
+  }
+
+  private getProcessOverviewStatus(
+    queueName: string,
+    bullState: string,
+    jobData: unknown,
+    validationTask?: ProcessOverviewValidationTask
+  ): ProcessDto['status'] {
+    if (queueName === 'validation-task') {
+      return this.mapValidationTaskStatus(validationTask?.status, bullState);
+    }
+
+    if (
+      queueName === 'test-person-coding' &&
+      bullState === 'completed' &&
+      jobData &&
+      typeof jobData === 'object' &&
+      (jobData as { isPaused?: unknown }).isPaused === true
+    ) {
+      return 'paused';
+    }
+
+    return this.mapBullStateToProcessStatus(bullState);
+  }
+
+  private getProcessFailedReason(
+    status: ProcessDto['status'],
+    job: Job,
+    validationTask?: ProcessOverviewValidationTask
+  ): string | undefined {
+    if (status !== 'failed') return undefined;
+    return validationTask?.error || job.failedReason;
   }
 
   private async jobBelongsToWorkspace(
@@ -268,13 +370,14 @@ export class JobQueueService {
   private async cancelKnownJob(queueName: string, job: Job): Promise<boolean> {
     try {
       const state = await job.getState();
-      if (state === 'waiting' || state === 'delayed' || state === 'paused' || state === 'completed' || state === 'failed') {
+      const removableStates = ['waiting', 'delayed', 'paused', 'completed', 'failed', 'cancelled'];
+      if (removableStates.includes(state)) {
         await job.remove();
         return true;
       }
 
       if (state === 'active') {
-        if (queueName === 'data-export') {
+        if (queueName === 'data-export' || queueName === 'database-export') {
           await job.update({ ...job.data, isCancelled: true });
           await job.discard();
           return true;
@@ -339,25 +442,47 @@ export class JobQueueService {
         queue.getJobs(['active', 'waiting', 'delayed', 'completed', 'failed', 'paused']).then(async jobs => {
           const existingJobs = jobs.filter(Boolean);
           let matchedJobs = existingJobs;
+          let validationTaskMap = new Map<number, ProcessOverviewValidationTask>();
           if (queueName === 'validation-task') {
             const taskIds = existingJobs.map(j => j.data?.taskId as number).filter(Boolean);
             if (taskIds.length === 0) return [];
             const tasks = await this.validationTaskRepository.find({
               where: { id: In(taskIds) },
-              select: ['id', 'workspace_id']
-            });
-            const taskWorkspaceMap = new Map(tasks.map(t => [t.id, t.workspace_id]));
-            matchedJobs = existingJobs.filter(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);
+              select: [
+                'id',
+                'workspace_id',
+                'validation_type',
+                'status',
+                'progress',
+                'progress_message',
+                'error'
+              ]
+            }) as ProcessOverviewValidationTask[];
+            validationTaskMap = new Map(tasks.map(t => [Number(t.id), t]));
+            matchedJobs = existingJobs.filter(j => (
+              Number(validationTaskMap.get(Number(j.data?.taskId))?.workspace_id) === Number(workspaceId)
+            ));
           } else {
             matchedJobs = existingJobs.filter(j => j.data && j.data.workspaceId === workspaceId);
           }
 
           const mappedPromises = matchedJobs.map(async job => {
-            const state = await job.getState();
-            let progress: unknown = job.progress();
+            const bullState = await job.getState();
+            const validationTask = queueName === 'validation-task' ?
+              validationTaskMap.get(Number(job.data?.taskId)) :
+              undefined;
+            const status = this.getProcessOverviewStatus(
+              queueName,
+              bullState,
+              job.data,
+              validationTask
+            );
+            let progress: unknown = typeof validationTask?.progress === 'number' ?
+              validationTask.progress :
+              job.progress();
 
             // For completed jobs, ensure progress shows as 100% if it's numeric/empty
-            if (state === 'completed') {
+            if (status === 'completed') {
               if (typeof progress !== 'object' || progress === null) {
                 progress = 100;
               }
@@ -368,10 +493,14 @@ export class JobQueueService {
             return {
               id: job.id,
               queueName: queueName,
-              status: state as ProcessDto['status'],
+              status: status,
               progress: progress,
-              data: this.sanitizeJobData(job.data),
-              failedReason: job.failedReason,
+              data: this.sanitizeJobData({
+                ...job.data,
+                validationType: validationTask?.validation_type,
+                progressMessage: validationTask?.progress_message
+              }),
+              failedReason: this.getProcessFailedReason(status, job, validationTask),
               timestamp: job.timestamp,
               processedOn: job.processedOn,
               finishedOn: job.finishedOn
@@ -414,6 +543,8 @@ export class JobQueueService {
       'sourceVersion',
       'scoreMode',
       'existingCodingMode',
+      'validationType',
+      'progressMessage',
       'isPaused',
       'isCancelled'
     ];
@@ -927,7 +1058,11 @@ export class JobQueueService {
     options?: JobOptions
   ): Promise<Job<VariableAnalysisJobData>> {
     this.logger.log(`Adding variable analysis job for workspace ${data.workspaceId}`);
-    return this.variableAnalysisQueue.add(data, options);
+    return this.variableAnalysisQueue.add(data, {
+      removeOnComplete: { age: 86400 },
+      removeOnFail: { age: 604800 },
+      ...options
+    });
   }
 
   async getVariableAnalysisJob(

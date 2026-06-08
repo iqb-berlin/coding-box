@@ -130,6 +130,11 @@
                 Vollständig bearbeitet
               </span>
             </mat-option>
+            <mat-option value="logAny">
+              <span matTooltip="Zeigt Testhefte mit beliebigen technischen Log-Auffälligkeiten.">
+                Log: auffällig
+              </span>
+            </mat-option>
             <mat-option value="logCritical">
               <span matTooltip="Kritische Log-Auffälligkeiten wie Controller-Fehler, fehlender Abschluss oder Connection Lost.">
                 Log: kritisch
@@ -232,6 +237,25 @@
           <ng-container matColumnDef="responseStatus">
             <th mat-header-cell *matHeaderCellDef>Antwortstatus</th>
             <td mat-cell *matCellDef="let row">{{ row.responseStatus }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="logStatus">
+            <th mat-header-cell *matHeaderCellDef>Logstatus</th>
+            <td mat-cell *matCellDef="let row">
+              <span
+                class="log-status-chip"
+                [class.critical]="getLogAnomalySeverity(row) === 'critical'"
+                [class.warning]="getLogAnomalySeverity(row) === 'warning'"
+                [class.info]="getLogAnomalySeverity(row) === 'info'"
+                [class.clean]="!hasLogAnomaliesForRow(row)"
+                [matTooltip]="getLogAnomalyTooltip(row)"
+              >
+                {{ getLogAnomalySeverityLabel(row) }}
+                @if (row.logAnomalies?.length) {
+                <span class="log-status-count">{{ row.logAnomalies.length }}</span>
+                }
+              </span>
+            </td>
           </ng-container>
 
           <ng-container matColumnDef="responseValue">

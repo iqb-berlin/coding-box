@@ -13,7 +13,6 @@ import { WorkspaceTestResultsResponseController } from '../workspace/workspace-t
 import { WorkspaceTestResultsAnalysisController } from '../workspace/workspace-test-results-analysis.controller';
 import { WorkspaceTestResultsImportController } from '../workspace/workspace-test-results-import.controller';
 import { WorkspaceTestResultsExportController } from '../workspace/workspace-test-results-export.controller';
-import { DatabaseExportService } from '../database/database-export.service';
 
 @Module({
   imports: [
@@ -35,9 +34,6 @@ import { DatabaseExportService } from '../database/database-export.service';
     WorkspaceTestResultsImportController,
     WorkspaceTestResultsExportController,
     WorkspaceTestResultsManagementController
-  ],
-  providers: [
-    DatabaseExportService
   ]
 })
 export class WorkspaceTestResultsAdminModule { }

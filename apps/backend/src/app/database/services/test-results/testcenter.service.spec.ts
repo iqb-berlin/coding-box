@@ -13,13 +13,16 @@ import { Person, Response, Log } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import { CodingAnalysisService } from '../coding/coding-analysis.service';
 
 describe('TestCenterService', () => {
   let service: TestcenterService;
   let httpService: { put: jest.Mock; axiosRef: { get: jest.Mock } };
   let personService: DeepMocked<PersonService>;
+  let cacheService: DeepMocked<CacheService>;
   let workspaceTestResultsService: DeepMocked<WorkspaceTestResultsService>;
   let codingFreshnessService: DeepMocked<CodingFreshnessService>;
+  let codingAnalysisService: DeepMocked<CodingAnalysisService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -52,7 +55,9 @@ describe('TestCenterService', () => {
         {
           provide: WorkspaceTestResultsService,
           useValue: createMock<WorkspaceTestResultsService>({
-            invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+            invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
+            invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined),
+            invalidateCodingAvailabilityCache: jest.fn().mockResolvedValue(undefined)
           })
         },
         {
@@ -69,12 +74,19 @@ describe('TestCenterService', () => {
           provide: CodingFreshnessService,
           useValue: createMock<CodingFreshnessService>({
             markUnitsPendingAfterImport: jest.fn().mockResolvedValue(undefined),
+            markResponsesPendingAfterImport: jest.fn().mockResolvedValue(undefined),
             markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined),
             getSummary: jest.fn().mockResolvedValue({
               workspaceId: 123,
               currentRevision: 1,
               items: []
             })
+          })
+        },
+        {
+          provide: CodingAnalysisService,
+          useValue: createMock<CodingAnalysisService>({
+            invalidateCache: jest.fn().mockResolvedValue(undefined)
           })
         }
       ]
@@ -83,8 +95,10 @@ describe('TestCenterService', () => {
     service = module.get<TestcenterService>(TestcenterService);
     httpService = module.get(HttpService);
     personService = module.get(PersonService);
+    cacheService = module.get(CacheService);
     workspaceTestResultsService = module.get(WorkspaceTestResultsService);
     codingFreshnessService = module.get(CodingFreshnessService);
+    codingAnalysisService = module.get(CodingAnalysisService);
     personService.filterLogRowsForPerson.mockImplementation((rows, person) => (
       (rows || []).filter(row => row.groupname === person.group &&
         row.loginname === person.login &&
@@ -199,6 +213,8 @@ describe('TestCenterService', () => {
         expect(result).toHaveLength(1);
         expect(result[0].groupName).toBe('group1');
         expect(result[0].existsInDatabase).toBe(false);
+        expect(personService.getGroupsWithBookletLogs)
+          .toHaveBeenCalledWith(123, []);
       });
 
       it('should mark groups as existing in database', async () => {
@@ -230,6 +246,55 @@ describe('TestCenterService', () => {
         );
 
         expect(result[0].existsInDatabase).toBe(true);
+        expect(personService.getGroupsWithBookletLogs)
+          .toHaveBeenCalledWith(123, ['existing-group']);
+      });
+
+      it('should record progress while fetching and preparing test groups', async () => {
+        const mockGroups: TestGroupsInfoDto[] = [
+          {
+            groupName: 'existing-group',
+            groupLabel: 'Existing Group',
+            bookletsStarted: 5,
+            numUnitsMin: 3,
+            numUnitsMax: 8,
+            numUnitsTotal: 25,
+            numUnitsAvg: 5.5,
+            lastChange: Date.now()
+          }
+        ];
+
+        httpService.axiosRef.get.mockResolvedValue({
+          data: mockGroups
+        } as AxiosResponse);
+        personService.getWorkspaceGroups.mockResolvedValue(['existing-group']);
+        personService.getGroupsWithBookletLogs.mockResolvedValue(
+          new Map([['existing-group', true]])
+        );
+
+        const result = await service.getTestgroups(
+          mockWorkspaceId,
+          mockTcWorkspace,
+          'demo',
+          '',
+          mockAuthToken,
+          'run-1'
+        );
+
+        expect(result[0]).toEqual(expect.objectContaining({
+          existsInDatabase: true,
+          hasBookletLogs: true
+        }));
+        expect(cacheService.set).toHaveBeenCalledWith(
+          'testcenter_test_groups_progress:123:run-1',
+          expect.objectContaining({
+            importRunId: 'run-1',
+            status: 'completed',
+            totalGroups: 1,
+            processedGroups: 1
+          }),
+          3600
+        );
       });
 
       it('should surface API errors when fetching test groups fails', async () => {
@@ -241,6 +306,20 @@ describe('TestCenterService', () => {
           '',
           mockAuthToken
         )).rejects.toThrow('Failed to retrieve test groups from Testcenter');
+      });
+
+      it('should reject malformed test group responses', async () => {
+        httpService.axiosRef.get.mockResolvedValue({
+          data: { groups: [] }
+        } as AxiosResponse);
+
+        await expect(service.getTestgroups(
+          mockWorkspaceId,
+          mockTcWorkspace,
+          'demo',
+          '',
+          mockAuthToken
+        )).rejects.toThrow('Unexpected Testcenter response');
       });
     });
   });
@@ -315,6 +394,13 @@ describe('TestCenterService', () => {
       expect(
         workspaceTestResultsService.invalidateWorkspaceStatsCache
       ).toHaveBeenCalledWith(123);
+      expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(123);
+      expect(
+        workspaceTestResultsService.invalidateCodingStatisticsCache
+      ).toHaveBeenCalledWith(123);
+      expect(
+        workspaceTestResultsService.invalidateCodingAvailabilityCache
+      ).toHaveBeenCalledWith(123);
       expect(
         codingFreshnessService.markUnitsPendingAfterImport
       ).toHaveBeenCalledWith(123, [10], 2);
@@ -327,6 +413,70 @@ describe('TestCenterService', () => {
         currentRevision: 1,
         items: []
       });
+    });
+
+    it('should keep Testcenter response imports successful when coding cache invalidation fails', async () => {
+      const mockResponses: Response[] = [
+        {
+          groupname: 'group1',
+          loginname: 'user1',
+          code: 'code1',
+          bookletname: 'booklet1',
+          unitname: 'unit1',
+          originalUnitId: 'unit-1-id',
+          responses: '[]',
+          laststate: '{}'
+        }
+      ];
+      httpService.axiosRef.get.mockResolvedValue({
+        data: mockResponses
+      } as AxiosResponse);
+      const mockPersons: Person[] = [
+        {
+          workspace_id: 123,
+          group: 'group1',
+          login: 'user1',
+          code: 'code1',
+          booklets: []
+        }
+      ];
+      personService.createPersonList.mockResolvedValue(mockPersons);
+      personService.assignBookletsToPerson.mockResolvedValue(mockPersons[0]);
+      personService.assignUnitsToBookletAndPerson.mockResolvedValue(
+        mockPersons[0]
+      );
+      personService.processPersonBooklets.mockResolvedValue({
+        addedUnitIds: [10],
+        changedUnitIds: [],
+        addedResponseCount: 1,
+        changedResponseCount: 0
+      });
+      personService.getImportStatistics.mockResolvedValue({
+        persons: 1,
+        booklets: 1,
+        units: 1
+      });
+      workspaceTestResultsService.invalidateCodingStatisticsCache
+        .mockRejectedValueOnce(new Error('statistics cache failed'));
+
+      const result = await service.importWorkspaceFiles(
+        '123',
+        'ws-456',
+        'demo',
+        '',
+        'token',
+        mockImportOptions,
+        'group1'
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          level: 'warning',
+          category: 'other',
+          message: expect.stringContaining('Kodierstatistiken')
+        })
+      ]);
     });
   });
 
@@ -628,6 +778,13 @@ describe('TestCenterService', () => {
       );
       expect(result.persons).toBe(1);
       expect(result.units).toBe(2);
+      expect(codingAnalysisService.invalidateCache).not.toHaveBeenCalled();
+      expect(
+        workspaceTestResultsService.invalidateCodingStatisticsCache
+      ).not.toHaveBeenCalled();
+      expect(
+        workspaceTestResultsService.invalidateCodingAvailabilityCache
+      ).not.toHaveBeenCalled();
     });
   });
 

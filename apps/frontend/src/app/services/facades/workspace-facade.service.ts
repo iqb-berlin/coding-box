@@ -37,6 +37,7 @@ import { BookletInfoDto } from '../../../../../../api-dto/booklet-info/booklet-i
 import { UnitInfoDto } from '../../../../../../api-dto/unit-info/unit-info.dto';
 import { ResourcePackageDto } from '../../../../../../api-dto/resource-package/resource-package-dto';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
+import { TestGroupsLoadProgressDto } from '../../../../../../api-dto/files/test-groups-load-progress.dto';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 
 interface PaginatedResponse<T> {
@@ -254,15 +255,24 @@ export class WorkspaceFacadeService {
     testCenterWorkspace: string,
     server: string,
     url: string,
-    authToken: string
+    authToken: string,
+    importRunId?: string
   ): Observable<TestGroupsInfoDto[]> {
     return this.importService.importTestcenterGroups(
       workspaceId,
       testCenterWorkspace,
       server,
       url,
-      authToken
+      authToken,
+      importRunId
     );
+  }
+
+  getTestGroupsLoadProgress(
+    workspaceId: number,
+    importRunId: string
+  ): Observable<TestGroupsLoadProgressDto | null> {
+    return this.importService.getTestGroupsLoadProgress(workspaceId, importRunId);
   }
 
   downloadWorkspaceFilesAsZip(workspaceId: number, fileTypes?: string[]): Observable<Blob> {

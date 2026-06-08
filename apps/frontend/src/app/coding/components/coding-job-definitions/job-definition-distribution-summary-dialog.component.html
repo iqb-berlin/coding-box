@@ -1,0 +1,126 @@
+<h2 mat-dialog-title class="distribution-title">
+  <mat-icon>table_chart</mat-icon>
+  {{ 'coding-job-definitions.distribution-summary.title' | translate }}
+</h2>
+
+<mat-dialog-content class="distribution-content">
+  <div class="definition-meta">
+    <span>{{ 'coding-job-definitions.distribution-summary.definition-label' | translate:{id: data.definitionId} }}</span>
+    @if (snapshot) {
+      <span>{{ getSourceLabelKey() | translate }}</span>
+      <span>{{ getSnapshotDate() }}</span>
+    }
+  </div>
+
+  @if (!snapshot) {
+    <div class="missing-history">
+      <mat-icon>info</mat-icon>
+      <p>{{ 'coding-job-definitions.distribution-summary.missing-history' | translate }}</p>
+    </div>
+  } @else {
+    @if (snapshots.length > 1) {
+      <div
+        class="snapshot-switcher"
+        [attr.aria-label]="'coding-job-definitions.distribution-summary.snapshots-label' | translate">
+        @for (snapshotOption of snapshots; track $index; let index = $index) {
+          <button
+            mat-stroked-button
+            type="button"
+            [class.selected]="index === selectedSnapshotIndex"
+            (click)="selectSnapshot(index)">
+            {{ (snapshotOption.source === 'refresh'
+              ? 'coding-job-definitions.distribution-summary.source.refresh'
+              : 'coding-job-definitions.distribution-summary.source.initial') | translate }}
+            <span>{{ snapshotOption.createdAt | date:'short' }}</span>
+          </button>
+        }
+      </div>
+    }
+
+    <div class="snapshot-summary">
+      <div class="summary-stat">
+        <span>{{ 'coding-job-definitions.distribution-summary.coders' | translate }}</span>
+        <strong>{{ coderColumns.length }}</strong>
+      </div>
+      <div class="summary-stat">
+        <span>{{ 'coding-job-definitions.distribution-summary.jobs' | translate }}</span>
+        <strong>{{ snapshot.jobs.length }}</strong>
+      </div>
+      <div class="summary-stat">
+        <span>{{ 'coding-job-definitions.distribution-summary.total-cases' | translate }}</span>
+        <strong>{{ getGrandTotal() }}</strong>
+      </div>
+      @if (hasAddedCases()) {
+        <div class="summary-stat positive">
+          <span>{{ 'coding-job-definitions.distribution-summary.new-cases' | translate }}</span>
+          <strong>{{ getGrandAddedCases() }}</strong>
+        </div>
+      }
+    </div>
+
+    <mat-divider></mat-divider>
+
+    <div class="distribution-matrix" [style.--distribution-columns]="getGridTemplate()">
+      <div class="matrix-row matrix-header">
+        <div class="matrix-cell item-cell">{{ 'coding-job-definitions.distribution-summary.item' | translate }}</div>
+        @for (coder of coderColumns; track coder.id) {
+          <div class="matrix-cell coder-cell">
+            <mat-icon>person</mat-icon>
+            <span>{{ coder.name }}</span>
+          </div>
+        }
+        <div class="matrix-cell">{{ 'coding-job-definitions.distribution-summary.total' | translate }}</div>
+        @if (hasAddedCases()) {
+        <div class="matrix-cell">{{ 'coding-job-definitions.distribution-summary.new' | translate }}</div>
+        }
+        <div class="matrix-cell">{{ 'coding-job-definitions.distribution-summary.double-coded' | translate }}</div>
+      </div>
+
+      @for (row of rows; track row.itemKey) {
+        <div class="matrix-row">
+          <div class="matrix-cell item-cell">{{ row.label }}</div>
+          @for (coder of coderColumns; track coder.id) {
+            <div class="matrix-cell value-cell">
+              <span>{{ row.coderCases[coder.id] || 0 }}</span>
+              @if (row.addedCoderTasks[coder.id]) {
+                <span
+                  class="added-value"
+                  [attr.aria-label]="'coding-job-definitions.distribution-summary.added-tasks-title' | translate: {
+                    tasks: row.addedCoderTasks[coder.id]
+                  }"
+                  [attr.title]="'coding-job-definitions.distribution-summary.added-tasks-title' | translate: {
+                    tasks: row.addedCoderTasks[coder.id]
+                  }">
+                  +{{ row.addedCoderTasks[coder.id] }}
+                </span>
+              }
+            </div>
+          }
+          <div class="matrix-cell total-cell">{{ row.totalCases }}</div>
+          @if (hasAddedCases()) {
+          <div class="matrix-cell added-total-cell">{{ row.addedCases }}</div>
+          }
+          <div class="matrix-cell">{{ row.doubleCodedCases }}</div>
+        </div>
+      }
+
+      <div class="matrix-row total-row">
+        <div class="matrix-cell item-cell">{{ 'coding-job-definitions.distribution-summary.grand-total' | translate }}</div>
+        @for (coder of coderColumns; track coder.id) {
+          <div class="matrix-cell">{{ getCoderTotal(coder.id) }}</div>
+        }
+        <div class="matrix-cell total-cell">{{ getGrandTotal() }}</div>
+        @if (hasAddedCases()) {
+        <div class="matrix-cell added-total-cell">{{ getGrandAddedCases() }}</div>
+        }
+        <div class="matrix-cell"></div>
+      </div>
+    </div>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-raised-button color="primary" type="button" (click)="dialogRef.close()">
+    {{ 'common.close' | translate }}
+  </button>
+</mat-dialog-actions>

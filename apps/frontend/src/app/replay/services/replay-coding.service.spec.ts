@@ -172,6 +172,120 @@ describe('ReplayCodingService', () => {
         }
       );
     });
+
+    it('uses the token captured before a queued progress save runs after switching jobs', async () => {
+      const subjects: Subject<CodingJob>[] = [];
+      codingJobBackendServiceMock.saveCodingProgress.mockImplementation(() => {
+        const subject = new Subject<CodingJob>();
+        subjects.push(subject);
+        return subject.asObservable();
+      });
+      service.codingJobId = 100;
+      service.setAuthToken('old-token');
+
+      const firstSave = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'one' });
+      await Promise.resolve();
+      expect(subjects).toHaveLength(1);
+
+      const secondSave = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 2, label: 'two' });
+      service.resetCodingData();
+      service.codingJobId = 200;
+      service.setAuthToken('new-token');
+
+      subjects[0].next({} as CodingJob);
+      subjects[0].complete();
+      await firstSave;
+      await Promise.resolve();
+
+      expect(subjects).toHaveLength(2);
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenNthCalledWith(
+        2,
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: {
+            id: 2,
+            code: '',
+            label: 'two',
+            score: null,
+            codingIssueOption: null
+          }
+        },
+        'old-token'
+      );
+
+      subjects[1].next({} as CodingJob);
+      subjects[1].complete();
+      await secondSave;
+    });
+
+    it('does not keep a save error from a stale queued progress save after switching jobs', async () => {
+      const firstSubject = new Subject<CodingJob>();
+      codingJobBackendServiceMock.saveCodingProgress
+        .mockReturnValueOnce(firstSubject.asObservable())
+        .mockReturnValueOnce(throwError(() => new Error('old save failed')));
+      service.codingJobId = 100;
+      service.setAuthToken('old-token');
+
+      const firstSave = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'one' });
+      await Promise.resolve();
+      const secondSave = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 2, label: 'two' });
+      service.resetCodingData();
+      service.codingJobId = 200;
+      service.setAuthToken('new-token');
+
+      firstSubject.next({} as CodingJob);
+      firstSubject.complete();
+      await firstSave;
+      await Promise.resolve();
+
+      await expect(secondSave).rejects.toThrow('old save failed');
+      expect(service.hasSaveError).toBe(false);
+      expect(service.lastSaveError).toBeNull();
+      expect(snackBarMock.open).not.toHaveBeenCalled();
+    });
+
+    it('waits for pending row mutations before resolving a flush', async () => {
+      const pendingSave = new Subject<CodingJob>();
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValueOnce(pendingSave.asObservable());
+      service.codingJobId = 100;
+
+      const savePromise = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'one' });
+      await Promise.resolve();
+      let didFlush = false;
+      const flushPromise = service.flushPendingRowMutations().then(() => {
+        didFlush = true;
+      });
+
+      await Promise.resolve();
+      expect(didFlush).toBe(false);
+
+      pendingSave.next({} as CodingJob);
+      pendingSave.complete();
+      await savePromise;
+      await flushPromise;
+
+      expect(didFlush).toBe(true);
+    });
+
+    it('rejects a flush when a pending row mutation fails', async () => {
+      const pendingSave = new Subject<CodingJob>();
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValueOnce(pendingSave.asObservable());
+      service.codingJobId = 100;
+
+      const savePromise = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'one' });
+      await Promise.resolve();
+      const flushPromise = service.flushPendingRowMutations();
+
+      pendingSave.error(new Error('pending save failed'));
+
+      await expect(savePromise).rejects.toThrow('pending save failed');
+      await expect(flushPromise).rejects.toThrow('pending save failed');
+      expect(service.hasSaveError).toBe(true);
+    });
   });
 
   describe('handleCodeSelected', () => {
@@ -243,6 +357,70 @@ describe('ReplayCodingService', () => {
       const key = service.generateCompositeKey('p1', 'u1', 'v1');
       expect(service.selectedCodes.get(key)?.id).toBe(2);
     });
+
+    it('does not apply a stale queued local selection after switching jobs', async () => {
+      const subjects: Subject<CodingJob>[] = [];
+      codingJobBackendServiceMock.saveCodingProgress.mockImplementation(() => {
+        const subject = new Subject<CodingJob>();
+        subjects.push(subject);
+        return subject.asObservable();
+      });
+      service.codingJobId = 100;
+      service.setAuthToken('old-token');
+
+      const first = service.handleCodeSelected(
+        { variableId: 'v1', code: { id: 1, label: 'one', score: 1 } as never },
+        'p1',
+        'u1',
+        1,
+        null
+      );
+      await Promise.resolve();
+      expect(subjects).toHaveLength(1);
+
+      const second = service.handleCodeSelected(
+        { variableId: 'v1', code: { id: 2, label: 'two', score: 2 } as never },
+        'p1',
+        'u1',
+        1,
+        null
+      );
+      service.resetCodingData();
+      service.codingJobId = 200;
+      service.setAuthToken('new-token');
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      service.selectedCodes.set(key, { id: 9, label: 'new job selection' });
+
+      subjects[0].next({} as CodingJob);
+      subjects[0].complete();
+      await expect(first).resolves.toBeNull();
+      await Promise.resolve();
+
+      expect(subjects).toHaveLength(2);
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenNthCalledWith(
+        2,
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: {
+            id: 2,
+            code: '2',
+            label: 'two',
+            score: 2,
+            codingIssueOption: null
+          }
+        },
+        'old-token'
+      );
+
+      subjects[1].next({} as CodingJob);
+      subjects[1].complete();
+      await expect(second).resolves.toBeNull();
+      expect(service.selectedCodes.get(key)?.id).toBe(9);
+    });
   });
 
   describe('resetCodingData', () => {
@@ -251,6 +429,7 @@ describe('ReplayCodingService', () => {
       service.isResumingJob = true;
       service.isCodingJobFinalized = true;
       service.isCompletedJobReview = true;
+      service.isReviewMode = true;
       service.hasSaveError = true;
       service.lastSaveError = 'failed';
       service.showScore = true;
@@ -263,6 +442,7 @@ describe('ReplayCodingService', () => {
       expect(service.isResumingJob).toBe(false);
       expect(service.isCodingJobFinalized).toBe(false);
       expect(service.isCompletedJobReview).toBe(false);
+      expect(service.isReviewMode).toBe(false);
       expect(service.hasSaveError).toBe(false);
       expect(service.lastSaveError).toBeNull();
       expect(service.showScore).toBe(false);
@@ -325,6 +505,119 @@ describe('ReplayCodingService', () => {
           notes: 'note'
         }
       );
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+    });
+
+    it('uses the job id and token captured before a queued note save runs after switching jobs', async () => {
+      const subjects: Subject<CodingJob>[] = [];
+      codingJobBackendServiceMock.saveCodingNotes.mockImplementation(() => {
+        const subject = new Subject<CodingJob>();
+        subjects.push(subject);
+        return subject.asObservable();
+      });
+      service.codingJobId = 100;
+      service.setAuthToken('old-token');
+
+      const firstSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'first');
+      await Promise.resolve();
+      expect(subjects).toHaveLength(1);
+
+      const secondSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'second');
+      service.resetCodingData();
+      service.codingJobId = 200;
+      service.setAuthToken('new-token');
+
+      subjects[0].next({} as CodingJob);
+      subjects[0].complete();
+      await firstSave;
+      await Promise.resolve();
+
+      expect(subjects).toHaveLength(2);
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenNthCalledWith(
+        2,
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          notes: 'second'
+        },
+        'old-token'
+      );
+
+      subjects[1].next({} as CodingJob);
+      subjects[1].complete();
+      await secondSave;
+
+      const noteKey = service.generateCompositeKey('p1', 'u1', 'v1');
+      expect(service.notes.has(noteKey)).toBe(false);
+    });
+
+    it('keeps note save errors until the failed note saves successfully', async () => {
+      codingJobBackendServiceMock.saveCodingNotes
+        .mockReturnValueOnce(throwError(() => new Error('note save failed')))
+        .mockReturnValueOnce(of({} as CodingJob));
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      service.codingJobId = 100;
+
+      await expect(service.saveNotes(1, 'p1', 'u1', 'v1', 'first'))
+        .rejects.toThrow('note save failed');
+
+      expect(service.hasSaveError).toBe(true);
+      expect(service.lastSaveError).toBe('translated');
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        'translated',
+        'translated',
+        {
+          duration: 5000,
+          panelClass: ['snackbar-error']
+        }
+      );
+
+      await service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'l' });
+      expect(service.hasSaveError).toBe(true);
+
+      await service.saveNotes(1, 'p1', 'u1', 'v1', 'second');
+
+      expect(service.hasSaveError).toBe(false);
+      expect(service.lastSaveError).toBeNull();
+    });
+  });
+
+  describe('read-only review mode', () => {
+    beforeEach(() => {
+      service.isReviewMode = true;
+      service.codingJobId = 100;
+    });
+
+    it('does not update status or persist coding changes', async () => {
+      await service.updateCodingJobStatus(1, 100, 'active');
+      await service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'l' });
+      await service.saveNotes(1, 'p1', 'u1', 'v1', 'note');
+      await service.saveCodingJobComment(1, 'comment');
+      await service.pauseCodingJob(1, 100);
+      await service.resumeCodingJob(1, 100);
+      await service.submitCodingJob(1, 100);
+
+      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.saveCodingNotes).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.updateCodingJobKeepalive).not.toHaveBeenCalled();
+    });
+
+    it('ignores code selections without changing local progress', async () => {
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+
+      await expect(service.handleCodeSelected(
+        { variableId: 'v1', code: { id: 1, label: 'one', score: 1 } as never },
+        'p1',
+        'u1',
+        1,
+        null
+      )).resolves.toBeNull();
+
+      expect(service.selectedCodes.has(key)).toBe(false);
       expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
     });
   });

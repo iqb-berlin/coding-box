@@ -61,6 +61,14 @@ const mockQueryBuilder = () => ({
   execute: jest.fn().mockResolvedValue({ affected: 0 })
 });
 
+type WorkspaceTestResultsServiceWithLogAnomalyLookup = {
+  findLogAnomaliesForBooklets: (
+    bookletIds: number[],
+    thresholds: unknown,
+    exclusions?: unknown
+  ) => Promise<Map<number, unknown[]>>;
+};
+
 describe('WorkspaceTestResultsService', () => {
   let service: WorkspaceTestResultsService;
   let responseManagementService: ResponseManagementService;
@@ -74,6 +82,7 @@ describe('WorkspaceTestResultsService', () => {
   let responseRepository: Repository<ResponseEntity>;
   let sessionRepository: Repository<Session>;
   let bookletLogRepository: Repository<BookletLog>;
+  let unitLogRepository: Repository<UnitLog>;
   let chunkRepository: Repository<ChunkEntity>;
   let codingListService: {
     getVariablePageMap: jest.Mock;
@@ -166,6 +175,10 @@ describe('WorkspaceTestResultsService', () => {
       createQueryBuilder: jest.fn(() => mockQueryBuilder())
     } as unknown as Repository<BookletLog>;
 
+    unitLogRepository = {
+      createQueryBuilder: jest.fn(() => mockQueryBuilder())
+    } as unknown as Repository<UnitLog>;
+
     chunkRepository = {
       createQueryBuilder: jest.fn(() => mockQueryBuilder()),
       find: jest.fn().mockResolvedValue([])
@@ -198,7 +211,7 @@ describe('WorkspaceTestResultsService', () => {
       {} as unknown as Repository<BookletInfo>,
       bookletLogRepository,
       sessionRepository,
-      {} as unknown as Repository<UnitLog>,
+      unitLogRepository,
       chunkRepository,
       dataSource,
       unitTagService,
@@ -450,6 +463,135 @@ describe('WorkspaceTestResultsService', () => {
       previewSpy.mockRestore();
       snapshotSpy.mockRestore();
       assertSpy.mockRestore();
+    });
+
+    it('deletes response rows and direct coding dependents for response cleanup jobs', async () => {
+      const deletedFrom: unknown[] = [];
+      const manager = {
+        createQueryBuilder: jest.fn(() => {
+          const qb = {} as {
+            delete: jest.Mock;
+            from: jest.Mock;
+            where: jest.Mock;
+            execute: jest.Mock;
+          };
+          qb.delete = jest.fn(() => qb);
+          qb.from = jest.fn((entity: unknown) => {
+            deletedFrom.push(entity);
+            return qb;
+          });
+          qb.where = jest.fn(() => qb);
+          qb.execute = jest.fn().mockResolvedValue({ affected: 2 });
+          return qb;
+        })
+      };
+      const preview = {
+        targetType: 'responses',
+        scope: 'units',
+        label: 'Aufgabe(n): UNIT_1 vor 01.01.2026',
+        persons: 1,
+        booklets: 1,
+        units: 1,
+        responses: 2,
+        groups: [],
+        bookletNames: ['BOOKLET_1'],
+        unitNames: ['UNIT_1'],
+        warnings: [],
+        responseCleanup: {
+          answeredBefore: 1767222000000,
+          variableIds: [],
+          subforms: [],
+          timestampSourceCounts: {
+            chunk: 2,
+            unknown: 0
+          },
+          unknownTimestampResponses: 0,
+          samples: []
+        }
+      };
+      const privateService = service as unknown as {
+        resolveResponseCleanupTargets: jest.Mock;
+        assertResponseCleanupCompleted: jest.Mock;
+      };
+      const resolveSpy = jest
+        .spyOn(privateService, 'resolveResponseCleanupTargets')
+        .mockResolvedValue({
+          responseIds: [501, 502],
+          unitIds: [301],
+          preview
+        });
+      const assertSpy = jest
+        .spyOn(privateService, 'assertResponseCleanupCompleted')
+        .mockResolvedValue(undefined);
+
+      (dataSource.transaction as jest.Mock).mockImplementation(cb => cb(manager));
+
+      const result = await service.deleteTestResultResponsesByRequest(
+        1,
+        {
+          unitNames: ['UNIT_1'],
+          answeredBefore: 1767222000000
+        },
+        'user-1'
+      );
+
+      expect(deletedFrom).toEqual([
+        CodingJobUnit,
+        CoderTrainingDiscussionResult,
+        ResponseEntity
+      ]);
+      expect(deletedFrom).not.toContain(Unit);
+      expect(deletedFrom).not.toContain(Booklet);
+      expect(deletedFrom).not.toContain(Persons);
+      expect(assertSpy).toHaveBeenCalledWith([501, 502]);
+      expect(result).toMatchObject({
+        targetType: 'responses',
+        deletedTargetCount: 2
+      });
+      expect(cacheService.delete).toHaveBeenCalledWith(
+        'workspace-overview-stats-1'
+      );
+      expect(journalService.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: 1,
+          actorUserId: 'user-1',
+          eventType: 'TEST_RESULT_RESPONSES_DELETED',
+          entityType: 'responses',
+          entityId: null,
+          result: 'success',
+          summary: 'Test result responses deleted by cleanup job',
+          details: expect.objectContaining({
+            deletedTargetCount: 2,
+            preview
+          })
+        })
+      );
+
+      resolveSpy.mockRestore();
+      assertSpy.mockRestore();
+    });
+
+    it('matches response cleanup chunks by exact variable list before using the subform fallback', () => {
+      const privateClass = WorkspaceTestResultsService as unknown as {
+        responseMatchesChunkCondition: (
+          chunkAlias: string,
+          responseAlias: string
+        ) => string;
+      };
+
+      const condition = privateClass.responseMatchesChunkCondition(
+        'cleanup_chunk',
+        'response'
+      );
+
+      expect(condition).toContain(
+        "response.variableid = ANY(string_to_array(COALESCE(cleanup_chunk.variables, ''), ','))"
+      );
+      expect(condition).toContain("COALESCE(cleanup_chunk.variables, '') = ''");
+      expect(condition).toContain(
+        "COALESCE(cleanup_chunk.key, '') = COALESCE(response.subform, '')"
+      );
+      expect(condition).not.toContain('LIKE');
     });
 
     it('explicitly deletes known unit dependents before removing unit targets', async () => {
@@ -726,13 +868,48 @@ describe('WorkspaceTestResultsService', () => {
 
       await service.searchResponses(
         1,
-        { codedStatus: '5', version: 'v3', responseSource: 'all' },
+        { codedStatus: 'CODING_COMPLETE', version: 'v3', responseSource: 'all' },
         { page: 1, limit: 100 }
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining('COALESCE(response.status_v3'),
-        { codedStatus: '5' }
+        { codedStatus: 5 }
+      );
+    });
+
+    it('should apply DERIVE_ERROR codedStatus filters numerically', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { codedStatus: 'DERIVE_ERROR', version: 'v1', responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 = :codedStatus',
+        { codedStatus: 4 }
+      );
+    });
+
+    it('should return no response search results for invalid codedStatus filters', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { codedStatus: 'NOPE', responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('1=0');
+      expect(qb.andWhere).not.toHaveBeenCalledWith(
+        expect.stringContaining(' = :codedStatus'),
+        expect.any(Object)
       );
     });
 
@@ -1022,6 +1199,270 @@ describe('WorkspaceTestResultsService', () => {
 
       expect(qb.where).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId });
       expect(qb.andWhere).toHaveBeenCalledWith('person.code ILIKE :code', { code: '%abc%' });
+    });
+
+    it('should not calculate log anomaly summaries for rows by default', async () => {
+      const workspaceId = 1;
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+      (workspaceCoreService.getIgnoredUnits as jest.Mock).mockResolvedValue([]);
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const anomalySpy = jest.spyOn(
+        serviceWithLogAnomalyLookup,
+        'findLogAnomaliesForBooklets'
+      );
+
+      await service.findFlatResponses(workspaceId, { page: 1, limit: 10 });
+
+      expect(anomalySpy).not.toHaveBeenCalled();
+    });
+
+    it('should calculate log anomaly summaries for rows when explicitly requested', async () => {
+      const workspaceId = 1;
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+      (workspaceCoreService.getIgnoredUnits as jest.Mock).mockResolvedValue([]);
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const anomalySpy = jest.spyOn(
+        serviceWithLogAnomalyLookup,
+        'findLogAnomaliesForBooklets'
+      ).mockResolvedValue(new Map());
+
+      await service.findFlatResponses(workspaceId, {
+        page: 1,
+        limit: 10,
+        includeLogAnomalies: 'true'
+      });
+
+      expect(anomalySpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('findLogAnomaliesForBooklets', () => {
+    const thresholds = {
+      longLoadingThresholdMs: 5000,
+      focusLostThresholdMs: 300000,
+      sessionSpanThresholdMs: 86400000,
+      repeatedStartThreshold: 2
+    };
+
+    it('should report long loading from unit STARTED/ENDED logs', async () => {
+      const bookletLogQb = mockQueryBuilder();
+      const sessionQb = mockQueryBuilder();
+      const unitQb = mockQueryBuilder();
+      const unitLogQb = mockQueryBuilder();
+      (bookletLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(bookletLogQb);
+      (sessionRepository.createQueryBuilder as jest.Mock).mockReturnValue(sessionQb);
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      (unitLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitLogQb);
+      bookletLogQb.getMany.mockResolvedValue([]);
+      sessionQb.getRawMany.mockResolvedValue([]);
+      unitQb.getMany.mockResolvedValue([
+        {
+          id: 11,
+          bookletid: 1,
+          name: 'unit-a.xml',
+          alias: 'unit-a'
+        }
+      ]);
+      unitLogQb.getMany.mockResolvedValue([
+        {
+          id: 1,
+          unitid: 11,
+          key: 'STARTED',
+          parameter: null,
+          ts: 1000
+        },
+        {
+          id: 2,
+          unitid: 11,
+          key: 'ENDED',
+          parameter: null,
+          ts: 8000
+        }
+      ]);
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const anomaliesByBooklet =
+        await serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+          [1],
+          thresholds
+        );
+      const anomalies = anomaliesByBooklet.get(1) as Array<{
+        code: string;
+        evidence: string;
+        count: number;
+      }>;
+
+      expect(anomalies).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'long_loading',
+            evidence: expect.stringContaining('Unit-Ladezeit'),
+            count: 1
+          })
+        ])
+      );
+    });
+
+    it('should not report long loading from null unit STARTED timestamps', async () => {
+      const bookletLogQb = mockQueryBuilder();
+      const sessionQb = mockQueryBuilder();
+      const unitQb = mockQueryBuilder();
+      const unitLogQb = mockQueryBuilder();
+      (bookletLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(bookletLogQb);
+      (sessionRepository.createQueryBuilder as jest.Mock).mockReturnValue(sessionQb);
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      (unitLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitLogQb);
+      bookletLogQb.getMany.mockResolvedValue([]);
+      sessionQb.getRawMany.mockResolvedValue([]);
+      unitQb.getMany.mockResolvedValue([
+        {
+          id: 11,
+          bookletid: 1,
+          name: 'unit-a.xml',
+          alias: 'unit-a'
+        }
+      ]);
+      unitLogQb.getMany.mockResolvedValue([
+        {
+          id: 1,
+          unitid: 11,
+          key: 'STARTED',
+          parameter: null,
+          ts: null
+        },
+        {
+          id: 2,
+          unitid: 11,
+          key: 'ENDED',
+          parameter: null,
+          ts: 8000
+        }
+      ]);
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const anomaliesByBooklet =
+        await serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+          [1],
+          thresholds
+        );
+      const anomalies = (anomaliesByBooklet.get(1) || []) as Array<{
+        code: string;
+      }>;
+
+      expect(
+        anomalies.some(anomaly => anomaly.code === 'long_loading')
+      ).toBe(false);
+    });
+
+    it('should ignore unit-based anomalies for globally ignored units', async () => {
+      const bookletNameQb = mockQueryBuilder();
+      const bookletLogQb = mockQueryBuilder();
+      const sessionQb = mockQueryBuilder();
+      const unitQb = mockQueryBuilder();
+      const unitLogQb = mockQueryBuilder();
+      (bookletRepository.createQueryBuilder as jest.Mock).mockReturnValue(bookletNameQb);
+      (bookletLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(bookletLogQb);
+      (sessionRepository.createQueryBuilder as jest.Mock).mockReturnValue(sessionQb);
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      (unitLogRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitLogQb);
+      bookletNameQb.getRawMany.mockResolvedValue([
+        { id: 1, name: 'booklet-a' }
+      ]);
+      bookletLogQb.getMany.mockResolvedValue([]);
+      sessionQb.getRawMany.mockResolvedValue([]);
+      unitQb.getMany.mockResolvedValue([
+        {
+          id: 11,
+          bookletid: 1,
+          name: 'ignored-unit.xml',
+          alias: 'ignored-unit'
+        }
+      ]);
+      unitLogQb.getMany.mockResolvedValue([
+        {
+          id: 1,
+          unitid: 11,
+          key: 'PLAYER',
+          parameter: 'LOADING',
+          ts: 1000
+        }
+      ]);
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const anomaliesByBooklet =
+        await serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+          [1],
+          thresholds,
+          {
+            globalIgnoredUnits: ['ignored-unit.xml'],
+            ignoredBooklets: [],
+            testletIgnoredUnits: []
+          }
+        );
+
+      expect(anomaliesByBooklet.get(1) || []).toEqual([]);
+      expect(unitLogRepository.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('should apply unit exclusions to SQL log anomaly filters', () => {
+      const qb = mockQueryBuilder();
+      const privateService = service as unknown as {
+        applyLogAnomalyFilters: (
+          queryBuilder: ReturnType<typeof mockQueryBuilder>,
+          codes: string[],
+          logThresholds: typeof thresholds,
+          exclusions?: {
+            globalIgnoredUnits: string[];
+            ignoredBooklets: string[];
+            testletIgnoredUnits: Array<{ bookletId: string; unitId: string }>;
+          }
+        ) => void;
+      };
+
+      privateService.applyLogAnomalyFilters(
+        qb,
+        ['long_loading', 'unit_progress_incomplete'],
+        thresholds,
+        {
+          globalIgnoredUnits: ['ignored-unit.xml'],
+          ignoredBooklets: [],
+          testletIgnoredUnits: [{
+            bookletId: 'booklet-a',
+            unitId: 'testlet-unit.xml'
+          }]
+        }
+      );
+
+      const [sql, params] = qb.andWhere.mock.calls[0];
+
+      expect(sql).toContain(
+        "REGEXP_REPLACE(UPPER(u.name), '\\.XML$', '', 'i') NOT IN"
+      );
+      expect(sql).toContain(
+        "REGEXP_REPLACE(UPPER(u2.name), '\\.XML$', '', 'i') NOT IN"
+      );
+      expect(sql).toContain(
+        "REGEXP_REPLACE(UPPER(u3.name), '\\.XML$', '', 'i') NOT IN"
+      );
+      expect(sql).toContain(
+        'UPPER(bookletinfo.name) = :logAnomaly0LongLoadingBooklet0'
+      );
+      expect(params).toMatchObject({
+        logAnomaly0LongLoadingIgnoredUnits: ['IGNORED-UNIT'],
+        logAnomaly0LongLoadingBooklet0: 'BOOKLET-A',
+        logAnomaly0LongLoadingUnit0: 'TESTLET-UNIT',
+        logAnomaly1UnitProgressAvailableIgnoredUnits: ['IGNORED-UNIT'],
+        logAnomaly1UnitProgressMissingIgnoredUnits: ['IGNORED-UNIT']
+      });
     });
   });
 
@@ -1314,6 +1755,26 @@ describe('WorkspaceTestResultsService', () => {
       );
       expect(row).toContain(
         '3;critical;"controller_error|connection_lost";"Controller error|Connection lost"'
+      );
+    });
+  });
+
+  describe('exportTestLogsToStream', () => {
+    const collectStream = (stream: PassThrough): Promise<string> => new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      stream.on('error', reject);
+    });
+
+    it('should write headers when no test logs are available', async () => {
+      const resStream = new PassThrough();
+      const outputPromise = collectStream(resStream);
+
+      await service.exportTestLogsToStream(1, resStream);
+
+      await expect(outputPromise).resolves.toBe(
+        'groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry'
       );
     });
   });

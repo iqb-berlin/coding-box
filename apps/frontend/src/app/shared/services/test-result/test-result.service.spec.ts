@@ -82,7 +82,9 @@ describe('TestResultService', () => {
         page: 1,
         limit: 10,
         code: 'code1',
-        group: 'group1'
+        group: 'group1',
+        logAnomalies: 'critical',
+        includeLogAnomalies: 'true'
       };
 
       service.getFlatResponses(mockWorkspaceId, options).subscribe(res => {
@@ -91,7 +93,9 @@ describe('TestResultService', () => {
 
       const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/flat-responses` &&
         request.params.get('page') === '1' &&
-        request.params.get('code') === 'code1'
+        request.params.get('code') === 'code1' &&
+        request.params.get('logAnomalies') === 'critical' &&
+        request.params.get('includeLogAnomalies') === 'true'
       );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
@@ -108,6 +112,107 @@ describe('TestResultService', () => {
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/flat-responses?page=1&limit=10`);
       req.flush('Error', { status: 500, statusText: 'Server Error' });
+    });
+  });
+
+  describe('getLogAnomalySummary', () => {
+    it('should fetch log anomaly summary with threshold parameters', () => {
+      const mockResponse = {
+        totalBooklets: 10,
+        affectedBooklets: 2,
+        criticalBooklets: 1,
+        warningBooklets: 1,
+        infoBooklets: 0,
+        totalAnomalyRules: 3,
+        totalAnomalyEvents: 4,
+        byCode: { controller_error: 1 }
+      };
+
+      service.getLogAnomalySummary(mockWorkspaceId, {
+        longLoadingThresholdMs: '8000'
+      }).subscribe(res => {
+        expect(res).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/log-anomaly-summary` &&
+        request.params.get('longLoadingThresholdMs') === '8000'
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+    });
+
+    it('should propagate summary load errors', done => {
+      service.getLogAnomalySummary(mockWorkspaceId).subscribe({
+        next: () => {
+          throw new Error('Expected log anomaly summary request to fail');
+        },
+        error: error => {
+          expect(error.status).toBe(500);
+          done();
+        }
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/log-anomaly-summary`
+      );
+      req.flush('Error', { status: 500, statusText: 'Server Error' });
+    });
+  });
+
+  describe('getLogAnomalyDetails', () => {
+    it('should fetch log anomaly details with limit parameter', () => {
+      const mockResponse = {
+        total: 1,
+        data: []
+      };
+
+      service.getLogAnomalyDetails(mockWorkspaceId, {
+        limit: '20'
+      }).subscribe(res => {
+        expect(res).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/log-anomaly-details` &&
+        request.params.get('limit') === '20'
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+    });
+
+    it('should propagate details load errors', done => {
+      service.getLogAnomalyDetails(mockWorkspaceId).subscribe({
+        next: () => {
+          throw new Error('Expected log anomaly details request to fail');
+        },
+        error: error => {
+          expect(error.status).toBe(500);
+          done();
+        }
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/log-anomaly-details`
+      );
+      req.flush('Error', { status: 500, statusText: 'Server Error' });
+    });
+  });
+
+  describe('requestFlatResponseFilters', () => {
+    it('should emit forced log anomaly table requests', done => {
+      service.flatResponseFilterRequests$.subscribe(request => {
+        expect(request).toEqual({
+          workspaceId: mockWorkspaceId,
+          filters: { logAnomalies: 'any' },
+          forceShowLogAnomalies: true
+        });
+        done();
+      });
+
+      service.requestFlatResponseFilters(
+        mockWorkspaceId,
+        { logAnomalies: 'any' },
+        { forceShowLogAnomalies: true }
+      );
     });
   });
 

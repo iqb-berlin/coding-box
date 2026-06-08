@@ -214,9 +214,16 @@ describe('CodingManagementComponent', () => {
 
     const translateService = TestBed.inject(TranslateService);
     translateService.setTranslation('de', {
+      close: 'Schließen',
       'coding-management': {
         actions: {
           close: 'Schließen'
+        },
+        descriptions: {
+          'no-results': 'Keine Ergebnisse für {{status}}'
+        },
+        statistics: {
+          'uncoded-responses-title': 'Unkodierte Antworten'
         },
         readiness: {
           'title-load-failed': 'Auto-Coding-Prüfung nicht verfügbar',
@@ -404,10 +411,10 @@ describe('CodingManagementComponent', () => {
         aggregatedDuplicateCases: 0
       };
 
-      expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding aktualisieren');
+      expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding starten');
       expect(component.codingFreshnessSummaryText).toBe(
-        'Auto-Coding 1 muss für 10 Aufgabenbearbeitungen ausgeführt werden. ' +
-        'Das betrifft 50 Antwortwerte.'
+        '10 Aufgabenbearbeitungen benötigen Auto-Coding 1. ' +
+        'Dabei werden 50 Antwortwerte berücksichtigt.'
       );
       expect(component.hasFreshnessAutoCodingWork('v1')).toBe(true);
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
@@ -445,8 +452,8 @@ describe('CodingManagementComponent', () => {
       expect(component.hasCodingFreshnessWarnings).toBe(true);
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(true);
       expect(component.codingFreshnessSummaryText).toBe(
-        'Auto-Coding 2 muss für 671 Aufgabenbearbeitungen ausgeführt werden. ' +
-        'Das betrifft 5098 Antwortwerte.'
+        '671 Aufgabenbearbeitungen benötigen Auto-Coding 2. ' +
+        'Dabei werden 5098 Antwortwerte berücksichtigt.'
       );
     });
 
@@ -892,9 +899,32 @@ describe('CodingManagementComponent', () => {
 
   describe('Data Fetching', () => {
     it('should get available statuses from coding statistics', () => {
+      component.codingStatistics = {
+        totalResponses: 103,
+        statusCounts: {
+          4: 3,
+          200: 50,
+          300: 50
+        }
+      };
+
       const statuses = component.getAvailableStatuses();
 
-      expect(statuses).toEqual(['200', '300']);
+      expect(statuses).toEqual(['4', '200', '300']);
+    });
+
+    it('should use centralized status labels in empty result snackbars', () => {
+      const componentWithPrivate = component as unknown as {
+        fetchResponsesByStatus(status: string): void;
+      };
+
+      componentWithPrivate.fetchResponsesByStatus('4');
+
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        'Keine Ergebnisse für DERIVE_ERROR',
+        'Schließen',
+        { duration: 5000 }
+      );
     });
   });
 

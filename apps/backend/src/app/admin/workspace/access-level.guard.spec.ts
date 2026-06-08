@@ -362,14 +362,25 @@ describe('AccessLevelGuard (Backend)', () => {
       expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(42, 999999999);
     });
 
-    it('should handle workspace ID with leading zeros', async () => {
+    it('should reject workspace ID with leading zeros', async () => {
       reflector.get.mockReturnValue(2);
       const context = createMockExecutionContext(42, '00123', 2);
 
-      await guard.canActivate(context);
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
 
-      expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(42, 123);
+      expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
     });
+
+    it.each(['1e2', '0x10', '1.5', '123abc'])(
+      'should reject ambiguous workspace ID format %s',
+      async workspaceId => {
+        reflector.get.mockReturnValue(2);
+        const context = createMockExecutionContext(42, workspaceId, 2);
+
+        await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+        expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
+      }
+    );
   });
 
   describe('Edge Cases - Access Levels', () => {

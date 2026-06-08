@@ -193,7 +193,9 @@ describe('CodingExportService high coverage paths', () => {
       1,
       'token',
       'http://server'
-    )).resolves.toContain('UNIT');
+    )).resolves.toBe(
+      'http://server/#/replay/login@code@group@BOOKLET/UNIT/2/VAR?auth=token'
+    );
   });
 
   it('enters the heavier coding result export variants with cancellable safe repositories', async () => {

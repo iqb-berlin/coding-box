@@ -56,6 +56,14 @@ describe('ErrorMessageDisplayComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('error.reauthentication_title');
   });
 
+  it('should not offer dismissing the global reauthentication message', () => {
+    router.url = '/coding';
+    fixture.detectChanges();
+
+    const reauthenticationMessage = fixture.nativeElement.querySelector('.re-authentication') as HTMLElement;
+    expect(reauthenticationMessage.querySelector('.close-button')).toBeNull();
+  });
+
   it('should start login with the remembered return URL', () => {
     fixture.componentInstance.handleLogin();
 

@@ -55,6 +55,7 @@ export interface VariableConfig {
   variableId: string;
   unitId: string;
   sampleCount: number;
+  includeDeriveError?: boolean;
 }
 
 export interface VariableGrouping {
@@ -318,7 +319,16 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     if (this.editTraining.assigned_variables) {
       this.editTraining.assigned_variables.forEach(v => {
-        this.addVariable(v.variableId, v.unitName, v.sampleCount || 10, undefined, undefined, true);
+        this.addVariable(
+          v.variableId,
+          v.unitName,
+          v.sampleCount || 10,
+          undefined,
+          undefined,
+          true,
+          undefined,
+          v.includeDeriveError === true
+        );
       });
     }
 
@@ -336,6 +346,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
             this.editTraining?.case_ordering_mode ||
             'continuous';
           this.addBundleVariables(b.id, sampleCount, caseOrderingMode, true);
+          this.applyBundleVariableDeriveErrorOptions(b.id, b.variables || []);
           if (this.variablesFormArray.controls.some(control => control.get('bundleId')?.value === b.id)) {
             this.selectedBundleIds.add(b.id);
           }
@@ -367,7 +378,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.codingJobBackendService.getCodingIncompleteVariables(workspaceId)
+    this.codingJobBackendService.getCodingIncompleteVariables(workspaceId, undefined, undefined, true)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: variables => {
@@ -671,9 +682,18 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
   }
 
-  addVariable(variableId: string = '', unitId: string = '', sampleCount?: number, bundleId?: number, bundleName?: string, skipUpdate = false, bundleCaseOrderingMode?: 'continuous' | 'alternating'): void {
+  addVariable(
+    variableId: string = '',
+    unitId: string = '',
+    sampleCount?: number,
+    bundleId?: number,
+    bundleName?: string,
+    skipUpdate = false,
+    bundleCaseOrderingMode?: 'continuous' | 'alternating',
+    includeDeriveError = false
+  ): void {
     const variableData = this.getAvailableVariable(unitId, variableId);
-    const maxAvailable = variableData ? this.getEffectiveAvailableCount(unitId, variableId) : 1000;
+    const maxAvailable = variableData ? this.getEffectiveAvailableCount(unitId, variableId, includeDeriveError) : 1000;
     const defaultSampleCount = sampleCount !== undefined ? sampleCount : maxAvailable;
 
     const variableGroup = this.fb.group({
@@ -683,7 +703,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       bundleId: [bundleId],
       bundleName: [bundleName],
       overlapWarning: [false],
-      bundleCaseOrderingMode: [bundleCaseOrderingMode || null]
+      bundleCaseOrderingMode: [bundleCaseOrderingMode || null],
+      includeDeriveError: [includeDeriveError]
     });
 
     this.variablesFormArray.push(variableGroup);
@@ -760,7 +781,16 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       if (this.isVariableAlreadyAdded(variable)) {
         duplicateVariables.push(`${variable.unitName} - ${variable.variableId}`);
       } else {
-        this.addVariable(variable.variableId, variable.unitName, sampleCountNum, bundle.id, bundle.name, false, effectiveCaseOrderingMode);
+        this.addVariable(
+          variable.variableId,
+          variable.unitName,
+          sampleCountNum,
+          bundle.id,
+          bundle.name,
+          false,
+          effectiveCaseOrderingMode,
+          variable.includeDeriveError === true
+        );
         addedCount += 1;
       }
     });
@@ -777,6 +807,25 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     bundle.caseOrderingMode = effectiveCaseOrderingMode;
 
     this.checkForOverlaps();
+  }
+
+  private applyBundleVariableDeriveErrorOptions(
+    bundleId: number,
+    variables: Array<Pick<Variable, 'unitName' | 'variableId' | 'includeDeriveError'>> = []
+  ): void {
+    variables.forEach(variable => {
+      const bundleVariableControl = this.variablesFormArray.controls.find(control => (
+        control.get('bundleId')?.value === bundleId &&
+        control.get('unitId')?.value === variable.unitName &&
+        control.get('variableId')?.value === variable.variableId
+      ));
+      if (bundleVariableControl) {
+        this.setDeriveErrorIncludedForControl(
+          bundleVariableControl as FormGroup,
+          variable.includeDeriveError === true
+        );
+      }
+    });
   }
 
   private isVariableAlreadyAdded(variable: { unitName: string; variableId: string }): boolean {
@@ -953,7 +1002,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const variableId = control.get('variableId')?.value;
       const requestedCount = control.get('sampleCount')?.value || 0;
       const variableData = this.getAvailableVariable(unitId, variableId);
-      const effectiveCount = this.getEffectiveAvailableCount(unitId, variableId);
+      const effectiveCount = this.getEffectiveAvailableCount(
+        unitId,
+        variableId,
+        control.get('includeDeriveError')?.value === true
+      );
       return !!variableData && effectiveCount < requestedCount;
     });
   }
@@ -1121,7 +1174,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const unitId = v.control.get('unitId')?.value;
       const variableId = v.control.get('variableId')?.value;
       const variableData = this.getAvailableVariable(unitId, variableId);
-      const effectiveCount = this.getEffectiveAvailableCount(unitId, variableId);
+      const effectiveCount = this.getEffectiveAvailableCount(
+        unitId,
+        variableId,
+        v.control.get('includeDeriveError')?.value === true
+      );
       return !!variableData && effectiveCount < requestedCount;
     });
   }
@@ -1131,23 +1188,81 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const variableId = item.control.get('variableId')?.value;
     const requestedCount = item.control.get('sampleCount')?.value || 0;
     const variableData = this.getAvailableVariable(unitId, variableId);
-    const effectiveCount = this.getEffectiveAvailableCount(unitId, variableId);
+    const effectiveCount = this.getEffectiveAvailableCount(
+      unitId,
+      variableId,
+      item.control.get('includeDeriveError')?.value === true
+    );
     return !!variableData && effectiveCount < requestedCount;
   }
 
   getAvailableCount(item: { control: FormGroup }): number {
     const unitId = item.control.get('unitId')?.value;
     const variableId = item.control.get('variableId')?.value;
-    return this.getEffectiveAvailableCount(unitId, variableId);
+    return this.getEffectiveAvailableCount(
+      unitId,
+      variableId,
+      item.control.get('includeDeriveError')?.value === true
+    );
   }
 
-  private getEffectiveAvailableCount(unitId: string | undefined, variableId: string | undefined): number {
+  private getEffectiveAvailableCount(
+    unitId: string | undefined,
+    variableId: string | undefined,
+    includeDeriveError = false
+  ): number {
     const variableData = this.getAvailableVariable(unitId, variableId);
+    if (includeDeriveError) {
+      return variableData?.uniqueCasesAfterAggregationWithDeriveError ??
+        ((variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0) +
+          (variableData?.deriveErrorResponseCount ?? 0));
+    }
+
     return variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0;
   }
 
   private getAvailableVariable(unitId: string | undefined, variableId: string | undefined): Variable | undefined {
     return this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
+  }
+
+  hasDeriveErrorResponsesForControl(control: FormGroup): boolean {
+    const unitId = control.get('unitId')?.value;
+    const variableId = control.get('variableId')?.value;
+    const variable = this.getAvailableVariable(unitId, variableId);
+    return (variable?.deriveErrorResponseCount ?? 0) > 0 || control.get('includeDeriveError')?.value === true;
+  }
+
+  getDeriveErrorResponseCountForControl(control: FormGroup): number {
+    const unitId = control.get('unitId')?.value;
+    const variableId = control.get('variableId')?.value;
+    return this.getAvailableVariable(unitId, variableId)?.deriveErrorResponseCount ?? 0;
+  }
+
+  isDeriveErrorIncludedForControl(control: FormGroup): boolean {
+    return control.get('includeDeriveError')?.value === true;
+  }
+
+  setDeriveErrorIncludedForControl(control: FormGroup, includeDeriveError: boolean): void {
+    control.get('includeDeriveError')?.setValue(includeDeriveError);
+    const unitId = control.get('unitId')?.value;
+    const variableId = control.get('variableId')?.value;
+    const maxAvailable = this.getEffectiveAvailableCount(unitId, variableId, includeDeriveError);
+    control.get('sampleCount')?.setValidators([
+      Validators.required,
+      Validators.min(1),
+      Validators.max(maxAvailable)
+    ]);
+    if (includeDeriveError && (Number(control.get('sampleCount')?.value) || 0) < 1 && maxAvailable > 0) {
+      control.get('sampleCount')?.setValue(maxAvailable);
+    }
+    control.get('sampleCount')?.updateValueAndValidity();
+    this.updateGroupedVariables();
+  }
+
+  getSelectedDeriveErrorOptInCount(): number {
+    return this.variablesFormArray.controls.filter(control => (
+      control.get('includeDeriveError')?.value === true
+    )).length;
   }
 
   getBundleOrderingOverrides(): BundleOrderingOverride[] {
@@ -1174,6 +1289,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       .join(', ');
   }
 
+  getBundleDeriveErrorControls(bundleGroup: { variables: { control: FormGroup; index: number }[] }): { control: FormGroup; index: number }[] {
+    return bundleGroup.variables.filter(item => this.hasDeriveErrorResponsesForControl(item.control));
+  }
+
   trackByCoderId(index: number, coder: Coder): number {
     return coder.id;
   }
@@ -1191,7 +1310,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       return {
         variableId,
         unitId: control.get('unitId')?.value || '',
-        sampleCount: control.get('sampleCount')?.value || 10
+        sampleCount: control.get('sampleCount')?.value || 10,
+        ...(control.get('includeDeriveError')?.value === true ? { includeDeriveError: true } : {})
       };
     });
 
@@ -1205,16 +1325,23 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     const trainingLabel = this.trainingForm.get('trainingLabel')?.value || '';
 
-    const assignedVariables: { unitName: string; variableId: string; sampleCount: number }[] =
+    const assignedVariables: { unitName: string; variableId: string; sampleCount: number; includeDeriveError?: boolean }[] =
       this.variablesFormArray.controls
         .filter(c => !c.get('bundleId')?.value)
         .map(c => ({
           variableId: c.get('variableId')?.value,
           unitName: c.get('unitId')?.value,
-          sampleCount: c.get('sampleCount')?.value
+          sampleCount: c.get('sampleCount')?.value,
+          ...(c.get('includeDeriveError')?.value === true ? { includeDeriveError: true } : {})
         }));
 
-    const assignedVariableBundles: { id: number; name: string; sampleCount: number; caseOrderingMode?: 'continuous' | 'alternating' }[] = [];
+    const assignedVariableBundles: {
+      id: number;
+      name: string;
+      sampleCount: number;
+      caseOrderingMode?: 'continuous' | 'alternating';
+      variables?: { unitName: string; variableId: string; sampleCount?: number; includeDeriveError?: boolean }[];
+    }[] = [];
     const seenBundleIds = new Set<number>();
     this.variablesFormArray.controls.forEach(c => {
       const bundleId = c.get('bundleId')?.value;
@@ -1226,7 +1353,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           id: bundleId,
           name: c.get('bundleName')?.value,
           sampleCount: c.get('sampleCount')?.value || 10,
-          caseOrderingMode: bundleCaseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous'
+          caseOrderingMode: bundleCaseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous',
+          variables: this.variablesFormArray.controls
+            .filter(control => control.get('bundleId')?.value === bundleId)
+            .map(control => ({
+              unitName: control.get('unitId')?.value,
+              variableId: control.get('variableId')?.value,
+              sampleCount: control.get('sampleCount')?.value || 10,
+              ...(control.get('includeDeriveError')?.value === true ? { includeDeriveError: true } : {})
+            }))
         });
       }
     });
@@ -1248,7 +1383,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         assignedVariableBundles,
         caseOrderingMode,
         caseSelectionMode,
-        referenceTrainingIds.length ? referenceTrainingIds : undefined,
+        referenceTrainingIds,
         referenceMode ?? undefined,
         this.trainingForm.get('suppressGeneralInstructions')?.value ?? false
       ) :
@@ -1337,7 +1472,16 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         );
         if (!isAlreadyAdded) {
           const sampleCount = v.casesInJobs ?? defaultSampleCount;
-          this.addVariable(v.variableId, v.unitName, sampleCount, undefined, undefined, true);
+          this.addVariable(
+            v.variableId,
+            v.unitName,
+            sampleCount,
+            undefined,
+            undefined,
+            true,
+            undefined,
+            v.includeDeriveError === true
+          );
           varsAdded += 1;
         }
       });
@@ -1353,6 +1497,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
             bundlesAdded += 1;
           }
         }
+        this.applyBundleVariableDeriveErrorOptions(b.id, b.variables || []);
       });
       this.bundleSelection$.next(Array.from(this.selectedBundleIds));
     }

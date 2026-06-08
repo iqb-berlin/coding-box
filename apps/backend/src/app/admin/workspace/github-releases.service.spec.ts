@@ -16,6 +16,8 @@ describe('GithubReleasesService', () => {
   };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GithubReleasesService,
@@ -102,6 +104,42 @@ describe('GithubReleasesService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('schemer.html');
+    });
+  });
+
+  describe('installCompatibleAspectPlayer', () => {
+    it('should install the minimal compatible Aspect player release', async () => {
+      mockHttpService.get
+        .mockReturnValueOnce(of({
+          data: [
+            {
+              tag_name: 'editor/2.9.4+player/2.9.4',
+              published_at: '2025-05-07T12:00:00Z',
+              assets: [
+                {
+                  name: 'iqb-player-aspect-2.9.4.html',
+                  browser_download_url: 'http://example.com/iqb-player-aspect-2.9.4.html'
+                }
+              ]
+            }
+          ]
+        }))
+        .mockReturnValueOnce(of({
+          data: Buffer.from('<html></html>')
+        }));
+      mockWorkspaceFilesService.uploadTestFiles.mockResolvedValue([]);
+
+      const result = await service.installCompatibleAspectPlayer(7);
+
+      expect(result).toBe(true);
+      expect(mockWorkspaceFilesService.uploadTestFiles).toHaveBeenCalledWith(
+        7,
+        [expect.objectContaining({
+          originalname: 'iqb-player-aspect-2.9.4.html',
+          mimetype: 'text/html'
+        })],
+        true
+      );
     });
   });
 });

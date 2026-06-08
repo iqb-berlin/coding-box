@@ -69,6 +69,113 @@ describe('WorkspaceSettingsService', () => {
     });
   });
 
+  describe('getAutoRefreshManualCodingJobs', () => {
+    it('should return parsed boolean', () => {
+      service.getAutoRefreshManualCodingJobs(1).subscribe(val => {
+        expect(val).toBe(false);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auto-refresh-manual-coding-jobs`);
+      req.flush({ value: '{"enabled":false}' });
+    });
+
+    it('should return true on error', () => {
+      service.getAutoRefreshManualCodingJobs(1).subscribe(val => {
+        expect(val).toBe(true);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auto-refresh-manual-coding-jobs`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setAutoRefreshManualCodingJobs', () => {
+    it('should persist the setting', () => {
+      service.setAutoRefreshManualCodingJobs(1, false).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'auto-refresh-manual-coding-jobs',
+        value: '{"enabled":false}',
+        description: 'Controls whether manual coding job tables refresh automatically when the browser window regains focus'
+      });
+      req.flush({});
+    });
+  });
+
+  describe('getShowTestResultsLogAnomalies', () => {
+    it('should return parsed boolean', () => {
+      service.getShowTestResultsLogAnomalies(1).subscribe(val => {
+        expect(val).toBe(true);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/show-test-results-log-anomalies`);
+      req.flush({ value: '{"enabled":true}' });
+    });
+
+    it('should return false on invalid JSON', () => {
+      service.getShowTestResultsLogAnomalies(1).subscribe(val => {
+        expect(val).toBe(false);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/show-test-results-log-anomalies`);
+      req.flush({ value: 'not-json' });
+    });
+
+    it('should return false on error', () => {
+      service.getShowTestResultsLogAnomalies(1).subscribe(val => {
+        expect(val).toBe(false);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/show-test-results-log-anomalies`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setShowTestResultsLogAnomalies', () => {
+    it('should persist the setting', () => {
+      service.setShowTestResultsLogAnomalies(1, true).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'show-test-results-log-anomalies',
+        value: '{"enabled":true}',
+        description: 'Controls whether log anomaly information is shown on the test results page'
+      });
+      req.flush({});
+    });
+  });
+
+  describe('getIncludeDeriveErrorInManualCoding', () => {
+    it('should return parsed boolean', () => {
+      service.getIncludeDeriveErrorInManualCoding(1).subscribe(val => {
+        expect(val).toBe(true);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/include-derive-error-in-manual-coding`);
+      req.flush({ value: '{"enabled":true}' });
+    });
+
+    it('should return false on error', () => {
+      service.getIncludeDeriveErrorInManualCoding(1).subscribe(val => {
+        expect(val).toBe(false);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/include-derive-error-in-manual-coding`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setIncludeDeriveErrorInManualCoding', () => {
+    it('should persist the setting', () => {
+      service.setIncludeDeriveErrorInManualCoding(1, true).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'include-derive-error-in-manual-coding',
+        value: '{"enabled":true}',
+        description: 'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
+      });
+      req.flush({});
+    });
+  });
+
   describe('getAggregationThreshold', () => {
     it('should return a persisted threshold', () => {
       service.getAggregationThreshold(1).subscribe(val => {

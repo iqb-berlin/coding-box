@@ -5,10 +5,10 @@
         mat-raised-button
         color="primary"
         (click)="openImportDialog()"
-        class="menu-button"
+        class="action-button"
       >
         <mat-icon>upload</mat-icon>
-        <span class="menu-button-label">Import</span>
+        <span>Import</span>
       </button>
 
       <button
@@ -16,7 +16,7 @@
         color="primary"
         [disabled]="isExporting"
         (click)="openExportDialog()"
-        class="menu-button"
+        class="action-button"
       >
         @if (!isExporting) {
         <mat-icon>download</mat-icon>
@@ -26,19 +26,20 @@
           style="display: inline-block; margin-right: 8px"
         ></mat-spinner>
         }
-        <span class="menu-button-label">Export</span>
+        <span>Export</span>
       </button>
 
       <button
         mat-raised-button
         color="primary"
         (click)="openValidationDialog()"
+        class="action-button"
       >
         @if (isAnyValidationRunning()) {
         <mat-icon class="rotating-icon">sync</mat-icon>
         } @if (!isAnyValidationRunning()) {
         <mat-icon>rule</mat-icon>
-        } Validieren @if (isAnyValidationRunning()) {
+        } <span>Validieren</span> @if (isAnyValidationRunning()) {
         <span class="validation-status-text">Läuft...</span>
         }
       </button>
@@ -47,21 +48,39 @@
         mat-raised-button
         color="primary"
         (click)="openTestResultsSearchDialog()"
+        class="action-button"
       >
         <mat-icon>search</mat-icon>
-        Schnellsuche
+        <span>Schnellsuche</span>
       </button>
 
       <button
         mat-raised-button
         color="primary"
         (click)="openVariableAnalysisDialog()"
+        class="action-button"
       >
         <mat-icon>analytics</mat-icon>
-        Antwortwertanalyse
+        <span>Antwortwertanalyse</span>
       </button>
 
-      <button mat-raised-button color="primary" (click)="toggleTableView()">
+      <button
+        mat-stroked-button
+        color="primary"
+        [disabled]="isDeleteJobRunning()"
+        (click)="openResponseCleanupDialog()"
+        class="action-button maintenance-action"
+      >
+        <mat-icon>cleaning_services</mat-icon>
+        <span>Antworten bereinigen</span>
+      </button>
+
+      <button
+        mat-stroked-button
+        color="primary"
+        (click)="toggleTableView()"
+        class="action-button"
+      >
         <mat-icon>table_chart</mat-icon>
         @if (!isTableView) {
         <span>Tabellenansicht</span>
@@ -98,10 +117,135 @@
   </div>
   }
 
+  @if (showTestResultsLogAnomalies) {
+  <div class="log-quality-card">
+    <div class="log-quality-header">
+      <div>
+        <h2 class="section-title">Log-Qualität</h2>
+        <p class="section-description">
+          Technische Auffälligkeiten in Booklet- und Aufgaben-Logs
+        </p>
+      </div>
+      @if (logAnomalySummary; as summary) {
+      <span
+        class="log-quality-pill"
+        [class.critical]="summary.criticalBooklets > 0"
+        [class.warning]="summary.criticalBooklets === 0 && summary.warningBooklets > 0"
+        [class.clean]="summary.affectedBooklets === 0"
+      >
+        {{ summary.affectedBooklets === 0 ? 'unauffällig' : summary.criticalBooklets > 0 ? 'kritisch' : 'auffällig' }}
+      </span>
+      }
+    </div>
+    <mat-divider></mat-divider>
+
+    @if (isLoadingLogAnomalySummary) {
+    <div class="loading-container compact">
+      <mat-spinner class="mat-spinner" diameter="32"></mat-spinner>
+      <p class="loading-text">Log-Qualität wird geladen...</p>
+    </div>
+    }
+
+    @if (!isLoadingLogAnomalySummary && logAnomalySummaryLoadFailed) {
+    <div class="log-quality-note warning">
+      <mat-icon>warning</mat-icon>
+      <span>Die Log-Qualität konnte nicht geladen werden.</span>
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="loadLogAnomalySummaryOnDemand()"
+      >
+        <mat-icon>refresh</mat-icon>
+        Erneut laden
+      </button>
+    </div>
+    }
+
+    @if (!isLoadingLogAnomalySummary && !logAnomalySummaryLoadFailed && !logAnomalySummaryRequested) {
+    <div class="log-quality-note neutral">
+      <mat-icon>troubleshoot</mat-icon>
+      <span>Die Log-Qualität wird bei Bedarf berechnet.</span>
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="loadLogAnomalySummaryOnDemand()"
+      >
+        <mat-icon>refresh</mat-icon>
+        Log-Qualität laden
+      </button>
+    </div>
+    }
+
+    @if (!isLoadingLogAnomalySummary && !logAnomalySummaryLoadFailed && logAnomalySummary; as summary) {
+    <div class="log-quality-grid">
+      <div class="log-quality-metric">
+        <div class="label">Booklets geprüft</div>
+        <div class="value">{{ summary.totalBooklets }}</div>
+      </div>
+      <div class="log-quality-metric affected">
+        <div class="label">Auffällig</div>
+        <div class="value">{{ summary.affectedBooklets }}</div>
+        <div class="hint">{{ logAnomalyAffectedPercent }}%</div>
+      </div>
+      <div class="log-quality-metric critical">
+        <div class="label">Kritisch</div>
+        <div class="value">{{ summary.criticalBooklets }}</div>
+      </div>
+      <div class="log-quality-metric warning">
+        <div class="label">Warnung</div>
+        <div class="value">{{ summary.warningBooklets }}</div>
+      </div>
+      <div class="log-quality-metric">
+        <div class="label">Ereignisse</div>
+        <div class="value">{{ summary.totalAnomalyEvents }}</div>
+      </div>
+    </div>
+
+    @if (summary.affectedBooklets === 0) {
+    <div class="log-quality-note clean">
+      <mat-icon>check_circle</mat-icon>
+      <span>In den vorhandenen Logs wurden keine technischen Auffälligkeiten erkannt.</span>
+    </div>
+    }
+
+    @if (summary.affectedBooklets > 0) {
+    <div class="log-quality-details">
+      <div class="log-quality-top-codes">
+        @for (item of logAnomalyTopCodes; track item.code) {
+        <span class="log-anomaly-chip">
+          {{ item.label }}
+          <span>{{ item.count }}</span>
+        </span>
+        }
+      </div>
+      <div class="log-quality-actions">
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="openLogAnomalyDetailsDialog()"
+        >
+          <mat-icon>troubleshoot</mat-icon>
+          Details anzeigen
+        </button>
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="showLogAnomaliesInTable()"
+        >
+          <mat-icon>table_chart</mat-icon>
+          In Tabelle anzeigen
+        </button>
+      </div>
+    </div>
+    }
+    }
+  </div>
+  }
+
   <div class="overview-card">
-    <h2 class="section-title">Übersicht (Arbeitsbereich)</h2>
+    <h2 class="section-title">Testergebnis-Übersicht</h2>
     <p class="section-description">
-      Kennzahlen und Statusverteilung über alle Testergebnisse im Workspace
+      Alle Kennzahlen beziehen sich auf den aktuellen Arbeitsbereich.
     </p>
     <mat-divider></mat-divider>
 
@@ -114,40 +258,49 @@
     <div class="overview-grid">
       <div class="overview-metric">
         <div class="label">Testgruppen</div>
-        <div class="value">{{ overview.testGroups }}</div>
+        <div class="value">{{ overview.testGroups | number:'1.0-0' }}</div>
       </div>
       <div class="overview-metric">
         <div class="label">Testpersonen</div>
-        <div class="value">{{ overview.testPersons }}</div>
+        <div class="value">{{ overview.testPersons | number:'1.0-0' }}</div>
       </div>
       <div class="overview-metric">
-        <div class="label">Aufgaben (einzigartig)</div>
-        <div class="value">{{ overview.uniqueUnits }}</div>
+        <div class="label">Verschiedene Aufgaben</div>
+        <div class="value">{{ overview.uniqueUnits | number:'1.0-0' }}</div>
       </div>
       <div class="overview-metric">
-        <div class="label">Testhefte (einzigartig)</div>
-        <div class="value">{{ overview.uniqueBooklets }}</div>
+        <div class="label">Verschiedene Testhefte</div>
+        <div class="value">{{ overview.uniqueBooklets | number:'1.0-0' }}</div>
       </div>
       <div class="overview-metric">
-        <div class="label">Antwortwerte (einzigartig)</div>
-        <div class="value">{{ overview.uniqueResponses }}</div>
+        <div class="label">Antwortwerte gesamt</div>
+        <div class="value">{{ overview.uniqueResponses | number:'1.0-0' }}</div>
       </div>
     </div>
 
     <div class="overview-status">
-      <h3 class="sub-title">Antwortwert-Status Verteilung</h3>
+      <h3 class="sub-title">Statusverteilung der Antwortwerte</h3>
       <div class="status-grid">
         @for (sc of overviewStatusCounts; track sc.status) {
-        <div
+        <button
+          type="button"
           class="status-chip"
+          [class.is-active]="quickSearchTableFilters?.responseStatus === sc.status && isTableView"
           [matTooltip]="getResponseStatusTooltip(sc.status)"
+          [attr.aria-label]="'Antwortstatus ' + sc.status + ' in der Tabellenansicht anzeigen'"
+          (click)="openResponseStatusInTable(sc.status)"
         >
           <span class="status">{{ sc.status }}</span>
-          <span class="count">{{ sc.count }}</span>
-        </div>
+          <span class="count">{{ sc.count | number:'1.0-0' }}</span>
+          <span class="percent">{{ sc.percent | number:'1.0-1' }}%</span>
+        </button>
         }
       </div>
     </div>
+
+    <p class="overview-scope-note">
+      Basis: berücksichtigte Testpersonen; ignorierte Inhalte und automatisch erzeugte Antwortwerte sind ausgeschlossen.
+    </p>
 
     <div class="overview-distributions">
       <button
@@ -155,7 +308,8 @@
         type="button"
         (click)="openSessionDistributionsDialog()"
       >
-        Sitzungs-Verteilungen anzeigen
+        <mat-icon>devices</mat-icon>
+        Sitzungsdaten
       </button>
     </div>
     } @if (!isLoadingOverview && !overview) {
@@ -195,6 +349,8 @@
   } @if(!isUploadingResults){ @if (dataSource) { @if (isTableView) {
   <coding-box-test-results-flat-table
     [initialFilters]="quickSearchTableFilters"
+    [showWorkspaceLogAnomalies]="showTestResultsLogAnomalies"
+    [forceShowLogAnomalies]="forceShowLogAnomalyTableColumn"
     (responseDeleted)="onFlatTableResponseDeleted()"
   ></coding-box-test-results-flat-table>
   } @else {

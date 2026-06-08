@@ -1,6 +1,7 @@
 import { Readable } from 'stream';
 import type { CodingExportService } from './coding-export.service';
 import { CodingExportOrchestratorService } from './coding-export-orchestrator.service';
+import type { CodingItemMatrixExportService } from './coding-item-matrix-export.service';
 import type { CodingResultsExportService } from './coding-results-export.service';
 
 jest.mock('./coding-export.service', () => ({
@@ -18,15 +19,26 @@ describe('CodingExportOrchestratorService', () => {
     const codingResultsExportService = {
       exportCodingResultsByVersionAsCsv: jest.fn(),
       exportCodingResultsByVersionAsExcel: jest.fn(),
+      exportCodingResultsByVersionAsGeoGebraZip: jest.fn(),
       exportCodingResultsDetailed: jest.fn()
+    };
+    const codingItemMatrixExportService = {
+      exportItemMatrixAsCsvStream: jest.fn(),
+      exportItemMatrixAsExcel: jest.fn()
     };
 
     const service = new CodingExportOrchestratorService(
       codingExportService as unknown as CodingExportService,
-      codingResultsExportService as unknown as CodingResultsExportService
+      codingResultsExportService as unknown as CodingResultsExportService,
+      codingItemMatrixExportService as unknown as CodingItemMatrixExportService
     );
 
-    return { service, codingExportService, codingResultsExportService };
+    return {
+      service,
+      codingExportService,
+      codingResultsExportService,
+      codingItemMatrixExportService
+    };
   };
 
   it('routes versioned CSV exports to the specialized results export service', async () => {
@@ -52,7 +64,103 @@ describe('CodingExportOrchestratorService', () => {
       'http://app.example',
       true,
       onProgress,
+      false,
       false
+    );
+  });
+
+  it('passes raw GeoGebra response value option to versioned exports', async () => {
+    const { service, codingResultsExportService } = createService();
+    const buffer = Buffer.from('xlsx');
+    codingResultsExportService.exportCodingResultsByVersionAsExcel.mockResolvedValue(buffer);
+
+    await expect(service.exportResultsByVersionAsExcel({
+      workspaceId: 7,
+      version: 'v2',
+      includeResponseValues: true,
+      includeGeoGebraResponseValues: true
+    })).resolves.toBe(buffer);
+
+    expect(codingResultsExportService.exportCodingResultsByVersionAsExcel).toHaveBeenCalledWith(
+      7,
+      'v2',
+      '',
+      '',
+      false,
+      undefined,
+      true,
+      true
+    );
+  });
+
+  it('routes versioned Excel GeoGebra packages to the ZIP export service', async () => {
+    const { service, codingResultsExportService } = createService();
+    const buffer = Buffer.from('zip');
+    const onProgress = jest.fn();
+    codingResultsExportService.exportCodingResultsByVersionAsGeoGebraZip.mockResolvedValue(buffer);
+
+    await expect(service.exportResultsByVersionAsExcel({
+      workspaceId: 7,
+      version: 'v2',
+      authToken: 'token',
+      serverUrl: 'http://app.example',
+      includeReplayUrl: true,
+      includeGeoGebraFiles: true,
+      onProgress
+    })).resolves.toBe(buffer);
+
+    expect(codingResultsExportService.exportCodingResultsByVersionAsGeoGebraZip).toHaveBeenCalledWith(
+      7,
+      'v2',
+      'token',
+      'http://app.example',
+      true,
+      onProgress
+    );
+    expect(codingResultsExportService.exportCodingResultsByVersionAsExcel).not.toHaveBeenCalled();
+  });
+
+  it('routes item matrix CSV exports to the item matrix export service', async () => {
+    const { service, codingItemMatrixExportService } = createService();
+    const csvStream = Readable.from(['csv']);
+    const onProgress = jest.fn();
+    const checkCancellation = jest.fn();
+    codingItemMatrixExportService.exportItemMatrixAsCsvStream.mockReturnValue(csvStream);
+
+    await expect(service.exportItemMatrixAsCsv({
+      workspaceId: 7,
+      matrixValue: 'code',
+      version: 'v1',
+      onProgress,
+      checkCancellation
+    })).resolves.toBe(csvStream);
+
+    expect(codingItemMatrixExportService.exportItemMatrixAsCsvStream).toHaveBeenCalledWith(
+      7,
+      'code',
+      'v1',
+      onProgress,
+      checkCancellation
+    );
+  });
+
+  it('routes item matrix Excel exports to the item matrix export service', async () => {
+    const { service, codingItemMatrixExportService } = createService();
+    const buffer = Buffer.from('xlsx');
+    codingItemMatrixExportService.exportItemMatrixAsExcel.mockResolvedValue(buffer);
+
+    await expect(service.exportItemMatrixAsExcel({
+      workspaceId: 7,
+      matrixValue: 'score',
+      version: 'v2'
+    })).resolves.toBe(buffer);
+
+    expect(codingItemMatrixExportService.exportItemMatrixAsExcel).toHaveBeenCalledWith(
+      7,
+      'score',
+      'v2',
+      undefined,
+      undefined
     );
   });
 

@@ -188,7 +188,7 @@
           <button mat-stroked-button color="primary" type="button" (click)="openImportDialog()"
             [disabled]="isLoadingVariables || isLoadingBundles">
             <mat-icon>download</mat-icon>
-            Aus Job-Definition importieren
+            Aus Jobdefinition importieren
           </button>
         </div>
       </div>
@@ -275,7 +275,19 @@
                 Reihenfolge: {{getCaseOrderingModeLabel(bundleGroup.bundle.caseOrderingMode || trainingForm.get('caseOrderingMode')?.value)}}
               </span>
             </div>
-            <!-- Individual variable details hidden for bundles as per requirement -->
+            <div class="bundle-derive-error-options"
+              *ngIf="bundleGroup.variables.length && getBundleDeriveErrorControls(bundleGroup).length > 0">
+              <mat-checkbox
+                *ngFor="let variableItem of getBundleDeriveErrorControls(bundleGroup)"
+                [checked]="isDeriveErrorIncludedForControl(variableItem.control)"
+                (change)="setDeriveErrorIncludedForControl(variableItem.control, $event.checked)"
+                matTooltip="DERIVE_ERROR-Fälle dieser Bündelvariable zusätzlich in die Schulungsstichprobe aufnehmen.">
+                {{variableItem.control.get('unitId')?.value}} - {{variableItem.control.get('variableId')?.value}}
+                <span *ngIf="getDeriveErrorResponseCountForControl(variableItem.control) > 0">
+                  ({{getDeriveErrorResponseCountForControl(variableItem.control)}})
+                </span>
+              </mat-checkbox>
+            </div>
           </div>
         </div>
       </div>
@@ -319,6 +331,9 @@
               <mat-option *ngFor="let variable of filteredVariables$ | async"
                 [value]="variable.unitName + '::' + variable.variableId">
                 {{variable.unitName}} - {{variable.variableId}} ({{variable.responseCount}} Fälle)
+                <span *ngIf="(variable.deriveErrorResponseCount || 0) > 0" class="derive-error-chip compact">
+                  +{{variable.deriveErrorResponseCount}} DERIVE_ERROR
+                </span>
                 <span *ngIf="isVariableDerived(variable)" class="derived-chip compact">abgeleitet</span>
               </mat-option>
             </mat-select>
@@ -379,6 +394,18 @@
                 </mat-hint>
               </mat-form-field>
 
+              <mat-checkbox
+                *ngIf="hasDeriveErrorResponsesForControl(item.control)"
+                class="derive-error-checkbox"
+                [checked]="isDeriveErrorIncludedForControl(item.control)"
+                (change)="setDeriveErrorIncludedForControl(item.control, $event.checked)"
+                matTooltip="DERIVE_ERROR-Fälle dieser Variable zusätzlich in die Schulungsstichprobe aufnehmen.">
+                DERIVE_ERROR
+                <span *ngIf="getDeriveErrorResponseCountForControl(item.control) > 0">
+                  ({{getDeriveErrorResponseCountForControl(item.control)}})
+                </span>
+              </mat-checkbox>
+
               <!-- Validation/Overlap Warnings -->
               <div class="warning-container">
                 <div *ngIf="item.control.get('overlapWarning')?.value" class="overlap-warning"
@@ -428,6 +455,10 @@
         <li>
           Abgeleitete Variablen:
           <strong>{{getSelectedDerivedVariablesCount()}}</strong>
+        </li>
+        <li>
+          DERIVE_ERROR einbezogen:
+          <strong>{{getSelectedDeriveErrorOptInCount()}}</strong>
         </li>
         <li>
           Fallauswahl:

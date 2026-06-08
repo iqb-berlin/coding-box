@@ -45,28 +45,56 @@ export class TestResultsDeletePreviewDialogComponent {
     return this.preview.targetType === 'logs';
   }
 
+  get isResponseCleanup(): boolean {
+    return this.preview.targetType === 'responses';
+  }
+
   get dialogTitle(): string {
-    return this.isLogDelete ?
-      'Logs unwiderruflich entfernen' :
-      'Testergebnisse unwiderruflich löschen';
+    if (this.isLogDelete) {
+      return 'Logs unwiderruflich entfernen';
+    }
+
+    if (this.isResponseCleanup) {
+      return 'Antworten unwiderruflich löschen';
+    }
+
+    return 'Testergebnisse unwiderruflich löschen';
   }
 
   get warningText(): string {
-    return this.isLogDelete ?
-      'Diese Aktion entfernt nur Logs und Sitzungsdaten dauerhaft. Testergebnisse, Antworten, Testhefte und Aufgaben bleiben erhalten.' :
-      'Diese Aktion entfernt die Daten dauerhaft. Eine Wiederherstellung ist danach nicht möglich.';
+    if (this.isLogDelete) {
+      return 'Diese Aktion entfernt nur Logs und Sitzungsdaten dauerhaft. Testergebnisse, Antworten, Testhefte und Aufgaben bleiben erhalten.';
+    }
+
+    if (this.isResponseCleanup) {
+      return 'Diese Aktion entfernt nur die ausgewählten Antwortwerte dauerhaft. Testpersonen, Testhefte, Aufgaben und Logs bleiben erhalten.';
+    }
+
+    return 'Diese Aktion entfernt die Daten dauerhaft. Eine Wiederherstellung ist danach nicht möglich.';
   }
 
   get metricAriaLabel(): string {
-    return this.isLogDelete ?
-      'Betroffene Logs' :
-      'Betroffene Testergebnisse';
+    if (this.isLogDelete) {
+      return 'Betroffene Logs';
+    }
+
+    if (this.isResponseCleanup) {
+      return 'Betroffene Antworten';
+    }
+
+    return 'Betroffene Testergebnisse';
   }
 
   get countNote(): string {
-    return this.isLogDelete ?
-      'Gezählt werden vorhandene Log- und Sitzungsdatensätze. Ergebnisdaten und Antworten werden nicht gelöscht.' :
-      'Die Zählweise entspricht der Arbeitsbereich-Übersicht: Testhefte, Aufgaben und Antworten werden eindeutig gezählt.';
+    if (this.isLogDelete) {
+      return 'Gezählt werden vorhandene Log- und Sitzungsdatensätze. Ergebnisdaten und Antworten werden nicht gelöscht.';
+    }
+
+    if (this.isResponseCleanup) {
+      return 'Gezählt werden Antworten mit passendem Chunk-Zeitstempel. Antworten ohne auswertbaren Zeitstempel werden nicht gelöscht.';
+    }
+
+    return 'Die Zählweise entspricht der Arbeitsbereich-Übersicht: Testhefte, Aufgaben und Antworten werden eindeutig gezählt.';
   }
 
   get hasCodingImpact(): boolean {
@@ -82,6 +110,10 @@ export class TestResultsDeletePreviewDialogComponent {
   }
 
   get codingImpactText(): string {
+    if (this.isResponseCleanup) {
+      return 'Mit diesen Antworten werden auch vorhandene Antwort-Kodierungen entfernt. Die betroffenen Aufgabenbearbeitungen werden danach als veraltet markiert.';
+    }
+
     return 'Mit diesen Testergebnissen werden auch vorhandene Kodierergebnisse entfernt. ' +
       'Danach erscheinen diese gelöschten Fälle nicht als veralteter Kodierstand.';
   }
@@ -119,17 +151,33 @@ export class TestResultsDeletePreviewDialogComponent {
   }
 
   get acknowledgementLabel(): string {
-    return this.isLogDelete ?
-      'Ich verstehe, dass diese Logs endgültig entfernt werden.' :
-      'Ich verstehe, dass diese Testergebnisse endgültig gelöscht werden.';
+    if (this.isLogDelete) {
+      return 'Ich verstehe, dass diese Logs endgültig entfernt werden.';
+    }
+
+    if (this.isResponseCleanup) {
+      return 'Ich verstehe, dass diese Antworten endgültig gelöscht werden.';
+    }
+
+    return 'Ich verstehe, dass diese Testergebnisse endgültig gelöscht werden.';
   }
 
   get confirmButtonIcon(): string {
-    return this.isLogDelete ? 'delete_sweep' : 'delete_forever';
+    return this.isLogDelete || this.isResponseCleanup ?
+      'delete_sweep' :
+      'delete_forever';
   }
 
   get confirmButtonLabel(): string {
-    return this.isLogDelete ? 'Logs entfernen' : 'Löschung starten';
+    if (this.isLogDelete) {
+      return 'Logs entfernen';
+    }
+
+    if (this.isResponseCleanup) {
+      return 'Antworten löschen';
+    }
+
+    return 'Löschung starten';
   }
 
   get metrics(): DeleteMetric[] {
@@ -146,6 +194,31 @@ export class TestResultsDeletePreviewDialogComponent {
         {
           label: 'Sitzungen',
           value: this.preview.sessions || 0
+        },
+        {
+          label: 'Testpersonen',
+          value: this.preview.persons,
+          hint: 'betroffen'
+        }
+      ];
+    }
+
+    if (this.isResponseCleanup) {
+      return [
+        {
+          label: 'Antworten',
+          value: this.preview.responses,
+          hint: 'mit Chunk-Zeitstempel'
+        },
+        {
+          label: 'Aufgaben',
+          value: this.preview.units,
+          hint: 'betroffen'
+        },
+        {
+          label: 'Testhefte',
+          value: this.preview.booklets,
+          hint: 'betroffen'
         },
         {
           label: 'Testpersonen',
@@ -180,6 +253,10 @@ export class TestResultsDeletePreviewDialogComponent {
       return this.totalLogRows > 0;
     }
 
+    if (this.isResponseCleanup) {
+      return this.preview.responses > 0;
+    }
+
     return this.preview.persons > 0 ||
       this.preview.booklets > 0 ||
       this.preview.units > 0 ||
@@ -191,6 +268,10 @@ export class TestResultsDeletePreviewDialogComponent {
       return this.preview.scope === 'filteredPersons' ||
         this.preview.scope === 'groups' ||
         this.totalLogRows >= 100;
+    }
+
+    if (this.isResponseCleanup) {
+      return this.preview.responses > 0;
     }
 
     return this.preview.scope === 'filteredPersons' ||
@@ -228,6 +309,44 @@ export class TestResultsDeletePreviewDialogComponent {
       this.preview.unitNames.length > 0;
   }
 
+  get hasResponseCleanupDetails(): boolean {
+    return this.isResponseCleanup && !!this.preview.responseCleanup;
+  }
+
+  get responseCleanupTimeText(): string {
+    const cleanup = this.preview.responseCleanup;
+    if (!cleanup) {
+      return '';
+    }
+
+    const before = this.formatTimestamp(cleanup.answeredBefore);
+    if (!cleanup.answeredFrom) {
+      return `vor ${before}`;
+    }
+
+    return `${this.formatTimestamp(cleanup.answeredFrom)} bis vor ${before}`;
+  }
+
+  get responseCleanupVariableText(): string {
+    const variableIds = this.preview.responseCleanup?.variableIds || [];
+    return variableIds.length > 0 ?
+      variableIds.join(', ') :
+      'Alle Variablen der ausgewählten Aufgaben';
+  }
+
+  get responseCleanupSubformText(): string {
+    const subforms = this.preview.responseCleanup?.subforms || [];
+    return subforms.length > 0 ? subforms.join(', ') : 'Alle Subforms';
+  }
+
+  get responseCleanupUnknownTimestampResponses(): number {
+    return this.preview.responseCleanup?.unknownTimestampResponses || 0;
+  }
+
+  get responseCleanupSamples() {
+    return this.preview.responseCleanup?.samples || [];
+  }
+
   onAcknowledgementChange(event: MatCheckboxChange): void {
     this.acknowledged = event.checked;
   }
@@ -240,5 +359,21 @@ export class TestResultsDeletePreviewDialogComponent {
 
   cancel(): void {
     this.dialogRef.close(false);
+  }
+
+  formatTimestamp(value: string | number | null | undefined): string {
+    if (value === null || value === undefined) {
+      return '-';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '-';
+    }
+
+    return date.toLocaleString('de-DE', {
+      dateStyle: 'short',
+      timeStyle: 'short'
+    });
   }
 }

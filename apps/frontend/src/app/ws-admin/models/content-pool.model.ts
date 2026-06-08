@@ -3,6 +3,27 @@ import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-f
 export interface ContentPoolSettings {
   enabled: boolean;
   baseUrl: string;
+  hasApplicationToken: boolean;
+}
+
+export interface ContentPoolSettingsUpdate {
+  enabled: boolean;
+  baseUrl: string;
+  applicationToken?: string;
+  clearApplicationToken?: boolean;
+}
+
+export interface ContentPoolConnectionTestRequest {
+  baseUrl?: string;
+  applicationToken?: string;
+  clearApplicationToken?: boolean;
+}
+
+export interface ContentPoolConnectionTestResponse {
+  success: boolean;
+  acpCount: number;
+  validatedScopes: string[];
+  message: string;
 }
 
 export interface ContentPoolAcpSummary {
@@ -18,8 +39,6 @@ export interface ContentPoolAcpListResponse {
 }
 
 export interface ContentPoolImportAcpRequest {
-  username: string;
-  password: string;
   acpId: string;
   overwriteExisting?: boolean;
   overwriteFileIds?: string[];
@@ -69,8 +88,6 @@ export interface ContentPoolUploadFileResult {
 }
 
 export interface ContentPoolUploadFilesRequest {
-  username: string;
-  password: string;
   acpId: string;
   fileIds: number[];
   changelog?: string;

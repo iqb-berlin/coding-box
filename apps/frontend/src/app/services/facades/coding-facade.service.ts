@@ -157,13 +157,15 @@ export class CodingFacadeService {
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
     includeReplayUrls: boolean = false,
-    includeResponseValues: boolean = true
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
     return this.codingExportService.getCodingResultsByVersion(
       workspaceId,
       version,
       includeReplayUrls,
-      includeResponseValues
+      includeResponseValues,
+      includeGeoGebraResponseValues
     );
   }
 
@@ -171,13 +173,16 @@ export class CodingFacadeService {
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
     includeReplayUrls: boolean = false,
-    includeResponseValues: boolean = true
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
     return this.codingExportService.getCodingResultsByVersionAsExcel(
       workspaceId,
       version,
       includeReplayUrls,
-      includeResponseValues
+      includeResponseValues,
+      false,
+      includeGeoGebraResponseValues
     );
   }
 
@@ -193,8 +198,8 @@ export class CodingFacadeService {
     return this.codingStatisticsService.getResponsesByStatus(workspaceId, status, version, page, limit);
   }
 
-  getReplayUrl(workspaceId: number, responseId: number, authToken: string): Observable<{ replayUrl: string }> {
-    return this.codingStatisticsService.getReplayUrl(workspaceId, responseId, authToken);
+  getReplayUrl(workspaceId: number, responseId: number): Observable<{ replayUrl: string }> {
+    return this.codingStatisticsService.getReplayUrl(workspaceId, responseId);
   }
 
   getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {
@@ -294,7 +299,7 @@ export class CodingFacadeService {
     return this.codingJobBackendService.getCodingNotes(workspaceId, codingJobId);
   }
 
-  getCodingJobUnits(workspaceId: number, codingJobId: number): Observable<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>> {
+  getCodingJobUnits(workspaceId: number, codingJobId: number): Observable<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; variablePage: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>> {
     return this.codingJobBackendService.getCodingJobUnits(workspaceId, codingJobId);
   }
 
@@ -455,6 +460,9 @@ export class CodingFacadeService {
     return this.variableAnalysisService.createAnalysisJob(workspaceId, unitId, variableId);
   }
 
+  /**
+   * @deprecated Use the paginated variable-analysis service call for large result sets.
+   */
   getVariableAnalysisResults(workspaceId: number, jobId: number): Observable<VariableAnalysisResultDto> {
     return this.variableAnalysisService.getAnalysisResults(workspaceId, jobId);
   }

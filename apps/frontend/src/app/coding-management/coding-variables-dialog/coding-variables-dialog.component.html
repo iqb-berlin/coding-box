@@ -33,6 +33,15 @@
             </mat-option>
           </mat-select>
         </mat-form-field>
+
+        <mat-form-field class="filter-field">
+          <mat-label>{{ 'coding-variables-dialog.filters.training-effort' | translate }}</mat-label>
+          <mat-select [(ngModel)]="trainingRequiredFilter" (selectionChange)="applyFilter()">
+            <mat-option value="all">{{ 'coding-variables-dialog.filters.all' | translate }}</mat-option>
+            <mat-option value="required">{{ 'coding-variables-dialog.filters.only-increased' | translate }}</mat-option>
+            <mat-option value="not-required">{{ 'coding-variables-dialog.filters.only-normal' | translate }}</mat-option>
+          </mat-select>
+        </mat-form-field>
       </div>
 
       <div class="filter-row">
@@ -94,6 +103,12 @@
               } @else {
                 <div class="variable-alias">{{ element.variableId }}</div>
               }
+              @if (element.coderTrainingRequired) {
+                <mat-chip class="training-required-chip" matTooltip="{{ 'coding-variables-dialog.training-required-tooltip' | translate }}" matTooltipPosition="above">
+                  <mat-icon>school</mat-icon>
+                  {{ 'coding-variables-dialog.training-required-chip' | translate }}
+                </mat-chip>
+              }
             </td>
           </ng-container>
 
@@ -106,6 +121,36 @@
                   {{ element.variableType }}
                 </mat-chip>
               </mat-chip-set>
+            </td>
+          </ng-container>
+
+          <!-- Replay Anchor Column -->
+          <ng-container matColumnDef="replayAnchor">
+            <th mat-header-cell *matHeaderCellDef>Replay-Anchor</th>
+            <td mat-cell *matCellDef="let element">
+              <div class="replay-anchor-cell">
+                <mat-form-field class="replay-anchor-field" subscriptSizing="dynamic">
+                  <mat-label>Anchor</mat-label>
+                  <input matInput
+                         [(ngModel)]="element.replayAnchor"
+                         [placeholder]="element.variableId"
+                         [disabled]="element.isSavingReplayAnchor"
+                         (keyup.enter)="saveReplayAnchor(element)">
+                </mat-form-field>
+                <button mat-icon-button
+                        color="primary"
+                        [disabled]="element.isSavingReplayAnchor || !hasReplayAnchorChanges(element)"
+                        (click)="saveReplayAnchor(element)"
+                        matTooltip="Replay-Anchor speichern">
+                  <mat-icon>save</mat-icon>
+                </button>
+                <button mat-icon-button
+                        [disabled]="element.isSavingReplayAnchor || !element.savedReplayAnchor"
+                        (click)="clearReplayAnchor(element)"
+                        matTooltip="Replay-Anchor zurücksetzen">
+                  <mat-icon>restart_alt</mat-icon>
+                </button>
+              </div>
             </td>
           </ng-container>
 

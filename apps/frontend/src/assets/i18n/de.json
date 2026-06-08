@@ -36,6 +36,11 @@
   "status-processing": "Wird bearbeitet",
   "status-completed": "Abgeschlossen",
   "status-failed": "Fehlgeschlagen",
+  "response-status": {
+    "tooltips": {
+      "DERIVE_ERROR": "DERIVE_ERROR bedeutet: Ableitung/Solver fehlgeschlagen, z. B. Typkonflikt im Kodierschema. Keine inhaltlich falsche Antwort."
+    }
+  },
   "xml-viewer": {
     "format-error": "XML konnte nicht formatiert werden",
     "enable-line-wrap": "Zeilen umbrechen",
@@ -64,7 +69,203 @@
       "by-variable-compact": "Nach Variable, kompakt",
       "detailed": "Detailliertes Kodierprotokoll",
       "coding-times": "Kodierzeiten-Bericht",
-      "results-by-version": "Finale Ergebnisdaten"
+      "results-by-version": "Finale Ergebnisdaten",
+      "item-matrix": "Itemmatrix"
+    }
+  },
+  "manual-coding-export": {
+    "title": "Manuelle Kodierung exportieren",
+    "subtitle-training": "Exportiert Auswertungen aus Kodierschulungen.",
+    "subtitle-execution": "Exportiert Auswertungen aus produktiven Kodieraufträgen.",
+    "mode-title": "Auswertung",
+    "mode-review": "Review- und Diskussionssicht",
+    "mode-report": "Mehrfach-Job-Bericht",
+    "double-coding-method": "Doppelkodierung darstellen",
+    "report-type": "Berichtstyp",
+    "report-detailed": "Detailliertes Kodierprotokoll",
+    "report-coding-times": "Kodierzeiten",
+    "job-definition-filter": "Jobdefinitionen filtern",
+    "training-filter": "Schulungen filtern",
+    "coder-filter": "Kodierer filtern",
+    "start": "Exportjob starten"
+  },
+  "process-overview": {
+    "title": "Zentrale Prozess-Übersicht",
+    "refresh": "Aktualisieren",
+    "no-data": "Keine Prozesse in der Warteschlange.",
+    "no-filter-data": "Keine Prozesse für die aktuellen Filter.",
+    "confirm-content": "Möchten Sie den Prozess \"{{queue}}\" (ID: {{id}}) wirklich {{action}}?",
+    "filters": {
+      "status": "Status",
+      "all-status": "Alle Status",
+      "type": "Typ",
+      "all-types": "Alle Typen",
+      "search": "Suchen",
+      "search-placeholder": "ID, Name oder Detail",
+      "clear": "Filter leeren"
+    },
+    "columns": {
+      "type": "Typ",
+      "status": "Status",
+      "progress": "Fortschritt",
+      "time": "Zeit",
+      "details": "Details",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "active": "Läuft",
+      "waiting": "Wartet",
+      "delayed": "Geplant",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "paused": "Pausiert",
+      "cancelled": "Abgebrochen",
+      "unknown": "Unbekannt"
+    },
+    "status-tooltips": {
+      "active": "Der Prozess wird gerade bearbeitet.",
+      "waiting": "Der Prozess wartet auf einen freien Worker oder auf vorgelagerte Arbeit.",
+      "delayed": "Der Prozess ist für einen späteren Start eingeplant.",
+      "completed": "Der Prozess wurde erfolgreich abgeschlossen.",
+      "failed": "Der Prozess ist mit einem Fehler beendet worden.",
+      "paused": "Der Prozess wurde angehalten.",
+      "cancelled": "Der Prozess wurde abgebrochen.",
+      "unknown": "Der aktuelle Prozessstatus ist nicht eindeutig bekannt."
+    },
+    "progress": {
+      "active": "Läuft ohne Fortschrittsangabe",
+      "waiting": "Wartet auf Start",
+      "delayed": "Start geplant",
+      "completed": "Abgeschlossen",
+      "failed": "Keine Fortschrittsangabe",
+      "paused": "Pausiert",
+      "cancelled": "Abgebrochen",
+      "unknown": "Keine Fortschrittsangabe"
+    },
+    "time": {
+      "created": "Erstellt",
+      "started": "Gestartet",
+      "finished": "Beendet",
+      "duration": "Dauer"
+    },
+    "queues": {
+      "test-person-coding": {
+        "label": "Auto-Kodierung",
+        "description": "Automatisches Kodieren von Testpersonen-Antworten"
+      },
+      "coding-statistics": {
+        "label": "Kodierstatistiken",
+        "description": "Berechnung der Kodierstatistiken für den Arbeitsbereich"
+      },
+      "data-export": {
+        "label": "Datenexport",
+        "description": "Export von Kodier- oder Testergebnisdaten"
+      },
+      "flat-response-filter-options": {
+        "label": "Filteroptionen",
+        "description": "Vorberechnung von Filteroptionen für die Ergebnisansicht"
+      },
+      "test-results-upload": {
+        "label": "Testergebnis-Import",
+        "description": "Import von Responses oder Logs"
+      },
+      "codebook-generation": {
+        "label": "Codebook-Erstellung",
+        "description": "Erstellung eines Codebooks"
+      },
+      "reset-coding-version": {
+        "label": "Kodierung zurücksetzen",
+        "description": "Zurücksetzen einer Kodier-Version"
+      },
+      "validation-task": {
+        "label": "Validierung",
+        "description": "Validierungsaufgabe für den Arbeitsbereich"
+      },
+      "response-analysis": {
+        "label": "Antwortanalyse",
+        "description": "Analyse von Antworten und Auffälligkeiten"
+      },
+      "variable-analysis": {
+        "label": "Variablenanalyse",
+        "description": "Analyse von Variablenwerten und Häufigkeiten"
+      },
+      "external-coding-import": {
+        "label": "Externer Kodierimport",
+        "description": "Import externer Kodierungen"
+      },
+      "database-export": {
+        "label": "Datenbankexport",
+        "description": "Export der Arbeitsbereichsdatenbank"
+      }
+    },
+    "details": {
+      "none": "Keine Details",
+      "unknown-key": "{{key}}",
+      "taskId": "Task",
+      "resultType": "Ergebnistyp",
+      "overwriteExisting": "Bestehende überschreiben",
+      "personMatchMode": "Personenabgleich",
+      "overwriteMode": "Überschreibmodus",
+      "scope": "Umfang",
+      "exportType": "Exporttyp",
+      "version": "Version",
+      "format": "Format",
+      "source": "Quelle",
+      "autoCoderRun": "Auto-Kodierlauf",
+      "freshnessVersion": "Freshness-Version",
+      "processingDurationThresholdMs": "Schwellwert",
+      "missingsProfile": "Missing-Profil",
+      "unitId": "Unit",
+      "variableId": "Variable",
+      "fileName": "Datei",
+      "sourceFormat": "Quellformat",
+      "sourceVersion": "Quellversion",
+      "scoreMode": "Score-Modus",
+      "existingCodingMode": "Importmodus",
+      "validationType": "Validierung",
+      "progressMessage": "Statusmeldung",
+      "isPaused": "Pausiert",
+      "isCancelled": "Abgebrochen",
+      "personCount": "Personen",
+      "unitCount": "Units",
+      "groupCount": "Gruppen",
+      "jobDefinitionCount": "Jobdefinitionen",
+      "coderTrainingCount": "Trainings",
+      "coderCount": "Kodierer:innen",
+      "matchingFlagCount": "Matching-Flags"
+    },
+    "actions": {
+      "not-safe": "Für diesen Status oder Prozesstyp gibt es keine sichere Aktion.",
+      "cancel": {
+        "label": "Abbrechen",
+        "tooltip": "Laufenden Prozess abbrechen",
+        "confirm-title": "Prozess abbrechen",
+        "infinitive": "abbrechen",
+        "success": "Prozess wurde abgebrochen"
+      },
+      "pause": {
+        "label": "Anhalten",
+        "tooltip": "Laufenden Prozess anhalten",
+        "confirm-title": "Prozess anhalten",
+        "infinitive": "anhalten",
+        "success": "Prozess wurde angehalten"
+      },
+      "remove": {
+        "label": "Entfernen",
+        "tooltip": "Prozess aus der Warteschlange entfernen",
+        "confirm-title": "Prozess entfernen",
+        "infinitive": "entfernen",
+        "success": "Prozess wurde entfernt"
+      }
+    },
+    "messages": {
+      "load-error": "Fehler beim Laden der Prozesse",
+      "action-failed": "Prozess konnte nicht aktualisiert werden",
+      "action-error": "Fehler beim Aktualisieren des Prozesses"
+    },
+    "values": {
+      "yes": "Ja",
+      "no": "Nein"
     }
   },
   "status-cancelled": "Abgebrochen",
@@ -91,6 +292,10 @@
     "password": "Passwort",
     "first-login": "Anlegen eines ersten User-Accounts",
     "no-user": " Dieses System hat aktuell keine User angelegt. Mit den Anmeldedaten unten legen Sie einen ersten Account mit Administrationsrechten an. Bitte notieren Sie sich die Daten!",
+    "loading-user-workspaces": "Arbeitsbereiche werden geladen...",
+    "auth-data-load-error": "Die Sitzungsdaten konnten noch nicht geladen werden. Bitte versuchen Sie es erneut oder melden Sie sich neu an.",
+    "retry-auth-data": "Erneut laden",
+    "relogin": "Neu anmelden",
     "no-user-workspaces": "Für diese Anmeldung wurden keine Arbeitsbereiche gefunden.",
     "user-menu": "Profil verwalten",
     "appName": "{{name}}",
@@ -208,6 +413,7 @@
     "test-results": "Testergebnisse",
     "select-unit-play": "Replay",
     "coding": "Kodierung",
+    "coding-overview": "Kodierübersicht",
     "cleaning": "Datenbereinigung",
     "cleaning-title": "Datenbereinigung",
     "cleaning-subtitle": "Bereinigung der Daten nach automatischer und manueller Kodierung",
@@ -218,11 +424,11 @@
     "export-title": "Datenexport",
     "my-coding-jobs": "Meine Kodierjobs",
     "coding-management": "Kodierung-Management",
-    "job-definitions": "Job-Definitionen",
+    "job-definitions": "Jobdefinitionen",
     "coding-statistics": "Kodierstatistiken",
     "manual-coding": "Manuelle Kodierung",
-    "export-subtitle": "Finale Ergebnisdaten und Audit-Sichten exportieren",
-    "export-description": "Exportieren Sie finale Ergebnisdaten oder nachvollziehbare Sichten aus Kodieraufträgen.",
+    "export-subtitle": "Finale Ergebnisdaten exportieren",
+    "export-description": "Exportieren Sie die final angewendeten Ergebnisdaten des Arbeitsbereichs.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
     "export-action-button": "Datenexport starten",
     "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff.",
@@ -263,6 +469,9 @@
       "include-auto-coded-tooltip": "Erweitert den Export um alle Variablen, die nicht manuell kodiert werden müssen. Standardmäßig werden nur Variablen mit CODING_INCOMPLETE Status exportiert.",
       "only-manual-coding": "Nur manuell zu kodierende Variablen",
       "only-manual-coding-tooltip": "Exportiert nur Variablen, die manuell kodiert werden sollen (CODING_INCOMPLETE Variablen). Diese Option ist standardmäßig aktiviert.",
+      "export-type": "Exporttyp",
+      "export-type-results": "Finale Ergebnisdaten",
+      "export-type-item-matrix": "Itemmatrix",
       "results-version": "Ergebnisversion",
       "results-version-v1": "v1 Autocoding",
       "results-version-v2": "v2 manuelle Kodierung",
@@ -270,10 +479,17 @@
       "results-format": "Dateiformat",
       "results-format-csv": "CSV",
       "results-format-excel": "Excel",
+      "matrix-value": "Zellwert",
+      "matrix-value-score": "Score",
+      "matrix-value-code": "Code",
       "include-response-values": "Antwortwerte einschließen",
       "include-response-values-tooltip": "Fügt die ursprünglichen Antwortwerte in den finalen Ergebnisdaten hinzu.",
+      "include-geogebra-response-values": "GeoGebra-Werte als String einschließen",
+      "include-geogebra-response-values-tooltip": "Gibt GeoGebra-Antworten als gespeicherte Base64-Strings aus. Ohne diese Option steht in der Spalte value der Platzhalter [GeoGebra].",
+      "include-geogebra-files": "GeoGebra-Antworten als .ggb-ZIP herunterladen",
+      "include-geogebra-files-tooltip": "Erstellt ein ZIP-Paket mit einer Excel-Datei und GeoGebra-Antworten als .ggb-Dateien. Die Spalte value verlinkt auf die Dateien.",
       "include-modal-value": "Modalwerte hinzufügen",
-      "include-modal-value-tooltip": "Es werden zwei Spalten hinzugefügt: Häufigster Wert und Anzahl der Abweichungen davon.",
+      "include-modal-value-tooltip": "Es werden Spalten für häufigsten Wert, Abweichungen, Gleichstand und Modalwert-Kandidaten hinzugefügt.",
       "include-double-coded": "Doppelkodierung-Indikator hinzufügen",
       "include-double-coded-tooltip": "Es wird eine Spalte hinzugefügt, die anzeigt, ob der Fall doppelt kodiert wurde (1) oder nicht (0).",
       "include-comments": "Kommentarspalte hinzufügen",
@@ -291,14 +507,14 @@
       "new-row-per-variable-tooltip": "Spalten bilden die Kodierer, als Zeilen sind die Personen genutzt und pro Variable hat die Person eine weitere Zeile. Beispiel für eine Zeilenbeschriftung: Testperson_Variablenname",
       "new-column-per-coder": "pro Kodierer neue Spalte",
       "new-column-per-coder-tooltip": "Spalte bilden die Variablen, als Zeilen sind die Personen genutzt und pro Kodierer hat die Variable eine weitere Spalte. Beispiel für Spaltenbeschriftung: Variablenname_Kodierer",
-      "most-frequent-random": "Kodierer: häufigster/Zufall",
-      "most-frequent-random-tooltip": "Es wird der häufigste Code genommen. Bei Gleichverteilung wird ein Code zufällig ausgewählt.",
-      "filter-jobs-trainings": "Enthaltene Job-Definitionen und Schulungen",
+      "most-frequent-random": "Kodierer: häufigster Code",
+      "most-frequent-random-tooltip": "Es wird der häufigste Code genommen. Bei Gleichverteilung wird der kleinste Code deterministisch ausgewählt.",
+      "filter-jobs-trainings": "Enthaltene Jobdefinitionen und Schulungen",
       "by-variable-too-large-title": "Dieser Export ist für einzelne Tabellenblätter zu groß",
-      "by-variable-too-large-message": "Die aktuelle Auswahl würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}. Wählen Sie den kompakten Variablenexport oder schränken Sie die Auswahl über Job-Definitionen, Schulungen oder Kodierer ein.",
+      "by-variable-too-large-message": "Die aktuelle Auswahl würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}. Wählen Sie den kompakten Variablenexport oder schränken Sie die Auswahl über Jobdefinitionen, Schulungen oder Kodierer ein.",
       "select-compact-variable-export": "Kompakten Export auswählen",
       "filter-coders": "Enthaltene Kodierer",
-      "job-definitions": "Job-Definitionen",
+      "job-definitions": "Jobdefinitionen",
       "coder-trainings": "Schulungen",
       "coders": "Kodierer",
       "all-coders": "Alle Kodierer",
@@ -368,6 +584,7 @@
       "import-from-testcenter": "Aus Testcenter importieren",
       "exclude-persons": "Personen ausschließen",
       "view-resource-packages": "Ressourcenpakete ansehen",
+      "upload-resource-packages": "Ressourcenpakete hochladen",
       "delete-resource-packages": "Ressourcenpakete löschen",
       "view-test-results": "Testergebnisse ansehen",
       "view-responses": "Antworten ansehen",
@@ -380,9 +597,9 @@
       "view-coding-jobs": "Eigene Kodieraufträge ansehen",
       "work-on-coding-jobs": "An Kodieraufträgen arbeiten",
       "view-all-jobs": "Alle Kodieraufträge ansehen",
-      "create-job-definitions": "Job-Definitionen erstellen",
-      "edit-job-definitions": "Job-Definitionen bearbeiten",
-      "delete-job-definitions": "Job-Definitionen löschen",
+      "create-job-definitions": "Jobdefinitionen erstellen",
+      "edit-job-definitions": "Jobdefinitionen bearbeiten",
+      "delete-job-definitions": "Jobdefinitionen löschen",
       "manage-missings-profiles": "Missings-Profile verwalten",
       "export-coding-data": "Kodierdaten exportieren",
       "import-external-codings": "Kodierungen importieren",
@@ -428,7 +645,7 @@
     "backend_unavailable_consequences": "Daten können nicht gespeichert oder geladen werden. Arbeiten Sie nicht weiter, um Datenverlust zu vermeiden.",
     "backend_unavailable_solution": "Bitte prüfen Sie Ihre Internetverbindung oder versuchen Sie es später erneut. Falls der Fehler bestehen bleibt, wenden Sie sich an den Administrator.",
     "reauthentication_title": "Anmeldung erforderlich",
-    "reauthentication_message": "Ihre Sitzung ist abgelaufen oder Sie sind nicht mehr angemeldet. Bitte melden Sie sich erneut an.",
+    "reauthentication_message": "Ihre Sitzung ist abgelaufen oder Sie sind nicht mehr angemeldet. Nicht gespeicherte Eingaben können erst nach erneuter Anmeldung gespeichert werden.",
     "login_button": "Anmelden",
     "error_title": "Fehler",
     "requests_affected": "{{count}} Anfragen betroffen",
@@ -511,7 +728,31 @@
       "job-name-prefix": "Schulung-",
       "compare": {
         "button": "Ergebnisse vergleichen",
-        "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt."
+        "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt.",
+        "dialog-title-between": "Kodierergebnisse vergleichen",
+        "dialog-title-within": "Schulungsauswertung",
+        "dialog-subtitle-between": "Ergebnisse verschiedener Kodierer-Schulungen gegenüberstellen",
+        "dialog-subtitle-within": "Stand, Übereinstimmung, Kappa, Modalwerte und Abweichungen einer Schulung",
+        "statistics-title-between": "Kodierungsübereinstimmung",
+        "statistics-title-within": "Schulungsauswertung",
+        "metric-visible-cases": "Sichtbare Fälle",
+        "metric-completion-rate": "{{rate}}% auswertbar",
+        "metric-comparable": "Auswertbare Vergleiche",
+        "metric-incomplete": "{{count}} unvollständig",
+        "metric-agreement-rate": "Übereinstimmungsrate",
+        "metric-agreements": "{{count}} Übereinstimmungen",
+        "metric-deviations": "Abweichungen",
+        "metric-not-comparable": "{{count}} nicht vergleichbar",
+        "metric-code-kappa": "Code-Kappa",
+        "metric-score-kappa": "Score-Kappa",
+        "metric-mean-agreement": "Mittlere Übereinstimmung",
+        "metric-weighted": "gewichtet",
+        "metric-unweighted": "ungewichtet",
+        "modal-value": "Modalwert",
+        "modal-deviations": "Abweichungen: {{count}}",
+        "modal-no-value-tooltip": "Kein Modalwert, weil kein ausgewählter Kodierer einen Code vergeben hat.",
+        "modal-tie-tooltip": "Mehrere Codes sind gleich häufig. Angezeigt wird der kleinste Code als deterministischer Modalwert.",
+        "modal-value-tooltip": "Häufigster Code unter den aktuell ausgewählten Kodierern."
       },
       "loading": "Lade Kodierer-Schulungen...",
       "loading.error": "Fehler beim Laden der Kodierer-Schulungen",
@@ -601,6 +842,13 @@
         "coder": "Kodierer:in",
         "status": "Status",
         "units": "Aufgaben"
+      },
+      "issue-tooltip": {
+        "no-review-issues": "Keine prüfpflichtigen Kodierungsprobleme",
+        "open-no-review-issues-singular": "{{count}} offene Aufgabe, keine prüfpflichtigen Kodierungsprobleme",
+        "open-no-review-issues-plural": "{{count}} offene Aufgaben, keine prüfpflichtigen Kodierungsprobleme",
+        "code-assignment-uncertain": "{{count}}x Code-Vergabe unsicher",
+        "new-code-needed": "{{count}}x neuer Code benötigt"
       }
     },
     "tooltip": {
@@ -673,6 +921,7 @@
     "missing-label": "Label",
     "missing-description": "Beschreibung",
     "missing-code": "Code",
+    "missing-score": "Score",
     "actions": "Aktionen",
     "remove-missing": "Missing-Wert entfernen",
     "add-missing": "Missing-Wert hinzufügen",
@@ -726,7 +975,7 @@
     "no-failures": "Keine Fehler vorhanden",
     "error-loading-missings-profiles": "Fehler beim Laden der Missings-Profile",
     "error-loading-missings-profile-details": "Fehler beim Laden der Details zum Missings-Profil",
-    "missing-validation-error": "Alle Missing-Einträge müssen ein gültiges Label und einen gültigen Code haben",
+    "missing-validation-error": "Alle Missing-Einträge müssen gültige Angaben inklusive Code und Score haben",
     "profile-updated-successfully": "Profil erfolgreich aktualisiert",
     "error-updating-missings-profile": "Fehler beim Aktualisieren des Missings-Profils",
     "profile-created-successfully": "Profil erfolgreich erstellt",
@@ -764,8 +1013,19 @@
     "failed-to-submit-coding-job": "Fehler beim Einreichen des Kodierungsauftrags",
     "failed-to-save-coding-progress": "Die Kodierung konnte nicht gespeichert werden. Bitte erneut auswählen oder die Verbindung prüfen.",
     "failed-to-save-coding-notes": "Die Notiz konnte nicht gespeichert werden. Bitte Verbindung prüfen und erneut versuchen.",
+    "reauthentication-required": "Bitte melden Sie sich erneut an, bevor Sie mit der Kodierung fortfahren.",
     "coding-progress-message": "Kodierfortschritt: {{completed}}/{{total}} abgeschlossen ({{percentage}}%)",
     "close": "Schließen",
+    "job-switcher": {
+      "label": "Kodierjob",
+      "loading": "Zugewiesene Kodierjobs werden geladen...",
+      "load-error": "Zugewiesene Kodierjobs konnten nicht geladen werden.",
+      "retry": "Erneut laden",
+      "save-error": "Der Kodierjob kann erst gewechselt werden, wenn der aktuelle Speicherfehler behoben ist.",
+      "no-units": "Für diesen Kodierjob sind keine Replays verfügbar.",
+      "switch-error": "Der Kodierjob konnte nicht gewechselt werden.",
+      "switched": "Kodierjob gewechselt: {{name}}"
+    },
     "navigate-dialog": {
       "title": "Kodierte Fälle navigieren",
       "position": "Position",
@@ -782,6 +1042,9 @@
     "open-explanation": "Diese Frage ist offen kodiert",
     "score-label": "Bewertung:",
     "no-codes-found": "Keine Codes gefunden für Variable",
+    "legacy-code-label": "Bisher gespeicherter Code:",
+    "legacy-code-note": "Dieser Code ist nicht mehr manuell auswählbar.",
+    "legacy-code-missing-note": "Dieser Code ist im aktuellen Kodierschema nicht mehr vorhanden.",
     "coder-notes": "Notiz zu diesem Kodierfall",
     "coder-notes-placeholder": "Notiz zu diesem Kodierfall",
     "coding-issue-options": {
@@ -810,12 +1073,21 @@
     "coding": "Kodierung",
     "auto-fetch-coding-statistics": "Automatisches Laden der Kodierstatistiken",
     "auto-fetch-coding-statistics-description": "Wenn aktiviert, werden die Kodierstatistiken automatisch beim Öffnen der Kodierungsverwaltung geladen. Wenn deaktiviert, müssen die Statistiken manuell über einen Button geladen werden.",
+    "auto-refresh-manual-coding-jobs": "Automatisches Aktualisieren der Kodierjob-Tabellen",
+    "auto-refresh-manual-coding-jobs-description": "Wenn aktiviert, werden die Kodierjob-Tabellen in Schulung und Durchführung automatisch aktualisiert, wenn das Browserfenster wieder aktiv wird. Wenn deaktiviert, aktualisieren Sie die Tabellen per Button.",
+    "include-derive-error-in-manual-coding": "DERIVE_ERROR in manueller Kodierung zulassen",
+    "include-derive-error-in-manual-coding-description": "Wenn aktiviert, können DERIVE_ERROR-Fälle bei Kodierjobdefinitionen gezielt in die manuelle Kodierung aufgenommen werden. Standardmäßig ist diese Funktion deaktiviert.",
+    "include-derive-error-in-manual-coding-enabled": "DERIVE_ERROR-Fälle können in die manuelle Kodierung aufgenommen werden",
+    "include-derive-error-in-manual-coding-disabled": "DERIVE_ERROR-Fälle werden nicht in die manuelle Kodierung aufgenommen",
+    "test-results": "Testergebnisse",
+    "show-test-results-log-anomalies": "Log-Auffälligkeiten in Testergebnissen anzeigen",
+    "show-test-results-log-anomalies-description": "Wenn aktiviert, werden die Log-Qualität und die Logstatus-Spalte in der Ergebnistabelle angezeigt. Wenn deaktiviert, werden diese Anzeigen ausgeblendet; die Logfilter bleiben verfügbar.",
     "enabled": "Aktiviert",
     "disabled": "Deaktiviert",
     "user-rights": "Nutzerrechte",
     "system-journal": "Audit-Journal",
-    "export-test-results": "Testergebnisse exportieren",
-    "export-database-description": "Exportieren Sie die Testergebnisse dieses Arbeitsbereichs als SQLite-Datenbank. Die Exportdatei enthält alle relevanten Daten wie Personen, Testhefte, Aufgaben, Antworten und Protokolle.",
+    "export-test-results": "Arbeitsbereich-Datenbank exportieren",
+    "export-database-description": "Beim Datenbank-Export wird eine SQLite-Datei mit den Daten dieses Arbeitsbereichs erzeugt. Enthalten sind unter anderem Personen, Testhefte, Aufgaben, Antworten, Kodierungen, Protokolle und relevante Metadaten. Der Export läuft im Hintergrund als Job und kann sensible Daten enthalten.",
     "exporting": "Exportiere...",
     "export-database": "Datenbank exportieren",
     "export-status": "Status",
@@ -825,11 +1097,15 @@
     "export-status-failed": "Fehlgeschlagen",
     "export-status-cancelled": "Abgebrochen",
     "export-status-unknown": "Unbekannt",
-    "export-may-take-minutes": "Dies kann bei großen Arbeitsbereichen einige Minuten dauern.",
+    "export-may-take-minutes": "Dies kann bei großen Arbeitsbereichen einige Minuten dauern. Nach einem Fehler kann der Export erneut gestartet werden.",
     "token-generated-successfully": "Token erfolgreich generiert",
     "token-copied-to-clipboard": "Token in die Zwischenablage kopiert",
     "auto-fetch-coding-statistics-enabled": "Automatisches Laden der Kodierstatistiken aktiviert",
     "auto-fetch-coding-statistics-disabled": "Automatisches Laden der Kodierstatistiken deaktiviert",
+    "auto-refresh-manual-coding-jobs-enabled": "Automatisches Aktualisieren der Kodierjob-Tabellen aktiviert",
+    "auto-refresh-manual-coding-jobs-disabled": "Automatisches Aktualisieren der Kodierjob-Tabellen deaktiviert",
+    "show-test-results-log-anomalies-enabled": "Log-Auffälligkeiten in Testergebnissen aktiviert",
+    "show-test-results-log-anomalies-disabled": "Log-Auffälligkeiten in Testergebnissen deaktiviert",
     "error-saving-setting": "Fehler beim Speichern der Einstellung",
     "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
     "workspace-database-exported-successfully": "Arbeitsbereich-Datenbank erfolgreich exportiert",
@@ -884,16 +1160,30 @@
     "search-variables": "Variablen suchen",
     "search-placeholder": "Variablenname eingeben...",
     "only-empty-values": "Nur Variablen mit leeren Werten",
+    "include-schema-codes": "Schema-Codes mit 0 anzeigen",
     "no-variables-found": "Keine Variablen gefunden.",
     "no-results-yet": "Noch keine Antwortwertanalyse geladen.",
     "max-values-info": "Es werden maximal die {{max}} häufigsten Werte pro Variable angezeigt.",
+    "result-table-info": "Eine Zeile entspricht einer Variable-Code/Kategorie-Kombination. Es werden maximal die {{max}} häufigsten Werte pro Variable berücksichtigt, zusätzliche Schema-Codes können eingeblendet werden.",
+    "page-window-limit-info": "Aus Performance-Gründen sind die ersten {{pageable}} sortierten Analysezeilen (bis Seite {{maxPage}}) seitenweise verfügbar; insgesamt gibt es {{total}} passende Analysezeilen.",
     "more-values-hidden": "weitere Werte ausgeblendet",
     "no-status-data": "keine Statusdaten",
+    "unit-column": "Aufgabe",
     "value-column": "Wert",
+    "code-category-column": "Code/Kategorie",
+    "label-column": "Label",
+    "score-column": "Score",
     "count-column": "Anzahl",
+    "valid-count-column": "Gültige Anzahl",
     "percentage-column": "Prozent",
+    "percentage-total-column": "Prozent gesamt",
+    "percentage-valid-column": "Prozent gültig",
+    "metric-column": "Kennwert",
+    "schema-only": "Schema",
+    "table-page-label": "Analysezeilen Seiten",
     "empty-value": "[Leer]",
     "total-cases": "Antworten",
+    "valid-responses-column": "Gültige Antworten",
     "empty-values": "Leere Werte",
     "status-distribution": "Antwortstatus",
     "unit-id-column": "Unit ID",
@@ -934,7 +1224,11 @@
     "status-cancelled": "Abgebrochen",
     "status-paused": "Pausiert",
     "loading-results": "Lade Analyse-Ergebnisse...",
-    "error-loading-results": "Fehler beim Laden der Analyse-Ergebnisse"
+    "error-loading-results": "Fehler beim Laden der Analyse-Ergebnisse",
+    "export-csv": "CSV",
+    "export-xlsx": "XLSX",
+    "export-success": "Export erfolgreich erstellt",
+    "export-error": "Fehler beim Export"
   },
   "coding-management": {
     "buttons": {
@@ -1146,6 +1440,10 @@
       "replay-urls-description": "Fügt eine Spalte mit direkten Links zu den Replay-Ansichten der einzelnen Antworten hinzu",
       "include-response-values": "Antwortwerte einschließen",
       "response-values-description": "Fügt die Antwortwerte als Spalte value in den Export ein. Bei sehr großen Antwortinhalten kann diese Option deaktiviert werden.",
+      "include-geogebra-response-values": "GeoGebra-Werte als String einschließen",
+      "geogebra-response-values-description": "Gibt GeoGebra-Antworten als gespeicherte Base64-Strings aus. Ohne diese Option steht in der Spalte value der Platzhalter [GeoGebra].",
+      "include-geogebra-files": "GeoGebra-Antworten als .ggb-ZIP herunterladen",
+      "geogebra-files-description": "Erstellt ein ZIP-Paket mit einer Excel-Datei und GeoGebra-Antworten als .ggb-Dateien. Die Spalte value verlinkt auf die Dateien.",
       "notice-title": "Hinweis",
       "notice-message": "Die heruntergeladene Datei enthält ALLE Datensätze für die ausgewählte Version, nicht nur die derzeit angezeigten gefilterten Datensätze.",
       "download-button": "Herunterladen",
@@ -1389,19 +1687,25 @@
     }
   },
   "coding-management-manual": {
+    "manual-scope-note": "Die Rohsumme der Status CODING_INCOMPLETE und INTENDED_INCOMPLETE umfasst {{statusResponseCount}} Fälle. Davon werden {{responseCount}} Fälle aus {{variableCount}} Basisvariablen nicht separat kodiert, weil sie über abgeleitete Variablen in der manuellen Kodierung abgedeckt sind.",
     "coding-progress": {
       "info-tooltip": "Erklärung zur Berechnung der Fortschrittswerte anzeigen",
       "info-total-title": "Gesamt zu kodierende Fälle",
       "info-total-desc": "Zählt die Basisanzahl eindeutiger Antworten, die noch der manuellen Kodierung bedürfen. Antworten von ausgeschlossenen Testteilnehmern werden dynamisch abgezogen.",
       "info-completed-title": "Abgeschlossene Fälle",
-      "info-completed-desc": "Zählt die Anzahl der eindeutigen Fälle, für die mindestens eine abschließende Kodierung in den Jobs vorliegt. Doppelkodierungen werden hierbei als ein Fall gezählt, um eine konsistente Fortschrittsanzeige von maximal 100% zu gewährleisten."
+      "info-completed-desc": "Zählt die Anzahl der eindeutigen Fälle, für die mindestens eine abschließende Kodierung in den Jobs vorliegt. Doppelkodierungen werden hierbei als ein Fall gezählt, um eine konsistente Fortschrittsanzeige von maximal 100% zu gewährleisten.",
+      "info-aggregation-title": "Antwortwert-Aggregation, falls aktiv",
+      "info-aggregation-desc": "Wenn Antwortwert-Aggregation aktiv ist, werden gleiche Antwortwerte pro Aufgabe/Variable gruppiert. Pro Gruppe wird ein Repräsentant in den Kodierjob gegeben; die Kodierung gilt anschließend für die zugehörigen Rohantworten. Abgeleitete Variablen werden nicht aggregiert.",
+      "aggregation-note": "Antwortwert-Aggregation ist aktiv: {{rawCases}} Rohantworten werden zu {{effectiveCases}} effektiven Kodierfällen zusammengefasst. Dadurch müssen bei Schwelle {{threshold}} {{collapsedCases}} gleichwertige Rohantworten nicht separat manuell kodiert werden.",
+      "analysis-aggregation-note": "Antwort-Analyse: {{rawCases}} Rohantworten ergeben {{effectiveCases}} effektive Kodierfälle.",
+      "analysis-aggregation-savings": "{{collapsedCases}} gleichwertige Rohantworten werden in dieser Analyse nicht separat als Kodierfälle gezählt."
     },
     "variable-coverage": {
       "info-tooltip": "Erklärung zur Variablenabdeckung anzeigen",
       "info-total-title": "Gesamt Variablen",
       "info-total-desc": "Anzahl aller eindeutigen Variablen im Arbeitsbereich, die Antworten enthalten, welche manuell kodiert werden müssen.",
       "info-covered-title": "Abgedeckte Variablen",
-      "info-covered-desc": "Gibt an, wie viele Variablen bereits mindestens einer Job-Definition zugeordnet sind.",
+      "info-covered-desc": "Gibt an, wie viele Variablen bereits mindestens einer Jobdefinition zugeordnet sind.",
       "info-completeness-title": "Vollständigkeit der Abdeckung",
       "info-completeness-desc": "Eine Variable gilt als 'Vollständig abgedeckt', wenn alle zugehörigen Antworten bereits in Kodierjobs verteilt wurden. Bei 'Partiell abgedeckt' sind zwar einige, aber noch nicht alle Antworten in Jobs zugewiesen."
     },
@@ -1569,7 +1873,8 @@
         "status": "Status"
       },
       "apply-empty-coding-button": "Kodierung automatisch anwenden",
-      "apply-empty-coding-tooltip": "Kodiert alle leeren Antworten CODING_COMPLETE, Code -98 und Score 0",
+      "apply-empty-coding-tooltip": "Kodiert alle leeren Antworten CODING_COMPLETE, Code {{code}} und Score {{score}}",
+      "apply-empty-coding-tooltip-loading": "IQB-Standard-Missingwert wird geladen",
       "apply-empty-coding-confirm-message": "Möchten Sie die automatische Kodierung für {{count}} leere Unit-Antworten anwenden?",
       "apply-empty-coding-success": "{{count}} leere Antworten wurden erfolgreich kodiert.",
       "apply-empty-coding-error": "Fehler beim Kodieren der leeren Antworten: {{error}}",
@@ -1593,6 +1898,9 @@
       "second-autocoding-ready-title": "Auto-Coding 2 bereit",
       "second-autocoding-ready-summary": "Die manuelle Kodierung ist abgeschlossen. Auto-Coding 2 kann nun für {{taskResults}} gestartet oder aktualisiert werden. Das betrifft {{responses}}.",
       "second-autocoding-ready-help": "Starten Sie Auto-Coding 2 in der Kodierübersicht. {{taskResultHelp}}"
+    },
+    "completed-jobs": {
+      "readonly-note": "Nur lesbar"
     },
     "duplicate-aggregation": {
       "is-applied": "Aggregation angewendet",
@@ -1666,13 +1974,24 @@
       "view-results-button": "Validierungs Ergebnisse anzeigen"
     }
   },
+  "coding-variables-dialog": {
+    "filters": {
+      "training-effort": "Schulungsaufwand",
+      "all": "Alle",
+      "only-increased": "Nur erhöht",
+      "only-normal": "Nur normal"
+    },
+    "training-required-tooltip": "Erhöhter Schulungsaufwand",
+    "training-required-chip": "Schulungsaufwand"
+  },
   "export-coding-book": {
     "validation-file": "Validierungs-Kodierliste"
   },
   "coding-job-definition-dialog": {
+    "manual-scope-note": "{{responseCount}} Fälle aus {{variableCount}} Basisvariablen werden nicht separat angeboten, weil sie über abgeleitete Variablen in der manuellen Kodierung abgedeckt sind.",
     "job-definition": {
-      "edit": "Job-Definition bearbeiten",
-      "create": "Neue Job-Definition erstellen",
+      "edit": "Jobdefinition bearbeiten",
+      "create": "Neue Jobdefinition erstellen",
       "save": "Definition speichern",
       "create-btn": "Definition erstellen",
       "submit-for-review": "Zur Prüfung einreichen"
@@ -1704,7 +2023,9 @@
       "max-cases-label": "Maximale Anzahl Kodierfälle",
       "max-cases-placeholder": "z.B. 100",
       "max-cases-hint": "Optionale Angabe der maximalen Anzahl von Kodierfällen. Bei mehr verfügbaren Fällen wird zufällig ausgewählt.",
-      "max-cases-error": "Die maximale Anzahl muss mindestens 1 betragen"
+      "max-cases-error": "Die maximale Anzahl muss mindestens 1 betragen",
+      "missings-profile-label": "Missing-Profil",
+      "missings-profile-loading": "Lade Missing-Profile..."
     },
     "double-coding": {
       "modes": {
@@ -1825,13 +2146,13 @@
       "bulk-creation-failed": "Verteilte Erstellung von Kodieraufträgen fehlgeschlagen: {{error}}",
       "bulk-creation-no-response": "Verteilte Erstellung von Kodieraufträgen fehlgeschlagen: Keine Antwort vom Server",
       "bulk-creation-failed-with-message": "Verteilte Erstellung von Kodieraufträgen fehlgeschlagen: {{message}}",
-      "definition-created-success": "Job-Definition erfolgreich erstellt",
-      "error-create-definition": "Fehler beim Erstellen der Job-Definition",
-      "error-creating-definition": "Fehler beim Erstellen der Job-Definition: {{error}}",
-      "definition-updated-success": "Job-Definition erfolgreich aktualisiert",
-      "error-update-definition": "Fehler beim Aktualisieren der Job-Definition",
-      "error-updating-definition": "Fehler beim Aktualisieren der Job-Definition: {{error}}",
-      "definition-submitted-review": "Job-Definition zur Prüfung eingereicht",
+      "definition-created-success": "Jobdefinition erfolgreich erstellt",
+      "error-create-definition": "Fehler beim Erstellen der Jobdefinition",
+      "error-creating-definition": "Fehler beim Erstellen der Jobdefinition: {{error}}",
+      "definition-updated-success": "Jobdefinition erfolgreich aktualisiert",
+      "error-update-definition": "Fehler beim Aktualisieren der Jobdefinition",
+      "error-updating-definition": "Fehler beim Aktualisieren der Jobdefinition: {{error}}",
+      "definition-submitted-review": "Jobdefinition zur Prüfung eingereicht",
       "error-submit-review": "Fehler beim Einreichen zur Prüfung",
       "error-submitting-review": "Fehler beim Einreichen zur Prüfung: {{error}}"
     },
@@ -1856,12 +2177,12 @@
     }
   },
   "coding-job-definitions": {
-    "title": "Job-Definitionen",
-    "info-tooltip": "Erklärung zu Job-Definitionen anzeigen",
-    "info-title": "Was sind Job-Definitionen?",
-    "info-desc": "Job-Definitionen dienen als Planungsvorlagen für Ihre Kodierjobs. Hier legen Sie vorab fest, welche Variablen bearbeitet werden sollen und wie viele Kodierer für Einfach- oder Doppelkodierungen eingesetzt werden. Sobald eine Definition geprüft und freigegeben wurde, können daraus die konkreten Kodierjobs für die Kodierer erzeugt werden.",
+    "title": "Jobdefinitionen",
+    "info-tooltip": "Erklärung zu Jobdefinitionen anzeigen",
+    "info-title": "Was sind Jobdefinitionen?",
+    "info-desc": "Jobdefinitionen dienen als Planungsvorlagen für Ihre Kodierjobs. Hier legen Sie vorab fest, welche Variablen bearbeitet werden sollen und wie viele Kodierer für Einfach- oder Doppelkodierungen eingesetzt werden. Sobald eine Definition geprüft und freigegeben wurde, können daraus die konkreten Kodierjobs für die Kodierer erzeugt werden.",
     "create-new": "Neue Definition erstellen",
-    "loading": "Lade Job-Definitionen...",
+    "loading": "Lade Jobdefinitionen...",
     "bulk-creation-in-progress": "Kodier-Jobs werden erstellt...",
     "table-headers": {
       "id": "ID",
@@ -1888,6 +2209,8 @@
       "jobs-created-short": "{{count}} erstellt",
       "jobs-count-unavailable": "Der Status erzeugter Kodier-Jobs konnte nicht geladen werden.",
       "jobs-count-unavailable-short": "Status unklar",
+      "distribution-summary": "Verteilungsübersicht anzeigen",
+      "distribution-export": "Verteilung als CSV exportieren",
       "refresh": "Kodierjobs neu verteilen",
       "refresh-tooltip": "Prüfen, welche bestehenden Kodierjobs ersetzt und anhand der aktuellen Definition neu erzeugt werden können.",
       "more": "Weitere Aktionen",
@@ -1920,18 +2243,40 @@
       "preview-title": "Jobstatus",
       "case-title": "Fälle",
       "task-title": "Kodieraufgaben",
+      "added-items-title": "Neue Fälle nach Variable / Bündel",
+      "added-item-counts": "{{cases}} Fälle · {{tasks}} Aufgaben",
       "stats": {
         "existing-jobs": "Vorhandene Jobs",
         "stale-jobs": "Davon veraltet",
         "existing-cases": "Bisherige Fälle",
         "planned-cases": "Geplante Fälle",
         "retained-cases": "Bleiben erhalten",
-        "added-cases": "Neue Fälle",
+        "added-cases": "Neue verfügbare Fälle",
         "removed-cases": "Entfernte Fälle",
         "added-tasks": "Aufgaben hinzugefügt",
         "removed-tasks": "Aufgaben entfernt"
       },
       "confirm": "Jobs neu verteilen"
+    },
+    "distribution-summary": {
+      "title": "Verteilungsübersicht",
+      "definition-label": "Definition #{{id}}",
+      "source": {
+        "initial": "Ersterstellung",
+        "refresh": "Neuverteilung"
+      },
+      "snapshots-label": "Gespeicherte Verteilungen",
+      "missing-history": "Für diese Jobdefinition liegt keine gespeicherte Verteilungsübersicht vor. Vermutlich wurden die Kodierjobs vor Einführung der Snapshot-Speicherung erstellt.",
+      "coders": "Kodierer",
+      "jobs": "Kodierjobs",
+      "total-cases": "Kodieraufgaben",
+      "new-cases": "Neue Fälle",
+      "item": "Variable / Bündel",
+      "total": "Gesamt",
+      "new": "Neue Fälle",
+      "added-tasks-title": "Neue Kodieraufgaben: {{tasks}}",
+      "double-coded": "Doppelt kodiert",
+      "grand-total": "Gesamt"
     },
     "summary": {
       "total": "Gesamt",
@@ -1948,25 +2293,29 @@
       "approved_count_unavailable": "Job-Erzeugung ist gesperrt, bis der Status erzeugter Kodier-Jobs geladen wurde."
     },
     "empty": {
-      "title": "Planung beginnt mit einer Job-Definition",
+      "title": "Planung beginnt mit einer Jobdefinition",
       "description": "Legen Sie fest, welche Variablen oder Bündel von welchen Kodierer:innen bearbeitet werden sollen. Danach können daraus konkrete Kodierjobs erzeugt werden."
     },
     "messages": {
-      "empty-state": "Keine Job-Definitionen gefunden",
+      "empty-state": "Keine Jobdefinitionen gefunden",
       "snackbar": {
-        "submitted-for-review": "Job-Definition wurde zur Prüfung eingereicht",
+        "submitted-for-review": "Jobdefinition wurde zur Prüfung eingereicht",
         "submit-failed": "Fehler beim Einreichen zur Prüfung: {{error}}",
-        "approved": "Job-Definition wurde genehmigt",
+        "approved": "Jobdefinition wurde genehmigt",
         "approve-failed": "Fehler bei der Genehmigung: {{error}}",
-        "rejected": "Job-Definition wurde abgelehnt und wieder als Entwurf markiert",
+        "rejected": "Jobdefinition wurde abgelehnt und wieder als Entwurf markiert",
         "reject-failed": "Fehler bei der Ablehnung: {{error}}",
-        "deleted": "Job-Definition wurde gelöscht",
+        "deleted": "Jobdefinition wurde gelöscht",
         "delete-failed": "Fehler beim Löschen: {{error}}",
         "jobs-created": "{{count}} Kodier-Jobs wurden erfolgreich erstellt",
         "jobs-created-partial": "{{successCount}} Jobs erstellt, {{errorCount}} fehlgeschlagen",
+        "create-preview-failed": "Vorschau konnte nicht berechnet werden: {{error}}",
+        "create-preview-no-coders": "Keine Kodierer in der Vorschau",
         "refresh-preview-failed": "Neuverteilung konnte nicht vorbereitet werden: {{error}}",
         "refresh-applied": "Kodierjobs neu verteilt: {{count}} Kodierjobs erstellt.",
         "refresh-apply-failed": "Neuverteilung fehlgeschlagen: {{error}}",
+        "distribution-export-missing": "Für diese Jobdefinition liegt keine gespeicherte Verteilungsübersicht vor.",
+        "distribution-export-failed": "Verteilung konnte nicht exportiert werden: {{error}}",
         "coders-loading-failed": "Fehler beim Laden der Kodierer: {{error}}",
         "no-workspace": "No workspace selected"
       }
@@ -2016,6 +2365,63 @@
       "info-text": "Diese Zusammenfassung trennt eindeutige Fälle von zusätzlichen Kodieraufgaben durch Doppelkodierung."
     }
   },
+  "cohens-kappa-statistics": {
+    "dialog-title": "Interrater-Reliabilität",
+    "loading": "Statistiken werden geladen...",
+    "workspace-title": "Inter-Rater Zuverlässigkeit (Cohen's Kappa)",
+    "workspace-subtitle": "Arbeitsbereichsübergreifende Analyse der Übereinstimmung zwischen Kodierern bei doppelt kodierten Variablen.",
+    "exclude-trainings": "Kodierer-Trainings ausschließen",
+    "exclude-trainings-tooltip": "Schließt alle Kodieraufträge aus, die mit einem Kodiertraining verknüpft sind.",
+    "weighted-mean": "Gewichteter Mittelwert",
+    "weighted-mean-tooltip": "Gewichtet jeden Kodierer-Paar-Wert nach der Anzahl gültiger Paare. Dies entspricht der R eatPrep-Implementierung.",
+    "weighted": "Gewichtet",
+    "unweighted": "Ungewichtet",
+    "average-kappa": "Durchschnittliches Kappa:",
+    "coder-pairs-analyzed": "Kodierer-Paare analysiert:",
+    "average-agreement": "Durchschnittliche Übereinstimmung:",
+    "total-coded-responses": "Kodierte Antworten gesamt:",
+    "double-coded-responses": "Doppelt kodierte Antworten:",
+    "coders-included": "Kodierer einbezogen:",
+    "variables-included": "Variablen einbezogen:",
+    "interpretation": "Interpretation:",
+    "variable-agreement-title": "Übereinstimmung nach Variable",
+    "variable-agreement-subtitle": "Kompakte Übersicht mit Fallzahlen, Doppelkodierungsanteil, mittlerem Kappa und mittlerer Übereinstimmung.",
+    "export-xlsx-tooltip": "Kappa-Statistiken als Excel-Arbeitsmappe exportieren",
+    "export-summary-tooltip": "Übersicht als CSV exportieren",
+    "export-details-tooltip": "Paarweise Details als CSV exportieren",
+    "export-running": "Export läuft...",
+    "export-xlsx": "XLSX exportieren",
+    "export-summary": "Übersicht CSV",
+    "export-details": "Details CSV",
+    "export-summary-error": "Kappa-Übersicht konnte nicht exportiert werden.",
+    "export-xlsx-error": "Kappa-Arbeitsmappe konnte nicht exportiert werden.",
+    "export-details-error": "Kappa-Details konnten nicht exportiert werden.",
+    "interpretation-scale": "Interpretationsskala",
+    "interpretation-scale-title": "Cohen's Kappa Interpretationsskala",
+    "show": "einblenden",
+    "hide": "ausblenden",
+    "scale-poor": "Schwache bis mäßige Übereinstimmung",
+    "scale-moderate": "Akzeptable Übereinstimmung",
+    "scale-substantial": "Substantielle Übereinstimmung",
+    "scale-good": "Gute Übereinstimmung",
+    "scale-perfect": "Nahezu perfekte Übereinstimmung",
+    "no-data": "Keine Interrater-Reliabilität verfügbar",
+    "no-data-available": "Keine Daten verfügbar",
+    "variable-means": "Mittelwerte je Variable",
+    "variable": "Variable",
+    "total-coded": "Gesamtzahl kodiert",
+    "double-coded-count": "Anzahl doppelt kodiert",
+    "double-coded-rate": "Anteil doppelt kodiert",
+    "mean-kappa": "Mittleres Kappa",
+    "mean-agreement": "Mittlere Übereinstimmung",
+    "coder-pair-details": "Details nach Kodierer-Paaren",
+    "coder-pair": "Kodierer-Paar",
+    "agreement": "Übereinstimmung",
+    "valid-pairs": "Gültige Paare",
+    "interpretation-label": "Interpretation",
+    "interpretation-poor-negative": "Schlechte Übereinstimmung (weniger als zufällig)",
+    "close": "Schließen"
+  },
   "kappa": {
     "poor": "Schlechte Übereinstimmung (weniger als zufällig)",
     "slight": "Schwache Übereinstimmung",
@@ -2031,7 +2437,8 @@
     "loading": "Doppelkodierungsdaten werden geladen...",
     "no-data": {
       "title": "Keine Daten verfügbar",
-      "message": "Es sind keine doppelkodierten Variablen zur Überprüfung verfügbar."
+      "message": "Es sind keine doppelkodierten Variablen zur Überprüfung verfügbar.",
+      "filter-hint": "Wenn in der Interrater-Statistik doppelt kodierte Antworten vorhanden sind, prüfen Sie die aktiven Filter für Jobdefinitionen, Schulungen, Status und Entscheidungen."
     },
     "no-conflicts": {
       "title": "Keine Konflikte gefunden",
@@ -2044,7 +2451,8 @@
       "person-info": "Personeninformationen",
       "given-answer": "Gegebene Antwort",
       "coder-results": "Kodierergebnisse",
-      "selection": "Auswahl"
+      "selection": "Auswahl",
+      "alternative-coder-names": "Weitere Namen: {{names}}"
     },
     "code-label": "Code",
     "score-label": "Bewertung",
@@ -2059,8 +2467,14 @@
       "select-label": "Endgültiger Code",
       "no-selection": "Kein Code gewählt",
       "status-conflict": "Abweichung",
+      "status-inter-coder-conflict": "Kodierer-Abweichung",
+      "status-same-coder-conflict": "Mehrfach-Abweichung",
+      "status-mixed-conflict": "Mehrere Abweichungen",
       "status-match": "Übereinstimmung",
-      "status-incomplete": "Unvollständig"
+      "status-incomplete": "Unvollständig",
+      "tooltip-inter-coder-conflict": "Unterschiedliche Kodierer haben abweichende Ergebnisse",
+      "tooltip-same-coder-conflict": "Derselbe Kodierer hat mehrere abweichende Ergebnisse",
+      "tooltip-mixed-conflict": "Es gibt Abweichungen innerhalb eines Kodierers und zwischen Kodierern"
     },
     "filter": {
       "show-only-conflicts": "Nur Konflikte anzeigen",
@@ -2068,12 +2482,12 @@
       "agreement-all": "Alle",
       "agreement-match": "Nur Übereinstimmung",
       "agreement-differ": "Nur Abweichung",
-      "scope-label": "Job-Definition / Schulung",
-      "scope-all": "Alle Job-Definitionen und Schulungen",
+      "scope-label": "Jobdefinition / Schulung",
+      "scope-all": "Alle Jobdefinitionen und Schulungen",
       "scope-summary": "{{jobs}} Definition(en), {{trainings}} Schulung(en)",
-      "scope-job-definitions": "Job-Definitionen",
+      "scope-job-definitions": "Jobdefinitionen",
       "scope-trainings": "Schulungen",
-      "scope-none": "Keine Job-Definition oder Schulung mit aktiven Kodierjobs gefunden",
+      "scope-none": "Keine Jobdefinition oder Schulung mit aktiven Kodierjobs gefunden",
       "training-fallback": "Schulung #{{id}}",
       "job-count-singular": "Kodierjob",
       "job-count-plural": "Kodierjobs",
@@ -2144,12 +2558,26 @@
     "aggregation-savings": "Einsparung durch Aggregation:",
     "applied-results": "Angewendete Ergebnisse:",
     "remaining": "Verbleibend:",
+    "derive-error-additional": "DERIVE_ERROR-Zusatzfälle:",
+    "derive-error-progress": "{{applied}} von {{total}} angewendet, {{remaining}} offen",
     "completion-progress": "Fertigstellungsfortschritt",
     "responses-have-been-applied": "der Antworten wurden angewendet",
     "final-status-distribution": "Endgültige Statusverteilung",
     "coding-complete": "CODING_COMPLETE:",
     "invalid": "INVALID:",
     "coding-error": "CODING_ERROR:"
+  },
+  "files-validation": {
+    "replay-compatibility": {
+      "title": "Eingeschränkte Replay-Markierung möglich",
+      "task-count": "{{count}} Aufgabe(n)",
+      "message": "Für einige Aufgaben wird ein Aspect-Player verwendet, der keine stabilen Element-Aliase im DOM bereitstellt. Elementgenaue Markierungen im Replay können dadurch fehlen oder ungenau sein. Bitte mindestens IQB-PLAYER-ASPECT 2.9.4 verwenden.",
+      "install-action": "Kompatiblen Aspect-Player installieren",
+      "installing": "Wird installiert...",
+      "install-success": "Kompatibler Aspect-Player wurde installiert.",
+      "install-error": "Kompatibler Aspect-Player konnte nicht installiert werden",
+      "affected-units": "Betroffene Aufgaben"
+    }
   },
   "coding-validation-results": {
     "title": "Validierungsergebnisse",

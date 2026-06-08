@@ -1,9 +1,14 @@
+import 'reflect-metadata';
 import { PassThrough, Writable } from 'stream';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { BadRequestException } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { WorkspaceCodingExportController } from './workspace-coding-export.controller';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { WorkspaceGuard } from './workspace.guard';
+import { AccessLevelGuard } from './access-level.guard';
 import {
   CodingExportService,
   CodingExportOrchestratorService,
@@ -76,6 +81,7 @@ describe('WorkspaceCodingExportController', () => {
       'http://server',
       false,
       false,
+      false,
       res as never
     );
     await new Promise(resolve => {
@@ -92,7 +98,8 @@ describe('WorkspaceCodingExportController', () => {
         authToken: 'token',
         serverUrl: 'http://server',
         includeReplayUrl: false,
-        includeResponseValues: false
+        includeResponseValues: false,
+        includeGeoGebraResponseValues: false
       });
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
     expect(res.end).toHaveBeenCalled();
@@ -171,6 +178,32 @@ describe('WorkspaceCodingExportController', () => {
       {
         exportType: 'results-by-version',
         format: format as never
+      }
+    )).rejects.toThrow(BadRequestException);
+
+    expect(jobQueueService.addExportJob).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid item matrix versions before starting a background export job', async () => {
+    const jobQueueService = {
+      addExportJob: jest.fn()
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingResultsExportService,
+      {} as CodingExportService,
+      {} as CodingTimesExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.startExportJob(
+      5,
+      { user: { id: 2 } } as never,
+      {
+        exportType: 'item-matrix',
+        version: 'v4' as never
       }
     )).rejects.toThrow(BadRequestException);
 
@@ -416,5 +449,40 @@ describe('WorkspaceCodingExportController', () => {
     await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
       error: 'Access denied to this export'
     });
+  });
+
+  it('requires coding-manager access at controller level', () => {
+    expect(Reflect.getMetadata(
+      'accessLevel',
+      WorkspaceCodingExportController
+    )).toBe(2);
+  });
+
+  it.each([
+    'getCodingListAsCsv',
+    'getCodingListAsExcel',
+    'getCodingListAsJson',
+    'getCodingResultsByVersion',
+    'getCodingResultsByVersionAsExcel',
+    'exportCodingResultsAggregated',
+    'exportCodingResultsByCoder',
+    'exportCodingResultsByVariable',
+    'exportCodingResultsDetailed',
+    'exportCodingTimesReport',
+    'estimateExportJob',
+    'startExportJob',
+    'getExportJobStatus',
+    'downloadExport',
+    'getExportJobs',
+    'deleteExportJob',
+    'cancelExportJob'
+  ] as const)('uses access-level guard for %s', methodName => {
+    const handler = WorkspaceCodingExportController.prototype[methodName];
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtAuthGuard,
+      WorkspaceGuard,
+      AccessLevelGuard
+    ]);
   });
 });

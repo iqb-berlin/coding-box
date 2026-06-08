@@ -44,4 +44,34 @@ export class FileBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/unit-variables`;
     return this.http.get<UnitVariableDetailsDto[]>(url, {});
   }
+
+  getReplayAnchorOverrides(workspaceId: number): Observable<ReplayAnchorOverride[]> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/replay-anchor-overrides`;
+    return this.http.get<ReplayAnchorOverride[]>(url, {});
+  }
+
+  saveReplayAnchorOverride(
+    workspaceId: number,
+    override: ReplayAnchorOverride
+  ): Observable<ReplayAnchorOverride> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/replay-anchor-overrides`;
+    return this.http.put<ReplayAnchorOverride>(url, override);
+  }
+
+  deleteReplayAnchorOverride(
+    workspaceId: number,
+    unitName: string,
+    variableId: string
+  ): Observable<{ deleted: boolean }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/replay-anchor-overrides`;
+    return this.http.delete<{ deleted: boolean }>(url, {
+      params: { unitName, variableId }
+    });
+  }
+}
+
+export interface ReplayAnchorOverride {
+  unitName: string;
+  variableId: string;
+  replayAnchor: string;
 }

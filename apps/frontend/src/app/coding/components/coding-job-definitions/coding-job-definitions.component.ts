@@ -20,8 +20,14 @@ import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { Subject, firstValueFrom, takeUntil } from 'rxjs';
-import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import {
+  Subject, finalize, firstValueFrom, takeUntil
+} from 'rxjs';
+import {
+  CodingJobBackendService,
+  JobDefinitionDistributionSnapshot
+} from '../../services/coding-job-backend.service';
+import type { JobDefinitionDistributionPreviewResponse } from '../../services/distributed-coding.service';
 import { AppService } from '../../../core/services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
 import { CoderService } from '../../services/coder.service';
@@ -37,6 +43,9 @@ import {
   CodingJobBulkCreationDialogComponent,
   BulkCreationData
 } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
+import {
+  JobDefinitionDistributionSummaryDialogComponent
+} from './job-definition-distribution-summary-dialog.component';
 
 interface JobDefinition {
   id?: number;
@@ -45,6 +54,8 @@ interface JobDefinition {
   assignedVariableBundles?: VariableBundle[];
   assignedCoders?: number[];
   assignedCoderConfigs?: { coderId: number; capacityPercent: number }[];
+  distributionSnapshots?: JobDefinitionDistributionSnapshot[];
+  missingsProfileId?: number | null;
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
   durationSeconds?: number;
@@ -100,6 +111,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   isLoading = false;
   isBulkCreating = false;
   refreshingDefinitionIds = new Set<number>();
+  exportingDistributionDefinitionIds = new Set<number>();
   coders: Coder[] = [];
   showInfo = false;
   private readonly variablePreviewLimit = 12;
@@ -213,7 +225,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return '-';
     }
     return definition.assignedVariables
-      .map(variable => `${variable.unitName}.${variable.variableId}`)
+      .map(variable => this.getVariableDisplayName(variable))
       .join(', ');
   }
 
@@ -222,8 +234,13 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return [];
     }
     return definition.assignedVariables.map(
-      variable => `${variable.unitName}.${variable.variableId}`
+      variable => this.getVariableDisplayName(variable)
     );
+  }
+
+  private getVariableDisplayName(variable: Variable): string {
+    const displayName = `${variable.unitName}.${variable.variableId}`;
+    return variable.includeDeriveError ? `${displayName} (DERIVE_ERROR)` : displayName;
   }
 
   getVisibleVariableItems(definition: JobDefinition): string[] {
@@ -402,8 +419,37 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return definition.status === 'approved' && createdJobsCount !== undefined && createdJobsCount > 0;
   }
 
+  canViewDistributionSummary(definition: JobDefinition): boolean {
+    const createdJobsCount = this.getCreatedJobsCount(definition);
+    return this.hasDistributionSnapshots(definition) ||
+      (createdJobsCount !== undefined && createdJobsCount > 0);
+  }
+
+  canExportDistributionCsv(definition: JobDefinition): boolean {
+    return !!definition.id && this.hasDistributionSnapshots(definition);
+  }
+
+  hasDistributionSnapshots(definition: JobDefinition): boolean {
+    return Array.isArray(definition.distributionSnapshots) &&
+      definition.distributionSnapshots.length > 0;
+  }
+
+  getLatestDistributionSnapshot(
+    definition: JobDefinition
+  ): JobDefinitionDistributionSnapshot | undefined {
+    if (!this.hasDistributionSnapshots(definition)) {
+      return undefined;
+    }
+
+    return definition.distributionSnapshots![definition.distributionSnapshots!.length - 1];
+  }
+
   isRefreshingDefinition(definition: JobDefinition): boolean {
     return !!definition.id && this.refreshingDefinitionIds.has(definition.id);
+  }
+
+  isExportingDistribution(definition: JobDefinition): boolean {
+    return !!definition.id && this.exportingDistributionDefinitionIds.has(definition.id);
   }
 
   getEditDefinitionLabel(definition: JobDefinition): string {
@@ -522,6 +568,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         assignedVariableBundles: definition.assignedVariableBundles,
         assignedCoders: definition.assignedCoders!,
         assignedCoderConfigs: definition.assignedCoderConfigs,
+        missings_profile_id: definition.missingsProfileId ?? undefined,
         durationSeconds: definition.durationSeconds,
         maxCodingCases: definition.maxCodingCases,
         doubleCodingAbsolute: definition.doubleCodingAbsolute,
@@ -759,6 +806,76 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
   }
 
+  viewDistributionSummary(definition: JobDefinition): void {
+    if (!definition.id || !this.canViewDistributionSummary(definition)) {
+      return;
+    }
+
+    this.dialog.open(JobDefinitionDistributionSummaryDialogComponent, {
+      width: '1120px',
+      maxWidth: '95vw',
+      data: {
+        definitionId: definition.id,
+        snapshot: this.getLatestDistributionSnapshot(definition),
+        snapshots: definition.distributionSnapshots || [],
+        coders: this.coders,
+        createdJobsCount: this.getCreatedJobsCount(definition)
+      },
+      autoFocus: false
+    });
+  }
+
+  exportDistributionCsv(definition: JobDefinition): void {
+    if (!definition.id) {
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.no-workspace'
+        )
+      );
+      return;
+    }
+
+    if (!this.canExportDistributionCsv(definition)) {
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.distribution-export-missing'
+        )
+      );
+      return;
+    }
+
+    this.exportingDistributionDefinitionIds.add(definition.id);
+    this.codingJobBackendService
+      .exportJobDefinitionDistributionCsv(workspaceId, definition.id)
+      .pipe(
+        finalize(() => {
+          this.exportingDistributionDefinitionIds.delete(definition.id!);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({
+        next: blob => {
+          this.saveBlob(
+            blob,
+            `job-definition-distribution-${definition.id}-${this.getDateString()}.csv`
+          );
+        },
+        error: error => {
+          this.showError(
+            this.translateService.instant(
+              'coding-job-definitions.messages.snackbar.distribution-export-failed',
+              { error: this.getErrorMessage(error) }
+            )
+          );
+        }
+      });
+  }
+
   private async applyDefinitionRefresh(
     workspaceId: number,
     jobDefinitionId: number
@@ -821,57 +938,89 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    let preview: JobDefinitionDistributionPreviewResponse;
     try {
-      const allCoders = await firstValueFrom(this.coderService.getCoders());
-      const capacityByCoderId = new Map(
-        (definition.assignedCoderConfigs || [])
-          .map(config => [config.coderId, config.capacityPercent])
-      );
-      const selectedCoders =
-        allCoders?.filter(coder => definition.assignedCoders!.includes(coder.id)
-        )
-          .map(coder => ({
-            ...coder,
-            capacityPercent: capacityByCoderId.get(coder.id) ?? 100
-          })) || [];
-
-      const dialogData: BulkCreationData = {
-        selectedVariables: definition.assignedVariables || [],
-        selectedVariableBundles: definition.assignedVariableBundles || [],
-        selectedCoders: selectedCoders,
-        doubleCodingAbsolute: definition.doubleCodingAbsolute,
-        doubleCodingPercentage: definition.doubleCodingPercentage,
-        caseOrderingMode: definition.caseOrderingMode || 'continuous',
-        maxCodingCases: definition.maxCodingCases,
-        distributionSeed: definition.distributionSeed,
-        displayOptions: {
-          showScore: definition.showScore ?? false,
-          allowComments: definition.allowComments ?? true,
-          suppressGeneralInstructions: definition.suppressGeneralInstructions ?? false
-        },
-        displayOptionsLocked: true
-      };
-      const dialogRef = this.dialog.open(CodingJobBulkCreationDialogComponent, {
-        width: '1200px',
-        data: dialogData
-      });
-
-      const result = await firstValueFrom(dialogRef.afterClosed());
-
-      if (result && result.confirmed) {
-        await this.createBulkJobsFromDefinition(
+      preview = await firstValueFrom(
+        this.codingJobBackendService.previewCodingJobFromDefinition(
           workspaceId,
           definition.id
-        );
-      }
+        )
+      );
     } catch (error) {
       this.showError(
         this.translateService.instant(
-          'coding-job-definitions.messages.snackbar.coders-loading-failed',
-          { error: (error as Error).message }
+          'coding-job-definitions.messages.snackbar.create-preview-failed',
+          { error: this.getErrorMessage(error) }
         )
       );
+      return;
     }
+
+    const selectedCoders = this.mapPreviewSelectedCoders(preview.selectedCoders);
+    if (selectedCoders.length === 0) {
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.create-preview-failed',
+          {
+            error: this.translateService.instant(
+              'coding-job-definitions.messages.snackbar.create-preview-no-coders'
+            )
+          }
+        )
+      );
+      return;
+    }
+
+    const dialogData: BulkCreationData = {
+      selectedVariables: preview.selectedVariables,
+      selectedVariableBundles: preview.selectedVariableBundles,
+      selectedCoders: selectedCoders,
+      doubleCodingAbsolute: definition.doubleCodingAbsolute,
+      doubleCodingPercentage: definition.doubleCodingPercentage,
+      caseOrderingMode: definition.caseOrderingMode || 'continuous',
+      maxCodingCases: definition.maxCodingCases,
+      distributionSeed: definition.distributionSeed,
+      distribution: preview.distribution,
+      distributionByCoderId: preview.distributionByCoderId,
+      doubleCodingInfo: preview.doubleCodingInfo,
+      warnings: preview.warnings,
+      displayOptions: {
+        showScore: definition.showScore ?? false,
+        allowComments: definition.allowComments ?? true,
+        suppressGeneralInstructions: definition.suppressGeneralInstructions ?? false
+      },
+      displayOptionsLocked: true
+    };
+    const dialogRef = this.dialog.open(CodingJobBulkCreationDialogComponent, {
+      width: '1200px',
+      data: dialogData
+    });
+
+    const result = await firstValueFrom(dialogRef.afterClosed());
+
+    if (result && result.confirmed) {
+      await this.createBulkJobsFromDefinition(
+        workspaceId,
+        definition.id
+      );
+    }
+  }
+
+  private mapPreviewSelectedCoders(
+    previewCoders: Array<{
+      id: number;
+      name?: string;
+      username?: string;
+      capacityPercent?: number;
+    }> = []
+  ): Coder[] {
+    return previewCoders
+      .map(coder => ({
+        id: coder.id,
+        name: coder.name || coder.username || `Coder ${coder.id}`,
+        capacityPercent: coder.capacityPercent
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
   }
 
   private async createBulkJobsFromDefinition(
@@ -937,6 +1086,21 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     this.snackBar.open(message, this.translateService.instant('common.close'), {
       duration: 5000
     });
+  }
+
+  private saveBlob(blob: Blob, filename: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
+  private getDateString(): string {
+    return new Date().toISOString().slice(0, 10);
   }
 
   private getErrorMessage(error: unknown): string {

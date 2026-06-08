@@ -3,25 +3,19 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, throwError } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 
-export interface DistributedCodingJobsResponse {
+export type DistributionVariable = { unitName: string; variableId: string; includeDeriveError?: boolean };
+
+export interface DistributionVariableBundle {
+  id: number;
+  name: string;
+  caseOrderingMode?: 'continuous' | 'alternating';
+  variables: DistributionVariable[];
+}
+
+export interface DistributedCodingJobsResponse extends DistributionCalculationResponse {
   success: boolean;
   jobsCreated: number;
   message: string;
-  distribution: Record<string, Record<string, number>>;
-  distributionByCoderId?: Record<string, Record<string, number>>;
-  doubleCodingInfo: Record<string, {
-    totalCases: number;
-    distinctCases?: number;
-    codingTasksTotal?: number;
-    doubleCodedCases: number;
-    singleCodedCasesAssigned: number;
-    doubleCodedCasesPerCoder: Record<string, number>;
-  }>;
-  aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
-  matchingFlags: string[];
-  pairDistribution?: Record<string, number>;
-  tasksPerCoder?: Record<string, number>;
-  coderWeights?: Record<string, number>;
   jobs: {
     itemKey?: string;
     coderId: number;
@@ -31,6 +25,39 @@ export interface DistributedCodingJobsResponse {
     jobName: string;
     caseCount: number;
   }[];
+}
+
+export interface DistributionPreviewCoder {
+  id: number;
+  name: string;
+  username: string;
+  capacityPercent?: number;
+}
+
+export interface DistributionCalculationResponse {
+  distribution: Record<string, Record<string, number>>;
+  distributionByCoderId?: Record<string, Record<string, number>>;
+  doubleCodingInfo: Record<string, {
+    totalCases: number;
+    distinctCases?: number;
+    codingTasksTotal?: number;
+    doubleCodedCases: number;
+    singleCodedCasesAssigned: number;
+    doubleCodedCasesPerCoder: Record<string, number>;
+    doubleCodedCasesPerCoderId?: Record<string, number>;
+  }>;
+  aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+  matchingFlags: string[];
+  warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
+  pairDistribution?: Record<string, number>;
+  tasksPerCoder?: Record<string, number>;
+  coderWeights?: Record<string, number>;
+}
+
+export interface JobDefinitionDistributionPreviewResponse extends DistributionCalculationResponse {
+  selectedVariables: DistributionVariable[];
+  selectedVariableBundles: DistributionVariableBundle[];
+  selectedCoders: DistributionPreviewCoder[];
 }
 
 @Injectable({
@@ -60,11 +87,11 @@ export class DistributedCodingService {
 
   createDistributedCodingJobs(
     workspaceId: number,
-    selectedVariables: { unitName: string; variableId: string }[],
+    selectedVariables: DistributionVariable[],
     selectedCoders: { id: number; name: string; username: string; weight?: number; capacityPercent?: number }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
-    selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[],
+    selectedVariableBundles?: DistributionVariableBundle[],
     caseOrderingMode?: 'continuous' | 'alternating',
     maxCodingCases?: number,
     displayOptions?: {
@@ -99,28 +126,18 @@ export class DistributedCodingService {
 
   calculateDistribution(
     workspaceId: number,
-    selectedVariables: { unitName: string; variableId: string }[],
+    selectedVariables: DistributionVariable[],
     selectedCoders: { id: number; name: string; username: string; weight?: number; capacityPercent?: number }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
-    selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[],
+    selectedVariableBundles?: DistributionVariableBundle[],
     caseOrderingMode?: 'continuous' | 'alternating',
     maxCodingCases?: number,
     distributionSeed?: string
-  ): Observable<{
-      distribution: Record<string, Record<string, number>>;
-      distributionByCoderId?: Record<string, Record<string, number>>;
-      doubleCodingInfo: DistributedCodingJobsResponse['doubleCodingInfo'];
-      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
-      matchingFlags: string[];
-      pairDistribution?: Record<string, number>;
-      tasksPerCoder?: Record<string, number>;
-      coderWeights?: Record<string, number>;
-      warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
-    }> {
+  ): Observable<DistributionCalculationResponse> {
     const body: {
-      selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[];
+      selectedVariables: DistributionVariable[];
+      selectedVariableBundles?: DistributionVariableBundle[];
       selectedCoders: { id: number; name: string; username: string; weight?: number; capacityPercent?: number }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;

@@ -1,7 +1,8 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
-  Component, OnDestroy, OnInit, inject
+  Component, OnDestroy, OnInit, SecurityContext, inject
 } from '@angular/core';
+import { DomSanitizer } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -18,6 +19,7 @@ import { LogoService } from '../../../core/services/logo.service';
 import { SystemSettingsService } from '../../../core/services/system-settings.service';
 import { ContentPoolSettings } from '../../../ws-admin/models/content-pool.model';
 import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
+import { defaultLegalNoticeHtml } from '../../../../../../../api-dto/legal-notice/default-legal-notice-html';
 import { SERVER_URL } from '../../../injection-tokens';
 
 type DatabaseExportStatus =
@@ -62,6 +64,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   private systemSettingsService = inject(SystemSettingsService);
   private snackBar = inject(MatSnackBar);
   private rawServerUrl = inject(SERVER_URL);
+  private sanitizer = inject(DomSanitizer);
   private exportPollingSubscription: Subscription | null = null;
 
   selectedFile: File | null = null;
@@ -73,12 +76,22 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   databaseExportProgress = 0;
   databaseExportStatus: DatabaseExportStatus | null = null;
   databaseExportError: string | null = null;
+  isLoadingLegalNotice = false;
+  isSavingLegalNotice = false;
+  isLegalNoticeDefault = true;
+  legalNoticeHtml = defaultLegalNoticeHtml;
+  legalNoticePreviewHtml = this.sanitizeHtml(defaultLegalNoticeHtml);
   isLoadingContentPoolSettings = false;
   isSavingContentPoolSettings = false;
+  isTestingContentPoolConnection = false;
   contentPoolSettings: ContentPoolSettings = {
     enabled: false,
-    baseUrl: ''
+    baseUrl: '',
+    hasApplicationToken: false
   };
+
+  contentPoolApplicationToken = '';
+  clearContentPoolApplicationToken = false;
 
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
   constructor() {
@@ -88,6 +101,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.loadLegalNotice();
     this.loadContentPoolSettings();
   }
 
@@ -250,6 +264,93 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     });
   }
 
+  loadLegalNotice(): void {
+    this.isLoadingLegalNotice = true;
+    this.systemSettingsService.getLegalNotice().subscribe({
+      next: legalNotice => {
+        this.legalNoticeHtml = legalNotice.html || defaultLegalNoticeHtml;
+        this.isLegalNoticeDefault = legalNotice.isDefault;
+        this.updateLegalNoticePreview();
+        this.isLoadingLegalNotice = false;
+      },
+      error: () => {
+        this.legalNoticeHtml = defaultLegalNoticeHtml;
+        this.isLegalNoticeDefault = true;
+        this.updateLegalNoticePreview();
+        this.isLoadingLegalNotice = false;
+        this.snackBar.open(
+          'Impressum/Datenschutz-Text konnte nicht geladen werden.',
+          'Schließen',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  saveLegalNotice(): void {
+    const html = (this.legalNoticeHtml || '').trim();
+    if (!html) {
+      this.snackBar.open(
+        'Bitte einen Impressum/Datenschutz-Text hinterlegen.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    this.isSavingLegalNotice = true;
+    this.systemSettingsService.updateLegalNotice({ html }).subscribe({
+      next: legalNotice => {
+        this.legalNoticeHtml = legalNotice.html;
+        this.isLegalNoticeDefault = legalNotice.isDefault;
+        this.updateLegalNoticePreview();
+        this.isSavingLegalNotice = false;
+        this.snackBar.open(
+          'Impressum/Datenschutz-Text wurde gespeichert.',
+          'Schließen',
+          { duration: 3000 }
+        );
+      },
+      error: error => {
+        this.isSavingLegalNotice = false;
+        const message = this.extractErrorMessage(
+          error,
+          'Impressum/Datenschutz-Text konnte nicht gespeichert werden.'
+        );
+        this.snackBar.open(message, 'Schließen', { duration: 4000 });
+      }
+    });
+  }
+
+  resetLegalNoticeToDefault(): void {
+    this.isSavingLegalNotice = true;
+    this.systemSettingsService.resetLegalNotice().subscribe({
+      next: legalNotice => {
+        this.legalNoticeHtml = legalNotice.html;
+        this.isLegalNoticeDefault = legalNotice.isDefault;
+        this.updateLegalNoticePreview();
+        this.isSavingLegalNotice = false;
+        this.snackBar.open(
+          'Impressum/Datenschutz-Text wurde auf den Standard zurückgesetzt.',
+          'Schließen',
+          { duration: 3000 }
+        );
+      },
+      error: error => {
+        this.isSavingLegalNotice = false;
+        const message = this.extractErrorMessage(
+          error,
+          'Impressum/Datenschutz-Text konnte nicht zurückgesetzt werden.'
+        );
+        this.snackBar.open(message, 'Schließen', { duration: 4000 });
+      }
+    });
+  }
+
+  updateLegalNoticePreview(): void {
+    this.legalNoticePreviewHtml = this.sanitizeHtml(this.legalNoticeHtml);
+  }
+
   ngOnDestroy(): void {
     this.stopExportPolling();
   }
@@ -277,8 +378,11 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       next: settings => {
         this.contentPoolSettings = {
           enabled: !!settings.enabled,
-          baseUrl: (settings.baseUrl || '').trim()
+          baseUrl: (settings.baseUrl || '').trim(),
+          hasApplicationToken: !!settings.hasApplicationToken
         };
+        this.contentPoolApplicationToken = '';
+        this.clearContentPoolApplicationToken = false;
         this.isLoadingContentPoolSettings = false;
       },
       error: () => {
@@ -294,9 +398,22 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
   saveContentPoolSettings(): void {
     const normalizedBaseUrl = (this.contentPoolSettings.baseUrl || '').trim();
+    const applicationToken = this.contentPoolApplicationToken.trim();
     if (this.contentPoolSettings.enabled && !normalizedBaseUrl) {
       this.snackBar.open(
         'Bitte eine Content-Pool URL hinterlegen, bevor das Feature aktiviert wird.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+    if (
+      this.contentPoolSettings.enabled &&
+      !applicationToken &&
+      (!this.contentPoolSettings.hasApplicationToken || this.clearContentPoolApplicationToken)
+    ) {
+      this.snackBar.open(
+        'Bitte ein Content-Pool Application-Token hinterlegen, bevor das Feature aktiviert wird.',
         'Schließen',
         { duration: 4000 }
       );
@@ -307,14 +424,19 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     this.systemSettingsService
       .updateContentPoolSettings({
         enabled: this.contentPoolSettings.enabled,
-        baseUrl: normalizedBaseUrl
+        baseUrl: normalizedBaseUrl,
+        applicationToken: applicationToken || undefined,
+        clearApplicationToken: this.clearContentPoolApplicationToken && !applicationToken
       })
       .subscribe({
         next: settings => {
           this.contentPoolSettings = {
             enabled: !!settings.enabled,
-            baseUrl: (settings.baseUrl || '').trim()
+            baseUrl: (settings.baseUrl || '').trim(),
+            hasApplicationToken: !!settings.hasApplicationToken
           };
+          this.contentPoolApplicationToken = '';
+          this.clearContentPoolApplicationToken = false;
           this.isSavingContentPoolSettings = false;
           this.snackBar.open(
             'Content-Pool-Einstellungen wurden gespeichert.',
@@ -329,6 +451,69 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
             'Content-Pool-Einstellungen konnten nicht gespeichert werden.'
           );
           this.snackBar.open(message, 'Schließen', { duration: 4000 });
+        }
+      });
+  }
+
+  clearStoredContentPoolToken(): void {
+    this.contentPoolApplicationToken = '';
+    this.clearContentPoolApplicationToken = true;
+  }
+
+  onContentPoolTokenInputChange(value: string): void {
+    if ((value || '').trim()) {
+      this.clearContentPoolApplicationToken = false;
+    }
+  }
+
+  testContentPoolConnection(): void {
+    const normalizedBaseUrl = (this.contentPoolSettings.baseUrl || '').trim();
+    const applicationToken = this.contentPoolApplicationToken.trim();
+    if (!normalizedBaseUrl) {
+      this.snackBar.open(
+        'Bitte eine Content-Pool URL für den Verbindungstest hinterlegen.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    if (
+      !applicationToken &&
+      (!this.contentPoolSettings.hasApplicationToken || this.clearContentPoolApplicationToken)
+    ) {
+      this.snackBar.open(
+        'Bitte ein Content-Pool Application-Token für den Verbindungstest hinterlegen.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    this.isTestingContentPoolConnection = true;
+    this.systemSettingsService
+      .testContentPoolConnection({
+        baseUrl: normalizedBaseUrl,
+        applicationToken: applicationToken || undefined,
+        clearApplicationToken: this.clearContentPoolApplicationToken && !applicationToken
+      })
+      .subscribe({
+        next: result => {
+          this.isTestingContentPoolConnection = false;
+          this.snackBar.open(
+            result.message ||
+              `Verbindung erfolgreich. ${result.acpCount} ACPs erreichbar.`,
+            'Schließen',
+            { duration: 4000 }
+          );
+        },
+        error: error => {
+          this.isTestingContentPoolConnection = false;
+          const message = this.extractErrorMessage(
+            error,
+            'Content-Pool-Verbindung konnte nicht getestet werden. Token und Scopes prüfen.'
+          );
+          this.snackBar.open(message, 'Schließen', { duration: 6000 });
         }
       });
   }
@@ -393,7 +578,9 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
           if (state.status === 'failed' || state.status === 'cancelled') {
             this.stopExportPolling();
             this.isExporting = false;
-            this.databaseExportError = state.error || 'Der Datenbank-Export ist fehlgeschlagen.';
+            this.databaseExportError =
+              state.error ||
+              'Der Datenbank-Export ist fehlgeschlagen. Sie können den Export erneut starten.';
             this.snackBar.open(this.databaseExportError, 'Schließen', { duration: 5000 });
           }
         },
@@ -479,6 +666,10 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     anchor.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(anchor);
+  }
+
+  private sanitizeHtml(html: string): string {
+    return this.sanitizer.sanitize(SecurityContext.HTML, html) || '';
   }
 
   private extractErrorMessage(error: unknown, fallback: string): string {

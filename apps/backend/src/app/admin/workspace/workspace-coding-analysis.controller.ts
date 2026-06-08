@@ -18,6 +18,7 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { CodingValidationService, CodingAnalysisService, MissingsProfilesService } from '../../database/services/coding';
 import { VariableAnalysisReplayService } from '../../database/services/test-results';
 import { ExportValidationResultsService } from '../../database/services/validation';
@@ -25,6 +26,7 @@ import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variab
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
+import { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
 import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
 
 @ApiTags('Admin Workspace Coding')
@@ -39,7 +41,8 @@ export class WorkspaceCodingAnalysisController {
   ) { }
 
   @Get(':workspace_id/coding/variable-analysis')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -115,7 +118,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/validate-completeness')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -143,7 +147,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/validate-completeness/export-excel')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -184,7 +189,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Get(':workspace_id/coding/incomplete-variables')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -197,6 +203,12 @@ export class WorkspaceCodingAnalysisController {
     name: 'trainingRequired',
     required: false,
     description: 'Filter variables by coder training requirement',
+    type: Boolean
+  })
+  @ApiQuery({
+    name: 'includeDeriveErrorOnly',
+    required: false,
+    description: 'Also include variables that only have DERIVE_ERROR responses and expose DERIVE_ERROR-aware case counts',
     type: Boolean
   })
   @ApiOkResponse({
@@ -212,6 +224,10 @@ export class WorkspaceCodingAnalysisController {
             type: 'number',
             description: 'Number of responses for this variable'
           },
+          deriveErrorResponseCount: {
+            type: 'number',
+            description: 'Number of DERIVE_ERROR responses for this variable'
+          },
           casesInJobs: {
             type: 'number',
             description:
@@ -225,6 +241,14 @@ export class WorkspaceCodingAnalysisController {
             type: 'number',
             description: 'Number of unique coding cases after applying aggregation grouping (1 per duplicate group)'
           },
+          availableCasesWithDeriveError: {
+            type: 'number',
+            description: 'Number of available cases when DERIVE_ERROR is included'
+          },
+          uniqueCasesAfterAggregationWithDeriveError: {
+            type: 'number',
+            description: 'Number of unique coding cases after aggregation when DERIVE_ERROR is included'
+          },
           isDerived: {
             type: 'boolean',
             description: 'Whether this is a derived variable (computed from other variables)'
@@ -236,15 +260,19 @@ export class WorkspaceCodingAnalysisController {
   async getCodingIncompleteVariables(
     @WorkspaceId() workspace_id: number,
       @Query('unitName') unitName?: string,
-      @Query('trainingRequired') trainingRequired?: string
+      @Query('trainingRequired') trainingRequired?: string,
+      @Query('includeDeriveErrorOnly') includeDeriveErrorOnly?: string
   ): Promise<
       {
         unitName: string;
         variableId: string;
         responseCount: number;
+        deriveErrorResponseCount: number;
         casesInJobs: number;
         availableCases: number;
         uniqueCasesAfterAggregation: number;
+        availableCasesWithDeriveError?: number;
+        uniqueCasesAfterAggregationWithDeriveError?: number;
         isDerived: boolean;
       }[]
       > {
@@ -257,12 +285,141 @@ export class WorkspaceCodingAnalysisController {
     return this.codingValidationService.getCodingIncompleteVariables(
       workspace_id,
       unitName,
+      trainingRequiredParam,
+      includeDeriveErrorOnly === 'true'
+    );
+  }
+
+  @Get(':workspace_id/coding/incomplete-variables/scope-summary')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'unitName',
+    required: false,
+    description: 'Filter by unit name',
+    type: String
+  })
+  @ApiQuery({
+    name: 'trainingRequired',
+    required: false,
+    description: 'Filter variables by coder training requirement',
+    type: Boolean
+  })
+  @ApiOkResponse({
+    description: 'Manual coding scope summary retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        manualVariableCount: { type: 'number' },
+        manualResponseCount: { type: 'number' },
+        coveredSourceVariableCount: { type: 'number' },
+        coveredSourceResponseCount: { type: 'number' },
+        coveredSourceVariables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' },
+              responseCount: { type: 'number' },
+              derivedVariableIds: {
+                type: 'array',
+                items: { type: 'string' }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  async getManualCodingScopeSummary(
+    @WorkspaceId() workspace_id: number,
+      @Query('unitName') unitName?: string,
+      @Query('trainingRequired') trainingRequired?: string
+  ): Promise<Awaited<ReturnType<CodingValidationService['getManualCodingScopeSummary']>>> {
+    let trainingRequiredParam: boolean | undefined;
+    if (trainingRequired === 'true') {
+      trainingRequiredParam = true;
+    } else if (trainingRequired === 'false') {
+      trainingRequiredParam = false;
+    }
+    return this.codingValidationService.getManualCodingScopeSummary(
+      workspace_id,
+      unitName,
+      trainingRequiredParam
+    );
+  }
+
+  @Get(':workspace_id/coding/incomplete-variables/code-availability')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'unitName',
+    required: false,
+    description: 'Filter by unit name',
+    type: String
+  })
+  @ApiQuery({
+    name: 'trainingRequired',
+    required: false,
+    description: 'Filter variables by coder training requirement',
+    type: Boolean
+  })
+  @ApiOkResponse({
+    description:
+      'Manual coding variables without selectable regular codes retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        checkedVariables: { type: 'number' },
+        warningCount: { type: 'number' },
+        warnings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' },
+              responseCount: { type: 'number' },
+              casesInJobs: { type: 'number' },
+              availableCases: { type: 'number' },
+              uniqueCasesAfterAggregation: { type: 'number' },
+              regularCodeCount: { type: 'number' },
+              selectableRegularCodeCount: { type: 'number' },
+              onlySpecialOptionsAvailable: { type: 'boolean' },
+              message: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  })
+  async validateManualCodeAvailability(
+    @WorkspaceId() workspace_id: number,
+      @Query('unitName') unitName?: string,
+      @Query('trainingRequired') trainingRequired?: string
+  ): Promise<ManualCodeAvailabilityValidationDto> {
+    let trainingRequiredParam: boolean | undefined;
+    if (trainingRequired === 'true') {
+      trainingRequiredParam = true;
+    } else if (trainingRequired === 'false') {
+      trainingRequiredParam = false;
+    }
+
+    return this.codingValidationService.validateManualCodeAvailability(
+      workspace_id,
+      unitName,
       trainingRequiredParam
     );
   }
 
   @Post(':workspace_id/coding/applied-results-count')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -306,7 +463,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Get(':workspace_id/coding/missings-profiles')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -331,7 +489,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Get(':workspace_id/coding/response-analysis')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -478,7 +637,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Get(':workspace_id/coding/aggregation-settings')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -491,7 +651,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/aggregation-settings')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -533,7 +694,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/apply-duplicate-aggregation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -596,7 +758,8 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/response-analysis')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -613,7 +776,8 @@ export class WorkspaceCodingAnalysisController {
     await this.codingAnalysisService.startAnalysis(
       workspace_id,
       undefined,
-      threshold
+      threshold,
+      { forceRefresh: true }
     );
   }
 

@@ -1,4 +1,9 @@
+import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { AccessLevelGuard } from '../../admin/workspace/access-level.guard';
+import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WsgCodingJobController } from './coding-job.controller';
 
 jest.mock('../../database/services/coding', () => ({
@@ -20,7 +25,18 @@ describe('WsgCodingJobController', () => {
     assertUserCanAccessCodingJob: jest.Mock;
     assertUserCanCodeCodingJob: jest.Mock;
   };
-  const req = { user: { id: 5 }, protocol: 'http', get: jest.fn().mockReturnValue('localhost') } as never;
+  let codingReplayService: {
+    generateReplayUrlsForItemsBulk: jest.Mock;
+  };
+  let usersService: {
+    getUserIsAdmin: jest.Mock;
+    getUserAccessLevel: jest.Mock;
+  };
+  const req = {
+    user: { id: 5 },
+    protocol: 'http',
+    get: jest.fn().mockReturnValue('localhost')
+  } as never;
 
   beforeEach(() => {
     codingJobService = {
@@ -41,17 +57,48 @@ describe('WsgCodingJobController', () => {
       assertUserCanAccessCodingJob: jest.fn().mockResolvedValue(undefined),
       assertUserCanCodeCodingJob: jest.fn().mockResolvedValue(undefined)
     };
+    codingReplayService = {
+      generateReplayUrlsForItemsBulk: jest
+        .fn()
+        .mockResolvedValue([{ replayUrl: 'http://localhost/#/replay/p/u/0/v' }])
+    };
+    usersService = {
+      getUserIsAdmin: jest.fn().mockResolvedValue(false),
+      getUserAccessLevel: jest.fn().mockResolvedValue(2)
+    };
 
     controller = new WsgCodingJobController(
       codingJobService as never,
-      {} as never
+      codingReplayService as never,
+      usersService as never
     );
+  });
+
+  it.each([
+    'transferCodingCases',
+    'createCodingJob',
+    'updateCodingJob',
+    'deleteCodingJob',
+    'restartCodingJobWithOpenUnits'
+  ] as const)('requires coding-manager access for %s', methodName => {
+    const handler = WsgCodingJobController.prototype[methodName];
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtAuthGuard,
+      WorkspaceGuard,
+      AccessLevelGuard
+    ]);
+    expect(Reflect.getMetadata('accessLevel', handler)).toBe(2);
   });
 
   it('passes onlyOpen=true to the coding job service when requested', async () => {
     await controller.getCodingJobUnits(47, 123, req, 'true');
 
-    expect(codingJobService.assertUserCanAccessCodingJob).toHaveBeenCalledWith(123, 47, 5);
+    expect(codingJobService.assertUserCanAccessCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      5
+    );
     expect(codingJobService.getCodingJob).toHaveBeenCalledWith(123, 47);
     expect(codingJobService.getCodingJobUnits).toHaveBeenCalledWith(123, true);
   });
@@ -63,72 +110,342 @@ describe('WsgCodingJobController', () => {
   });
 
   it('does not change completed jobs to active when opening them for review', async () => {
-    codingJobService.getCodingJob.mockResolvedValue({ codingJob: { id: 123, status: 'completed' } });
+    codingJobService.getCodingJob.mockResolvedValue({
+      codingJob: { id: 123, status: 'completed' }
+    });
 
     await controller.startCodingJob(47, 123, req);
 
-    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(123, 47, 5);
-    expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      5
+    );
+    expect(
+      codingJobService.assertUserCanAccessCodingJob
+    ).not.toHaveBeenCalled();
     expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
   });
 
-  it('uses coding access for saving coding progress', async () => {
-    await controller.saveCodingProgress(47, 123, {
-      testPerson: 'p@c@b',
-      unitId: 'u',
-      variableId: 'v'
-    } as never, req);
+  it('prepares read-only reviews with management access and without changing job state', async () => {
+    codingJobService.getCodingJobUnits.mockResolvedValue([
+      {
+        unitName: 'UNIT',
+        variableId: 'VAR'
+      }
+    ]);
 
-    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(123, 47, 5);
-    expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
+    await expect(
+      controller.prepareCodingJobReview(47, 123, req)
+    ).resolves.toEqual({
+      total: 1,
+      firstReplayUrl: 'http://localhost/#/replay/p/u/0/v'
+    });
+
+    expect(codingJobService.assertUserCanAccessCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      5
+    );
+    expect(codingJobService.assertUserCanCodeCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.getCodingJobUnits).toHaveBeenCalledWith(123, false);
+    expect(
+      codingReplayService.generateReplayUrlsForItemsBulk
+    ).toHaveBeenCalledWith(
+      47,
+      [{ unitName: 'UNIT', variableId: 'VAR' }],
+      'http://localhost'
+    );
+  });
+
+  it('uses coding access for saving coding progress', async () => {
+    await controller.saveCodingProgress(
+      47,
+      123,
+      {
+        testPerson: 'p@c@b',
+        unitId: 'u',
+        variableId: 'v'
+      } as never,
+      req
+    );
+
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      5
+    );
+    expect(
+      codingJobService.assertUserCanAccessCodingJob
+    ).not.toHaveBeenCalled();
     expect(codingJobService.saveCodingProgress).toHaveBeenCalled();
   });
 
   it('uses coding access for saving coding notes', async () => {
-    await controller.saveCodingNotes(47, 123, {
-      testPerson: 'p@c@b',
-      unitId: 'u',
-      variableId: 'v',
-      notes: 'note'
-    } as never, req);
+    await controller.saveCodingNotes(
+      47,
+      123,
+      {
+        testPerson: 'p@c@b',
+        unitId: 'u',
+        variableId: 'v',
+        notes: 'note'
+      } as never,
+      req
+    );
 
-    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(123, 47, 5);
-    expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      5
+    );
+    expect(
+      codingJobService.assertUserCanAccessCodingJob
+    ).not.toHaveBeenCalled();
     expect(codingJobService.saveCodingNotes).toHaveBeenCalled();
   });
 
   it('rejects jobDefinitionId on direct coding job creates', async () => {
-    await expect(controller.createCodingJob(47, {
-      name: 'Direct job',
-      jobDefinitionId: 9
-    } as never)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      controller.createCodingJob(47, {
+        name: 'Direct job',
+        jobDefinitionId: 9
+      } as never)
+    ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.createCodingJob).not.toHaveBeenCalled();
   });
 
   it('rejects direct coding job creates without a request body', async () => {
-    await expect(controller.createCodingJob(47, undefined as never))
-      .rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      controller.createCodingJob(47, undefined as never)
+    ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.createCodingJob).not.toHaveBeenCalled();
   });
 
   it('rejects bulk progress requests without job IDs', async () => {
-    await expect(controller.getBulkCodingProgress(47, undefined as never, req))
-      .rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      controller.getBulkCodingProgress(47, undefined as never, req)
+    ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
+    expect(
+      codingJobService.assertUserCanAccessCodingJob
+    ).not.toHaveBeenCalled();
   });
 
   it('passes the authenticated user id for assignedTo=me job lists', async () => {
-    await controller.getCodingJobs(47, 1, undefined, 'me', req);
+    await controller.getCodingJobs(
+      47,
+      1,
+      undefined,
+      'me',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      req
+    );
 
-    expect(codingJobService.getCodingJobs).toHaveBeenCalledWith(47, 1, undefined, 5);
+    expect(codingJobService.getCodingJobs).toHaveBeenCalledWith(
+      47,
+      1,
+      undefined,
+      5,
+      expect.objectContaining({
+        includeIssueSummary: false
+      })
+    );
+  });
+
+  it('limits level-1 coding job lists to the authenticated user by default', async () => {
+    usersService.getUserAccessLevel.mockResolvedValue(1);
+
+    await controller.getCodingJobs(
+      47,
+      1,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      req
+    );
+
+    expect(usersService.getUserIsAdmin).toHaveBeenCalledWith(5);
+    expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(5, 47);
+    expect(codingJobService.getCodingJobs).toHaveBeenCalledWith(
+      47,
+      1,
+      undefined,
+      5,
+      expect.objectContaining({
+        includeIssueSummary: false
+      })
+    );
+  });
+
+  it('keeps workspace-wide coding job lists for coding managers', async () => {
+    usersService.getUserAccessLevel.mockResolvedValue(2);
+
+    await controller.getCodingJobs(
+      47,
+      1,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      req
+    );
+
+    expect(codingJobService.getCodingJobs).toHaveBeenCalledWith(
+      47,
+      1,
+      undefined,
+      undefined,
+      expect.objectContaining({
+        includeIssueSummary: false
+      })
+    );
+  });
+
+  it('keeps workspace-wide coding job lists for system admins', async () => {
+    usersService.getUserIsAdmin.mockResolvedValue(true);
+
+    await controller.getCodingJobs(
+      47,
+      1,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      req
+    );
+
+    expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
+    expect(codingJobService.getCodingJobs).toHaveBeenCalledWith(
+      47,
+      1,
+      undefined,
+      undefined,
+      expect.objectContaining({
+        includeIssueSummary: false
+      })
+    );
+  });
+
+  it('passes coding job list filters to the service', async () => {
+    await controller.getCodingJobs(
+      47,
+      2,
+      25,
+      undefined,
+      'productive',
+      'completed',
+      undefined,
+      '7',
+      'Job 1',
+      'updatedAt',
+      'asc',
+      'none',
+      'true',
+      req
+    );
+
+    expect(codingJobService.getCodingJobs).toHaveBeenCalledWith(
+      47,
+      2,
+      25,
+      undefined,
+      {
+        scope: 'productive',
+        status: 'completed',
+        excludeStatus: undefined,
+        coderId: 7,
+        jobName: 'Job 1',
+        trainingId: 'none',
+        includeIssueSummary: true,
+        sortBy: 'updatedAt',
+        sortDirection: 'asc'
+      }
+    );
+  });
+
+  it('passes excludeStatus to the service when status is not set', async () => {
+    await controller.getCodingJobs(
+      47,
+      1,
+      25,
+      undefined,
+      undefined,
+      undefined,
+      'review',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      req
+    );
+
+    expect(codingJobService.getCodingJobs).toHaveBeenCalledWith(
+      47,
+      1,
+      25,
+      undefined,
+      expect.objectContaining({
+        status: undefined,
+        excludeStatus: 'review'
+      })
+    );
   });
 
   it('rejects unsupported assignedTo values', async () => {
-    await expect(controller.getCodingJobs(47, 1, undefined, '7', req))
-      .rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      controller.getCodingJobs(
+        47,
+        1,
+        undefined,
+        '7',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        req
+      )
+    ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.getCodingJobs).not.toHaveBeenCalled();
   });

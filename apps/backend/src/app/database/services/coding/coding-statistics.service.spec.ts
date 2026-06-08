@@ -338,7 +338,7 @@ describe('CodingStatisticsService', () => {
       await service.invalidateIncompleteVariablesCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v3:1'
+        'coding_incomplete_variables_v7:1'
       );
     });
 
@@ -560,6 +560,93 @@ describe('CodingStatisticsService', () => {
       expect(result[0].agreement).toBe(1);
     });
 
+    it('should match the REQ-002 code-level reference dataset', () => {
+      const result = service.calculateCohensKappa([
+        {
+          coder1Id: 1,
+          coder1Name: 'Coder1',
+          coder2Id: 2,
+          coder2Name: 'Coder2',
+          codes: [
+            { code1: 0, code2: 0 },
+            { code1: 0, code2: 6 },
+            { code1: 6, code2: 6 },
+            { code1: 8, code2: 9 },
+            { code1: 9, code2: 9 },
+            { code1: 0, code2: 0 },
+            { code1: 6, code2: 0 },
+            { code1: 8, code2: 8 },
+            { code1: null, code2: 0 }
+          ]
+        }
+      ]);
+
+      expect(result[0].validPairs).toBe(8);
+      expect(result[0].totalItems).toBe(9);
+      expect(result[0].agreement).toBe(0.625);
+      expect(result[0].kappa).toBe(0.489);
+    });
+
+    it('should match the REQ-002 score-level perfect agreement convention', () => {
+      const result = service.calculateCohensKappa(
+        [
+          {
+            coder1Id: 1,
+            coder1Name: 'Coder1',
+            coder2Id: 2,
+            coder2Name: 'Coder2',
+            codes: [],
+            scores: [
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: null, score2: 0 }
+            ]
+          }
+        ],
+        'score'
+      );
+
+      expect(result[0].validPairs).toBe(8);
+      expect(result[0].totalItems).toBe(9);
+      expect(result[0].agreement).toBe(1);
+      expect(result[0].kappa).toBe(1);
+    });
+
+    it('should match the REQ-002 score-level two-category reference dataset', () => {
+      const result = service.calculateCohensKappa(
+        [
+          {
+            coder1Id: 1,
+            coder1Name: 'Coder1',
+            coder2Id: 2,
+            coder2Name: 'Coder2',
+            codes: [],
+            scores: [
+              { score1: 1, score2: 1 },
+              { score1: 1, score2: 1 },
+              { score1: 1, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 0 },
+              { score1: 0, score2: 1 },
+              { score1: 1, score2: 1 },
+              { score1: 0, score2: 0 }
+            ]
+          }
+        ],
+        'score'
+      );
+
+      expect(result[0].validPairs).toBe(8);
+      expect(result[0].agreement).toBe(0.75);
+      expect(result[0].kappa).toBe(0.5);
+    });
+
     it('should handle no valid coding pairs', () => {
       const coderPairs = [
         {
@@ -607,6 +694,93 @@ describe('CodingStatisticsService', () => {
           }
         ]);
         expect(result[0].interpretation).toBe(testCase.expected);
+      });
+    });
+
+    it('should use the updated good and almost perfect kappa boundaries', () => {
+      const buildCodes = (
+        matchingOnes: number,
+        oneVsTwo: number,
+        twoVsOne: number,
+        matchingTwos: number
+      ): Array<{ code1: number; code2: number }> => [
+        ...Array.from({ length: matchingOnes }, () => ({ code1: 1, code2: 1 })),
+        ...Array.from({ length: oneVsTwo }, () => ({ code1: 1, code2: 2 })),
+        ...Array.from({ length: twoVsOne }, () => ({ code1: 2, code2: 1 })),
+        ...Array.from({ length: matchingTwos }, () => ({ code1: 2, code2: 2 }))
+      ];
+
+      [
+        {
+          codes: buildCodes(90, 10, 9, 91),
+          expectedKappa: 0.81,
+          expectedInterpretation: 'kappa.good'
+        },
+        {
+          codes: buildCodes(98, 2, 3, 97),
+          expectedKappa: 0.95,
+          expectedInterpretation: 'kappa.good'
+        },
+        {
+          codes: buildCodes(99, 1, 1, 99),
+          expectedKappa: 0.98,
+          expectedInterpretation: 'kappa.almost_perfect'
+        }
+      ].forEach(testCase => {
+        const result = service.calculateCohensKappa([
+          {
+            coder1Id: 1,
+            coder1Name: 'C1',
+            coder2Id: 2,
+            coder2Name: 'C2',
+            codes: testCase.codes
+          }
+        ]);
+
+        expect(result[0].kappa).toBeCloseTo(testCase.expectedKappa, 10);
+        expect(result[0].interpretation).toBe(testCase.expectedInterpretation);
+      });
+    });
+
+    it('should summarize variable-level kappa and agreement over valid coder pairs', () => {
+      const summary = service.calculateKappaVariableSummary([
+        {
+          kappa: 0.5,
+          agreement: 0.8,
+          validPairs: 10
+        },
+        {
+          kappa: 0.7,
+          agreement: 0.9,
+          validPairs: 5
+        },
+        {
+          kappa: null,
+          agreement: 0,
+          validPairs: 0
+        }
+      ]);
+
+      expect(summary.meanKappa).toBeCloseTo(0.6, 10);
+      expect(summary.meanAgreement).toBeCloseTo(0.85, 10);
+      expect(summary.validPairCount).toBe(15);
+      expect(summary.coderPairCount).toBe(2);
+    });
+
+    it('should define empty variable summaries when no coder pair has valid pairs', () => {
+      const summary = service.calculateKappaVariableSummary([
+        {
+          kappa: null,
+          agreement: 0,
+          validPairs: 0
+        }
+      ]);
+
+      expect(summary).toEqual({
+        meanKappa: null,
+        meanAgreement: null,
+        validPairCount: 0,
+        coderPairCount: 0
       });
     });
   });

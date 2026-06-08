@@ -1,0 +1,124 @@
+<h2 mat-dialog-title>
+  <mat-icon>download</mat-icon>
+  {{ 'manual-coding-export.title' | translate }}
+</h2>
+
+<mat-dialog-content class="manual-export-content">
+  <p class="manual-export-subtitle">{{ contextSubtitleKey | translate }}</p>
+
+  <section class="manual-export-section">
+    <h3>{{ 'manual-coding-export.mode-title' | translate }}</h3>
+    <mat-radio-group class="manual-export-radio-group" [(ngModel)]="exportMode">
+      <mat-radio-button value="review">
+        {{ 'manual-coding-export.mode-review' | translate }}
+      </mat-radio-button>
+      <mat-radio-button value="report">
+        {{ 'manual-coding-export.mode-report' | translate }}
+      </mat-radio-button>
+    </mat-radio-group>
+  </section>
+
+  @if (exportMode === 'review') {
+  <section class="manual-export-section">
+    <h3>{{ 'manual-coding-export.double-coding-method' | translate }}</h3>
+    <mat-radio-group class="manual-export-radio-group" [(ngModel)]="doubleCodingMethod">
+      <mat-radio-button value="most-frequent">
+        {{ 'ws-admin.export-options.double-coding-methods.most-frequent' | translate }}
+      </mat-radio-button>
+      <mat-radio-button value="new-column-per-coder">
+        {{ 'ws-admin.export-options.double-coding-methods.new-column-per-coder' | translate }}
+      </mat-radio-button>
+      <mat-radio-button value="new-row-per-variable">
+        {{ 'ws-admin.export-options.double-coding-methods.new-row-per-variable' | translate }}
+      </mat-radio-button>
+    </mat-radio-group>
+  </section>
+  } @else {
+  <section class="manual-export-section">
+    <h3>{{ 'manual-coding-export.report-type' | translate }}</h3>
+    <mat-radio-group class="manual-export-radio-group" [(ngModel)]="reportExportType">
+      <mat-radio-button value="detailed">
+        {{ 'manual-coding-export.report-detailed' | translate }}
+      </mat-radio-button>
+      <mat-radio-button value="coding-times">
+        {{ 'manual-coding-export.report-coding-times' | translate }}
+      </mat-radio-button>
+    </mat-radio-group>
+  </section>
+  }
+
+  @if (data.context === 'execution' && data.jobDefinitions?.length) {
+  <section class="manual-export-section">
+    <mat-form-field appearance="outline" class="manual-export-field">
+      <mat-label>{{ 'manual-coding-export.job-definition-filter' | translate }}</mat-label>
+      <mat-select multiple [(ngModel)]="selectedJobDefinitionIds">
+        @for (jobDefinition of data.jobDefinitions; track jobDefinition.id) {
+        <mat-option [value]="jobDefinition.id">{{ jobDefinition.label }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  </section>
+  }
+
+  @if (data.context === 'training' && data.coderTrainings?.length) {
+  <section class="manual-export-section">
+    <mat-form-field appearance="outline" class="manual-export-field">
+      <mat-label>{{ 'manual-coding-export.training-filter' | translate }}</mat-label>
+      <mat-select multiple [(ngModel)]="selectedCoderTrainingIds">
+        @for (training of data.coderTrainings; track training.id) {
+        <mat-option [value]="training.id">{{ training.label }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  </section>
+  }
+
+  @if (data.coders.length > 0) {
+  <section class="manual-export-section">
+    <mat-form-field appearance="outline" class="manual-export-field">
+      <mat-label>{{ 'manual-coding-export.coder-filter' | translate }}</mat-label>
+      <mat-select multiple [(ngModel)]="selectedCoderIds">
+        @for (coder of data.coders; track coder.id) {
+        <mat-option [value]="coder.id">{{ coder.displayName || coder.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  </section>
+  }
+
+  <section class="manual-export-section manual-export-options">
+    @if (exportMode === 'review') {
+    <mat-checkbox [(ngModel)]="includeComments">
+      {{ 'ws-admin.export-options.include-comments' | translate }}
+    </mat-checkbox>
+    <mat-checkbox [(ngModel)]="includeModalValue">
+      {{ 'ws-admin.export-options.include-modal-value' | translate }}
+    </mat-checkbox>
+    }
+    <mat-checkbox [(ngModel)]="outputCommentsInsteadOfCodes">
+      {{ 'ws-admin.export-options.output-comments-instead-of-codes' | translate }}
+    </mat-checkbox>
+    <mat-checkbox [(ngModel)]="anonymizeCoders">
+      {{ 'ws-admin.export-options.anonymize-coders' | translate }}
+    </mat-checkbox>
+    <mat-checkbox [(ngModel)]="usePseudoCoders" [disabled]="!anonymizeCoders">
+      {{ 'ws-admin.export-options.use-pseudo-coders' | translate }}
+    </mat-checkbox>
+  </section>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" mat-dialog-close>
+    {{ 'close' | translate }}
+  </button>
+  <button
+    mat-flat-button
+    color="primary"
+    type="button"
+    (click)="confirm()"
+    [disabled]="!canConfirm"
+  >
+    <mat-icon>play_arrow</mat-icon>
+    {{ 'manual-coding-export.start' | translate }}
+  </button>
+</mat-dialog-actions>

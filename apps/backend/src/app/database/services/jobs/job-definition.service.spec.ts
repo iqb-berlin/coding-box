@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { In } from 'typeorm';
 import { JobDefinitionService } from './job-definition.service';
 
 jest.mock('../coding/coding-job.service', () => ({
@@ -25,13 +26,16 @@ describe('JobDefinitionService', () => {
     createCodingJob: jest.Mock;
     createDistributedCodingJobs: jest.Mock;
     refreshDistributedCodingJobs: jest.Mock;
+    calculateDistribution: jest.Mock;
     calculateDistributionVariableUsage: jest.Mock;
     calculateDistributionVariableUsageBatch: jest.Mock;
     getCodingJobCountsByDefinitionIds: jest.Mock;
     getBlockingCodingJobCountsByDefinitionIds: jest.Mock;
     assertCodersCanCodeInWorkspace: jest.Mock;
+    assertDeriveErrorManualCodingEnabled: jest.Mock;
   };
   let codingValidationService: { getCodingIncompleteVariables: jest.Mock };
+  let missingsProfilesService: { resolveMissingsProfileId: jest.Mock };
   let service: JobDefinitionService;
 
   beforeEach(() => {
@@ -59,11 +63,23 @@ describe('JobDefinitionService', () => {
           canApply: true
         }
       }),
+      calculateDistribution: jest.fn().mockResolvedValue({
+        distribution: {},
+        distributionByCoderId: {},
+        doubleCodingInfo: {},
+        aggregationInfo: {},
+        matchingFlags: [],
+        warnings: [],
+        pairDistribution: {},
+        tasksPerCoder: {},
+        coderWeights: {}
+      }),
       calculateDistributionVariableUsage: jest.fn(),
       calculateDistributionVariableUsageBatch: jest.fn(),
       getCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map()),
       getBlockingCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map()),
-      assertCodersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined)
+      assertCodersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined),
+      assertDeriveErrorManualCodingEnabled: jest.fn().mockResolvedValue(undefined)
     };
     codingValidationService = {
       getCodingIncompleteVariables: jest.fn().mockResolvedValue([
@@ -71,15 +87,18 @@ describe('JobDefinitionService', () => {
         { unitName: 'Unit 2', variableId: 'Var 2', availableCases: 4 }
       ])
     };
+    missingsProfilesService = {
+      resolveMissingsProfileId: jest.fn(async (_workspaceId, profileId?: number | null) => profileId || 55)
+    };
 
     jobDefinitionRepository.find.mockResolvedValue([]);
     variableBundleRepository.find.mockResolvedValue([]);
     usersRepository.find.mockResolvedValue([]);
     const calculateUsageForRequest = async (request: {
       selectedVariableBundles?: {
-        variables?: { unitName: string; variableId: string }[];
+        variables?: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
       }[];
-      selectedVariables?: { unitName: string; variableId: string }[];
+      selectedVariables?: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
       maxCodingCases?: number;
     }) => {
       const incompleteVariables = await codingValidationService.getCodingIncompleteVariables() as Array<{
@@ -95,7 +114,7 @@ describe('JobDefinitionService', () => {
       );
       const addUsage = (
         usageByVariable: Map<string, number>,
-        variable: { unitName: string; variableId: string },
+        variable: { unitName: string; variableId: string; includeDeriveError?: boolean },
         usage: number
       ) => {
         const key = `${variable.unitName}::${variable.variableId}`;
@@ -103,7 +122,7 @@ describe('JobDefinitionService', () => {
       };
       const reserveAcrossVariables = (
         usageByVariable: Map<string, number>,
-        variables: { unitName: string; variableId: string }[],
+        variables: { unitName: string; variableId: string; includeDeriveError?: boolean }[],
         selectedCases: number
       ) => {
         const entries = variables
@@ -191,7 +210,8 @@ describe('JobDefinitionService', () => {
       variableBundleRepository as never,
       usersRepository as never,
       codingJobService as never,
-      codingValidationService as never
+      codingValidationService as never,
+      missingsProfilesService as never
     );
   });
 
@@ -245,6 +265,88 @@ describe('JobDefinitionService', () => {
         selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
         maxCodingCases: 2,
         distributionSeed: result.distribution_seed
+      })
+    ]);
+  });
+
+  it('merges DERIVE_ERROR opt-in into bundled variables when planning usage', async () => {
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 9,
+        name: 'Bundle',
+        variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+      }
+    ]);
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+      assignedVariableBundles: [{ id: 9, name: 'Bundle' }],
+      assignedCoders: [1],
+      maxCodingCases: 2
+    }, 7)).resolves.toMatchObject({
+      workspace_id: 7,
+      max_coding_cases: 2
+    });
+
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 'requested',
+        selectedVariables: [],
+        selectedVariableBundles: [expect.objectContaining({
+          id: 9,
+          variables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }]
+        })]
+      })
+    ]);
+  });
+
+  it('preserves DERIVE_ERROR opt-in from duplicate assigned variables when planning usage', async () => {
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 9,
+        name: 'Bundle',
+        variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+      }
+    ]);
+
+    await service.createJobDefinition({
+      assignedVariables: [
+        { unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true },
+        { unitName: 'Unit 1', variableId: 'Var 1' }
+      ],
+      assignedVariableBundles: [{ id: 9, name: 'Bundle' }],
+      assignedCoders: [1],
+      maxCodingCases: 2
+    }, 7);
+
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 'requested',
+        selectedVariables: [],
+        selectedVariableBundles: [expect.objectContaining({
+          id: 9,
+          variables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }]
+        })]
+      })
+    ]);
+  });
+
+  it('deduplicates duplicate unbundled variables when planning usage', async () => {
+    await service.createJobDefinition({
+      assignedVariables: [
+        { unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true },
+        { unitName: 'Unit 1', variableId: 'Var 1' }
+      ],
+      assignedVariableBundles: [],
+      assignedCoders: [1],
+      maxCodingCases: 2
+    }, 7);
+
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 'requested',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+        selectedVariableBundles: []
       })
     ]);
   });
@@ -587,7 +689,7 @@ describe('JobDefinitionService', () => {
       {
         id: 1,
         assigned_variables: [
-          { unitName: 'Unit 1', variableId: 'Var 1' },
+          { unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true },
           { unitName: 'Unit 2', variableId: 'Var 2' }
         ],
         assigned_variable_bundles: [],
@@ -615,6 +717,153 @@ describe('JobDefinitionService', () => {
       allow_comments: false,
       suppress_general_instructions: true
     });
+  });
+
+  it('normalizes missing profiles on job definitions', async () => {
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1]
+    }, 7)).resolves.toMatchObject({
+      missings_profile_id: 55
+    });
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      missingsProfileId: 77
+    }, 7)).resolves.toMatchObject({
+      missings_profile_id: 77
+    });
+
+    expect(missingsProfilesService.resolveMissingsProfileId).toHaveBeenCalledWith(7, undefined);
+    expect(missingsProfilesService.resolveMissingsProfileId).toHaveBeenCalledWith(7, 77);
+  });
+
+  it('scopes single job definition lookup to the workspace', async () => {
+    const definition = {
+      id: 2,
+      workspace_id: 7,
+      assigned_variable_bundles: []
+    };
+    jobDefinitionRepository.findOne.mockResolvedValue(definition);
+
+    await expect(service.getJobDefinition(2, 7)).resolves.toBe(definition);
+
+    expect(jobDefinitionRepository.findOne).toHaveBeenCalledWith({
+      where: {
+        id: 2,
+        workspace_id: 7
+      }
+    });
+  });
+
+  it('exports the latest distribution snapshot as formula-safe CSV', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 42,
+      workspace_id: 7,
+      assigned_variable_bundles: [],
+      distribution_snapshots: [
+        {
+          version: 1,
+          source: 'initial_creation',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          distributionSeed: 'old-seed',
+          selectedVariables: [],
+          selectedVariableBundles: [],
+          selectedCoders: [{ coderId: 1, capacityPercent: 100 }],
+          settings: {},
+          distributionByCoderId: { 'Old::Var': { 1: 1 } },
+          doubleCodingInfo: {},
+          aggregationInfo: {},
+          matchingFlags: [],
+          pairDistribution: {},
+          tasksPerCoder: {},
+          coderWeights: {},
+          jobs: []
+        },
+        {
+          version: 1,
+          source: 'refresh',
+          createdAt: '2026-01-02T00:00:00.000Z',
+          distributionSeed: 'new-seed',
+          selectedVariables: [],
+          selectedVariableBundles: [{ id: 9, name: '@Bundle' }],
+          selectedCoders: [
+            { coderId: 2, capacityPercent: 100 },
+            { coderId: 1, capacityPercent: 100 }
+          ],
+          settings: {},
+          distributionByCoderId: {
+            '=UNIT::+VAR': { 1: 2, 2: 1 },
+            'Legacy::Var': { 1: 2, 2: 1 },
+            'bundle:9': { 1: 0, 2: 3 }
+          },
+          doubleCodingInfo: {
+            '=UNIT::+VAR': {
+              totalCases: 3,
+              distinctCases: 2,
+              codingTasksTotal: 3,
+              doubleCodedCases: 1,
+              singleCodedCasesAssigned: 1,
+              doubleCodedCasesPerCoderId: { 1: 1, 2: 1 }
+            },
+            'Legacy::Var': {
+              totalCases: 3,
+              doubleCodedCases: 1,
+              singleCodedCasesAssigned: 1,
+              doubleCodedCasesPerCoderId: { 1: 1, 2: 1 }
+            },
+            'bundle:9': {
+              totalCases: 3,
+              distinctCases: 3,
+              codingTasksTotal: 3,
+              doubleCodedCases: 0,
+              singleCodedCasesAssigned: 3,
+              doubleCodedCasesPerCoderId: {}
+            }
+          },
+          aggregationInfo: {
+            'Legacy::Var': { uniqueCases: 99, totalResponses: 99 }
+          },
+          matchingFlags: [],
+          pairDistribution: {},
+          tasksPerCoder: {},
+          coderWeights: {},
+          jobs: []
+        }
+      ]
+    });
+    usersRepository.find.mockResolvedValue([
+      { id: 1, username: '=Ada' },
+      { id: 2, username: 'Bob' }
+    ]);
+
+    const csv = await service.exportDistributionSnapshotAsCsv(42, 7);
+
+    expect(jobDefinitionRepository.findOne).toHaveBeenCalledWith({
+      where: {
+        id: 42,
+        workspace_id: 7
+      }
+    });
+    expect(usersRepository.find).toHaveBeenCalledWith({ where: { id: In([1, 2]) } });
+    expect(csv).toContain('Job-Definition-ID;Snapshot-Zeitpunkt;Quelle;Typ;Variable/Buendel;Coder-ID;Coder;Fallzahl');
+    expect(csv).toContain("Neuverteilung;Variable;'=UNIT -> +VAR;1;'=Ada;2;2;1;1;1");
+    expect(csv).toContain("Neuverteilung;Variable;Legacy -> Var;1;'=Ada;2;2;1;1;1");
+    expect(csv).toContain("Neuverteilung;Buendel;'@Bundle;2;Bob;3;3;0;3;0");
+    expect(csv).not.toContain('Old::Var');
+  });
+
+  it('rejects distribution CSV export when no snapshot exists', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 42,
+      workspace_id: 7,
+      assigned_variable_bundles: [],
+      distribution_snapshots: []
+    });
+
+    await expect(service.exportDistributionSnapshotAsCsv(42, 7))
+      .rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('persists coder capacity configs and derives assigned coder ids from them', async () => {
@@ -655,7 +904,7 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
     jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       assignedCoders: [2, 3]
     })).resolves.toMatchObject({
       id: 2,
@@ -687,7 +936,7 @@ describe('JobDefinitionService', () => {
     codingJobService.calculateDistributionVariableUsageBatch.mockClear();
     codingJobService.assertCodersCanCodeInWorkspace.mockClear();
 
-    await service.updateJobDefinition(2, {
+    await service.updateJobDefinition(2, 7, {
       caseOrderingMode: 'alternating'
     });
 
@@ -730,7 +979,7 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
     jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       showScore: true,
       allowComments: false,
       suppressGeneralInstructions: true
@@ -758,7 +1007,7 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
     jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       maxCodingCases: 5
     })).resolves.toMatchObject({ id: 2, max_coding_cases: 5 });
   });
@@ -785,7 +1034,7 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue(editedDefinition);
     jobDefinitionRepository.find.mockResolvedValue([editedDefinition, competingDefinition]);
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       status: 'approved'
     })).rejects.toBeInstanceOf(BadRequestException);
     expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7);
@@ -809,7 +1058,7 @@ describe('JobDefinitionService', () => {
       new BadRequestException('Coder is not enabled')
     );
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       status: 'approved'
     })).rejects.toBeInstanceOf(BadRequestException);
 
@@ -901,6 +1150,53 @@ describe('JobDefinitionService', () => {
     ]);
   });
 
+  it('normalizes bundled variable opt-ins when attaching planned usage to listed definitions', async () => {
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 6,
+        workspace_id: 7,
+        status: 'draft',
+        assigned_variables: [
+          { unitName: 'Unit-A', variableId: 'B', includeDeriveError: true },
+          { unitName: 'Unit', variableId: 'A-B', includeDeriveError: true }
+        ],
+        assigned_variable_bundles: [{ id: 10, name: 'Hyphen Bundle' }],
+        max_coding_cases: 2,
+        case_ordering_mode: 'continuous',
+        distribution_seed: 'seed-6'
+      }
+    ]);
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 10,
+        name: 'Hyphen Bundle',
+        variables: [{ unitName: 'Unit', variableId: 'A-B' }]
+      }
+    ]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map());
+    codingJobService.getBlockingCodingJobCountsByDefinitionIds.mockResolvedValue(new Map());
+    codingJobService.calculateDistributionVariableUsageBatch.mockResolvedValueOnce(new Map([
+      [6, new Map([['Unit::A-B', 1], ['Unit-A::B', 1]])]
+    ]));
+
+    await service.getJobDefinitions(7);
+
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 6,
+        selectedVariables: [{ unitName: 'Unit-A', variableId: 'B', includeDeriveError: true }],
+        selectedVariableBundles: [expect.objectContaining({
+          id: 10,
+          variables: [{ unitName: 'Unit', variableId: 'A-B', includeDeriveError: true }]
+        })],
+        maxCodingCases: 2,
+        caseOrderingMode: 'continuous',
+        jobDefinitionId: 6,
+        distributionSeed: 'seed-6'
+      })
+    ]);
+  });
+
   it('batches planned variable usage for listed definitions in the same workspace', async () => {
     jobDefinitionRepository.find.mockResolvedValue([
       {
@@ -963,7 +1259,7 @@ describe('JobDefinitionService', () => {
     });
     codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
 
-    await expect(service.updateJobDefinition(2, {
+    await expect(service.updateJobDefinition(2, 7, {
       assignedVariables: [{ unitName: 'Unit 2', variableId: 'Var 2' }]
     })).rejects.toBeInstanceOf(BadRequestException);
 
@@ -983,7 +1279,7 @@ describe('JobDefinitionService', () => {
     });
     codingJobService.getBlockingCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
 
-    await expect(service.deleteJobDefinition(2)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.deleteJobDefinition(2, 7)).rejects.toBeInstanceOf(BadRequestException);
 
     expect(jobDefinitionRepository.remove).not.toHaveBeenCalled();
   });
@@ -1002,7 +1298,7 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue(definition);
     codingJobService.getBlockingCodingJobCountsByDefinitionIds.mockResolvedValue(new Map());
 
-    await expect(service.deleteJobDefinition(2)).resolves.toBeUndefined();
+    await expect(service.deleteJobDefinition(2, 7)).resolves.toBeUndefined();
 
     expect(jobDefinitionRepository.remove).toHaveBeenCalledWith(definition);
   });
@@ -1056,7 +1352,7 @@ describe('JobDefinitionService', () => {
       case_ordering_mode: 'continuous'
     });
 
-    await expect(service.approveJobDefinition(4, {
+    await expect(service.approveJobDefinition(4, 7, {
       status: 'pending_review'
     })).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -1077,11 +1373,43 @@ describe('JobDefinitionService', () => {
       new BadRequestException('Coder is not enabled')
     );
 
-    await expect(service.approveJobDefinition(4, {
+    await expect(service.approveJobDefinition(4, 7, {
       status: 'approved'
     })).rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7);
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects approval endpoint calls with DERIVE_ERROR opt-ins when the workspace setting is disabled', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 4,
+      workspace_id: 7,
+      status: 'pending_review',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 1,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-4'
+    });
+    codingJobService.assertDeriveErrorManualCodingEnabled.mockRejectedValueOnce(
+      new BadRequestException('DERIVE_ERROR manual coding is disabled for this workspace.')
+    );
+
+    await expect(service.approveJobDefinition(4, 7, {
+      status: 'approved'
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(codingJobService.assertDeriveErrorManualCodingEnabled).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+        selectedVariableBundles: []
+      })
+    );
+    expect(codingJobService.assertCodersCanCodeInWorkspace).not.toHaveBeenCalled();
     expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
   });
 
@@ -1091,7 +1419,7 @@ describe('JobDefinitionService', () => {
       workspace_id: 7,
       status: 'approved',
       assigned_variables: [
-        { unitName: 'Unit 1', variableId: 'Var 1' },
+        { unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true },
         { unitName: 'Unit 2', variableId: 'Var 2' }
       ],
       assigned_variable_bundles: [{ id: 9, name: 'Saved Bundle', caseOrderingMode: 'alternating' }],
@@ -1101,6 +1429,7 @@ describe('JobDefinitionService', () => {
       double_coding_absolute: 2,
       double_coding_percentage: null,
       case_ordering_mode: 'continuous',
+      missings_profile_id: 88,
       assigned_coder_configs: [
         { coderId: 3, capacityPercent: 50 },
         { coderId: 1, capacityPercent: 150 }
@@ -1121,11 +1450,74 @@ describe('JobDefinitionService', () => {
       { id: 1, username: 'Ada' },
       { id: 3, username: 'Chris' }
     ]);
-    codingJobService.createDistributedCodingJobs.mockResolvedValue({
+    const creationResult = {
       success: true,
       jobsCreated: 2,
-      jobs: [{ jobId: 100 }, { jobId: 101 }]
-    });
+      distribution: {
+        'Unit 1::Var 1': { Chris: 1, Ada: 0 },
+        'bundle:9': { Chris: 0, Ada: 1 }
+      },
+      distributionByCoderId: {
+        'Unit 1::Var 1': { 3: 1, 1: 0 },
+        'bundle:9': { 3: 0, 1: 1 }
+      },
+      doubleCodingInfo: {
+        'Unit 1::Var 1': {
+          totalCases: 1,
+          distinctCases: 1,
+          codingTasksTotal: 1,
+          doubleCodedCases: 0,
+          singleCodedCasesAssigned: 1,
+          doubleCodedCasesPerCoder: { Chris: 0, Ada: 0 },
+          doubleCodedCasesPerCoderId: { 3: 0, 1: 0 }
+        },
+        'bundle:9': {
+          totalCases: 2,
+          distinctCases: 1,
+          codingTasksTotal: 2,
+          doubleCodedCases: 1,
+          singleCodedCasesAssigned: 0,
+          doubleCodedCasesPerCoder: { Chris: 1, Ada: 1 },
+          doubleCodedCasesPerCoderId: { 3: 1, 1: 1 }
+        }
+      },
+      aggregationInfo: {
+        'Unit 1::Var 1': { uniqueCases: 1, totalResponses: 1 },
+        'bundle:9': { uniqueCases: 1, totalResponses: 1 }
+      },
+      matchingFlags: ['NO_AGGREGATION'],
+      pairDistribution: { '1-3': 1 },
+      tasksPerCoder: { 3: 2, 1: 1 },
+      coderWeights: { 3: 0.5, 1: 1.5 },
+      jobs: [
+        {
+          itemKey: 'Unit 1::Var 1',
+          coderId: 3,
+          variable: { unitName: 'Unit 1', variableId: 'Var 1' },
+          jobId: 100,
+          caseCount: 1
+        },
+        {
+          itemKey: 'bundle:9',
+          coderId: 1,
+          variable: { unitName: 'Hydrated Bundle', variableId: '' },
+          jobId: 101,
+          caseCount: 1
+        }
+      ]
+    };
+    codingJobService.createDistributedCodingJobs.mockImplementation(
+      async (_workspaceId, _request, afterCreateInTransaction) => {
+        if (afterCreateInTransaction) {
+          await afterCreateInTransaction(
+            { getRepository: () => jobDefinitionRepository } as never,
+            creationResult
+          );
+        }
+
+        return creationResult;
+      }
+    );
 
     await expect(service.createCodingJobFromDefinition(12, 7)).resolves.toMatchObject({
       success: true,
@@ -1133,31 +1525,359 @@ describe('JobDefinitionService', () => {
     });
 
     expect(codingJobService.createCodingJob).not.toHaveBeenCalled();
-    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(7, {
-      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
-      selectedVariableBundles: [{
-        id: 9,
-        name: 'Hydrated Bundle',
-        variables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
-        caseOrderingMode: 'alternating'
-      }],
-      selectedCoders: [
-        {
-          id: 3, name: 'Chris', username: 'Chris', capacityPercent: 50
-        },
-        {
-          id: 1, name: 'Ada', username: 'Ada', capacityPercent: 150
+    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(
+      7,
+      {
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+        selectedVariableBundles: [{
+          id: 9,
+          name: 'Hydrated Bundle',
+          variables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
+          caseOrderingMode: 'alternating'
+        }],
+        selectedCoders: [
+          {
+            id: 3, name: 'Chris', username: 'Chris', capacityPercent: 50
+          },
+          {
+            id: 1, name: 'Ada', username: 'Ada', capacityPercent: 150
+          }
+        ],
+        doubleCodingAbsolute: 2,
+        doubleCodingPercentage: undefined,
+        caseOrderingMode: 'continuous',
+        maxCodingCases: 7,
+        jobDefinitionId: 12,
+        missingsProfileId: 88,
+        distributionSeed: 'seed-12',
+        showScore: true,
+        allowComments: false,
+        suppressGeneralInstructions: true
+      },
+      expect.any(Function)
+    );
+    expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      distribution_snapshots: [
+        expect.objectContaining({
+          version: 1,
+          source: 'initial_creation',
+          distributionSeed: 'seed-12',
+          selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+          selectedVariableBundles: [expect.objectContaining({ id: 9 })],
+          selectedCoders: [
+            { coderId: 3, capacityPercent: 50 },
+            { coderId: 1, capacityPercent: 150 }
+          ],
+          settings: {
+            maxCodingCases: 7,
+            doubleCodingAbsolute: 2,
+            doubleCodingPercentage: undefined,
+            caseOrderingMode: 'continuous'
+          },
+          distributionByCoderId: {
+            'Unit 1::Var 1': { 3: 1, 1: 0 },
+            'bundle:9': { 3: 0, 1: 1 }
+          },
+          doubleCodingInfo: {
+            'Unit 1::Var 1': expect.objectContaining({
+              doubleCodedCases: 0,
+              doubleCodedCasesPerCoderId: { 3: 0, 1: 0 }
+            }),
+            'bundle:9': expect.objectContaining({
+              doubleCodedCases: 1,
+              doubleCodedCasesPerCoderId: { 3: 1, 1: 1 }
+            })
+          },
+          jobs: [
+            {
+              itemKey: 'Unit 1::Var 1',
+              coderId: 3,
+              variable: { unitName: 'Unit 1', variableId: 'Var 1' },
+              jobId: 100,
+              caseCount: 1
+            },
+            {
+              itemKey: 'bundle:9',
+              coderId: 1,
+              variable: { unitName: 'Hydrated Bundle', variableId: '' },
+              jobId: 101,
+              caseCount: 1
+            }
+          ]
+        })
+      ]
+    }));
+  });
+
+  it('does not store a distribution snapshot when distributed job creation fails', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 15,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      assigned_coder_configs: [{ coderId: 1, capacityPercent: 100 }],
+      distribution_seed: 'seed-15',
+      case_ordering_mode: 'continuous',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    });
+    usersRepository.find.mockResolvedValue([{ id: 1, username: 'Ada' }]);
+    codingJobService.createDistributedCodingJobs.mockResolvedValue({
+      success: false,
+      jobsCreated: 0,
+      message: 'Failed',
+      jobs: []
+    });
+
+    await expect(service.createCodingJobFromDefinition(15, 7)).resolves.toMatchObject({
+      success: false,
+      message: 'Failed'
+    });
+
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('appends a refresh distribution snapshot without replacing earlier snapshots', async () => {
+    const existingSnapshot = {
+      version: 1,
+      source: 'initial_creation',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    };
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 16,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      assigned_coder_configs: [{ coderId: 1, capacityPercent: 100 }],
+      distribution_seed: 'seed-16',
+      distribution_snapshots: [existingSnapshot],
+      case_ordering_mode: 'continuous',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    });
+    usersRepository.find.mockResolvedValue([{ id: 1, username: 'Ada' }]);
+    const refreshResult = {
+      success: true,
+      jobsCreated: 1,
+      message: 'Updated',
+      distribution: { 'Unit 1::Var 1': { Ada: 1 } },
+      distributionByCoderId: { 'Unit 1::Var 1': { 1: 1 } },
+      doubleCodingInfo: {
+        'Unit 1::Var 1': {
+          totalCases: 1,
+          distinctCases: 1,
+          codingTasksTotal: 1,
+          doubleCodedCases: 0,
+          singleCodedCasesAssigned: 1,
+          doubleCodedCasesPerCoder: { Ada: 0 },
+          doubleCodedCasesPerCoderId: { 1: 0 }
         }
+      },
+      aggregationInfo: { 'Unit 1::Var 1': { uniqueCases: 1, totalResponses: 1 } },
+      matchingFlags: [],
+      pairDistribution: {},
+      tasksPerCoder: { 1: 1 },
+      coderWeights: { 1: 1 },
+      jobs: [{
+        itemKey: 'Unit 1::Var 1',
+        coderId: 1,
+        variable: { unitName: 'Unit 1', variableId: 'Var 1' },
+        jobId: 200,
+        caseCount: 1
+      }],
+      preview: {
+        jobDefinitionId: 16,
+        existingJobsCount: 1,
+        staleJobsCount: 1,
+        existingCases: 0,
+        plannedCases: 1,
+        retainedCases: 0,
+        addedCases: 1,
+        removedCases: 0,
+        addedCodingTasks: 1,
+        removedCodingTasks: 0,
+        itemDeltas: [
+          {
+            itemKey: 'Unit 1::Var 1',
+            itemLabel: 'Unit 1::Var 1',
+            existingCases: 0,
+            plannedCases: 1,
+            retainedCases: 0,
+            addedCases: 1,
+            removedCases: 0,
+            existingCodingTasks: 0,
+            plannedCodingTasks: 1,
+            retainedCodingTasks: 0,
+            addedCodingTasks: 1,
+            removedCodingTasks: 0,
+            codingTasksByCoderId: {
+              1: {
+                coderId: 1,
+                existingCodingTasks: 0,
+                plannedCodingTasks: 1,
+                retainedCodingTasks: 0,
+                addedCodingTasks: 1,
+                removedCodingTasks: 0
+              }
+            }
+          }
+        ],
+        canApply: true
+      }
+    };
+    codingJobService.refreshDistributedCodingJobs.mockImplementation(
+      async (_workspaceId, _request, afterRefreshInTransaction) => {
+        if (afterRefreshInTransaction) {
+          await afterRefreshInTransaction(
+            { getRepository: () => jobDefinitionRepository } as never,
+            refreshResult
+          );
+        }
+
+        return refreshResult;
+      }
+    );
+
+    await expect(service.refreshCodingJobFromDefinition(16, 7)).resolves.toMatchObject({
+      success: true,
+      jobsCreated: 1
+    });
+
+    expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      distribution_snapshots: [
+        existingSnapshot,
+        expect.objectContaining({
+          version: 1,
+          source: 'refresh',
+          distributionSeed: 'seed-16',
+          selectedCoders: [{ coderId: 1, capacityPercent: 100 }],
+          refreshPreview: expect.objectContaining({
+            addedCases: 1,
+            itemDeltas: [
+              expect.objectContaining({
+                itemKey: 'Unit 1::Var 1',
+                addedCases: 1
+              })
+            ]
+          }),
+          jobs: [expect.objectContaining({ jobId: 200, coderId: 1, caseCount: 1 })]
+        })
+      ]
+    }));
+  });
+
+  it('does not collide hyphenated variable keys when creating jobs from definitions', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 13,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [
+        { unitName: 'Unit-A', variableId: 'B', includeDeriveError: true },
+        { unitName: 'Unit', variableId: 'A-B' }
       ],
-      doubleCodingAbsolute: 2,
-      doubleCodingPercentage: undefined,
-      caseOrderingMode: 'continuous',
-      maxCodingCases: 7,
-      jobDefinitionId: 12,
-      distributionSeed: 'seed-12',
-      showScore: true,
-      allowComments: false,
-      suppressGeneralInstructions: true
+      assigned_variable_bundles: [{ id: 10, name: 'Hyphen Bundle' }],
+      assigned_coders: [1],
+      duration_seconds: 30,
+      max_coding_cases: 7,
+      double_coding_absolute: 0,
+      double_coding_percentage: null,
+      case_ordering_mode: 'continuous',
+      assigned_coder_configs: [{ coderId: 1, capacityPercent: 100 }],
+      distribution_seed: 'seed-13',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    });
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 10,
+        name: 'Hyphen Bundle',
+        variables: [{ unitName: 'Unit', variableId: 'A-B' }]
+      }
+    ]);
+    usersRepository.find.mockResolvedValue([{ id: 1, username: 'Ada' }]);
+
+    await expect(service.createCodingJobFromDefinition(13, 7)).resolves.toMatchObject({
+      success: true
+    });
+
+    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        selectedVariables: [{ unitName: 'Unit-A', variableId: 'B', includeDeriveError: true }],
+        selectedVariableBundles: [{
+          id: 10,
+          name: 'Hyphen Bundle',
+          variables: [{ unitName: 'Unit', variableId: 'A-B' }],
+          caseOrderingMode: undefined
+        }]
+      }),
+      expect.any(Function)
+    );
+  });
+
+  it('previews jobs from definitions with the same normalized variable selection', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 14,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [
+        { unitName: 'Unit-A', variableId: 'B', includeDeriveError: true },
+        { unitName: 'Unit', variableId: 'A-B', includeDeriveError: true }
+      ],
+      assigned_variable_bundles: [{ id: 10, name: 'Hyphen Bundle' }],
+      assigned_coders: [1],
+      duration_seconds: 30,
+      max_coding_cases: 7,
+      double_coding_absolute: 0,
+      double_coding_percentage: null,
+      case_ordering_mode: 'continuous',
+      assigned_coder_configs: [{ coderId: 1, capacityPercent: 100 }],
+      distribution_seed: 'seed-14',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    });
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 10,
+        name: 'Hyphen Bundle',
+        variables: [{ unitName: 'Unit', variableId: 'A-B' }]
+      }
+    ]);
+    usersRepository.find.mockResolvedValue([{ id: 1, username: 'Ada' }]);
+
+    const preview = await service.previewCodingJobFromDefinition(14, 7);
+
+    expect(codingJobService.calculateDistribution).toHaveBeenCalledWith(7, expect.objectContaining({
+      selectedVariables: [{ unitName: 'Unit-A', variableId: 'B', includeDeriveError: true }],
+      selectedVariableBundles: [{
+        id: 10,
+        name: 'Hyphen Bundle',
+        variables: [{ unitName: 'Unit', variableId: 'A-B', includeDeriveError: true }],
+        caseOrderingMode: undefined
+      }]
+    }));
+    expect(preview).toMatchObject({
+      selectedVariables: [{ unitName: 'Unit-A', variableId: 'B', includeDeriveError: true }],
+      selectedVariableBundles: [{
+        id: 10,
+        name: 'Hyphen Bundle',
+        variables: [{ unitName: 'Unit', variableId: 'A-B', includeDeriveError: true }],
+        caseOrderingMode: undefined
+      }],
+      selectedCoders: [{
+        id: 1,
+        name: 'Ada',
+        username: 'Ada',
+        capacityPercent: 100
+      }]
     });
   });
 });

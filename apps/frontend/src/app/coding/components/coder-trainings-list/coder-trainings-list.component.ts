@@ -30,7 +30,10 @@ import { Subject, takeUntil } from 'rxjs';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CaseSelectionMode, CoderTraining } from '../../models/coder-training.model';
 import { AppService } from '../../../core/services/app.service';
-import { CodingResultsComparisonComponent } from '../coding-results-comparison/coding-results-comparison.component';
+import {
+  CodingResultsComparisonComponent,
+  CodingResultsComparisonMode
+} from '../coding-results-comparison/coding-results-comparison.component';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog.component';
 import { TrainingJobsDialogComponent } from './training-jobs-dialog.component';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
@@ -203,7 +206,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
     return this.duplicateTrainingLabels.has(normalizeTrainingLabel(training.label));
   }
 
-  openResultsComparison(training?: CoderTraining): void {
+  openResultsComparison(training?: CoderTraining, initialMode?: CodingResultsComparisonMode): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
@@ -216,7 +219,8 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
       maxHeight: '95vh',
       data: {
         workspaceId,
-        selectedTraining: training
+        selectedTraining: training,
+        initialMode: training ? 'within-training' : initialMode
       }
     });
   }

@@ -29,7 +29,6 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { ResourcePackageService } from '../../../shared/services/response/resource-package.service';
 import { ResourcePackageDto } from '../../../../../../../api-dto/resource-package/resource-package-dto';
-import { AppService } from '../../../core/services/app.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 
 export interface ResourcePackagesDialogData {
@@ -72,14 +71,13 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   dialogRef = inject<MatDialogRef<ResourcePackagesDialogComponent>>(MatDialogRef);
   data = inject<ResourcePackagesDialogData>(MAT_DIALOG_DATA);
   resourcePackageService = inject(ResourcePackageService);
-  private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translate = inject(TranslateService);
   private dialog = inject(MatDialog);
 
   // Resource packages
   resourcePackages: ResourcePackageDto[] = [];
-  resourcePackageDataSource!: MatTableDataSource<ResourcePackageDto>;
+  resourcePackageDataSource = new MatTableDataSource<ResourcePackageDto>([]);
   resourcePackageSelection = new SelectionModel<ResourcePackageDto>(true, []);
   isLoadingResourcePackages = false;
   isResourcePackageOperationActive = false;
@@ -124,8 +122,17 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
    * Loads all resource packages
    */
   loadResourcePackages(): void {
+    const workspaceId = this.getWorkspaceId();
+    if (workspaceId === null) {
+      this.snackBar.open(
+        this.translate.instant('Workspace ID is required'),
+        this.translate.instant('error'),
+        { duration: 3000 }
+      );
+      return;
+    }
     this.isLoadingResourcePackages = true;
-    this.resourcePackageService.getResourcePackages(this.appService.selectedWorkspaceId)
+    this.resourcePackageService.getResourcePackages(workspaceId)
       .subscribe({
         next: (packages: ResourcePackageDto[]) => {
           this.resourcePackages = packages;
@@ -142,6 +149,11 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
           );
         }
       });
+  }
+
+  private getWorkspaceId(): number | null {
+    const workspaceId = Number(this.data.workspaceId);
+    return Number.isInteger(workspaceId) && workspaceId > 0 ? workspaceId : null;
   }
 
   /** Sets up custom filter predicate for the resource package data source */
@@ -193,11 +205,12 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
    * Deletes selected resource packages
    */
   deleteResourcePackages(): void {
+    const workspaceId = this.getWorkspaceId();
     if (this.resourcePackageSelection.selected.length === 0) {
       return;
     }
 
-    if (!this.data.workspaceId) {
+    if (workspaceId === null) {
       this.snackBar.open(
         this.translate.instant('Workspace ID is required'),
         this.translate.instant('error'),
@@ -229,7 +242,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       const packageIds = selectedPackages.map(pkg => pkg.id);
       this.isLoadingResourcePackages = true;
 
-      this.resourcePackageService.deleteResourcePackages(this.data.workspaceId!, packageIds)
+      this.resourcePackageService.deleteResourcePackages(workspaceId, packageIds)
         .subscribe({
           next: (success: boolean) => {
             this.isLoadingResourcePackages = false;
@@ -267,7 +280,8 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
    * @param resourcePackage The resource package to download
    */
   downloadResourcePackage(resourcePackage: ResourcePackageDto): void {
-    if (!this.data.workspaceId) {
+    const workspaceId = this.getWorkspaceId();
+    if (workspaceId === null) {
       this.snackBar.open(
         this.translate.instant('Workspace ID is required'),
         this.translate.instant('error'),
@@ -277,7 +291,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     }
     this.activeDownloadPackageId = resourcePackage.id;
     this.startResourcePackageOperation(`Download: ${resourcePackage.name}`, 'indeterminate');
-    this.resourcePackageService.downloadResourcePackageWithProgress(this.data.workspaceId, resourcePackage.name)
+    this.resourcePackageService.downloadResourcePackageWithProgress(workspaceId, resourcePackage.name)
       .subscribe({
         next: event => {
           if (event.type === HttpEventType.DownloadProgress) {
@@ -322,7 +336,8 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
    * @param target The file input change event target
    */
   onResourcePackageSelected(target: EventTarget | null): void {
-    if (!this.data.workspaceId) {
+    const workspaceId = this.getWorkspaceId();
+    if (workspaceId === null) {
       this.snackBar.open(
         this.translate.instant('Workspace ID is required'),
         this.translate.instant('error'),
@@ -336,7 +351,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     if (files && files.length) {
       const file = files[0];
       this.startResourcePackageOperation(`Upload: ${file.name}`, 'determinate');
-      this.resourcePackageService.uploadResourcePackageWithProgress(this.data.workspaceId, file)
+      this.resourcePackageService.uploadResourcePackageWithProgress(workspaceId, file)
         .subscribe({
           next: event => {
             if (event.type === HttpEventType.UploadProgress) {
@@ -380,7 +395,8 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   }
 
   installGeoGebraPackage(): void {
-    if (!this.data.workspaceId) {
+    const workspaceId = this.getWorkspaceId();
+    if (workspaceId === null) {
       this.snackBar.open(
         this.translate.instant('Workspace ID is required'),
         this.translate.instant('error'),
@@ -410,7 +426,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
         'GeoGebra Math Apps Bundle wird heruntergeladen und installiert...',
         'indeterminate'
       );
-      this.resourcePackageService.installGeoGebraPackage(this.data.workspaceId!)
+      this.resourcePackageService.installGeoGebraPackage(workspaceId)
         .subscribe({
           next: event => {
             if (event instanceof HttpResponse) {

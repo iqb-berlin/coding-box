@@ -32,6 +32,39 @@ export class WorkspaceCoderTrainingController {
     private codingStatisticsService: CodingStatisticsService
   ) { }
 
+  private getTrainingKappaVariableKey(unitName: string, variableId: string): string {
+    return `${unitName}:${variableId}`;
+  }
+
+  private countValidCoderValuesForKappa(
+    coders: Array<{ code: string | number | null; score: number | null }>,
+    level: 'code' | 'score'
+  ): number {
+    return coders.filter(coder => (
+      level === 'score' ? coder.score !== null : coder.code !== null
+    )).length;
+  }
+
+  private calculateTrainingKappaCaseCountsByVariable(
+    comparisonData: Array<{
+      unitName: string;
+      variableId: string;
+      coders: Array<{ code: string | number | null; score: number | null }>;
+    }>,
+    level: 'code' | 'score'
+  ): Map<string, number> {
+    const caseCountsByVariable = new Map<string, number>();
+
+    comparisonData.forEach(item => {
+      if (this.countValidCoderValuesForKappa(item.coders, level) < 2) return;
+
+      const key = this.getTrainingKappaVariableKey(item.unitName, item.variableId);
+      caseCountsByVariable.set(key, (caseCountsByVariable.get(key) ?? 0) + 1);
+    });
+
+    return caseCountsByVariable;
+  }
+
   @Post(':workspace_id/coding/coder-training-packages')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
@@ -59,7 +92,8 @@ export class WorkspaceCoderTrainingController {
             properties: {
               variableId: { type: 'string' },
               unitId: { type: 'string' },
-              sampleCount: { type: 'number' }
+              sampleCount: { type: 'number' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         }
@@ -106,6 +140,7 @@ export class WorkspaceCoderTrainingController {
                        variableId: string;
                        unitId: string;
                        sampleCount: number;
+                       includeDeriveError?: boolean;
                      }[];
                    }
   ): Promise<
@@ -258,7 +293,8 @@ export class WorkspaceCoderTrainingController {
             properties: {
               variableId: { type: 'string' },
               unitId: { type: 'string' },
-              sampleCount: { type: 'number' }
+              sampleCount: { type: 'number' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -269,7 +305,8 @@ export class WorkspaceCoderTrainingController {
             properties: {
               unitName: { type: 'string' },
               variableId: { type: 'string' },
-              sampleCount: { type: 'number' }
+              sampleCount: { type: 'number' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -329,6 +366,7 @@ export class WorkspaceCoderTrainingController {
                        variableId: string;
                        unitId: string;
                        sampleCount: number;
+                       includeDeriveError?: boolean;
                      }[];
                      assignedVariables?: JobDefinitionVariable[];
                      assignedVariableBundles?: JobDefinitionVariableBundle[];
@@ -562,7 +600,11 @@ export class WorkspaceCoderTrainingController {
       properties: {
         responseId: { type: 'number' },
         code: { type: 'number', nullable: true },
-        score: { type: 'number', nullable: true }
+        score: {
+          type: 'number',
+          nullable: true,
+          description: 'Deprecated input; score is derived on the server from coding scheme, missings, or stored results.'
+        }
       },
       required: ['responseId']
     }
@@ -572,7 +614,14 @@ export class WorkspaceCoderTrainingController {
       @Param('trainingId') trainingId: number,
       @Body() body: { responseId: number; code: number | null; score: number | null },
       @Req() req: Request
-  ): Promise<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }> {
+  ): Promise<{
+        success: boolean;
+        code: number | null;
+        score: number | null;
+        source: 'manual' | 'auto_agreement' | null;
+        managerUserId: number | null;
+        managerName: string | null;
+      }> {
     const reqUser = (req as Request & {
       user?: { id?: string | number; username?: string; preferred_username?: string; name?: string };
     }).user;
@@ -585,8 +634,7 @@ export class WorkspaceCoderTrainingController {
       Number(body.responseId),
       Number.isNaN(managerUserId) ? null : managerUserId,
       managerName,
-      body.code,
-      body.score
+      body.code
     );
   }
 
@@ -623,7 +671,8 @@ export class WorkspaceCoderTrainingController {
             properties: {
               variableId: { type: 'string' },
               unitId: { type: 'string' },
-              sampleCount: { type: 'number' }
+              sampleCount: { type: 'number' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -634,7 +683,8 @@ export class WorkspaceCoderTrainingController {
             properties: {
               unitName: { type: 'string' },
               variableId: { type: 'string' },
-              sampleCount: { type: 'number' }
+              sampleCount: { type: 'number' },
+              includeDeriveError: { type: 'boolean' }
             }
           }
         },
@@ -682,6 +732,7 @@ export class WorkspaceCoderTrainingController {
           variableId: string;
           unitId: string;
           sampleCount: number;
+          includeDeriveError?: boolean;
         }[];
         assignedVariables?: JobDefinitionVariable[];
         assignedVariableBundles?: JobDefinitionVariableBundle[];
@@ -905,6 +956,11 @@ export class WorkspaceCoderTrainingController {
             properties: {
               unitName: { type: 'string', description: 'Name of the unit' },
               variableId: { type: 'string', description: 'Variable ID' },
+              meanKappa: { type: 'number', nullable: true },
+              meanAgreement: { type: 'number', nullable: true },
+              caseCount: { type: 'number', description: 'Distinct valid cases for this variable' },
+              validPairCount: { type: 'number', description: 'Sum of valid pair values across coder pairs' },
+              coderPairCount: { type: 'number', description: 'Coder pairs with valid values' },
               coderPairs: {
                 type: 'array',
                 items: {
@@ -937,6 +993,11 @@ export class WorkspaceCoderTrainingController {
               type: 'string',
               enum: ['weighted', 'unweighted'],
               description: 'Method used to calculate mean kappa'
+            },
+            calculationLevel: {
+              type: 'string',
+              enum: ['code', 'score'],
+              description: 'Value level used for kappa calculation'
             }
           }
         }
@@ -952,6 +1013,11 @@ export class WorkspaceCoderTrainingController {
         variables: Array<{
           unitName: string;
           variableId: string;
+          meanKappa: number | null;
+          meanAgreement: number | null;
+          caseCount: number;
+          validPairCount: number;
+          coderPairCount: number;
           coderPairs: Array<{
             coder1Id: number;
             coder1Name: string;
@@ -1002,6 +1068,8 @@ export class WorkspaceCoderTrainingController {
       };
     }
 
+    const caseCountsByVariable = this.calculateTrainingKappaCaseCountsByVariable(comparisonData, calculationLevel);
+
     // 2. Transform to coder pairs format
     const coderPairs = this.coderTrainingService.transformToCoderPairs(comparisonData);
 
@@ -1027,7 +1095,7 @@ export class WorkspaceCoderTrainingController {
     const variableMap = new Map<string, { unitName: string; variableId: string; coderPairs: typeof kappaResults }>();
 
     kappaResults.forEach(result => {
-      const key = `${result.unitName}:${result.variableId}`;
+      const key = this.getTrainingKappaVariableKey(result.unitName as string, result.variableId as string);
       if (!variableMap.has(key)) {
         variableMap.set(key, {
           unitName: result.unitName as string,
@@ -1038,7 +1106,11 @@ export class WorkspaceCoderTrainingController {
       variableMap.get(key)!.coderPairs.push(result);
     });
 
-    const variables = Array.from(variableMap.values());
+    const variables = Array.from(variableMap.entries()).map(([key, variable]) => ({
+      ...variable,
+      caseCount: caseCountsByVariable.get(key) ?? 0,
+      ...this.codingStatisticsService.calculateKappaVariableSummary(variable.coderPairs)
+    }));
 
     // 5. Calculate summary statistics
     let totalWeightedKappa = 0;
@@ -1070,8 +1142,8 @@ export class WorkspaceCoderTrainingController {
       averageKappa = validKappaCount > 0 ? totalKappa / validKappaCount : null;
     }
 
-    const totalDoubleCodedResponses = comparisonData.filter(d => d.coders.filter(c => c.code !== null).length >= 2
-    ).length;
+    const totalDoubleCodedResponses = Array.from(caseCountsByVariable.values())
+      .reduce((sum, caseCount) => sum + caseCount, 0);
 
     return {
       variables,

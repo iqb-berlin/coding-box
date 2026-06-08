@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { createHash } from 'crypto';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import {
+  Repository, In, IsNull, Not, Brackets
+} from 'typeorm';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
@@ -17,16 +18,28 @@ import User from '../../entities/user.entity';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
-import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingJobService } from './coding-job.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
-import { MissingsProfilesService } from './missings-profiles.service';
+import {
+  IQB_STANDARD_MISSING_CODES,
+  IQB_STANDARD_MISSING_SCORES,
+  IqbStandardMissingId,
+  MissingsProfilesService
+} from './missings-profiles.service';
 import {
   applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import type { CaseSelectionMode, ReferenceMode } from '../../entities/coder-training.entity';
+import {
+  DERIVE_ERROR_STATUS,
+  MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+} from '../../utils/manual-coding-candidate.util';
+import {
+  buildAggregationGroups,
+  deduplicateManualCodingResponses
+} from './aggregation-metrics.util';
 
 interface CoderTrainingResponse {
   responseId: number;
@@ -75,7 +88,23 @@ interface CoderTrainingWithJobs {
 
 export type TrainingResponseIdsMap = Record<string, number[]>;
 
+type TrainingVariableConfig = {
+  variableId: string;
+  unitId: string;
+  sampleCount: number;
+  includeDeriveError?: boolean;
+};
+
 type DiscussionSource = 'manual' | 'auto_agreement' | null;
+
+type SaveDiscussionResultResponse = {
+  success: boolean;
+  code: number | null;
+  score: number | null;
+  source: DiscussionSource;
+  managerUserId: number | null;
+  managerName: string | null;
+};
 
 type WithinTrainingCoderResult = {
   jobId: number;
@@ -84,6 +113,32 @@ type WithinTrainingCoderResult = {
   score: number | null;
   notes: string | null;
   codingIssueOption: number | null;
+};
+
+type DiscussionScoreFallback = {
+  found: boolean;
+  score: number | null;
+};
+
+type TrainingResponseJobUnit = {
+  job: Pick<CodingJob, 'id' | 'missings_profile_id'>;
+  unit: CodingJobUnit;
+};
+
+type MissingCodePair = { mirCode: number; mciCode: number };
+type MissingCodeDisplayContext = MissingCodePair & {
+  negativeCodes: Set<number>;
+  scoresByCode: Map<number, number>;
+};
+
+const DEFAULT_MISSING_CODE_CONTEXT: MissingCodeDisplayContext = {
+  mirCode: IQB_STANDARD_MISSING_CODES.mir,
+  mciCode: IQB_STANDARD_MISSING_CODES.mci,
+  negativeCodes: new Set(Object.values(IQB_STANDARD_MISSING_CODES)),
+  scoresByCode: new Map(
+    (Object.entries(IQB_STANDARD_MISSING_SCORES) as Array<[IqbStandardMissingId, number]>)
+      .map(([missingId, score]) => [IQB_STANDARD_MISSING_CODES[missingId], score])
+  )
 };
 
 @Injectable()
@@ -128,45 +183,154 @@ export class CoderTrainingService {
   private async buildMissingCodesByJobId(
     workspaceId: number,
     jobs: Array<Pick<CodingJob, 'id' | 'missings_profile_id'>>
-  ): Promise<Map<number, { mirCode: number; mciCode: number }>> {
+  ): Promise<Map<number, MissingCodeDisplayContext>> {
+    if (!Array.isArray(jobs)) {
+      return new Map();
+    }
+
+    const defaultMissingCodes = await this.getDefaultMissingCodeDisplayContext(workspaceId);
     const profileIds = [...new Set(jobs
       .map(job => job.missings_profile_id)
       .filter((id): id is number => id !== null && id !== undefined))];
 
-    const missingCodesByProfileId = new Map<number, { mirCode: number; mciCode: number }>();
+    const missingCodesByProfileId = new Map<number, MissingCodeDisplayContext>();
 
     for (const profileId of profileIds) {
-      const profile = await this.missingsProfilesService.getMissingsProfileDetails(workspaceId, profileId);
-      const missings = profile?.parseMissings() || [];
+      if (!this.missingsProfilesService?.getMissingsProfileDetails ||
+          !this.missingsProfilesService?.getNegativeMissingCodesForProfileOrDefault) {
+        missingCodesByProfileId.set(profileId, defaultMissingCodes);
+        continue;
+      }
 
-      const mirMissing = missings.find(m => m.id === 'mir' ||
-        m.label?.toLowerCase().includes('invalid') ||
-        m.label?.toLowerCase().includes('spa')
+      const [profile, negativeCodes] = await Promise.all([
+        this.missingsProfilesService.getMissingsProfileDetails(workspaceId, profileId),
+        this.missingsProfilesService.getNegativeMissingCodesForProfileOrDefault(workspaceId, profileId)
+      ]);
+      if (!profile) {
+        throw new BadRequestException(`Missing profile ${profileId} not found`);
+      }
+
+      missingCodesByProfileId.set(
+        profileId,
+        {
+          ...this.getMirMciCodesFromMissings(profile.parseMissings(), defaultMissingCodes),
+          negativeCodes,
+          scoresByCode: this.getMissingScoresByCodeFromMissings(
+            profile.parseMissings(),
+            defaultMissingCodes.scoresByCode
+          )
+        }
       );
-
-      const mciMissing = missings.find(m => m.id === 'mci' ||
-        m.label?.toLowerCase().includes('coding impossible') ||
-        m.label?.toLowerCase().includes('techn')
-      );
-
-      missingCodesByProfileId.set(profileId, {
-        mirCode: mirMissing?.code ?? -98,
-        mciCode: mciMissing?.code ?? -97
-      });
     }
 
-    const missingCodesByJobId = new Map<number, { mirCode: number; mciCode: number }>();
+    const missingCodesByJobId = new Map<number, MissingCodeDisplayContext>();
     jobs.forEach(job => {
       const profileCodes = job.missings_profile_id ? missingCodesByProfileId.get(job.missings_profile_id) : undefined;
-      missingCodesByJobId.set(job.id, profileCodes ?? { mirCode: -98, mciCode: -97 });
+      missingCodesByJobId.set(job.id, profileCodes ?? defaultMissingCodes);
     });
 
     return missingCodesByJobId;
   }
 
+  private async getDefaultMissingCodeDisplayContext(workspaceId: number): Promise<MissingCodeDisplayContext> {
+    if (!this.missingsProfilesService?.getNegativeMissingCodesForProfileOrDefault ||
+        !this.missingsProfilesService?.ensureDefaultMissingsProfile) {
+      return {
+        ...DEFAULT_MISSING_CODE_CONTEXT,
+        negativeCodes: new Set(DEFAULT_MISSING_CODE_CONTEXT.negativeCodes),
+        scoresByCode: new Map(DEFAULT_MISSING_CODE_CONTEXT.scoresByCode)
+      };
+    }
+
+    const [defaultProfile, negativeCodes] = await Promise.all([
+      this.missingsProfilesService.ensureDefaultMissingsProfile(workspaceId),
+      this.missingsProfilesService.getNegativeMissingCodesForProfileOrDefault(workspaceId, null)
+    ]);
+
+    return {
+      ...this.getMirMciCodesFromMissings(defaultProfile.parseMissings()),
+      negativeCodes,
+      scoresByCode: this.getMissingScoresByCodeFromMissings(
+        defaultProfile.parseMissings()
+      )
+    };
+  }
+
+  private getMissingScoresByCodeFromMissings(
+    missings: Array<{ id?: string; code: number; score?: unknown }>,
+    fallbackScoresByCode?: Map<number, number>
+  ): Map<number, number> {
+    const scoresByCode = new Map<number, number>(fallbackScoresByCode);
+
+    missings.forEach(missing => {
+      const code = Number(missing.code);
+      if (!Number.isInteger(code) || code >= 0) {
+        return;
+      }
+
+      if (!this.hasExplicitFiniteScore(missing.score)) {
+        throw new BadRequestException(`Missing profile must define a score for code ${code}`);
+      }
+
+      scoresByCode.set(code, Number(missing.score));
+    });
+
+    return scoresByCode;
+  }
+
+  private hasExplicitFiniteScore(score: unknown): boolean {
+    if (typeof score === 'number') {
+      return Number.isFinite(score);
+    }
+
+    if (typeof score === 'string') {
+      const trimmedScore = score.trim();
+      return trimmedScore !== '' && Number.isFinite(Number(trimmedScore));
+    }
+
+    return false;
+  }
+
+  private getMissingScoreFromContext(
+    missingCodes: MissingCodeDisplayContext,
+    code: number
+  ): number {
+    const score = missingCodes.scoresByCode.get(code);
+    if (score === undefined) {
+      throw new BadRequestException(`Missing profile must define a score for code ${code}`);
+    }
+
+    return score;
+  }
+
+  private getMirMciCodesFromMissings(
+    missings: Array<{ id?: string; label?: string; code: number }>,
+    fallback?: MissingCodePair
+  ): MissingCodePair {
+    const mirMissing = missings.find(m => m.id === 'mir' ||
+      m.label?.toLowerCase().includes('invalid') ||
+      m.label?.toLowerCase().includes('spa')
+    );
+
+    const mciMissing = missings.find(m => m.id === 'mci' ||
+      m.label?.toLowerCase().includes('coding impossible') ||
+      m.label?.toLowerCase().includes('techn')
+    );
+
+    const mirCode = mirMissing?.code ?? fallback?.mirCode;
+    const mciCode = mciMissing?.code ?? fallback?.mciCode;
+
+    if (!Number.isInteger(mirCode) || !Number.isInteger(mciCode)) {
+      throw new BadRequestException('Missing profile must define MIR and MCI codes');
+    }
+
+    return { mirCode, mciCode };
+  }
+
   /**
-   * Get response IDs used in the given trainings, grouped by variable (unitAlias:variableId).
-   * Used for referenceMode 'same' (only these cases) or 'different' (exclude these cases).
+   * Get response IDs used in the given trainings, grouped by variable.
+   * Both unit name and unit alias are exposed as keys so reference training filters
+   * match whichever unit identifier the current training configuration uses.
    */
   async getTrainingResponseIds(
     workspaceId: number,
@@ -182,7 +346,8 @@ export class CoderTrainingService {
     const query = this.codingJobUnitRepository
       .createQueryBuilder('cju')
       .innerJoin('cju.coding_job', 'cj')
-      .select('COALESCE(cju.unit_alias, cju.unit_name)', 'unitKey')
+      .select('cju.unit_name', 'unitName')
+      .addSelect('cju.unit_alias', 'unitAlias')
       .addSelect('cju.variable_id', 'variableId')
       .addSelect('cju.response_id', 'responseId')
       .where('cj.workspace_id = :workspaceId', { workspaceId })
@@ -193,16 +358,25 @@ export class CoderTrainingService {
       bookletNameExpression: 'cju.booklet_name',
       parameterPrefix: 'trainingResponseIds'
     });
-    const rows = await query.getRawMany<{ unitKey: string; variableId: string; responseId: number }>();
+    const rows = await query.getRawMany<{
+      unitName?: string | null;
+      unitAlias?: string | null;
+      unitKey?: string | null;
+      variableId: string;
+      responseId: number;
+    }>();
 
     const result: TrainingResponseIdsMap = {};
     for (const row of rows) {
-      const key = `${row.unitKey}:${row.variableId}`;
-      if (!result[key]) {
-        result[key] = [];
-      }
-      if (!result[key].includes(row.responseId)) {
-        result[key].push(row.responseId);
+      const unitKeys = new Set([row.unitName, row.unitAlias, row.unitKey].filter((key): key is string => !!key));
+      for (const unitKey of unitKeys) {
+        const key = `${unitKey}:${row.variableId}`;
+        if (!result[key]) {
+          result[key] = [];
+        }
+        if (!result[key].includes(row.responseId)) {
+          result[key].push(row.responseId);
+        }
       }
     }
 
@@ -210,11 +384,278 @@ export class CoderTrainingService {
     return result;
   }
 
+  private applyReferenceFilter(
+    responses: CoderTrainingResponse[],
+    referenceMode: ReferenceMode | undefined,
+    referenceResponseIdsByConfig: TrainingResponseIdsMap | null,
+    configKey: string
+  ): CoderTrainingResponse[] {
+    if (!referenceMode || !referenceResponseIdsByConfig) {
+      return responses;
+    }
+
+    const refIds = referenceResponseIdsByConfig[configKey] ?
+      new Set(referenceResponseIdsByConfig[configKey]) :
+      null;
+
+    if (referenceMode === 'same') {
+      return refIds ? responses.filter(r => refIds.has(r.responseId)) : [];
+    }
+
+    if (referenceMode === 'different' && refIds) {
+      return responses.filter(r => !refIds.has(r.responseId));
+    }
+
+    return responses;
+  }
+
+  private async hasCodingProgressForJobs(jobIds: number[]): Promise<boolean> {
+    const distinctJobIds = [...new Set(jobIds.filter(jobId => Number.isInteger(jobId) && jobId > 0))];
+    if (distinctJobIds.length === 0) {
+      return false;
+    }
+
+    const codedUnits = await this.codingJobUnitRepository.count({
+      where: [
+        { coding_job_id: In(distinctJobIds), code: Not(IsNull()) },
+        { coding_job_id: In(distinctJobIds), score: Not(IsNull()) },
+        { coding_job_id: In(distinctJobIds), notes: Not(IsNull()) },
+        { coding_job_id: In(distinctJobIds), coding_issue_option: Not(IsNull()) },
+        { coding_job_id: In(distinctJobIds), supervisor_comment: Not(IsNull()) }
+      ]
+    });
+
+    return codedUnits > 0;
+  }
+
+  private async hasDiscussionResultsForTraining(workspaceId: number, trainingId: number): Promise<boolean> {
+    const discussionResults = await this.coderTrainingDiscussionResultRepository.count({
+      where: {
+        workspace_id: workspaceId,
+        training_id: trainingId
+      }
+    });
+
+    return discussionResults > 0;
+  }
+
+  private makeTrainingVariableKey(unitName: string, variableId: string): string {
+    return `${unitName}::${variableId}`;
+  }
+
+  private getValidatedBundleIds(
+    assignedVariableBundles: JobDefinitionVariableBundle[] = []
+  ): number[] {
+    const invalidBundleIds = assignedVariableBundles
+      .map(bundle => bundle?.id)
+      .filter(id => !Number.isInteger(id));
+
+    if (invalidBundleIds.length > 0) {
+      throw new BadRequestException(
+        `Invalid variable bundle IDs: ${invalidBundleIds.map(id => String(id)).join(', ')}`
+      );
+    }
+
+    return assignedVariableBundles.map(bundle => bundle.id);
+  }
+
+  private async getWorkspaceVariableBundlesById(
+    workspaceId: number,
+    bundleIds: number[]
+  ): Promise<Map<number, VariableBundle>> {
+    const uniqueBundleIds = Array.from(new Set(bundleIds));
+    if (uniqueBundleIds.length === 0) {
+      return new Map();
+    }
+
+    const variableBundles = await this.variableBundleRepository.find({
+      where: {
+        id: In(uniqueBundleIds),
+        workspace_id: workspaceId
+      }
+    });
+    const variableBundlesById = new Map(variableBundles.map(bundle => [bundle.id, bundle]));
+    const missingBundleIds = uniqueBundleIds.filter(id => !variableBundlesById.has(id));
+
+    if (missingBundleIds.length > 0) {
+      throw new BadRequestException(
+        `Unknown variable bundle IDs for workspace ${workspaceId}: ${missingBundleIds.join(', ')}`
+      );
+    }
+
+    return variableBundlesById;
+  }
+
+  private async resolveBundleVariableSelections(
+    workspaceId: number,
+    assignedVariableBundles: JobDefinitionVariableBundle[] = []
+  ): Promise<JobDefinitionVariable[]> {
+    const bundleIds = this.getValidatedBundleIds(assignedVariableBundles);
+    const fetchedBundleById = await this.getWorkspaceVariableBundlesById(workspaceId, bundleIds);
+    const variablesByKey = new Map<string, JobDefinitionVariable>();
+
+    const addBundleVariable = (
+      variable: JobDefinitionVariable,
+      bundleSampleCount?: number
+    ) => {
+      if (!variable.unitName || !variable.variableId) {
+        return;
+      }
+
+      const key = this.makeTrainingVariableKey(variable.unitName, variable.variableId);
+      const existing = variablesByKey.get(key);
+      variablesByKey.set(key, {
+        unitName: variable.unitName,
+        variableId: variable.variableId,
+        sampleCount: existing?.sampleCount || variable.sampleCount || bundleSampleCount || 10,
+        includeDeriveError: existing?.includeDeriveError === true || variable.includeDeriveError === true ?
+          true :
+          undefined
+      });
+    };
+
+    assignedVariableBundles.forEach(bundle => {
+      const configuredBundleVariablesByKey = new Map(
+        (bundle.variables || []).map(variable => [
+          this.makeTrainingVariableKey(variable.unitName, variable.variableId),
+          variable
+        ])
+      );
+      const bundleVariables = fetchedBundleById.get(bundle.id)?.variables || [];
+      bundleVariables.forEach(variable => {
+        const configuredVariable = configuredBundleVariablesByKey.get(
+          this.makeTrainingVariableKey(variable.unitName, variable.variableId)
+        );
+        addBundleVariable({
+          unitName: variable.unitName,
+          variableId: variable.variableId,
+          sampleCount: configuredVariable?.sampleCount,
+          includeDeriveError: configuredVariable?.includeDeriveError
+        }, bundle.sampleCount);
+      });
+    });
+
+    return Array.from(variablesByKey.values());
+  }
+
+  private async buildTrainingVariableSelections(
+    workspaceId: number,
+    variableConfigs: TrainingVariableConfig[] = [],
+    assignedVariables: JobDefinitionVariable[] = [],
+    assignedVariableBundles: JobDefinitionVariableBundle[] = []
+  ): Promise<JobDefinitionVariable[]> {
+    const bundleVariables = await this.resolveBundleVariableSelections(workspaceId, assignedVariableBundles);
+    const fallbackVariables = [...assignedVariables, ...bundleVariables];
+    const assignedVariablesByKey = new Map<string, JobDefinitionVariable>();
+    fallbackVariables.forEach(variable => {
+      assignedVariablesByKey.set(
+        this.makeTrainingVariableKey(variable.unitName, variable.variableId),
+        variable
+      );
+    });
+
+    const selectionsByKey = new Map<string, JobDefinitionVariable>();
+    variableConfigs.forEach(config => {
+      const key = this.makeTrainingVariableKey(config.unitId, config.variableId);
+      const assignedVariable = assignedVariablesByKey.get(key);
+      selectionsByKey.set(key, {
+        unitName: config.unitId,
+        variableId: config.variableId,
+        sampleCount: config.sampleCount || assignedVariable?.sampleCount || 10,
+        includeDeriveError: config.includeDeriveError === true || assignedVariable?.includeDeriveError === true ?
+          true :
+          undefined
+      });
+    });
+
+    fallbackVariables.forEach(variable => {
+      const key = this.makeTrainingVariableKey(variable.unitName, variable.variableId);
+      if (!selectionsByKey.has(key)) {
+        selectionsByKey.set(key, {
+          unitName: variable.unitName,
+          variableId: variable.variableId,
+          sampleCount: variable.sampleCount || 10,
+          includeDeriveError: variable.includeDeriveError === true ? true : undefined
+        });
+      }
+    });
+
+    return Array.from(selectionsByKey.values());
+  }
+
+  private mapTrainingVariableSelectionsToConfigs(
+    variables: JobDefinitionVariable[] = []
+  ): TrainingVariableConfig[] {
+    return variables.map(variable => ({
+      variableId: variable.variableId,
+      unitId: variable.unitName,
+      sampleCount: variable.sampleCount || 10,
+      includeDeriveError: variable.includeDeriveError === true ? true : undefined
+    }));
+  }
+
+  private mapTrainingBundles(
+    bundles: CoderTrainingBundle[] = [],
+    variables: JobDefinitionVariable[] = []
+  ): JobDefinitionVariableBundle[] {
+    const variablesByKey = new Map(
+      variables.map(variable => [
+        this.makeTrainingVariableKey(variable.unitName, variable.variableId),
+        variable
+      ])
+    );
+
+    return bundles.map(bundle => ({
+      id: bundle.variable_bundle_id,
+      name: bundle.bundle?.name || '',
+      sampleCount: bundle.sample_count || 10,
+      caseOrderingMode: bundle.case_ordering_mode ?? undefined,
+      variables: bundle.bundle?.variables?.map(variable => {
+        const savedVariable = variablesByKey.get(
+          this.makeTrainingVariableKey(variable.unitName, variable.variableId)
+        );
+        return {
+          unitName: variable.unitName,
+          variableId: variable.variableId,
+          sampleCount: savedVariable?.sampleCount ?? bundle.sample_count ?? 10,
+          includeDeriveError: savedVariable?.includeDeriveError === true ? true : undefined
+        };
+      })
+    }));
+  }
+
+  private mapTrainingVariables(
+    variables: CoderTrainingVariable[] = []
+  ): JobDefinitionVariable[] {
+    return variables.map(variable => ({
+      variableId: variable.variable_id,
+      unitName: variable.unit_name,
+      sampleCount: variable.sample_count || 10,
+      includeDeriveError: variable.include_derive_error === true ? true : undefined
+    }));
+  }
+
+  private getBundleVariableKeys(bundles: CoderTrainingBundle[] = []): Set<string> {
+    return new Set(
+      bundles.flatMap(bundle => bundle.bundle?.variables || [])
+        .map(variable => this.makeTrainingVariableKey(variable.unitName, variable.variableId))
+    );
+  }
+
+  private getTrainingVariablesByKey(
+    variables: CoderTrainingVariable[] = []
+  ): Map<string, CoderTrainingVariable> {
+    return new Map(variables.map(variable => [
+      this.makeTrainingVariableKey(variable.unit_name, variable.variable_id),
+      variable
+    ]));
+  }
+
   private mapDisplayCodeAndScore(
     code: number | null,
     score: number | null,
     codingIssueOption: number | null,
-    missingCodes: { mirCode: number; mciCode: number }
+    missingCodes: MissingCodeDisplayContext
   ): { code: string | null; score: number | null } {
     if (code === null && codingIssueOption === null) {
       return { code: null, score };
@@ -223,14 +664,21 @@ export class CoderTrainingService {
     if (code === -3 || codingIssueOption === -3) {
       return {
         code: missingCodes.mirCode.toString(),
-        score: score ?? 0
+        score: this.getMissingScoreFromContext(missingCodes, missingCodes.mirCode)
       };
     }
 
     if (code === -4 || codingIssueOption === -4) {
       return {
         code: missingCodes.mciCode.toString(),
-        score
+        score: this.getMissingScoreFromContext(missingCodes, missingCodes.mciCode)
+      };
+    }
+
+    if (code !== null && code < 0 && missingCodes.negativeCodes.has(code)) {
+      return {
+        code: code.toString(),
+        score: this.getMissingScoreFromContext(missingCodes, code)
       };
     }
 
@@ -268,36 +716,267 @@ export class CoderTrainingService {
     };
   }
 
+  private async deriveAutomaticDiscussionResultForResponse(
+    workspaceId: number,
+    training: CoderTraining,
+    responseId: number,
+    coders: WithinTrainingCoderResult[],
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<{ code: number; score: number | null } | null> {
+    const result = this.deriveAutomaticDiscussionResult(coders);
+    if (!result || result.code >= 0) {
+      return result;
+    }
+
+    return {
+      code: result.code,
+      score: await this.getMissingScoreForResponse(
+        workspaceId,
+        training,
+        responseId,
+        result.code,
+        exclusions
+      )
+    };
+  }
+
+  private findTrainingUnitForResponse(
+    training: CoderTraining,
+    responseId: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): CodingJobUnit | null {
+    return this.findTrainingJobUnitsForResponse(training, responseId, exclusions)[0]?.unit ?? null;
+  }
+
+  private findTrainingJobUnitsForResponse(
+    training: CoderTraining,
+    responseId: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): TrainingResponseJobUnit[] {
+    return (training.codingJobs || []).flatMap(job => {
+      const unit = job.codingJobUnits?.find(candidate => (
+        candidate.response_id === responseId &&
+        !isExcludedByResolvedExclusions(exclusions, candidate.booklet_name, candidate.unit_name)
+      ));
+
+      return unit ? [{ job, unit }] : [];
+    });
+  }
+
+  private buildCoderResultsForResponse(
+    training: CoderTraining,
+    responseId: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>,
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>
+  ): WithinTrainingCoderResult[] {
+    return (training.codingJobs || []).map(job => {
+      let code: number | null = null;
+      let score: number | null = null;
+      let notes: string | null = null;
+      let codingIssueOption: number | null = null;
+
+      const coderName = job.codingJobCoders && job.codingJobCoders.length > 0 && job.codingJobCoders[0].user ?
+        `${job.codingJobCoders[0].user.username || 'Unknown'}` :
+        `Coder ${job.name}`;
+
+      job.codingJobUnits?.forEach(unit => {
+        if (
+          unit.response_id === responseId &&
+          !isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)
+        ) {
+          code = unit.code;
+          if (unit.score !== null) {
+            score = unit.score;
+          }
+          notes = unit.notes;
+          codingIssueOption = unit.coding_issue_option;
+        }
+      });
+
+      const mappedDisplay = this.mapDisplayCodeAndScore(
+        code,
+        score,
+        codingIssueOption,
+        missingCodesByJobId.get(job.id) ?? DEFAULT_MISSING_CODE_CONTEXT
+      );
+
+      return {
+        jobId: job.id,
+        coderName,
+        code: mappedDisplay.code,
+        score: mappedDisplay.score,
+        notes,
+        codingIssueOption
+      };
+    });
+  }
+
+  private toNullableScore(score: number | string | null | undefined): number | null {
+    if (score === null || score === undefined) {
+      return null;
+    }
+
+    const numericScore = Number(score);
+    return Number.isFinite(numericScore) ? numericScore : null;
+  }
+
+  private findReplayScoreFallback(response: ResponseEntity | null | undefined, code: number): DiscussionScoreFallback {
+    const versionedResults = [
+      { code: response?.code_v3, score: response?.score_v3 },
+      { code: response?.code_v2, score: response?.score_v2 },
+      { code: response?.code_v1, score: response?.score_v1 }
+    ];
+
+    const replayResult = versionedResults.find(result => (
+      result.code !== null &&
+      result.code !== undefined &&
+      Number(result.code) === code
+    ));
+
+    if (!replayResult) {
+      return { found: false, score: null };
+    }
+
+    return {
+      found: true,
+      score: this.toNullableScore(replayResult.score)
+    };
+  }
+
+  private findExistingDiscussionScoreFallback(
+    training: CoderTraining,
+    responseId: number,
+    code: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): DiscussionScoreFallback {
+    for (const job of training.codingJobs || []) {
+      const unit = job.codingJobUnits?.find(candidate => (
+        candidate.response_id === responseId &&
+        !isExcludedByResolvedExclusions(exclusions, candidate.booklet_name, candidate.unit_name)
+      ));
+
+      if (!unit) {
+        continue;
+      }
+
+      if (unit.code !== null && unit.code !== undefined && Number(unit.code) === code) {
+        return {
+          found: true,
+          score: this.toNullableScore(unit.score)
+        };
+      }
+
+      const replayFallback = this.findReplayScoreFallback(unit.response, code);
+      if (replayFallback.found) {
+        return replayFallback;
+      }
+    }
+
+    return { found: false, score: null };
+  }
+
+  private async getMissingScoreForResponse(
+    workspaceId: number,
+    training: CoderTraining,
+    responseId: number,
+    code: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<number> {
+    const jobUnits = this.findTrainingJobUnitsForResponse(training, responseId, exclusions);
+    if (jobUnits.length === 0) {
+      return (await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
+        workspaceId,
+        null,
+        code
+      )).score;
+    }
+
+    const resolvedProfileIds = await Promise.all(jobUnits.map(({ job }) => (
+      this.missingsProfilesService.resolveMissingsProfileId(workspaceId, job.missings_profile_id)
+    )));
+    const profileKeys = new Set(resolvedProfileIds);
+    if (profileKeys.size > 1) {
+      throw new BadRequestException(`Conflicting missing profiles for response ${responseId} in training ${training.id}`);
+    }
+
+    try {
+      return (await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
+        workspaceId,
+        resolvedProfileIds[0],
+        code
+      )).score;
+    } catch (error) {
+      if (error instanceof BadRequestException && error.message.includes('not found')) {
+        throw new BadRequestException(`Unsupported missing code: ${code}`);
+      }
+
+      throw error;
+    }
+  }
+
+  private async deriveDiscussionScore(
+    workspaceId: number,
+    training: CoderTraining,
+    responseId: number,
+    code: number,
+    representativeUnit: CodingJobUnit,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<number | null> {
+    if (code < 0) {
+      return this.getMissingScoreForResponse(
+        workspaceId,
+        training,
+        responseId,
+        code,
+        exclusions
+      );
+    }
+
+    try {
+      return await this.codingJobService.getCodingSchemeScoreForUnitCode(
+        representativeUnit,
+        workspaceId,
+        code
+      );
+    } catch (error) {
+      if (!(error instanceof BadRequestException)) {
+        throw error;
+      }
+
+      const fallback = this.findExistingDiscussionScoreFallback(training, responseId, code, exclusions);
+      if (fallback.found) {
+        return fallback.score;
+      }
+
+      throw error;
+    }
+  }
+
   async saveDiscussionResult(
     workspaceId: number,
     trainingId: number,
     responseId: number,
     managerUserId: number | null,
     managerName: string | null,
-    code: number | null,
-    score: number | null
-  ): Promise<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }> {
+    code: number | null | undefined
+  ): Promise<SaveDiscussionResultResponse> {
     const training = await this.coderTrainingRepository.findOne({
       where: {
         id: trainingId,
         workspace_id: workspaceId
       },
-      relations: ['codingJobs', 'codingJobs.codingJobUnits']
+      relations: ['codingJobs', 'codingJobs.codingJobUnits', 'codingJobs.codingJobUnits.response']
     });
 
     if (!training) {
-      throw new Error(`Training ${trainingId} not found in workspace ${workspaceId}`);
+      throw new BadRequestException(`Training ${trainingId} not found in workspace ${workspaceId}`);
     }
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const hasResponseInTraining = (training.codingJobs || []).some(job => (job.codingJobUnits || []).some(unit => (
-      unit.response_id === responseId &&
-      !isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)
-    ))
-    );
+    const representativeUnit = this.findTrainingUnitForResponse(training, responseId, exclusions);
 
-    if (!hasResponseInTraining) {
-      throw new Error(`Response ${responseId} is not part of training ${trainingId}`);
+    if (!representativeUnit) {
+      throw new BadRequestException(`Response ${responseId} is not part of training ${trainingId}`);
     }
 
     const existing = await this.coderTrainingDiscussionResultRepository.findOne({
@@ -308,18 +987,47 @@ export class CoderTrainingService {
       }
     });
 
-    if (code === null) {
+    if (code === null || code === undefined) {
+      const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, training.codingJobs || []);
+      const codersData = this.buildCoderResultsForResponse(
+        training,
+        responseId,
+        exclusions,
+        missingCodesByJobId
+      );
+      const automaticDiscussionResult = await this.deriveAutomaticDiscussionResultForResponse(
+        workspaceId,
+        training,
+        responseId,
+        codersData,
+        exclusions
+      );
+
       if (existing) {
         await this.coderTrainingDiscussionResultRepository.delete(existing.id);
       }
       return {
         success: true,
-        code: null,
-        score: null,
+        code: automaticDiscussionResult?.code ?? null,
+        score: automaticDiscussionResult?.score ?? null,
+        source: automaticDiscussionResult ? 'auto_agreement' : null,
         managerUserId: null,
         managerName: null
       };
     }
+
+    if (!Number.isInteger(code)) {
+      throw new BadRequestException('Discussion code must be an integer');
+    }
+
+    const derivedScore = await this.deriveDiscussionScore(
+      workspaceId,
+      training,
+      responseId,
+      code,
+      representativeUnit,
+      exclusions
+    );
 
     const discussionResult = existing || this.coderTrainingDiscussionResultRepository.create({
       workspace_id: workspaceId,
@@ -328,7 +1036,7 @@ export class CoderTrainingService {
     });
 
     discussionResult.code = code;
-    discussionResult.score = score;
+    discussionResult.score = derivedScore;
     discussionResult.manager_user_id = managerUserId;
     discussionResult.manager_name = managerName;
 
@@ -337,6 +1045,7 @@ export class CoderTrainingService {
       success: true,
       code: saved.code,
       score: saved.score,
+      source: 'manual',
       managerUserId: saved.manager_user_id,
       managerName: saved.manager_name
     };
@@ -463,7 +1172,7 @@ export class CoderTrainingService {
   async generateCoderTrainingPackages(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    variableConfigs: TrainingVariableConfig[],
     options?: {
       caseSelectionMode?: CaseSelectionMode;
       referenceTrainingIds?: number[];
@@ -487,13 +1196,12 @@ export class CoderTrainingService {
     const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
     this.logger.log(`Aggregation threshold: ${aggregationThreshold}, matching flags: ${matchingFlags.join(', ')}`);
 
-    // Build derived variable lookup to skip aggregation for derived vars
+    // Build derived variable lookup for the shared aggregation logic.
     const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
     const derivedVariableSets = new Map<string, Set<string>>();
     derivedVariableMap.forEach((vars, unitNameKey) => {
       derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
     });
-    const isDerivedVariable = (unitName: string, variableId: string): boolean => derivedVariableSets.get(unitName.toUpperCase())?.has(variableId) ?? false;
 
     // Pre-sample responses for each variable configuration to ensure consistency across all coders
     const sampledResponsesByConfig: Map<string, CoderTrainingResponse[]> = new Map();
@@ -503,6 +1211,7 @@ export class CoderTrainingService {
       const unitId = config.unitId;
       const sampleCount = config.sampleCount;
       const configKey = `${unitId}:${variableId}`;
+      const includeDeriveError = config.includeDeriveError === true;
 
       this.logger.log(`Querying incomplete responses for unit ${unitId}, variable ${variableId}`);
 
@@ -515,12 +1224,16 @@ export class CoderTrainingService {
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.status_v1 IN (:...statuses)', {
-          statuses: [
-            statusStringToNumber('CODING_INCOMPLETE'),
-            statusStringToNumber('INTENDED_INCOMPLETE')
-          ]
-        })
+        .andWhere(includeDeriveError ?
+          new Brackets(qb => {
+            qb.where('response.status_v1 IN (:...statuses)', {
+              statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+            }).orWhere('response.status_v1 = :deriveErrorStatus', {
+              deriveErrorStatus: DERIVE_ERROR_STATUS
+            });
+          }) :
+          'response.status_v1 IN (:...statuses)',
+        { statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES })
         .andWhere('response.variableid = :variableId', { variableId })
         .andWhere('response.status_v2 IS NULL')
         .andWhere('(unit.alias = :unitId OR unit.name = :unitId)', { unitId })
@@ -599,52 +1312,30 @@ export class CoderTrainingService {
         }
       }
 
-      // De-duplicate identical responses per person/unit/variable/value (keep lowest responseId).
-      const dedupedByPersonValue = new Map<string, CoderTrainingResponse>();
-      for (const response of transformedResponses) {
-        const valueHash = createHash('sha1').update(response.value || '').digest('hex');
-        const key = `${response.personLogin}::${response.personCode}::${response.personGroup}::${response.unitName}::${response.variableId}::${valueHash}`;
-        const existing = dedupedByPersonValue.get(key);
-        if (!existing || response.responseId < existing.responseId) {
-          dedupedByPersonValue.set(key, response);
-        }
+      const dedupedResponses = deduplicateManualCodingResponses(transformedResponses);
+      if (dedupedResponses.length !== transformedResponses.length) {
+        this.logger.debug(`Removed ${transformedResponses.length - dedupedResponses.length} duplicate responses for unit ${unitId}, variable ${variableId}.`);
       }
-      if (dedupedByPersonValue.size !== transformedResponses.length) {
-        this.logger.debug(`Removed ${transformedResponses.length - dedupedByPersonValue.size} duplicate responses for unit ${unitId}, variable ${variableId}.`);
-      }
-      transformedResponses = Array.from(dedupedByPersonValue.values());
+      transformedResponses = dedupedResponses;
 
-      // Apply aggregation grouping: if threshold is set, keep only 1 representative per value group.
-      // Derived variables have null/empty values — skip aggregation to avoid collapsing all responses into 1 group.
-      const isDerived = isDerivedVariable(unitId, variableId);
+      // Apply the same aggregation grouping used by availability analysis.
       let responsesForSampling: CoderTrainingResponse[];
-      if (!isDerived && aggregationThreshold !== null) {
-        // Build slim-compatible objects for aggregation
-        const slimResponses = transformedResponses.map(r => ({
-          id: r.responseId,
-          variableid: r.variableId,
-          value: r.value,
-          unitName: r.unitName,
-          unitAlias: r.unitAlias,
-          bookletName: r.bookletName,
-          personLogin: r.personLogin,
-          personCode: r.personCode,
-          personGroup: r.personGroup
-        }));
-        const aggregatedGroups = this.codingJobService.aggregateResponsesByValue(slimResponses, matchingFlags);
+      if (aggregationThreshold !== null) {
+        const aggregatedGroups = buildAggregationGroups(
+          transformedResponses,
+          matchingFlags,
+          aggregationThreshold,
+          derivedVariableSets
+        );
         responsesForSampling = [];
         for (const group of aggregatedGroups) {
           if (group.responses.length >= aggregationThreshold) {
-            // Keep only 1 representative (lowest id first)
-            const representative = group.responses.reduce((a, b) => (a.id < b.id ? a : b));
-            const orig = transformedResponses.find(r => r.responseId === representative.id);
-            if (orig) responsesForSampling.push(orig);
+            const representative = group.responses.reduce((a, b) => (
+              a.responseId < b.responseId ? a : b
+            ));
+            responsesForSampling.push(representative);
           } else {
-            // Below threshold — all responses are kept individually
-            for (const slimR of group.responses) {
-              const orig = transformedResponses.find(r => r.responseId === slimR.id);
-              if (orig) responsesForSampling.push(orig);
-            }
+            responsesForSampling.push(...group.responses);
           }
         }
         this.logger.log(
@@ -654,18 +1345,12 @@ export class CoderTrainingService {
         responsesForSampling = transformedResponses;
       }
 
-      if (referenceMode && referenceResponseIdsByConfig) {
-        const refIds = referenceResponseIdsByConfig[configKey] ?
-          new Set(referenceResponseIdsByConfig[configKey]) :
-          null;
-        if (refIds) {
-          if (referenceMode === 'same') {
-            responsesForSampling = responsesForSampling.filter(r => refIds.has(r.responseId));
-          } else if (referenceMode === 'different') {
-            responsesForSampling = responsesForSampling.filter(r => !refIds.has(r.responseId));
-          }
-        }
-      }
+      responsesForSampling = this.applyReferenceFilter(
+        responsesForSampling,
+        referenceMode,
+        referenceResponseIdsByConfig,
+        configKey
+      );
 
       const sampledResponses = this.sampleResponses(responsesForSampling, sampleCount, caseSelectionMode);
       sampledResponsesByConfig.set(configKey, sampledResponses);
@@ -705,7 +1390,7 @@ export class CoderTrainingService {
   async createCoderTrainingJobs(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    variableConfigs: TrainingVariableConfig[],
     trainingLabel: string,
     missingsProfileId?: number,
     assignedVariables?: JobDefinitionVariable[],
@@ -722,6 +1407,17 @@ export class CoderTrainingService {
         selectedCoders.map(coder => coder.id),
         workspaceId
       );
+      const resolvedMissingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
+        workspaceId,
+        missingsProfileId
+      );
+      const trainingVariableSelections = await this.buildTrainingVariableSelections(
+        workspaceId,
+        variableConfigs,
+        assignedVariables || [],
+        assignedVariableBundles || []
+      );
+      const trainingVariableConfigs = this.mapTrainingVariableSelectionsToConfigs(trainingVariableSelections);
 
       const coderTraining = new CoderTraining();
       coderTraining.workspace_id = workspaceId;
@@ -737,16 +1433,15 @@ export class CoderTrainingService {
       const savedTraining = await this.coderTrainingRepository.save(coderTraining);
       const trainingId = savedTraining.id;
 
-      // Save assigned variables
-      if (assignedVariables) {
-        for (const variable of assignedVariables) {
-          const trainingVariable = new CoderTrainingVariable();
-          trainingVariable.coder_training_id = trainingId;
-          trainingVariable.variable_id = variable.variableId;
-          trainingVariable.unit_name = variable.unitName;
-          trainingVariable.sample_count = variable.sampleCount || 10;
-          await this.coderTrainingVariableRepository.save(trainingVariable);
-        }
+      // Save selected variables, including variables that came from bundles.
+      for (const variable of trainingVariableSelections) {
+        const trainingVariable = new CoderTrainingVariable();
+        trainingVariable.coder_training_id = trainingId;
+        trainingVariable.variable_id = variable.variableId;
+        trainingVariable.unit_name = variable.unitName;
+        trainingVariable.sample_count = variable.sampleCount || 10;
+        trainingVariable.include_derive_error = variable.includeDeriveError === true;
+        await this.coderTrainingVariableRepository.save(trainingVariable);
       }
 
       // Save assigned bundles
@@ -771,7 +1466,7 @@ export class CoderTrainingService {
 
       this.logger.log(`Created coder training ${trainingId} with label '${trainingLabel}' and configuration`);
 
-      const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs, {
+      const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, trainingVariableConfigs, {
         caseSelectionMode: caseSelectionMode ?? 'oldest_first',
         referenceTrainingIds,
         referenceMode
@@ -782,12 +1477,10 @@ export class CoderTrainingService {
       const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating'>();
       this.logger.log(`Building bundle maps for ${assignedVariableBundles?.length || 0} bundles`);
       if (assignedVariableBundles && assignedVariableBundles.length > 0) {
-        const bundleIds = assignedVariableBundles.map(b => b.id);
+        const bundleIds = this.getValidatedBundleIds(assignedVariableBundles);
         if (bundleIds.length > 0) {
-          const fetchedBundles = await this.variableBundleRepository.find({
-            where: { id: In(bundleIds) }
-          });
-          for (const bundle of fetchedBundles) {
+          const fetchedBundlesById = await this.getWorkspaceVariableBundlesById(workspaceId, bundleIds);
+          for (const bundle of fetchedBundlesById.values()) {
             // Store the bundle's sorting mode (if set, otherwise null)
             const bundleConfig = assignedVariableBundles.find(b => b.id === bundle.id);
             const mode = bundleConfig?.caseOrderingMode || null;
@@ -818,7 +1511,7 @@ export class CoderTrainingService {
         codingJob.workspace_id = workspaceId;
         codingJob.description = '';
         codingJob.training_id = trainingId;
-        codingJob.missings_profile_id = missingsProfileId;
+        codingJob.missings_profile_id = resolvedMissingsProfileId;
         codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
         codingJob.suppressGeneralInstructions = suppressGeneralInstructions ?? false;
         codingJob.created_at = new Date();
@@ -902,6 +1595,7 @@ export class CoderTrainingService {
         const codingJobUnits: CodingJobUnit[] = sortedResponses.map(response => {
           const codingJobUnit = new CodingJobUnit();
           codingJobUnit.coding_job_id = jobId;
+          codingJobUnit.workspace_id = workspaceId;
           codingJobUnit.response_id = response.responseId;
           codingJobUnit.unit_name = response.unitName;
           codingJobUnit.unit_alias = response.unitAlias || null;
@@ -952,31 +1646,49 @@ export class CoderTrainingService {
       order: { created_at: 'DESC' }
     });
 
-    return trainings.map(training => ({
-      id: training.id,
-      workspace_id: training.workspace_id,
-      label: training.label,
-      created_at: training.created_at,
-      updated_at: training.updated_at,
-      jobsCount: training.codingJobs?.length || 0,
-      case_ordering_mode: training.case_ordering_mode,
-      case_selection_mode: training.case_selection_mode,
-      reference_training_ids: training.reference_training_ids ?? undefined,
-      reference_mode: training.reference_mode ?? undefined,
-      suppress_general_instructions: training.suppress_general_instructions,
-      assigned_variables: training.variables?.map(v => ({
-        variableId: v.variable_id,
-        unitName: v.unit_name,
-        sampleCount: v.sample_count
-      })),
-      assigned_variable_bundles: training.bundles?.map(b => ({
-        id: b.variable_bundle_id,
-        name: b.bundle?.name || 'Unknown Bundle',
-        sampleCount: b.sample_count,
-        caseOrderingMode: b.case_ordering_mode
-      })),
-      assigned_coders: training.coders?.map(c => c.user_id)
-    }));
+    return trainings.map(training => {
+      const bundleVariableKeys = this.getBundleVariableKeys(training.bundles || []);
+      const trainingVariablesByKey = this.getTrainingVariablesByKey(training.variables || []);
+
+      return {
+        id: training.id,
+        workspace_id: training.workspace_id,
+        label: training.label,
+        created_at: training.created_at,
+        updated_at: training.updated_at,
+        jobsCount: training.codingJobs?.length || 0,
+        case_ordering_mode: training.case_ordering_mode,
+        case_selection_mode: training.case_selection_mode,
+        reference_training_ids: training.reference_training_ids ?? undefined,
+        reference_mode: training.reference_mode ?? undefined,
+        suppress_general_instructions: training.suppress_general_instructions,
+        assigned_variables: training.variables
+          ?.filter(v => !bundleVariableKeys.has(this.makeTrainingVariableKey(v.unit_name, v.variable_id)))
+          .map(v => ({
+            variableId: v.variable_id,
+            unitName: v.unit_name,
+            sampleCount: v.sample_count,
+            ...(v.include_derive_error === true ? { includeDeriveError: true } : {})
+          })),
+        assigned_variable_bundles: training.bundles?.map(b => ({
+          id: b.variable_bundle_id,
+          name: b.bundle?.name || 'Unknown Bundle',
+          sampleCount: b.sample_count,
+          caseOrderingMode: b.case_ordering_mode,
+          variables: b.bundle?.variables?.map(variable => {
+            const savedVariable = trainingVariablesByKey.get(
+              this.makeTrainingVariableKey(variable.unitName, variable.variableId)
+            );
+            return {
+              ...variable,
+              sampleCount: savedVariable?.sample_count ?? b.sample_count,
+              ...(savedVariable?.include_derive_error === true ? { includeDeriveError: true } : {})
+            };
+          })
+        })),
+        assigned_coders: training.coders?.map(c => c.user_id)
+      };
+    });
   }
 
   async getTrainingCodingComparison(
@@ -1024,6 +1736,7 @@ export class CoderTrainingService {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const allTrainingJobs = trainings.flatMap(training => training.codingJobs || []);
     const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, allTrainingJobs);
+    const defaultMissingCodeContext = await this.getDefaultMissingCodeDisplayContext(workspaceId);
 
     const responseMap = new Map<number, {
       unitName: string;
@@ -1114,7 +1827,7 @@ export class CoderTrainingService {
                 unit.code,
                 unit.score,
                 unit.coding_issue_option,
-                missingCodesByJobId.get(job.id) ?? { mirCode: -98, mciCode: -97 }
+                missingCodesByJobId.get(job.id) ?? defaultMissingCodeContext
               );
 
               codersData.push({
@@ -1195,6 +1908,7 @@ export class CoderTrainingService {
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, training.codingJobs);
+    const defaultMissingCodeContext = await this.getDefaultMissingCodeDisplayContext(workspaceId);
 
     const unitVariableMap = new Map<string, {
       responseId: number;
@@ -1296,7 +2010,7 @@ export class CoderTrainingService {
           code,
           score,
           codingIssueOption,
-          missingCodesByJobId.get(job.id) ?? { mirCode: -98, mciCode: -97 }
+          missingCodesByJobId.get(job.id) ?? defaultMissingCodeContext
         );
 
         codersData.push({
@@ -1313,7 +2027,13 @@ export class CoderTrainingService {
       const hasManualDiscussionResult = discussionResult?.code !== null && discussionResult?.code !== undefined;
       const automaticDiscussionResult = hasManualDiscussionResult ?
         null :
-        this.deriveAutomaticDiscussionResult(codersData);
+        await this.deriveAutomaticDiscussionResultForResponse(
+          workspaceId,
+          training,
+          unitVar.responseId,
+          codersData,
+          exclusions
+        );
       let discussionCode = automaticDiscussionResult?.code ?? null;
       let discussionScore = automaticDiscussionResult?.score ?? null;
       let discussionManagerUserId: number | null = null;
@@ -1360,7 +2080,7 @@ export class CoderTrainingService {
     trainingId: number,
     trainingLabel: string,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    variableConfigs: TrainingVariableConfig[],
     missingsProfileId?: number,
     assignedVariables?: JobDefinitionVariable[],
     assignedVariableBundles?: JobDefinitionVariableBundle[],
@@ -1379,57 +2099,147 @@ export class CoderTrainingService {
 
       const training = await this.coderTrainingRepository.findOne({
         where: { id: trainingId, workspace_id: workspaceId },
-        relations: ['codingJobs', 'variables', 'bundles', 'coders']
+        relations: ['codingJobs', 'variables', 'bundles', 'bundles.bundle', 'coders']
       });
 
       if (!training) {
         return { success: false, message: 'Training nicht gefunden' };
       }
 
+      const resolvedCurrentProfileIds = await Promise.all((training.codingJobs || [])
+        .map(job => this.missingsProfilesService.resolveMissingsProfileId(
+          workspaceId,
+          job.missings_profile_id
+        )));
+      const currentProfileKeys = new Set(resolvedCurrentProfileIds);
+      const hasConflictingCurrentMissingsProfiles = currentProfileKeys.size > 1;
+      if (hasConflictingCurrentMissingsProfiles && missingsProfileId === undefined) {
+        throw new BadRequestException(`Conflicting missing profiles for training ${trainingId}`);
+      }
+      const currentMissingsProfileId = currentProfileKeys.size === 1 ?
+        Array.from(currentProfileKeys)[0] :
+        null;
+      const resolvedCurrentMissingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
+        workspaceId,
+        currentMissingsProfileId
+      );
+      const resolvedMissingsProfileId = missingsProfileId !== undefined ?
+        await this.missingsProfilesService.resolveMissingsProfileId(workspaceId, missingsProfileId) :
+        resolvedCurrentMissingsProfileId;
+
       // Check if critical configuration changed (coders or variables)
       const currentCoderIds = training.coders?.map(c => c.user_id).sort() || [];
       const newCoderIds = selectedCoders.map(c => c.id).sort();
       const codersChanged = JSON.stringify(currentCoderIds) !== JSON.stringify(newCoderIds);
 
-      const currentVariables = training.variables?.map(v => ({
-        variableId: v.variable_id,
-        unitName: v.unit_name,
-        sampleCount: v.sample_count
-      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName)) || [];
+      const currentAssignedVariables = this.mapTrainingVariables(training.variables || []);
 
-      const newVariables = assignedVariables?.map(v => ({
+      const currentCaseOrderingMode = training.case_ordering_mode || 'continuous';
+      const newCaseOrderingMode = caseOrderingMode ?? currentCaseOrderingMode;
+
+      const currentAssignedVariableBundles = this.mapTrainingBundles(
+        training.bundles || [],
+        currentAssignedVariables
+      );
+      const currentTrainingVariables = await this.buildTrainingVariableSelections(
+        workspaceId,
+        [],
+        currentAssignedVariables,
+        currentAssignedVariableBundles
+      );
+
+      const effectiveAssignedVariables = assignedVariables ?? currentAssignedVariables;
+      const effectiveAssignedVariableBundles = assignedVariableBundles ?? currentAssignedVariableBundles;
+      const effectiveTrainingVariables = await this.buildTrainingVariableSelections(
+        workspaceId,
+        variableConfigs,
+        effectiveAssignedVariables,
+        effectiveAssignedVariableBundles
+      );
+      const effectiveTrainingVariableConfigs = this.mapTrainingVariableSelectionsToConfigs(effectiveTrainingVariables);
+
+      const currentVariables = currentTrainingVariables.map(v => ({
         variableId: v.variableId,
         unitName: v.unitName,
-        sampleCount: v.sampleCount || 10
-      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName)) || [];
+        sampleCount: v.sampleCount || 10,
+        includeDeriveError: v.includeDeriveError === true
+      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName));
+
+      const newVariables = effectiveTrainingVariables.map(v => ({
+        variableId: v.variableId,
+        unitName: v.unitName,
+        sampleCount: v.sampleCount || 10,
+        includeDeriveError: v.includeDeriveError === true
+      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName));
 
       const variablesChanged = JSON.stringify(currentVariables) !== JSON.stringify(newVariables);
 
-      const currentBundles = training.bundles?.map(b => ({
-        id: b.variable_bundle_id
-      })).sort((a, b) => a.id - b.id) || [];
+      const currentBundles = currentAssignedVariableBundles.map(b => ({
+        id: b.id,
+        sampleCount: b.sampleCount || 10,
+        caseOrderingMode: b.caseOrderingMode ?? currentCaseOrderingMode
+      })).sort((a, b) => a.id - b.id);
 
-      const newBundles = assignedVariableBundles?.map(b => ({
-        id: b.id
-      })).sort((a, b) => a.id - b.id) || [];
+      const newBundles = effectiveAssignedVariableBundles.map(b => ({
+        id: b.id,
+        sampleCount: b.sampleCount || 10,
+        caseOrderingMode: b.caseOrderingMode ?? newCaseOrderingMode
+      })).sort((a, b) => a.id - b.id);
 
       const bundlesChanged = JSON.stringify(currentBundles) !== JSON.stringify(newBundles);
+      const caseOrderingChanged = currentCaseOrderingMode !== newCaseOrderingMode;
+      const currentCaseSelectionMode = training.case_selection_mode || 'oldest_first';
+      const newCaseSelectionMode = caseSelectionMode ?? currentCaseSelectionMode;
+      const currentReferenceTrainingIds = [...(training.reference_training_ids ?? [])].sort((a, b) => a - b);
+      const effectiveReferenceTrainingIds = referenceTrainingIds ?? training.reference_training_ids ?? [];
+      const newReferenceTrainingIds = [...effectiveReferenceTrainingIds].sort((a, b) => a - b);
+      const currentReferenceMode = training.reference_mode ?? null;
+      const newReferenceMode = effectiveReferenceTrainingIds.length > 0 ?
+        referenceMode ?? currentReferenceMode :
+        null;
+      const caseSelectionChanged = currentCaseSelectionMode !== newCaseSelectionMode;
+      const referenceSelectionChanged = JSON.stringify(currentReferenceTrainingIds) !== JSON.stringify(newReferenceTrainingIds) ||
+        currentReferenceMode !== newReferenceMode;
+      const missingsProfileChanged = hasConflictingCurrentMissingsProfiles ||
+        resolvedCurrentMissingsProfileId !== resolvedMissingsProfileId;
+      const shouldRecreateJobs =
+        codersChanged ||
+        variablesChanged ||
+        bundlesChanged ||
+        caseOrderingChanged ||
+        caseSelectionChanged ||
+        referenceSelectionChanged ||
+        missingsProfileChanged;
+
+      if (shouldRecreateJobs) {
+        const jobIds = (training.codingJobs || []).map(job => job.id);
+        const [hasCodingProgress, hasDiscussionResults] = await Promise.all([
+          this.hasCodingProgressForJobs(jobIds),
+          this.hasDiscussionResultsForTraining(workspaceId, trainingId)
+        ]);
+        if (hasCodingProgress || hasDiscussionResults) {
+          return {
+            success: false,
+            message: 'Die Schulung wurde bereits bearbeitet. Änderungen an Fallauswahl, Fallreihenfolge, Referenzen, Missing-Profil, Kodierern oder Variablen würden bestehende Kodierungen löschen.'
+          };
+        }
+      }
 
       const resolvedSuppressGeneralInstructions = suppressGeneralInstructions ??
         training.suppress_general_instructions ??
         false;
 
       training.label = trainingLabel;
-      training.case_ordering_mode = caseOrderingMode || 'continuous';
-      training.case_selection_mode = caseSelectionMode ?? training.case_selection_mode ?? 'oldest_first';
-      training.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
-      training.reference_mode = referenceMode ?? null;
+      training.case_ordering_mode = newCaseOrderingMode;
+      training.case_selection_mode = newCaseSelectionMode;
+      training.reference_training_ids = effectiveReferenceTrainingIds.length ? effectiveReferenceTrainingIds : null;
+      training.reference_mode = newReferenceMode;
       training.suppress_general_instructions = resolvedSuppressGeneralInstructions;
       training.updated_at = new Date();
 
       await this.coderTrainingRepository.save(training);
 
-      if (codersChanged || variablesChanged || bundlesChanged) {
+      if (shouldRecreateJobs) {
         this.logger.log(`Configuration changed for training ${trainingId}. Recreating jobs.`);
 
         // Delete existing configuration relations
@@ -1438,26 +2248,23 @@ export class CoderTrainingService {
         await this.coderTrainingCoderRepository.delete({ coder_training_id: trainingId });
 
         // Save new configuration relations
-        if (assignedVariables) {
-          for (const variable of assignedVariables) {
-            const trainingVariable = new CoderTrainingVariable();
-            trainingVariable.coder_training_id = trainingId;
-            trainingVariable.variable_id = variable.variableId;
-            trainingVariable.unit_name = variable.unitName;
-            trainingVariable.sample_count = variable.sampleCount || 10;
-            await this.coderTrainingVariableRepository.save(trainingVariable);
-          }
+        for (const variable of effectiveTrainingVariables) {
+          const trainingVariable = new CoderTrainingVariable();
+          trainingVariable.coder_training_id = trainingId;
+          trainingVariable.variable_id = variable.variableId;
+          trainingVariable.unit_name = variable.unitName;
+          trainingVariable.sample_count = variable.sampleCount || 10;
+          trainingVariable.include_derive_error = variable.includeDeriveError === true;
+          await this.coderTrainingVariableRepository.save(trainingVariable);
         }
 
-        if (assignedVariableBundles) {
-          for (const bundle of assignedVariableBundles) {
-            const trainingBundle = new CoderTrainingBundle();
-            trainingBundle.coder_training_id = trainingId;
-            trainingBundle.variable_bundle_id = bundle.id;
-            trainingBundle.sample_count = bundle.sampleCount || 10;
-            trainingBundle.case_ordering_mode = bundle.caseOrderingMode || null;
-            await this.coderTrainingBundleRepository.save(trainingBundle);
-          }
+        for (const bundle of effectiveAssignedVariableBundles) {
+          const trainingBundle = new CoderTrainingBundle();
+          trainingBundle.coder_training_id = trainingId;
+          trainingBundle.variable_bundle_id = bundle.id;
+          trainingBundle.sample_count = bundle.sampleCount || 10;
+          trainingBundle.case_ordering_mode = bundle.caseOrderingMode ?? null;
+          await this.coderTrainingBundleRepository.save(trainingBundle);
         }
 
         for (const coder of selectedCoders) {
@@ -1477,26 +2284,24 @@ export class CoderTrainingService {
         }
 
         // Generate and create new jobs
-        const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs, {
-          caseSelectionMode: caseSelectionMode ?? training.case_selection_mode ?? 'oldest_first',
-          referenceTrainingIds,
-          referenceMode
+        const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, effectiveTrainingVariableConfigs, {
+          caseSelectionMode: newCaseSelectionMode,
+          referenceTrainingIds: effectiveReferenceTrainingIds,
+          referenceMode: newReferenceMode ?? undefined
         });
 
         // Build mapping from variable to bundle id and bundle sorting mode
         const variableToBundleMap = new Map<string, number>();
-        const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating'>();
-        this.logger.log(`[Update] Building bundle maps for ${assignedVariableBundles?.length || 0} bundles`);
-        if (assignedVariableBundles && assignedVariableBundles.length > 0) {
-          const bundleIds = assignedVariableBundles.map(b => b.id);
+        const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating' | null>();
+        this.logger.log(`[Update] Building bundle maps for ${effectiveAssignedVariableBundles.length} bundles`);
+        if (effectiveAssignedVariableBundles.length > 0) {
+          const bundleIds = this.getValidatedBundleIds(effectiveAssignedVariableBundles);
           if (bundleIds.length > 0) {
-            const fetchedBundles = await this.variableBundleRepository.find({
-              where: { id: In(bundleIds) }
-            });
-            for (const bundle of fetchedBundles) {
+            const fetchedBundlesById = await this.getWorkspaceVariableBundlesById(workspaceId, bundleIds);
+            for (const bundle of fetchedBundlesById.values()) {
               // Store the bundle's sorting mode (if set, otherwise null)
-              const bundleConfig = assignedVariableBundles.find(b => b.id === bundle.id);
-              const mode = bundleConfig?.caseOrderingMode || null;
+              const bundleConfig = effectiveAssignedVariableBundles.find(b => b.id === bundle.id);
+              const mode = bundleConfig?.caseOrderingMode ?? null;
               bundleSortingModeMap.set(bundle.id, mode);
               this.logger.log(`[Update] Bundle ${bundle.id} (${bundle.name}): mode=${mode}`);
               if (bundle.variables) {
@@ -1521,8 +2326,8 @@ export class CoderTrainingService {
           codingJob.name = `${trainingLabel}-${coderName}`;
           codingJob.workspace_id = workspaceId;
           codingJob.training_id = trainingId;
-          codingJob.missings_profile_id = missingsProfileId;
-          codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
+          codingJob.missings_profile_id = resolvedMissingsProfileId;
+          codingJob.case_ordering_mode = newCaseOrderingMode;
           codingJob.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
           codingJob.created_at = new Date();
           codingJob.updated_at = new Date();
@@ -1553,7 +2358,7 @@ export class CoderTrainingService {
               const jobVariableBundle = new CodingJobVariableBundle();
               jobVariableBundle.coding_job_id = jobId;
               jobVariableBundle.variable_bundle_id = bundleId;
-              jobVariableBundle.case_ordering_mode = bundleMode || null;
+              jobVariableBundle.case_ordering_mode = bundleMode ?? null;
               await this.codingJobVariableBundleRepository.save(jobVariableBundle);
               this.logger.log(`[Update] Saved CodingJobVariableBundle: job=${jobId}, bundle=${bundleId}, mode=${bundleMode || 'null'}`);
             }
@@ -1574,7 +2379,7 @@ export class CoderTrainingService {
 
           // Sort responses with bundle-specific sorting modes
           // Group responses by their effective sorting mode
-          const defaultMode = caseOrderingMode || 'continuous';
+          const defaultMode = newCaseOrderingMode;
           const alternatingResponses: CoderTrainingResponse[] = [];
           const continuousResponses: CoderTrainingResponse[] = [];
 
@@ -1604,6 +2409,7 @@ export class CoderTrainingService {
           const codingJobUnits: CodingJobUnit[] = sortedResponses.map(response => {
             const codingJobUnit = new CodingJobUnit();
             codingJobUnit.coding_job_id = jobId;
+            codingJobUnit.workspace_id = workspaceId;
             codingJobUnit.response_id = response.responseId;
             codingJobUnit.unit_name = response.unitName;
             codingJobUnit.unit_alias = response.unitAlias || null;
@@ -1612,6 +2418,7 @@ export class CoderTrainingService {
             codingJobUnit.booklet_name = response.bookletName;
             codingJobUnit.person_login = response.personLogin;
             codingJobUnit.person_code = response.personCode;
+            codingJobUnit.person_group = response.personGroup;
             codingJobUnit.is_open = true;
             codingJobUnit.variable_bundle_id = variableToBundleMap.get(`${response.unitName}::${response.variableId}`) || null;
             return codingJobUnit;

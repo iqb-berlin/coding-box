@@ -67,6 +67,8 @@ describe('ResponseTableComponent', () => {
   });
 
   it('should format status string correctly', () => {
+    expect(component.getStatusString('4')).toBe('DERIVE_ERROR');
+    expect(component.getStatusString('4abc')).toBe('4abc');
     expect(component.getStatusString('200')).toBeTruthy();
     expect(component.getStatusString('')).toBe('');
   });
@@ -120,5 +122,8 @@ describe('ResponseTableComponent', () => {
 
     component.currentStatusFilter = 'invalid';
     expect(component.getFilterStatusLabel()).toBe('invalid');
+
+    component.currentStatusFilter = '4abc';
+    expect(component.getFilterStatusLabel()).toBe('4abc');
   });
 });

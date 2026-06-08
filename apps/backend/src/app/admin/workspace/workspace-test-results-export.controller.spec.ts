@@ -3,7 +3,6 @@ import { Logger } from '@nestjs/common';
 import { Queue } from 'bull';
 import { WorkspaceTestResultsExportController } from './workspace-test-results-export.controller';
 import type { WorkspaceTestResultsService } from '../../database/services/test-results';
-import { DatabaseExportService } from '../database/database-export.service';
 import {
   DatabaseExportJobData,
   DatabaseExportJobResult
@@ -32,7 +31,6 @@ describe('WorkspaceTestResultsExportController', () => {
     } as unknown as Queue<DatabaseExportJobData>;
     const controller = new WorkspaceTestResultsExportController(
       {} as WorkspaceTestResultsService,
-      {} as DatabaseExportService,
       jobQueueService,
       {} as CacheService,
       journalService,
@@ -48,7 +46,6 @@ describe('WorkspaceTestResultsExportController', () => {
   };
 
   it.each([
-    'exportWorkspaceToSqlite',
     'startWorkspaceDatabaseExportJob',
     'getWorkspaceDatabaseExportJobStatus',
     'downloadWorkspaceDatabaseExport'
@@ -82,7 +79,6 @@ describe('WorkspaceTestResultsExportController', () => {
     } as unknown as Queue<DatabaseExportJobData>;
     const controller = new WorkspaceTestResultsExportController(
       {} as WorkspaceTestResultsService,
-      {} as DatabaseExportService,
       {} as JobQueueService,
       {} as CacheService,
       { recordEvent: jest.fn() } as unknown as JournalService,

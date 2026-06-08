@@ -29,7 +29,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { FormsModule } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
 import { ScrollingModule } from '@angular/cdk/scrolling';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -44,6 +44,7 @@ import {
   DuplicateTestTaker,
   FileValidationResultDto,
   GeoGebraValidationResult,
+  ReplayCompatibilityWarning,
   UnusedTestFile
 } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
@@ -67,6 +68,7 @@ type FileStatus = {
   exists: boolean;
   schemaValid?: boolean;
   schemaErrors?: string[];
+  schemaWarnings?: string[];
   ignored?: boolean;
   parents?: string[];
 };
@@ -188,6 +190,7 @@ export class FilesValidationDialogComponent implements OnInit {
     duplicateTestTakers?: DuplicateTestTaker[];
     unusedTestFiles?: UnusedTestFile[];
     geogebra?: GeoGebraValidationResult;
+    replayCompatibilityWarnings?: ReplayCompatibilityWarning[];
     workspaceId?: number;
   }>(MAT_DIALOG_DATA);
 
@@ -197,6 +200,7 @@ export class FilesValidationDialogComponent implements OnInit {
   duplicateTestTakers: DuplicateTestTaker[] = [];
   unusedTestFiles: UnusedTestFile[] = [];
   geogebra?: GeoGebraValidationResult;
+  replayCompatibilityWarnings: ReplayCompatibilityWarning[] = [];
   validationResults: FilesValidationView[] = [];
 
   selection = new SelectionModel<FilteredTestTaker>(true, []);
@@ -226,6 +230,7 @@ export class FilesValidationDialogComponent implements OnInit {
   private testResultService = inject(TestResultService);
   private snackBar = inject(MatSnackBar);
   private validationService = inject(ValidationService);
+  private translate = inject(TranslateService);
 
   isExcluding = false;
   excludingProgress = 0;
@@ -235,6 +240,7 @@ export class FilesValidationDialogComponent implements OnInit {
   isRefreshingValidation = false;
   refreshValidationProgress = 0;
   refreshValidationProgressMessage = '';
+  isInstallingCompatibleAspectPlayer = false;
 
   summary: ValidationSummary = {
     totalTestTakers: 0,
@@ -432,6 +438,7 @@ export class FilesValidationDialogComponent implements OnInit {
     this.duplicateTestTakers = resultDto.duplicateTestTakers || [];
     this.unusedTestFiles = resultDto.unusedTestFiles || [];
     this.geogebra = resultDto.geogebra;
+    this.replayCompatibilityWarnings = resultDto.replayCompatibilityWarnings || [];
 
     this.selection.clear();
     this.allSelected = false;
@@ -545,6 +552,35 @@ export class FilesValidationDialogComponent implements OnInit {
         this.refreshValidationData('GeoGebra-Ressourcenpakete wurden aktualisiert.');
       }
     });
+  }
+
+  installCompatibleAspectPlayer(): void {
+    if (!this.data.workspaceId || this.isInstallingCompatibleAspectPlayer) {
+      return;
+    }
+
+    this.isInstallingCompatibleAspectPlayer = true;
+    this.cdr.markForCheck();
+
+    this.fileService.installCompatibleAspectPlayer(this.data.workspaceId)
+      .pipe(finalize(() => {
+        this.isInstallingCompatibleAspectPlayer = false;
+        this.cdr.markForCheck();
+      }))
+      .subscribe({
+        next: () => {
+          this.refreshValidationData(
+            this.translate.instant('files-validation.replay-compatibility.install-success')
+          );
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translate.instant('files-validation.replay-compatibility.install-error'),
+            'OK',
+            { duration: 3000 }
+          );
+        }
+      });
   }
 
   private createValidationView(result: FilesValidation): FilesValidationView {
@@ -710,6 +746,10 @@ export class FilesValidationDialogComponent implements OnInit {
 
       if (this.data.geogebra) {
         this.geogebra = this.data.geogebra;
+      }
+
+      if (this.data.replayCompatibilityWarnings) {
+        this.replayCompatibilityWarnings = this.data.replayCompatibilityWarnings;
       }
     }
   }
@@ -1059,11 +1099,11 @@ export class FilesValidationDialogComponent implements OnInit {
     this.isDeletingUnusedFiles = true;
     const idsToDelete = this.unusedFilesSelection.selected.map(f => f.id);
 
-    this.fileService.deleteFiles(this.data.workspaceId, idsToDelete)
+    this.fileService.deleteFilesWithResult(this.data.workspaceId, idsToDelete)
       .subscribe({
-        next: (success: boolean) => {
+        next: result => {
           this.isDeletingUnusedFiles = false;
-          if (success) {
+          if (result.success) {
             this.filesDeleted = true;
             this.unusedTestFiles = this.unusedTestFiles.filter(f => !idsToDelete.includes(f.id));
             this.unusedFilesSelection.clear();
@@ -1071,6 +1111,12 @@ export class FilesValidationDialogComponent implements OnInit {
             this.refreshValidationData('Validierungsergebnisse wurden aktualisiert');
             this.snackBar.open('Dateien erfolgreich gelöscht', 'OK', { duration: 3000 });
           } else {
+            if (result.requestHandled) {
+              this.filesDeleted = true;
+              this.unusedFilesSelection.clear();
+              this.checkIfAllUnusedFilesSelected();
+              this.refreshValidationData();
+            }
             this.snackBar.open('Fehler beim Löschen der Dateien', 'Fehler', { duration: 3000 });
           }
         },

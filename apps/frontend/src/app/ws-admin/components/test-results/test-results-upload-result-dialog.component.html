@@ -1,10 +1,31 @@
 <h2 mat-dialog-title class="dialog-title">
-  <mat-icon>{{ data.resultType === 'logs' ? 'article' : 'upload_file' }}</mat-icon>
-  <span>Upload-Ergebnis ({{ data.resultType === 'logs' ? 'Logs' : 'Antworten' }})</span>
+  <mat-icon>{{ dialogIcon }}</mat-icon>
+  <span>{{ dialogTitle }}</span>
 </h2>
 
 <div mat-dialog-content class="upload-result-content">
   <div class="summary-container">
+    @if (result.importSummary) {
+    <div class="section import-outcome-section" [class.has-issues]="issues.length > 0">
+      <div class="outcome-header">
+        <mat-icon>{{ issues.length > 0 ? 'info' : 'check_circle' }}</mat-icon>
+        <div class="outcome-copy">
+          <div class="section-title">{{ importOutcomeTitle }}</div>
+          <div class="note-text">{{ importOutcomeText }}</div>
+        </div>
+      </div>
+      @if (importOutcomeMetrics.length > 0) {
+      <div class="outcome-metrics">
+        @for (metric of importOutcomeMetrics; track metric.label) {
+        <span class="metric-chip">
+          <strong>{{ metric.value | number:'1.0-0' }}</strong>
+          {{ metric.label }}
+        </span>
+        }
+      </div>
+      }
+    </div>
+    }
     @if (result.overviewPending) {
     <div class="section warning-section">
       <div class="section-title">Übersicht wird aktualisiert</div>
@@ -17,7 +38,8 @@
     <div class="section log-import-note-section">
       <div class="section-title">Hinweis zum Log-Import</div>
       <div class="note-text">
-        Logs werden bestehenden Testpersonen, Booklets und Units zugeordnet. Fehlende Testergebnisse werden nicht automatisch angelegt.
+        Logs werden nur bestehenden Testpersonen, Testheften und Aufgaben zugeordnet. Wenn die passenden
+        Testergebnisse fehlen, legt der Import sie nicht automatisch an.
       </div>
     </div>
     }
@@ -46,37 +68,64 @@
     <div class="section import-summary-section">
       <div class="section-title">Import-Zusammenfassung</div>
       <div class="kv">
-        <div class="k">Zeilen gelesen</div>
-        <div class="v">{{ result.importSummary.totalRows }}</div>
+        <div class="k">Gelesene Datei-Zeilen</div>
+        <div class="v">{{ result.importSummary.totalRows | number:'1.0-0' }}</div>
         @if (result.importSummary.responseRows !== undefined) {
-        <div class="k">Antwort-Zeilen</div>
-        <div class="v">{{ result.importSummary.responseRows }}</div>
+        <div class="k">Antwort-Zeilen in der Datei</div>
+        <div class="v">{{ result.importSummary.responseRows | number:'1.0-0' }}</div>
+        }
+        @if (result.importSummary.savedResponses !== undefined) {
+        <div class="k">Antwortwerte gespeichert</div>
+        <div class="v">{{ result.importSummary.savedResponses | number:'1.0-0' }}</div>
+        }
+        @if (result.importSummary.skippedExistingUnits !== undefined) {
+        <div class="k">Vorhandene Units übersprungen</div>
+        <div class="v">{{ result.importSummary.skippedExistingUnits | number:'1.0-0' }}</div>
+        }
+        @if (result.importSummary.skippedExistingResponses !== undefined) {
+        <div class="k">Antwortwerte wegen bestehender Daten nicht gemerged</div>
+        <div class="v">{{ result.importSummary.skippedExistingResponses | number:'1.0-0' }}</div>
+        }
+        @if (result.importSummary.deletedResponses !== undefined) {
+        <div class="k">Antwortwerte ersetzt/gelöscht</div>
+        <div class="v">{{ result.importSummary.deletedResponses | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.bookletLogRows !== undefined) {
-        <div class="k">Booklet-Log-Zeilen</div>
-        <div class="v">{{ result.importSummary.bookletLogRows }}</div>
+        <div class="k">Testheft-Log-Zeilen in der Datei</div>
+        <div class="v">{{ result.importSummary.bookletLogRows | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.unitLogRows !== undefined) {
-        <div class="k">Unit-Log-Zeilen</div>
-        <div class="v">{{ result.importSummary.unitLogRows }}</div>
+        <div class="k">Aufgaben-Log-Zeilen in der Datei</div>
+        <div class="v">{{ result.importSummary.unitLogRows | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.savedLogs !== undefined) {
-        <div class="k">Gespeicherte Logs</div>
-        <div class="v">{{ result.importSummary.savedLogs }}</div>
+        <div class="k">Logs gespeichert</div>
+        <div class="v">{{ result.importSummary.savedLogs | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.skippedRows !== undefined) {
-        <div class="k">Übersprungene Zeilen</div>
-        <div class="v">{{ result.importSummary.skippedRows }}</div>
+        <div class="k">Zeilen übersprungen</div>
+        <div class="v">{{ result.importSummary.skippedRows | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.skippedLogs !== undefined) {
-        <div class="k">Übersprungene Logs</div>
-        <div class="v">{{ result.importSummary.skippedLogs }}</div>
+        <div class="k">Logs übersprungen</div>
+        <div class="v">{{ result.importSummary.skippedLogs | number:'1.0-0' }}</div>
         }
       </div>
+      @if (responseRowsNeedExplanation) {
+      <div class="summary-note">
+        Antwort-Zeilen und Antwortwerte zählen unterschiedliche Dinge: Eine Antwort-Zeile kann mehrere
+        Antwortwerte enthalten.
+      </div>
+      }
+      @if (responseImportModeSummary) {
+      <div class="summary-note">
+        {{ responseImportModeSummary }}
+      </div>
+      }
       @if (issueSummaryEntries.length > 0) {
       <div class="issue-summary">
         @for (entry of issueSummaryEntries; track entry.category) {
-        <span class="issue-count-chip">{{ entry.label }}: {{ entry.count }}</span>
+        <span class="issue-count-chip">{{ entry.label }}: {{ entry.count | number:'1.0-0' }}</span>
         }
       </div>
       }
@@ -84,10 +133,10 @@
     }
     @if (result.importedResponses && !result.overviewPending) {
     <div class="section db-changes-section">
-      <div class="section-title">Import und Arbeitsbereich</div>
+      <div class="section-title">Erkannte Daten und Arbeitsbereich</div>
       <div class="db-change-note">
-        Aus Import zeigt, was die Upload-Jobs in der Datei erkannt haben. Vorher und Nachher zeigen den
-        Gesamtbestand im Arbeitsbereich. Delta zeigt die Veränderung im Arbeitsbereich durch diesen Import.
+        Aus Import zeigt die eindeutigen Werte, die in der Datei erkannt wurden. Vorher und Nachher zeigen
+        den Gesamtbestand im Arbeitsbereich. Delta zeigt die Veränderung durch diesen Import.
       </div>
       <table class="db-changes-table">
         <thead>
@@ -102,52 +151,52 @@
         <tbody>
           <tr>
             <td class="row-label">Testpersonen</td>
-            <td class="num">{{ result.expected.testPersons }}</td>
-            <td class="num">{{ result.before.testPersons }}</td>
-            <td class="num">{{ result.after.testPersons }}</td>
+            <td class="num">{{ result.expected.testPersons | number:'1.0-0' }}</td>
+            <td class="num">{{ result.before.testPersons | number:'1.0-0' }}</td>
+            <td class="num">{{ result.after.testPersons | number:'1.0-0' }}</td>
             <td class="num delta" [class.positive]="result.delta.testPersons > 0"
               [class.negative]="result.delta.testPersons < 0">
-              {{ result.delta.testPersons > 0 ? '+' : '' }}{{ result.delta.testPersons }}
+              {{ result.delta.testPersons > 0 ? '+' : '' }}{{ result.delta.testPersons | number:'1.0-0' }}
             </td>
           </tr>
           <tr>
             <td class="row-label">Testgruppen</td>
-            <td class="num">{{ result.expected.testGroups }}</td>
-            <td class="num">{{ result.before.testGroups }}</td>
-            <td class="num">{{ result.after.testGroups }}</td>
+            <td class="num">{{ result.expected.testGroups | number:'1.0-0' }}</td>
+            <td class="num">{{ result.before.testGroups | number:'1.0-0' }}</td>
+            <td class="num">{{ result.after.testGroups | number:'1.0-0' }}</td>
             <td class="num delta" [class.positive]="result.delta.testGroups > 0"
               [class.negative]="result.delta.testGroups < 0">
-              {{ result.delta.testGroups > 0 ? '+' : '' }}{{ result.delta.testGroups }}
+              {{ result.delta.testGroups > 0 ? '+' : '' }}{{ result.delta.testGroups | number:'1.0-0' }}
             </td>
           </tr>
           <tr>
-            <td class="row-label">Testhefte (einzigartig)</td>
-            <td class="num">{{ result.expected.uniqueBooklets }}</td>
-            <td class="num">{{ result.before.uniqueBooklets }}</td>
-            <td class="num">{{ result.after.uniqueBooklets }}</td>
+            <td class="row-label">Testhefte (eindeutig)</td>
+            <td class="num">{{ result.expected.uniqueBooklets | number:'1.0-0' }}</td>
+            <td class="num">{{ result.before.uniqueBooklets | number:'1.0-0' }}</td>
+            <td class="num">{{ result.after.uniqueBooklets | number:'1.0-0' }}</td>
             <td class="num delta" [class.positive]="result.delta.uniqueBooklets > 0"
               [class.negative]="result.delta.uniqueBooklets < 0">
-              {{ result.delta.uniqueBooklets > 0 ? '+' : '' }}{{ result.delta.uniqueBooklets }}
+              {{ result.delta.uniqueBooklets > 0 ? '+' : '' }}{{ result.delta.uniqueBooklets | number:'1.0-0' }}
             </td>
           </tr>
           <tr>
-            <td class="row-label">Aufgaben (einzigartig)</td>
-            <td class="num">{{ result.expected.uniqueUnits }}</td>
-            <td class="num">{{ result.before.uniqueUnits }}</td>
-            <td class="num">{{ result.after.uniqueUnits }}</td>
+            <td class="row-label">Aufgaben-IDs (eindeutig)</td>
+            <td class="num">{{ result.expected.uniqueUnits | number:'1.0-0' }}</td>
+            <td class="num">{{ result.before.uniqueUnits | number:'1.0-0' }}</td>
+            <td class="num">{{ result.after.uniqueUnits | number:'1.0-0' }}</td>
             <td class="num delta" [class.positive]="result.delta.uniqueUnits > 0"
               [class.negative]="result.delta.uniqueUnits < 0">
-              {{ result.delta.uniqueUnits > 0 ? '+' : '' }}{{ result.delta.uniqueUnits }}
+              {{ result.delta.uniqueUnits > 0 ? '+' : '' }}{{ result.delta.uniqueUnits | number:'1.0-0' }}
             </td>
           </tr>
           <tr>
-            <td class="row-label">Antwortwerte (einzigartig)</td>
-            <td class="num">{{ result.expected.uniqueResponses }}</td>
-            <td class="num">{{ result.before.uniqueResponses }}</td>
-            <td class="num">{{ result.after.uniqueResponses }}</td>
+            <td class="row-label">Antwortwerte (eindeutig)</td>
+            <td class="num">{{ result.expected.uniqueResponses | number:'1.0-0' }}</td>
+            <td class="num">{{ result.before.uniqueResponses | number:'1.0-0' }}</td>
+            <td class="num">{{ result.after.uniqueResponses | number:'1.0-0' }}</td>
             <td class="num delta" [class.positive]="result.delta.uniqueResponses > 0"
               [class.negative]="result.delta.uniqueResponses < 0">
-              {{ result.delta.uniqueResponses > 0 ? '+' : '' }}{{ result.delta.uniqueResponses }}
+              {{ result.delta.uniqueResponses > 0 ? '+' : '' }}{{ result.delta.uniqueResponses | number:'1.0-0' }}
             </td>
           </tr>
         </tbody>
@@ -163,11 +212,15 @@
     @if (result.importedLogs && result.logMetrics) {
     <div class="section log-coverage-section">
       <div class="section-title">Log-Abdeckung im Arbeitsbereich nach Import</div>
+      <div class="db-change-note">
+        Bei Aufgaben zählt hier jedes Testheft-Aufgaben-Paar. Diese Zahl kann höher sein als die eindeutigen
+        Aufgaben-IDs im Import.
+      </div>
       <div class="kv">
         <div class="k">Testhefte mit Logs</div>
-        <div class="v">{{ result.logMetrics.bookletsWithLogs }} / {{ result.logMetrics.totalBooklets }}</div>
-        <div class="k">Aufgaben mit Logs</div>
-        <div class="v">{{ result.logMetrics.unitsWithLogs }} / {{ result.logMetrics.totalUnits }}</div>
+        <div class="v">{{ result.logMetrics.bookletsWithLogs | number:'1.0-0' }} / {{ result.logMetrics.totalBooklets | number:'1.0-0' }}</div>
+        <div class="k">Aufgaben-Vorkommen mit Logs</div>
+        <div class="v">{{ result.logMetrics.unitsWithLogs | number:'1.0-0' }} / {{ result.logMetrics.totalUnits | number:'1.0-0' }}</div>
         <div class="k">Abdeckung (Testhefte)</div>
         <div class="v">{{ (result.logMetrics.totalBooklets > 0 ? (result.logMetrics.bookletsWithLogs /
           result.logMetrics.totalBooklets * 100) : 0) | number:'1.0-1' }}%</div>
@@ -268,7 +321,7 @@
           @for (s of statusCounts; track s.status) {
           <div class="status-row">
             <div class="status">{{ s.status }}</div>
-            <div class="count">{{ s.count }}</div>
+            <div class="count">{{ s.count | number:'1.0-0' }}</div>
           </div>
           }
         </div>

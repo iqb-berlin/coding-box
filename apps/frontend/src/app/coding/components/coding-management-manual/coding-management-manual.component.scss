@@ -25,6 +25,28 @@
   min-width: 0;
 }
 
+.manual-coding-tabs {
+  display: block;
+  margin: 8px 0 24px;
+}
+
+.manual-tab-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+  min-width: 0;
+
+  button {
+    min-height: 40px;
+    height: auto;
+    line-height: 1.2;
+    white-space: normal;
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -245,6 +267,28 @@
           }
         }
 
+        .manual-scope-note {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          margin: 0 0 14px 0;
+          padding: 10px 12px;
+          background-color: rgba(227, 242, 253, 0.9);
+          border: 1px solid rgba(25, 118, 210, 0.25);
+          border-radius: 6px;
+          color: #17456f;
+          font-size: 13px;
+          line-height: 1.4;
+
+          mat-icon {
+            color: #1976d2;
+            font-size: 18px;
+            height: 18px;
+            width: 18px;
+            flex: 0 0 auto;
+          }
+        }
+
         .coverage-stats {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
@@ -437,6 +481,23 @@
           }
         }
 
+        .completed-job-readonly-note {
+          display: inline-flex;
+          flex: 0 0 auto;
+          align-items: center;
+          gap: 6px;
+          color: #666;
+          font-size: 13px;
+          font-weight: 600;
+          white-space: nowrap;
+
+          mat-icon {
+            width: 18px;
+            height: 18px;
+            font-size: 18px;
+          }
+        }
+
         .completed-job-copy {
           display: flex;
           flex-direction: column;
@@ -539,7 +600,7 @@
       color: #1976d2;
     }
 
-    div {
+    .planning-status-copy {
       display: flex;
       flex-direction: column;
       gap: 2px;
@@ -555,6 +616,24 @@
       font-size: 13px;
       line-height: 1.4;
       overflow-wrap: anywhere;
+    }
+
+    .manual-code-availability-list {
+      display: flex;
+      flex-flow: row wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .manual-code-availability-chip {
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(245, 124, 0, 0.24);
+      border-radius: 999px;
+      color: rgba(0, 0, 0, 0.76);
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.2;
+      padding: 5px 8px;
     }
 
     &.status-attention {
@@ -1100,6 +1179,13 @@
     .metric-hint {
       font-size: 12px;
       color: #666;
+      overflow-wrap: anywhere;
+    }
+
+    .metric-explainer {
+      color: #4b5563;
+      font-size: 12px;
+      line-height: 1.35;
       overflow-wrap: anywhere;
     }
   }

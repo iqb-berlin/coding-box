@@ -44,10 +44,18 @@ export type TestResultsUploadIssueDto = {
 
 export type TestResultsUploadSummaryDto = {
   totalRows: number;
+  overwriteMode?: 'skip' | 'merge' | 'replace';
+  scope?: 'person' | 'workspace' | 'group' | 'booklet' | 'unit' | 'response';
   responseRows?: number;
   logRows?: number;
   bookletLogRows?: number;
   unitLogRows?: number;
+  savedResponses?: number;
+  deletedResponses?: number;
+  skippedExistingUnits?: number;
+  skippedExistingResponses?: number;
+  addedUnits?: number;
+  changedUnits?: number;
   savedLogs?: number;
   skippedRows?: number;
   skippedLogs?: number;

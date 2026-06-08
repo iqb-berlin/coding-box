@@ -113,6 +113,59 @@
     </div>
     }
 
+    @if (replayCompatibilityWarnings && replayCompatibilityWarnings.length > 0) {
+    <div class="replay-compatibility-panel">
+      <mat-expansion-panel [expanded]="true">
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <mat-icon class="replay-compatibility-icon">warning</mat-icon>
+            <span class="replay-compatibility-title">
+              {{ 'files-validation.replay-compatibility.title' | translate }}
+            </span>
+          </mat-panel-title>
+          <mat-panel-description>
+            {{ 'files-validation.replay-compatibility.task-count' | translate: { count: replayCompatibilityWarnings.length } }}
+          </mat-panel-description>
+        </mat-expansion-panel-header>
+
+        <div class="replay-compatibility-content">
+          <p class="replay-compatibility-message">
+            {{ 'files-validation.replay-compatibility.message' | translate }}
+          </p>
+
+          @if (data.workspaceId) {
+          <button mat-raised-button color="primary" class="replay-compatibility-action"
+            [disabled]="isInstallingCompatibleAspectPlayer || isRefreshingValidation"
+            (click)="installCompatibleAspectPlayer()">
+            <mat-icon>{{ isInstallingCompatibleAspectPlayer ? 'hourglass_empty' : 'system_update_alt' }}</mat-icon>
+            @if (isInstallingCompatibleAspectPlayer) {
+            {{ 'files-validation.replay-compatibility.installing' | translate }}
+            } @else {
+            {{ 'files-validation.replay-compatibility.install-action' | translate }}
+            }
+          </button>
+          }
+
+          <div class="replay-compatibility-unit-section">
+            <div class="replay-compatibility-unit-header">
+              <span>{{ 'files-validation.replay-compatibility.affected-units' | translate }}</span>
+              <span class="replay-compatibility-unit-count">{{ replayCompatibilityWarnings.length }}</span>
+            </div>
+            <div class="replay-compatibility-unit-list"
+              [attr.aria-label]="'files-validation.replay-compatibility.affected-units' | translate">
+              @for (warning of replayCompatibilityWarnings; track warning.unit + warning.requestedPlayer) {
+              <span class="replay-compatibility-unit-chip"
+                matTooltip="{{ warning.requestedPlayer }} -> {{ warning.resolvedPlayer || warning.requestedPlayer }}">
+                {{ warning.unit }}
+              </span>
+              }
+            </div>
+          </div>
+        </div>
+      </mat-expansion-panel>
+    </div>
+    }
+
     @if (duplicateTestTakers && duplicateTestTakers.length > 0) {
     <div class="missing-units-warning duplicate-testtakers-warning">
       <mat-expansion-panel>
@@ -656,6 +709,12 @@
                         report_problem
                       </mat-icon>
                       }
+                      @if ((file.schemaWarnings || []).length > 0) {
+                      <mat-icon class="file-status-icon schema-warning-icon"
+                        matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                        warning
+                      </mat-icon>
+                      }
                       @if (file.exists) {
                       <button mat-icon-button class="file-action-button" (click)="openBookletInfo(file.filename)"
                         matTooltip="Testheft anzeigen" [attr.aria-label]="'Testheft anzeigen'">
@@ -778,6 +837,12 @@
                         report_problem
                       </mat-icon>
                       }
+                      @if ((file.schemaWarnings || []).length > 0) {
+                      <mat-icon class="file-status-icon schema-warning-icon"
+                        matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                        warning
+                      </mat-icon>
+                      }
                       @if (file.exists) {
                       <button mat-icon-button class="file-action-button" (click)="openUnitInfo(file.filename)"
                         matTooltip="Aufgabe anzeigen" [attr.aria-label]="'Aufgabe anzeigen'">
@@ -868,6 +933,12 @@
                       report_problem
                     </mat-icon>
                     }
+                    @if ((file.schemaWarnings || []).length > 0) {
+                    <mat-icon class="file-status-icon schema-warning-icon"
+                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                      warning
+                    </mat-icon>
+                    }
                     @if (file.exists) {
                     <button mat-icon-button class="file-action-button" (click)="openSchemeFile(file.filename)"
                       matTooltip="Kodierschema anzeigen" [attr.aria-label]="'Kodierschema anzeigen'">
@@ -953,6 +1024,12 @@
                       report_problem
                     </mat-icon>
                     }
+                    @if ((file.schemaWarnings || []).length > 0) {
+                    <mat-icon class="file-status-icon schema-warning-icon"
+                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                      warning
+                    </mat-icon>
+                    }
                     </div>
                   </li>
                   }
@@ -1030,6 +1107,12 @@
                     @if (file.schemaValid === false) {
                     <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
                       report_problem
+                    </mat-icon>
+                    }
+                    @if ((file.schemaWarnings || []).length > 0) {
+                    <mat-icon class="file-status-icon schema-warning-icon"
+                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                      warning
                     </mat-icon>
                     }
                     @if (file.exists) {
@@ -1117,6 +1200,12 @@
                       report_problem
                     </mat-icon>
                     }
+                    @if ((file.schemaWarnings || []).length > 0) {
+                    <mat-icon class="file-status-icon schema-warning-icon"
+                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                      warning
+                    </mat-icon>
+                    }
                     </div>
                   </li>
                   }
@@ -1194,6 +1283,12 @@
                     @if (file.schemaValid === false) {
                     <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
                       report_problem
+                    </mat-icon>
+                    }
+                    @if ((file.schemaWarnings || []).length > 0) {
+                    <mat-icon class="file-status-icon schema-warning-icon"
+                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                      warning
                     </mat-icon>
                     }
                     @if (file.exists) {

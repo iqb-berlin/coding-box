@@ -98,6 +98,53 @@
     </mat-card-content>
   </mat-card>
 
+  <mat-card class="legal-notice-settings-card">
+    <mat-card-header>
+      <mat-card-title>Impressum/Datenschutz</mat-card-title>
+    </mat-card-header>
+    @if (isLoadingLegalNotice) {
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    }
+    <mat-card-content>
+      <div class="legal-notice-editor-container">
+        <mat-form-field class="full-width">
+          <mat-label>Text</mat-label>
+          <textarea
+            matInput
+            [(ngModel)]="legalNoticeHtml"
+            (ngModelChange)="updateLegalNoticePreview()"
+            [disabled]="isLoadingLegalNotice || isSavingLegalNotice"
+            rows="14"></textarea>
+          <mat-hint>HTML wird beim Anzeigen bereinigt.</mat-hint>
+        </mat-form-field>
+
+        <div class="legal-notice-actions">
+          <button
+            mat-raised-button
+            color="primary"
+            [disabled]="isLoadingLegalNotice || isSavingLegalNotice"
+            (click)="saveLegalNotice()">
+            <mat-icon>save</mat-icon>
+            {{ isSavingLegalNotice ? 'Speichere...' : 'Text speichern' }}
+          </button>
+          <button
+            mat-stroked-button
+            color="primary"
+            [disabled]="isLoadingLegalNotice || isSavingLegalNotice || isLegalNoticeDefault"
+            (click)="resetLegalNoticeToDefault()">
+            <mat-icon>restore</mat-icon>
+            Standard wiederherstellen
+          </button>
+        </div>
+      </div>
+
+      <div class="legal-notice-preview-container">
+        <h3>Vorschau</h3>
+        <div class="legal-notice-preview" [innerHTML]="legalNoticePreviewHtml"></div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
   <mat-card class="content-pool-settings-card">
     <mat-card-header>
       <mat-card-title>Content-Pool Integration</mat-card-title>
@@ -109,7 +156,8 @@
       <div class="content-pool-settings-container">
         <p class="content-pool-description">
           Steuert die Übertragung von Kodierschemata aus der Coding-Box in den Content Pool.
-          Die URL kann flexibel als Domain oder IP hinterlegt werden.
+          Die URL kann flexibel als Domain oder IP hinterlegt werden; der Zugriff erfolgt
+          über ein Application-Token aus dem Content Pool.
         </p>
 
         <div class="content-pool-toggle">
@@ -123,22 +171,66 @@
           <input
             matInput
             [(ngModel)]="contentPoolSettings.baseUrl"
-            [disabled]="isSavingContentPoolSettings"
+            [disabled]="isSavingContentPoolSettings || isTestingContentPoolConnection"
             placeholder="z. B. content-pool.example.org oder https://192.168.10.11:4201">
           <mat-hint>
             Wenn kein Protokoll gesetzt ist, wird HTTPS verwendet. Der API-Pfad wird automatisch ergänzt.
           </mat-hint>
         </mat-form-field>
 
+        <mat-form-field class="full-width">
+          <mat-label>Content-Pool Application-Token</mat-label>
+          <input
+            matInput
+            type="password"
+            autocomplete="new-password"
+            [(ngModel)]="contentPoolApplicationToken"
+            (ngModelChange)="onContentPoolTokenInputChange($event)"
+            [disabled]="isSavingContentPoolSettings || isTestingContentPoolConnection"
+            placeholder="Neues Token eintragen">
+          <mat-hint>
+            @if (contentPoolSettings.hasApplicationToken && !clearContentPoolApplicationToken) {
+              Token ist gespeichert. Feld nur zum Ersetzen ausfüllen.
+            } @else if (clearContentPoolApplicationToken) {
+              Gespeichertes Token wird beim Speichern entfernt.
+            } @else {
+              Token wird nur backendseitig gespeichert und nicht wieder angezeigt.
+            }
+          </mat-hint>
+        </mat-form-field>
+
+        <p class="content-pool-description">
+          Benötigte Content-Pool-Scopes: acp.read, files.read, files.write.
+          Der Verbindungstest prüft URL, Token und diese Scopes.
+        </p>
+
         <div class="content-pool-actions">
           <button
             mat-raised-button
             color="primary"
-            [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings"
+            [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings || isTestingContentPoolConnection"
             (click)="saveContentPoolSettings()">
             <mat-icon>save</mat-icon>
             {{ isSavingContentPoolSettings ? 'Speichere...' : 'Einstellungen speichern' }}
           </button>
+          <button
+            mat-stroked-button
+            color="primary"
+            [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings || isTestingContentPoolConnection"
+            (click)="testContentPoolConnection()">
+            <mat-icon>{{ isTestingContentPoolConnection ? 'hourglass_empty' : 'wifi_tethering' }}</mat-icon>
+            {{ isTestingContentPoolConnection ? 'Teste...' : 'Verbindung testen' }}
+          </button>
+          @if (contentPoolSettings.hasApplicationToken && !clearContentPoolApplicationToken) {
+            <button
+              mat-stroked-button
+              color="warn"
+              [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings || isTestingContentPoolConnection"
+              (click)="clearStoredContentPoolToken()">
+              <mat-icon>delete</mat-icon>
+              Token entfernen
+            </button>
+          }
         </div>
       </div>
     </mat-card-content>
@@ -157,8 +249,9 @@
         </p>
         <p class="export-description">
           Enthalten sind unter anderem Benutzer- und Rechteverwaltung, Arbeitsbereiche,
-          Kodierungen, Antworten, Logs und Systemeinstellungen. Die Datei kann sensible
-          Daten enthalten und sollte entsprechend geschützt abgelegt werden.
+          Kodierungen, Antworten, Logs und Systemeinstellungen. Dazu zählen auch
+          System-Secrets wie ein gespeichertes Content-Pool Application-Token. Die Datei
+          kann sensible Daten enthalten und sollte entsprechend geschützt abgelegt werden.
         </p>
         <div class="export-actions">
           <button

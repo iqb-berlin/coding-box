@@ -196,13 +196,13 @@
   }
 
   .mat-column-actions {
-    width: 176px;
+    width: 260px;
     text-align: left;
     overflow-wrap: normal;
   }
 
   button.primary-row-action[mat-stroked-button] {
-    width: 110px;
+    width: 104px;
     min-height: 34px;
     line-height: 1.2;
     border-radius: 6px;
@@ -231,6 +231,15 @@
 
     &:hover {
       transform: none;
+    }
+  }
+
+  button.danger-row-action[mat-stroked-button] {
+    color: #b3261e;
+    border-color: rgba(179, 38, 30, 0.45);
+
+    mat-icon {
+      color: #b3261e;
     }
   }
 
@@ -294,7 +303,7 @@
     }
 
     .trainings-list {
-      --trainings-table-min-width: 920px;
+      --trainings-table-min-width: 840px;
 
       overflow-x: auto;
     }

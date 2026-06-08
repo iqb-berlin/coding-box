@@ -209,16 +209,36 @@ export class PersonQueryService {
     }
   }
 
-  async getGroupsWithBookletLogs(workspaceId: number): Promise<Map<string, boolean>> {
+  async getGroupsWithBookletLogs(
+    workspaceId: number,
+    workspaceGroups?: string[]
+  ): Promise<Map<string, boolean>> {
     try {
-      const groups = await this.getWorkspaceGroups(workspaceId);
-      const groupsWithLogs = new Map<string, boolean>();
-      for (const group of groups) {
-        const hasLogs = await this.hasBookletLogsForGroup(workspaceId, group);
-        groupsWithLogs.set(group, hasLogs);
-      }
+      const groups = workspaceGroups || await this.getWorkspaceGroups(workspaceId);
+      const groupsWithLogs = await this.bookletLogRepository
+        .createQueryBuilder('bookletlog')
+        .innerJoin('bookletlog.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .select('person.group', 'group')
+        .addSelect('COUNT(bookletlog.id)', 'logCount')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .groupBy('person.group')
+        .getRawMany();
 
-      return groupsWithLogs;
+      const groupNamesWithLogs = new Set(
+        groupsWithLogs
+          .filter(item => item.group)
+          .filter(item => Number(item.logCount) > 0)
+          .map(item => item.group)
+      );
+
+      return new Map(
+        groups.map(group => [
+          group,
+          groupNamesWithLogs.has(group)
+        ])
+      );
     } catch (error) {
       this.logger.error(`Error getting groups with booklet logs: ${error.message}`);
       return new Map<string, boolean>();

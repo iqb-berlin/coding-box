@@ -88,6 +88,9 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   readonly minTokenDurationDays = 1;
   readonly maxTokenDurationDays = 90;
   autoFetchCodingStatistics = true;
+  autoRefreshManualCodingJobs = true;
+  includeDeriveErrorInManualCoding = false;
+  showTestResultsLogAnomalies = false;
   isExporting = false;
   databaseExportProgress = 0;
   databaseExportStatus: DatabaseExportStatus | null = null;
@@ -100,6 +103,21 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(enabled => {
           this.autoFetchCodingStatistics = enabled;
+        });
+      this.workspaceSettingsService
+        .getAutoRefreshManualCodingJobs(workspaceId)
+        .subscribe(enabled => {
+          this.autoRefreshManualCodingJobs = enabled;
+        });
+      this.workspaceSettingsService
+        .getIncludeDeriveErrorInManualCoding(workspaceId)
+        .subscribe(enabled => {
+          this.includeDeriveErrorInManualCoding = enabled;
+        });
+      this.workspaceSettingsService
+        .getShowTestResultsLogAnomalies(workspaceId)
+        .subscribe(enabled => {
+          this.showTestResultsLogAnomalies = enabled;
         });
     }
   }
@@ -238,6 +256,125 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
               }
             );
             this.autoFetchCodingStatistics = !this.autoFetchCodingStatistics;
+          }
+        });
+    }
+  }
+
+  toggleAutoRefreshManualCodingJobs(toggleEvent: { checked: boolean }): void {
+    this.autoRefreshManualCodingJobs = toggleEvent.checked;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService
+        .setAutoRefreshManualCodingJobs(
+          workspaceId,
+          this.autoRefreshManualCodingJobs
+        )
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.autoRefreshManualCodingJobs ?
+                this.translateService.instant(
+                  'ws-settings.auto-refresh-manual-coding-jobs-enabled'
+                ) :
+                this.translateService.instant(
+                  'ws-settings.auto-refresh-manual-coding-jobs-disabled'
+                ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
+            this.autoRefreshManualCodingJobs = !this.autoRefreshManualCodingJobs;
+          }
+        });
+    }
+  }
+
+  toggleIncludeDeriveErrorInManualCoding(toggleEvent: { checked: boolean }): void {
+    this.includeDeriveErrorInManualCoding = toggleEvent.checked;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService
+        .setIncludeDeriveErrorInManualCoding(
+          workspaceId,
+          this.includeDeriveErrorInManualCoding
+        )
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.includeDeriveErrorInManualCoding ?
+                this.translateService.instant(
+                  'ws-settings.include-derive-error-in-manual-coding-enabled'
+                ) :
+                this.translateService.instant(
+                  'ws-settings.include-derive-error-in-manual-coding-disabled'
+                ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
+            this.includeDeriveErrorInManualCoding =
+              !this.includeDeriveErrorInManualCoding;
+          }
+        });
+    }
+  }
+
+  toggleShowTestResultsLogAnomalies(toggleEvent: { checked: boolean }): void {
+    this.showTestResultsLogAnomalies = toggleEvent.checked;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService
+        .setShowTestResultsLogAnomalies(
+          workspaceId,
+          this.showTestResultsLogAnomalies
+        )
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.showTestResultsLogAnomalies ?
+                this.translateService.instant(
+                  'ws-settings.show-test-results-log-anomalies-enabled'
+                ) :
+                this.translateService.instant(
+                  'ws-settings.show-test-results-log-anomalies-disabled'
+                ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
+            this.showTestResultsLogAnomalies =
+              !this.showTestResultsLogAnomalies;
           }
         });
     }

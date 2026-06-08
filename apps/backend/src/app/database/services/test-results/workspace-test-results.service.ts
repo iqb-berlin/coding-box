@@ -56,6 +56,8 @@ import {
   applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
   normalizeExclusionBookletId,
+  normalizeExclusionUnitId,
+  ResolvedWorkspaceExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { FLAT_FREQUENCIES_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX } from '../workspace/workspace-constants';
@@ -64,7 +66,10 @@ import {
   TestResultsDeletePreviewDto,
   TestResultsDeleteRequestDto,
   TestResultsDeleteResultDto,
-  TestResultsDeleteScope
+  TestResultsDeleteScope,
+  TestResultsResponseCleanupRequestDto,
+  TestResultsResponseCleanupSampleDto,
+  TestResultsTimestampSource
 } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 interface PersonWhere {
@@ -161,6 +166,11 @@ interface LogAnomalyThresholds {
   repeatedStartThreshold: number;
 }
 
+interface LogAnomalySqlFragment {
+  sql: string;
+  params: Record<string, string | string[]>;
+}
+
 interface LogAnomalyDashboardSummary {
   totalBooklets: number;
   affectedBooklets: number;
@@ -202,6 +212,37 @@ interface TestResultsDeleteTargets {
   kind: TestResultsDeleteTargetKind;
   ids: number[];
   preview: TestResultsDeletePreviewDto;
+}
+
+interface ResponseCleanupTargetRow {
+  responseId: number;
+  unitId: number;
+  personId: number;
+  personCode: string;
+  personLogin: string;
+  personGroup: string;
+  bookletId: number;
+  bookletName: string;
+  unitName: string;
+  variableId: string;
+  subform: string | null;
+  value: string | null;
+  answeredAt: number | null;
+  timestampSource: TestResultsTimestampSource;
+}
+
+interface ResponseCleanupTargets {
+  responseIds: number[];
+  unitIds: number[];
+  preview: TestResultsDeletePreviewDto;
+}
+
+interface NormalizedResponseCleanupRequest {
+  unitNames: string[];
+  answeredBefore: number | null;
+  answeredFrom: number | null;
+  variableIds: string[];
+  subforms: string[];
 }
 
 interface DeleteDependencySnapshot {
@@ -475,10 +516,57 @@ export class WorkspaceTestResultsService {
     return Array.from(new Set(expanded));
   }
 
+  private getNormalizedLogAnomalyUnitSql(expression: string): string {
+    return `REGEXP_REPLACE(UPPER(${expression}), '\\.XML$', '', 'i')`;
+  }
+
+  private buildLogAnomalyUnitVisibilitySql(
+    unitNameExpression: string,
+    exclusions: ResolvedWorkspaceExclusions | undefined,
+    parameterPrefix: string,
+    bookletNameExpression = 'bookletinfo.name'
+  ): LogAnomalySqlFragment {
+    const conditions: string[] = [];
+    const params: Record<string, string | string[]> = {};
+    const normalizedUnitExpression =
+      this.getNormalizedLogAnomalyUnitSql(unitNameExpression);
+
+    if (exclusions?.globalIgnoredUnits.length) {
+      conditions.push(
+        `${normalizedUnitExpression} NOT IN (:...${parameterPrefix}IgnoredUnits)`
+      );
+      params[`${parameterPrefix}IgnoredUnits`] =
+        exclusions.globalIgnoredUnits.map(normalizeExclusionUnitId);
+    }
+
+    if (exclusions?.testletIgnoredUnits.length) {
+      const testletCondition = exclusions.testletIgnoredUnits
+        .map((_, index) => (
+          `(UPPER(${bookletNameExpression}) = :${parameterPrefix}Booklet${index} ` +
+          `AND ${normalizedUnitExpression} = :${parameterPrefix}Unit${index})`
+        ))
+        .join(' OR ');
+      conditions.push(`NOT (${testletCondition})`);
+      exclusions.testletIgnoredUnits.forEach((ignoredUnit, index) => {
+        params[`${parameterPrefix}Booklet${index}`] =
+          normalizeExclusionBookletId(ignoredUnit.bookletId);
+        params[`${parameterPrefix}Unit${index}`] =
+          normalizeExclusionUnitId(ignoredUnit.unitId);
+      });
+    }
+
+    return {
+      sql: conditions.length > 0 ? conditions.join(' AND ') : 'TRUE',
+      params
+    };
+  }
+
   private getLogAnomalySql(
     code: LogAnomalyCode,
-    thresholds: LogAnomalyThresholds
-  ): string {
+    thresholds: LogAnomalyThresholds,
+    exclusions?: ResolvedWorkspaceExclusions,
+    parameterPrefix = 'logAnomaly'
+  ): LogAnomalySqlFragment | string {
     const longLoadingThreshold = Math.round(thresholds.longLoadingThresholdMs);
     const focusLostThreshold = Math.round(thresholds.focusLostThresholdMs);
     const sessionSpanThreshold = Math.round(thresholds.sessionSpanThresholdMs);
@@ -514,8 +602,14 @@ export class WorkspaceTestResultsService {
             AND bl.key = 'CONNECTION'
             AND bl.parameter = 'LOST'
         )`;
-      case 'timestamp_zero':
-        return `EXISTS (
+      case 'timestamp_zero': {
+        const unitVisibility = this.buildLogAnomalyUnitVisibilitySql(
+          'u.name',
+          exclusions,
+          `${parameterPrefix}TimestampZero`
+        );
+        return {
+          sql: `EXISTS (
           SELECT 1 FROM bookletlog bl
           WHERE bl.bookletid = "bookletEntity"."id"
             AND COALESCE(bl.ts, 0) = 0
@@ -524,20 +618,34 @@ export class WorkspaceTestResultsService {
           SELECT 1 FROM unit u
           JOIN unitlog ul ON ul.unitid = u.id
           WHERE u.bookletid = "bookletEntity"."id"
+            AND ${unitVisibility.sql}
             AND COALESCE(ul.ts, 0) = 0
-        )`;
-      case 'player_stuck_loading':
-        return `EXISTS (
+        )`,
+          params: unitVisibility.params
+        };
+      }
+      case 'player_stuck_loading': {
+        const unitVisibility = this.buildLogAnomalyUnitVisibilitySql(
+          'u.name',
+          exclusions,
+          `${parameterPrefix}PlayerLoading`
+        );
+        return {
+          sql: `EXISTS (
           SELECT 1 FROM unit u
           JOIN unitlog ul ON ul.unitid = u.id
           WHERE u.bookletid = "bookletEntity"."id"
+            AND ${unitVisibility.sql}
           GROUP BY u.id
           HAVING COUNT(*) FILTER (
             WHERE ul.key = 'PLAYER' AND ul.parameter = 'LOADING'
           ) > COUNT(*) FILTER (
             WHERE ul.key = 'PLAYER' AND ul.parameter = 'RUNNING'
           )
-        )`;
+        )`,
+          params: unitVisibility.params
+        };
+      }
       case 'repeated_start':
         return `(SELECT COUNT(*)
           FROM bookletlog bl
@@ -545,8 +653,14 @@ export class WorkspaceTestResultsService {
             AND bl.key = 'CONTROLLER'
             AND bl.parameter = 'LOADING'
         ) >= ${repeatedStartThreshold}`;
-      case 'long_loading':
-        return `EXISTS (
+      case 'long_loading': {
+        const unitVisibility = this.buildLogAnomalyUnitVisibilitySql(
+          'u.name',
+          exclusions,
+          `${parameterPrefix}LongLoading`
+        );
+        return {
+          sql: `EXISTS (
           SELECT 1 FROM session s
           WHERE s.bookletid = "bookletEntity"."id"
             AND COALESCE(s.loadcompletems, 0) >= ${longLoadingThreshold}
@@ -557,10 +671,14 @@ export class WorkspaceTestResultsService {
           JOIN unitlog ul_started ON ul_started.unitid = u.id
           JOIN unitlog ul_ended ON ul_ended.unitid = u.id
           WHERE u.bookletid = "bookletEntity"."id"
+            AND ${unitVisibility.sql}
             AND ul_started.key = 'STARTED'
             AND ul_ended.key = 'ENDED'
             AND (ul_ended.ts - ul_started.ts) >= ${longLoadingThreshold}
-        )`;
+        )`,
+          params: unitVisibility.params
+        };
+      }
       case 'timer_left_on_exit':
         return `EXISTS (
           SELECT 1 FROM bookletlog bl
@@ -619,28 +737,56 @@ export class WorkspaceTestResultsService {
               ) - bl_lost.ts
             ) >= ${focusLostThreshold}
         )`;
-      case 'unit_progress_incomplete':
-        return `EXISTS (
+      case 'unit_progress_incomplete': {
+        const availableUnitVisibility =
+          this.buildLogAnomalyUnitVisibilitySql(
+            'u2.name',
+            exclusions,
+            `${parameterPrefix}UnitProgressAvailable`
+          );
+        const missingUnitVisibility =
+          this.buildLogAnomalyUnitVisibilitySql(
+            'u3.name',
+            exclusions,
+            `${parameterPrefix}UnitProgressMissing`
+          );
+        return {
+          sql: `EXISTS (
           SELECT 1 FROM unit u2
           WHERE u2.bookletid = "bookletEntity"."id"
             AND u2.alias IS NOT NULL
+            AND ${availableUnitVisibility.sql}
         )
         AND EXISTS (
           SELECT 1 FROM unit u3
           WHERE u3.bookletid = "bookletEntity"."id"
             AND u3.alias IS NOT NULL
+            AND ${missingUnitVisibility.sql}
             AND NOT EXISTS (
               SELECT 1 FROM bookletlog bl
               WHERE bl.bookletid = "bookletEntity"."id"
                 AND bl.key = 'CURRENT_UNIT_ID'
                 AND bl.parameter = u3.alias
             )
-        )`;
-      case 'progress_incomplete':
-        return `EXISTS (
+        )`,
+          params: {
+            ...availableUnitVisibility.params,
+            ...missingUnitVisibility.params
+          }
+        };
+      }
+      case 'progress_incomplete': {
+        const unitVisibility = this.buildLogAnomalyUnitVisibilitySql(
+          'u.name',
+          exclusions,
+          `${parameterPrefix}ProgressIncomplete`
+        );
+        return {
+          sql: `EXISTS (
           SELECT 1 FROM unit u
           JOIN unitlog ul ON ul.unitid = u.id
           WHERE u.bookletid = "bookletEntity"."id"
+            AND ${unitVisibility.sql}
             AND ul.key IN ('PRESENTATION_PROGRESS', 'RESPONSE_PROGRESS')
             AND ul.id = (
               SELECT ul_last.id
@@ -651,7 +797,10 @@ export class WorkspaceTestResultsService {
               LIMIT 1
             )
             AND COALESCE(ul.parameter, '') <> 'complete'
-        )`;
+        )`,
+          params: unitVisibility.params
+        };
+      }
       case 'debug_command':
         return `EXISTS (
           SELECT 1 FROM bookletlog bl
@@ -684,13 +833,29 @@ export class WorkspaceTestResultsService {
   private applyLogAnomalyFilters(
     qb: SelectQueryBuilder<unknown>,
     codes: LogAnomalyCode[],
-    thresholds: LogAnomalyThresholds
+    thresholds: LogAnomalyThresholds,
+    exclusions?: ResolvedWorkspaceExclusions
   ): void {
     if (codes.length === 0) {
       return;
     }
-    const anomalySql = codes.map(code => `(${this.getLogAnomalySql(code, thresholds)})`);
-    qb.andWhere(`(${anomalySql.join(' OR ')})`);
+    const fragments = codes.map((code, index) => {
+      const fragment = this.getLogAnomalySql(
+        code,
+        thresholds,
+        exclusions,
+        `logAnomaly${index}`
+      );
+      return typeof fragment === 'string' ?
+        { sql: fragment, params: {} } :
+        fragment;
+    });
+    const params = fragments.reduce<Record<string, string | string[]>>(
+      (acc, fragment) => ({ ...acc, ...fragment.params }),
+      {}
+    );
+    const anomalySql = fragments.map(fragment => `(${fragment.sql})`);
+    qb.andWhere(`(${anomalySql.join(' OR ')})`, params);
   }
 
   private ensureLogAnomalyList(
@@ -733,6 +898,36 @@ export class WorkspaceTestResultsService {
     }
   }
 
+  private hasResolvedExclusions(
+    exclusions?: ResolvedWorkspaceExclusions
+  ): exclusions is ResolvedWorkspaceExclusions {
+    return !!exclusions && (
+      exclusions.globalIgnoredUnits.length > 0 ||
+      exclusions.ignoredBooklets.length > 0 ||
+      exclusions.testletIgnoredUnits.length > 0
+    );
+  }
+
+  private async getBookletNamesById(
+    bookletIds: number[]
+  ): Promise<Map<number, string>> {
+    if (bookletIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.bookletRepository
+      .createQueryBuilder('bookletEntity')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .select('bookletEntity.id', 'id')
+      .addSelect('bookletinfo.name', 'name')
+      .where('bookletEntity.id IN (:...bookletIds)', { bookletIds })
+      .getRawMany<{ id: number | string; name: string | null }>();
+
+    return new Map(
+      rows.map(row => [Number(row.id), String(row.name || '')])
+    );
+  }
+
   private toLogTimestamp(value: number | string | null | undefined): number | null {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
@@ -748,7 +943,8 @@ export class WorkspaceTestResultsService {
 
   private async findLogAnomaliesForBooklets(
     bookletIds: number[],
-    thresholds: LogAnomalyThresholds
+    thresholds: LogAnomalyThresholds,
+    exclusions?: ResolvedWorkspaceExclusions
   ): Promise<Map<number, LogAnomalySummary[]>> {
     type SessionLogRow = {
       id: number;
@@ -759,12 +955,30 @@ export class WorkspaceTestResultsService {
       ts: number | null;
       loadcompletems: number | null;
     };
-    const uniqueBookletIds = Array.from(
+    let uniqueBookletIds = Array.from(
       new Set(bookletIds.map(id => Number(id)).filter(id => id > 0))
     );
     const result = new Map<number, LogAnomalySummary[]>();
     if (uniqueBookletIds.length === 0) {
       return result;
+    }
+
+    const shouldApplyExclusions = this.hasResolvedExclusions(exclusions);
+    const bookletNamesById = shouldApplyExclusions ?
+      await this.getBookletNamesById(uniqueBookletIds) :
+      new Map<number, string>();
+
+    if (shouldApplyExclusions) {
+      uniqueBookletIds = uniqueBookletIds.filter(bookletId => (
+        !isExcludedByResolvedExclusions(
+          exclusions,
+          bookletNamesById.get(bookletId),
+          undefined
+        )
+      ));
+      if (uniqueBookletIds.length === 0) {
+        return result;
+      }
     }
 
     const [bookletLogs, sessions, units] = await Promise.all([
@@ -810,7 +1024,16 @@ export class WorkspaceTestResultsService {
         .getMany()
     ]);
 
-    const unitIds = (units || []).map(unit => Number(unit.id)).filter(id => id > 0);
+    const visibleUnits = shouldApplyExclusions ?
+      (units || []).filter(unit => (
+        !isExcludedByResolvedExclusions(
+          exclusions,
+          bookletNamesById.get(unit.bookletid),
+          unit.name
+        )
+      )) :
+      (units || []);
+    const unitIds = visibleUnits.map(unit => Number(unit.id)).filter(id => id > 0);
     const unitLogs = unitIds.length > 0 ?
       await this.unitLogRepository
         .createQueryBuilder('unitLog')
@@ -844,7 +1067,7 @@ export class WorkspaceTestResultsService {
       list.push(session);
       sessionsByBooklet.set(bookletId, list);
     });
-    (units || []).forEach(unit => {
+    visibleUnits.forEach(unit => {
       const list = unitsByBooklet.get(unit.bookletid) || [];
       list.push(unit);
       unitsByBooklet.set(unit.bookletid, list);
@@ -931,19 +1154,58 @@ export class WorkspaceTestResultsService {
         });
       }
 
-      const maxLoadTime = Math.max(
+      const longLoadingSessions = bookletSessions
+        .map(session => Number(session.loadcompletems || 0))
+        .filter(loadCompleteMs => loadCompleteMs >= thresholds.longLoadingThresholdMs);
+      const longLoadingUnits: Array<{ unit: Unit; durationMs: number }> = [];
+      const toUnitLoadingTimestamp = (
+        value: number | string | null | undefined
+      ): number | null => {
+        if (value === null || value === undefined) {
+          return null;
+        }
+        if (typeof value === 'string' && value.trim() === '') {
+          return null;
+        }
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+      bookletUnits.forEach(unit => {
+        const logsForUnit = unitLogsByUnit.get(unit.id) || [];
+        const startedLogsForUnit = logsForUnit
+          .filter(log => log.key === 'STARTED')
+          .map(log => toUnitLoadingTimestamp(log.ts))
+          .filter((ts): ts is number => ts !== null);
+        const endedLogsForUnit = logsForUnit
+          .filter(log => log.key === 'ENDED')
+          .map(log => toUnitLoadingTimestamp(log.ts))
+          .filter((ts): ts is number => ts !== null);
+        const maxUnitDuration = Math.max(
+          0,
+          ...startedLogsForUnit.flatMap(startTs => endedLogsForUnit
+            .filter(endTs => endTs >= startTs)
+            .map(endTs => endTs - startTs))
+        );
+        if (maxUnitDuration >= thresholds.longLoadingThresholdMs) {
+          longLoadingUnits.push({ unit, durationMs: maxUnitDuration });
+        }
+      });
+      const maxSessionLoadTime = Math.max(0, ...longLoadingSessions);
+      const maxUnitLoadTime = Math.max(
         0,
-        ...bookletSessions.map(session => Number(session.loadcompletems || 0))
+        ...longLoadingUnits.map(item => item.durationMs)
       );
+      const maxLoadTime = Math.max(maxSessionLoadTime, maxUnitLoadTime);
       if (maxLoadTime >= thresholds.longLoadingThresholdMs) {
+        const evidence = maxUnitLoadTime > maxSessionLoadTime ?
+          `Maximale Unit-Ladezeit ${Math.round(maxUnitLoadTime)} ms` :
+          `Maximale LOADCOMPLETE-Ladezeit ${Math.round(maxSessionLoadTime)} ms`;
         this.addLogAnomaly(result, bookletId, {
           code: 'long_loading',
           severity: 'warning',
           label: 'Lange Ladezeit',
-          evidence: `Maximale LOADCOMPLETE-Ladezeit ${Math.round(maxLoadTime)} ms`,
-          count: bookletSessions.filter(
-            session => Number(session.loadcompletems || 0) >= thresholds.longLoadingThresholdMs
-          ).length
+          evidence,
+          count: longLoadingSessions.length + longLoadingUnits.length
         });
       }
 
@@ -1175,7 +1437,8 @@ export class WorkspaceTestResultsService {
 
     const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
       bookletIds,
-      this.buildLogAnomalyThresholds(options)
+      this.buildLogAnomalyThresholds(options),
+      exclusions
     );
 
     const summary: LogAnomalyDashboardSummary = {
@@ -1275,7 +1538,8 @@ export class WorkspaceTestResultsService {
 
     const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
       bookletIds,
-      this.buildLogAnomalyThresholds(options)
+      this.buildLogAnomalyThresholds(options),
+      exclusions
     );
 
     const details = filteredRows
@@ -1333,9 +1597,13 @@ export class WorkspaceTestResultsService {
     await this.codingStatisticsService?.invalidateCache(workspaceId);
   }
 
+  async invalidateCodingAvailabilityCache(workspaceId: number): Promise<void> {
+    await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
+  }
+
   private async invalidateCachesAfterTestResultDeletion(workspaceId: number): Promise<void> {
     await Promise.all([
-      this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId),
+      this.invalidateCodingAvailabilityCache(workspaceId),
       this.invalidateWorkspaceStatsCache(workspaceId),
       this.invalidateCodingStatisticsCache(workspaceId)
     ]);
@@ -2152,6 +2420,7 @@ export class WorkspaceTestResultsService {
       sessionScreens?: string;
       sessionIds?: string;
       logAnomalies?: string;
+      includeLogAnomalies?: string;
       focusLostThresholdMs?: number | string;
       sessionSpanThresholdMs?: number | string;
       repeatedStartThreshold?: number | string;
@@ -2327,6 +2596,13 @@ export class WorkspaceTestResultsService {
     const logAnomalyCodes = this.expandLogAnomalyCodes(
       parseCsv(options.logAnomalies)
     );
+    const includeLogAnomaliesRaw = String(options.includeLogAnomalies || '')
+      .trim()
+      .toLowerCase();
+    const includeLogAnomalies =
+      includeLogAnomaliesRaw === 'true' ||
+      includeLogAnomaliesRaw === '1' ||
+      includeLogAnomaliesRaw === 'yes';
 
     const parseResponseStatus = (s: string): number | null => {
       const v = (s || '').trim();
@@ -2584,7 +2860,12 @@ export class WorkspaceTestResultsService {
       );
     }
 
-    this.applyLogAnomalyFilters(qb, logAnomalyCodes, logAnomalyThresholds);
+    this.applyLogAnomalyFilters(
+      qb,
+      logAnomalyCodes,
+      logAnomalyThresholds,
+      exclusions
+    );
 
     const countQb = this.responseRepository
       .createQueryBuilder('response')
@@ -2704,7 +2985,8 @@ export class WorkspaceTestResultsService {
     this.applyLogAnomalyFilters(
       countQb,
       logAnomalyCodes,
-      logAnomalyThresholds
+      logAnomalyThresholds,
+      exclusions
     );
 
     if (processingDurations.length > 0) {
@@ -2874,10 +3156,13 @@ export class WorkspaceTestResultsService {
       };
     });
 
-    const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
-      mapped.map(row => row.bookletId),
-      logAnomalyThresholds
-    );
+    const anomaliesByBooklet = includeLogAnomalies ?
+      await this.findLogAnomaliesForBooklets(
+        mapped.map(row => row.bookletId),
+        logAnomalyThresholds,
+        exclusions
+      ) :
+      new Map<number, LogAnomalySummary[]>();
 
     return [
       mapped.map(row => ({
@@ -4423,6 +4708,465 @@ export class WorkspaceTestResultsService {
     );
   }
 
+  async previewDeleteTestResultResponses(
+    workspaceId: number,
+    request: TestResultsResponseCleanupRequestDto
+  ): Promise<TestResultsDeletePreviewDto> {
+    return (await this.resolveResponseCleanupTargets(workspaceId, request))
+      .preview;
+  }
+
+  async deleteTestResultResponsesByRequest(
+    workspaceId: number,
+    request: TestResultsResponseCleanupRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => this.deleteTestResultResponsesByRequestLocked(
+        workspaceId,
+        request,
+        userId,
+        onProgress
+      )
+    );
+  }
+
+  private async deleteTestResultResponsesByRequestLocked(
+    workspaceId: number,
+    request: TestResultsResponseCleanupRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    const targets = await this.resolveResponseCleanupTargets(
+      workspaceId,
+      request
+    );
+    const totalResponses = targets.responseIds.length;
+
+    if (totalResponses === 0) {
+      return {
+        ...targets.preview,
+        deletedTargetCount: 0
+      };
+    }
+
+    await onProgress?.(
+      5,
+      `Lösche ${totalResponses} Antwort(en) aus dem Ergebnisbrowser...`
+    );
+
+    const chunks = WorkspaceTestResultsService.chunkArray(
+      targets.responseIds,
+      1000
+    );
+    let deletedTargetCount = 0;
+
+    for (const [index, responseIds] of chunks.entries()) {
+      const deleteResult = await this.connection.transaction(async manager => {
+        await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
+          workspaceId,
+          responseIds,
+          'RESULT_DELETED',
+          'stale_source',
+          manager
+        );
+
+        await this.deleteRowsByIds(
+          manager,
+          CodingJobUnit,
+          'response_id',
+          responseIds
+        );
+        await this.deleteRowsByIds(
+          manager,
+          CoderTrainingDiscussionResult,
+          'response_id',
+          responseIds
+        );
+        return manager
+          .createQueryBuilder()
+          .delete()
+          .from(ResponseEntity)
+          .where('id IN (:...responseIds)', { responseIds })
+          .execute();
+      });
+
+      deletedTargetCount += deleteResult.affected || responseIds.length;
+      const progress = Math.min(
+        90,
+        10 + Math.round((deletedTargetCount / totalResponses) * 80)
+      );
+      await onProgress?.(
+        progress,
+        `Antwort-Löschung läuft: ${deletedTargetCount}/${totalResponses} Antwort(en) verarbeitet (${index + 1}/${chunks.length} Stapel).`
+      );
+    }
+
+    await onProgress?.(92, 'Kodierstatus wird aktualisiert...');
+    await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+      workspaceId,
+      targets.unitIds,
+      'RESULT_DELETED'
+    );
+
+    await onProgress?.(95, 'Antwort-Löschung wird abschließend geprüft...');
+    await this.assertResponseCleanupCompleted(targets.responseIds);
+
+    await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
+    await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+
+    await this.tryRecordAuditEvent({
+      workspaceId,
+      actorUserId: userId,
+      eventType: 'TEST_RESULT_RESPONSES_DELETED',
+      entityType: 'responses',
+      entityId: null,
+      result: 'success',
+      summary: 'Test result responses deleted by cleanup job',
+      details: {
+        deletedTargetCount,
+        request,
+        preview: targets.preview
+      }
+    }, 'Failed to create journal entry for response cleanup deletion');
+
+    return {
+      ...targets.preview,
+      deletedTargetCount
+    };
+  }
+
+  private async resolveResponseCleanupTargets(
+    workspaceId: number,
+    request: TestResultsResponseCleanupRequestDto
+  ): Promise<ResponseCleanupTargets> {
+    const normalized =
+      WorkspaceTestResultsService.normalizeResponseCleanupRequest(request);
+    const warnings: string[] = [];
+    const isValidRequest =
+      normalized.unitNames.length > 0 &&
+      normalized.answeredBefore !== null &&
+      (
+        normalized.answeredFrom === null ||
+        normalized.answeredFrom < normalized.answeredBefore
+      );
+
+    if (normalized.unitNames.length === 0) {
+      warnings.push('Es wurde keine Aufgabe ausgewählt.');
+    }
+
+    if (normalized.answeredBefore === null) {
+      warnings.push('Es wurde kein gültiger Stichtag angegeben.');
+    }
+
+    if (
+      normalized.answeredFrom !== null &&
+      normalized.answeredBefore !== null &&
+      normalized.answeredFrom >= normalized.answeredBefore
+    ) {
+      warnings.push('Der Beginn des Zeitraums muss vor dem Stichtag liegen.');
+    }
+
+    const rows = isValidRequest ?
+      await this.getResponseCleanupRows(workspaceId, normalized) :
+      [];
+    const unknownTimestampResponses = isValidRequest ?
+      await this.countResponseCleanupUnknownTimestamps(workspaceId, normalized) :
+      0;
+
+    if (rows.length === 0 && isValidRequest) {
+      warnings.push(
+        'Keine passenden Antworten mit auswertbarem Chunk-Zeitstempel gefunden.'
+      );
+    }
+
+    if (unknownTimestampResponses > 0) {
+      warnings.push(
+        `${unknownTimestampResponses} Antwort(en) in der Auswahl haben keinen auswertbaren Chunk-Zeitstempel und werden nicht gelöscht.`
+      );
+    }
+
+    const responseIds = WorkspaceTestResultsService.uniqueIds(
+      rows.map(row => row.responseId)
+    );
+    const unitIds = WorkspaceTestResultsService.uniqueIds(
+      rows.map(row => row.unitId)
+    );
+    const codingImpact = await this.getResponseCleanupCodingImpact(
+      responseIds,
+      unitIds
+    );
+    const groups = WorkspaceTestResultsService.limitPreviewStrings(
+      rows.map(row => row.personGroup)
+    );
+    const bookletNames = WorkspaceTestResultsService.limitPreviewStrings(
+      rows.map(row => row.bookletName)
+    );
+    const unitNames = WorkspaceTestResultsService.limitPreviewStrings(
+      rows.map(row => row.unitName)
+    );
+
+    const preview: TestResultsDeletePreviewDto = {
+      targetType: 'responses',
+      scope: 'units',
+      label: WorkspaceTestResultsService.getResponseCleanupLabel(normalized),
+      persons: new Set(rows.map(row => row.personId)).size,
+      booklets: new Set(rows.map(row => row.bookletId)).size,
+      units: unitIds.length,
+      responses: responseIds.length,
+      groups,
+      bookletNames,
+      unitNames,
+      codingImpact,
+      warnings,
+      responseCleanup: {
+        answeredFrom: normalized.answeredFrom || undefined,
+        answeredBefore: normalized.answeredBefore || undefined,
+        variableIds: normalized.variableIds,
+        subforms: normalized.subforms,
+        timestampSourceCounts: {
+          chunk: responseIds.length,
+          unknown: unknownTimestampResponses
+        },
+        unknownTimestampResponses,
+        samples: rows
+          .slice(0, 10)
+          .map(WorkspaceTestResultsService.toResponseCleanupSample)
+      }
+    };
+
+    return {
+      responseIds,
+      unitIds,
+      preview
+    };
+  }
+
+  private async getResponseCleanupRows(
+    workspaceId: number,
+    request: NormalizedResponseCleanupRequest
+  ): Promise<ResponseCleanupTargetRow[]> {
+    const query = this.createResponseCleanupBaseQuery(workspaceId, request)
+      .select('response.id', 'responseId')
+      .addSelect('unit.id', 'unitId')
+      .addSelect('person.id', 'personId')
+      .addSelect('person.code', 'personCode')
+      .addSelect('person.login', 'personLogin')
+      .addSelect('person.group', 'personGroup')
+      .addSelect('booklet.id', 'bookletId')
+      .addSelect('bookletinfo.name', 'bookletName')
+      .addSelect('COALESCE(unit.alias, unit.name)', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .addSelect('response.subform', 'subform')
+      .addSelect('response.value', 'value')
+      .addSelect('MAX(chunk.ts)', 'answeredAt')
+      .groupBy('response.id')
+      .addGroupBy('unit.id')
+      .addGroupBy('person.id')
+      .addGroupBy('person.code')
+      .addGroupBy('person.login')
+      .addGroupBy('person.group')
+      .addGroupBy('booklet.id')
+      .addGroupBy('bookletinfo.name')
+      .addGroupBy('unit.alias')
+      .addGroupBy('unit.name')
+      .addGroupBy('response.variableid')
+      .addGroupBy('response.subform')
+      .addGroupBy('response.value')
+      .having('MAX(chunk.ts) < :answeredBefore', {
+        answeredBefore: request.answeredBefore
+      });
+
+    if (request.answeredFrom !== null) {
+      query.andHaving('MAX(chunk.ts) >= :answeredFrom', {
+        answeredFrom: request.answeredFrom
+      });
+    }
+
+    const rows = await query.getRawMany<Record<string, unknown>>();
+    return rows
+      .map(row => ({
+        responseId: Number(row.responseId),
+        unitId: Number(row.unitId),
+        personId: Number(row.personId),
+        personCode: String(row.personCode || ''),
+        personLogin: String(row.personLogin || ''),
+        personGroup: String(row.personGroup || ''),
+        bookletId: Number(row.bookletId),
+        bookletName: String(row.bookletName || ''),
+        unitName: String(row.unitName || ''),
+        variableId: String(row.variableId || ''),
+        subform: row.subform === null || row.subform === undefined ?
+          null :
+          String(row.subform),
+        value: row.value === null || row.value === undefined ?
+          null :
+          String(row.value),
+        answeredAt: row.answeredAt === null || row.answeredAt === undefined ?
+          null :
+          Number(row.answeredAt),
+        timestampSource: 'chunk' as const
+      }))
+      .filter(row => Number.isInteger(row.responseId) && row.responseId > 0);
+  }
+
+  private createResponseCleanupBaseQuery(
+    workspaceId: number,
+    request: NormalizedResponseCleanupRequest
+  ): SelectQueryBuilder<unknown> {
+    const query = this.connection
+      .createQueryBuilder()
+      .from(ResponseEntity, 'response')
+      .innerJoin(Unit, 'unit', 'unit.id = response.unitid')
+      .innerJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+      .innerJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+      .innerJoin(Persons, 'person', 'person.id = booklet.personid')
+      .innerJoin(
+        ChunkEntity,
+        'chunk',
+        `chunk.unitid = unit.id
+          AND chunk.ts IS NOT NULL
+          AND ${WorkspaceTestResultsService.responseMatchesChunkCondition('chunk', 'response')}`
+      )
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere(
+        `(REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') IN (:...unitNames)
+          OR REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') IN (:...unitNames))`,
+        { unitNames: request.unitNames }
+      );
+
+    if (request.variableIds.length > 0) {
+      query.andWhere('response.variableid IN (:...variableIds)', {
+        variableIds: request.variableIds
+      });
+    }
+
+    if (request.subforms.length > 0) {
+      query.andWhere("COALESCE(response.subform, '') IN (:...subforms)", {
+        subforms: request.subforms
+      });
+    }
+
+    return query;
+  }
+
+  private async countResponseCleanupUnknownTimestamps(
+    workspaceId: number,
+    request: NormalizedResponseCleanupRequest
+  ): Promise<number> {
+    const query = this.connection
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT response.id)', 'count')
+      .from(ResponseEntity, 'response')
+      .innerJoin(Unit, 'unit', 'unit.id = response.unitid')
+      .innerJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+      .innerJoin(Persons, 'person', 'person.id = booklet.personid')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere(
+        `(REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') IN (:...unitNames)
+          OR REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') IN (:...unitNames))`,
+        { unitNames: request.unitNames }
+      )
+      .andWhere(
+        `NOT EXISTS (
+          SELECT 1
+          FROM chunk cleanup_chunk
+          WHERE cleanup_chunk.unitid = unit.id
+            AND cleanup_chunk.ts IS NOT NULL
+            AND ${WorkspaceTestResultsService.responseMatchesChunkCondition('cleanup_chunk', 'response')}
+        )`
+      );
+
+    if (request.variableIds.length > 0) {
+      query.andWhere('response.variableid IN (:...variableIds)', {
+        variableIds: request.variableIds
+      });
+    }
+
+    if (request.subforms.length > 0) {
+      query.andWhere("COALESCE(response.subform, '') IN (:...subforms)", {
+        subforms: request.subforms
+      });
+    }
+
+    const raw = await query.getRawOne<{ count: string }>();
+    return Number(raw?.count || 0);
+  }
+
+  private async getResponseCleanupCodingImpact(
+    responseIds: number[],
+    unitIds: number[]
+  ): Promise<NonNullable<TestResultsDeletePreviewDto['codingImpact']>> {
+    const impact = {
+      autoCodingV1: 0,
+      manualCodingV2: 0,
+      autoCodingV3: 0,
+      affectedUnits: unitIds.length
+    };
+
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      responseIds,
+      1000
+    )) {
+      const raw = await this.connection
+        .createQueryBuilder()
+        .select(
+          'SUM(CASE WHEN response.status_v1 IS NOT NULL OR response.code_v1 IS NOT NULL OR response.score_v1 IS NOT NULL THEN 1 ELSE 0 END)',
+          'autoCodingV1'
+        )
+        .addSelect(
+          'SUM(CASE WHEN response.status_v2 IS NOT NULL OR response.code_v2 IS NOT NULL OR response.score_v2 IS NOT NULL THEN 1 ELSE 0 END)',
+          'manualCodingV2'
+        )
+        .addSelect(
+          'SUM(CASE WHEN response.status_v3 IS NOT NULL OR response.code_v3 IS NOT NULL OR response.score_v3 IS NOT NULL THEN 1 ELSE 0 END)',
+          'autoCodingV3'
+        )
+        .from(ResponseEntity, 'response')
+        .where('response.id IN (:...responseIds)', { responseIds: chunk })
+        .getRawOne<Record<string, string | null>>();
+
+      impact.autoCodingV1 += Number(raw?.autoCodingV1 || 0);
+      impact.manualCodingV2 += Number(raw?.manualCodingV2 || 0);
+      impact.autoCodingV3 += Number(raw?.autoCodingV3 || 0);
+    }
+
+    return impact;
+  }
+
+  private async assertResponseCleanupCompleted(
+    responseIds: number[]
+  ): Promise<void> {
+    const remaining = await this.countRowsByIds(
+      ResponseEntity,
+      'id',
+      responseIds
+    );
+    if (remaining > 0) {
+      throw new Error(
+        `Die Antwort-Löschung wurde nicht vollständig bestätigt. Verblieben: ${remaining} Antwort(en).`
+      );
+    }
+  }
+
+  private static responseMatchesChunkCondition(
+    chunkAlias: string,
+    responseAlias: string
+  ): string {
+    return `(
+      ${responseAlias}.variableid = ANY(string_to_array(COALESCE(${chunkAlias}.variables, ''), ','))
+      OR (
+        COALESCE(${chunkAlias}.variables, '') = ''
+        AND COALESCE(${chunkAlias}.key, '') = COALESCE(${responseAlias}.subform, '')
+      )
+    )`;
+  }
+
   private async deleteTestLogsByRequestLocked(
     workspaceId: number,
     request: TestResultsDeleteRequestDto,
@@ -5338,6 +6082,54 @@ export class WorkspaceTestResultsService {
     };
   }
 
+  private static normalizeResponseCleanupRequest(
+    request: TestResultsResponseCleanupRequestDto
+  ): NormalizedResponseCleanupRequest {
+    return {
+      unitNames: WorkspaceTestResultsService
+        .normalizeStringList(request.unitNames)
+        .map(WorkspaceTestResultsService.normalizeUnitKey),
+      answeredBefore:
+        WorkspaceTestResultsService.normalizeCleanupTimestamp(
+          request.answeredBefore
+        ),
+      answeredFrom:
+        WorkspaceTestResultsService.normalizeCleanupTimestamp(
+          request.answeredFrom
+        ),
+      variableIds:
+        WorkspaceTestResultsService.normalizeStringList(request.variableIds),
+      subforms: WorkspaceTestResultsService.normalizeStringList(
+        request.subforms
+      )
+    };
+  }
+
+  private static normalizeCleanupTimestamp(
+    value?: string | number
+  ): number | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (typeof value === 'number') {
+      return Number.isFinite(value) && value > 0 ? Math.round(value) : null;
+    }
+
+    const trimmed = String(value || '').trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const numericValue = Number(trimmed);
+    if (Number.isFinite(numericValue) && numericValue > 0) {
+      return Math.round(numericValue);
+    }
+
+    const parsed = Date.parse(trimmed);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
   private static normalizeNumberList(value?: number[] | string): number[] {
     if (!value) return [];
     const values = Array.isArray(value) ? value : String(value).split(',');
@@ -5378,6 +6170,37 @@ export class WorkspaceTestResultsService {
       .slice(0, 30);
   }
 
+  private static limitPreviewStrings(values: string[]): string[] {
+    return Array.from(
+      new Set(
+        values
+          .map(value => String(value || '').trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 30);
+  }
+
+  private static toResponseCleanupSample(
+    row: ResponseCleanupTargetRow
+  ): TestResultsResponseCleanupSampleDto {
+    return {
+      responseId: row.responseId,
+      personId: row.personId,
+      personCode: row.personCode,
+      personLogin: row.personLogin,
+      personGroup: row.personGroup,
+      bookletId: row.bookletId,
+      bookletName: row.bookletName,
+      unitId: row.unitId,
+      unitName: row.unitName,
+      variableId: row.variableId,
+      subform: row.subform,
+      value: row.value,
+      answeredAt: row.answeredAt,
+      timestampSource: row.timestampSource
+    };
+  }
+
   private static getDeleteLabel(
     request: Required<TestResultsDeleteRequestDto>
   ): string {
@@ -5397,6 +6220,28 @@ export class WorkspaceTestResultsService {
       default:
         return 'Testergebnisdaten';
     }
+  }
+
+  private static getResponseCleanupLabel(
+    request: NormalizedResponseCleanupRequest
+  ): string {
+    const unitLabel = request.unitNames.length > 0 ?
+      `Aufgabe(n): ${request.unitNames.join(', ')}` :
+      'Antworten';
+    const beforeLabel = request.answeredBefore ?
+      `vor ${new Date(request.answeredBefore).toLocaleString('de-DE')}` :
+      'ohne gültigen Stichtag';
+    const fromLabel = request.answeredFrom ?
+      `ab ${new Date(request.answeredFrom).toLocaleString('de-DE')}` :
+      '';
+    const variableLabel = request.variableIds.length > 0 ?
+      `, Variable(n): ${request.variableIds.join(', ')}` :
+      ', alle Variablen';
+    const subformLabel = request.subforms.length > 0 ?
+      `, Subform(s): ${request.subforms.join(', ')}` :
+      '';
+
+    return `${unitLabel} ${fromLabel} ${beforeLabel}${variableLabel}${subformLabel}`.replace(/\s+/g, ' ').trim();
   }
 
   private static chunkArray<T>(values: T[], size: number): T[][] {
@@ -5703,12 +6548,17 @@ export class WorkspaceTestResultsService {
       }
 
       if (searchParams.codedStatus) {
-        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
-          searchParams.version || 'v1'
-        );
-        query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
-          codedStatus: searchParams.codedStatus
-        });
+        const codedStatusNumber = statusStringToNumber(searchParams.codedStatus);
+        if (codedStatusNumber === null) {
+          query.andWhere('1=0');
+        } else {
+          const effectiveStatusExpression = getEffectiveCodingStatusExpression(
+            searchParams.version || 'v1'
+          );
+          query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
+            codedStatus: codedStatusNumber
+          });
+        }
       }
 
       if (searchParams.group) {
@@ -6288,7 +7138,8 @@ export class WorkspaceTestResultsService {
       const anomaliesByBookletId = includeLogAnomalies ?
         await this.findLogAnomaliesForBooklets(
           Array.from(new Set(units.map(unit => unit.booklet.id))),
-          this.buildLogAnomalyThresholds({})
+          this.buildLogAnomalyThresholds({}),
+          exclusions
         ) :
         new Map<number, LogAnomalySummary[]>();
 
@@ -6518,7 +7369,8 @@ export class WorkspaceTestResultsService {
         'logentry'
       ],
       delimiter: ';',
-      quote: null
+      quote: null,
+      alwaysWriteHeaders: true
     });
 
     csvStream.pipe(stream);

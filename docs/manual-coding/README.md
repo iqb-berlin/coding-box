@@ -9,6 +9,47 @@ Eine Kodierer-Schulung erstellt pro ausgewahltem Kodierer einen Kodierjob mit ei
 konsistenten Fallstichprobe. Alle Kodierer erhalten dabei dieselben Falle (pro
 Variable/Unit-Konfiguration).
 
+## Auswaehlbarkeit regulaerer Codes
+
+Regulaere Codes sind in manuellen Kodierkontexten nur dann auswaehlbar, wenn das
+Code-Level-Feld `manualInstruction` nach Trimmung nicht leer ist:
+
+```ts
+code.manualInstruction?.trim()
+```
+
+Ein leerer String oder ein String, der nur aus Whitespace besteht, bedeutet in der
+aktuellen Schemaversion: Der Code ist nicht fuer die manuelle Kodierung gedacht.
+
+Diese Semantik gilt fuer:
+
+* die Codeauswahl in der Kodierbox,
+* das Codebook fuer die Auswahl "Manuell kodierte Variablen", sofern
+  "Geschlossen kodierte Variablen" nicht mit ausgewaehlt ist,
+* Warnungen fuer Variablen, bei denen keine regulaeren Codes fuer die manuelle
+  Kodierung verfuegbar sind.
+
+Diese Semantik gilt nicht fuer vollstaendige Schema- oder Schemer-Ansichten. Dort
+bleiben auch Codes ohne manuelle Instruktion sichtbar, weil sie fuer automatische
+Kodierung, Filterung, Pruefung oder Dokumentation relevant sein koennen.
+
+Sonderoptionen der Kodierbox, zum Beispiel "Code-Vergabe unsicher" oder "Neuer
+Code noetig", sind davon unabhaengig und bleiben auch dann verfuegbar, wenn eine
+Variable keine regulaeren manuell auswaehlbaren Codes hat.
+
+### Kompatibilitaet und Schemaentwicklung
+
+Die Leerstring-Semantik ist kompatibel zu bestehenden Kodierschemata, weil kein
+neues Pflichtfeld eingefuehrt wird. Sie hat aber ein fachliches Risiko:
+`manualInstruction` ist eigentlich Anzeigetext und kein explizites Steuerfeld.
+Ein Code, der manuell auswaehlbar sein soll, aber keine eigene Instruktion
+benoetigt, kann damit aktuell nicht eindeutig modelliert werden.
+
+Fuer eine spaetere Schemaversion sollte deshalb ein explizites Code-Level-Feld
+geprueft werden, zum Beispiel `manualCodingEnabled: boolean` oder ein
+Code-Level-Modell wie `MANUAL_ONLY`, `MANUAL_AND_RULES` und `RULES_ONLY`. Fuer
+aeltere Schemata bleibt `manualInstruction?.trim()` dann der Fallback.
+
 ## Schulung erstellen
 
 Der Prozess besteht aus mehreren Schritten. Die Reihenfolge ist im UI vorgegeben,

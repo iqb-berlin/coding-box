@@ -17,6 +17,35 @@ export class TestPersonCodingProcessor {
     private readonly workspaceCodingService: WorkspaceCodingService
   ) { }
 
+  private async shouldStopBeforeBatch(
+    job: Job<TestPersonCodingJobData>,
+    batchNumber: number
+  ): Promise<boolean> {
+    const currentState = await job.getState();
+    if (currentState === 'failed' || currentState === 'paused') {
+      this.logger.log(`Job ${job.id} was ${currentState} before processing batch ${batchNumber}`);
+      return true;
+    }
+
+    let isPausedInLatestJob = false;
+    try {
+      const latestJob = await job.queue.getJob(job.id);
+      isPausedInLatestJob = Boolean(latestJob?.data?.isPaused);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Could not refresh pause state for job ${job.id} before processing batch ${batchNumber}: ${message}`
+      );
+    }
+
+    if (job.data.isPaused || isPausedInLatestJob) {
+      this.logger.log(`Job ${job.id} was paused before processing batch ${batchNumber}`);
+      return true;
+    }
+
+    return false;
+  }
+
   @Process()
   async process(job: Job<TestPersonCodingJobData>): Promise<CodingStatistics> {
     this.logger.log(`Processing test person coding job ${job.id} for workspace ${job.data.workspaceId}`);
@@ -29,19 +58,12 @@ export class TestPersonCodingProcessor {
       await job.progress(0);
 
       for (let i = 0; i < job.data.personIds.length; i += BATCH_SIZE) {
-        const currentJob = await job.getState();
-        if (currentJob === 'failed' || currentJob === 'paused') {
-          this.logger.log(`Job ${job.id} was ${currentJob} before processing batch ${(i / BATCH_SIZE) + 1}`);
-          return combinedResult;
-        }
-
-        if (job.data.isPaused) {
-          this.logger.log(`Job ${job.id} was paused before processing batch ${(i / BATCH_SIZE) + 1}`);
+        const batchNumber = (i / BATCH_SIZE) + 1;
+        if (await this.shouldStopBeforeBatch(job, batchNumber)) {
           return combinedResult;
         }
 
         const batchPersonIds = job.data.personIds.slice(i, i + BATCH_SIZE);
-        const batchNumber = (i / BATCH_SIZE) + 1;
         const totalBatches = Math.ceil(totalPersons / BATCH_SIZE);
         this.logger.log(`Processing batch ${batchNumber} of ${totalBatches} (${batchPersonIds.length} persons)`);
 

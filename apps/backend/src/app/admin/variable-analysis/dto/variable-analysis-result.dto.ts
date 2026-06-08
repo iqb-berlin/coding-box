@@ -4,7 +4,15 @@ export interface VariableCombo {
   unitId: number;
   unitName: string;
   variableId: string;
+  sourceVariableId?: string;
+  variableAlias?: string;
+  selectionSource?: string;
+  sourceType?: string;
+  isDerived?: boolean;
+  hasCodingScheme?: boolean;
   totalCount?: number;
+  validCount?: number;
+  invalidCount?: number;
   emptyCount?: number;
   emptyPercentage?: number;
   distinctValueCount?: number;

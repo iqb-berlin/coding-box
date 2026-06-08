@@ -113,4 +113,22 @@ describe('CodingResponseFilterService', () => {
       queryBuilder.andWhere.mock.calls.some(([condition]) => String(condition).includes('OR response.is_autocoder_generated'))
     ).toBe(false);
   });
+
+  it('keeps DERIVE_ERROR out of default manual coding candidate filters', async () => {
+    const { service, queryBuilder } = createService();
+
+    await service.countResponses(1, {
+      manualCodingCandidatesOnly: true
+    });
+
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      'response.status_v1 IN (:...statuses)',
+      {
+        statuses: [
+          8,
+          12
+        ]
+      }
+    );
+  });
 });

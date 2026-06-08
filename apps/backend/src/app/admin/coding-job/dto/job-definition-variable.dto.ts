@@ -1,7 +1,7 @@
 // eslint-disable-next-line max-classes-per-file
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsEnum, IsNumber, IsOptional, IsString, Min
+  IsBoolean, IsEnum, IsNumber, IsOptional, IsString, Min
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -19,6 +19,15 @@ export class JobDefinitionVariableDto {
   })
   @IsString()
     variableId: string;
+
+  @ApiProperty({
+    description: 'Whether DERIVE_ERROR responses for this variable should be included in generated manual coding jobs',
+    example: false,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    includeDeriveError?: boolean;
 }
 
 export class JobDefinitionVariableBundleDto {

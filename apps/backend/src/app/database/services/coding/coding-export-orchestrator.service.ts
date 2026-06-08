@@ -2,6 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { Request } from 'express';
 import { Readable } from 'stream';
 import { CodingExportService } from './coding-export.service';
+import {
+  CodingItemMatrixExportService,
+  ItemMatrixValue,
+  ItemMatrixVersion
+} from './coding-item-matrix-export.service';
 import { CodingResultsExportService } from './coding-results-export.service';
 
 type CodingVersion = 'v1' | 'v2' | 'v3';
@@ -13,6 +18,8 @@ export interface VersionedCodingResultsExportOptions {
   serverUrl?: string;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;
+  includeGeoGebraResponseValues?: boolean;
+  includeGeoGebraFiles?: boolean;
   onProgress?: (percentage: number) => Promise<void>;
 }
 
@@ -32,11 +39,20 @@ export interface DetailedCodingResultsExportOptions {
   serverUrl?: string;
 }
 
+export interface ItemMatrixExportOptions {
+  workspaceId: number;
+  matrixValue?: ItemMatrixValue;
+  version?: ItemMatrixVersion;
+  onProgress?: (percentage: number) => Promise<void>;
+  checkCancellation?: () => Promise<void>;
+}
+
 @Injectable()
 export class CodingExportOrchestratorService {
   constructor(
     private readonly codingExportService: CodingExportService,
-    private readonly codingResultsExportService: CodingResultsExportService
+    private readonly codingResultsExportService: CodingResultsExportService,
+    private readonly codingItemMatrixExportService: CodingItemMatrixExportService
   ) { }
 
   exportResultsByVersionAsCsv(
@@ -49,13 +65,25 @@ export class CodingExportOrchestratorService {
       options.serverUrl || '',
       options.includeReplayUrl || false,
       options.onProgress,
-      options.includeResponseValues !== false
+      options.includeResponseValues !== false,
+      options.includeGeoGebraResponseValues === true
     );
   }
 
   exportResultsByVersionAsExcel(
     options: VersionedCodingResultsExportOptions
   ): Promise<Buffer> {
+    if (options.includeGeoGebraFiles) {
+      return this.codingResultsExportService.exportCodingResultsByVersionAsGeoGebraZip(
+        options.workspaceId,
+        options.version || 'v2',
+        options.authToken || '',
+        options.serverUrl || '',
+        options.includeReplayUrl || false,
+        options.onProgress
+      );
+    }
+
     return this.codingResultsExportService.exportCodingResultsByVersionAsExcel(
       options.workspaceId,
       options.version || 'v2',
@@ -63,7 +91,8 @@ export class CodingExportOrchestratorService {
       options.serverUrl || '',
       options.includeReplayUrl || false,
       options.onProgress,
-      options.includeResponseValues !== false
+      options.includeResponseValues !== false,
+      options.includeGeoGebraResponseValues === true
     );
   }
 
@@ -96,6 +125,26 @@ export class CodingExportOrchestratorService {
       options.coderTrainingIds,
       options.coderIds,
       options.serverUrl || ''
+    );
+  }
+
+  exportItemMatrixAsCsv(options: ItemMatrixExportOptions): Promise<Readable> {
+    return Promise.resolve(this.codingItemMatrixExportService.exportItemMatrixAsCsvStream(
+      options.workspaceId,
+      options.matrixValue || 'score',
+      options.version || 'v2',
+      options.onProgress,
+      options.checkCancellation
+    ) as Readable);
+  }
+
+  exportItemMatrixAsExcel(options: ItemMatrixExportOptions): Promise<Buffer> {
+    return this.codingItemMatrixExportService.exportItemMatrixAsExcel(
+      options.workspaceId,
+      options.matrixValue || 'score',
+      options.version || 'v2',
+      options.onProgress,
+      options.checkCancellation
     );
   }
 

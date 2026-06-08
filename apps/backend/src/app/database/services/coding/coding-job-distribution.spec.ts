@@ -221,7 +221,7 @@ describe('CodingJobService distribution from job definitions', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v3:5');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v7:5');
     expect(result.distribution).toEqual(preview.distribution);
     expect(result.doubleCodingInfo).toEqual(preview.doubleCodingInfo);
     expect(result.jobsCreated).toBe(createdJobCalls.length);
@@ -304,6 +304,87 @@ describe('CodingJobService distribution from job definitions', () => {
     }]);
     expect(createdJobCalls).toHaveLength(1);
     expect(createdJobCalls[0].subset.map(response => response.id)).toEqual([6, 7, 8, 9, 10]);
+  });
+
+  it('shows newly imported available cases in a job definition refresh preview', async () => {
+    const responses = Array.from({ length: 8 }, (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1'));
+    const variable = { unitName: 'Unit 1', variableId: 'Var 1' };
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+    jest.spyOn(
+      service as unknown as {
+        getJobDefinitionExistingTaskRows: (
+          workspaceId: number,
+          jobDefinitionId: number
+        ) => Promise<Array<{
+          responseId: number;
+          itemKey: string;
+          coderId: number;
+          taskCount: number;
+        }>>;
+      },
+      'getJobDefinitionExistingTaskRows'
+    ).mockResolvedValue(
+      [1, 2, 3, 4, 5].map(responseId => ({
+        responseId,
+        itemKey: 'Unit 1::Var 1',
+        coderId: 1,
+        taskCount: 1
+      }))
+    );
+    jest.spyOn(
+      service as unknown as {
+        getJobDefinitionJobCounts: (
+          workspaceId: number,
+          jobDefinitionId: number
+        ) => Promise<{ existingJobsCount: number; staleJobsCount: number }>;
+      },
+      'getJobDefinitionJobCounts'
+    ).mockResolvedValue({ existingJobsCount: 1, staleJobsCount: 1 });
+    jest.spyOn(
+      service as unknown as {
+        jobDefinitionHasAnyCodingWork: (
+          workspaceId: number,
+          jobDefinitionId: number
+        ) => Promise<boolean>;
+      },
+      'jobDefinitionHasAnyCodingWork'
+    ).mockResolvedValue(false);
+
+    const preview = await service.previewJobDefinitionRefresh(5, {
+      selectedVariables: [variable],
+      selectedCoders: [{ id: 1, name: 'Ada', username: 'ada' }],
+      caseOrderingMode: 'continuous',
+      jobDefinitionId: 80
+    });
+
+    expect(preview).toMatchObject({
+      jobDefinitionId: 80,
+      existingJobsCount: 1,
+      staleJobsCount: 1,
+      existingCases: 5,
+      plannedCases: 8,
+      retainedCases: 5,
+      addedCases: 3,
+      removedCases: 0,
+      addedCodingTasks: 3,
+      removedCodingTasks: 0,
+      itemDeltas: [
+        expect.objectContaining({
+          itemKey: 'Unit 1::Var 1',
+          addedCases: 3,
+          addedCodingTasks: 3
+        })
+      ],
+      canApply: true
+    });
+    expect(
+      (
+        service as unknown as { getAssignedResponseIdsForVariables: jest.Mock }
+      ).getAssignedResponseIdsForVariables
+    ).toHaveBeenCalledWith(5, [variable], 80, undefined);
   });
 
   it('assigns double-coded cases to exactly two coders when more coders are selected', async () => {

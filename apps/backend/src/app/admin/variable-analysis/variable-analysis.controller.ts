@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Query,
+  Res,
   UseGuards
 } from '@nestjs/common';
 import {
@@ -22,17 +23,21 @@ import {
   ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
 import { VariableAnalysisService } from '../../database/services/test-results';
 import { VariableAnalysisResultDto } from './dto/variable-analysis-result.dto';
+import { VariableAnalysisResultPageDto } from './dto/variable-analysis-result-page.dto';
 import { VariableAnalysisJobDto } from './dto/variable-analysis-job.dto';
 
 @ApiTags('Variable Analysis')
 @Controller('admin/workspace/:workspace_id/variable-analysis')
 export class VariableAnalysisController {
-  constructor(private readonly variableAnalysisService: VariableAnalysisService) { }
+  constructor(
+    private readonly variableAnalysisService: VariableAnalysisService
+  ) {}
 
   @Post('jobs')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -70,7 +75,8 @@ export class VariableAnalysisController {
     description: 'Workspace not found.'
   })
   @ApiConflictResponse({
-    description: 'A variable analysis job is already in progress for this workspace.'
+    description:
+      'A variable analysis job is already in progress for this workspace.'
   })
   async createAnalysisJob(
     @WorkspaceId() workspaceId: number,
@@ -84,10 +90,15 @@ export class VariableAnalysisController {
         variableId
       );
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      ) {
         throw error;
       }
-      throw new BadRequestException(`Failed to create variable analysis job: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to create variable analysis job: ${error.message}`
+      );
     }
   }
 
@@ -123,7 +134,9 @@ export class VariableAnalysisController {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException(`Failed to retrieve variable analysis jobs: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to retrieve variable analysis jobs: ${error.message}`
+      );
     }
   }
 
@@ -161,7 +174,10 @@ export class VariableAnalysisController {
       @Param('job_id') jobId: string
   ): Promise<VariableAnalysisJobDto> {
     try {
-      return await this.variableAnalysisService.getAnalysisJob(jobId, workspaceId);
+      return await this.variableAnalysisService.getAnalysisJob(
+        jobId,
+        workspaceId
+      );
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -169,7 +185,9 @@ export class VariableAnalysisController {
       if (error.message && error.message.includes('not found in workspace')) {
         throw new NotFoundException(error.message);
       }
-      throw new BadRequestException(`Failed to retrieve variable analysis job: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to retrieve variable analysis job: ${error.message}`
+      );
     }
   }
 
@@ -192,8 +210,15 @@ export class VariableAnalysisController {
     required: true,
     description: 'The ID of the job'
   })
+  @ApiQuery({
+    name: 'includeSchemaCodes',
+    type: Boolean,
+    required: false,
+    description: 'Include coding scheme codes that are not part of the default top values'
+  })
   @ApiOkResponse({
-    description: 'The variable analysis results have been successfully retrieved.',
+    description:
+      'The variable analysis results have been successfully retrieved.',
     type: VariableAnalysisResultDto
   })
   @ApiBadRequestResponse({
@@ -204,10 +229,15 @@ export class VariableAnalysisController {
   })
   async getAnalysisResults(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string
+      @Param('job_id') jobId: string,
+      @Query('includeSchemaCodes') includeSchemaCodes?: string
   ): Promise<VariableAnalysisResultDto> {
     try {
-      return await this.variableAnalysisService.getAnalysisResults(jobId, workspaceId);
+      return await this.variableAnalysisService.getAnalysisResults(
+        jobId,
+        workspaceId,
+        { includeSchemaCodes }
+      );
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -215,7 +245,315 @@ export class VariableAnalysisController {
       if (error.message && error.message.includes('not found in workspace')) {
         throw new NotFoundException(error.message);
       }
-      throw new BadRequestException(`Failed to retrieve variable analysis results: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to retrieve variable analysis results: ${error.message}`
+      );
+    }
+  }
+
+  @Get('jobs/:job_id/results/page')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get paginated results of a variable analysis job',
+    description:
+      'Retrieves one page of the completed variable analysis job results'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'job_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the job'
+  })
+  @ApiQuery({
+    name: 'page',
+    type: Number,
+    required: false,
+    description: '1-based page number'
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    type: Number,
+    required: false,
+    description: 'Number of variables per page, capped by the server'
+  })
+  @ApiQuery({
+    name: 'search',
+    type: String,
+    required: false,
+    description: 'Search term matched against unit name and variable ID'
+  })
+  @ApiQuery({
+    name: 'onlyEmpty',
+    type: Boolean,
+    required: false,
+    description: 'Only include variables with empty responses'
+  })
+  @ApiQuery({
+    name: 'includeSchemaCodes',
+    type: Boolean,
+    required: false,
+    description: 'Include coding scheme codes that are not part of the default top values'
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    type: String,
+    required: false,
+    description:
+      'Sort column for table rows: unitName, variableId, value, label, score, count, validOccurrenceCount, percentage, percentageTotal, percentageValid, totalCount, validCount, emptyCount, emptyPercentage, statusSummary'
+  })
+  @ApiQuery({
+    name: 'sortDirection',
+    type: String,
+    required: false,
+    description: 'Sort direction: asc or desc'
+  })
+  @ApiOkResponse({
+    description:
+      'The variable analysis result page has been successfully retrieved.',
+    type: VariableAnalysisResultPageDto
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data or job not completed.'
+  })
+  @ApiNotFoundResponse({
+    description: 'Job not found.'
+  })
+  async getAnalysisResultsPage(
+    @WorkspaceId() workspaceId: number,
+      @Param('job_id') jobId: string,
+      @Query('page') page?: string,
+      @Query('pageSize') pageSize?: string,
+      @Query('search') search?: string,
+      @Query('onlyEmpty') onlyEmpty?: string,
+      @Query('includeSchemaCodes') includeSchemaCodes?: string,
+      @Query('sortBy') sortBy?: string,
+      @Query('sortDirection') sortDirection?: string
+  ): Promise<VariableAnalysisResultPageDto> {
+    try {
+      return await this.variableAnalysisService.getAnalysisResultsPage(
+        jobId,
+        workspaceId,
+        {
+          page,
+          pageSize,
+          search,
+          onlyEmpty,
+          includeSchemaCodes,
+          sortBy,
+          sortDirection
+        }
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message && error.message.includes('not found in workspace')) {
+        throw new NotFoundException(error.message);
+      }
+      throw new BadRequestException(
+        `Failed to retrieve variable analysis result page: ${error.message}`
+      );
+    }
+  }
+
+  @Get('jobs/:job_id/results/export/csv')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Export variable analysis results as CSV',
+    description:
+      'Exports all filtered results of a completed variable analysis job as CSV'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'job_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the job'
+  })
+  @ApiQuery({
+    name: 'search',
+    type: String,
+    required: false,
+    description: 'Search term matched against unit name and variable ID'
+  })
+  @ApiQuery({
+    name: 'onlyEmpty',
+    type: Boolean,
+    required: false,
+    description: 'Only include variables with empty responses'
+  })
+  @ApiQuery({
+    name: 'includeSchemaCodes',
+    type: Boolean,
+    required: false,
+    description: 'Include coding scheme codes that are not part of the default top values'
+  })
+  @ApiOkResponse({
+    description: 'Variable analysis results exported as CSV.',
+    content: {
+      'text/csv': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data or job not completed.'
+  })
+  @ApiNotFoundResponse({
+    description: 'Job not found.'
+  })
+  async exportAnalysisResultsAsCsv(
+    @WorkspaceId() workspaceId: number,
+      @Param('job_id') jobId: string,
+      @Query('search') search: string | undefined,
+      @Query('onlyEmpty') onlyEmpty: string | undefined,
+      @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const csv = await this.variableAnalysisService.exportAnalysisResultsAsCsv(
+        jobId,
+        workspaceId,
+        {
+          search,
+          onlyEmpty,
+          includeSchemaCodes
+        }
+      );
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const safeJobId = this.toSafeFilenamePart(jobId);
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="variable-analysis-${workspaceId}-${safeJobId}-${timestamp}.csv"`
+      );
+      res.send(csv);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message && error.message.includes('not found in workspace')) {
+        throw new NotFoundException(error.message);
+      }
+      throw new BadRequestException(
+        `Failed to export variable analysis results as CSV: ${error.message}`
+      );
+    }
+  }
+
+  @Get('jobs/:job_id/results/export/xlsx')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Export variable analysis results as XLSX',
+    description:
+      'Exports all filtered results of a completed variable analysis job as XLSX'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'job_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the job'
+  })
+  @ApiQuery({
+    name: 'search',
+    type: String,
+    required: false,
+    description: 'Search term matched against unit name and variable ID'
+  })
+  @ApiQuery({
+    name: 'onlyEmpty',
+    type: Boolean,
+    required: false,
+    description: 'Only include variables with empty responses'
+  })
+  @ApiQuery({
+    name: 'includeSchemaCodes',
+    type: Boolean,
+    required: false,
+    description: 'Include coding scheme codes that are not part of the default top values'
+  })
+  @ApiOkResponse({
+    description: 'Variable analysis results exported as XLSX.',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data or job not completed.'
+  })
+  @ApiNotFoundResponse({
+    description: 'Job not found.'
+  })
+  async exportAnalysisResultsAsXlsx(
+    @WorkspaceId() workspaceId: number,
+      @Param('job_id') jobId: string,
+      @Query('search') search: string | undefined,
+      @Query('onlyEmpty') onlyEmpty: string | undefined,
+      @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const xlsx =
+        await this.variableAnalysisService.exportAnalysisResultsAsXlsx(
+          jobId,
+          workspaceId,
+          {
+            search,
+            onlyEmpty,
+            includeSchemaCodes
+          }
+        );
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const safeJobId = this.toSafeFilenamePart(jobId);
+
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="variable-analysis-${workspaceId}-${safeJobId}-${timestamp}.xlsx"`
+      );
+      res.send(xlsx);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message && error.message.includes('not found in workspace')) {
+        throw new NotFoundException(error.message);
+      }
+      throw new BadRequestException(
+        `Failed to export variable analysis results as XLSX: ${error.message}`
+      );
     }
   }
 
@@ -246,10 +584,15 @@ export class VariableAnalysisController {
       @Param('job_id') jobId: string
   ): Promise<{ success: boolean; message?: string }> {
     try {
-      const success = await this.variableAnalysisService.deleteJob(workspaceId, jobId);
+      const success = await this.variableAnalysisService.deleteJob(
+        workspaceId,
+        jobId
+      );
       return { success };
     } catch (error) {
-      throw new BadRequestException(`Failed to delete variable analysis job: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to delete variable analysis job: ${error.message}`
+      );
     }
   }
 
@@ -280,7 +623,9 @@ export class VariableAnalysisController {
       await this.variableAnalysisService.deleteAllJobs(workspaceId);
       return { success: true };
     } catch (error) {
-      throw new BadRequestException(`Failed to delete all variable analysis jobs: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to delete all variable analysis jobs: ${error.message}`
+      );
     }
   }
 
@@ -311,10 +656,19 @@ export class VariableAnalysisController {
       @Param('job_id') jobId: string
   ): Promise<{ success: boolean; message?: string }> {
     try {
-      const success = await this.variableAnalysisService.cancelJob(workspaceId, jobId);
+      const success = await this.variableAnalysisService.cancelJob(
+        workspaceId,
+        jobId
+      );
       return { success };
     } catch (error) {
-      throw new BadRequestException(`Failed to cancel variable analysis job: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to cancel variable analysis job: ${error.message}`
+      );
     }
+  }
+
+  private toSafeFilenamePart(value: string): string {
+    return value.replace(/[^a-zA-Z0-9_-]/g, '-');
   }
 }
