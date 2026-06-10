@@ -1037,12 +1037,14 @@ export class CodingValidationService {
       unitVariableMap,
       derivedVariableMap,
       trainingRequiredMap,
-      derivedVariablesBySourceMap
+      derivedVariablesBySourceMap,
+      manualInstructionMap
     ] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
       this.workspaceFilesService.getDerivedVariableMap(workspaceId),
       this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId),
-      this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId)
+      this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId),
+      this.workspaceFilesService.getManualInstructionVariableMap(workspaceId)
     ]);
 
     // Build case-insensitive lookup structures
@@ -1059,6 +1061,11 @@ export class CodingValidationService {
     const trainingRequiredSets = new Map<string, Set<string>>();
     trainingRequiredMap.forEach((variables: Set<string>, unitNameKey: string) => {
       trainingRequiredSets.set(unitNameKey.toUpperCase(), variables);
+    });
+
+    const manualInstructionSets = new Map<string, Set<string>>();
+    manualInstructionMap.forEach((variables: Set<string>, unitNameKey: string) => {
+      manualInstructionSets.set(unitNameKey.toUpperCase(), variables);
     });
 
     this.logger.debug(
@@ -1089,7 +1096,14 @@ export class CodingValidationService {
       derivedVariablesBySourceMap
     );
     const filteredIntendedIncompleteBeforeSourceExclusion =
-      intendedIncompleteRaw.filter(filterFn);
+      intendedIncompleteRaw.filter(row => {
+        if (!filterFn(row)) {
+          return false;
+        }
+
+        const unitKey = row.unitName?.toUpperCase();
+        return manualInstructionSets.get(unitKey)?.has(row.variableId) || false;
+      });
     const filteredIntendedIncomplete =
       filteredIntendedIncompleteBeforeSourceExclusion.filter(
         row => !isCoveredSourceVariable(row, coveredSourceKeys)

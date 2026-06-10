@@ -629,7 +629,12 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
         sourceType: 'MANUAL',
         type: 'integer',
         deriveSources: ['B1'],
-        codes: [{ id: 1, label: 'Code 1', score: 1 }]
+        codes: [{
+          id: 1,
+          label: 'Code 1',
+          score: 1,
+          manualInstruction: '<p>Manual</p>'
+        }]
       },
       {
         id: 'DX',
@@ -645,6 +650,19 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
         sourceType: 'SUM_SCORE',
         type: 'number',
         codes: [{ id: 2, label: 'Code 2', score: 2 }]
+      },
+      {
+        id: 'G1',
+        alias: 'general_instruction_only',
+        sourceType: 'MANUAL',
+        type: 'string',
+        manualInstruction: '<p>General instruction only</p>',
+        codes: [{
+          id: 3,
+          label: 'Code 3',
+          score: 3,
+          manualInstruction: ''
+        }]
       },
       {
         id: 'N1',
@@ -785,7 +803,7 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
     expect(sourceMap.get(getManualCodingScopeKey('UnitA', 'base_alias')))
       .toEqual(new Set(['derived_alias', 'xml_derived_alias']));
     expect(mockCacheService.set).toHaveBeenCalledWith(
-      'workspace_files:derived_variables_by_source:1',
+      'workspace_files:v2:derived_variables_by_source:1',
       {
         [getManualCodingScopeKey('UnitA', 'base_alias')]: [
           'derived_alias',
@@ -793,5 +811,28 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
         ]
       }
     );
+  });
+
+  it('should cache variables with manual instructions by response alias', async () => {
+    const service = makeService();
+
+    const manualInstructionMap = await service.getManualInstructionVariableMap(1);
+
+    expect(manualInstructionMap.get('UnitA')).toEqual(new Set(['derived_alias']));
+    expect(mockCacheService.set).toHaveBeenCalledWith(
+      'workspace_files:v2:manual_instruction_variables:1',
+      {
+        UnitA: ['derived_alias']
+      }
+    );
+  });
+
+  it('should not treat variable-level instructions as selectable manual codes', async () => {
+    const service = makeService();
+
+    const manualInstructionMap = await service.getManualInstructionVariableMap(1);
+
+    expect(manualInstructionMap.get('UnitA'))
+      .not.toContain('general_instruction_only');
   });
 });
