@@ -98,10 +98,12 @@ export class WorkspaceFilesService implements OnModuleInit {
   private readonly detailedUnitCacheLogging =
     process.env.DEBUG_UNIT_CACHE === 'true';
 
+  private readonly unitVariableCacheVersion = 'v2';
+
   private readonly unitVariableCacheRefreshes = new Map<number, Promise<void>>();
 
   private getCacheKey(workspaceId: number, type: string): string {
-    return `workspace_files:${type}:${workspaceId}`;
+    return `workspace_files:${this.unitVariableCacheVersion}:${type}:${workspaceId}`;
   }
 
   private logUnitCacheDebug(message: string): void {
@@ -2471,6 +2473,7 @@ ${bookletRefs}
       // Maps unitId → Map<alias, schemeId> for resolving XML aliases back to VOCS IDs
       const schemeAliasToIdMap = new Map<string, Map<string, string>>();
       const intendedIncompleteByUnit = new Map<string, Set<string>>();
+      const manualInstructionByUnit = new Map<string, Set<string>>();
       const trainingRequiredByUnit = new Map<string, Set<string>>();
       const derivedSourcesByUnit = new Map<
       string,
@@ -2486,7 +2489,7 @@ ${bookletRefs}
               sourceType?: string;
               deriveSources?: string[];
               processing?: string[];
-              codes?: Array<{ type?: string }>;
+              codes?: Array<{ type?: string; manualInstruction?: string | null }>;
             }[];
           };
           if (
@@ -2501,6 +2504,7 @@ ${bookletRefs}
             const intendedIncompleteSchemeIds = new Set<string>();
             // Collect scheme variable IDs that have CODER_TRAINING_REQUIRED processing property.
             const trainingRequiredSchemeIds = new Set<string>();
+            const manualInstructionSchemeIds = new Set<string>();
             const derivedSourceEntries: Array<{
               derivedId: string;
               derivedAlias?: string;
@@ -2522,6 +2526,12 @@ ${bookletRefs}
                 );
                 if (hasIntendedIncomplete) {
                   intendedIncompleteSchemeIds.add(vc.id);
+                }
+                const hasManualInstruction = vc.codes.some(
+                  code => !!code.manualInstruction?.trim()
+                );
+                if (hasManualInstruction) {
+                  manualInstructionSchemeIds.add(vc.id);
                 }
               }
               // Track variables with CODER_TRAINING_REQUIRED
@@ -2561,6 +2571,9 @@ ${bookletRefs}
               );
               trainingRequiredByUnit.set(unitId, trainingRequiredSchemeIds);
             }
+            if (manualInstructionSchemeIds.size > 0) {
+              manualInstructionByUnit.set(unitId, manualInstructionSchemeIds);
+            }
             if (derivedSourceEntries.length > 0) {
               derivedSourcesByUnit.set(unitId, derivedSourceEntries);
             }
@@ -2582,6 +2595,7 @@ ${bookletRefs}
       const derivedVariablesBySource = new Map<string, Set<string>>();
       // Maps unitId → alias-keyed set of variables with CODER_TRAINING_REQUIRED
       const trainingRequiredAliasByUnit = new Map<string, Set<string>>();
+      const manualInstructionAliasByUnit = new Map<string, Set<string>>();
 
       for (const unitFile of unitFiles) {
         try {
@@ -2605,10 +2619,13 @@ ${bookletRefs}
             // Scheme IDs that have CODER_TRAINING_REQUIRED processing property
             const schemeIdsWithTrainingRequired =
               trainingRequiredByUnit.get(unitName);
+            const schemeIdsWithManualInstructions =
+              manualInstructionByUnit.get(unitName);
             // Aliases that map to those scheme IDs — keyed by alias (= response variableid)
             const aliasesWithIntendedIncomplete = new Set<string>();
             // Aliases that map to scheme IDs with CODER_TRAINING_REQUIRED
             const aliasesWithTrainingRequired = new Set<string>();
+            const aliasesWithManualInstructions = new Set<string>();
             // Derived variable aliases for this unit
             const derivedAliases = new Set<string>();
             const xmlIdToAlias = new Map<string, string>();
@@ -2650,6 +2667,9 @@ ${bookletRefs}
                   // Check CODER_TRAINING_REQUIRED
                   if (schemeIdsWithTrainingRequired?.has(schemeKey)) {
                     aliasesWithTrainingRequired.add(variable.$.alias);
+                  }
+                  if (schemeIdsWithManualInstructions?.has(schemeKey)) {
+                    aliasesWithManualInstructions.add(variable.$.alias);
                   }
                 }
               }
@@ -2720,6 +2740,9 @@ ${bookletRefs}
                 if (schemeIdsWithTrainingRequired?.has(schemeKey)) {
                   aliasesWithTrainingRequired.add(alias);
                 }
+                if (schemeIdsWithManualInstructions?.has(schemeKey)) {
+                  aliasesWithManualInstructions.add(alias);
+                }
               }
             } else {
               this.logUnitCacheDebug(
@@ -2756,6 +2779,9 @@ ${bookletRefs}
                   // Also check CODER_TRAINING_REQUIRED for this scheme-only variable
                   if (schemeIdsWithTrainingRequired?.has(schemeId)) {
                     aliasesWithTrainingRequired.add(resolvedAlias);
+                  }
+                  if (schemeIdsWithManualInstructions?.has(schemeId)) {
+                    aliasesWithManualInstructions.add(resolvedAlias);
                   }
                 }
               }
@@ -2802,6 +2828,12 @@ ${bookletRefs}
                 aliasesWithTrainingRequired
               );
             }
+            if (aliasesWithManualInstructions.size > 0) {
+              manualInstructionAliasByUnit.set(
+                unitName,
+                aliasesWithManualInstructions
+              );
+            }
             if (derivedAliases.size > 0) {
               derivedVariablesByUnit.set(unitName, derivedAliases);
             }
@@ -2835,6 +2867,10 @@ ${bookletRefs}
         this.getCacheKey(workspaceId, 'derived_variables_by_source'),
         this.toRedisMap(derivedVariablesBySource)
       );
+      await this.cacheService.set(
+        this.getCacheKey(workspaceId, 'manual_instruction_variables'),
+        this.toRedisMap(manualInstructionAliasByUnit)
+      );
 
       this.logger.log(
         `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId} to Redis`
@@ -2843,6 +2879,7 @@ ${bookletRefs}
         `Unit variable cache summary for workspace ${workspaceId}: ` +
         `${intendedIncompleteAliasByUnit.size} units with intended-incomplete variables, ` +
         `${trainingRequiredAliasByUnit.size} units with training-required variables, ` +
+        `${manualInstructionAliasByUnit.size} units with manual instructions, ` +
         `${derivedVariablesByUnit.size} units with derived variables, ` +
         `${derivedVariablesBySource.size} source variables for derived variables`
       );
@@ -2925,6 +2962,26 @@ ${bookletRefs}
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'derived_variables_by_source');
+    const cached =
+      await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!cached) {
+      await this.refreshUnitVariableCache(workspaceId);
+      return this.fromRedisMap(
+        await this.cacheService.get<Record<string, string[]>>(cacheKey)
+      );
+    }
+    return this.fromRedisMap(cached);
+  }
+
+  /**
+   * Returns a map of unitName → Set of variable aliases where at least one
+   * code has a manual instruction. General variable-level instructions alone
+   * do not make a variable selectable in manual coding.
+   */
+  async getManualInstructionVariableMap(
+    workspaceId: number
+  ): Promise<Map<string, Set<string>>> {
+    const cacheKey = this.getCacheKey(workspaceId, 'manual_instruction_variables');
     const cached =
       await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
@@ -3511,6 +3568,9 @@ ${bookletRefs}
       ),
       this.cacheService.delete(
         this.getCacheKey(workspaceId, 'derived_variables_by_source')
+      ),
+      this.cacheService.delete(
+        this.getCacheKey(workspaceId, 'manual_instruction_variables')
       ),
       this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`)
     ]);

@@ -20,6 +20,7 @@ This `AGENTS.md` provides context and guidelines for AI agents working on the Ko
 ## Agent Notes
 - Use the Nx MCP tools from the generated section above when they are available. If they are not available in the current session, inspect `nx.json`, `apps/*/project.json`, `package.json`, and relevant local files instead.
 - Prefer `npx nx ...` or the npm scripts in `package.json` over bare `nx ...`, because the repository has a local Nx installation and no global Nx binary should be assumed.
+- Local performance rule: Do not run frontend and backend validation tasks in the same command or in parallel. Run frontend and backend tests, linting, builds, and e2e checks as separate commands and wait for one command to finish before starting the next.
 - For Nx plugin-specific guidance, check `node_modules/@nx/<plugin>/PLUGIN.md` when present. In this workspace, not every installed Nx plugin ships such a file.
 - More specific instructions exist in nested `AGENTS.md` files. Read them when working under `apps/frontend` or `apps/backend`.
 - Do not invent new workspace structure or import aliases without checking the existing code first.
@@ -68,14 +69,14 @@ This `AGENTS.md` provides context and guidelines for AI agents working on the Ko
 - **Run Tests**: `npx nx test frontend` / `npx nx test backend`
 - **Linting**: `npx nx lint frontend` / `npx nx lint backend`
 - **Build**: `npx nx build frontend` / `npx nx build backend`
-- **Run Multiple Projects**: `npx nx run-many --target=build --projects=frontend,backend --parallel`
+- **Run Multiple Projects**: Avoid running frontend and backend together on this local machine unless the user explicitly asks for it; prefer separate commands for performance.
 - Equivalent npm scripts exist for common frontend/backend test, lint, build, and serve tasks.
 
 ## Validation Checklist
 - **Frontend-only changes**: Run `npx nx lint frontend` and `npx nx test frontend`.
 - **Backend-only changes**: Run `npx nx lint backend` and `npx nx test backend`.
-- **Shared DTO/API contract changes**: Run frontend and backend tests, and inspect affected controllers, services, facades, and components.
-- **Build or configuration changes**: Run `npx nx run-many --target=build --projects=frontend,backend --parallel`.
+- **Shared DTO/API contract changes**: Run frontend and backend tests separately, and inspect affected controllers, services, facades, and components.
+- **Build or configuration changes**: Run the affected frontend and backend builds separately.
 - **Critical user flows**: Run `npx nx e2e frontend` when UI behavior, routing, auth, uploads, or coding workflows are affected.
 
 ## Coding Guidelines

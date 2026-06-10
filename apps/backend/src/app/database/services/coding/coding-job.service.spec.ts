@@ -1522,7 +1522,7 @@ describe('CodingJobService', () => {
       'job_definition_id'
     );
     expect(cacheService.delete).toHaveBeenCalledWith(
-      'coding_incomplete_variables_v7:7'
+      'coding_incomplete_variables_v8:7'
     );
   });
 
