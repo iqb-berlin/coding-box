@@ -162,7 +162,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   // Variables
   variables: Variable[] = [];
-  selectedVariables = new SelectionModel<Variable>(true, []);
+  selectedVariables = this.createVariableSelectionModel();
   displayedColumns: string[] = ['select', 'unitName', 'variableId'];
   dataSource = new MatTableDataSource<Variable>([]);
 
@@ -458,7 +458,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
 
     if (originallyAssigned && originallyAssigned.length > 0) {
-      this.selectedVariables = new SelectionModel<Variable>(true, [...originallyAssigned]);
+      this.selectedVariables = this.createVariableSelectionModel([...originallyAssigned]);
     }
   }
 
@@ -563,42 +563,61 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   private processVariableSelection(): void {
     const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
-    if (originallyAssigned && originallyAssigned.length > 0) {
-      const makeKey = (u?: string | null, v?: string | null) => `${(u || '').trim().toLowerCase()}::${(v || '').trim().toLowerCase()}`;
 
-      const toKey = (obj: unknown): string => {
-        if (obj && typeof obj === 'object') {
-          const rec = obj as Record<string, unknown>;
-          const unitNameVal = rec.unitName;
-          const varIdCandidate = rec.variableId ?? rec.variableid ?? rec.variableID;
-          const unitName = typeof unitNameVal === 'string' ? unitNameVal : '';
-          const variableId = typeof varIdCandidate === 'string' ? varIdCandidate : '';
-          return makeKey(unitName, variableId);
-        }
-        return makeKey('', '');
-      };
+    const selectedByKey = new Map(this.selectedVariables.selected.map(variable => [
+      this.getVariableSelectionKey(variable),
+      variable
+    ]));
+    const assignedByKey = new Map((originallyAssigned ?? []).map(variable => [
+      this.getVariableSelectionKey(variable),
+      variable
+    ]));
+    const selectedKeys = new Set([...selectedByKey.keys(), ...assignedByKey.keys()]);
+    const currentVariableKeys = new Set(
+      this.variables.map(variable => this.getVariableSelectionKey(variable))
+    );
+    const nextSelectedVariables = this.selectedVariables.selected.filter(
+      variable => !currentVariableKeys.has(this.getVariableSelectionKey(variable))
+    );
 
-      const assignedKeySet = new Set(originallyAssigned.map(toKey));
-      const assignedByKey = new Map(originallyAssigned.map(variable => [
-        toKey(variable),
-        variable
-      ]));
+    this.variables.forEach(rowVar => {
+      const rowKey = this.getVariableSelectionKey(rowVar);
+      const selectedVariable = selectedByKey.get(rowKey);
+      const assignedVariable = assignedByKey.get(rowKey);
 
-      this.selectedVariables.clear();
-      this.variables.forEach(rowVar => {
-        const rowKey = makeKey(rowVar.unitName ?? '', rowVar.variableId ?? '');
-        rowVar.includeDeriveError =
-          this.includeDeriveErrorInManualCoding &&
-          assignedByKey.get(rowKey)?.includeDeriveError === true;
-        if (assignedKeySet.has(rowKey)) {
-          this.selectedVariables.select(rowVar);
-        }
-      });
-    } else {
-      this.variables.forEach(rowVar => {
-        rowVar.includeDeriveError = false;
-      });
+      rowVar.includeDeriveError =
+        this.includeDeriveErrorInManualCoding &&
+        (selectedVariable?.includeDeriveError === true || assignedVariable?.includeDeriveError === true);
+
+      if (selectedKeys.has(rowKey)) {
+        nextSelectedVariables.push(rowVar);
+      }
+    });
+
+    this.selectedVariables = this.createVariableSelectionModel(nextSelectedVariables);
+    this.syncSelectionWithAvailability();
+  }
+
+  private createVariableSelectionModel(initiallySelectedValues: Variable[] = []): SelectionModel<Variable> {
+    return new SelectionModel<Variable>(
+      true,
+      initiallySelectedValues,
+      true,
+      (first, second) => this.getVariableSelectionKey(first) === this.getVariableSelectionKey(second)
+    );
+  }
+
+  private getVariableSelectionKey(variable: unknown): string {
+    if (variable && typeof variable === 'object') {
+      const record = variable as Record<string, unknown>;
+      const unitName = typeof record.unitName === 'string' ? record.unitName : '';
+      const variableIdCandidate = record.variableId ?? record.variableid ?? record.variableID;
+      const variableId = typeof variableIdCandidate === 'string' ? variableIdCandidate : '';
+
+      return this.getVariableUsageKey(unitName, variableId);
     }
+
+    return this.getVariableUsageKey('', '');
   }
 
   loadVariableBundles(): void {
@@ -1048,7 +1067,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   isAllSelected(): boolean {
     const selectableRows = this.dataSource.data.filter(v => !this.isVariableDisabled(v));
-    const numSelected = this.selectedVariables.selected.filter(v => !this.isVariableDisabled(v)).length;
+    const numSelected = selectableRows.filter(v => this.selectedVariables.isSelected(v)).length;
     const numRows = selectableRows.length;
     return numSelected === numRows && numRows > 0;
   }
