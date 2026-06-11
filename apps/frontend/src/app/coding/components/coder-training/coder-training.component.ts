@@ -33,7 +33,7 @@ import {
   FormControl
 } from '@angular/forms';
 import {
-  Subject, takeUntil, map, startWith, Observable, combineLatest, BehaviorSubject
+  Subject, takeUntil, map, startWith, Observable, combineLatest, BehaviorSubject, tap, catchError, of
 } from 'rxjs';
 import { JobDefinitionSelectionDialogComponent } from './job-definition-selection-dialog.component';
 import { CoderService } from '../../services/coder.service';
@@ -148,6 +148,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   bundleSelection$ = new BehaviorSubject<number[]>([]);
   manualVariablesSelectControl = new FormControl<string[]>([]); // Stable control for mat-select
   private isSyncing = false;
+  private hasPopulatedTrainingSettings = false;
+  private hasPopulatedTrainingSelections = false;
+  private availableVariablesLoaded = false;
+  private availableBundlesLoaded = false;
 
   filteredVariables$!: Observable<Variable[]>;
   filteredBundles$!: Observable<VariableBundle[]>;
@@ -269,13 +273,20 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.loadCoders();
     this.loadAvailableVariables();
     this.loadAvailableTrainings();
+    this.populateTrainingSettingsFromTraining();
 
-    // Population logic: wait for variables and bundles if in edit mode
+    // Variable and bundle selections depend on the loaded option lists.
     combineLatest([
-      this._availableVariables$.pipe(startWith([])),
+      this._availableVariables$,
       this.variableBundleService.getBundles(1, 100).pipe(
         map(({ bundles }: { bundles: VariableBundle[] }) => bundles),
-        startWith([])
+        tap(() => {
+          this.availableBundlesLoaded = true;
+        }),
+        catchError(() => {
+          this.availableBundlesLoaded = true;
+          return of([] as VariableBundle[]);
+        })
       )
     ]).pipe(
       takeUntil(this.destroy$)
@@ -283,8 +294,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       this.availableVariables = variables;
       this.availableBundles = bundles;
 
-      if ((variables.length > 0 || bundles.length > 0) && this.editTraining && this.trainingForm.get('variables')?.value.length === 0) {
-        this.populateFormFromTraining();
+      if (
+        this.editTraining &&
+        this.availableVariablesLoaded &&
+        this.availableBundlesLoaded &&
+        !this.hasPopulatedTrainingSelections
+      ) {
+        this.populateTrainingSelectionsFromTraining();
       }
 
       this.isLoadingVariables = false;
@@ -294,7 +310,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   private populateFormFromTraining(): void {
+    this.populateTrainingSettingsFromTraining();
+    this.populateTrainingSelectionsFromTraining();
+  }
+
+  private populateTrainingSettingsFromTraining(): void {
     if (!this.editTraining) return;
+    if (this.hasPopulatedTrainingSettings) return;
 
     this.trainingForm.get('trainingLabel')?.setValue(this.editTraining.label);
     if (this.editTraining.case_ordering_mode) {
@@ -316,6 +338,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (this.editTraining.assigned_coders) {
       this.selectedCoders = new Set(this.editTraining.assigned_coders);
     }
+
+    this.hasPopulatedTrainingSettings = true;
+  }
+
+  private populateTrainingSelectionsFromTraining(): void {
+    if (!this.editTraining) return;
+    if (this.hasPopulatedTrainingSelections) return;
 
     if (this.editTraining.assigned_variables) {
       this.editTraining.assigned_variables.forEach(v => {
@@ -356,6 +385,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
 
     this.updateGroupedVariables();
+    this.hasPopulatedTrainingSelections = true;
   }
 
   ngOnDestroy(): void {
@@ -383,12 +413,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       .subscribe({
         next: variables => {
           this.availableVariables = variables;
+          this.availableVariablesLoaded = true;
           this._availableVariables$.next(variables);
           this.isLoadingVariables = false;
           this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.showError('Fehler beim Laden der verfügbaren Variablen');
+          this.availableVariablesLoaded = true;
+          this._availableVariables$.next([]);
           this.isLoadingVariables = false;
           this.changeDetectorRef.markForCheck();
         }
