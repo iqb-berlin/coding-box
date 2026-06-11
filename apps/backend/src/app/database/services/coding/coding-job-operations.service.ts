@@ -9,6 +9,7 @@ import {
 } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingValidationService } from './coding-validation.service';
+import { isCodingIssueReviewJobType } from './coding-job-type.util';
 
 type BulkApplySkippedReason = 'training-job' | 'not-completed' | 'freshness-stale';
 
@@ -75,8 +76,10 @@ export class CodingJobOperationsService {
 
     const codingJobs = await this.codingJobRepository.find({
       where: { workspace_id: workspaceId },
-      select: ['id', 'name', 'status', 'training_id', 'freshness_status']
-    });
+      select: ['id', 'name', 'status', 'training_id', 'freshness_status', 'job_type']
+    }).then(jobs => jobs.filter(
+      job => !isCodingIssueReviewJobType(job.job_type)
+    ));
 
     const results: Array<{
       jobId: number;

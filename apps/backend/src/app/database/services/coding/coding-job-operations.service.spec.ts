@@ -67,6 +67,14 @@ describe('CodingJobOperationsService', () => {
         status: 'completed',
         training_id: null,
         freshness_status: 'stale_source'
+      },
+      {
+        id: 5,
+        name: 'Hidden review job',
+        status: 'completed',
+        training_id: null,
+        job_type: 'coding_issue_review',
+        source_coding_job_id: 3
       }
     ] as CodingJob[]);
 
@@ -84,7 +92,14 @@ describe('CodingJobOperationsService', () => {
 
     expect(codingJobRepository.find).toHaveBeenCalledWith({
       where: { workspace_id: 5 },
-      select: ['id', 'name', 'status', 'training_id', 'freshness_status']
+      select: [
+        'id',
+        'name',
+        'status',
+        'training_id',
+        'freshness_status',
+        'job_type'
+      ]
     });
     expect(codingResultsService.applyCodingResults).toHaveBeenCalledTimes(1);
     expect(codingResultsService.applyCodingResults).toHaveBeenCalledWith(5, 3, {});

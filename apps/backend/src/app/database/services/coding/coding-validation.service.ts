@@ -42,6 +42,10 @@ import {
   createManualCodingVariableReferences,
   DERIVE_ERROR_STATUS
 } from '../../utils/manual-coding-candidate.util';
+import {
+  applyNonCodingIssueReviewJobFilter,
+  getNonCodingIssueReviewJobSqlCondition
+} from './coding-job-type.util';
 
 interface NormalizedExpectedCombination {
   unitKey: string;
@@ -943,6 +947,11 @@ export class CodingValidationService {
     });
 
     query.andWhere(`(${conditions.join(' OR ')})`, parameters);
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'codingValidationAssignedResponsesReviewJobType'
+    );
     applyResolvedExclusionsToQuery(query, exclusions, {
       unitNameExpression: 'cju.unit_name',
       bookletNameExpression: 'cju.booklet_name',
@@ -1260,6 +1269,11 @@ export class CodingValidationService {
       .andWhere('coding_job.training_id IS NULL')
       .groupBy('cju.unit_name')
       .addGroupBy('cju.variable_id');
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'codingValidationCasesInJobsReviewJobType'
+    );
     applyResolvedExclusionsToQuery(query, exclusions, {
       unitNameExpression: 'cju.unit_name',
       bookletNameExpression: 'cju.booklet_name',
@@ -1297,6 +1311,11 @@ export class CodingValidationService {
         deriveErrorStatus: statusStringToNumber('DERIVE_ERROR')
       })
       .distinct(true);
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'appliedResultsDeriveErrorVariablesReviewJobType'
+    );
 
     applyResolvedExclusionsToQuery(query, exclusions, {
       unitNameExpression: 'cju.unit_name',
@@ -1372,6 +1391,7 @@ export class CodingValidationService {
                     ON manual_derive_cj.id = manual_derive_cju.coding_job_id
                   WHERE manual_derive_cju.response_id = response.id
                     AND manual_derive_cj.training_id IS NULL
+                    AND ${getNonCodingIssueReviewJobSqlCondition('manual_derive_cj')}
                 )`,
               { deriveErrorStatus: statusStringToNumber('DERIVE_ERROR') }
             );

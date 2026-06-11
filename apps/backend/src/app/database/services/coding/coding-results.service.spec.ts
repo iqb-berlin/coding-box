@@ -85,6 +85,8 @@ describe('CodingResultsService', () => {
           score: 0
         }
       }),
+      getResolvedCodingIssueReviewResponseIds: jest.fn().mockResolvedValue([]),
+      getOpenCodingIssueReviewResponseIds: jest.fn().mockResolvedValue([]),
       getAggregationSettingsForCodingJob: jest.fn().mockResolvedValue({
         aggregationEnabled: false,
         aggregationThreshold: null,
@@ -378,6 +380,28 @@ describe('CodingResultsService', () => {
     expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
   });
 
+  it('does not block resolved coding issue reviews as double-coding conflicts', async () => {
+    codingJobService.getResolvedCodingIssueReviewResponseIds
+      .mockResolvedValueOnce([99]);
+    (responseRepository.manager.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 99, statusV2: null }]);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(responseRepository.manager.query).toHaveBeenCalledTimes(1);
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      99,
+      {
+        code_v2: 0,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
+    expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalled();
+  });
+
   it('does not mark coding jobs as applied when only coding issues still require review', async () => {
     codingJobService.getCodingProgress.mockResolvedValueOnce({
       'person@code@booklet::booklet::UNIT::VAR': {
@@ -393,6 +417,28 @@ describe('CodingResultsService', () => {
     expect(result.skippedReviewCount).toBe(1);
     expect(result.messageKey).toBe('coding-results.apply.success.no-responses');
     expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
+  });
+
+  it('does not apply coding issue review units that are still open', async () => {
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'person@code@booklet::booklet::UNIT::VAR:open': {
+        id: -1,
+        code: '',
+        label: 'OPEN'
+      }
+    });
+    codingJobService.getOpenCodingIssueReviewResponseIds
+      .mockResolvedValueOnce([99]);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(result.updatedResponsesCount).toBe(0);
+    expect(result.skippedReviewCount).toBe(1);
+    expect(result.messageKey).toBe('coding-results.apply.success.no-responses');
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markManualCodingCurrent).not.toHaveBeenCalled();
     expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
   });
 

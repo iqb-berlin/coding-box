@@ -139,6 +139,39 @@ describe('ReplayCodingService', () => {
       );
     });
 
+    it('marks progress saves as issue reviews in coding issue review mode', async () => {
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      service.isCodingIssueReviewMode = true;
+
+      await service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'l' });
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        expect.objectContaining({
+          issueReview: true
+        })
+      );
+    });
+
+    it('includes locally edited notes when saving coding issue review progress', async () => {
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      service.isCodingIssueReviewMode = true;
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      service.notes.set(key, ' manager note ');
+
+      await service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'l' });
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        expect.objectContaining({
+          issueReview: true,
+          notes: 'manager note'
+        })
+      );
+    });
+
     it('keeps save errors until the failed coding case saves successfully', async () => {
       codingJobBackendServiceMock.saveCodingProgress
         .mockReturnValueOnce(throwError(() => new Error('save failed')))
@@ -506,6 +539,22 @@ describe('ReplayCodingService', () => {
         }
       );
       expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+    });
+
+    it('marks note saves as issue reviews in coding issue review mode', async () => {
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
+      service.codingJobId = 100;
+      service.isCodingIssueReviewMode = true;
+
+      await service.saveNotes(1, 'login@code@group@booklet', 'UNIT', 'VAR', 'note');
+
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledWith(
+        1,
+        100,
+        expect.objectContaining({
+          issueReview: true
+        })
+      );
     });
 
     it('uses the job id and token captured before a queued note save runs after switching jobs', async () => {

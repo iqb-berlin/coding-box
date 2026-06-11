@@ -48,6 +48,7 @@ export class ReplayCodingService {
   isCodingJobFinalized: boolean = false;
   isCompletedJobReview: boolean = false;
   isReviewMode: boolean = false;
+  isCodingIssueReviewMode: boolean = false;
   hasSaveError: boolean = false;
   lastSaveError: string | null = null;
   private failedSaveKeys = new Set<string>();
@@ -79,6 +80,7 @@ export class ReplayCodingService {
     this.isCodingJobFinalized = false;
     this.isCompletedJobReview = false;
     this.isReviewMode = false;
+    this.isCodingIssueReviewMode = false;
     this.hasSaveError = false;
     this.lastSaveError = null;
     this.failedSaveKeys.clear();
@@ -238,12 +240,17 @@ export class ReplayCodingService {
           }
         }
 
+        const currentNotes = this.notes.get(compositeKey)?.trim();
         await firstValueFrom(
           this.codingJobBackendService.saveCodingProgress(workspaceId, jobId, {
             testPerson,
             unitId,
             variableId,
-            selectedCode: backendSelectedCode
+            selectedCode: backendSelectedCode,
+            ...(this.isCodingIssueReviewMode ? {
+              issueReview: true,
+              notes: currentNotes || undefined
+            } : {})
           }, ...authTokenArg)
         );
         if (this.isCurrentCodingContext(contextSnapshot)) {
@@ -492,7 +499,8 @@ export class ReplayCodingService {
             testPerson,
             unitId,
             variableId,
-            notes: trimmedNotes || undefined
+            notes: trimmedNotes || undefined,
+            ...(this.isCodingIssueReviewMode ? { issueReview: true } : {})
           }, ...authTokenArg)
         );
         if (this.isCurrentCodingContext(contextSnapshot)) {

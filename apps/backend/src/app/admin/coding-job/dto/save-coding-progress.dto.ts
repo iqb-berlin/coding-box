@@ -64,4 +64,13 @@ export class SaveCodingProgressDto {
   @IsString()
   @IsOptional()
     notes?: string;
+
+  @ApiProperty({
+    description: 'Save this entry as a coding issue review by the current user.',
+    example: false,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    issueReview?: boolean;
 }
