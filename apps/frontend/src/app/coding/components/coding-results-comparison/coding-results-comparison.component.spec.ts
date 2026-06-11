@@ -253,6 +253,37 @@ describe('CodingResultsComparisonComponent', () => {
     );
   });
 
+  it('should pass selected training display options to the discussion replay', () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    codingStatisticsService.getReplayUrl.mockReturnValue(of({
+      replayUrl: 'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1'
+    }));
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.availableTrainings = [{
+      id: 5,
+      workspace_id: 1,
+      label: 'Training with hidden instructions',
+      created_at: new Date('2026-06-11T12:00:00Z'),
+      updated_at: new Date('2026-06-11T12:00:00Z'),
+      jobsCount: 2,
+      suppress_general_instructions: true
+    }];
+
+    component.openReplay({
+      responseId: 77,
+      unitName: 'UNIT_1',
+      variableId: 'VAR_1',
+      testperson: 'login@code@booklet',
+      coders: []
+    } as never);
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding&originResponseId=77&suppressGeneralInstructions=true',
+      '_blank'
+    );
+  });
+
   it('should show feedback when no replay URL is returned', () => {
     const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
     codingStatisticsService.getReplayUrl.mockReturnValue(of({ replayUrl: '' }));
