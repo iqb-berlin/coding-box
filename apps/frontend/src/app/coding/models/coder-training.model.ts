@@ -27,5 +27,7 @@ export interface CoderTraining {
   case_selection_mode?: CaseSelectionMode;
   reference_training_ids?: number[];
   reference_mode?: ReferenceMode | null;
+  show_score?: boolean;
+  allow_comments?: boolean;
   suppress_general_instructions?: boolean;
 }

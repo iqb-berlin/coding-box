@@ -112,6 +112,8 @@ export class CodingTrainingBackendService {
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
     referenceMode?: 'same' | 'different',
+    showScore?: boolean,
+    allowComments?: boolean,
     suppressGeneralInstructions?: boolean
   ): Observable<CreateCoderTrainingJobsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-training-jobs`;
@@ -126,6 +128,8 @@ export class CodingTrainingBackendService {
       caseSelectionMode,
       referenceTrainingIds,
       referenceMode,
+      showScore,
+      allowComments,
       suppressGeneralInstructions
     }, { headers: this.authHeader });
   }
@@ -154,6 +158,8 @@ export class CodingTrainingBackendService {
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
     referenceMode?: 'same' | 'different',
+    showScore?: boolean,
+    allowComments?: boolean,
     suppressGeneralInstructions?: boolean
   ): Observable<{ success: boolean; message: string; jobsCreated?: number }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
@@ -168,6 +174,8 @@ export class CodingTrainingBackendService {
       caseSelectionMode,
       referenceTrainingIds,
       referenceMode,
+      showScore,
+      allowComments,
       suppressGeneralInstructions
     }, { headers: this.authHeader });
   }

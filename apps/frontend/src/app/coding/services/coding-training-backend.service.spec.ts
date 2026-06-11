@@ -56,6 +56,8 @@ describe('CodingTrainingBackendService', () => {
         caseSelectionMode: undefined,
         referenceTrainingIds: undefined,
         referenceMode: undefined,
+        showScore: undefined,
+        allowComments: undefined,
         suppressGeneralInstructions: undefined
       });
       req.flush({});
@@ -89,6 +91,8 @@ describe('CodingTrainingBackendService', () => {
         'random',
         [10, 11],
         'same',
+        true,
+        false,
         true
       ).subscribe();
 
@@ -120,6 +124,8 @@ describe('CodingTrainingBackendService', () => {
         caseSelectionMode: 'random',
         referenceTrainingIds: [10, 11],
         referenceMode: 'same',
+        showScore: true,
+        allowComments: false,
         suppressGeneralInstructions: true
       });
       req.flush({});
@@ -150,6 +156,8 @@ describe('CodingTrainingBackendService', () => {
         'newest_first',
         [5],
         'different',
+        true,
+        false,
         true
       ).subscribe();
 
@@ -166,6 +174,8 @@ describe('CodingTrainingBackendService', () => {
         caseSelectionMode: 'newest_first',
         referenceTrainingIds: [5],
         referenceMode: 'different',
+        showScore: true,
+        allowComments: false,
         suppressGeneralInstructions: true
       });
       req.flush({});
