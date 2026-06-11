@@ -76,6 +76,12 @@
         <h3 class="section-subtitle">{{ 'coding-job-definition-dialog.coding-display-options.title' | translate }}</h3>
       </div>
       <p class="section-description">{{ 'coding-job-definition-dialog.coding-display-options.description' | translate }}</p>
+      <mat-checkbox formControlName="showScore" class="display-option-checkbox">
+        {{ 'coding-job-definition-dialog.coding-display-options.show-score' | translate }}
+      </mat-checkbox>
+      <mat-checkbox formControlName="allowComments" class="display-option-checkbox">
+        {{ 'coding-job-definition-dialog.coding-display-options.allow-comments' | translate }}
+      </mat-checkbox>
       <mat-checkbox formControlName="suppressGeneralInstructions" class="display-option-checkbox">
         {{ 'coding-job-definition-dialog.coding-display-options.suppress-general-instructions' | translate }}
       </mat-checkbox>

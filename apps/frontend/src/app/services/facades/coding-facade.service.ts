@@ -123,6 +123,8 @@ interface DistributedCodingCoderSelection {
 }
 
 interface CoderTrainingDisplayOptions {
+  showScore?: boolean;
+  allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
 }
 
@@ -251,6 +253,8 @@ export class CodingFacadeService {
       undefined,
       undefined,
       undefined,
+      displayOptions?.showScore,
+      displayOptions?.allowComments,
       displayOptions?.suppressGeneralInstructions
     );
   }

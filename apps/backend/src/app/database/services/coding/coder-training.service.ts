@@ -83,6 +83,8 @@ interface CoderTrainingWithJobs {
   case_selection_mode?: string;
   reference_training_ids?: number[];
   reference_mode?: string | null;
+  show_score?: boolean;
+  allow_comments?: boolean;
   suppress_general_instructions?: boolean;
 }
 
@@ -1399,6 +1401,8 @@ export class CoderTrainingService {
     caseSelectionMode?: CaseSelectionMode,
     referenceTrainingIds?: number[],
     referenceMode?: ReferenceMode,
+    showScore?: boolean,
+    allowComments?: boolean,
     suppressGeneralInstructions?: boolean
   ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
     try {
@@ -1426,6 +1430,8 @@ export class CoderTrainingService {
       coderTraining.case_selection_mode = caseSelectionMode ?? 'oldest_first';
       coderTraining.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
       coderTraining.reference_mode = referenceMode ?? null;
+      coderTraining.show_score = showScore ?? false;
+      coderTraining.allow_comments = allowComments ?? true;
       coderTraining.suppress_general_instructions = suppressGeneralInstructions ?? false;
       coderTraining.created_at = new Date();
       coderTraining.updated_at = new Date();
@@ -1513,6 +1519,8 @@ export class CoderTrainingService {
         codingJob.training_id = trainingId;
         codingJob.missings_profile_id = resolvedMissingsProfileId;
         codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
+        codingJob.showScore = showScore ?? false;
+        codingJob.allowComments = allowComments ?? true;
         codingJob.suppressGeneralInstructions = suppressGeneralInstructions ?? false;
         codingJob.created_at = new Date();
         codingJob.updated_at = new Date();
@@ -1661,6 +1669,8 @@ export class CoderTrainingService {
         case_selection_mode: training.case_selection_mode,
         reference_training_ids: training.reference_training_ids ?? undefined,
         reference_mode: training.reference_mode ?? undefined,
+        show_score: training.show_score,
+        allow_comments: training.allow_comments,
         suppress_general_instructions: training.suppress_general_instructions,
         assigned_variables: training.variables
           ?.filter(v => !bundleVariableKeys.has(this.makeTrainingVariableKey(v.unit_name, v.variable_id)))
@@ -2088,6 +2098,8 @@ export class CoderTrainingService {
     caseSelectionMode?: CaseSelectionMode,
     referenceTrainingIds?: number[],
     referenceMode?: ReferenceMode,
+    showScore?: boolean,
+    allowComments?: boolean,
     suppressGeneralInstructions?: boolean
   ): Promise<{ success: boolean; message: string; jobsCreated?: number; jobs?: TrainingJob[] }> {
     try {
@@ -2228,12 +2240,20 @@ export class CoderTrainingService {
       const resolvedSuppressGeneralInstructions = suppressGeneralInstructions ??
         training.suppress_general_instructions ??
         false;
+      const resolvedShowScore = showScore ??
+        training.show_score ??
+        false;
+      const resolvedAllowComments = allowComments ??
+        training.allow_comments ??
+        true;
 
       training.label = trainingLabel;
       training.case_ordering_mode = newCaseOrderingMode;
       training.case_selection_mode = newCaseSelectionMode;
       training.reference_training_ids = effectiveReferenceTrainingIds.length ? effectiveReferenceTrainingIds : null;
       training.reference_mode = newReferenceMode;
+      training.show_score = resolvedShowScore;
+      training.allow_comments = resolvedAllowComments;
       training.suppress_general_instructions = resolvedSuppressGeneralInstructions;
       training.updated_at = new Date();
 
@@ -2328,6 +2348,8 @@ export class CoderTrainingService {
           codingJob.training_id = trainingId;
           codingJob.missings_profile_id = resolvedMissingsProfileId;
           codingJob.case_ordering_mode = newCaseOrderingMode;
+          codingJob.showScore = resolvedShowScore;
+          codingJob.allowComments = resolvedAllowComments;
           codingJob.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
           codingJob.created_at = new Date();
           codingJob.updated_at = new Date();
@@ -2436,6 +2458,8 @@ export class CoderTrainingService {
       }
 
       for (const job of training.codingJobs || []) {
+        job.showScore = resolvedShowScore;
+        job.allowComments = resolvedAllowComments;
         job.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
         await this.codingJobRepository.save(job);
       }
