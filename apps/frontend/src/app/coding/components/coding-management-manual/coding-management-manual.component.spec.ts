@@ -1039,11 +1039,12 @@ describe('CodingManagementManualComponent', () => {
     expect(refreshSpy).not.toHaveBeenCalled();
   });
 
-  it('should open training reliability with a coder-training kappa scope', () => {
+  it('should open training reliability with available coder trainings', () => {
     const dialog = { open: jest.fn() };
     (component as unknown as { dialog: typeof dialog }).dialog = dialog;
+    const training = { id: 7 };
     component.coderTrainingsListComponent = {
-      originalData: [{ id: 7 }],
+      originalData: [training],
       coderTrainings: [],
       openResultsComparison: jest.fn()
     } as unknown as CodingManagementManualComponent['coderTrainingsListComponent'];
@@ -1055,7 +1056,7 @@ describe('CodingManagementManualComponent', () => {
       expect.objectContaining({
         data: {
           excludeTrainings: false,
-          scope: { coderTrainingIds: [7] }
+          availableCoderTrainings: [training]
         }
       })
     );
