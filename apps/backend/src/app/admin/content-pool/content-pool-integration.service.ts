@@ -180,7 +180,7 @@ ContentPoolUploadFilesJobProgress,
 export class ContentPoolIntegrationService {
   private readonly requiredCodingBoxScopes = ['acp.read', 'files.read', 'files.write'];
 
-  private readonly scopeProbeAcpId = '__coding-box-connection-test__';
+  private readonly scopeProbeAcpId = '00000000-0000-4000-8000-000000000000';
 
   private readonly enabledSettingKey = 'system-content-pool-enabled';
 
@@ -1019,9 +1019,43 @@ export class ContentPoolIntegrationService {
 
       this.throwHttpError(
         error,
-        `Content-Pool-Scope ${scope} konnte nicht geprüft werden.`
+        this.getScopeProbeFailureMessage(scope, error, options)
       );
     }
+  }
+
+  private getScopeProbeFailureMessage(
+    scope: string,
+    error: unknown,
+    options: ScopeProbeOptions
+  ): string {
+    const baseMessage = `Content-Pool-Scope ${scope} konnte nicht geprüft werden.`;
+    const status = this.getErrorHttpStatus(error);
+
+    if (
+      options.acceptsFallbackAcpNotFound &&
+      status !== undefined &&
+      status >= 500 &&
+      status < 600
+    ) {
+      return `${baseMessage} Der Content Pool konnte den Scope-Test für ` +
+        'eine nicht vorhandene ACP nicht sauber beantworten. Erwartet wurde ' +
+        `"404 ACP not found", erhalten wurde "${status}".`;
+    }
+
+    return baseMessage;
+  }
+
+  private getErrorHttpStatus(error: unknown): number | undefined {
+    if ((error as AxiosError)?.isAxiosError) {
+      return (error as AxiosError).response?.status;
+    }
+
+    if (error instanceof HttpException) {
+      return error.getStatus();
+    }
+
+    return undefined;
   }
 
   private isNonAuthScopeProbeRejection(
