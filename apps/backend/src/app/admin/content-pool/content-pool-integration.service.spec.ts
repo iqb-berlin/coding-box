@@ -291,6 +291,24 @@ describe('ContentPoolIntegrationService settings', () => {
     })).rejects.toThrow(InternalServerErrorException);
   });
 
+  it('should explain fallback scope probe server errors from the Content Pool', async () => {
+    const httpService = createHttpServiceMock();
+    const settingRepository = createEnabledSettings();
+    const service = createService(httpService, undefined, settingRepository);
+    httpService.axiosRef.get
+      .mockResolvedValueOnce({ data: [] })
+      .mockRejectedValueOnce(createAxiosError(500, 'Internal server error'));
+
+    await expect(service.testConnection({
+      baseUrl: 'http://content-pool.test'
+    })).rejects.toThrow(
+      'Der Content Pool konnte den Scope-Test für eine nicht vorhandene ACP ' +
+      'nicht sauber beantworten. Erwartet wurde "404 ACP not found", ' +
+      'erhalten wurde "500".'
+    );
+    expect(httpService.axiosRef.post).not.toHaveBeenCalled();
+  });
+
   it('should validate file scopes without ACP side effects when no ACP is visible', async () => {
     const httpService = createHttpServiceMock();
     const settingRepository = createEnabledSettings();
@@ -313,11 +331,11 @@ describe('ContentPoolIntegrationService settings', () => {
     });
     expect(httpService.axiosRef.get).toHaveBeenNthCalledWith(
       2,
-      'http://content-pool.test/api/server/acp/__coding-box-connection-test__/files',
+      'http://content-pool.test/api/server/acp/00000000-0000-4000-8000-000000000000/files',
       { headers: { 'X-Server-Token': 'cp_test_token' } }
     );
     expect(httpService.axiosRef.post).toHaveBeenCalledWith(
-      'http://content-pool.test/api/server/acp/__coding-box-connection-test__/files/upload?conflictStrategy=reject',
+      'http://content-pool.test/api/server/acp/00000000-0000-4000-8000-000000000000/files/upload?conflictStrategy=reject',
       null,
       { headers: { 'X-Server-Token': 'cp_test_token' } }
     );
