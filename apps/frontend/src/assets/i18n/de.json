@@ -2368,6 +2368,10 @@
   "cohens-kappa-statistics": {
     "dialog-title": "Interrater-Reliabilität",
     "loading": "Statistiken werden geladen...",
+    "training-selection-title": "Schulung auswählen",
+    "training-selection-subtitle": "Die Interrater-Reliabilität wird für die ausgewählte Kodierer-Schulung berechnet.",
+    "training-select-label": "Schulung",
+    "select-training-hint": "Bitte wählen Sie eine Schulung aus.",
     "workspace-title": "Inter-Rater Zuverlässigkeit (Cohen's Kappa)",
     "workspace-subtitle": "Arbeitsbereichsübergreifende Analyse der Übereinstimmung zwischen Kodierern bei doppelt kodierten Variablen.",
     "exclude-trainings": "Kodierer-Trainings ausschließen",

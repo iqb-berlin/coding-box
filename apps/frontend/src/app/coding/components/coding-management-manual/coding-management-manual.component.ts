@@ -1032,9 +1032,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   openTrainingReliability(): void {
-    const coderTrainingIds = this.getCoderTrainingIds();
+    const coderTrainings = this.getCoderTrainingsForExport();
 
-    if (coderTrainingIds.length === 0) {
+    if (coderTrainings.length === 0) {
       this.showError('Die Schulungen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
       return;
     }
@@ -1045,7 +1045,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       height: '90vh',
       data: {
         excludeTrainings: false,
-        scope: { coderTrainingIds }
+        availableCoderTrainings: coderTrainings
       }
     });
   }
