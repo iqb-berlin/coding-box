@@ -469,7 +469,8 @@ export class CodingResultsComparisonComponent implements OnInit {
       return undefined;
     }
 
-    return this.availableTrainings.find(training => training.id === this.selectedTrainingForWithin);
+    return this.availableTrainings.find(training => training.id === this.selectedTrainingForWithin) ||
+      (this.data.selectedTraining?.id === this.selectedTrainingForWithin ? this.data.selectedTraining : undefined);
   }
 
   private getSelectedTrainingsWithoutCodes(): CoderTraining[] {
@@ -1044,7 +1045,11 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.codingStatisticsService.getReplayUrl(workspaceId, responseId).subscribe({
       next: result => {
         if (result.replayUrl) {
-          window.open(this.buildReplayUrl(result.replayUrl, responseId), '_blank');
+          window.open(this.buildReplayUrl(
+            result.replayUrl,
+            responseId,
+            this.getReplayDisplayOptions()
+          ), '_blank');
         } else {
           this.snackBar.open('Replay-URL konnte nicht erzeugt werden.', this.translate.instant('common.close'), { duration: 3000 });
         }
@@ -1055,13 +1060,35 @@ export class CodingResultsComparisonComponent implements OnInit {
     });
   }
 
-  private buildReplayUrl(replayUrl: string, responseId: number): string {
+  private getReplayDisplayOptions(): { suppressGeneralInstructions?: boolean } {
+    if (this.comparisonMode !== 'within-training') {
+      return {};
+    }
+
+    const selectedTraining = this.getSelectedWithinTraining();
+    if (!selectedTraining) {
+      return {};
+    }
+
+    return {
+      suppressGeneralInstructions: selectedTraining.suppress_general_instructions ?? false
+    };
+  }
+
+  private buildReplayUrl(
+    replayUrl: string,
+    responseId: number,
+    displayOptions: { suppressGeneralInstructions?: boolean } = {}
+  ): string {
     const [baseUrl, fragment = ''] = replayUrl.split('#', 2);
     const appendParams = (value: string): string => {
       const [path, query = ''] = value.split('?', 2);
       const params = new URLSearchParams(query);
       params.set('mode', 'coding');
       params.set('originResponseId', responseId.toString());
+      if (displayOptions.suppressGeneralInstructions !== undefined) {
+        params.set('suppressGeneralInstructions', String(displayOptions.suppressGeneralInstructions));
+      }
       const serializedParams = params.toString();
       return serializedParams ? `${path}?${serializedParams}` : path;
     };

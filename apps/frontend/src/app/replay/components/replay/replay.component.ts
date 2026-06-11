@@ -402,6 +402,18 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  private getBooleanQueryParam(value: unknown): boolean | null {
+    if (value === true || value === 'true') {
+      return true;
+    }
+
+    if (value === false || value === 'false') {
+      return false;
+    }
+
+    return null;
+  }
+
   subscribeRouter(): void {
     this.routerSubscription = this.route.params
       ?.subscribe(async params => {
@@ -420,6 +432,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.isCodingMode = queryParams.mode === 'coding' || this.isReviewMode;
         this.isBookletReplayMode = queryParams.mode === 'booklet-view' || queryParams.mode === 'booklet';
         this.originResponseId = queryParams.originResponseId ? Number(queryParams.originResponseId) : null;
+        const suppressGeneralInstructions = this.getBooleanQueryParam(queryParams.suppressGeneralInstructions);
         if (this.isCodingMode || this.isBookletReplayMode) {
           let deserializedUnits = null as UnitsReplay | null;
 
@@ -521,6 +534,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               }
             }
           }
+        }
+
+        if (suppressGeneralInstructions !== null) {
+          this.codingService.suppressGeneralInstructions = suppressGeneralInstructions;
         }
 
         if (this.authToken) {

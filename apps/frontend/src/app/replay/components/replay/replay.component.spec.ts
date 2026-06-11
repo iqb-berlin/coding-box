@@ -219,6 +219,32 @@ describe('ReplayComponent', () => {
     expect(component.responses).toBeDefined();
   });
 
+  it('should apply suppress general instructions from query params', async () => {
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      workspaceId: '47',
+      suppressGeneralInstructions: 'true'
+    };
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(component.codingService.suppressGeneralInstructions).toBe(true);
+  });
+
   it('should keep server timings from replay payload', () => {
     expect((component as unknown as { serverTimings: Record<string, number> | null }).serverTimings)
       .toEqual({
