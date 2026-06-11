@@ -15,6 +15,7 @@ import { CodingFreshnessService } from './coding-freshness.service';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 import { CodingValidationService } from './coding-validation.service';
 import { MissingsProfilesService } from './missings-profiles.service';
+import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
 
 export interface ApplyCodingResultsOptions {
   overwriteExisting?: boolean;
@@ -102,19 +103,33 @@ export class CodingResultsService {
       const codingProgress = await this.codingJobService.getCodingProgress(codingJobId);
       const directResponseIds = Array.from(new Set(codingJobUnits.map(unit => unit.responseId)));
       const existingV2StatusByResponseId = await this.getExistingV2StatusByResponseId(directResponseIds);
+      const resolvedIssueReviewResponseIds = new Set(
+        await this.codingJobService.getResolvedCodingIssueReviewResponseIds(codingJobId)
+      );
+      const openIssueReviewResponseIds = new Set(
+        await this.codingJobService.getOpenCodingIssueReviewResponseIds(codingJobId)
+      );
+      const getProgressKeyForUnit = (unit: typeof codingJobUnits[number]) => {
+        const testPerson = formatCodingTestPerson({
+          login: unit.personLogin,
+          code: unit.personCode,
+          group: unit.personGroup || undefined,
+          booklet: unit.bookletName
+        });
+
+        return generateCodingProgressKey(testPerson, unit.unitName, unit.variableId);
+      };
+      const unitRequiresIssueReview = (unit: typeof codingJobUnits[number]) => (
+        openIssueReviewResponseIds.has(unit.responseId) ||
+        this.requiresCodingIssueReview(codingProgress[getProgressKeyForUnit(unit)])
+      );
       const reviewResponseIds = new Set(codingJobUnits
-        .filter(unit => {
-          const testPerson = formatCodingTestPerson({
-            login: unit.personLogin,
-            code: unit.personCode,
-            group: unit.personGroup || undefined,
-            booklet: unit.bookletName
-          });
-          const progressKey = generateCodingProgressKey(testPerson, unit.unitName, unit.variableId);
-          return this.requiresCodingIssueReview(codingProgress[progressKey]);
-        })
+        .filter(unitRequiresIssueReview)
         .map(unit => unit.responseId));
-      const conflictCheckResponseIds = directResponseIds.filter(responseId => !reviewResponseIds.has(responseId));
+      const conflictCheckResponseIds = directResponseIds.filter(responseId => (
+        !reviewResponseIds.has(responseId) &&
+        !resolvedIssueReviewResponseIds.has(responseId)
+      ));
 
       const doubleCodingConflicts = await this.getDoubleCodingConflicts(
         workspaceId,
@@ -142,16 +157,10 @@ export class CodingResultsService {
       let overwrittenExistingCount = 0;
 
       for (const unit of codingJobUnits) {
-        const testPerson = formatCodingTestPerson({
-          login: unit.personLogin,
-          code: unit.personCode,
-          group: unit.personGroup || undefined,
-          booklet: unit.bookletName
-        });
-        const progressKey = generateCodingProgressKey(testPerson, unit.unitName, unit.variableId);
+        const progressKey = getProgressKeyForUnit(unit);
         const progress = codingProgress[progressKey];
 
-        if (this.requiresCodingIssueReview(progress)) {
+        if (unitRequiresIssueReview(unit)) {
           skippedReviewCount += 1;
           continue;
         }
@@ -585,6 +594,7 @@ export class CodingResultsService {
       scopeClauses.push(`cj.training_id = $${params.length}`);
     } else {
       scopeClauses.push('cj.training_id IS NULL');
+      scopeClauses.push(getNonCodingIssueReviewJobSqlCondition('cj'));
 
       if (codingJob.job_definition_id !== null && codingJob.job_definition_id !== undefined) {
         params.push(codingJob.job_definition_id);

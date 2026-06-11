@@ -443,7 +443,10 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       [0, -3]
     );
 
-    expect(queryBuilder.andWhere).not.toHaveBeenCalled();
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
   });
 
   it('applies normalized scoped filters for job/training/coder ids', () => {
@@ -461,13 +464,18 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
 
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
       1,
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
+    expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
+      2,
       expect.stringContaining('cj.job_definition_id IN (:...jobDefinitionIds)'),
       { jobDefinitionIds: [1], coderTrainingIds: [3] }
     );
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('coding_job_variable_bundle');
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cj.training_id IN (:...coderTrainingIds)');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('coding_job_variable_bundle');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('cj.training_id IN (:...coderTrainingIds)');
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.stringContaining('EXISTS'),
       { coderIds: [7] }
     );
@@ -483,7 +491,11 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
     }).applyJobFilters(queryBuilder, [11], undefined, undefined);
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(2);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('coding_job_variable_bundle'),
       { jobDefinitionIds: [11] }
@@ -510,9 +522,9 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       expect.stringContaining('scope_vb.variables'),
       { jobDefinitionIds: [11] }
     );
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('variable_bundle scope_vb');
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cju.unit_name');
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cju.variable_id');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('variable_bundle scope_vb');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('cju.unit_name');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('cju.variable_id');
   });
 
   it('applies only training filter when only training ids are selected', () => {
@@ -525,7 +537,11 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
     }).applyJobFilters(queryBuilder, undefined, [22], undefined);
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(2);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       '(cj.training_id IN (:...coderTrainingIds))',
       { coderTrainingIds: [22] }
@@ -542,7 +558,11 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
     }).applyJobFilters(queryBuilder, undefined, undefined, [33]);
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(2);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('EXISTS'),
       { coderIds: [33] }
@@ -1195,16 +1215,21 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
     }).applyJobFilters(queryBuilder, [44], [55], [66]);
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(2);
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(3);
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
       1,
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
+    expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
+      2,
       expect.stringContaining('cj.job_definition_id IN (:...jobDefinitionIds)'),
       { jobDefinitionIds: [44], coderTrainingIds: [55] }
     );
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('coding_job_variable_bundle');
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cj.training_id IN (:...coderTrainingIds)');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('coding_job_variable_bundle');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('cj.training_id IN (:...coderTrainingIds)');
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.stringContaining('EXISTS'),
       { coderIds: [66] }
     );

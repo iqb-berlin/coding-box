@@ -32,6 +32,7 @@ import {
 import { CodingJobFreshnessStatus } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
+import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
 
 type UnitCodingPresence = Record<CodingFreshnessVersion, boolean>;
 
@@ -763,6 +764,7 @@ export class CodingFreshnessService {
           WHERE cj.workspace_id = $1
             AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
             AND cj.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
             AND resp.unitid = ANY($2::int[])
           GROUP BY cju.coding_job_id
         )
@@ -817,6 +819,7 @@ export class CodingFreshnessService {
           WHERE cj.workspace_id = $1
             AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
             AND cj.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
             AND cju.response_id = ANY($2::int[])
           GROUP BY cju.coding_job_id
         )
@@ -935,6 +938,7 @@ export class CodingFreshnessService {
           WHERE cj.workspace_id = $1
             AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
             AND cj.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
             AND cj.status = 'results_applied'
             ${scopeConditions.join('\n            ')}
           GROUP BY cju.coding_job_id
@@ -1044,6 +1048,7 @@ export class CodingFreshnessService {
           WHERE cj.workspace_id = $1
             AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
             AND cj.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
             AND cj.status = 'results_applied'
             AND ${scopeCondition}
           GROUP BY cju.coding_job_id
@@ -1135,6 +1140,7 @@ export class CodingFreshnessService {
             ON coding_job.id = coding_job_variable.coding_job_id
           WHERE coding_job.workspace_id = $1
             AND coding_job.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('coding_job')}
           UNION
           SELECT
             coding_job.id AS coding_job_id,
@@ -1155,6 +1161,7 @@ export class CodingFreshnessService {
             ON coding_job.id = coding_job_variable_bundle.coding_job_id
           WHERE coding_job.workspace_id = $1
             AND coding_job.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('coding_job')}
         ),
         affected_jobs AS (
           SELECT
@@ -1232,6 +1239,7 @@ export class CodingFreshnessService {
             ON coding_job.id = coding_job_variable.coding_job_id
           WHERE coding_job.workspace_id = $1
             AND coding_job.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('coding_job')}
           UNION
           SELECT
             coding_job.id AS coding_job_id,
@@ -1252,6 +1260,7 @@ export class CodingFreshnessService {
             ON coding_job.id = coding_job_variable_bundle.coding_job_id
           WHERE coding_job.workspace_id = $1
             AND coding_job.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('coding_job')}
         ),
         affected_jobs AS (
           SELECT
@@ -1339,6 +1348,7 @@ export class CodingFreshnessService {
         WHERE cj.workspace_id = $1
           AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
           AND cj.training_id IS NULL
+          AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
           AND cj.freshness_status IN ('review_required', 'stale_source')
           AND resp.unitid = ANY($2::int[])
           AND (
@@ -1372,6 +1382,7 @@ export class CodingFreshnessService {
           WHERE cj.workspace_id = $1
             AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
             AND cj.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
             AND cj.freshness_status = 'review_required'
             AND cju.response_id = ANY($2::int[])
         )
@@ -1382,6 +1393,7 @@ export class CodingFreshnessService {
         WHERE cj.workspace_id = $1
           AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
           AND cj.training_id IS NULL
+          AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
           AND cj.freshness_status = 'review_required'
         GROUP BY cj.id
         HAVING BOOL_AND(cju.response_id = ANY($2::int[]))
@@ -1922,6 +1934,7 @@ export class CodingFreshnessService {
           AND COALESCE(cju.workspace_id, cj.workspace_id) = cj.workspace_id
         WHERE cj.workspace_id = $1
           AND cj.training_id IS NULL
+          AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
           AND cj.freshness_status IN ('review_required', 'stale_source')
       `,
       [workspaceId]

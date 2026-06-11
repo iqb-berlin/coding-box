@@ -89,6 +89,7 @@ interface ReplayCodingServiceSnapshot {
   isCodingJobFinalized: boolean;
   isCompletedJobReview: boolean;
   isReviewMode: boolean;
+  isCodingIssueReviewMode: boolean;
   hasSaveError: boolean;
   lastSaveError: string | null;
   currentCodingJobStatus: string | null;
@@ -432,6 +433,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.isReviewMode = queryParams.mode === 'coding-review';
         this.isCodingIssueReviewMode = queryParams.mode === 'coding-issue-review';
         this.codingService.isReviewMode = this.isReviewMode;
+        this.codingService.isCodingIssueReviewMode = this.isCodingIssueReviewMode;
         this.isCodingMode = queryParams.mode === 'coding' || this.isReviewMode || this.isCodingIssueReviewMode;
         this.isBookletReplayMode = queryParams.mode === 'booklet-view' || queryParams.mode === 'booklet';
         this.originResponseId = queryParams.originResponseId ? Number(queryParams.originResponseId) : null;
@@ -496,6 +498,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               !this.isCodingIssueReviewMode && this.unitsData.name.includes(' - Review: ')
             );
             this.codingService.isReviewMode = this.isReviewMode;
+            this.codingService.isCodingIssueReviewMode = this.isCodingIssueReviewMode;
             this.currentUnitIndex = deserializedUnits.currentUnitIndex;
             this.totalUnits = deserializedUnits.units.length;
             const unitAny = (this.unitsData.units[this.currentUnitIndex] || {}) as unknown as {
@@ -1797,6 +1800,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         isCodingJobFinalized: this.codingService.isCodingJobFinalized,
         isCompletedJobReview: this.codingService.isCompletedJobReview,
         isReviewMode: this.codingService.isReviewMode,
+        isCodingIssueReviewMode: this.codingService.isCodingIssueReviewMode,
         hasSaveError: this.codingService.hasSaveError,
         lastSaveError: this.codingService.lastSaveError,
         currentCodingJobStatus: this.codingService.currentCodingJobStatus,
@@ -1852,6 +1856,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.codingService.isCodingJobFinalized = snapshot.isCodingJobFinalized;
     this.codingService.isCompletedJobReview = snapshot.isCompletedJobReview;
     this.codingService.isReviewMode = snapshot.isReviewMode;
+    this.codingService.isCodingIssueReviewMode = snapshot.isCodingIssueReviewMode;
     this.codingService.hasSaveError = snapshot.hasSaveError;
     this.codingService.lastSaveError = snapshot.lastSaveError;
     this.codingService.currentCodingJobStatus = snapshot.currentCodingJobStatus;
@@ -1906,6 +1911,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.isBookletReplayMode = false;
     this.isReviewMode = false;
     this.codingService.isReviewMode = false;
+    this.isCodingIssueReviewMode = false;
+    this.codingService.isCodingIssueReviewMode = false;
     this.unitsData = unitsData;
     this.loadedCodingJobUnitsKey = this.getCodingJobUnitsCacheKey(job.workspace_id, job.id, onlyOpen);
     this.totalUnits = unitsData.units.length;
