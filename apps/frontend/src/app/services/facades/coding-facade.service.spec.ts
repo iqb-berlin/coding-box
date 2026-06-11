@@ -115,7 +115,7 @@ describe('CodingFacadeService', () => {
       [{ variableId: 'Var', unitId: 'Unit', sampleCount: 3 }],
       'Training',
       undefined,
-      { suppressGeneralInstructions: true }
+      { showScore: true, allowComments: false, suppressGeneralInstructions: true }
     ).subscribe();
 
     expect(dependencies[8].createCoderTrainingJobs).toHaveBeenCalledWith(
@@ -130,6 +130,8 @@ describe('CodingFacadeService', () => {
       undefined,
       undefined,
       undefined,
+      true,
+      false,
       true
     );
   });

@@ -161,6 +161,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       trainingLabel: ['', [Validators.required]],
       caseOrderingMode: ['continuous'],
       caseSelectionMode: ['oldest_first' as CaseSelectionMode],
+      showScore: [false],
+      allowComments: [true],
       suppressGeneralInstructions: [false],
       includeDerivedVariables: [true],
       referenceTrainingIds: [[] as number[]],
@@ -331,6 +333,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (this.editTraining.reference_mode) {
       this.trainingForm.get('referenceMode')?.setValue(this.editTraining.reference_mode);
     }
+    this.trainingForm.get('showScore')?.setValue(
+      this.editTraining.show_score ?? false
+    );
+    this.trainingForm.get('allowComments')?.setValue(
+      this.editTraining.allow_comments ?? true
+    );
     this.trainingForm.get('suppressGeneralInstructions')?.setValue(
       this.editTraining.suppress_general_instructions ?? false
     );
@@ -1418,6 +1426,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         caseSelectionMode,
         referenceTrainingIds,
         referenceMode ?? undefined,
+        this.trainingForm.get('showScore')?.value ?? false,
+        this.trainingForm.get('allowComments')?.value ?? true,
         this.trainingForm.get('suppressGeneralInstructions')?.value ?? false
       ) :
       this.codingTrainingBackendService.createCoderTrainingJobs(
@@ -1432,6 +1442,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         caseSelectionMode,
         referenceTrainingIds.length ? referenceTrainingIds : undefined,
         referenceMode ?? undefined,
+        this.trainingForm.get('showScore')?.value ?? false,
+        this.trainingForm.get('allowComments')?.value ?? true,
         this.trainingForm.get('suppressGeneralInstructions')?.value ?? false
       );
 
@@ -1491,6 +1503,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     this.trainingForm.get('suppressGeneralInstructions')?.setValue(
       jobDef.suppressGeneralInstructions ?? false
+    );
+    this.trainingForm.get('showScore')?.setValue(
+      jobDef.showScore ?? false
+    );
+    this.trainingForm.get('allowComments')?.setValue(
+      jobDef.allowComments ?? true
     );
 
     if (jobDef.assignedVariables && jobDef.assignedVariables.length > 0) {
