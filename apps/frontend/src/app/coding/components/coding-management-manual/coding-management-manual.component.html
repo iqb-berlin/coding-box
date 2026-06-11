@@ -1733,6 +1733,12 @@
                   <div class="completed-job-copy">
                     <strong>{{ job.name }}</strong>
                     <span>{{ getCodingJobResultSummary(job) }}</span>
+                    <span
+                      *ngIf="job.hasIssues"
+                      class="completed-job-review-note"
+                    >
+                      Offene Hinweise bleiben zur manuellen Prüfung bestehen.
+                    </span>
                   </div>
                   <button
                     *ngIf="canApplyCompletedJobResults()"
@@ -1767,7 +1773,10 @@
               </div>
 
               <div
-                *ngIf="hasCompletedJobsBlockedForReview()"
+                *ngIf="
+                  hasCompletedJobsBlockedForReview() &&
+                  !hasCompletedJobsReadyForApply()
+                "
                 class="completed-jobs-apply-list review-required-list"
               >
                 <div

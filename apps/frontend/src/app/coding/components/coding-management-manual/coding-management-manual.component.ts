@@ -1580,6 +1580,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     if (this.hasCompletedJobsReadyForApply()) {
+      if (this.hasCompletedJobsBlockedForReview()) {
+        return `${this.completedJobsReadyForApply.length} abgeschlossene Kodierjob(s) bereit zum Anwenden, ${this.completedJobsBlockedForReview.length} mit offenen Hinweisen`;
+      }
       return `${this.completedJobsReadyForApply.length} abgeschlossene Kodierjob(s) bereit zum Anwenden`;
     }
 
@@ -1742,7 +1745,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       width: '500px',
       data: {
         title: 'Alle abgeschlossenen Ergebnisse anwenden',
-        message: `Möchten Sie die Ergebnisse für ${this.completedJobsReadyForApply.length} abgeschlossene Kodierjob(s) anwenden? Jobs mit Kodierungsproblemen werden übersprungen.`,
+        message: [
+          `Möchten Sie die Ergebnisse für ${this.completedJobsReadyForApply.length} abgeschlossene Kodierjob(s) anwenden?`,
+          'Bei Jobs mit offenen Kodierungshinweisen werden gültige Antworten angewendet;',
+          'offene Hinweise bleiben zur manuellen Prüfung bestehen.'
+        ].join(' '),
         confirmButtonText: 'Anwenden',
         cancelButtonText: 'Abbrechen'
       }
@@ -2809,15 +2816,22 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             .pipe(takeUntil(this.destroy$))
             .subscribe({
               next: progressByJobId => {
-                this.completedJobsBlockedForReview = completedJobs
-                  .filter(job => this.hasBlockingCodingIssues(progressByJobId[job.id]));
                 this.completedJobsReadyForApply = completedJobs
-                  .filter(job => !this.hasBlockingCodingIssues(progressByJobId[job.id]));
+                  .map(job => ({
+                    ...job,
+                    hasIssues: this.hasCodingIssuesForCompletedJob(
+                      job,
+                      progressByJobId[job.id]
+                    )
+                  }));
+                this.completedJobsBlockedForReview = this.completedJobsReadyForApply
+                  .filter(job => job.hasIssues === true);
                 this.isLoadingCompletedJobsReadyForApply = false;
               },
               error: () => {
-                this.completedJobsReadyForApply = [];
-                this.completedJobsBlockedForReview = completedJobs;
+                this.completedJobsReadyForApply = completedJobs;
+                this.completedJobsBlockedForReview = completedJobs
+                  .filter(job => job.hasIssues === true);
                 this.isLoadingCompletedJobsReadyForApply = false;
               }
             });
@@ -2846,6 +2860,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         savedCode.codingIssueOption === -1 ||
         savedCode.codingIssueOption === -2;
     });
+  }
+
+  private hasCodingIssuesForCompletedJob(
+    job: CodingJob,
+    progress?: Record<string, unknown>
+  ): boolean {
+    if (progress === undefined) {
+      return job.hasIssues === true;
+    }
+
+    return this.hasBlockingCodingIssues(progress);
   }
 
   private isCodingJobReadyForApply(job: CodingJob): boolean {

@@ -10,7 +10,7 @@ import {
 import { CodingJobService } from './coding-job.service';
 import { CodingValidationService } from './coding-validation.service';
 
-type BulkApplySkippedReason = 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
+type BulkApplySkippedReason = 'training-job' | 'not-completed' | 'freshness-stale';
 
 @Injectable()
 export class CodingJobOperationsService {
@@ -134,25 +134,12 @@ export class CodingJobOperationsService {
         continue;
       }
 
-      const hasIssues = await this.codingJobService.hasCodingIssues(job.id);
-
-      if (hasIssues) {
-        results.push({
-          jobId: job.id,
-          jobName: job.name,
-          hasIssues: true,
-          skipped: true,
-          skippedReason: 'coding-issues'
-        });
-        continue;
-      }
-
       try {
         const applyResult = await this.applyCodingResults(workspaceId, job.id);
         results.push({
           jobId: job.id,
           jobName: job.name,
-          hasIssues: false,
+          hasIssues: applyResult.skippedReviewCount > 0,
           skipped: false,
           result: {
             success: applyResult.success,
@@ -192,13 +179,11 @@ export class CodingJobOperationsService {
       }
     }
 
-    const codingIssueJobs = results.filter(result => result.skippedReason === 'coding-issues').length;
     const trainingJobs = results.filter(result => result.skippedReason === 'training-job').length;
     const notCompletedJobs = results.filter(result => result.skippedReason === 'not-completed').length;
     const freshnessStaleJobs = results.filter(result => result.skippedReason === 'freshness-stale').length;
     const failedJobs = results.filter(result => !result.skipped && result.result && !result.result.success).length;
-    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review. ${codingIssueJobs
-    } jobs skipped due to coding issues.${trainingJobs > 0 ? ` ${trainingJobs} training jobs skipped.` : ''}${notCompletedJobs > 0 ? ` ${notCompletedJobs} jobs skipped because they are not completed.` : ''}${freshnessStaleJobs > 0 ? ` ${freshnessStaleJobs} jobs skipped because their source responses changed.` : ''}${failedJobs > 0 ? ` ${failedJobs} jobs could not be applied due to conflicts or errors.` : ''}`;
+    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review.${trainingJobs > 0 ? ` ${trainingJobs} training jobs skipped.` : ''}${notCompletedJobs > 0 ? ` ${notCompletedJobs} jobs skipped because they are not completed.` : ''}${freshnessStaleJobs > 0 ? ` ${freshnessStaleJobs} jobs skipped because their source responses changed.` : ''}${failedJobs > 0 ? ` ${failedJobs} jobs could not be applied due to conflicts or errors.` : ''}`;
 
     this.logger.log(message);
 

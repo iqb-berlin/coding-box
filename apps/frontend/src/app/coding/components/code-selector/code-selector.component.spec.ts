@@ -313,6 +313,28 @@ describe('CodeSelectorComponent', () => {
     });
   });
 
+  it('clears a coding issue option when a regular code resolves an issue review', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.clearCodingIssueOnRegularSelection = true;
+    const emitSpy = jest.spyOn(component.codeSelected, 'emit');
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    component.onSelect(-1);
+    component.onSelect(1);
+
+    expect(component.selectedCode).toBe(1);
+    expect(component.selectedCodingIssueOption).toBeNull();
+    expect(emitSpy).toHaveBeenLastCalledWith({
+      variableId: 'VAR1',
+      code: mixedCodingScheme.variableCodings[0].codes[0],
+      codingIssueOption: null
+    });
+  });
+
   it('clears stored legacy code when removing the selection', () => {
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
