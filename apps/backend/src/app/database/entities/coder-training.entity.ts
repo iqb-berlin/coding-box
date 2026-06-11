@@ -61,6 +61,12 @@ export class CoderTraining {
     reference_mode: ReferenceMode | null;
 
   @Column({ type: 'boolean', default: false })
+    show_score: boolean;
+
+  @Column({ type: 'boolean', default: true })
+    allow_comments: boolean;
+
+  @Column({ type: 'boolean', default: false })
     suppress_general_instructions: boolean;
 
   @OneToMany(() => CodingJob, codingJob => codingJob.training, { cascade: true })

@@ -338,6 +338,8 @@ describe('CoderTrainingComponent', () => {
       'oldest_first',
       undefined,
       undefined,
+      false,
+      true,
       false
     );
   });
@@ -620,6 +622,8 @@ describe('CoderTrainingComponent', () => {
       'oldest_first',
       undefined,
       undefined,
+      false,
+      true,
       false
     );
   });
@@ -664,6 +668,8 @@ describe('CoderTrainingComponent', () => {
       'oldest_first',
       undefined,
       undefined,
+      false,
+      true,
       false
     );
   });
@@ -700,6 +706,8 @@ describe('CoderTrainingComponent', () => {
       'oldest_first',
       undefined,
       undefined,
+      false,
+      true,
       false
     );
   });

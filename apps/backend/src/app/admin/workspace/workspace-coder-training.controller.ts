@@ -201,6 +201,14 @@ export class WorkspaceCoderTrainingController {
             enum: ['continuous', 'alternating'],
             description: 'Global case ordering mode for this training'
           },
+          show_score: {
+            type: 'boolean',
+            description: 'Whether score values are shown in coding jobs created for this training'
+          },
+          allow_comments: {
+            type: 'boolean',
+            description: 'Whether comments are allowed in coding jobs created for this training'
+          },
           suppress_general_instructions: {
             type: 'boolean',
             description: 'Whether general variable instructions are hidden in coding jobs created for this training'
@@ -221,6 +229,8 @@ export class WorkspaceCoderTrainingController {
     case_selection_mode?: string;
     reference_training_ids?: number[];
     reference_mode?: string | null;
+    show_score?: boolean;
+    allow_comments?: boolean;
     suppress_general_instructions?: boolean;
   }[]
   > {
@@ -320,6 +330,14 @@ export class WorkspaceCoderTrainingController {
             }
           }
         },
+        showScore: {
+          type: 'boolean',
+          description: 'Whether score values are shown in coding jobs created for this training'
+        },
+        allowComments: {
+          type: 'boolean',
+          description: 'Whether comments are allowed in coding jobs created for this training'
+        },
         suppressGeneralInstructions: {
           type: 'boolean',
           description: 'Whether general variable instructions are hidden in coding jobs created for this training'
@@ -374,6 +392,8 @@ export class WorkspaceCoderTrainingController {
                      caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups';
                      referenceTrainingIds?: number[];
                      referenceMode?: 'same' | 'different';
+                     showScore?: boolean;
+                     allowComments?: boolean;
                      suppressGeneralInstructions?: boolean;
                    }
   ): Promise<{
@@ -400,6 +420,8 @@ export class WorkspaceCoderTrainingController {
       body.caseSelectionMode,
       body.referenceTrainingIds,
       body.referenceMode,
+      body.showScore,
+      body.allowComments,
       body.suppressGeneralInstructions
     );
   }
@@ -702,6 +724,14 @@ export class WorkspaceCoderTrainingController {
         caseSelectionMode: { type: 'string', enum: ['oldest_first', 'newest_first', 'random', 'random_per_testgroup', 'random_testgroups'] },
         referenceTrainingIds: { type: 'array', items: { type: 'number' } },
         referenceMode: { type: 'string', enum: ['same', 'different'] },
+        showScore: {
+          type: 'boolean',
+          description: 'Whether score values are shown in coding jobs created for this training'
+        },
+        allowComments: {
+          type: 'boolean',
+          description: 'Whether comments are allowed in coding jobs created for this training'
+        },
         suppressGeneralInstructions: {
           type: 'boolean',
           description: 'Whether general variable instructions are hidden in coding jobs created for this training'
@@ -740,6 +770,8 @@ export class WorkspaceCoderTrainingController {
         caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups';
         referenceTrainingIds?: number[];
         referenceMode?: 'same' | 'different';
+        showScore?: boolean;
+        allowComments?: boolean;
         suppressGeneralInstructions?: boolean;
       }
   ): Promise<{ success: boolean; message: string; jobsCreated?: number }> {
@@ -760,6 +792,8 @@ export class WorkspaceCoderTrainingController {
       body.caseSelectionMode,
       body.referenceTrainingIds,
       body.referenceMode,
+      body.showScore,
+      body.allowComments,
       body.suppressGeneralInstructions
     );
   }
