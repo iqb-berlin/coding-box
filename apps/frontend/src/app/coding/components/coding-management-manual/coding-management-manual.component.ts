@@ -1164,7 +1164,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const exportConfig: ExportJobConfig = {
       exportType: result.exportType,
       userId: this.appService.userId,
-      includeReplayUrl: false,
+      includeReplayUrl: result.includeReplayUrl ?? false,
       outputCommentsInsteadOfCodes: result.outputCommentsInsteadOfCodes,
       anonymizeCoders: result.anonymizeCoders,
       usePseudoCoders: result.usePseudoCoders,

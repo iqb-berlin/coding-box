@@ -98,6 +98,11 @@
     <mat-checkbox [(ngModel)]="outputCommentsInsteadOfCodes">
       {{ 'ws-admin.export-options.output-comments-instead-of-codes' | translate }}
     </mat-checkbox>
+    @if (canIncludeReplayUrl) {
+    <mat-checkbox [(ngModel)]="includeReplayUrl">
+      {{ 'ws-admin.export-options.include-replay-url' | translate }}
+    </mat-checkbox>
+    }
     <mat-checkbox [(ngModel)]="anonymizeCoders">
       {{ 'ws-admin.export-options.anonymize-coders' | translate }}
     </mat-checkbox>
