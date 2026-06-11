@@ -159,7 +159,8 @@
     "serialize-javascript": "7.0.5",
     "picomatch": "4.0.4",
     "vite": "7.3.2",
-    "path-to-regexp": "8.4.2"
+    "path-to-regexp": "8.4.2",
+    "shell-quote": "1.8.4"
   },
   "eslintConfig": {
     "extends": "@iqb/eslint-config",
