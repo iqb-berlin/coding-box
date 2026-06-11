@@ -273,6 +273,44 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.dataSource.data[0].unitName).toBe('Unit 3');
   });
 
+  it('should keep selected variables selected when filters reload variable rows', () => {
+    const fullVariables: Variable[] = [
+      {
+        unitName: 'DLV003', variableId: 'Var A', responseCount: 10, availableCases: 10, uniqueCasesAfterAggregation: 10
+      },
+      {
+        unitName: 'Other Unit', variableId: 'Var B', responseCount: 5, availableCases: 5, uniqueCasesAfterAggregation: 5
+      }
+    ];
+    const filteredVariables = [fullVariables[0]];
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockImplementation(
+      (_workspaceId: number, unitNameFilter?: string) => of(
+        (unitNameFilter ? filteredVariables : fullVariables).map(variable => ({ ...variable }))
+      )
+    );
+    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
+    (mockCodingJobBackendService.getVariableBundles as jest.Mock).mockReturnValue(of([]));
+
+    createComponent();
+
+    component.unitNameFilter = 'DLV003';
+    component.applyFilter();
+    const selectedFilteredVariable = component.dataSource.data[0];
+    component.selectedVariables.select(selectedFilteredVariable);
+
+    component.clearFilters();
+
+    const reloadedVariable = component.dataSource.data.find(variable => (
+      variable.unitName === 'DLV003' && variable.variableId === 'Var A'
+    ));
+
+    expect(reloadedVariable).toBeDefined();
+    expect(reloadedVariable).not.toBe(selectedFilteredVariable);
+    expect(component.selectedVariables.isSelected(reloadedVariable!)).toBe(true);
+    expect(component.selectedVariables.selected).toContain(reloadedVariable);
+    expect(component.selectedVariables.selected).not.toContain(selectedFilteredVariable);
+  });
+
   it('should subtract existing definition usage from backend availability without repeated subtraction', () => {
     (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockImplementation(() => of([
       {
