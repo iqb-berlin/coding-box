@@ -50,6 +50,66 @@ describe('ManualCodingExportDialogComponent', () => {
     expect(dialogRef.close).not.toHaveBeenCalled();
   });
 
+  it('returns includeReplayUrl for review exports', () => {
+    const { component, dialogRef } = createComponent({
+      context: 'execution',
+      coders: []
+    });
+
+    component.includeReplayUrl = true;
+
+    component.confirm();
+
+    expect(dialogRef.close).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exportType: 'aggregated',
+        includeReplayUrl: true
+      })
+    );
+  });
+
+  it('returns includeReplayUrl for detailed report exports', () => {
+    const { component, dialogRef } = createComponent({
+      context: 'training',
+      coders: []
+    });
+
+    component.exportMode = 'report';
+    component.reportExportType = 'detailed';
+    component.includeReplayUrl = true;
+
+    component.confirm();
+
+    expect(dialogRef.close).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exportType: 'detailed',
+        includeReplayUrl: true
+      })
+    );
+  });
+
+  it('does not return includeReplayUrl for coding-times exports', () => {
+    const { component, dialogRef } = createComponent({
+      context: 'training',
+      coders: []
+    });
+
+    component.exportMode = 'report';
+    component.reportExportType = 'coding-times';
+    component.includeReplayUrl = true;
+
+    expect(component.canIncludeReplayUrl).toBe(false);
+
+    component.confirm();
+
+    expect(dialogRef.close).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exportType: 'coding-times',
+        includeReplayUrl: false
+      })
+    );
+  });
+
   describe('template', () => {
     let fixture: ComponentFixture<ManualCodingExportDialogComponent>;
 

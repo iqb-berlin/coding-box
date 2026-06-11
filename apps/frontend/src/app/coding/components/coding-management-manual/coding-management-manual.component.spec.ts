@@ -1106,7 +1106,7 @@ describe('CodingManagementManualComponent', () => {
     const exportJobService = TestBed.inject(ExportJobService);
     const dialog = {
       open: jest.fn().mockReturnValue({
-        afterClosed: () => of({ exportType: 'detailed' })
+        afterClosed: () => of({ exportType: 'detailed', includeReplayUrl: true })
       })
     };
     const componentInternals = component as unknown as {
@@ -1163,6 +1163,7 @@ describe('CodingManagementManualComponent', () => {
       expect.objectContaining({
         exportType: 'detailed',
         userId: 9,
+        includeReplayUrl: true,
         excludeAutoCoded: true,
         jobDefinitionIds: [11]
       })
