@@ -111,7 +111,7 @@ export class WorkspaceCodingResultsController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
-    description: 'Bulk apply coding results for all jobs without issues.',
+    description: 'Bulk apply coding results for all eligible jobs, leaving coding issue reviews open.',
     schema: {
       type: 'object',
       properties: {
@@ -161,7 +161,7 @@ export class WorkspaceCodingResultsController {
               },
               skippedReason: {
                 type: 'string',
-                enum: ['coding-issues', 'training-job', 'not-completed', 'freshness-stale'],
+                enum: ['training-job', 'not-completed', 'freshness-stale'],
                 description: 'Reason why the job was skipped'
               },
               result: {
@@ -195,7 +195,7 @@ export class WorkspaceCodingResultsController {
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
-      skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
+      skippedReason?: 'training-job' | 'not-completed' | 'freshness-stale';
       result?: {
         success: boolean;
         updatedResponsesCount: number;

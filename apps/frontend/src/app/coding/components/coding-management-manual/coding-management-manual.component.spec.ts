@@ -415,6 +415,114 @@ describe('CodingManagementManualComponent', () => {
     expect(component.canShowCompletedJobApplyActions()).toBe(true);
   });
 
+  it('should explain bulk apply keeps coding issue reviews open', () => {
+    const dialogOpen = jest.fn().mockReturnValue({
+      afterClosed: () => of(undefined)
+    });
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      dialog: { open: jest.Mock };
+    };
+    const staleBulkApplySkipMessage = [
+      'Jobs mit Kodierungsproblemen',
+      'werden übersprungen'
+    ].join(' ');
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.dialog = { open: dialogOpen };
+    component.completedJobsReadyForApply = [
+      {
+        id: 1,
+        workspace_id: 1,
+        name: 'Job 1',
+        status: 'completed',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 5,
+        codedUnits: 5
+      }
+    ];
+    jest.spyOn(component, 'canApplyCompletedJobResults').mockReturnValue(true);
+
+    component.applyAllCompletedJobResults();
+
+    expect(dialogOpen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          message: expect.stringContaining('offenen Kodierungshinweisen')
+        })
+      })
+    );
+    expect(dialogOpen).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          message: expect.stringContaining(staleBulkApplySkipMessage)
+        })
+      })
+    );
+  });
+
+  it('should keep completed jobs with review issues ready for bulk apply', () => {
+    const jobs = [
+      {
+        id: 1,
+        workspace_id: 5,
+        name: 'Job mit Hinweis',
+        status: 'completed',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 5,
+        codedUnits: 5
+      },
+      {
+        id: 2,
+        workspace_id: 5,
+        name: 'Job ohne Hinweis',
+        status: 'completed',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 3,
+        codedUnits: 3
+      }
+    ];
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      codingJobBackendService: {
+        getCodingJobs: jest.Mock;
+        getBulkCodingProgress: jest.Mock;
+      };
+      loadCompletedJobsReadyForApply: () => void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.codingJobBackendService = {
+      getCodingJobs: jest.fn().mockReturnValue(of({ data: jobs })),
+      getBulkCodingProgress: jest.fn().mockReturnValue(of({
+        1: {
+          'person@code@booklet::booklet::UNIT::VAR': {
+            id: -2
+          }
+        },
+        2: {
+          'person@code@booklet::booklet::UNIT::VAR': {
+            id: 1
+          }
+        }
+      }))
+    };
+
+    componentInternals.loadCompletedJobsReadyForApply();
+
+    expect(component.completedJobsReadyForApply).toHaveLength(2);
+    expect(component.completedJobsReadyForApply.map(job => job.id)).toEqual([1, 2]);
+    expect(component.completedJobsReadyForApply[0].hasIssues).toBe(true);
+    expect(component.completedJobsBlockedForReview.map(job => job.id)).toEqual([1]);
+    expect(component.getCompletionActionTitle()).toContain('1 mit offenen Hinweisen');
+  });
+
   it('should use parent apply permission when the coding jobs table is not rendered', () => {
     component.completedJobsReadyForApply = [
       {

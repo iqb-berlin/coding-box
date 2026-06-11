@@ -145,6 +145,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   private refreshSubject = new Subject<void>();
   private destroy$ = new Subject<void>();
+  private hasAppliedResults = false;
   private readonly defaultMissingProfileLabel = 'IQB-Standard';
   private readonly manualMissingIdsByIssueOptionId = new Map<number, string>([
     [-3, 'mir'],
@@ -173,6 +174,12 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     this.destroy$.next();
     this.destroy$.complete();
     this.refreshSubject.complete();
+  }
+
+  closeDialog(): void {
+    this.dialogRef.close(
+      this.hasAppliedResults ? { resultsApplied: true } : undefined
+    );
   }
 
   private setupAutoRefresh(): void {
@@ -604,6 +611,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
           this.isLoading = false;
           let message = this.translateService.instant(result.messageKey, result.messageParams || {});
           if (result.success) {
+            this.hasAppliedResults = true;
             if (result.updatedResponsesCount > 0) {
               message += `\n\nAktualisiert: ${result.updatedResponsesCount} Antworten`;
             }
@@ -620,7 +628,11 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
               duration: 5000,
               panelClass: ['success-snackbar']
             });
-            this.dialogRef.close({ resultsApplied: true });
+            if (result.skippedReviewCount > 0) {
+              this.loadCodingResults();
+            } else {
+              this.dialogRef.close({ resultsApplied: true });
+            }
           } else {
             this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${message}`, 'Schließen', {
               duration: 5000,
@@ -826,7 +838,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
     const unitsData: UnitsReplay = {
       id: this.data.codingJob.id, // Use original coding job ID
-      name: `${this.data.codingJob.name} - Review: ${result.variableId}`,
+      name: `${this.data.codingJob.name} - Kodierungshinweis: ${result.variableId}`,
       units: [reviewUnit],
       currentUnitIndex: 0
     };
@@ -834,12 +846,12 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     const serializedUnits = this.serializeUnitsData(unitsData);
 
     const queryParams = {
-      mode: 'coding',
+      mode: 'coding-issue-review',
       unitsData: serializedUnits,
       workspaceId: this.data.workspaceId
     };
 
-    const unitName = result.unitAlias || result.unitName || '';
+    const unitName = result.unitName || '';
     const url = this.router
       .serializeUrl(
         this.router.createUrlTree(

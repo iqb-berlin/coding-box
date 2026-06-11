@@ -1055,6 +1055,54 @@ describe('ReplayComponent', () => {
     expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
   });
 
+  it('should load coding-issue-review mode as editable without coding job status side effects', async () => {
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding-issue-review',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'unit-123',
+      unitAlias: 'Unit 123',
+      variableId: 'VAR1',
+      variableAnchor: 'VAR1',
+      bookletName: 'Booklet 1',
+      personLogin: 'valid',
+      personCode: 'test',
+      personGroup: '',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+    codingJobBackendServiceMock.getCodingJob.mockReturnValue(of({ status: 'completed' }));
+    codingJobBackendServiceMock.updateCodingJob.mockClear();
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(component.isCodingMode).toBe(true);
+    expect(component.isReviewMode).toBe(false);
+    expect(component.isCodingIssueReviewMode).toBe(true);
+    expect(component.codingService.isReviewMode).toBe(false);
+    expect(component.codingService.isCompletedJobReview).toBe(true);
+    expect(component.isCodingReadOnly()).toBe(false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', false);
+    expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+  });
+
   it('should reuse coding job units loaded from query params during replay navigation', async () => {
     routeParams = {
       page: '0',
