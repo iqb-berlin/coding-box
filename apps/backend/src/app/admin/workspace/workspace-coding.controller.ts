@@ -29,6 +29,10 @@ import {
   CodingResponseQueryService,
   CodingResultsService
 } from '../../database/services/coding';
+import {
+  CodingResponseSortBy,
+  CodingResponseSortDirection
+} from '../../database/services/coding/coding-response-query.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
@@ -166,6 +170,29 @@ export class WorkspaceCodingController {
     description: 'Number of items per page (default: 100, max: 500)',
     type: Number
   })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    description: 'Column to sort by',
+    enum: [
+      'unitname',
+      'variableid',
+      'value',
+      'codedstatus',
+      'code',
+      'score',
+      'person_code',
+      'person_login',
+      'person_group',
+      'booklet_id'
+    ]
+  })
+  @ApiQuery({
+    name: 'sortDirection',
+    required: false,
+    description: 'Sort direction',
+    enum: ['asc', 'desc']
+  })
   @ApiOkResponse({
     description: 'Responses retrieved successfully.',
     schema: {
@@ -202,7 +229,9 @@ export class WorkspaceCodingController {
       @Param('status') status: string,
                    @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1',
                    @Query('page') page: number = 1,
-                   @Query('limit') limit: number = 100
+                   @Query('limit') limit: number = 100,
+                   @Query('sortBy') sortBy?: CodingResponseSortBy,
+                   @Query('sortDirection') sortDirection?: CodingResponseSortDirection
   ): Promise<{
         data: ResponseEntity[];
         total: number;
@@ -217,7 +246,9 @@ export class WorkspaceCodingController {
       status,
       version,
       validPage,
-      validLimit
+      validLimit,
+      sortBy,
+      sortDirection
     );
   }
 

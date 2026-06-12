@@ -2,12 +2,15 @@ import {
   Inject, Injectable, Logger, forwardRef
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import {
   STATISTICS_IGNORED_STATUSES,
   statusStringToNumber
 } from '../../utils/response-status-converter';
-import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
+import {
+  CodingVersion,
+  getEffectiveCodingStatusExpression
+} from '../../utils/effective-coding-status-expression.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   applyResolvedExclusionsToQuery,
@@ -15,6 +18,20 @@ import {
 } from '../workspace/workspace-exclusion.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+
+export type CodingResponseSortBy =
+  'unitname' |
+  'variableid' |
+  'value' |
+  'codedstatus' |
+  'code' |
+  'score' |
+  'person_code' |
+  'person_login' |
+  'person_group' |
+  'booklet_id';
+export type CodingResponseSortDirection = 'asc' | 'desc';
+const EFFECTIVE_CODING_STATUS_SORT_ALIAS = 'effective_coding_status_sort';
 
 @Injectable()
 export class CodingResponseQueryService {
@@ -38,7 +55,9 @@ export class CodingResponseQueryService {
     status: string,
     version: 'v1' | 'v2' | 'v3' = 'v1',
     page: number = 1,
-    limit: number = 100
+    limit: number = 100,
+    sortBy?: CodingResponseSortBy,
+    sortDirection?: CodingResponseSortDirection
   ): Promise<{
       data: ResponseEntity[];
       total: number;
@@ -46,6 +65,7 @@ export class CodingResponseQueryService {
       limit: number;
     }> {
     try {
+      const codingVersion = this.normalizeCodingVersion(version);
       const statusNumber = statusStringToNumber(status);
       if (statusNumber === null) {
         this.logger.warn(`Invalid status string: ${status}`);
@@ -92,7 +112,7 @@ export class CodingResponseQueryService {
       applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
       queryBuilder.andWhere(
-        `${getEffectiveCodingStatusExpression(version)} = :status`,
+        `${getEffectiveCodingStatusExpression(codingVersion)} = :status`,
         { status: statusNumber }
       );
       queryBuilder.andWhere(
@@ -101,14 +121,14 @@ export class CodingResponseQueryService {
       );
 
       const total = await queryBuilder.getCount();
+      this.applySorting(queryBuilder, codingVersion, sortBy, sortDirection);
       const data = await queryBuilder
-        .orderBy('response.id', 'ASC')
         .skip(offset)
         .take(limit)
         .getMany();
 
       this.logger.log(
-        `Retrieved ${data.length} responses with status ${status} for version ${version} in workspace ${workspaceId}`
+        `Retrieved ${data.length} responses with status ${status} for version ${codingVersion} in workspace ${workspaceId}`
       );
 
       return {
@@ -137,6 +157,64 @@ export class CodingResponseQueryService {
 
   private toVariablePairKey(unitName: string, variableId: string): string {
     return `${unitName}\u001F${variableId}`;
+  }
+
+  private applySorting(
+    queryBuilder: SelectQueryBuilder<ResponseEntity>,
+    version: CodingVersion,
+    sortBy?: CodingResponseSortBy,
+    sortDirection?: CodingResponseSortDirection
+  ): void {
+    const direction = sortDirection === 'desc' ? 'DESC' : 'ASC';
+    if (sortBy === 'codedstatus') {
+      queryBuilder.addSelect(
+        getEffectiveCodingStatusExpression(version),
+        EFFECTIVE_CODING_STATUS_SORT_ALIAS
+      );
+      queryBuilder
+        .orderBy(EFFECTIVE_CODING_STATUS_SORT_ALIAS, direction)
+        .addOrderBy('response.id', 'ASC');
+      return;
+    }
+
+    const sortExpression = this.getSortExpression(version, sortBy);
+
+    queryBuilder.orderBy(sortExpression, direction);
+    if (sortExpression !== 'response.id') {
+      queryBuilder.addOrderBy('response.id', 'ASC');
+    }
+  }
+
+  private getSortExpression(
+    version: CodingVersion,
+    sortBy?: CodingResponseSortBy
+  ): string {
+    switch (sortBy) {
+      case 'unitname':
+        return 'unit.name';
+      case 'variableid':
+        return 'response.variableid';
+      case 'value':
+        return 'response.value';
+      case 'code':
+        return `response.code_${version}`;
+      case 'score':
+        return `response.score_${version}`;
+      case 'person_code':
+        return 'person.code';
+      case 'person_login':
+        return 'person.login';
+      case 'person_group':
+        return 'person.group';
+      case 'booklet_id':
+        return 'bookletinfo.name';
+      default:
+        return 'response.id';
+    }
+  }
+
+  private normalizeCodingVersion(version: unknown): CodingVersion {
+    return version === 'v2' || version === 'v3' ? version : 'v1';
   }
 
   async getManualTestPersons(
