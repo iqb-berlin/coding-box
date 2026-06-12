@@ -54,6 +54,14 @@ export interface DoubleCodedReviewResponse {
   limit: number;
 }
 
+export interface DoubleCodedResolutionDecision {
+  responseId: number;
+  selectedJobId?: number | null;
+  code?: number | null;
+  score?: number | null;
+  resolutionComment?: string;
+}
+
 export interface DoubleCodedResolutionResponse {
   success: boolean;
   appliedCount: number;
