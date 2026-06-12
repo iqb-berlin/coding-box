@@ -22,7 +22,39 @@
       }
     </div>
 
-    @if (!element.isResolved) {
+    @if (element.isResolved) {
+      @if (getAppliedReviewResult(element); as appliedResult) {
+        <div class="applied-result" [matTooltip]="getAppliedResultTooltip(element)">
+          <div class="applied-result-header">
+            <span class="applied-result-label">
+              {{ 'double-coded-review.applied-result.label' | translate }}
+            </span>
+            <span class="applied-result-source">
+              {{ getAppliedResultSourceLabel(element) }}
+            </span>
+          </div>
+          <div class="applied-code-row">
+            <span
+              class="applied-code-value"
+              [matTooltip]="getCodeLabel(appliedResult.code)"
+            >
+              {{ getCodeDisplay(appliedResult.code) || 'N/A' }}
+            </span>
+            @if (appliedResult.score !== null) {
+              <span class="applied-score-value"
+                >({{ appliedResult.score }})</span
+              >
+            }
+          </div>
+          @if (appliedResult.comment) {
+            <div class="applied-comment">
+              <mat-icon>rate_review</mat-icon>
+              <span>{{ appliedResult.comment }}</span>
+            </div>
+          }
+        </div>
+      }
+    } @else {
       <mat-form-field class="decision-select-field" appearance="outline">
         <mat-label>{{
           'double-coded-review.decision.select-label' | translate
@@ -477,7 +509,9 @@
                                   <div
                                     class="coder-column-cell"
                                     [ngClass]="{
-                                      pending: result.code === null
+                                      pending: result.code === null,
+                                      'applied-code-match':
+                                        isAppliedCodeMatch(element, result)
                                     }"
                                   >
                                     @if (results.length > 1) {
@@ -504,6 +538,16 @@
                                         @if (result.score !== null) {
                                           <span class="coder-score-value"
                                             >({{ result.score }})</span
+                                          >
+                                        }
+                                        @if (isAppliedCodeMatch(element, result)) {
+                                          <mat-icon
+                                            class="applied-match-icon"
+                                            [matTooltip]="
+                                              'double-coded-review.applied-result.match-tooltip'
+                                                | translate
+                                            "
+                                            >done</mat-icon
                                           >
                                         }
                                       </div>
@@ -936,7 +980,11 @@
                               @for (result of results; track result.jobId) {
                                 <div
                                   class="coder-column-cell"
-                                  [ngClass]="{ pending: result.code === null }"
+                                  [ngClass]="{
+                                    pending: result.code === null,
+                                    'applied-code-match':
+                                      isAppliedCodeMatch(element, result)
+                                  }"
                                 >
                                   @if (results.length > 1) {
                                     <div
@@ -960,6 +1008,16 @@
                                       @if (result.score !== null) {
                                         <span class="coder-score-value"
                                           >({{ result.score }})</span
+                                        >
+                                      }
+                                      @if (isAppliedCodeMatch(element, result)) {
+                                        <mat-icon
+                                          class="applied-match-icon"
+                                          [matTooltip]="
+                                            'double-coded-review.applied-result.match-tooltip'
+                                              | translate
+                                          "
+                                          >done</mat-icon
                                         >
                                       }
                                     </div>

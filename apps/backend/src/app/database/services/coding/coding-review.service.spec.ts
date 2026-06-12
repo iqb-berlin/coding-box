@@ -84,6 +84,8 @@ describe('CodingReviewService', () => {
     },
     response: {
       value: 'answer',
+      code_v2: null,
+      score_v2: null,
       unit: {
         name: 'UNIT_1',
         booklet: {
@@ -478,9 +480,12 @@ describe('CodingReviewService', () => {
         coding_job_id: 110,
         code: 3,
         score: 1,
+        supervisor_comment: 'Reviewed by manager',
         variable_id: 'VAR_2',
         response: {
           value: 'matching answer',
+          code_v2: 3,
+          score_v2: 1,
           unit: {
             name: 'UNIT_2',
             booklet: {
@@ -511,6 +516,8 @@ describe('CodingReviewService', () => {
         variable_id: 'VAR_2',
         response: {
           value: 'matching answer',
+          code_v2: 3,
+          score_v2: 1,
           unit: {
             name: 'UNIT_2',
             booklet: {
@@ -551,11 +558,137 @@ describe('CodingReviewService', () => {
       responseId: 11,
       variableId: 'VAR_2',
       isResolved: true,
+      appliedCode: 3,
+      appliedScore: 1,
+      appliedComment: 'Reviewed by manager',
       coderResults: [
         { coderId: 3, code: 3, score: 1 },
         { coderId: 4, code: 3, score: 1 }
       ]
     });
+  });
+
+  it('uses matching coding issue review notes as the applied comment', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([
+      { responseId: 11, responseStatus: 5 }
+    ]);
+    codingJobUnitRepository.query.mockResolvedValueOnce([{ total: '1' }]);
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      makeCodingJobUnit({
+        response_id: 11,
+        coding_job_id: 110,
+        code: -2,
+        score: null,
+        variable_id: 'VAR_2',
+        response: {
+          value: 'answer requiring review',
+          code_v2: 7,
+          score_v2: 2,
+          unit: {
+            name: 'UNIT_2',
+            booklet: {
+              bookletinfo: { name: 'BOOKLET_2' },
+              person: {
+                login: 'person-2',
+                code: 'P002'
+              }
+            }
+          }
+        },
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: 11,
+          training_id: null,
+          name: 'Issue Source Job',
+          codingJobCoders: [{
+            user_id: 3,
+            user: { username: 'Coder 3' }
+          }]
+        }
+      }),
+      makeCodingJobUnit({
+        response_id: 11,
+        coding_job_id: 111,
+        code: 7,
+        score: 2,
+        variable_id: 'VAR_2',
+        response: {
+          value: 'answer requiring review',
+          code_v2: 7,
+          score_v2: 2,
+          unit: {
+            name: 'UNIT_2',
+            booklet: {
+              bookletinfo: { name: 'BOOKLET_2' },
+              person: {
+                login: 'person-2',
+                code: 'P002'
+              }
+            }
+          }
+        },
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: 11,
+          training_id: null,
+          name: 'Second Job',
+          codingJobCoders: [{
+            user_id: 4,
+            user: { username: 'Coder 4' }
+          }]
+        }
+      }),
+      makeCodingJobUnit({
+        response_id: 11,
+        coding_job_id: 112,
+        code: 7,
+        score: 2,
+        notes: 'Manager review note',
+        variable_id: 'VAR_2',
+        response: {
+          value: 'answer requiring review',
+          code_v2: 7,
+          score_v2: 2,
+          unit: {
+            name: 'UNIT_2',
+            booklet: {
+              bookletinfo: { name: 'BOOKLET_2' },
+              person: {
+                login: 'person-2',
+                code: 'P002'
+              }
+            }
+          }
+        },
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: 11,
+          training_id: null,
+          job_type: 'coding_issue_review',
+          name: 'Issue Review Job',
+          codingJobCoders: [{
+            user_id: 5,
+            user: { username: 'Manager' }
+          }]
+        }
+      })
+    ]);
+
+    const result = await service.getDoubleCodedVariablesForReview(workspaceId);
+
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      responseId: 11,
+      isResolved: true,
+      appliedCode: 7,
+      appliedScore: 2,
+      appliedComment: 'Manager review note',
+      coderResults: [
+        { coderId: 3, code: -2, score: null },
+        { coderId: 4, code: 7, score: 2 }
+      ]
+    });
+    expect(result.data[0].coderResults).toHaveLength(2);
   });
 
   it('applies resolved and coding-status filters independently', async () => {
@@ -794,6 +927,9 @@ describe('CodingReviewService', () => {
   });
 
   it('keeps legacy bundle jobs in job-definition scoped double-coding review rows', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([
+      { responseId: 10, responseStatus: 5 }
+    ]);
     jobDefinitionRepository.find.mockResolvedValueOnce([{
       assigned_variable_bundles: [{
         id: 9,
@@ -807,6 +943,21 @@ describe('CodingReviewService', () => {
     codingJobUnitRepository.find.mockResolvedValueOnce([
       makeCodingJobUnit({
         coding_job_id: 100,
+        response: {
+          value: 'answer',
+          code_v2: 1,
+          score_v2: 1,
+          unit: {
+            name: 'UNIT_1',
+            booklet: {
+              bookletinfo: { name: 'BOOKLET_1' },
+              person: {
+                login: 'person-1',
+                code: 'P001'
+              }
+            }
+          }
+        },
         coding_job: {
           workspace_id: workspaceId,
           job_definition_id: null,
@@ -822,6 +973,21 @@ describe('CodingReviewService', () => {
       makeCodingJobUnit({
         coding_job_id: 101,
         code: 2,
+        response: {
+          value: 'answer',
+          code_v2: 1,
+          score_v2: 1,
+          unit: {
+            name: 'UNIT_1',
+            booklet: {
+              bookletinfo: { name: 'BOOKLET_1' },
+              person: {
+                login: 'person-1',
+                code: 'P001'
+              }
+            }
+          }
+        },
         coding_job: {
           workspace_id: workspaceId,
           job_definition_id: null,
@@ -847,6 +1013,40 @@ describe('CodingReviewService', () => {
           codingJobCoders: [{
             user_id: 4,
             user: { username: 'Coder 4' }
+          }]
+        }
+      }),
+      makeCodingJobUnit({
+        coding_job_id: 105,
+        code: 1,
+        score: 1,
+        notes: 'Legacy bundle review note',
+        variable_bundle_id: 9,
+        response: {
+          value: 'answer',
+          code_v2: 1,
+          score_v2: 1,
+          unit: {
+            name: 'UNIT_1',
+            booklet: {
+              bookletinfo: { name: 'BOOKLET_1' },
+              person: {
+                login: 'person-1',
+                code: 'P001'
+              }
+            }
+          }
+        },
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: null,
+          training_id: null,
+          job_type: 'coding_issue_review',
+          name: 'Legacy Bundle Issue Review',
+          codingJobVariableBundles: [],
+          codingJobCoders: [{
+            user_id: 5,
+            user: { username: 'Manager' }
           }]
         }
       }),
@@ -899,6 +1099,7 @@ describe('CodingReviewService', () => {
       expect.objectContaining({ coderId: 1, jobId: 100 }),
       expect.objectContaining({ coderId: 2, jobId: 101 })
     ]);
+    expect(result.data[0].appliedComment).toBe('Legacy bundle review note');
   });
 
   it('returns an empty page without loading relations when no double-coded rows match', async () => {
@@ -1153,6 +1354,9 @@ describe('CodingReviewService', () => {
             bookletName: 'BOOKLET_1',
             givenAnswer: 'answer',
             isResolved: false,
+            appliedCode: null,
+            appliedScore: null,
+            appliedComment: null,
             coderResults: [
               {
                 coderId: 31,

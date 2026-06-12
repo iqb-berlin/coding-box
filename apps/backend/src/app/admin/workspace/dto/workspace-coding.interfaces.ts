@@ -28,6 +28,9 @@ export interface DoubleCodedReviewItem {
   bookletName: string;
   givenAnswer: string;
   isResolved: boolean;
+  appliedCode: number | null;
+  appliedScore: number | null;
+  appliedComment: string | null;
   coderResults: Array<{
     coderId: number;
     coderName: string;

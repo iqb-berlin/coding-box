@@ -532,6 +532,9 @@ describe('TestPersonCodingService', () => {
           bookletName: 'BOOKLET_1',
           givenAnswer: 'answer',
           isResolved: false,
+          appliedCode: null,
+          appliedScore: null,
+          appliedComment: null,
           coderResults: [{
             coderId: 1,
             coderName: 'Coder 1',
