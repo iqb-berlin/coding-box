@@ -20,6 +20,9 @@ describe('WsgCodingJobController', () => {
     getBulkCodingProgress: jest.Mock;
     createCodingJob: jest.Mock;
     updateCodingJob: jest.Mock;
+    pauseCodingJob: jest.Mock;
+    resumeCodingJob: jest.Mock;
+    submitCodingJob: jest.Mock;
     saveCodingProgress: jest.Mock;
     saveCodingIssueReviewProgress: jest.Mock;
     saveCodingNotes: jest.Mock;
@@ -54,6 +57,9 @@ describe('WsgCodingJobController', () => {
       getBulkCodingProgress: jest.fn().mockResolvedValue({}),
       createCodingJob: jest.fn().mockResolvedValue({ id: 124 }),
       updateCodingJob: jest.fn(),
+      pauseCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'paused' }),
+      resumeCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'active' }),
+      submitCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'completed' }),
       saveCodingProgress: jest.fn().mockResolvedValue({ id: 123 }),
       saveCodingIssueReviewProgress: jest.fn().mockResolvedValue({ id: 123 }),
       saveCodingNotes: jest.fn().mockResolvedValue({ id: 123 }),
@@ -93,6 +99,20 @@ describe('WsgCodingJobController', () => {
       AccessLevelGuard
     ]);
     expect(Reflect.getMetadata('accessLevel', handler)).toBe(2);
+  });
+
+  it.each([
+    'pauseCodingJob',
+    'resumeCodingJob',
+    'submitCodingJob'
+  ] as const)('uses coder access guards for %s', methodName => {
+    const handler = WsgCodingJobController.prototype[methodName];
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtAuthGuard,
+      WorkspaceGuard
+    ]);
+    expect(Reflect.getMetadata('accessLevel', handler)).toBeUndefined();
   });
 
   it('passes onlyOpen=true to the coding job service when requested', async () => {
@@ -170,6 +190,24 @@ describe('WsgCodingJobController', () => {
     expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, {
       status: 'review'
     });
+  });
+
+  it.each([
+    ['pauseCodingJob', 'pauseCodingJob'],
+    ['resumeCodingJob', 'resumeCodingJob'],
+    ['submitCodingJob', 'submitCodingJob']
+  ] as const)('uses coding access for %s', async (controllerMethod, serviceMethod) => {
+    await controller[controllerMethod](47, 123, req);
+
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      5
+    );
+    expect(
+      codingJobService.assertUserCanAccessCodingJob
+    ).not.toHaveBeenCalled();
+    expect(codingJobService[serviceMethod]).toHaveBeenCalledWith(123, 47);
   });
 
   it('prepares read-only reviews with management access and without changing job state', async () => {
