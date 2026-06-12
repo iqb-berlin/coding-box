@@ -102,6 +102,7 @@ interface ReplayCodingJobSwitchSnapshot {
   authToken: string;
   workspaceId: number;
   isCodingMode: boolean;
+  isCodingDecisionMode: boolean;
   isBookletReplayMode: boolean;
   isReviewMode: boolean;
   isCodingIssueReviewMode: boolean;
@@ -170,6 +171,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   testPerson: string = '';
   unitId: string = '';
   isCodingMode: boolean = false;
+  isCodingDecisionMode: boolean = false;
   isBookletReplayMode: boolean = false; // for replays without coding features
   isReviewMode: boolean = false;
   isCodingIssueReviewMode: boolean = false;
@@ -432,9 +434,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         const workspace = this.workspaceId ? String(this.workspaceId) : undefined;
         this.isReviewMode = queryParams.mode === 'coding-review';
         this.isCodingIssueReviewMode = queryParams.mode === 'coding-issue-review';
+        this.isCodingDecisionMode = queryParams.mode === 'coding-decision';
         this.codingService.isReviewMode = this.isReviewMode;
         this.codingService.isCodingIssueReviewMode = this.isCodingIssueReviewMode;
-        this.isCodingMode = queryParams.mode === 'coding' || this.isReviewMode || this.isCodingIssueReviewMode;
+        this.isCodingMode = queryParams.mode === 'coding' ||
+          this.isReviewMode ||
+          this.isCodingIssueReviewMode ||
+          this.isCodingDecisionMode;
         this.isBookletReplayMode = queryParams.mode === 'booklet-view' || queryParams.mode === 'booklet';
         this.originResponseId = queryParams.originResponseId ? Number(queryParams.originResponseId) : null;
         const suppressGeneralInstructions = this.getBooleanQueryParam(queryParams.suppressGeneralInstructions);
@@ -1162,14 +1168,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   isCodingReadOnly(): boolean {
     return this.isSwitchingCodingJob ||
-      this.appService.needsReAuthentication ||
+      (!this.isCodingDecisionMode && this.appService.needsReAuthentication) ||
       this.isReviewMode ||
       (this.codingService.isCompletedJobReview && !this.isCodingIssueReviewMode) ||
       this.codingService.isCodingJobFinalized;
   }
 
   isCodingInteractionBlockedByReAuthentication(): boolean {
-    return this.isCodingMode && !this.isReviewMode && this.appService.needsReAuthentication;
+    return this.isCodingMode &&
+      !this.isReviewMode &&
+      !this.isCodingDecisionMode &&
+      this.appService.needsReAuthentication;
   }
 
   isSubmitCodingJobDisabled(): boolean {
@@ -1199,7 +1208,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   canSwitchAssignedCodingJobs(): boolean {
-    return this.isCodingMode && !this.isReviewMode && !this.isCodingIssueReviewMode;
+    return this.isCodingMode &&
+      !this.isReviewMode &&
+      !this.isCodingIssueReviewMode &&
+      !this.isCodingDecisionMode;
   }
 
   isCodingJobSwitchDisabled(): boolean {
@@ -1764,6 +1776,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       authToken: this.authToken,
       workspaceId: this.workspaceId,
       isCodingMode: this.isCodingMode,
+      isCodingDecisionMode: this.isCodingDecisionMode,
       isBookletReplayMode: this.isBookletReplayMode,
       isReviewMode: this.isReviewMode,
       isCodingIssueReviewMode: this.isCodingIssueReviewMode,
@@ -1817,6 +1830,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.authToken = snapshot.authToken;
     this.workspaceId = snapshot.workspaceId;
     this.isCodingMode = snapshot.isCodingMode;
+    this.isCodingDecisionMode = snapshot.isCodingDecisionMode;
     this.isBookletReplayMode = snapshot.isBookletReplayMode;
     this.isReviewMode = snapshot.isReviewMode;
     this.isCodingIssueReviewMode = snapshot.isCodingIssueReviewMode;
@@ -1908,6 +1922,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.codingService.setAuthToken(authToken);
     this.workspaceId = job.workspace_id;
     this.isCodingMode = true;
+    this.isCodingDecisionMode = false;
     this.isBookletReplayMode = false;
     this.isReviewMode = false;
     this.codingService.isReviewMode = false;
