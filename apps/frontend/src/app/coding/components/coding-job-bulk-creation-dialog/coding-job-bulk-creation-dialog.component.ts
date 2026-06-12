@@ -387,13 +387,16 @@ export class CodingJobBulkCreationDialogComponent {
   private getCaseCountForCoder(item: Variable | PreviewVariableBundle, coder: Coder): number {
     let itemKey;
     let totalCases;
+    let variableCaseCounts: number[];
 
     if ('variables' in item) { // bundle
       itemKey = this.getBundleItemKey(item);
-      totalCases = item.variables.reduce((sum, v) => sum + (v.responseCount || 0), 0);
+      variableCaseCounts = item.variables.map(variable => variable.responseCount || 0);
+      totalCases = variableCaseCounts.reduce((sum, count) => sum + count, 0);
     } else { // variable
       itemKey = `${item.unitName}::${item.variableId}`;
       totalCases = item.responseCount || 0;
+      variableCaseCounts = [totalCases];
     }
 
     if (this.data.distribution && this.data.doubleCodingInfo) {
@@ -416,13 +419,8 @@ export class CodingJobBulkCreationDialogComponent {
 
     if (coderIndex === -1) return 0;
 
-    // Calculate double coding requirements
-    let doubleCodingCount = 0;
-    if (this.data.doubleCodingAbsolute && this.data.doubleCodingAbsolute > 0) {
-      doubleCodingCount = Math.min(this.data.doubleCodingAbsolute, totalCases);
-    } else if (this.data.doubleCodingPercentage && this.data.doubleCodingPercentage > 0) {
-      doubleCodingCount = Math.floor((this.data.doubleCodingPercentage / 100) * totalCases);
-    }
+    const doubleCodingCount = variableCaseCounts
+      .reduce((sum, count) => sum + this.getDoubleCodingCountForVariable(count), 0);
 
     const singleCodingCases = totalCases - doubleCodingCount;
     const baseCasesPerCoder = Math.floor(singleCodingCases / sortedCoders.length);
@@ -430,6 +428,19 @@ export class CodingJobBulkCreationDialogComponent {
 
     const singleCases = baseCasesPerCoder + (coderIndex < remainder ? 1 : 0);
     return singleCases + doubleCodingCount;
+  }
+
+  private getDoubleCodingCountForVariable(totalCases: number): number {
+    if (this.data.doubleCodingAbsolute && this.data.doubleCodingAbsolute > 0) {
+      return Math.min(this.data.doubleCodingAbsolute, totalCases);
+    }
+    if (this.data.doubleCodingPercentage && this.data.doubleCodingPercentage > 0) {
+      return Math.min(
+        Math.ceil((this.data.doubleCodingPercentage / 100) * totalCases),
+        totalCases
+      );
+    }
+    return 0;
   }
 
   private initForm(): void {

@@ -235,9 +235,9 @@ describe('CodingJobService distribution from job definitions', () => {
 
     const doubleCodingSummary = Object.values(result.doubleCodingInfo);
     expect(doubleCodingSummary.reduce((sum, item) => sum + item.distinctCases, 0)).toBe(7);
-    expect(doubleCodingSummary.reduce((sum, item) => sum + item.codingTasksTotal, 0)).toBe(8);
-    expect(doubleCodingSummary.reduce((sum, item) => sum + item.doubleCodedCases, 0)).toBe(1);
-    expect(doubleCodingSummary.reduce((sum, item) => sum + item.singleCodedCasesAssigned, 0)).toBe(6);
+    expect(doubleCodingSummary.reduce((sum, item) => sum + item.codingTasksTotal, 0)).toBe(10);
+    expect(doubleCodingSummary.reduce((sum, item) => sum + item.doubleCodedCases, 0)).toBe(3);
+    expect(doubleCodingSummary.reduce((sum, item) => sum + item.singleCodedCasesAssigned, 0)).toBe(4);
 
     expect(createdJobCalls.every(call => call.dto.jobDefinitionId === 77)).toBe(true);
     expect(createdJobCalls.every(call => call.subset.length > 0)).toBe(true);
@@ -257,7 +257,7 @@ describe('CodingJobService distribution from job definitions', () => {
     createdJobCalls.flatMap(call => call.subset).forEach(response => {
       assignedResponseCounts.set(response.id, (assignedResponseCounts.get(response.id) || 0) + 1);
     });
-    expect([...assignedResponseCounts.values()].filter(count => count === 2)).toHaveLength(1);
+    expect([...assignedResponseCounts.values()].filter(count => count === 2)).toHaveLength(3);
     expect(Math.max(...assignedResponseCounts.values())).toBe(2);
   });
 
@@ -435,6 +435,83 @@ describe('CodingJobService distribution from job definitions', () => {
     expect([...assignedResponseCounts.values()].filter(count => count === 2)).toHaveLength(2);
     expect(Math.max(...assignedResponseCounts.values())).toBe(2);
     expect(Object.values(result.pairDistribution).reduce((sum, count) => sum + count, 0)).toBe(2);
+  });
+
+  it('applies the absolute double-coding count to each selected variable', async () => {
+    const responses = [
+      ...Array.from({ length: 3 }, (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1')),
+      makeResponse(10, 'Unit 2', 'Var 2')
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const preview = await service.calculateDistribution(5, {
+      selectedVariables: [
+        { unitName: 'Unit 1', variableId: 'Var 1' },
+        { unitName: 'Unit 2', variableId: 'Var 2' }
+      ],
+      selectedCoders: [
+        { id: 1, name: 'Ada', username: 'ada' },
+        { id: 2, name: 'Bea', username: 'bea' }
+      ],
+      doubleCodingAbsolute: 2,
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'double-coding-absolute-per-variable'
+    });
+
+    expect(preview.doubleCodingInfo['Unit 1::Var 1']).toMatchObject({
+      distinctCases: 3,
+      codingTasksTotal: 5,
+      doubleCodedCases: 2,
+      singleCodedCasesAssigned: 1
+    });
+    expect(preview.doubleCodingInfo['Unit 2::Var 2']).toMatchObject({
+      distinctCases: 1,
+      codingTasksTotal: 2,
+      doubleCodedCases: 1,
+      singleCodedCasesAssigned: 0
+    });
+    expect(
+      Object.values(preview.doubleCodingInfo)
+        .reduce((sum, item) => sum + item.doubleCodedCases, 0)
+    ).toBe(3);
+  });
+
+  it('applies the percentage double-coding count per variable and rounds up', async () => {
+    const responses = [
+      ...Array.from({ length: 277 }, (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1')),
+      ...Array.from({ length: 51 }, (_, index) => makeResponse(index + 1000, 'Unit 2', 'Var 2')),
+      ...Array.from({ length: 5 }, (_, index) => makeResponse(index + 2000, 'Unit 3', 'Var 3'))
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const preview = await service.calculateDistribution(5, {
+      selectedVariables: [
+        { unitName: 'Unit 1', variableId: 'Var 1' },
+        { unitName: 'Unit 2', variableId: 'Var 2' },
+        { unitName: 'Unit 3', variableId: 'Var 3' }
+      ],
+      selectedCoders: [
+        { id: 1, name: 'Ada', username: 'ada' },
+        { id: 2, name: 'Bea', username: 'bea' }
+      ],
+      doubleCodingPercentage: 10,
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'double-coding-percentage-per-variable'
+    });
+
+    expect(preview.doubleCodingInfo['Unit 1::Var 1'].doubleCodedCases).toBe(28);
+    expect(preview.doubleCodingInfo['Unit 2::Var 2'].doubleCodedCases).toBe(6);
+    expect(preview.doubleCodingInfo['Unit 3::Var 3'].doubleCodedCases).toBe(1);
+    expect(
+      Object.values(preview.doubleCodingInfo)
+        .reduce((sum, item) => sum + item.doubleCodedCases, 0)
+    ).toBe(35);
   });
 
   it('ignores unsupported requests for more than two coders per double-coded case', async () => {
