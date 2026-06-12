@@ -13,6 +13,10 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { TestResultService } from '../test-result/test-result.service';
 import { ValidationTaskStateService } from '../validation/validation-task-state.service';
 import { suppressGlobalHttpErrorContext } from '../../../core/interceptors/http-error-context';
+import {
+  CodingResponseSortBy,
+  CodingResponseSortDirection
+} from '../../../models/coding-interfaces';
 
 @Injectable({
   providedIn: 'root'
@@ -151,7 +155,7 @@ export class ResponseService {
 
   searchResponses(
     workspaceId: number,
-    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3'; geogebra?: boolean; derivedOnly?: boolean; responseSource?: 'base' | 'derived' | 'all'; personLogin?: string },
+    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3'; geogebra?: boolean; derivedOnly?: boolean; responseSource?: 'base' | 'derived' | 'all'; personLogin?: string; sortBy?: CodingResponseSortBy; sortDirection?: CodingResponseSortDirection },
     page?: number,
     limit?: number
   ): Observable<{
@@ -228,6 +232,14 @@ export class ResponseService {
 
     if (searchParams.personLogin) {
       params = params.set('personLogin', searchParams.personLogin);
+    }
+
+    if (searchParams.sortBy) {
+      params = params.set('sortBy', searchParams.sortBy);
+    }
+
+    if (searchParams.sortDirection) {
+      params = params.set('sortDirection', searchParams.sortDirection);
     }
 
     if (page !== undefined) {

@@ -123,7 +123,22 @@ export interface SearchResponsesParams {
   derivedOnly?: boolean;
   responseSource?: 'base' | 'derived' | 'all';
   personLogin?: string;
+  sortBy?: CodingResponseSortBy;
+  sortDirection?: CodingResponseSortDirection;
 }
+
+export type CodingResponseSortBy =
+  'unitname' |
+  'variableid' |
+  'value' |
+  'codedstatus' |
+  'code' |
+  'score' |
+  'person_code' |
+  'person_login' |
+  'person_group' |
+  'booklet_id';
+export type CodingResponseSortDirection = 'asc' | 'desc';
 
 export interface SearchResponseItem {
   responseId: number;

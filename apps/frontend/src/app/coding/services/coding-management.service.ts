@@ -13,7 +13,11 @@ import { CodingVersionService, ResetVersionJobStatus } from './coding-version.se
 import { CodingExportService } from './coding-export.service';
 import { ResponseService } from '../../shared/services/response/response.service';
 import {
-  SearchResponseItem, SearchResponsesParams, CodingJobStatus
+  SearchResponseItem,
+  SearchResponsesParams,
+  CodingJobStatus,
+  CodingResponseSortBy,
+  CodingResponseSortDirection
 } from '../../models/coding-interfaces';
 import { AppService } from '../../core/services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
@@ -201,12 +205,14 @@ export class CodingManagementService {
     status: string,
     version: StatisticsVersion,
     page: number,
-    limit: number
+    limit: number,
+    sortBy?: CodingResponseSortBy,
+    sortDirection?: CodingResponseSortDirection
   ): Observable<{ data: ResponseEntity[], total: number }> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return of({ data: [], total: 0 });
 
-    return this.statisticsService.getResponsesByStatus(workspaceId, status, version, page, limit)
+    return this.statisticsService.getResponsesByStatus(workspaceId, status, version, page, limit, sortBy, sortDirection)
       .pipe(
         catchError(() => {
           this.snackBar.open(`Fehler beim Abrufen der Antworten mit Status ${status}`, 'Schließen', {
@@ -227,7 +233,9 @@ export class CodingManagementService {
   searchResponses(
     filterParams: FilterParams,
     page: number,
-    limit: number
+    limit: number,
+    sortBy?: CodingResponseSortBy,
+    sortDirection?: CodingResponseSortDirection
   ): Observable<{ data: SearchResponseItem[], total: number }> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return of({ data: [], total: 0 });
@@ -242,7 +250,9 @@ export class CodingManagementService {
       variableId: filterParams.variableId,
       geogebra: filterParams.geogebra,
       responseSource: filterParams.responseSource,
-      personLogin: filterParams.personLogin
+      personLogin: filterParams.personLogin,
+      sortBy,
+      sortDirection
     };
 
     return this.responseService.searchResponses(workspaceId, backendParams, page, limit)
