@@ -46,6 +46,14 @@ export interface CodingStatistics {
   };
 }
 
+export interface DoubleCodedResolutionDecision {
+  responseId: number;
+  selectedJobId?: number;
+  code?: number;
+  score?: number | null;
+  resolutionComment?: string;
+}
+
 export interface CodingStatisticsWithJob extends CodingStatistics {
   jobId?: string;
   message?: string;
@@ -1156,7 +1164,7 @@ export class TestPersonCodingService {
 
   applyDoubleCodedResolutions(
     workspaceId: number,
-    dto: { decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }> }
+    dto: { decisions: DoubleCodedResolutionDecision[] }
   ): Observable<{
       success: boolean;
       appliedCount: number;

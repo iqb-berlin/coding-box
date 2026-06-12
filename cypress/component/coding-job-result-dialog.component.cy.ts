@@ -9,18 +9,16 @@ import { of } from 'rxjs';
 import { CodingJobResultDialogComponent } from '../../apps/frontend/src/app/coding/components/coding-jobs/coding-job-result-dialog/coding-job-result-dialog.component';
 import { CodingJobBackendService } from '../../apps/frontend/src/app/coding/services/coding-job-backend.service';
 import { CodingJob } from '../../apps/frontend/src/app/coding/models/coding-job.model';
-import { AppService } from '../../apps/frontend/src/app/core/services/app.service';
 import { SERVER_URL } from '../../apps/frontend/src/app/injection-tokens';
 import { FileService } from '../../apps/frontend/src/app/shared/services/file/file.service';
 import { base64ToUtf8 } from '../../apps/frontend/src/app/shared/utils/common-utils';
 
 describe('CodingJobResultDialogComponent review flow', () => {
-  it('opens the review replay on the variable page returned for the coding job unit', () => {
+  it('opens the coding issue review replay on the variable page returned for the coding job unit', () => {
     cy.viewport(1400, 900);
 
     const createUrlTree = cy.stub().returns({});
     const serializeUrl = cy.stub().returns('/replay/generated');
-    const createOwnToken = cy.stub().returns(of('review-token'));
 
     const codingJob: CodingJob = {
       id: 1,
@@ -83,12 +81,6 @@ describe('CodingJobResultDialogComponent review flow', () => {
           }
         },
         {
-          provide: AppService,
-          useValue: {
-            createOwnToken
-          }
-        },
-        {
           provide: FileService,
           useValue: {}
         },
@@ -127,17 +119,21 @@ describe('CodingJobResultDialogComponent review flow', () => {
       expect(openStub.firstCall.args[1]).to.equal('_blank');
     });
     cy.then(() => {
-      expect(createOwnToken).to.have.been.calledWith(5, 1);
       expect(createUrlTree).to.have.been.calledWith(
         ['replay/login@code@group@BOOKLET_A/UNIT_1/0/VAR_ON_ONLY_PAGE'],
         Cypress.sinon.match.object
       );
 
       const queryParams = createUrlTree.firstCall.args[1].queryParams;
-      expect(queryParams.auth).to.equal('review-token');
-      expect(queryParams.mode).to.equal('coding');
+      expect(queryParams).not.to.have.property('auth');
+      expect(queryParams.mode).to.equal('coding-issue-review');
+      expect(queryParams.workspaceId).to.equal(5);
 
       const unitsData = JSON.parse(base64ToUtf8(queryParams.unitsData));
+      expect(unitsData).to.include({
+        id: 1,
+        currentUnitIndex: 0
+      });
       expect(unitsData.units[0]).to.include({
         name: 'UNIT_1',
         testPerson: 'login@code@group@BOOKLET_A',

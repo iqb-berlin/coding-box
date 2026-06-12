@@ -626,7 +626,9 @@ export class WorkspaceCodingService {
     workspaceId: number,
     decisions: Array<{
       responseId: number;
-      selectedJobId: number;
+      selectedJobId?: number | null;
+      code?: number | null;
+      score?: number | null;
       resolutionComment?: string;
     }>
   ): Promise<{

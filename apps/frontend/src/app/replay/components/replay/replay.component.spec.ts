@@ -1115,6 +1115,47 @@ describe('ReplayComponent', () => {
     expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
   });
 
+  it('should load coding-decision mode as editable without coding job access side effects', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding-decision',
+      originResponseId: '77',
+      workspaceId: '47'
+    };
+    appService.needsReAuthentication = true;
+    codingJobBackendServiceMock.getCodingJobUnits.mockClear();
+    codingJobBackendServiceMock.updateCodingJob.mockClear();
+    codingJobBackendServiceMock.resumeCodingJob.mockClear();
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(component.isCodingMode).toBe(true);
+    expect(component.isCodingDecisionMode).toBe(true);
+    expect(component.isReviewMode).toBe(false);
+    expect(component.isCodingIssueReviewMode).toBe(false);
+    expect(component.originResponseId).toBe(77);
+    expect(component.isCodingReadOnly()).toBe(false);
+    expect(component.isCodingInteractionBlockedByReAuthentication()).toBe(false);
+    expect(component.canSwitchAssignedCodingJobs()).toBe(false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
+  });
+
   it('should reuse coding job units loaded from query params during replay navigation', async () => {
     routeParams = {
       page: '0',
