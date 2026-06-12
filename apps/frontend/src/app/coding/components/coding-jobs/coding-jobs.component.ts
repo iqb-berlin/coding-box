@@ -742,6 +742,10 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return 'apply';
     }
 
+    if (job.status === 'review') {
+      return this.canReviewCodingJob(job) ? 'review' : 'results';
+    }
+
     if (
       this.canReviewCodingJob(job) &&
       (job.status === 'completed' ||
@@ -791,7 +795,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     return (
       this.showApplyActions &&
       this.canApplyResults &&
-      job.status === 'completed' &&
+      ['completed', 'review'].includes(job.status) &&
       this.isCodingJobFreshnessApplyable(job) &&
       !job.training?.id &&
       !job.training_id

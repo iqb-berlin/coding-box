@@ -517,6 +517,16 @@ export class CodingJobBackendService {
     });
   }
 
+  submitCodingJobForReview(
+    workspaceId: number,
+    codingJobId: number
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/submit-review`;
+    return this.http
+      .post<unknown>(url, {}, { headers: this.authHeader })
+      .pipe(map(job => this.mapApiCodingJob(job)));
+  }
+
   getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string,

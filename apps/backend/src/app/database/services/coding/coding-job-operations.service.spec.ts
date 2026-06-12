@@ -200,4 +200,46 @@ describe('CodingJobOperationsService', () => {
     expect(result.message).toContain('skipped 1 for review');
     expect(result.message).not.toContain('jobs skipped due to coding issues');
   });
+
+  it('bulk apply includes jobs submitted for review', async () => {
+    codingJobRepository.find.mockResolvedValue([
+      {
+        id: 8,
+        name: 'Submitted review job',
+        status: 'review',
+        training_id: null
+      }
+    ] as CodingJob[]);
+    codingResultsService.applyCodingResults.mockResolvedValue({
+      success: true,
+      updatedResponsesCount: 4,
+      skippedReviewCount: 0,
+      skippedAlreadyCodedCount: 0,
+      overwrittenExistingCount: 0,
+      messageKey: 'coding-results.apply.success.bulk',
+      messageParams: { count: 4 }
+    });
+
+    const result = await service.bulkApplyCodingResults(5);
+
+    expect(codingResultsService.applyCodingResults).toHaveBeenCalledWith(5, 8, {});
+    expect(result.jobsProcessed).toBe(1);
+    expect(result.totalUpdatedResponses).toBe(4);
+    expect(result.results).toEqual([
+      {
+        jobId: 8,
+        jobName: 'Submitted review job',
+        hasIssues: false,
+        skipped: false,
+        result: {
+          success: true,
+          updatedResponsesCount: 4,
+          skippedReviewCount: 0,
+          skippedAlreadyCodedCount: 0,
+          overwrittenExistingCount: 0,
+          message: 'coding-results.apply.success.bulk'
+        }
+      }
+    ]);
+  });
 });

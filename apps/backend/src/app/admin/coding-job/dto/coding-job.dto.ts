@@ -43,7 +43,15 @@ export class CodingJobDto {
   @ApiProperty({
     description: 'Status of the coding job',
     example: 'pending',
-    enum: ['pending', 'active', 'completed']
+    enum: [
+      'pending',
+      'active',
+      'paused',
+      'open',
+      'completed',
+      'review',
+      'results_applied'
+    ]
   })
     status: string;
 

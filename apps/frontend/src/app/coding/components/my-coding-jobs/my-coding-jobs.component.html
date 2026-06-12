@@ -94,6 +94,13 @@
                 [attr.aria-label]="getStartCodingJobLabel(element)">
                 <mat-icon>{{ getStartCodingJobIcon(element) }}</mat-icon>
               </button>
+              @if (canSubmitForReview(element)) {
+              <button mat-icon-button (click)="$event.stopPropagation(); submitCodingJobForReview(element)"
+                [matTooltip]="getSubmitForReviewLabel()"
+                [attr.aria-label]="getSubmitForReviewLabel()">
+                <mat-icon>send</mat-icon>
+              </button>
+              }
             </mat-cell>
           </ng-container>
 

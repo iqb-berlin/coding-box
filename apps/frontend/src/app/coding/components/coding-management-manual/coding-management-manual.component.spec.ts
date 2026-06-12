@@ -464,7 +464,7 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
-  it('should keep completed jobs with review issues ready for bulk apply', () => {
+  it('should keep completed and review jobs with review issues ready for bulk apply', () => {
     const jobs = [
       {
         id: 1,
@@ -481,7 +481,7 @@ describe('CodingManagementManualComponent', () => {
         id: 2,
         workspace_id: 5,
         name: 'Job ohne Hinweis',
-        status: 'completed',
+        status: 'review',
         created_at: new Date(),
         updated_at: new Date(),
         assignedCoders: [],
