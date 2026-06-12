@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { PageEvent } from '@angular/material/paginator';
+import { Sort } from '@angular/material/sort';
 import { ResponseTableComponent } from './response-table.component';
 import { Success } from '../../../../models/success.model';
 
@@ -40,11 +41,33 @@ describe('ResponseTableComponent', () => {
     expect(component.dataSource.data).toEqual(testData);
   });
 
+  it('should not attach local data-source sorting when the table is rendered', () => {
+    const testData = [
+      { id: 1, unitname: 'Test Unit', variableid: 'b' } as Success,
+      { id: 2, unitname: 'Another Unit', variableid: 'a' } as Success
+    ];
+    fixture.componentRef.setInput('displayedColumns', ['unitname', 'variableid']);
+    fixture.componentRef.setInput('data', testData);
+
+    fixture.detectChanges();
+
+    expect(component.dataSource.sort).toBeUndefined();
+  });
+
   it('should emit pageChange when pagination changes', () => {
     jest.spyOn(component.pageChange, 'emit');
     const event = { pageIndex: 1, pageSize: 100, length: 200 } as PageEvent;
     component.onPageChange(event);
     expect(component.pageChange.emit).toHaveBeenCalledWith(event);
+  });
+
+  it('should emit sortChange when sorting changes', () => {
+    jest.spyOn(component.sortChange, 'emit');
+    const event = { active: 'score', direction: 'desc' } as Sort;
+
+    component.onSortChange(event);
+
+    expect(component.sortChange.emit).toHaveBeenCalledWith(event);
   });
 
   it('should emit replayClick when replay button is clicked', () => {
