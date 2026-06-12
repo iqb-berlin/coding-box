@@ -2705,6 +2705,47 @@ export class CodingJobService {
     return savedCodingJob;
   }
 
+  async pauseCodingJob(id: number, workspaceId: number): Promise<CodingJob> {
+    return this.setOwnCodingJobStatus(id, workspaceId, 'paused');
+  }
+
+  async resumeCodingJob(id: number, workspaceId: number): Promise<CodingJob> {
+    return this.setOwnCodingJobStatus(id, workspaceId, 'active');
+  }
+
+  async submitCodingJob(id: number, workspaceId: number): Promise<CodingJob> {
+    return this.updateCodingJob(id, workspaceId, { status: 'completed' });
+  }
+
+  private async setOwnCodingJobStatus(
+    id: number,
+    workspaceId: number,
+    status: 'active' | 'paused'
+  ): Promise<CodingJob> {
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id, workspace_id: workspaceId }
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${id} not found`);
+    }
+
+    if (['review', 'results_applied'].includes(codingJob.status)) {
+      return codingJob;
+    }
+
+    if (codingJob.status === 'completed' && status === 'paused') {
+      return codingJob;
+    }
+
+    if (codingJob.status === status) {
+      return codingJob;
+    }
+
+    codingJob.status = status;
+    return this.codingJobRepository.save(codingJob);
+  }
+
   async markCodingJobResultsApplied(
     id: number,
     workspaceId: number,

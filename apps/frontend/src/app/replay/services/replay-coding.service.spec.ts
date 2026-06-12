@@ -15,12 +15,16 @@ describe('ReplayCodingService', () => {
   beforeEach(() => {
     codingJobBackendServiceMock = {
       updateCodingJob: jest.fn(),
+      pauseCodingJob: jest.fn(),
+      resumeCodingJob: jest.fn(),
+      submitCodingJob: jest.fn(),
       getCodingProgress: jest.fn(),
       getCodingNotes: jest.fn(),
       getCodingJob: jest.fn(),
       saveCodingProgress: jest.fn(),
       saveCodingNotes: jest.fn(),
-      updateCodingJobKeepalive: jest.fn()
+      updateCodingJobKeepalive: jest.fn(),
+      pauseCodingJobKeepalive: jest.fn()
     } as unknown as jest.Mocked<CodingJobBackendService>;
 
     translateServiceMock = {
@@ -48,24 +52,34 @@ describe('ReplayCodingService', () => {
   });
 
   describe('updateCodingJobStatus', () => {
-    it('should update status via backend', async () => {
-      codingJobBackendServiceMock.updateCodingJob.mockReturnValue(of({} as CodingJob));
+    it('should resume active status via dedicated backend endpoint', async () => {
+      codingJobBackendServiceMock.resumeCodingJob.mockReturnValue(of({} as CodingJob));
       await service.updateCodingJobStatus(1, 100, 'active');
-      expect(codingJobBackendServiceMock.updateCodingJob).toHaveBeenCalledWith(1, 100, { status: 'active' });
+      expect(codingJobBackendServiceMock.resumeCodingJob).toHaveBeenCalledWith(1, 100);
     });
 
     it('should pass the replay auth token to backend status updates', async () => {
-      codingJobBackendServiceMock.updateCodingJob.mockReturnValue(of({} as CodingJob));
+      codingJobBackendServiceMock.resumeCodingJob.mockReturnValue(of({} as CodingJob));
       service.setAuthToken('replay-token');
 
       await service.updateCodingJobStatus(1, 100, 'active');
 
-      expect(codingJobBackendServiceMock.updateCodingJob).toHaveBeenCalledWith(
+      expect(codingJobBackendServiceMock.resumeCodingJob).toHaveBeenCalledWith(
         1,
         100,
-        { status: 'active' },
         'replay-token'
       );
+    });
+
+    it('should pause and submit via dedicated backend endpoints', async () => {
+      codingJobBackendServiceMock.pauseCodingJob.mockReturnValue(of({} as CodingJob));
+      codingJobBackendServiceMock.submitCodingJob.mockReturnValue(of({} as CodingJob));
+
+      await service.updateCodingJobStatus(1, 100, 'paused');
+      await service.updateCodingJobStatus(1, 100, 'completed');
+
+      expect(codingJobBackendServiceMock.pauseCodingJob).toHaveBeenCalledWith(1, 100);
+      expect(codingJobBackendServiceMock.submitCodingJob).toHaveBeenCalledWith(1, 100);
     });
   });
 
@@ -512,10 +526,9 @@ describe('ReplayCodingService', () => {
 
       service.pauseCodingJobOnUnload(1, 100);
 
-      expect(codingJobBackendServiceMock.updateCodingJobKeepalive).toHaveBeenCalledWith(
+      expect(codingJobBackendServiceMock.pauseCodingJobKeepalive).toHaveBeenCalledWith(
         1,
         100,
-        { status: 'paused' },
         'replay-token'
       );
     });
@@ -664,9 +677,12 @@ describe('ReplayCodingService', () => {
       await service.submitCodingJob(1, 100);
 
       expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.pauseCodingJob).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.submitCodingJob).not.toHaveBeenCalled();
       expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
       expect(codingJobBackendServiceMock.saveCodingNotes).not.toHaveBeenCalled();
-      expect(codingJobBackendServiceMock.updateCodingJobKeepalive).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.pauseCodingJobKeepalive).not.toHaveBeenCalled();
     });
 
     it('ignores code selections without changing local progress', async () => {
