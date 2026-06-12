@@ -85,6 +85,8 @@ describe('CodingResultsService', () => {
           score: 0
         }
       }),
+      getResolvedCodingIssueReviewResponseIds: jest.fn().mockResolvedValue([]),
+      getOpenCodingIssueReviewResponseIds: jest.fn().mockResolvedValue([]),
       getAggregationSettingsForCodingJob: jest.fn().mockResolvedValue({
         aggregationEnabled: false,
         aggregationThreshold: null,
@@ -378,7 +380,29 @@ describe('CodingResultsService', () => {
     expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
   });
 
-  it('does not mark coding jobs as applied while coding issues still require review', async () => {
+  it('does not block resolved coding issue reviews as double-coding conflicts', async () => {
+    codingJobService.getResolvedCodingIssueReviewResponseIds
+      .mockResolvedValueOnce([99]);
+    (responseRepository.manager.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 99, statusV2: null }]);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(responseRepository.manager.query).toHaveBeenCalledTimes(1);
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      99,
+      {
+        code_v2: 0,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
+    expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalled();
+  });
+
+  it('does not mark coding jobs as applied when only coding issues still require review', async () => {
     codingJobService.getCodingProgress.mockResolvedValueOnce({
       'person@code@booklet::booklet::UNIT::VAR': {
         id: -2,
@@ -388,10 +412,113 @@ describe('CodingResultsService', () => {
 
     const result = await service.applyCodingResults(17, 10);
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
     expect(result.updatedResponsesCount).toBe(0);
-    expect(result.messageKey).toBe('coding-results.apply.error.uncertain-issues-present');
+    expect(result.skippedReviewCount).toBe(1);
+    expect(result.messageKey).toBe('coding-results.apply.success.no-responses');
     expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
+  });
+
+  it('does not apply coding issue review units that are still open', async () => {
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'person@code@booklet::booklet::UNIT::VAR:open': {
+        id: -1,
+        code: '',
+        label: 'OPEN'
+      }
+    });
+    codingJobService.getOpenCodingIssueReviewResponseIds
+      .mockResolvedValueOnce([99]);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(result.updatedResponsesCount).toBe(0);
+    expect(result.skippedReviewCount).toBe(1);
+    expect(result.messageKey).toBe('coding-results.apply.success.no-responses');
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markManualCodingCurrent).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
+  });
+
+  it('keeps coding issues open even when the response already has completed v2 status', async () => {
+    (responseRepository.manager.query as jest.Mock).mockResolvedValueOnce([{
+      id: 99,
+      statusV2: statusStringToNumber('CODING_COMPLETE')
+    }]);
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'person@code@booklet::booklet::UNIT::VAR': {
+        id: -2,
+        score: null
+      }
+    });
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(result.updatedResponsesCount).toBe(0);
+    expect(result.skippedReviewCount).toBe(1);
+    expect(result.skippedAlreadyCodedCount).toBe(0);
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markManualCodingCurrent).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
+  });
+
+  it('applies valid results while skipping coding issues that still require review', async () => {
+    codingJobService.getCodingJobUnits.mockResolvedValueOnce([
+      {
+        responseId: 99,
+        personLogin: 'person',
+        personCode: 'code',
+        bookletName: 'booklet',
+        unitName: 'UNIT',
+        variableId: 'VAR'
+      },
+      {
+        responseId: 100,
+        personLogin: 'person',
+        personCode: 'code',
+        bookletName: 'booklet',
+        unitName: 'UNIT',
+        variableId: 'VAR2'
+      }
+    ] as never);
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'person@code@booklet::booklet::UNIT::VAR': {
+        id: 0,
+        score: 0
+      },
+      'person@code@booklet::booklet::UNIT::VAR2': {
+        id: -2,
+        score: null
+      }
+    });
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(result.updatedResponsesCount).toBe(1);
+    expect(result.skippedReviewCount).toBe(1);
+    expect(responseRepository.manager.query).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      [17, [99]]
+    );
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      99,
+      {
+        code_v2: 0,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
+    expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
+      17,
+      [99],
+      { codingJobId: 10, manager: queryRunner.manager }
+    );
     expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
   });
 
@@ -523,6 +650,96 @@ describe('CodingResultsService', () => {
       101,
       expect.any(Object)
     );
+  });
+
+  it('does not propagate aggregated results to coding issues that still require review', async () => {
+    codingJobService.getCodingJobUnits.mockResolvedValueOnce([
+      {
+        responseId: 99,
+        personLogin: 'person',
+        personCode: 'code',
+        bookletName: 'booklet',
+        unitName: 'UNIT',
+        variableId: 'VAR'
+      },
+      {
+        responseId: 100,
+        personLogin: 'other',
+        personCode: 'code',
+        bookletName: 'booklet',
+        unitName: 'UNIT',
+        variableId: 'VAR'
+      }
+    ] as never);
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'person@code@booklet::booklet::UNIT::VAR': {
+        id: 0,
+        score: 0
+      },
+      'other@code@booklet::booklet::UNIT::VAR': {
+        id: -2,
+        score: null
+      }
+    });
+    codingJobService.getAggregationSettingsForCodingJob.mockResolvedValue({
+      aggregationEnabled: true,
+      aggregationThreshold: 2,
+      responseMatchingFlags: [
+        ResponseMatchingFlag.IGNORE_CASE,
+        ResponseMatchingFlag.IGNORE_WHITESPACE
+      ],
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: true
+    });
+
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(createQueryBuilderMock([
+        {
+          id: 99,
+          value: ' A ',
+          variableid: 'VAR',
+          status_v2: 3,
+          unit: { id: 1, name: 'UNIT' }
+        }
+      ]))
+      .mockReturnValueOnce(createQueryBuilderMock([
+        {
+          id: 99,
+          value: ' A ',
+          variableid: 'VAR',
+          status_v2: 3,
+          unit: { id: 1, name: 'UNIT' }
+        },
+        {
+          id: 100,
+          value: 'a',
+          variableid: 'VAR',
+          status_v2: null,
+          unit: { id: 2, name: 'UNIT' }
+        }
+      ]));
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(result.updatedResponsesCount).toBe(1);
+    expect(result.skippedReviewCount).toBe(1);
+    expect(queryRunner.manager.update).toHaveBeenCalledTimes(1);
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      99,
+      {
+        code_v2: 0,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
+    expect(queryRunner.manager.update).not.toHaveBeenCalledWith(
+      ResponseEntity,
+      100,
+      expect.any(Object)
+    );
+    expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
   });
 
   it('overwrites matching already coded siblings only when explicitly requested', async () => {

@@ -892,9 +892,9 @@ describe('CodingReviewService', () => {
       },
       select: ['id', 'variables']
     });
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('variable_bundle scope_vb');
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('scope_vb.variables');
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cju.unit_name');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('variable_bundle scope_vb');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('scope_vb.variables');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('cju.unit_name');
     expect(result.data[0].coderResults).toEqual([
       expect.objectContaining({ coderId: 1, jobId: 100 }),
       expect.objectContaining({ coderId: 2, jobId: 101 })

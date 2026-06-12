@@ -26,6 +26,8 @@ export interface Variable {
   variableId: string;
 }
 
+export type CodingJobType = 'regular' | 'coding_issue_review';
+
 /**
  * Entity for coding jobs
  * A coding job is a collection of variables and variable bundles assigned to coders
@@ -46,6 +48,24 @@ export class CodingJob {
 
   @Column({ type: 'text', nullable: true })
     comment?: string;
+
+  @Column({
+    name: 'job_type',
+    type: 'varchar',
+    length: 32,
+    default: 'regular'
+  })
+    job_type: CodingJobType;
+
+  @Column({ name: 'source_coding_job_id', type: 'int', nullable: true })
+    source_coding_job_id?: number | null;
+
+  @Column({ name: 'reviewer_user_id', type: 'int', nullable: true })
+    reviewer_user_id?: number | null;
+
+  @ManyToOne(() => CodingJob, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'source_coding_job_id' })
+    sourceCodingJob?: CodingJob | null;
 
   @Column({ default: 'pending' })
     status: string;

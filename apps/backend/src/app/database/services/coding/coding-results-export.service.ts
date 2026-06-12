@@ -1,7 +1,9 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Readable } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Repository } from 'typeorm';
+import {
+  In, IsNull, Not, Repository
+} from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { Request } from 'express';
 import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
@@ -36,6 +38,10 @@ import {
   ManualCodingVariableReference,
   toManualCodingVariablePairKey
 } from '../../utils/manual-coding-candidate.util';
+import {
+  applyNonCodingIssueReviewJobFilter,
+  CODING_JOB_TYPE_CODING_ISSUE_REVIEW
+} from './coding-job-type.util';
 
 @Injectable()
 export class CodingResultsExportService {
@@ -132,12 +138,21 @@ export class CodingResultsExportService {
       .innerJoin('coding_job_unit.coding_job', 'coding_job')
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL')
-      .distinct(true)
-      .getRawMany<{ unitName: string; variableId: string }>();
+      .distinct(true);
+    applyNonCodingIssueReviewJobFilter(
+      manualJobVariables,
+      'coding_job',
+      'manualCodingVariablesReviewJobType'
+    );
+    const manualJobVariableRows =
+      await manualJobVariables.getRawMany<{
+        unitName: string;
+        variableId: string;
+      }>();
 
     const manualCodingVariables = createManualCodingVariableReferences([
       ...codingListVariables,
-      ...manualJobVariables
+      ...manualJobVariableRows
     ]);
 
     if (manualCodingVariables.length === 0) {
@@ -372,7 +387,8 @@ export class CodingResultsExportService {
       where: {
         coding_job: {
           workspace_id: workspaceId,
-          training_id: IsNull()
+          training_id: IsNull(),
+          job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
         }
       },
       relations: [
@@ -676,7 +692,8 @@ export class CodingResultsExportService {
       where: {
         coding_job: {
           workspace_id: workspaceId,
-          training_id: IsNull()
+          training_id: IsNull(),
+          job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
         }
       },
       relations: [
@@ -996,7 +1013,8 @@ export class CodingResultsExportService {
       where: {
         coding_job: {
           workspace_id: workspaceId,
-          training_id: IsNull()
+          training_id: IsNull(),
+          job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
         }
       },
       relations: [
@@ -1296,7 +1314,11 @@ export class CodingResultsExportService {
     }
 
     const codingJobs = await this.codingJobRepository.find({
-      where: { workspace_id: workspaceId, training_id: IsNull() },
+      where: {
+        workspace_id: workspaceId,
+        training_id: IsNull(),
+        job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
+      },
       relations: ['codingJobCoders', 'codingJobCoders.user', 'codingJobUnits', 'codingJobUnits.response', 'codingJobUnits.response.unit']
     });
 
@@ -1624,7 +1646,8 @@ export class CodingResultsExportService {
                 variable_id: variableId,
                 coding_job: {
                   workspace_id: workspaceId,
-                  training_id: IsNull()
+                  training_id: IsNull(),
+                  job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
                 }
               },
               relations: [
@@ -1877,13 +1900,19 @@ export class CodingResultsExportService {
       if (anonymizeCoders && usePseudoCoders) {
         coderNameMapping = new Map<string, string>();
       } else if (anonymizeCoders) {
-        const coders = await this.codingJobRepository
+        const codersQuery = this.codingJobRepository
           .createQueryBuilder('cj')
           .innerJoin('cj.codingJobCoders', 'cjc')
           .innerJoin('cjc.user', 'user')
           .select('user.username', 'username')
           .where('cj.workspace_id = :workspaceId', { workspaceId })
-          .andWhere('cj.training_id IS NULL')
+          .andWhere('cj.training_id IS NULL');
+        applyNonCodingIssueReviewJobFilter(
+          codersQuery,
+          'cj',
+          'detailedExportCodersReviewJobType'
+        );
+        const coders = await codersQuery
           .groupBy('user.username')
           .getRawMany();
         coderNameMapping = buildCoderNameMapping(coders.map(c => c.username), false);
@@ -1898,6 +1927,11 @@ export class CodingResultsExportService {
           '(countResp.status_v1 IS NULL OR countResp.status_v1 NOT IN (:...excludedStatuses))',
           { excludedStatuses: EXCLUDED_STATUSES }
         );
+      applyNonCodingIssueReviewJobFilter(
+        totalCountQuery,
+        'cj',
+        'newColumnPerCoderTotalReviewJobType'
+      );
       const totalCount = await totalCountQuery.getCount();
 
       const pseudoCoderMappings = new Map<string, Map<string, string>>();
@@ -1913,7 +1947,7 @@ export class CodingResultsExportService {
 
       for (let offset = 0; offset < totalCount; offset += batchSize) {
         if (checkCancellation) await checkCancellation();
-        const unitsBatch = await this.codingJobUnitRepository.createQueryBuilder('cju')
+        const unitsBatch = this.codingJobUnitRepository.createQueryBuilder('cju')
           .innerJoinAndSelect('cju.coding_job', 'cj')
           .leftJoinAndSelect('cj.codingJobCoders', 'cjc')
           .leftJoinAndSelect('cjc.user', 'user')
@@ -1928,14 +1962,20 @@ export class CodingResultsExportService {
             '(resp.status_v1 IS NULL OR resp.status_v1 NOT IN (:...excludedStatuses))',
             { excludedStatuses: EXCLUDED_STATUSES }
           )
-          .orderBy('cju.created_at', 'ASC')
+          .orderBy('cju.created_at', 'ASC');
+        applyNonCodingIssueReviewJobFilter(
+          unitsBatch,
+          'cj',
+          'newColumnPerCoderBatchReviewJobType'
+        );
+        const unitsBatchRows = await unitsBatch
           .addOrderBy('cju.id', 'ASC')
           .skip(offset)
           .take(batchSize)
           .getMany();
 
         let batchCsv = '';
-        for (const unit of unitsBatch) {
+        for (const unit of unitsBatchRows) {
           if (!unit.unit_name || isExcluded(unit.response?.unit?.booklet?.bookletinfo?.name || '', unit.unit_name)) {
             continue;
           }

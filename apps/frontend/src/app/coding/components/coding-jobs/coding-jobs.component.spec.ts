@@ -408,7 +408,12 @@ describe('CodingJobsComponent', () => {
   it('should view coding results', () => {
     const job = mockCodingJobs[0] as CodingJob;
     const dialogRefSpyObj = {
-      afterClosed: jest.fn().mockReturnValue(of({ resultsApplied: true }))
+      afterClosed: jest.fn().mockReturnValue(of({ resultsApplied: true })),
+      backdropClick: jest.fn().mockReturnValue(of(undefined)),
+      keydownEvents: jest.fn().mockReturnValue(of()),
+      componentInstance: {
+        closeDialog: jest.fn()
+      }
     };
     (matDialogMock.open as jest.Mock).mockReturnValue(dialogRefSpyObj);
     const loadSpy = jest.spyOn(component, 'loadCodingJobs');
@@ -418,10 +423,12 @@ describe('CodingJobsComponent', () => {
     expect(matDialogMock.open).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
+        disableClose: true,
         data: expect.objectContaining({ codingJob: job })
       })
     );
     expect(loadSpy).toHaveBeenCalled();
+    expect(dialogRefSpyObj.componentInstance.closeDialog).toHaveBeenCalled();
   });
 
   it('should not delete if confirmation cancelled', () => {
@@ -889,18 +896,70 @@ describe('CodingJobsComponent', () => {
   });
 
   it('should handle bulk apply coding results', () => {
+    const staleBulkApplySkipMessage = [
+      'Jobs mit Problemen',
+      'werden übersprungen'
+    ].join(' ');
+    (
+      codingJobBackendServiceMock.bulkApplyCodingResults as jest.Mock
+    ).mockReturnValueOnce(
+      of({
+        success: true,
+        jobsProcessed: 1,
+        totalUpdatedResponses: 2,
+        totalSkippedReview: 2,
+        totalSkippedAlreadyCoded: 0,
+        totalOverwrittenExisting: 0,
+        results: [
+          {
+            jobId: 2,
+            jobName: 'Job 2',
+            hasIssues: true,
+            skipped: false,
+            result: {
+              success: true,
+              updatedResponsesCount: 2,
+              skippedReviewCount: 2,
+              skippedAlreadyCodedCount: 0,
+              overwrittenExistingCount: 0,
+              messageKey: 'coding-results.apply.success.partial'
+            }
+          }
+        ]
+      })
+    );
     (matDialogMock.open as jest.Mock).mockReturnValue({
       afterClosed: () => of(true)
     });
 
     component.bulkApplyCodingResults();
 
-    expect(matDialogMock.open).toHaveBeenCalled();
+    expect(matDialogMock.open).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          message: expect.stringContaining('offenen Kodierungshinweisen')
+        })
+      })
+    );
+    expect(matDialogMock.open).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          message: expect.stringContaining(staleBulkApplySkipMessage)
+        })
+      })
+    );
     expect(
       codingJobBackendServiceMock.bulkApplyCodingResults
     ).toHaveBeenCalledWith(1);
     expect(matSnackBarMock.open).toHaveBeenCalledWith(
       expect.stringContaining('Massenanwendung abgeschlossen'),
+      'Schließen',
+      expect.objectContaining({})
+    );
+    expect(matSnackBarMock.open).toHaveBeenCalledWith(
+      expect.stringContaining('2 Ergebnisse zur manuellen Prüfung offen'),
       'Schließen',
       expect.objectContaining({})
     );

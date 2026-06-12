@@ -234,7 +234,6 @@ export interface BulkApplyCodingResultsResponse {
     hasIssues: boolean;
     skipped: boolean;
     skippedReason?:
-    | 'coding-issues'
     | 'training-job'
     | 'not-completed'
     | 'freshness-stale';
@@ -648,6 +647,7 @@ export class CodingJobBackendService {
       } | null;
       isOpen?: boolean;
       notes?: string;
+      issueReview?: boolean;
     },
     authToken?: string
   ): Observable<CodingJob> {
@@ -683,6 +683,7 @@ export class CodingJobBackendService {
       unitId: string;
       variableId: string;
       notes?: string;
+      issueReview?: boolean;
     },
     authToken?: string
   ): Observable<CodingJob> {

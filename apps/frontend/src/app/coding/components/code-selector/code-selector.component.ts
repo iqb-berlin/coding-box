@@ -57,6 +57,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() isReadOnly: boolean = false;
   @Input() isNavigationDisabled: boolean = false;
   @Input() hasSaveError: boolean = false;
+  @Input() clearCodingIssueOnRegularSelection: boolean = false;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() notesChanged = new EventEmitter<string>();
@@ -258,6 +259,9 @@ export class CodeSelectorComponent implements OnChanges {
     } else {
       this.selectedCode = codeId;
       this.legacySelectedCode = null;
+      if (this.clearCodingIssueOnRegularSelection) {
+        this.selectedCodingIssueOption = null;
+      }
     }
     const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
       this.selectableItems.find(item => item.id === this.selectedCode)!

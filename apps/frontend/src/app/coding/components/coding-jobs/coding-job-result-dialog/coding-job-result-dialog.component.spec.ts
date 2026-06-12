@@ -31,7 +31,8 @@ describe('CodingJobResultDialogComponent', () => {
   const mockCodingJobBackendService = {
     getCodingJobUnits: jest.fn(() => of([])) as jest.Mock,
     getCodingProgress: jest.fn(() => of({})) as jest.Mock,
-    getCodingNotes: jest.fn(() => of({})) as jest.Mock
+    getCodingNotes: jest.fn(() => of({})) as jest.Mock,
+    applyCodingResults: jest.fn() as jest.Mock
   };
 
   const mockFileService = {
@@ -77,6 +78,15 @@ describe('CodingJobResultDialogComponent', () => {
     mockCodingJobBackendService.getCodingJobUnits.mockReturnValue(of([]));
     mockCodingJobBackendService.getCodingProgress.mockReturnValue(of({}));
     mockCodingJobBackendService.getCodingNotes.mockReturnValue(of({}));
+    mockCodingJobBackendService.applyCodingResults.mockReturnValue(of({
+      success: true,
+      updatedResponsesCount: 1,
+      skippedReviewCount: 0,
+      skippedAlreadyCodedCount: 0,
+      overwrittenExistingCount: 0,
+      messageKey: 'coding-results.apply.success.bulk',
+      messageParams: {}
+    }));
     mockMissingsProfileService.getMissingsProfiles.mockReturnValue(of([{ id: 1, label: 'IQB-Standard' }]));
     mockMissingsProfileService.getMissingsProfileDetails.mockReturnValue(of({
       id: 1,
@@ -121,6 +131,38 @@ describe('CodingJobResultDialogComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should keep dialog open and reload results when apply leaves coding issue reviews open', () => {
+    (component as unknown as { dialog: { open: jest.Mock } }).dialog = mockMatDialog;
+    mockMatDialog.open.mockReturnValue({
+      afterClosed: () => of({ overwriteExisting: false })
+    });
+    mockCodingJobBackendService.applyCodingResults.mockReturnValue(of({
+      success: true,
+      updatedResponsesCount: 1,
+      skippedReviewCount: 1,
+      skippedAlreadyCodedCount: 0,
+      overwrittenExistingCount: 0,
+      messageKey: 'coding-results.apply.success.bulk',
+      messageParams: {}
+    }));
+    const loadSpy = jest.spyOn(component, 'loadCodingResults').mockImplementation();
+
+    component.applyCodingResults();
+
+    expect(mockDialogRef.close).not.toHaveBeenCalled();
+    expect(loadSpy).toHaveBeenCalled();
+
+    component.closeDialog();
+
+    expect(mockDialogRef.close).toHaveBeenCalledWith({ resultsApplied: true });
+  });
+
+  it('should close without applied result marker before applying results', () => {
+    component.closeDialog();
+
+    expect(mockDialogRef.close).toHaveBeenCalledWith(undefined);
   });
 
   it('should display test person context without empty separators and keep booklet searchable', () => {
@@ -366,7 +408,7 @@ describe('CodingJobResultDialogComponent', () => {
 
     component.reviewCodingResult({
       unitName: 'UNIT_1',
-      unitAlias: 'UNIT_1',
+      unitAlias: 'Unit Alias',
       variableId: 'VAR_1',
       variableAnchor: 'VAR_1',
       variablePage: '2',
@@ -393,7 +435,7 @@ describe('CodingJobResultDialogComponent', () => {
     ]>;
     const queryParams = createUrlTreeCalls[0][1].queryParams;
     expect(queryParams).toEqual(expect.objectContaining({
-      mode: 'coding',
+      mode: 'coding-issue-review',
       workspaceId: 123,
       unitsData: expect.any(String)
     }));
