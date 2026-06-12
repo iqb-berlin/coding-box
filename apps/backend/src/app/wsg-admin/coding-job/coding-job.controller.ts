@@ -678,6 +678,117 @@ export class WsgCodingJobController {
     return this.prepareCodingJobReplay(workspaceId, id, req, onlyOpen);
   }
 
+  @Post(':id/pause')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Pause an assigned coding job',
+    description: 'Pauses a coding job assigned to the current coder'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job has been paused.',
+    type: CodingJobDto
+  })
+  async pauseCodingJob(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
+    const codingJob = await this.codingJobService.pauseCodingJob(
+      id,
+      workspaceId
+    );
+    return CodingJobDto.fromEntity(codingJob);
+  }
+
+  @Post(':id/resume')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Resume an assigned coding job',
+    description: 'Marks a coding job assigned to the current coder as active'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job has been resumed.',
+    type: CodingJobDto
+  })
+  async resumeCodingJob(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
+    const codingJob = await this.codingJobService.resumeCodingJob(
+      id,
+      workspaceId
+    );
+    return CodingJobDto.fromEntity(codingJob);
+  }
+
+  @Post(':id/submit')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Submit an assigned coding job',
+    description: 'Completes a coding job assigned to the current coder'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job has been submitted.',
+    type: CodingJobDto
+  })
+  @ApiBadRequestResponse({
+    description: 'The coding job cannot be completed yet.'
+  })
+  async submitCodingJob(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
+    const codingJob = await this.codingJobService.submitCodingJob(
+      id,
+      workspaceId
+    );
+    return CodingJobDto.fromEntity(codingJob);
+  }
+
   @Get(':id/review')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()

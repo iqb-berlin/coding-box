@@ -507,6 +507,39 @@ export class CodingJobBackendService {
     );
   }
 
+  pauseCodingJob(
+    workspaceId: number,
+    codingJobId: number,
+    authToken?: string
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/pause`;
+    return this.http.post<CodingJob>(url, {}, {
+      headers: this.getAuthHeader(authToken)
+    });
+  }
+
+  resumeCodingJob(
+    workspaceId: number,
+    codingJobId: number,
+    authToken?: string
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/resume`;
+    return this.http.post<CodingJob>(url, {}, {
+      headers: this.getAuthHeader(authToken)
+    });
+  }
+
+  submitCodingJob(
+    workspaceId: number,
+    codingJobId: number,
+    authToken?: string
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/submit`;
+    return this.http.post<CodingJob>(url, {}, {
+      headers: this.getAuthHeader(authToken)
+    });
+  }
+
   prepareCodingJobReview(
     workspaceId: number,
     codingJobId: number
@@ -682,6 +715,19 @@ export class CodingJobBackendService {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(codingJob)
+    }).catch(() => undefined);
+  }
+
+  pauseCodingJobKeepalive(
+    workspaceId: number,
+    codingJobId: number,
+    authToken?: string
+  ): void {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/pause`;
+    fetch(url, {
+      method: 'POST',
+      keepalive: true,
+      headers: this.getAuthHeader(authToken)
     }).catch(() => undefined);
   }
 
