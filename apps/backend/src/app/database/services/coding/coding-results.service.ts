@@ -79,7 +79,7 @@ export class CodingResultsService {
       };
     }
 
-    if (codingJob.status !== 'completed') {
+    if (!['completed', 'review'].includes(codingJob.status)) {
       return {
         success: false,
         updatedResponsesCount: 0,

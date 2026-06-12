@@ -131,7 +131,7 @@ export class ReplayCodingService {
     this.allowComments = codingJob.allowComments !== undefined ? codingJob.allowComments : true;
     this.suppressGeneralInstructions = codingJob.suppressGeneralInstructions || false;
     this.isCodingJobFinalized = status === 'results_applied';
-    this.isCompletedJobReview = status === 'completed' || status === 'results_applied';
+    this.isCompletedJobReview = status === 'review' || status === 'results_applied';
   }
 
   async loadSavedCodingProgress(workspaceId: number, jobId: number): Promise<void> {

@@ -113,7 +113,7 @@ describe('WsgCodingJobController', () => {
     expect(codingJobService.getCodingJobUnits).toHaveBeenCalledWith(123, false);
   });
 
-  it('does not change completed jobs to active when opening them for review', async () => {
+  it('changes completed jobs back to active when starting them again', async () => {
     codingJobService.getCodingJob.mockResolvedValue({
       codingJob: { id: 123, status: 'completed' }
     });
@@ -128,7 +128,48 @@ describe('WsgCodingJobController', () => {
     expect(
       codingJobService.assertUserCanAccessCodingJob
     ).not.toHaveBeenCalled();
-    expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, {
+      status: 'active'
+    });
+  });
+
+  it.each(['review', 'results_applied'])(
+    'does not change %s jobs to active when preparing replay data',
+    async status => {
+      codingJobService.getCodingJob.mockResolvedValue({
+        codingJob: { id: 123, status }
+      });
+
+      await controller.startCodingJob(47, 123, req);
+
+      expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+    }
+  );
+
+  it('allows assigned coders to submit completed coding jobs for review', async () => {
+    codingJobService.updateCodingJob.mockResolvedValue({
+      id: 123,
+      workspace_id: 47,
+      name: 'Job',
+      status: 'review'
+    });
+
+    await expect(
+      controller.submitCodingJobForReview(47, 123, req)
+    ).resolves.toMatchObject({
+      id: 123,
+      workspace_id: 47,
+      status: 'review'
+    });
+
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      5
+    );
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, {
+      status: 'review'
+    });
   });
 
   it('prepares read-only reviews with management access and without changing job state', async () => {

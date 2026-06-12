@@ -484,6 +484,20 @@ describe('ReplayCodingService', () => {
     });
   });
 
+  describe('setCodingJobMetadata', () => {
+    it('keeps completed jobs editable and review jobs read-only', () => {
+      service.setCodingJobMetadata({ status: 'completed' });
+
+      expect(service.isCompletedJobReview).toBe(false);
+      expect(service.isCodingJobFinalized).toBe(false);
+
+      service.setCodingJobMetadata({ status: 'review' });
+
+      expect(service.isCompletedJobReview).toBe(true);
+      expect(service.isCodingJobFinalized).toBe(false);
+    });
+  });
+
   describe('pauseCodingJob', () => {
     it('does not pause completed review jobs', async () => {
       service.isCompletedJobReview = true;

@@ -115,7 +115,7 @@ export class CodingJobOperationsService {
         continue;
       }
 
-      if (job.status !== 'completed') {
+      if (!['completed', 'review'].includes(job.status)) {
         results.push({
           jobId: job.id,
           jobName: job.name,

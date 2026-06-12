@@ -1097,7 +1097,7 @@ describe('ReplayComponent', () => {
     expect(component.isReviewMode).toBe(false);
     expect(component.isCodingIssueReviewMode).toBe(true);
     expect(component.codingService.isReviewMode).toBe(false);
-    expect(component.codingService.isCompletedJobReview).toBe(true);
+    expect(component.codingService.isCompletedJobReview).toBe(false);
     expect(component.isCodingReadOnly()).toBe(false);
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', false);
     expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
@@ -1653,7 +1653,7 @@ describe('ReplayComponent', () => {
       expect(window.location.href).toContain('codingJobId=88');
     });
 
-    it('keeps switched completed coding jobs read-only', async () => {
+    it('keeps switched completed coding jobs editable', async () => {
       const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
       const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
       const handleCodeSelectedSpy = jest.spyOn(component.codingService, 'handleCodeSelected');
@@ -1696,9 +1696,14 @@ describe('ReplayComponent', () => {
       await privateComponent.onCodingJobSelectionChange('48:88');
 
       expect(saveAllSpy).toHaveBeenCalledWith(47, 77);
-      expect(component.codingService.isCompletedJobReview).toBe(true);
-      expect(component.isCodingReadOnly()).toBe(true);
-      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+      expect(component.codingService.isCompletedJobReview).toBe(false);
+      expect(component.isCodingReadOnly()).toBe(false);
+      expect(codingJobBackendServiceMock.updateCodingJob).toHaveBeenCalledWith(
+        48,
+        88,
+        { status: 'active' },
+        'workspace-token'
+      );
 
       await component.onCodeSelected({
         variableId: 'VAR_COMPLETED',
@@ -1707,10 +1712,10 @@ describe('ReplayComponent', () => {
           label: 'Code 1'
         }
       });
-      component.onNotesChanged('should not be saved');
+      component.onNotesChanged('can be saved again');
 
-      expect(handleCodeSelectedSpy).not.toHaveBeenCalled();
-      expect(saveNotesSpy).not.toHaveBeenCalled();
+      expect(handleCodeSelectedSpy).toHaveBeenCalled();
+      expect(saveNotesSpy).toHaveBeenCalled();
     });
 
     it('rolls back to the previous coding job when the target replay payload fails', async () => {

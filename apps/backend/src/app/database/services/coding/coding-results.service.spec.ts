@@ -174,6 +174,35 @@ describe('CodingResultsService', () => {
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
   });
 
+  it('applies a coding job submitted for review', async () => {
+    codingJobService.getCodingJobById.mockResolvedValueOnce({
+      id: 10,
+      status: 'review'
+    } as never);
+    codingJobService.getCodingJobByIdForWorkspace.mockResolvedValueOnce({
+      id: 10,
+      status: 'review'
+    } as never);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      99,
+      {
+        code_v2: 0,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
+    expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(
+      10,
+      17,
+      queryRunner.manager
+    );
+  });
+
   it('resolves manually selected MIR missing from the coding job profile', async () => {
     codingJobService.getCodingJobById.mockResolvedValueOnce({
       id: 10,
