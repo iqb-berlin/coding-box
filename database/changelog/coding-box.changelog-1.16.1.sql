@@ -19,7 +19,7 @@ ALTER TABLE "public"."coder_training"
 -- rollback ALTER TABLE "public"."coder_training" DROP COLUMN IF EXISTS "allow_comments";
 -- rollback ALTER TABLE "public"."coder_training" DROP COLUMN IF EXISTS "show_score";
 
--- changeset jurei733:3
+-- changeset jurei733:3 splitStatements:false
 -- comment: Store coding issue review jobs with explicit metadata instead of comment markers
 
 ALTER TABLE "public"."coding_job"
