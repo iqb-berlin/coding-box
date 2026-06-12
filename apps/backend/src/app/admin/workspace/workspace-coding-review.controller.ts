@@ -108,6 +108,21 @@ export class WorkspaceCodingReviewController {
                 description: 'The given answer by the test person'
               },
               isResolved: { type: 'boolean', description: 'Whether the variable is already resolved' },
+              appliedCode: {
+                type: 'number',
+                nullable: true,
+                description: 'Code that has been applied to the response'
+              },
+              appliedScore: {
+                type: 'number',
+                nullable: true,
+                description: 'Score that has been applied to the response'
+              },
+              appliedComment: {
+                type: 'string',
+                nullable: true,
+                description: 'Optional supervisor comment saved with the applied decision'
+              },
               coderResults: {
                 type: 'array',
                 items: {
