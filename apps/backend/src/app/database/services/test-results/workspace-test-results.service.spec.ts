@@ -25,6 +25,7 @@ import { CodingValidationService } from '../coding/coding-validation.service';
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 
 const mockQueryBuilder = () => ({
   select: jest.fn().mockReturnThis(),
@@ -817,6 +818,90 @@ describe('WorkspaceTestResultsService', () => {
           ggDataUriPrefix: 'data:%;base64,UEsD%'
         }
       );
+    });
+
+    it('should sort response searches by requested column before pagination', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { responseSource: 'all', version: 'v3' },
+        {
+          page: 2,
+          limit: 100,
+          sortBy: 'person_login',
+          sortDirection: 'desc'
+        }
+      );
+
+      expect(qb.orderBy).toHaveBeenCalledWith('person.login', 'DESC');
+      expect(qb.addOrderBy).toHaveBeenCalledWith('response.id', 'ASC');
+      expect(qb.skip).not.toHaveBeenCalled();
+    });
+
+    it('should normalize invalid version values before building response search sort expressions', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        {
+          responseSource: 'all',
+          version: 'v2); DROP TABLE response; --' as unknown as 'v1'
+        },
+        {
+          page: 1,
+          limit: 100,
+          sortBy: 'code',
+          sortDirection: 'desc'
+        }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('response.status_v1 IS NOT NULL');
+      expect(qb.orderBy).toHaveBeenCalledWith('response.code_v1', 'DESC');
+    });
+
+    it('should sort codedStatus response searches through a selected alias before pagination', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { responseSource: 'all', version: 'v3' },
+        {
+          page: 1,
+          limit: 100,
+          sortBy: 'codedstatus',
+          sortDirection: 'asc'
+        }
+      );
+
+      expect(qb.addSelect).toHaveBeenCalledWith(
+        getEffectiveCodingStatusExpression('v3'),
+        'effective_coding_status_sort'
+      );
+      expect(qb.orderBy).toHaveBeenCalledWith('effective_coding_status_sort', 'ASC');
+      expect(qb.addOrderBy).toHaveBeenCalledWith('response.id', 'ASC');
+    });
+
+    it('should keep the GeoGebra default ordering when no explicit sort is requested', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { geogebra: true, version: 'v2' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.orderBy).toHaveBeenCalledWith('response.code_v2', 'ASC');
+      expect(qb.addOrderBy).toHaveBeenCalledWith('person.code', 'ASC');
+      expect(qb.addOrderBy).toHaveBeenCalledWith('response.id', 'ASC');
     });
 
     it('should treat GeoGebra all-source searches as base responses', async () => {

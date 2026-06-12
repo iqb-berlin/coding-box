@@ -92,5 +92,29 @@ describe('ResponseService', () => {
       );
       req.flush(mockResponse);
     });
+
+    it('should include sort params when searching responses', () => {
+      const searchParams = {
+        version: 'v2' as const,
+        responseSource: 'all' as const,
+        sortBy: 'person_login' as const,
+        sortDirection: 'desc' as const
+      };
+      const mockResponse = { data: [], total: 0 };
+
+      service.searchResponses(mockWorkspaceId, searchParams, 2, 50).subscribe(res => {
+        expect(res).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/responses/search` &&
+        request.params.get('version') === 'v2' &&
+        request.params.get('responseSource') === 'all' &&
+        request.params.get('sortBy') === 'person_login' &&
+        request.params.get('sortDirection') === 'desc' &&
+        request.params.get('page') === '2' &&
+        request.params.get('limit') === '50'
+      );
+      req.flush(mockResponse);
+    });
   });
 });
