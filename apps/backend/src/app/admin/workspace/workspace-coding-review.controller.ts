@@ -18,6 +18,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { CodingReviewService } from '../../database/services/coding';
 import {
+  DoubleCodedResolutionDecision,
   DoubleCodedReviewResponse,
   DoubleCodedResolutionResponse
 } from './dto/workspace-coding.interfaces';
@@ -235,7 +236,18 @@ export class WorkspaceCodingReviewController {
               responseId: { type: 'number', description: 'Response ID' },
               selectedJobId: {
                 type: 'number',
-                description: 'Selected coding job ID'
+                nullable: true,
+                description: 'Selected coding job ID for an existing coder result'
+              },
+              code: {
+                type: 'number',
+                nullable: true,
+                description: 'Explicit final replay code when no coder result is selected'
+              },
+              score: {
+                type: 'number',
+                nullable: true,
+                description: 'Replay score echoed by the client; regular-code scores are validated and derived from the coding scheme'
               },
               resolutionComment: {
                 type: 'string',
@@ -243,7 +255,7 @@ export class WorkspaceCodingReviewController {
                 description: 'Optional resolution comment'
               }
             },
-            required: ['responseId', 'selectedJobId']
+            required: ['responseId']
           }
         }
       },
@@ -279,11 +291,7 @@ export class WorkspaceCodingReviewController {
     @WorkspaceId() workspace_id: number,
       @Body()
                    body: {
-                     decisions: Array<{
-                       responseId: number;
-                       selectedJobId: number;
-                       resolutionComment?: string;
-                     }>;
+                     decisions: DoubleCodedResolutionDecision[];
                    }
   ): Promise<DoubleCodedResolutionResponse> {
     return this.codingReviewService.applyDoubleCodedResolutions(

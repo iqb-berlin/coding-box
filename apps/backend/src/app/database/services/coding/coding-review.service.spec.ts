@@ -53,6 +53,9 @@ describe('CodingReviewService', () => {
   let variableBundleRepository: {
     find: jest.Mock;
   };
+  let codingJobService: {
+    getCodingSchemeScoreForUnitCode: jest.Mock;
+  };
   let service: CodingReviewService;
 
   const makeCodingJobUnit = (
@@ -182,6 +185,9 @@ describe('CodingReviewService', () => {
     variableBundleRepository = {
       find: jest.fn().mockResolvedValue([])
     };
+    codingJobService = {
+      getCodingSchemeScoreForUnitCode: jest.fn().mockResolvedValue(1)
+    };
 
     service = new CodingReviewService(
       {} as never,
@@ -191,7 +197,8 @@ describe('CodingReviewService', () => {
       {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
-      } as never
+      } as never,
+      codingJobService as never
     );
   });
 
@@ -354,6 +361,7 @@ describe('CodingReviewService', () => {
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
+      codingJobService as never,
       missingsProfilesService as never
     );
 
@@ -1285,6 +1293,199 @@ describe('CodingReviewService', () => {
     expect(queryBuilder.setParameter).toHaveBeenCalledWith('kappaCoderTrainingIds', [21]);
   });
 
+  it('applies an explicit replay code with the score derived from the coding scheme', async () => {
+    codingJobService.getCodingSchemeScoreForUnitCode.mockResolvedValueOnce(7);
+    const response = {
+      value: 'supervisor note\n\n--- ORIGINAL RESPONSE ---\noriginal answer',
+      status_v2: null,
+      code_v2: null,
+      score_v2: null
+    };
+    const sourceUnit = makeCodingJobUnit({
+      id: 77,
+      response_id: 10,
+      coding_job_id: 100,
+      code: 1,
+      score: 0,
+      supervisor_comment: 'old comment',
+      response
+    });
+    const clearCommentsQueryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([{ id: 77 }])
+    };
+    const transactionalEntityManager = {
+      findOne: jest.fn().mockResolvedValue(sourceUnit),
+      save: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockResolvedValue(undefined),
+      getRepository: jest.fn().mockReturnValue({
+        createQueryBuilder: jest.fn().mockReturnValue(clearCommentsQueryBuilder)
+      })
+    };
+    const responseRepository = {
+      manager: {
+        transaction: jest.fn(async (callback: (manager: typeof transactionalEntityManager) => Promise<void>) => (
+          callback(transactionalEntityManager)
+        ))
+      }
+    };
+    const localService = new CodingReviewService(
+      responseRepository as never,
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      {} as never,
+      {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
+      } as never,
+      codingJobService as never
+    );
+
+    const result = await localService.applyDoubleCodedResolutions(workspaceId, [{
+      responseId: 10,
+      code: 3,
+      score: 999,
+      resolutionComment: 'Replay checked'
+    }]);
+
+    expect(transactionalEntityManager.findOne).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        where: {
+          response_id: 10,
+          coding_job: { workspace_id: workspaceId }
+        },
+        relations: ['response', 'coding_job'],
+        order: {
+          id: 'ASC'
+        }
+      })
+    );
+    expect(codingJobService.getCodingSchemeScoreForUnitCode).toHaveBeenCalledWith(
+      sourceUnit,
+      workspaceId,
+      3
+    );
+    expect(sourceUnit.supervisor_comment).toBe('Replay checked');
+    expect(response.code_v2).toBe(3);
+    expect(response.score_v2).toBe(7);
+    expect(response.value).toBe('original answer');
+    expect(transactionalEntityManager.update).toHaveBeenCalled();
+    expect(transactionalEntityManager.save).toHaveBeenCalledWith(
+      expect.any(Function),
+      sourceUnit
+    );
+    expect(transactionalEntityManager.save).toHaveBeenCalledWith(
+      expect.any(Function),
+      response
+    );
+    expect(result).toMatchObject({
+      success: true,
+      appliedCount: 1,
+      failedCount: 0,
+      skippedCount: 0
+    });
+  });
+
+  it('skips explicit replay decisions with codes unsupported by the coding scheme', async () => {
+    const sourceUnit = makeCodingJobUnit({
+      response_id: 10,
+      coding_job_id: 100
+    });
+    const transactionalEntityManager = {
+      findOne: jest.fn().mockResolvedValue(sourceUnit),
+      save: jest.fn(),
+      update: jest.fn(),
+      getRepository: jest.fn()
+    };
+    const responseRepository = {
+      manager: {
+        transaction: jest.fn(async (callback: (manager: typeof transactionalEntityManager) => Promise<void>) => (
+          callback(transactionalEntityManager)
+        ))
+      }
+    };
+    codingJobService.getCodingSchemeScoreForUnitCode.mockRejectedValueOnce(new Error('Unsupported code'));
+    const localService = new CodingReviewService(
+      responseRepository as never,
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      {} as never,
+      {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
+      } as never,
+      codingJobService as never
+    );
+
+    const result = await localService.applyDoubleCodedResolutions(workspaceId, [{
+      responseId: 10,
+      code: 999,
+      score: 1
+    }]);
+
+    expect(codingJobService.getCodingSchemeScoreForUnitCode).toHaveBeenCalledWith(
+      sourceUnit,
+      workspaceId,
+      999
+    );
+    expect(transactionalEntityManager.save).not.toHaveBeenCalled();
+    expect(transactionalEntityManager.update).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: false,
+      appliedCount: 0,
+      failedCount: 0,
+      skippedCount: 1
+    });
+  });
+
+  it('skips explicit replay decisions with invalid code or score values', async () => {
+    const transactionalEntityManager = {
+      findOne: jest.fn(),
+      save: jest.fn(),
+      update: jest.fn(),
+      getRepository: jest.fn()
+    };
+    const responseRepository = {
+      manager: {
+        transaction: jest.fn(async (callback: (manager: typeof transactionalEntityManager) => Promise<void>) => (
+          callback(transactionalEntityManager)
+        ))
+      }
+    };
+    const localService = new CodingReviewService(
+      responseRepository as never,
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      {} as never,
+      {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
+      } as never,
+      codingJobService as never
+    );
+
+    const result = await localService.applyDoubleCodedResolutions(workspaceId, [
+      { responseId: 10, code: '' },
+      { responseId: 11, code: 1, score: ' ' },
+      { responseId: 12, code: true },
+      { responseId: 13, code: 1, score: [2] },
+      { responseId: 14, selectedJobId: true }
+    ] as never);
+
+    expect(transactionalEntityManager.findOne).not.toHaveBeenCalled();
+    expect(transactionalEntityManager.save).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: false,
+      appliedCount: 0,
+      failedCount: 0,
+      skippedCount: 5
+    });
+  });
+
   it('returns an empty workspace kappa summary for a single selected coder', async () => {
     const getDoubleCodedVariablesForReviewSpy = jest.spyOn(
       service,
@@ -1338,7 +1539,8 @@ describe('CodingReviewService', () => {
       codingStatisticsService as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
-      } as never
+      } as never,
+      codingJobService as never
     );
     const getDoubleCodedVariablesForReviewSpy = jest
       .spyOn(service, 'getDoubleCodedVariablesForReview')
