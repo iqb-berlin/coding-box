@@ -14,6 +14,10 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { MissingsProfilesService, ResolvedMissingValue } from './missings-profiles.service';
+import {
+  applyNonCodingIssueReviewJobFilter,
+  isCodingIssueReviewJobType
+} from './coding-job-type.util';
 
 type JobDefinitionBundleScope = {
   bundleIds: number[];
@@ -185,6 +189,11 @@ export class CodingReviewService {
         .groupBy('cju.response_id')
         .addGroupBy('resp.status_v2')
         .having('COUNT(DISTINCT review_coder.user_id) > 1'); // Multiple single-coder decisions for this response
+      applyNonCodingIssueReviewJobFilter(
+        query,
+        'cj',
+        'reviewBaseReviewJobType'
+      );
       applyResolvedExclusionsToQuery(query, exclusions, {
         unitNameExpression: 'cju.unit_name',
         bookletNameExpression: 'cju.booklet_name',
@@ -375,6 +384,10 @@ export class CodingReviewService {
 
         // Keep result assembly aligned with the workspace-scoped base query.
         if (unit.coding_job.workspace_id !== workspaceId) {
+          return false;
+        }
+
+        if (isCodingIssueReviewJobType(unit.coding_job.job_type)) {
           return false;
         }
 
@@ -593,6 +606,11 @@ export class CodingReviewService {
       .addOrderBy('cjc.user_id', 'ASC')
       .addOrderBy('cju.id', 'ASC')
       .addOrderBy('cjc.id', 'ASC');
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'cj',
+      'kappaCodedVariablesReviewJobType'
+    );
 
     if (excludeTrainings) {
       query.andWhere('cj.training_id IS NULL');

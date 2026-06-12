@@ -4,6 +4,7 @@ import {
   Controller,
   DefaultValuePipe,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
@@ -157,6 +158,31 @@ export class WsgCodingJobController {
       codingJobId,
       workspaceId,
       this.getRequestUserId(req)
+    );
+  }
+
+  private async assertCodingIssueReviewAccess(
+    workspaceId: number,
+    codingJobId: number,
+    req: Request
+  ): Promise<number> {
+    const userId = this.getRequestUserId(req);
+    await this.codingJobService.getCodingJob(codingJobId, workspaceId);
+
+    if (await this.usersService.getUserIsAdmin(userId)) {
+      return userId;
+    }
+
+    const accessLevel = await this.usersService.getUserAccessLevel(
+      userId,
+      workspaceId
+    );
+    if ((accessLevel ?? 0) >= 2) {
+      return userId;
+    }
+
+    throw new ForbiddenException(
+      'User is not allowed to review coding issues in this workspace'
     );
   }
 
@@ -723,12 +749,23 @@ export class WsgCodingJobController {
                    saveCodingProgressDto: SaveCodingProgressDto,
                    @Req() req: Request
   ): Promise<CodingJobDto> {
-    await this.assertCodingJobCodingAccess(workspaceId, id, req);
-    await this.codingJobService.getCodingJob(id, workspaceId);
-    const codingJob = await this.codingJobService.saveCodingProgress(
-      id,
-      saveCodingProgressDto
-    );
+    const userId = saveCodingProgressDto.issueReview ?
+      await this.assertCodingIssueReviewAccess(workspaceId, id, req) :
+      undefined;
+    if (!saveCodingProgressDto.issueReview) {
+      await this.assertCodingJobCodingAccess(workspaceId, id, req);
+      await this.codingJobService.getCodingJob(id, workspaceId);
+    }
+    const codingJob = saveCodingProgressDto.issueReview ?
+      await this.codingJobService.saveCodingIssueReviewProgress(
+        id,
+        userId as number,
+        saveCodingProgressDto
+      ) :
+      await this.codingJobService.saveCodingProgress(
+        id,
+        saveCodingProgressDto
+      );
     return CodingJobDto.fromEntity(codingJob);
   }
 
@@ -769,12 +806,23 @@ export class WsgCodingJobController {
                    saveCodingNotesDto: SaveCodingNotesDto,
                    @Req() req: Request
   ): Promise<CodingJobDto> {
-    await this.assertCodingJobCodingAccess(workspaceId, id, req);
-    await this.codingJobService.getCodingJob(id, workspaceId);
-    const codingJob = await this.codingJobService.saveCodingNotes(
-      id,
-      saveCodingNotesDto
-    );
+    const userId = saveCodingNotesDto.issueReview ?
+      await this.assertCodingIssueReviewAccess(workspaceId, id, req) :
+      undefined;
+    if (!saveCodingNotesDto.issueReview) {
+      await this.assertCodingJobCodingAccess(workspaceId, id, req);
+      await this.codingJobService.getCodingJob(id, workspaceId);
+    }
+    const codingJob = saveCodingNotesDto.issueReview ?
+      await this.codingJobService.saveCodingIssueReviewNotes(
+        id,
+        userId as number,
+        saveCodingNotesDto
+      ) :
+      await this.codingJobService.saveCodingNotes(
+        id,
+        saveCodingNotesDto
+      );
     return CodingJobDto.fromEntity(codingJob);
   }
 

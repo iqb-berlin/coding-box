@@ -39,6 +39,7 @@ import {
   ManualCodingVariableReference,
   toManualCodingVariablePairKey
 } from '../../utils/manual-coding-candidate.util';
+import { applyNonCodingIssueReviewJobFilter } from './coding-job-type.util';
 
 interface ByVariableCombination {
   unitName: string;
@@ -197,12 +198,21 @@ export class CodingExportService {
       .innerJoin('coding_job_unit.coding_job', 'coding_job')
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL')
-      .distinct(true)
-      .getRawMany<{ unitName: string; variableId: string }>();
+      .distinct(true);
+    applyNonCodingIssueReviewJobFilter(
+      manualJobVariables,
+      'coding_job',
+      'manualCodingVariablesReviewJobType'
+    );
+    const manualJobVariableRows =
+      await manualJobVariables.getRawMany<{
+        unitName: string;
+        variableId: string;
+      }>();
 
     const manualCodingVariables = createManualCodingVariableReferences([
       ...codingListVariables,
-      ...manualJobVariables
+      ...manualJobVariableRows
     ]);
 
     if (manualCodingVariables.length === 0) {
@@ -3982,6 +3992,12 @@ export class CodingExportService {
     coderIds?: number[],
     codingJobUnitAlias?: string
   ): void {
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'cj',
+      'codingExportReviewJobType'
+    );
+
     const normalizedJobDefinitionIds = this.normalizeFilterIds(jobDefinitionIds);
     const normalizedCoderTrainingIds = this.normalizeFilterIds(coderTrainingIds);
     const normalizedCoderIds = this.normalizeFilterIds(coderIds);
