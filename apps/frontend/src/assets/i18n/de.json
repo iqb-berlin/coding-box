@@ -2489,6 +2489,7 @@
       "status-mixed-conflict": "Mehrere Abweichungen",
       "status-match": "Übereinstimmung",
       "status-incomplete": "Unvollständig",
+      "replay-source": "Replay-Entscheidung",
       "tooltip-inter-coder-conflict": "Unterschiedliche Kodierer haben abweichende Ergebnisse",
       "tooltip-same-coder-conflict": "Derselbe Kodierer hat mehrere abweichende Ergebnisse",
       "tooltip-mixed-conflict": "Es gibt Abweichungen innerhalb eines Kodierers und zwischen Kodierern"
@@ -2559,10 +2560,12 @@
       "failed-to-apply": "Fehler beim Anwenden der Auflösungen",
       "no-decisions": "Keine Entscheidungen zum Anwenden ausgewählt",
       "no-decision-for-item": "Keine Entscheidung für diese Variable ausgewählt",
-      "replay-failed": "Replay konnte für diese Antwort nicht geöffnet werden"
+      "replay-failed": "Replay konnte für diese Antwort nicht geöffnet werden",
+      "replay-code-not-in-decisions": "Der im Replay gewählte Code kommt in den verfügbaren Kodierergebnissen nicht vor."
     },
     "success": {
-      "resolutions-applied": "{{count}} Auflösung(en) erfolgreich angewendet"
+      "resolutions-applied": "{{count}} Auflösung(en) erfolgreich angewendet",
+      "replay-code-selected": "Replay-Code als Entscheidung ausgewählt"
     }
   },
   "applied-results-overview": {

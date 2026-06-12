@@ -18,6 +18,7 @@ import {
   applyNonCodingIssueReviewJobFilter,
   isCodingIssueReviewJobType
 } from './coding-job-type.util';
+import { CodingJobService } from './coding-job.service';
 
 type JobDefinitionBundleScope = {
   bundleIds: number[];
@@ -45,6 +46,21 @@ type AppliedReviewResult = {
   appliedComment: string | null;
 };
 
+type DoubleCodedResolutionDecision = {
+  responseId: number;
+  selectedJobId?: number | null;
+  code?: number | null;
+  score?: number | null;
+  resolutionComment?: string;
+};
+
+type ResolvedDoubleCodedResolution = {
+  response: ResponseEntity;
+  sourceUnit: CodingJobUnit;
+  code: number | null;
+  score: number | null;
+};
+
 type KappaCodedVariableRow = {
   responseId: number | string;
   unitName: string;
@@ -69,6 +85,7 @@ type KappaCodedVariableRow = {
 @Injectable()
 export class CodingReviewService {
   private readonly logger = new Logger(CodingReviewService.name);
+  private readonly allowedCodingIssueCodes = new Set([-1, -2, -3, -4]);
   private readonly manualMissingIdsByIssueOptionId = new Map<number, string>([
     [-3, 'mir'],
     [-4, 'mci']
@@ -85,6 +102,7 @@ export class CodingReviewService {
     private variableBundleRepository: Repository<VariableBundle>,
     private codingStatisticsService: CodingStatisticsService,
     private workspaceExclusionService: WorkspaceExclusionService,
+    private codingJobService: CodingJobService,
     @Optional()
     private missingsProfilesService?: MissingsProfilesService
   ) { }
@@ -1098,11 +1116,7 @@ export class CodingReviewService {
 
   async applyDoubleCodedResolutions(
     workspaceId: number,
-    decisions: Array<{
-      responseId: number;
-      selectedJobId: number;
-      resolutionComment?: string;
-    }>
+    decisions: DoubleCodedResolutionDecision[]
   ): Promise<{
       success: boolean;
       appliedCount: number;
@@ -1122,45 +1136,18 @@ export class CodingReviewService {
       await this.responseRepository.manager.transaction(async transactionalEntityManager => {
         for (const decision of decisions) {
           try {
-            const selectedCodingJobUnit =
-              await transactionalEntityManager.findOne(CodingJobUnit, {
-                where: {
-                  response_id: decision.responseId,
-                  coding_job_id: decision.selectedJobId
-                },
-                relations: ['response', 'coding_job']
-              });
+            const resolvedDecision = await this.resolveDoubleCodedResolution(
+              transactionalEntityManager,
+              workspaceId,
+              decision
+            );
 
-            if (!selectedCodingJobUnit) {
-              this.logger.warn(
-                `Could not find coding_job_unit for responseId ${decision.responseId} and jobId ${decision.selectedJobId}`
-              );
+            if (!resolvedDecision) {
               skippedCount += 1;
               continue;
             }
 
-            if (selectedCodingJobUnit.coding_job?.workspace_id !== workspaceId) {
-              this.logger.warn(
-                `Workspace mismatch for responseId ${decision.responseId}`
-              );
-              skippedCount += 1;
-              continue;
-            }
-
-            const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-            if (isExcludedByResolvedExclusions(
-              exclusions,
-              selectedCodingJobUnit.booklet_name,
-              selectedCodingJobUnit.unit_name
-            )) {
-              this.logger.warn(
-                `Skipped ignored responseId ${decision.responseId} for jobId ${decision.selectedJobId}`
-              );
-              skippedCount += 1;
-              continue;
-            }
-
-            const response = selectedCodingJobUnit.response;
+            const response = resolvedDecision.response;
             if (!response) {
               this.logger.warn(
                 `Could not find response for responseId ${decision.responseId}`
@@ -1169,13 +1156,7 @@ export class CodingReviewService {
               continue;
             }
 
-            let updatedValue = response.value || '';
-            const boundary = '\n\n--- ORIGINAL RESPONSE ---\n';
-
-            if (updatedValue.includes(boundary)) {
-              const parts = updatedValue.split(boundary);
-              updatedValue = parts[parts.length - 1];
-            }
+            const updatedValue = this.getOriginalResponseValue(response.value);
 
             await this.clearWorkspaceSupervisorComments(
               transactionalEntityManager,
@@ -1184,20 +1165,20 @@ export class CodingReviewService {
             );
 
             if (decision.resolutionComment && decision.resolutionComment.trim()) {
-              selectedCodingJobUnit.supervisor_comment = decision.resolutionComment.trim();
-              await transactionalEntityManager.save(CodingJobUnit, selectedCodingJobUnit);
+              resolvedDecision.sourceUnit.supervisor_comment = decision.resolutionComment.trim();
+              await transactionalEntityManager.save(CodingJobUnit, resolvedDecision.sourceUnit);
             }
 
             response.status_v2 = statusStringToNumber('CODING_COMPLETE');
-            response.code_v2 = selectedCodingJobUnit.code;
-            response.score_v2 = selectedCodingJobUnit.score;
+            response.code_v2 = resolvedDecision.code;
+            response.score_v2 = resolvedDecision.score;
             response.value = updatedValue;
 
             await transactionalEntityManager.save(ResponseEntity, response);
             appliedCount += 1;
 
             this.logger.debug(
-              `Applied resolution for responseId ${decision.responseId}: code=${selectedCodingJobUnit.code}, score=${selectedCodingJobUnit.score}`
+              `Applied resolution for responseId ${decision.responseId}: code=${resolvedDecision.code}, score=${resolvedDecision.score}`
             );
           } catch (error) {
             this.logger.error(
@@ -1229,6 +1210,199 @@ export class CodingReviewService {
         'Could not apply double-coded resolutions. Please check the database connection.'
       );
     }
+  }
+
+  private async resolveDoubleCodedResolution(
+    manager: EntityManager,
+    workspaceId: number,
+    decision: DoubleCodedResolutionDecision
+  ): Promise<ResolvedDoubleCodedResolution | null> {
+    if (this.hasSelectedCodingJobDecision(decision)) {
+      return this.resolveSelectedCodingJobResolution(manager, workspaceId, decision);
+    }
+
+    return this.resolveExplicitReplayResolution(manager, workspaceId, decision);
+  }
+
+  private hasSelectedCodingJobDecision(decision: DoubleCodedResolutionDecision): boolean {
+    return this.normalizeExplicitReplayInteger(decision.selectedJobId) !== undefined;
+  }
+
+  private async resolveSelectedCodingJobResolution(
+    manager: EntityManager,
+    workspaceId: number,
+    decision: DoubleCodedResolutionDecision
+  ): Promise<ResolvedDoubleCodedResolution | null> {
+    const selectedJobId = this.normalizeExplicitReplayInteger(decision.selectedJobId);
+    if (selectedJobId === undefined) {
+      this.logger.warn(`Invalid selected job ID for responseId ${decision.responseId}`);
+      return null;
+    }
+
+    const selectedCodingJobUnit = await manager.findOne(CodingJobUnit, {
+      where: {
+        response_id: decision.responseId,
+        coding_job_id: selectedJobId
+      },
+      relations: ['response', 'coding_job']
+    });
+
+    if (!selectedCodingJobUnit) {
+      this.logger.warn(
+        `Could not find coding_job_unit for responseId ${decision.responseId} and jobId ${selectedJobId}`
+      );
+      return null;
+    }
+
+    if (!await this.isResolutionSourceAllowed(workspaceId, selectedCodingJobUnit)) {
+      this.logger.warn(`Skipped unavailable responseId ${decision.responseId} for jobId ${selectedJobId}`);
+      return null;
+    }
+
+    return {
+      response: selectedCodingJobUnit.response,
+      sourceUnit: selectedCodingJobUnit,
+      code: selectedCodingJobUnit.code,
+      score: selectedCodingJobUnit.score
+    };
+  }
+
+  private async resolveExplicitReplayResolution(
+    manager: EntityManager,
+    workspaceId: number,
+    decision: DoubleCodedResolutionDecision
+  ): Promise<ResolvedDoubleCodedResolution | null> {
+    if (decision.code === null || decision.code === undefined) {
+      this.logger.warn(`Missing replay code for responseId ${decision.responseId}`);
+      return null;
+    }
+
+    const code = this.normalizeExplicitReplayInteger(decision.code);
+    if (code === undefined) {
+      this.logger.warn(`Invalid replay code for responseId ${decision.responseId}`);
+      return null;
+    }
+
+    if (!this.isExplicitReplayScorePayloadValid(decision.score)) {
+      this.logger.warn(`Invalid replay score for responseId ${decision.responseId}`);
+      return null;
+    }
+
+    const sourceUnit = await manager.findOne(CodingJobUnit, {
+      where: {
+        response_id: decision.responseId,
+        coding_job: { workspace_id: workspaceId }
+      },
+      relations: ['response', 'coding_job'],
+      order: {
+        id: 'ASC'
+      }
+    });
+
+    if (!sourceUnit) {
+      this.logger.warn(`Could not find workspace coding_job_unit for replay responseId ${decision.responseId}`);
+      return null;
+    }
+
+    if (!await this.isResolutionSourceAllowed(workspaceId, sourceUnit)) {
+      this.logger.warn(`Skipped unavailable replay responseId ${decision.responseId}`);
+      return null;
+    }
+
+    const score = await this.resolveExplicitReplayScore(workspaceId, sourceUnit, code);
+    if (score === undefined) {
+      this.logger.warn(`Unsupported replay code for responseId ${decision.responseId}: ${code}`);
+      return null;
+    }
+
+    return {
+      response: sourceUnit.response,
+      sourceUnit,
+      code,
+      score
+    };
+  }
+
+  private async resolveExplicitReplayScore(
+    workspaceId: number,
+    sourceUnit: CodingJobUnit,
+    code: number
+  ): Promise<number | null | undefined> {
+    if (code < 0) {
+      return this.allowedCodingIssueCodes.has(code) ? null : undefined;
+    }
+
+    try {
+      return await this.codingJobService.getCodingSchemeScoreForUnitCode(
+        sourceUnit,
+        workspaceId,
+        code
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Could not validate replay code ${code} for responseId ${sourceUnit.response_id}: ${error.message}`
+      );
+      return undefined;
+    }
+  }
+
+  private isExplicitReplayScorePayloadValid(score: unknown): boolean {
+    if (score === null || score === undefined) {
+      return true;
+    }
+
+    return this.normalizeExplicitReplayNumber(score) !== undefined;
+  }
+
+  private normalizeExplicitReplayInteger(value: unknown): number | undefined {
+    const normalizedValue = this.normalizeExplicitReplayNumber(value);
+    if (normalizedValue === undefined) {
+      return undefined;
+    }
+
+    return Number.isInteger(normalizedValue) ? normalizedValue : undefined;
+  }
+
+  private normalizeExplicitReplayNumber(value: unknown): number | undefined {
+    if (typeof value !== 'number' && typeof value !== 'string') {
+      return undefined;
+    }
+
+    if (typeof value === 'string' && value.trim() === '') {
+      return undefined;
+    }
+
+    const normalizedValue = Number(value);
+    return Number.isFinite(normalizedValue) ? normalizedValue : undefined;
+  }
+
+  private async isResolutionSourceAllowed(
+    workspaceId: number,
+    sourceUnit: CodingJobUnit
+  ): Promise<boolean> {
+    if (sourceUnit.coding_job?.workspace_id !== workspaceId) {
+      this.logger.warn(`Workspace mismatch for responseId ${sourceUnit.response_id}`);
+      return false;
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    return !isExcludedByResolvedExclusions(
+      exclusions,
+      sourceUnit.booklet_name,
+      sourceUnit.unit_name
+    );
+  }
+
+  private getOriginalResponseValue(value: string | null | undefined): string {
+    let updatedValue = value || '';
+    const boundary = '\n\n--- ORIGINAL RESPONSE ---\n';
+
+    if (updatedValue.includes(boundary)) {
+      const parts = updatedValue.split(boundary);
+      updatedValue = parts[parts.length - 1];
+    }
+
+    return updatedValue;
   }
 
   private async clearWorkspaceSupervisorComments(

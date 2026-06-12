@@ -27,6 +27,21 @@ describe('PostMessageService', () => {
     });
   });
 
+  describe('getMessages', () => {
+    it('should include the message origin', done => {
+      service.getMessages('test').subscribe(event => {
+        expect(event.message).toEqual({ type: 'test' });
+        expect(event.origin).toBe('https://example.test');
+        done();
+      });
+
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'test' },
+        origin: 'https://example.test'
+      }));
+    });
+  });
+
   describe('generateSessionId', () => {
     it('should generate numeric string', () => {
       const id = service.generateSessionId();

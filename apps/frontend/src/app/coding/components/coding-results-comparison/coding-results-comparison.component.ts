@@ -1084,7 +1084,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     const appendParams = (value: string): string => {
       const [path, query = ''] = value.split('?', 2);
       const params = new URLSearchParams(query);
-      params.set('mode', 'coding');
+      params.set('mode', 'coding-decision');
       params.set('originResponseId', responseId.toString());
       if (displayOptions.suppressGeneralInstructions !== undefined) {
         params.set('suppressGeneralInstructions', String(displayOptions.suppressGeneralInstructions));

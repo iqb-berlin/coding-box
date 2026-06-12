@@ -228,7 +228,7 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.withinTrainingData[0].modalValueDisplay?.valueText).toBe('7*');
   });
 
-  it('should open replay for the row response with coding context', () => {
+  it('should open replay for the row response with coding decision context', () => {
     const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
     codingStatisticsService.getReplayUrl.mockReturnValue(of({
       replayUrl: 'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1'
@@ -248,7 +248,7 @@ describe('CodingResultsComparisonComponent', () => {
     expect(appService.createOwnToken).not.toHaveBeenCalled();
     expect(codingStatisticsService.getReplayUrl).toHaveBeenCalledWith(1, 77);
     expect(openSpy).toHaveBeenCalledWith(
-      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding&originResponseId=77',
+      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=77',
       '_blank'
     );
   });
@@ -279,7 +279,7 @@ describe('CodingResultsComparisonComponent', () => {
     } as never);
 
     expect(openSpy).toHaveBeenCalledWith(
-      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding&originResponseId=77&suppressGeneralInstructions=true',
+      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=77&suppressGeneralInstructions=true',
       '_blank'
     );
   });
