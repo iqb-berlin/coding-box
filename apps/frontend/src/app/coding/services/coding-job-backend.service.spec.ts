@@ -432,6 +432,22 @@ describe('CodingJobBackendService', () => {
       });
     });
 
+    it.each([
+      ['pauseCodingJob', 'pause'],
+      ['resumeCodingJob', 'resume'],
+      ['submitCodingJob', 'submit']
+    ] as const)('should use the %s endpoint with auth token override', (methodName, path) => {
+      service[methodName](47, 123, 'url-token').subscribe();
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}wsg-admin/workspace/47/coding-job/123/${path}`
+      );
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({});
+      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
+      req.flush({});
+    });
+
     it('should use the supplied auth token when saving coding progress', () => {
       service
         .saveCodingProgress(

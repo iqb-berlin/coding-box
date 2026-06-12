@@ -1889,6 +1889,67 @@ describe('CodingJobService', () => {
     }
   );
 
+  it('pauses active coding jobs through the coder action', async () => {
+    const codingJob = {
+      id: 1,
+      workspace_id: 3,
+      status: 'active'
+    };
+    codingJobRepository.findOne.mockResolvedValue(codingJob);
+
+    await expect(service.pauseCodingJob(1, 3)).resolves.toMatchObject({
+      status: 'paused'
+    });
+
+    expect(codingJobRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 1, workspace_id: 3 }
+    });
+    expect(codingJobRepository.save).toHaveBeenCalledWith({
+      ...codingJob,
+      status: 'paused'
+    });
+  });
+
+  it('leaves completed coding jobs unchanged when a pause arrives late', async () => {
+    const codingJob = {
+      id: 1,
+      workspace_id: 3,
+      status: 'completed'
+    };
+    codingJobRepository.findOne.mockResolvedValue(codingJob);
+
+    await expect(service.pauseCodingJob(1, 3)).resolves.toBe(codingJob);
+
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('resumes paused coding jobs through the coder action', async () => {
+    const codingJob = {
+      id: 1,
+      workspace_id: 3,
+      status: 'paused'
+    };
+    codingJobRepository.findOne.mockResolvedValue(codingJob);
+
+    await expect(service.resumeCodingJob(1, 3)).resolves.toMatchObject({
+      status: 'active'
+    });
+
+    expect(codingJobRepository.save).toHaveBeenCalledWith({
+      ...codingJob,
+      status: 'active'
+    });
+  });
+
+  it('rejects coder status actions for unknown coding jobs', async () => {
+    codingJobRepository.findOne.mockResolvedValue(null);
+
+    await expect(service.pauseCodingJob(1, 3)).rejects.toBeInstanceOf(
+      NotFoundException
+    );
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
   it('validates updated coders before saving job fields or deleting existing assignments', async () => {
     codingJobRepository.findOne.mockResolvedValue({
       id: 1,

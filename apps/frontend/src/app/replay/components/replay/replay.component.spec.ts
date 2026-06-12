@@ -137,12 +137,16 @@ describe('ReplayComponent', () => {
     getCodingJobs: jest.Mock;
     getCodingJobUnits: jest.Mock;
     updateCodingJob: jest.Mock;
+    pauseCodingJob: jest.Mock;
+    resumeCodingJob: jest.Mock;
+    submitCodingJob: jest.Mock;
     getCodingProgress: jest.Mock;
     getCodingNotes: jest.Mock;
     getCodingJob: jest.Mock;
     saveCodingProgress: jest.Mock;
     saveCodingNotes: jest.Mock;
     updateCodingJobKeepalive: jest.Mock;
+    pauseCodingJobKeepalive: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -169,12 +173,16 @@ describe('ReplayComponent', () => {
       })),
       getCodingJobUnits: jest.fn().mockReturnValue(of([])),
       updateCodingJob: jest.fn().mockReturnValue(of({})),
+      pauseCodingJob: jest.fn().mockReturnValue(of({})),
+      resumeCodingJob: jest.fn().mockReturnValue(of({})),
+      submitCodingJob: jest.fn().mockReturnValue(of({})),
       getCodingProgress: jest.fn().mockReturnValue(of({})),
       getCodingNotes: jest.fn().mockReturnValue(of({})),
       getCodingJob: jest.fn().mockReturnValue(of({})),
       saveCodingProgress: jest.fn().mockReturnValue(of({})),
       saveCodingNotes: jest.fn().mockReturnValue(of({})),
-      updateCodingJobKeepalive: jest.fn()
+      updateCodingJobKeepalive: jest.fn(),
+      pauseCodingJobKeepalive: jest.fn()
     };
 
     await TestBed.configureTestingModule({
@@ -1037,6 +1045,7 @@ describe('ReplayComponent', () => {
       otherCoders: []
     }]));
     codingJobBackendServiceMock.updateCodingJob.mockClear();
+    codingJobBackendServiceMock.resumeCodingJob.mockClear();
 
     fixture.destroy();
     fixture = TestBed.createComponent(ReplayComponent);
@@ -1053,6 +1062,7 @@ describe('ReplayComponent', () => {
     expect(component.isCodingReadOnly()).toBe(true);
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', false);
     expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
   });
 
   it('should load coding-issue-review mode as editable without coding job status side effects', async () => {
@@ -1083,6 +1093,7 @@ describe('ReplayComponent', () => {
     }]));
     codingJobBackendServiceMock.getCodingJob.mockReturnValue(of({ status: 'completed' }));
     codingJobBackendServiceMock.updateCodingJob.mockClear();
+    codingJobBackendServiceMock.resumeCodingJob.mockClear();
 
     fixture.destroy();
     fixture = TestBed.createComponent(ReplayComponent);
@@ -1101,6 +1112,7 @@ describe('ReplayComponent', () => {
     expect(component.isCodingReadOnly()).toBe(false);
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', false);
     expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
   });
 
   it('should reuse coding job units loaded from query params during replay navigation', async () => {
@@ -1677,6 +1689,7 @@ describe('ReplayComponent', () => {
       appService.createOwnToken.mockReturnValueOnce(of('workspace-token'));
       codingJobBackendServiceMock.getCodingProgress.mockReturnValueOnce(throwError(() => new Error('Progress error')));
       codingJobBackendServiceMock.updateCodingJob.mockClear();
+      codingJobBackendServiceMock.resumeCodingJob.mockClear();
       codingJobBackendServiceMock.getCodingJobUnits.mockReturnValueOnce(of([{
         responseId: 1,
         unitName: 'UNIT_COMPLETED',
@@ -1698,10 +1711,10 @@ describe('ReplayComponent', () => {
       expect(saveAllSpy).toHaveBeenCalledWith(47, 77);
       expect(component.codingService.isCompletedJobReview).toBe(false);
       expect(component.isCodingReadOnly()).toBe(false);
-      expect(codingJobBackendServiceMock.updateCodingJob).toHaveBeenCalledWith(
+      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.resumeCodingJob).toHaveBeenCalledWith(
         48,
         88,
-        { status: 'active' },
         'workspace-token'
       );
 
@@ -1797,7 +1810,7 @@ describe('ReplayComponent', () => {
       expect(component.codingService.currentVariableId).toBe('VAR_CURRENT');
       expect(component.codingService.selectedCodes.get('current-key')).toEqual({ id: 1, code: '1', label: 'Current Code' });
       expect(component.codingService.notes.get('current-note-key')).toBe('Current Note');
-      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalledWith(48, 88, { status: 'active' }, targetToken);
+      expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalledWith(48, 88, targetToken);
       expect(snackBar.open).toHaveBeenCalledWith(
         'replay.job-switcher.switch-error',
         'close',
