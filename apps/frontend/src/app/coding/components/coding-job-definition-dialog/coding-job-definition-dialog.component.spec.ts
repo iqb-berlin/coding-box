@@ -78,6 +78,15 @@ describe('CodingJobDefinitionDialogComponent', () => {
     ...bundle,
     variables: bundle.variables.map(variable => ({ ...variable }))
   }));
+  const emptyDistributionPreview = {
+    distribution: {},
+    distributionByCoderId: {},
+    doubleCodingInfo: {},
+    aggregationInfo: {},
+    matchingFlags: [],
+    warnings: [],
+    tasksPerCoder: {}
+  };
 
   beforeEach(async () => {
     mockCodingJobBackendService = {
@@ -111,7 +120,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
     } as unknown as Partial<CodingJobBackendService>;
 
     mockDistributedCodingService = {
-      createDistributedCodingJobs: jest.fn()
+      createDistributedCodingJobs: jest.fn(),
+      calculateDistribution: jest.fn().mockReturnValue(of(emptyDistributionPreview))
     } as unknown as Partial<DistributedCodingService>;
 
     mockAppService = {
@@ -478,6 +488,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledTimes(1);
     expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledWith(1, expect.objectContaining({
+      distributionSeed: expect.stringMatching(/^job-definition:1:/),
       showScore: false,
       allowComments: true,
       suppressGeneralInstructions: false
@@ -638,12 +649,14 @@ describe('CodingJobDefinitionDialogComponent', () => {
       component.onSubmit();
       tick();
 
+      const updatePayload = (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mock.calls[0][2];
       expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.objectContaining({
         showScore: true,
         allowComments: false,
         suppressGeneralInstructions: true,
         missingsProfileId: 7
       }));
+      expect(updatePayload).not.toHaveProperty('distributionSeed');
       expect(mockDialogRef.close).toHaveBeenCalled();
     }));
   });
@@ -922,6 +935,116 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.getTotalCodingCases()).toBe(14);
   });
 
+  it('should calculate double coding totals per selected variable', () => {
+    createComponent();
+
+    component.selectedVariables.select(component.variables[0]);
+    component.selectedVariables.select(component.variables[2]);
+
+    component.doubleCodingMode = 'absolute';
+    component.codingJobForm.patchValue({ doubleCodingAbsolute: 2 });
+
+    expect(component.getTotalCodingCases()).toBe(14);
+    expect(component.getTotalDoubleCodedCases()).toBe(4);
+    expect(component.getTotalCodingTasks()).toBe(18);
+
+    component.doubleCodingMode = 'percentage';
+    component.codingJobForm.patchValue({ doubleCodingPercentage: 10 });
+
+    expect(component.getTotalDoubleCodedCases()).toBe(2);
+    expect(component.getTotalCodingTasks()).toBe(16);
+  });
+
+  it('should apply max coding cases by distribution item before estimating per-variable double coding', () => {
+    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
+    createComponent();
+
+    const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+    expect(bundle).toBeDefined();
+
+    component.selectedVariableBundles.select(bundle!);
+    component.selectedVariables.select(component.variables[1]);
+    component.doubleCodingMode = 'absolute';
+    component.codingJobForm.patchValue({
+      maxCodingCases: 6,
+      doubleCodingAbsolute: 2
+    });
+
+    expect(component.getTotalCodingCases()).toBe(6);
+    expect(component.getTotalDoubleCodedCases()).toBe(5);
+    expect(component.getTotalCodingTasks()).toBe(11);
+  });
+
+  it('should use the backend distribution preview for definition estimates', fakeAsync(() => {
+    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
+    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockReturnValue(of({
+      ...emptyDistributionPreview,
+      doubleCodingInfo: {
+        'bundle:1': {
+          totalCases: 10,
+          distinctCases: 6,
+          doubleCodedCases: 4,
+          singleCodedCasesAssigned: 2,
+          codingTasksTotal: 10,
+          doubleCodedCasesPerCoder: {}
+        }
+      },
+      tasksPerCoder: {
+        1: 7,
+        2: 3
+      }
+    }));
+    createComponent();
+    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
+
+    const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+    expect(bundle).toBeDefined();
+
+    component.selectedCoders.select(component.availableCoders[0], component.availableCoders[1]);
+    component.selectedVariableBundles.select(bundle!);
+    component.codingJobForm.patchValue({
+      maxCodingCases: 6,
+      doubleCodingAbsolute: 2,
+      durationSeconds: 60
+    });
+
+    tick(300);
+
+    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledWith(
+      1,
+      [],
+      [
+        expect.objectContaining({ id: 1, capacityPercent: 100 }),
+        expect.objectContaining({ id: 2, capacityPercent: 100 })
+      ],
+      2,
+      0,
+      [expect.objectContaining({ id: 1, name: 'Bundle 1' })],
+      'continuous',
+      6,
+      expect.stringMatching(/^job-definition:1:/)
+    );
+    expect(component.getTotalCodingCases()).toBe(6);
+    expect(component.getTotalDoubleCodedCases()).toBe(4);
+    expect(component.getTotalCodingTasks()).toBe(10);
+    expect(component.getTimePerCoderInSeconds()).toBe(420);
+  }));
+
+  it('should send a stable distribution seed when submitting a new definition for review', () => {
+    createComponent();
+    (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedVariables.select(mockVariables[0]);
+
+    component.onSubmitForReview();
+
+    expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledWith(1, expect.objectContaining({
+      status: 'pending_review',
+      distributionSeed: expect.stringMatching(/^job-definition:1:/)
+    }));
+  });
+
   it('should calculate "Time per coder" correctly with double coding', () => {
     createComponent();
 
@@ -958,7 +1081,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     component.doubleCodingMode = 'percentage';
     component.codingJobForm.patchValue({ doubleCodingPercentage: 50 });
 
-    // Total tasks: 10 + floor(0.5 * 10) = 15
+    // Total tasks: 10 + ceil(0.5 * 10) = 15
     // Total time: 15 * 60 = 900s (15 min)
     // Time per coder: 900 / 2 = 450s (7 min 30 sec)
     expect(component.getTotalCodingTasks()).toBe(15);

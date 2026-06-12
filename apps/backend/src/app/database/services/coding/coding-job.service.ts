@@ -5787,6 +5787,29 @@ export class CodingJobService {
     request: DistributionPlanRequest,
     totalCases: number
   ): number {
+    const { doubleCodingAbsolute, doubleCodingPercentage } =
+      this.getDoubleCodingSettings(request);
+
+    if (doubleCodingAbsolute > 0) {
+      return Math.min(doubleCodingAbsolute, totalCases);
+    }
+
+    if (doubleCodingPercentage > 0) {
+      return Math.min(
+        Math.ceil((doubleCodingPercentage / 100) * totalCases),
+        totalCases
+      );
+    }
+
+    return 0;
+  }
+
+  private getDoubleCodingSettings(
+    request: Pick<
+    DistributionPlanRequest,
+    'doubleCodingAbsolute' | 'doubleCodingPercentage'
+    >
+  ): { doubleCodingAbsolute: number; doubleCodingPercentage: number } {
     const doubleCodingAbsolute = Number(request.doubleCodingAbsolute || 0);
     const doubleCodingPercentage = Number(request.doubleCodingPercentage || 0);
 
@@ -5796,18 +5819,11 @@ export class CodingJobService {
       );
     }
 
-    if (doubleCodingAbsolute > 0) {
-      return Math.min(doubleCodingAbsolute, totalCases);
-    }
+    return { doubleCodingAbsolute, doubleCodingPercentage };
+  }
 
-    if (doubleCodingPercentage > 0) {
-      return Math.min(
-        Math.floor((doubleCodingPercentage / 100) * totalCases),
-        totalCases
-      );
-    }
-
-    return 0;
+  private getResponseVariableKey(response: SlimResponse): string {
+    return `${response.unitName}::${response.variableid}`;
   }
 
   private getCoderLoadRatio(
@@ -6094,12 +6110,30 @@ export class CodingJobService {
       planItems,
       request.maxCodingCases
     );
-    const doubleCodingCount = this.getDoubleCodingCount(
-      request,
-      selectedCases.length
-    );
+    this.getDoubleCodingSettings(request);
+    const selectedCaseCountsByVariableKey = new Map<string, number>();
+    selectedCases.forEach(selectedCase => {
+      const variableKey = this.getResponseVariableKey(selectedCase.response);
+      selectedCaseCountsByVariableKey.set(
+        variableKey,
+        (selectedCaseCountsByVariableKey.get(variableKey) || 0) + 1
+      );
+    });
+    const doubleCodingCountsByVariableKey = new Map<string, number>();
+    selectedCaseCountsByVariableKey.forEach((caseCount, variableKey) => {
+      doubleCodingCountsByVariableKey.set(
+        variableKey,
+        this.getDoubleCodingCount(request, caseCount)
+      );
+    });
+    const totalDoubleCodingCount = Array.from(
+      doubleCodingCountsByVariableKey.values()
+    ).reduce((sum, count) => sum + count, 0);
 
-    if (doubleCodingCount > 0 && coders.length < codersPerDoubleCodedCase) {
+    if (
+      totalDoubleCodingCount > 0 &&
+      coders.length < codersPerDoubleCodedCase
+    ) {
       throw new BadRequestException(
         `Double coding requires at least ${codersPerDoubleCodedCase} selected coders.`
       );
@@ -6113,12 +6147,18 @@ export class CodingJobService {
     const jobsByItemAndCoder = new Map<string, Map<number, SlimResponse[]>>();
     const plannedCases: DistributionPlanCase[] = [];
     const doubleCodingCoderCombinations =
-      doubleCodingCount > 0 ?
+      totalDoubleCodingCount > 0 ?
         this.getCoderCombinations(coders, codersPerDoubleCodedCase) :
         [];
+    const assignedDoubleCodingCountsByVariableKey = new Map<string, number>();
 
-    selectedCases.forEach((selectedCase, index) => {
-      const isDoubleCoded = index < doubleCodingCount;
+    selectedCases.forEach(selectedCase => {
+      const variableKey = this.getResponseVariableKey(selectedCase.response);
+      const assignedDoubleCodingCount =
+        assignedDoubleCodingCountsByVariableKey.get(variableKey) || 0;
+      const isDoubleCoded =
+        assignedDoubleCodingCount <
+        (doubleCodingCountsByVariableKey.get(variableKey) || 0);
       const assignedCoders = isDoubleCoded ?
         this.chooseDoubleCodingCoders(
           doubleCodingCoderCombinations,
@@ -6138,6 +6178,10 @@ export class CodingJobService {
       const assignedCoderIds = assignedCoders.map(coder => coder.id);
 
       if (isDoubleCoded) {
+        assignedDoubleCodingCountsByVariableKey.set(
+          variableKey,
+          assignedDoubleCodingCount + 1
+        );
         const pairKey = [...assignedCoderIds].sort((a, b) => a - b).join('-');
         pairCounts.set(pairKey, (pairCounts.get(pairKey) || 0) + 1);
       }
