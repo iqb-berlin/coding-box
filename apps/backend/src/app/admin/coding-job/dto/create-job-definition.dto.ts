@@ -5,6 +5,8 @@ import {
   IsArray,
   IsBoolean,
   IsNumber,
+  IsString,
+  MaxLength,
   Max,
   Min,
   ValidateNested
@@ -110,7 +112,7 @@ export class CreateJobDefinitionDto {
     maxCodingCases?: number;
 
   @ApiProperty({
-    description: 'Absolute number of cases that should be double coded',
+    description: 'Absolute number of cases per variable that should be double coded',
     example: 10,
     required: false
   })
@@ -121,7 +123,7 @@ export class CreateJobDefinitionDto {
     doubleCodingAbsolute?: number;
 
   @ApiProperty({
-    description: 'Percentage (0-100) of cases that should be double coded',
+    description: 'Percentage (0-100) of cases per variable that should be double coded',
     example: 25.5,
     required: false
   })
@@ -141,6 +143,17 @@ export class CreateJobDefinitionDto {
   @IsEnum(['continuous', 'alternating'])
   @IsOptional()
     caseOrderingMode?: CaseOrderingMode;
+
+  @ApiProperty({
+    description: 'Seed used for deterministic distribution planning',
+    example: 'job-definition:7:550e8400-e29b-41d4-a716-446655440000',
+    maxLength: 128,
+    required: false
+  })
+  @IsString()
+  @MaxLength(128)
+  @IsOptional()
+    distributionSeed?: string;
 
   @ApiProperty({
     description: 'Whether to show scores in generated coding jobs',
