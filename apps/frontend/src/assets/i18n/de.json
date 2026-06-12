@@ -2467,6 +2467,11 @@
     "coders-done": "Kodierer fertig",
     "pending": "Ausstehend",
     "applied": "Angewandt",
+    "applied-result": {
+      "label": "Angewendeter Code",
+      "final-source": "Endgültige Entscheidung",
+      "match-tooltip": "Entspricht dem angewendeten Code"
+    },
     "decision": {
       "select-label": "Endgültiger Code",
       "no-selection": "Kein Code gewählt",

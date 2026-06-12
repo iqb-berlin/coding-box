@@ -39,6 +39,12 @@ type ReviewCoderResult = {
   codedAt: Date;
 };
 
+type AppliedReviewResult = {
+  appliedCode: number | null;
+  appliedScore: number | null;
+  appliedComment: string | null;
+};
+
 type KappaCodedVariableRow = {
   responseId: number | string;
   unitName: string;
@@ -140,6 +146,9 @@ export class CodingReviewService {
         bookletName: string;
         givenAnswer: string;
         isResolved: boolean;
+        appliedCode: number | null;
+        appliedScore: number | null;
+        appliedComment: string | null;
         coderResults: Array<{
           coderId: number;
           coderName: string;
@@ -376,7 +385,7 @@ export class CodingReviewService {
         relations
       });
 
-      const finalCodingJobUnits = codingJobUnits.filter(unit => {
+      const isIncludedReviewUnit = (unit: CodingJobUnit) => {
         // Ignore orphaned coding_job_unit rows from deleted jobs.
         if (!unit.coding_job) {
           return false;
@@ -384,10 +393,6 @@ export class CodingReviewService {
 
         // Keep result assembly aligned with the workspace-scoped base query.
         if (unit.coding_job.workspace_id !== workspaceId) {
-          return false;
-        }
-
-        if (isCodingIssueReviewJobType(unit.coding_job.job_type)) {
           return false;
         }
 
@@ -399,14 +404,20 @@ export class CodingReviewService {
           return false;
         }
 
-        const codingJobBundleIds = unit.coding_job.codingJobVariableBundles
-          ?.map(bundle => bundle.variable_bundle_id) || [];
+        const codingJobBundleIds = new Set(
+          (unit.coding_job.codingJobVariableBundles || [])
+            .map(bundle => Number(bundle.variable_bundle_id))
+            .filter(bundleId => Number.isFinite(bundleId))
+        );
+        if (unit.variable_bundle_id !== null && unit.variable_bundle_id !== undefined) {
+          codingJobBundleIds.add(unit.variable_bundle_id);
+        }
         if (!this.isIncludedByScope(
           unit.coding_job.job_definition_id,
           unit.coding_job.training_id,
           jobDefinitionIds,
           coderTrainingIds,
-          codingJobBundleIds,
+          Array.from(codingJobBundleIds),
           scopedJobDefinitionBundleScope,
           unit.unit_name,
           unit.variable_id
@@ -419,7 +430,14 @@ export class CodingReviewService {
         }
 
         return true;
-      });
+      };
+      const scopedCodingJobUnits = codingJobUnits.filter(isIncludedReviewUnit);
+      const finalCodingJobUnits = scopedCodingJobUnits.filter(unit => (
+        !isCodingIssueReviewJobType(unit.coding_job?.job_type)
+      ));
+      const codingIssueReviewUnits = scopedCodingJobUnits.filter(unit => (
+        isCodingIssueReviewJobType(unit.coding_job?.job_type)
+      ));
 
       const responseGroups = new Map<
       number,
@@ -433,6 +451,9 @@ export class CodingReviewService {
         bookletName: string;
         givenAnswer: string;
         isResolved: boolean;
+        appliedCode: number | null;
+        appliedScore: number | null;
+        appliedComment: string | null;
         coderResults: Array<{
           coderId: number;
           coderName: string;
@@ -457,6 +478,11 @@ export class CodingReviewService {
 
         if (!responseGroups.has(responseId)) {
           const responseStatus = statusMap.get(responseId);
+          const isResolved = responseStatus === completeStatus;
+          const appliedResult = this.getAppliedReviewResult(
+            isResolved,
+            unit.response
+          );
           responseGroups.set(responseId, {
             responseId: responseId,
             unitName: unit.unit_name || unit.response?.unit?.name || '',
@@ -466,12 +492,16 @@ export class CodingReviewService {
             personGroup: unit.person_group || unit.response?.unit?.booklet?.person?.group || '',
             bookletName: unit.booklet_name || unit.response?.unit?.booklet?.bookletinfo?.name || '',
             givenAnswer: unit.response?.value || '',
-            isResolved: responseStatus === completeStatus,
+            isResolved,
+            ...appliedResult,
             coderResults: []
           });
         }
 
         const group = responseGroups.get(responseId)!;
+        if (group.isResolved && unit.supervisor_comment && !group.appliedComment) {
+          group.appliedComment = unit.supervisor_comment;
+        }
 
         const coder = this.getDistinctCodingJobCoders(unit.coding_job?.codingJobCoders || [])[0];
         if (coder) {
@@ -480,6 +510,10 @@ export class CodingReviewService {
             unit,
             manualMissingCache
           );
+          if (group.isResolved && this.isAppliedRawResult(group, unit)) {
+            group.appliedCode = resolvedCodeAndScore.code;
+            group.appliedScore = resolvedCodeAndScore.score;
+          }
           const coderResult = {
             coderId: coder.user_id,
             coderName: coder.user?.username || `Coder ${coder.user_id}`,
@@ -506,6 +540,22 @@ export class CodingReviewService {
           } else if (this.shouldReplaceCoderResult(group.coderResults[existingResultIndex], coderResult)) {
             group.coderResults[existingResultIndex] = coderResult;
           }
+        }
+      }
+
+      for (const unit of codingIssueReviewUnits) {
+        const group = responseGroups.get(unit.response_id);
+        if (!group?.isResolved || group.appliedComment || !unit.notes?.trim()) {
+          continue;
+        }
+
+        const resolvedCodeAndScore = await this.resolveManualMissingForReview(
+          workspaceId,
+          unit,
+          manualMissingCache
+        );
+        if (this.isAppliedResolvedResult(group, resolvedCodeAndScore)) {
+          group.appliedComment = unit.notes.trim();
         }
       }
 
@@ -998,6 +1048,52 @@ export class CodingReviewService {
     }
 
     return candidate.codedAt.getTime() > existing.codedAt.getTime();
+  }
+
+  private getAppliedReviewResult(
+    isResolved: boolean,
+    response?: Pick<ResponseEntity, 'code_v2' | 'score_v2'> | null
+  ): AppliedReviewResult {
+    if (!isResolved) {
+      return {
+        appliedCode: null,
+        appliedScore: null,
+        appliedComment: null
+      };
+    }
+
+    return {
+      appliedCode: this.toNullableNumber(response?.code_v2),
+      appliedScore: this.toNullableNumber(response?.score_v2),
+      appliedComment: null
+    };
+  }
+
+  private toNullableNumber(value: number | string | null | undefined): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const parsedValue = Number(value);
+    return Number.isFinite(parsedValue) ? parsedValue : null;
+  }
+
+  private isAppliedRawResult(
+    appliedResult: AppliedReviewResult,
+    unit: Pick<CodingJobUnit, 'code' | 'score'>
+  ): boolean {
+    return appliedResult.appliedCode !== null &&
+      appliedResult.appliedCode === this.toNullableNumber(unit.code) &&
+      appliedResult.appliedScore === this.toNullableNumber(unit.score);
+  }
+
+  private isAppliedResolvedResult(
+    appliedResult: AppliedReviewResult,
+    resolvedResult: { code: number | null; score: number | null }
+  ): boolean {
+    return appliedResult.appliedCode !== null &&
+      appliedResult.appliedCode === resolvedResult.code &&
+      appliedResult.appliedScore === resolvedResult.score;
   }
 
   async applyDoubleCodedResolutions(

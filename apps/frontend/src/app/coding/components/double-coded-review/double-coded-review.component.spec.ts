@@ -68,6 +68,9 @@ describe('DoubleCodedReviewComponent', () => {
                   bookletName: 'Booklet 1',
                   givenAnswer: 'answer',
                   isResolved: false,
+                  appliedCode: null,
+                  appliedScore: null,
+                  appliedComment: null,
                   coderResults: [
                     {
                       coderId: 10,
@@ -102,6 +105,9 @@ describe('DoubleCodedReviewComponent', () => {
                   bookletName: 'Booklet 1',
                   givenAnswer: 'second answer',
                   isResolved: false,
+                  appliedCode: null,
+                  appliedScore: null,
+                  appliedComment: null,
                   coderResults: [
                     {
                       coderId: 10,
@@ -136,6 +142,9 @@ describe('DoubleCodedReviewComponent', () => {
                   bookletName: 'Booklet 2',
                   givenAnswer: 'third answer',
                   isResolved: false,
+                  appliedCode: null,
+                  appliedScore: null,
+                  appliedComment: null,
                   coderResults: [
                     {
                       coderId: 10,
@@ -160,9 +169,46 @@ describe('DoubleCodedReviewComponent', () => {
                       codedAt: '2026-05-20T11:10:00.000Z'
                     }
                   ]
+                },
+                {
+                  responseId: 504,
+                  unitName: 'Unit D',
+                  variableId: 'VAR_4',
+                  personLogin: 'person-4',
+                  personCode: 'P004',
+                  bookletName: 'Booklet 2',
+                  givenAnswer: 'fourth answer',
+                  isResolved: true,
+                  appliedCode: 2,
+                  appliedScore: 1,
+                  appliedComment: 'Final decision note',
+                  coderResults: [
+                    {
+                      coderId: 10,
+                      coderName: 'Coder A',
+                      jobId: 4001,
+                      jobName: 'Definition 103 / A',
+                      code: 1,
+                      score: 0,
+                      notes: null,
+                      supervisorComment: null,
+                      codedAt: '2026-05-20T12:00:00.000Z'
+                    },
+                    {
+                      coderId: 20,
+                      coderName: 'Coder B',
+                      jobId: 4002,
+                      jobName: 'Definition 103 / B',
+                      code: 2,
+                      score: 1,
+                      notes: null,
+                      supervisorComment: 'Final decision note',
+                      codedAt: '2026-05-20T12:10:00.000Z'
+                    }
+                  ]
                 }
               ],
-              total: 3,
+              total: 4,
               page: 1,
               limit: 50
             })),
@@ -275,6 +321,28 @@ describe('DoubleCodedReviewComponent', () => {
     expect(coderACell.textContent).toContain('Definition 102 / A');
     expect(coderACell.textContent).toContain('#3002');
     expect(coderBCell.textContent).toContain('-');
+  });
+
+  it('shows applied decisions and marks matching original codes for resolved rows', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const nativeElement = fixture.nativeElement as HTMLElement;
+    const rows = Array.from(nativeElement.querySelectorAll('tbody tr')) as HTMLElement[];
+    const resolvedRow = rows[3];
+
+    expect(resolvedRow.querySelector('.applied-result')?.textContent).toContain('2');
+    expect(resolvedRow.querySelector('.applied-result')?.textContent).toContain('Final decision note');
+    expect(resolvedRow.querySelector('.decision-status.resolved')?.textContent)
+      .toContain('double-coded-review.applied');
+
+    const coderACell = resolvedRow.querySelector('td.mat-column-coder_10') as HTMLElement;
+    const coderBCell = resolvedRow.querySelector('td.mat-column-coder_20') as HTMLElement;
+
+    expect(coderACell.querySelector('.applied-code-match')).toBeNull();
+    expect(coderBCell.querySelector('.applied-code-match')).toBeTruthy();
+    expect(coderBCell.querySelector('.applied-match-icon')).toBeTruthy();
   });
 
   it('labels duplicate coder decisions with job source and counts progress by unique coders', async () => {

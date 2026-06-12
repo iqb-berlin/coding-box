@@ -97,6 +97,9 @@ const sampleReviewItem = {
   bookletName: 'booklet',
   givenAnswer: 'answer',
   isResolved: false,
+  appliedCode: null,
+  appliedScore: null,
+  appliedComment: null,
   coderResults: [
     sampleCoderResult,
     {
