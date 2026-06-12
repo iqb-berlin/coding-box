@@ -3,8 +3,6 @@ import {
   Input,
   Output,
   EventEmitter,
-  ViewChild,
-  AfterViewInit,
   ChangeDetectionStrategy,
   OnChanges,
   SimpleChanges
@@ -23,8 +21,13 @@ import {
   MatTable,
   MatTableDataSource
 } from '@angular/material/table';
-import { MatSort, MatSortModule, MatSortHeader } from '@angular/material/sort';
-import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import {
+  MatSortModule,
+  MatSortHeader,
+  Sort,
+  SortDirection
+} from '@angular/material/sort';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIcon } from '@angular/material/icon';
 import { MatButton, MatIconButton } from '@angular/material/button';
@@ -34,6 +37,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Success } from '../../../../models/success.model';
 import { extractGeoGebraBase64 } from '../../../../utils/geogebra-value.util';
 import { getResponseStatusLabel } from '../../../../../shared/utils/response-status-metadata.util';
+import { CodingResponseSortBy } from '../../../../../models/coding-interfaces';
 
 @Component({
   selector: 'app-response-table',
@@ -65,7 +69,7 @@ import { getResponseStatusLabel } from '../../../../../shared/utils/response-sta
     TranslateModule
   ]
 })
-export class ResponseTableComponent implements AfterViewInit, OnChanges {
+export class ResponseTableComponent implements OnChanges {
   @Input() data: Success[] = [];
   @Input() displayedColumns: string[] = [];
   @Input() totalRecords = 0;
@@ -78,15 +82,15 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
   @Input() isGeogebraFilterActive = false;
   @Input() isDerivedFilterActive = false;
   @Input() isReviewLoading = false;
+  @Input() sortBy: CodingResponseSortBy | '' = '';
+  @Input() sortDirection: SortDirection = '';
 
   @Output() pageChange = new EventEmitter<PageEvent>();
   @Output() replayClick = new EventEmitter<Success>();
   @Output() showCodingScheme = new EventEmitter<number>();
   @Output() showUnitXml = new EventEmitter<number>();
   @Output() reviewClick = new EventEmitter<void>();
-
-  @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  @Output() sortChange = new EventEmitter<Sort>();
 
   dataSource = new MatTableDataSource<Success>([]);
 
@@ -96,11 +100,6 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
     if (changes.data) {
       this.dataSource.data = this.data;
     }
-  }
-
-  ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
-    this.dataSource.paginator = this.paginator;
   }
 
   getColumnHeader(column: string): string {
@@ -140,6 +139,10 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
 
   onPageChange(event: PageEvent): void {
     this.pageChange.emit(event);
+  }
+
+  onSortChange(sort: Sort): void {
+    this.sortChange.emit(sort);
   }
 
   onReplayClick(response: Success): void {
