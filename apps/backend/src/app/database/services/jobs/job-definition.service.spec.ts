@@ -269,6 +269,23 @@ describe('JobDefinitionService', () => {
     ]);
   });
 
+  it('uses a provided distribution seed when creating a definition', async () => {
+    const result = await service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      maxCodingCases: 2,
+      distributionSeed: 'frontend-seed'
+    }, 7);
+
+    expect(result.distribution_seed).toBe('frontend-seed');
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 'requested',
+        distributionSeed: 'frontend-seed'
+      })
+    ]);
+  });
+
   it('merges DERIVE_ERROR opt-in into bundled variables when planning usage', async () => {
     variableBundleRepository.find.mockResolvedValue([
       {

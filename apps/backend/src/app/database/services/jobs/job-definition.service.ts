@@ -742,7 +742,7 @@ export class JobDefinitionService {
 
   async createJobDefinition(createDto: CreateJobDefinitionDto, workspaceId: number): Promise<JobDefinition> {
     const coderAssignments = this.resolveCoderAssignments(createDto);
-    const distributionSeed = this.createDistributionSeed(workspaceId);
+    const distributionSeed = createDto.distributionSeed || this.createDistributionSeed(workspaceId);
     const missingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
       workspaceId,
       createDto.missingsProfileId

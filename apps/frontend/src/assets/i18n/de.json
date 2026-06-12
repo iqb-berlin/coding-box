@@ -2007,7 +2007,7 @@
       "general-info": "Allgemeine Informationen",
       "double-coding": {
         "title": "Doppelkodierung",
-        "description": "Konfiguriere, welche Fälle doppelt kodiert werden sollen."
+        "description": "Konfiguriere, wie viele Fälle für jede Variable doppelt kodiert werden sollen."
       },
       "variable-bundles": {
         "title": "Variablenbündel",
