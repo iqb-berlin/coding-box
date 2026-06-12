@@ -54,8 +54,17 @@ interface DoubleCodedItem {
   bookletName: string;
   givenAnswer: string;
   isResolved: boolean;
+  appliedCode: number | null;
+  appliedScore: number | null;
+  appliedComment: string | null;
   coderResults: CoderResult[];
   selectedCoderResult?: CoderResult;
+}
+
+interface AppliedReviewResult {
+  code: number | null;
+  score: number | null;
+  comment: string | null;
 }
 
 interface CoderColumnMeta {
@@ -375,7 +384,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     currentItems.forEach(item => {
       const controlName = this.getItemControlName(item);
 
-      const resolvedResult = item.coderResults.find(cr => !!cr.supervisorComment);
+      const resolvedResult = this.getAppliedMatchingCoderResult(item) ||
+        item.coderResults.find(cr => !!cr.supervisorComment);
       const firstCodedResult = item.coderResults.find(cr => cr.code !== null);
 
       let defaultValue = '';
@@ -509,6 +519,68 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       item.selectedCoderResult;
 
     return selectedResult && selectedResult.code !== null ? selectedResult : undefined;
+  }
+
+  getAppliedReviewResult(item: DoubleCodedItem): AppliedReviewResult | null {
+    if (!item.isResolved) {
+      return null;
+    }
+
+    const code = item.appliedCode ?? null;
+    const score = item.appliedScore ?? null;
+    const comment = item.appliedComment?.trim() ||
+      item.coderResults.find(result => !!result.supervisorComment)?.supervisorComment?.trim() ||
+      null;
+
+    if (code === null && score === null && !comment) {
+      return null;
+    }
+
+    return {
+      code,
+      score,
+      comment
+    };
+  }
+
+  getAppliedMatchingCoderResult(item: DoubleCodedItem): CoderResult | undefined {
+    const appliedResult = this.getAppliedReviewResult(item);
+    if (!appliedResult || appliedResult.code === null) {
+      return undefined;
+    }
+
+    return item.coderResults.find(result => (
+      result.code === appliedResult.code &&
+      (result.score ?? null) === (appliedResult.score ?? null)
+    )) || item.coderResults.find(result => result.code === appliedResult.code);
+  }
+
+  getAppliedResultSourceLabel(item: DoubleCodedItem): string {
+    const matchingResult = this.getAppliedMatchingCoderResult(item);
+    if (matchingResult) {
+      return this.getDecisionResultSourceLabel(item, matchingResult);
+    }
+
+    return this.translateService.instant('double-coded-review.applied-result.final-source');
+  }
+
+  getAppliedResultTooltip(item: DoubleCodedItem): string {
+    const appliedResult = this.getAppliedReviewResult(item);
+    if (!appliedResult) {
+      return '';
+    }
+
+    const codeDisplay = this.getCodeDisplay(appliedResult.code) || this.getCodeLabel(appliedResult.code) || 'N/A';
+    const scoreDisplay = appliedResult.score !== null ? ` (${appliedResult.score})` : '';
+
+    return `${this.translateService.instant('double-coded-review.applied-result.label')}: ${codeDisplay}${scoreDisplay}`;
+  }
+
+  isAppliedCodeMatch(item: DoubleCodedItem, result: CoderResult): boolean {
+    const appliedResult = this.getAppliedReviewResult(item);
+    return !!appliedResult &&
+      appliedResult.code !== null &&
+      result.code === appliedResult.code;
   }
 
   getDecisionStatusClass(item: DoubleCodedItem): string {
@@ -787,7 +859,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       next: response => {
         this.allData = response.data.map(item => ({
           ...item,
-          selectedCoderResult: item.coderResults.find(result => result.code !== null)
+          selectedCoderResult: this.getAppliedMatchingCoderResult(item) ||
+            item.coderResults.find(result => result.code !== null)
         }));
         this.updateDisplayedColumns(this.allData);
         this.dataSource.data = this.allData;
