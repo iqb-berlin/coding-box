@@ -57,6 +57,18 @@ describe('MyCodingJobsComponent', () => {
                 total: 1,
                 firstReplayUrl: 'https://example.test/replay'
               })
+            ),
+            prepareCodingJobReview: jest.fn().mockReturnValue(
+              of({
+                total: 1,
+                firstReplayUrl: 'https://example.test/review'
+              })
+            ),
+            submitCodingJobForReview: jest.fn().mockReturnValue(
+              of({
+                ...completedJob,
+                status: 'review'
+              })
             )
           }
         },
@@ -73,8 +85,28 @@ describe('MyCodingJobsComponent', () => {
     component = fixture.componentInstance;
   });
 
-  it.each(['completed', 'results_applied'])(
-    'renders %s coding jobs with a single review action',
+  it('renders completed coding jobs with start and submit-for-review actions', () => {
+    component.isAuthorized = true;
+    component.isLoading = false;
+    component.dataSource.data = [completedJob];
+    component.jobsTotal = 1;
+
+    fixture.detectChanges();
+
+    const actionCell: HTMLElement =
+      fixture.nativeElement.querySelector('.actions-cell');
+    const buttons = actionCell.querySelectorAll('button');
+
+    expect(buttons).toHaveLength(2);
+    expect(actionCell.textContent).toContain('play_arrow');
+    expect(actionCell.textContent).toContain('send');
+    expect(component.getStartCodingJobLabel(completedJob)).toBe(
+      'coding.my-coding-jobs.restart-coding'
+    );
+  });
+
+  it.each(['review', 'results_applied'])(
+    'renders %s coding jobs with a single read-only review action',
     status => {
       const job = {
         ...completedJob,
@@ -93,10 +125,40 @@ describe('MyCodingJobsComponent', () => {
 
       expect(buttons).toHaveLength(1);
       expect(actionCell.textContent).toContain('visibility');
-      expect(actionCell.textContent).not.toContain('check_circle');
-      expect(component.getStartCodingJobLabel(job)).toBe('Review öffnen');
+      expect(actionCell.textContent).not.toContain('send');
+      expect(component.getStartCodingJobLabel(job)).toBe(
+        'coding.my-coding-jobs.open-review'
+      );
     }
   );
+
+  it('submits completed coding jobs for review after confirmation', () => {
+    const codingJobBackendService = TestBed.inject(
+      CodingJobBackendService
+    ) as unknown as {
+      submitCodingJobForReview: jest.Mock;
+    };
+    const dialog = {
+      open: jest.fn().mockReturnValue({ afterClosed: () => of(true) })
+    };
+    const snackBar = TestBed.inject(MatSnackBar) as unknown as {
+      open: jest.Mock;
+    };
+    (component as unknown as { dialog: typeof dialog }).dialog = dialog;
+
+    component.submitCodingJobForReview(completedJob);
+
+    expect(dialog.open).toHaveBeenCalled();
+    expect(codingJobBackendService.submitCodingJobForReview).toHaveBeenCalledWith(
+      1,
+      10
+    );
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'coding.my-coding-jobs.submit-for-review-success',
+      'close',
+      { duration: 3000 }
+    );
+  });
 
   it('loads only the selected workspace through the own-jobs backend filter', () => {
     const codingJobBackendService = TestBed.inject(
@@ -117,10 +179,11 @@ describe('MyCodingJobsComponent', () => {
       1,
       50,
       expect.objectContaining({
-        assignedTo: 'me',
-        excludeStatus: 'review'
+        assignedTo: 'me'
       })
     );
+    expect(codingJobBackendService.getCodingJobs.mock.calls[0][3])
+      .not.toHaveProperty('excludeStatus');
   });
 
   it('loads all matching jobs when multiple workspaces are selected', () => {
@@ -141,19 +204,21 @@ describe('MyCodingJobsComponent', () => {
       undefined,
       undefined,
       expect.objectContaining({
-        assignedTo: 'me',
-        excludeStatus: 'review'
+        assignedTo: 'me'
       })
     );
+    expect(codingJobBackendService.getCodingJobs.mock.calls[0][3])
+      .not.toHaveProperty('excludeStatus');
     expect(codingJobBackendService.getCodingJobs).toHaveBeenCalledWith(
       2,
       undefined,
       undefined,
       expect.objectContaining({
-        assignedTo: 'me',
-        excludeStatus: 'review'
+        assignedTo: 'me'
       })
     );
+    expect(codingJobBackendService.getCodingJobs.mock.calls[1][3])
+      .not.toHaveProperty('excludeStatus');
   });
 
   it('uses the table paginator when multiple workspaces are selected', () => {
@@ -180,6 +245,46 @@ describe('MyCodingJobsComponent', () => {
     expect(component.serverPagingEnabled).toBe(false);
     expect(component.dataSource.paginator).toBeTruthy();
     expect(fixture.nativeElement.querySelector('mat-paginator')).toBeTruthy();
+  });
+
+  it('counts review jobs as completed without adding them to total progress', () => {
+    const codingJobBackendService = TestBed.inject(
+      CodingJobBackendService
+    ) as unknown as {
+      getCodingJobs: jest.Mock;
+    };
+    const activeJob: CodingJob = {
+      ...completedJob,
+      id: 11,
+      status: 'active',
+      progress: 50,
+      codedUnits: 1,
+      totalUnits: 2
+    };
+    const reviewJob: CodingJob = {
+      ...completedJob,
+      id: 12,
+      status: 'review',
+      progress: 100,
+      codedUnits: 3,
+      totalUnits: 3
+    };
+    codingJobBackendService.getCodingJobs.mockReturnValueOnce(
+      of({
+        data: [activeJob, reviewJob],
+        total: 2,
+        page: 1
+      })
+    );
+
+    component.loadMyCodingJobs([{ id: 1, name: 'Workspace 1' }]);
+
+    expect(component.dataSource.data).toEqual([activeJob, reviewJob]);
+    expect(component.totalProgress).toBe(50);
+    expect(component.totalCodedUnits).toBe(1);
+    expect(component.totalUnits).toBe(2);
+    expect(component.incompleteJobs).toBe(1);
+    expect(component.completedJobs).toBe(1);
   });
 
   it('keeps all workspaces deselected without reloading jobs', () => {

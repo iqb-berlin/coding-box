@@ -557,6 +557,13 @@ describe('CodingJobsComponent', () => {
         assignedCoders: [1]
       } as CodingJob)
     ).toBe('results');
+    expect(
+      component.getPrimaryJobAction({
+        ...mockCodingJobs[1],
+        status: 'review',
+        assignedCoders: [1]
+      } as CodingJob)
+    ).toBe('results');
   });
 
   it('does not start coding jobs that are assigned to another coder', () => {
@@ -575,11 +582,17 @@ describe('CodingJobsComponent', () => {
     );
   });
 
-  it('should only allow applying results for completed non-training jobs', () => {
+  it('should only allow applying results for completed or review non-training jobs', () => {
     component.canApplyResults = true;
 
     expect(
       component.canApplyCodingResults(mockCodingJobs[1] as CodingJob)
+    ).toBe(true);
+    expect(
+      component.canApplyCodingResults({
+        ...mockCodingJobs[1],
+        status: 'review'
+      } as CodingJob)
     ).toBe(true);
     expect(
       component.canApplyCodingResults(mockCodingJobs[0] as CodingJob)

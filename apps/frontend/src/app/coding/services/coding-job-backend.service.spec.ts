@@ -410,6 +410,28 @@ describe('CodingJobBackendService', () => {
       req.flush({ total: 1, firstReplayUrl: 'http://replay.url' });
     });
 
+    it('should submit coding jobs for review through the coder endpoint', () => {
+      service.submitCodingJobForReview(47, 123).subscribe(job => {
+        expect(job).toEqual(
+          expect.objectContaining({
+            id: 123,
+            workspace_id: 47,
+            status: 'review'
+          })
+        );
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}wsg-admin/workspace/47/coding-job/123/submit-review`
+      );
+      expect(req.request.method).toBe('POST');
+      req.flush({
+        id: 123,
+        workspace_id: 47,
+        status: 'review'
+      });
+    });
+
     it('should use the supplied auth token when saving coding progress', () => {
       service
         .saveCodingProgress(
