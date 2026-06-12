@@ -12,14 +12,20 @@ export interface PostMessage {
   data?: Record<string, unknown>;
 }
 
+export type PostMessageEvent<T extends PostMessage = PostMessage> = {
+  message: T;
+  source: MessageEventSource | null;
+  origin: string;
+};
+
 @Injectable({
   providedIn: 'root'
 })
 export class PostMessageService {
-  private readonly messageSubject: Subject<{ message: PostMessage, source: MessageEventSource | null }> =
-    new Subject<{ message: PostMessage, source: MessageEventSource | null }>();
+  private readonly messageSubject: Subject<PostMessageEvent> =
+    new Subject<PostMessageEvent>();
 
-  readonly messages$: Observable<{ message: PostMessage, source: MessageEventSource | null }> =
+  readonly messages$: Observable<PostMessageEvent> =
     this.messageSubject.asObservable();
 
   constructor(private readonly zone: NgZone) {
@@ -36,7 +42,8 @@ export class PostMessageService {
             const message = event.data as PostMessage;
             this.messageSubject.next({
               message,
-              source: event.source
+              source: event.source,
+              origin: event.origin
             });
           } catch (error) {
             // Error processing postMessage: ${JSON.stringify(error)}
@@ -73,12 +80,13 @@ export class PostMessageService {
     return this.sendMessage(message, iframe.contentWindow, targetOrigin);
   }
 
-  getMessages<T extends PostMessage>(type: string): Observable<{ message: T, source: MessageEventSource | null }> {
+  getMessages<T extends PostMessage>(type: string): Observable<PostMessageEvent<T>> {
     return this.messages$.pipe(
       filter(event => event.message.type === type),
       map(event => ({
         message: event.message as T,
-        source: event.source
+        source: event.source,
+        origin: event.origin
       }))
     );
   }
