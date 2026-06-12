@@ -1850,7 +1850,7 @@ describe('CodingJobService', () => {
     });
   });
 
-  it('rejects status changes away from completed coding jobs', async () => {
+  it('rejects unsupported status changes away from completed coding jobs', async () => {
     codingJobRepository.findOne.mockResolvedValue({
       id: 1,
       workspace_id: 3,
@@ -1866,6 +1866,28 @@ describe('CodingJobService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(codingJobRepository.save).not.toHaveBeenCalled();
   });
+
+  it.each(['active', 'review'])(
+    'allows completed coding jobs to change to %s',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValue({
+        id: 1,
+        workspace_id: 3,
+        status: 'completed'
+      });
+      codingJobCoderRepository.find.mockResolvedValue([]);
+      codingJobVariableRepository.find.mockResolvedValue([]);
+      codingJobVariableBundleRepository.find.mockResolvedValue([]);
+      variableBundleRepository.find.mockResolvedValue([]);
+
+      await expect(
+        service.updateCodingJob(1, 3, { status })
+      ).resolves.toMatchObject({ status });
+      expect(codingJobRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status })
+      );
+    }
+  );
 
   it('validates updated coders before saving job fields or deleting existing assignments', async () => {
     codingJobRepository.findOne.mockResolvedValue({
@@ -1908,7 +1930,41 @@ describe('CodingJobService', () => {
     variableBundleRepository.find.mockResolvedValue([]);
 
     await expect(
+      service.updateCodingJob(1, 3, { status: 'archived' })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects review submission before the coding job is completed', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 1,
+      workspace_id: 3,
+      status: 'active'
+    });
+    codingJobCoderRepository.find.mockResolvedValue([]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    variableBundleRepository.find.mockResolvedValue([]);
+
+    await expect(
       service.updateCodingJob(1, 3, { status: 'review' })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects changes away from coding jobs submitted for review', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 1,
+      workspace_id: 3,
+      status: 'review'
+    });
+    codingJobCoderRepository.find.mockResolvedValue([]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    variableBundleRepository.find.mockResolvedValue([]);
+
+    await expect(
+      service.updateCodingJob(1, 3, { status: 'active' })
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(codingJobRepository.save).not.toHaveBeenCalled();
   });
@@ -1930,27 +1986,30 @@ describe('CodingJobService', () => {
     expect(codingJobRepository.save).not.toHaveBeenCalled();
   });
 
-  it('allows the internal apply flow to mark completed coding jobs as results applied', async () => {
-    codingJobRepository.findOne.mockResolvedValue({
-      id: 1,
-      workspace_id: 3,
-      status: 'completed'
-    });
-    codingJobCoderRepository.find.mockResolvedValue([]);
-    codingJobVariableRepository.find.mockResolvedValue([]);
-    codingJobVariableBundleRepository.find.mockResolvedValue([]);
-    variableBundleRepository.find.mockResolvedValue([]);
-
-    await expect(
-      service.markCodingJobResultsApplied(1, 3)
-    ).resolves.toMatchObject({ status: 'results_applied' });
-    expect(codingJobRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({
+  it.each(['completed', 'review'])(
+    'allows the internal apply flow to mark %s coding jobs as results applied',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValue({
         id: 1,
-        status: 'results_applied'
-      })
-    );
-  });
+        workspace_id: 3,
+        status
+      });
+      codingJobCoderRepository.find.mockResolvedValue([]);
+      codingJobVariableRepository.find.mockResolvedValue([]);
+      codingJobVariableBundleRepository.find.mockResolvedValue([]);
+      variableBundleRepository.find.mockResolvedValue([]);
+
+      await expect(
+        service.markCodingJobResultsApplied(1, 3)
+      ).resolves.toMatchObject({ status: 'results_applied' });
+      expect(codingJobRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 1,
+          status: 'results_applied'
+        })
+      );
+    }
+  );
 
   it('uses the provided transaction manager when marking coding job results applied', async () => {
     const transactionalCodingJobRepository = createRepo();
@@ -2244,6 +2303,28 @@ describe('CodingJobService', () => {
       })
     );
   });
+
+  it.each(['review', 'results_applied'])(
+    'rejects saving progress for %s coding jobs',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValue({
+        id: 1,
+        workspace_id: 3,
+        status
+      });
+
+      await expect(
+        service.saveCodingProgress(1, {
+          testPerson: 'login@code@booklet',
+          unitId: 'UNIT',
+          variableId: 'VAR',
+          selectedCode: { id: 7 }
+        } as never)
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(codingJobUnitRepository.findOne).not.toHaveBeenCalled();
+      expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+    }
+  );
 
   it('stores coding issue review progress as the manager coder without changing the source unit', async () => {
     const sourceJob = {
@@ -2943,6 +3024,28 @@ describe('CodingJobService', () => {
     );
     expect(codingJobRepository.update).not.toHaveBeenCalled();
   });
+
+  it.each(['review', 'results_applied'])(
+    'rejects saving notes for %s coding jobs',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValue({
+        id: 1,
+        workspace_id: 3,
+        status
+      });
+
+      await expect(
+        service.saveCodingNotes(1, {
+          testPerson: 'login@code@group@booklet',
+          unitId: 'UNIT',
+          variableId: 'VAR',
+          notes: 'remember'
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(codingJobUnitRepository.findOne).not.toHaveBeenCalled();
+      expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+    }
+  );
 
   it('does not create a discussion result when saving progress for a training job', async () => {
     const trainingJob = { id: 1, workspace_id: 3, training_id: 42 };

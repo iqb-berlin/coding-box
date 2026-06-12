@@ -585,6 +585,47 @@ export class WsgCodingJobController {
     );
   }
 
+  @Post(':id/submit-review')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Submit a completed coding job for review',
+    description:
+      'Allows an assigned coder to submit a completed coding job for review'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job has been submitted for review.',
+    type: CodingJobDto
+  })
+  @ApiBadRequestResponse({
+    description: 'Coding job is not completed or cannot be submitted.'
+  })
+  async submitCodingJobForReview(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
+    const codingJob = await this.codingJobService.updateCodingJob(
+      id,
+      workspaceId,
+      { status: 'review' }
+    );
+    return CodingJobDto.fromEntity(codingJob);
+  }
+
   @Post(':id/start')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
@@ -624,8 +665,11 @@ export class WsgCodingJobController {
     const job = await this.codingJobService.getCodingJob(id, workspaceId);
 
     const onlyOpen = job.codingJob.status === 'open';
+    const isFinalizedJob = ['review', 'results_applied'].includes(
+      job.codingJob.status
+    );
 
-    if (!['completed', 'results_applied'].includes(job.codingJob.status)) {
+    if (!isFinalizedJob) {
       await this.codingJobService.updateCodingJob(id, workspaceId, {
         status: 'active'
       });

@@ -250,6 +250,7 @@
                 canStartCodingJob(element) &&
                 getPrimaryJobAction(element) !== 'start' &&
                 element.status !== 'completed' &&
+                element.status !== 'review' &&
                 element.status !== 'results_applied'
               ) {
                 <button

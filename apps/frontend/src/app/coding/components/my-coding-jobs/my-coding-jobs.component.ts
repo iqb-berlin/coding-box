@@ -37,6 +37,7 @@ import {
 } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
@@ -52,6 +53,7 @@ import { AppService } from '../../../core/services/app.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingJob, Variable } from '../../models/coding-job.model';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
+import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import {
   appendReplayUrlParams,
   normalizeReplayUrlToCurrentOrigin
@@ -87,7 +89,8 @@ import {
     MatLabel,
     MatInputModule,
     MatSelect,
-    MatOption
+    MatOption,
+    MatDialogModule
   ],
   providers: [{ provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }]
 })
@@ -96,6 +99,7 @@ implements OnInit, OnDestroy, OnChanges {
   appService = inject(AppService);
   codingJobBackendService = inject(CodingJobBackendService);
   private snackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
   private cdr = inject(ChangeDetectorRef);
   private translateService = inject(TranslateService);
 
@@ -221,7 +225,6 @@ implements OnInit, OnDestroy, OnChanges {
           {
             assignedTo: 'me',
             status: this.selectedStatus || undefined,
-            excludeStatus: this.selectedStatus ? undefined : 'review',
             jobName: this.normalizeJobNameFilter()
           }
         )
@@ -403,8 +406,15 @@ implements OnInit, OnDestroy, OnChanges {
       duration: 3000
     });
 
-    this.codingJobBackendService
-      .startCodingJob(job.workspace_id, job.id)
+    const openAsReview = this.isReadOnlyReviewJob(job);
+    const replayRequest = openAsReview ?
+      this.codingJobBackendService.prepareCodingJobReview(
+        job.workspace_id,
+        job.id
+      ) :
+      this.codingJobBackendService.startCodingJob(job.workspace_id, job.id);
+
+    replayRequest
       .subscribe({
         next: result => {
           loadingSnack.dismiss();
@@ -431,7 +441,7 @@ implements OnInit, OnDestroy, OnChanges {
           const replayUrl = appendReplayUrlParams(
             normalizeReplayUrlToCurrentOrigin(result.firstReplayUrl),
             {
-              mode: 'coding',
+              mode: openAsReview ? 'coding-review' : 'coding',
               codingJobId: job.id,
               workspaceId: job.workspace_id
             }
@@ -463,19 +473,90 @@ implements OnInit, OnDestroy, OnChanges {
   }
 
   getStartCodingJobLabel(job: CodingJob): string {
-    if (this.isFinishedJob(job)) {
-      return 'Review öffnen';
+    if (this.isReadOnlyReviewJob(job)) {
+      return this.translateService.instant(
+        'coding.my-coding-jobs.open-review'
+      );
+    }
+
+    if (job.status === 'completed') {
+      return this.translateService.instant(
+        'coding.my-coding-jobs.restart-coding'
+      );
     }
 
     return this.translateService.instant('coding.my-coding-jobs.start-coding');
   }
 
   getStartCodingJobIcon(job: CodingJob): string {
-    if (this.isFinishedJob(job)) {
+    if (this.isReadOnlyReviewJob(job)) {
       return 'visibility';
     }
 
     return 'play_arrow';
+  }
+
+  canSubmitForReview(job: CodingJob): boolean {
+    return job.status === 'completed';
+  }
+
+  getSubmitForReviewLabel(): string {
+    return this.translateService.instant(
+      'coding.my-coding-jobs.submit-for-review'
+    );
+  }
+
+  submitCodingJobForReview(job: CodingJob): void {
+    if (!this.canSubmitForReview(job)) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '440px',
+      data: {
+        title: this.translateService.instant(
+          'coding.my-coding-jobs.submit-for-review-title'
+        ),
+        message: this.translateService.instant(
+          'coding.my-coding-jobs.submit-for-review-message'
+        ),
+        confirmButtonText: this.translateService.instant(
+          'coding.my-coding-jobs.submit-for-review-confirm'
+        ),
+        cancelButtonText: this.translateService.instant('common.cancel')
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (!confirmed) {
+        return;
+      }
+
+      this.codingJobBackendService
+        .submitCodingJobForReview(job.workspace_id, job.id)
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.translateService.instant(
+                'coding.my-coding-jobs.submit-for-review-success',
+                { name: job.name }
+              ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+            this.reloadFirstPage();
+          },
+          error: () => {
+            this.snackBar.open(
+              this.translateService.instant(
+                'coding.my-coding-jobs.submit-for-review-error'
+              ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          }
+        });
+    });
   }
 
   getStatusClass(status: string): string {
@@ -590,15 +671,18 @@ implements OnInit, OnDestroy, OnChanges {
       this.totalUnits > 0 ?
         Math.round((this.totalCodedUnits / this.totalUnits) * 100) :
         0;
-    this.incompleteJobs = assignedJobs.filter(
-      job => !this.isFinishedJob(job) && job.status !== 'review'
+    this.incompleteJobs = assignedJobs.filter(job => !this.isFinishedJob(job)
     ).length;
     this.completedJobs = assignedJobs.filter(job => this.isFinishedJob(job)
     ).length;
   }
 
   private isFinishedJob(job: CodingJob): boolean {
-    return job.status === 'completed' || job.status === 'results_applied';
+    return ['completed', 'review', 'results_applied'].includes(job.status);
+  }
+
+  private isReadOnlyReviewJob(job: CodingJob): boolean {
+    return job.status === 'review' || job.status === 'results_applied';
   }
 
   private formatAssignedVariables(assignedVariables: Variable[]): string {

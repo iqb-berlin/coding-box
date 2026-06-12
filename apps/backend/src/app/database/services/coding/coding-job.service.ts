@@ -368,7 +368,8 @@ const UPDATABLE_CODING_JOB_STATUSES = new Set([
   'active',
   'paused',
   'open',
-  'completed'
+  'completed',
+  'review'
 ]);
 
 export interface CodingJobAggregationSettings {
@@ -2577,11 +2578,27 @@ export class CodingJobService {
         );
       }
       if (
+        codingJob.codingJob.status === 'review' &&
+        targetStatus !== 'review'
+      ) {
+        throw new BadRequestException(
+          `Cannot change status of coding job ${id} because it has been submitted for review`
+        );
+      }
+      if (
         codingJob.codingJob.status === 'completed' &&
-        targetStatus !== 'completed'
+        !['active', 'completed', 'review'].includes(targetStatus)
       ) {
         throw new BadRequestException(
           `Cannot change status of completed coding job ${id}`
+        );
+      }
+      if (
+        targetStatus === 'review' &&
+        codingJob.codingJob.status !== 'completed'
+      ) {
+        throw new BadRequestException(
+          `Cannot submit coding job ${id} for review because it is not completed`
         );
       }
       if (
@@ -2710,9 +2727,9 @@ export class CodingJobService {
       );
     }
 
-    if (codingJob.status !== 'completed') {
+    if (!['completed', 'review'].includes(codingJob.status)) {
       throw new BadRequestException(
-        `Cannot apply results for coding job ${id} because it is not completed`
+        `Cannot apply results for coding job ${id} because it is not completed or submitted for review`
       );
     }
 
@@ -3136,9 +3153,9 @@ export class CodingJobService {
       );
     }
 
-    if (codingJob.status === 'results_applied') {
+    if (['review', 'results_applied'].includes(codingJob.status)) {
       throw new BadRequestException(
-        'Cannot save progress for a coding job whose results have already been applied'
+        `Cannot save progress for a coding job with status ${codingJob.status}`
       );
     }
 
@@ -3823,9 +3840,9 @@ export class CodingJobService {
       );
     }
 
-    if (codingJob.status === 'results_applied') {
+    if (['review', 'results_applied'].includes(codingJob.status)) {
       throw new BadRequestException(
-        'Cannot save notes for a coding job whose results have already been applied'
+        `Cannot save notes for a coding job with status ${codingJob.status}`
       );
     }
 
