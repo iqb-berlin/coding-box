@@ -17,6 +17,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
@@ -25,6 +26,10 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceTestResultsService, ResponseManagementService } from '../../database/services/test-results';
+import {
+  ResponseSearchSortBy,
+  ResponseSearchSortDirection
+} from '../../database/services/test-results/workspace-test-results.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { RequestWithUser, ResolveDuplicateResponsesRequest, ResponseSearchResult } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
@@ -202,6 +207,29 @@ export class WorkspaceTestResultsResponseController {
   @ApiOkResponse({
     description: 'Responses retrieved successfully.'
   })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    description: 'Column to sort by',
+    enum: [
+      'unitname',
+      'variableid',
+      'value',
+      'codedstatus',
+      'code',
+      'score',
+      'person_code',
+      'person_login',
+      'person_group',
+      'booklet_id'
+    ]
+  })
+  @ApiQuery({
+    name: 'sortDirection',
+    required: false,
+    description: 'Sort direction',
+    enum: ['asc', 'desc']
+  })
   @ApiBadRequestResponse({ description: 'Failed to search for responses' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async searchResponses(
@@ -219,6 +247,8 @@ export class WorkspaceTestResultsResponseController {
       @Query('derivedOnly') derivedOnly?: string,
       @Query('responseSource') responseSource?: 'base' | 'derived' | 'all',
       @Query('personLogin') personLogin?: string,
+      @Query('sortBy') sortBy?: ResponseSearchSortBy,
+      @Query('sortDirection') sortDirection?: ResponseSearchSortDirection,
                                          @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
                                          @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<ResponseSearchResult> {
@@ -244,7 +274,12 @@ export class WorkspaceTestResultsResponseController {
           responseSource,
           personLogin
         },
-        { page, limit }
+        {
+          page,
+          limit,
+          sortBy,
+          sortDirection
+        }
       );
     } catch (error) {
       this.logger.error(`Error searching for responses: ${error}`);

@@ -21,7 +21,10 @@ import {
   statusNumberToString,
   statusStringToNumber
 } from '../../utils/response-status-converter';
-import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
+import {
+  CodingVersion,
+  getEffectiveCodingStatusExpression
+} from '../../utils/effective-coding-status-expression.util';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -79,6 +82,20 @@ interface PersonWhere {
   consider: boolean;
   group?: string;
 }
+
+export type ResponseSearchSortBy =
+  'unitname' |
+  'variableid' |
+  'value' |
+  'codedstatus' |
+  'code' |
+  'score' |
+  'person_code' |
+  'person_login' |
+  'person_group' |
+  'booklet_id';
+export type ResponseSearchSortDirection = 'asc' | 'desc';
+const EFFECTIVE_CODING_STATUS_SORT_ALIAS = 'effective_coding_status_sort';
 
 export type WorkspaceOverviewStats = {
   testPersons: number;
@@ -6465,7 +6482,12 @@ export class WorkspaceTestResultsService {
       responseSource?: 'base' | 'derived' | 'all';
       personLogin?: string;
     },
-    options: { page?: number; limit?: number } = {}
+    options: {
+      page?: number;
+      limit?: number;
+      sortBy?: ResponseSearchSortBy;
+      sortDirection?: ResponseSearchSortDirection;
+    } = {}
   ): Promise<{
       data: {
         responseId: number;
@@ -6495,6 +6517,7 @@ export class WorkspaceTestResultsService {
     const page = options.page || 1;
     const limit = options.limit || 10;
     const skip = (page - 1) * limit;
+    const version = this.normalizeCodingVersion(searchParams.version);
 
     this.logger.log(`Searching for responses in workspace ${workspaceId}`);
 
@@ -6552,9 +6575,7 @@ export class WorkspaceTestResultsService {
         if (codedStatusNumber === null) {
           query.andWhere('1=0');
         } else {
-          const effectiveStatusExpression = getEffectiveCodingStatusExpression(
-            searchParams.version || 'v1'
-          );
+          const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
           query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
             codedStatus: codedStatusNumber
           });
@@ -6580,9 +6601,6 @@ export class WorkspaceTestResultsService {
           WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
           WorkspaceTestResultsService.geoGebraValueParams
         );
-        const version = searchParams.version || 'v1';
-        query.addOrderBy(`response.code_${version}`, 'ASC');
-        query.addOrderBy('person.code', 'ASC');
       }
 
       const requestedResponseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
@@ -6591,9 +6609,7 @@ export class WorkspaceTestResultsService {
         requestedResponseSource;
 
       if (responseSource === 'derived') {
-        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
-          searchParams.version || 'v1'
-        );
+        const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
         query.andWhere('response.is_autocoder_generated = :derivedOnly', {
           derivedOnly: true
         });
@@ -6603,9 +6619,7 @@ export class WorkspaceTestResultsService {
         });
         await this.applyValidCodingVariableFilter(query, workspaceId);
       } else if (responseSource === 'all') {
-        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
-          searchParams.version || 'v1'
-        );
+        const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
         query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
         query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
           ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
@@ -6616,6 +6630,13 @@ export class WorkspaceTestResultsService {
       }
 
       const total = await query.getCount();
+      this.applyResponseSearchSorting(
+        query,
+        version,
+        searchParams.geogebra === true,
+        options.sortBy,
+        options.sortDirection
+      );
 
       if (total === 0) {
         this.logger.log(
@@ -6643,7 +6664,6 @@ export class WorkspaceTestResultsService {
         variablePageMaps.set(unitName, pageMap);
       }
 
-      const version = searchParams.version || 'v1';
       const data = responses.map(response => {
         const code = response[
           `code_${version}` as keyof ResponseEntity
@@ -6695,6 +6715,73 @@ export class WorkspaceTestResultsService {
         `An error occurred while searching for responses: ${error.message}`
       );
     }
+  }
+
+  private applyResponseSearchSorting(
+    query: SelectQueryBuilder<ResponseEntity>,
+    version: CodingVersion,
+    geogebra: boolean,
+    sortBy?: ResponseSearchSortBy,
+    sortDirection?: ResponseSearchSortDirection
+  ): void {
+    const direction = sortDirection === 'desc' ? 'DESC' : 'ASC';
+    if (!sortBy && geogebra) {
+      query
+        .orderBy(`response.code_${version}`, 'ASC')
+        .addOrderBy('person.code', 'ASC')
+        .addOrderBy('response.id', 'ASC');
+      return;
+    }
+
+    if (sortBy === 'codedstatus') {
+      query.addSelect(
+        getEffectiveCodingStatusExpression(version),
+        EFFECTIVE_CODING_STATUS_SORT_ALIAS
+      );
+      query
+        .orderBy(EFFECTIVE_CODING_STATUS_SORT_ALIAS, direction)
+        .addOrderBy('response.id', 'ASC');
+      return;
+    }
+
+    const sortExpression = this.getResponseSearchSortExpression(version, sortBy);
+
+    query.orderBy(sortExpression, direction);
+    if (sortExpression !== 'response.id') {
+      query.addOrderBy('response.id', 'ASC');
+    }
+  }
+
+  private getResponseSearchSortExpression(
+    version: CodingVersion,
+    sortBy?: ResponseSearchSortBy
+  ): string {
+    switch (sortBy) {
+      case 'unitname':
+        return 'unit.name';
+      case 'variableid':
+        return 'response.variableid';
+      case 'value':
+        return 'response.value';
+      case 'code':
+        return `response.code_${version}`;
+      case 'score':
+        return `response.score_${version}`;
+      case 'person_code':
+        return 'person.code';
+      case 'person_login':
+        return 'person.login';
+      case 'person_group':
+        return 'person.group';
+      case 'booklet_id':
+        return 'bookletinfo.name';
+      default:
+        return 'response.id';
+    }
+  }
+
+  private normalizeCodingVersion(version: unknown): CodingVersion {
+    return version === 'v2' || version === 'v3' ? version : 'v1';
   }
 
   private async applyValidCodingVariableFilter(
