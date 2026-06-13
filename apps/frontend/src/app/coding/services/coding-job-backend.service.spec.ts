@@ -375,6 +375,70 @@ describe('CodingJobBackendService', () => {
         validationTaskStateServiceMock.invalidateWorkspace
       ).toHaveBeenCalledWith(1);
     });
+
+    it('should preview a job definition update refresh with the proposed definition', () => {
+      const update = { maxCodingCases: 4 };
+
+      service.previewJobDefinitionUpdateRefresh(1, 42, update).subscribe(response => {
+        expect(response.plannedCases).toBe(4);
+        expect(response.canApply).toBe(true);
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/1/coding/job-definitions/42/update-refresh-preview`
+      );
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual(update);
+      req.flush({
+        jobDefinitionId: 42,
+        existingJobsCount: 2,
+        staleJobsCount: 1,
+        existingCases: 5,
+        plannedCases: 4,
+        retainedCases: 4,
+        addedCases: 0,
+        removedCases: 1,
+        addedCodingTasks: 0,
+        removedCodingTasks: 1,
+        canApply: true
+      });
+    });
+
+    it('should apply a job definition update refresh and invalidate validation state', () => {
+      const update = { maxCodingCases: 4 };
+
+      service.applyJobDefinitionUpdateRefresh(1, 42, update).subscribe(response => {
+        expect(response.success).toBe(true);
+        expect(response.jobsCreated).toBe(2);
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/1/coding/job-definitions/42/update-refresh-apply`
+      );
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual(update);
+      req.flush({
+        success: true,
+        message: 'updated',
+        jobsCreated: 2,
+        preview: {
+          jobDefinitionId: 42,
+          existingJobsCount: 2,
+          staleJobsCount: 1,
+          existingCases: 5,
+          plannedCases: 4,
+          retainedCases: 4,
+          addedCases: 0,
+          removedCases: 1,
+          addedCodingTasks: 0,
+          removedCodingTasks: 1,
+          canApply: true
+        }
+      });
+      expect(
+        validationTaskStateServiceMock.invalidateWorkspace
+      ).toHaveBeenCalledWith(1);
+    });
   });
 
   describe('auth token override', () => {

@@ -2707,6 +2707,47 @@ export class CodingJobService {
     return savedCodingJob;
   }
 
+  async updateCodingJobDisplayOptionsByDefinitionId(
+    workspaceId: number,
+    jobDefinitionId: number,
+    options: {
+      showScore?: boolean;
+      allowComments?: boolean;
+      suppressGeneralInstructions?: boolean;
+    },
+    manager?: EntityManager
+  ): Promise<number> {
+    const updateValues: Partial<CodingJob> = {};
+
+    if (options.showScore !== undefined) {
+      updateValues.showScore = options.showScore;
+    }
+    if (options.allowComments !== undefined) {
+      updateValues.allowComments = options.allowComments;
+    }
+    if (options.suppressGeneralInstructions !== undefined) {
+      updateValues.suppressGeneralInstructions =
+        options.suppressGeneralInstructions;
+    }
+
+    if (Object.keys(updateValues).length === 0) {
+      return 0;
+    }
+
+    const repository = manager ?
+      manager.getRepository(CodingJob) :
+      this.codingJobRepository;
+    const result = await repository.update(
+      {
+        workspace_id: workspaceId,
+        job_definition_id: jobDefinitionId
+      },
+      updateValues
+    );
+
+    return result.affected || 0;
+  }
+
   async pauseCodingJob(id: number, workspaceId: number): Promise<CodingJob> {
     return this.setOwnCodingJobStatus(id, workspaceId, 'paused');
   }
