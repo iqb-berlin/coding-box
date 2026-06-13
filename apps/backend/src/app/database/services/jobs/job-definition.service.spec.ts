@@ -1263,8 +1263,8 @@ describe('JobDefinitionService', () => {
     ]);
   });
 
-  it('rejects updates once coding jobs exist for a definition', async () => {
-    jobDefinitionRepository.findOne.mockResolvedValue({
+  it('allows display option updates once coding jobs exist for a definition', async () => {
+    const existingDefinition = {
       id: 2,
       workspace_id: 7,
       status: 'approved',
@@ -1272,9 +1272,100 @@ describe('JobDefinitionService', () => {
       assigned_variable_bundles: [],
       assigned_coders: [1],
       duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+    codingJobService.calculateDistributionVariableUsageBatch.mockClear();
+
+    await expect(service.updateJobDefinition(2, 7, {
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true
+    })).resolves.toMatchObject({
+      id: 2,
+      show_score: true,
+      allow_comments: false,
+      suppress_general_instructions: true
+    });
+
+    expect(codingJobService.calculateDistributionVariableUsageBatch).not.toHaveBeenCalled();
+    expect(jobDefinitionRepository.save).toHaveBeenCalled();
+  });
+
+  it('allows saving an existing definition with created jobs when its own cases cover the request', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValueOnce([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 5 }
+    ]);
+    codingJobService.calculateDistributionVariableUsageBatch.mockResolvedValueOnce(new Map([
+      ['requested', new Map([['Unit 1::Var 1', 5]])]
+    ]));
+
+    await expect(service.updateJobDefinition(2, 7, {
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedVariableBundles: [],
+      maxCodingCases: 5,
+      caseOrderingMode: 'continuous'
+    })).resolves.toMatchObject({
+      id: 2,
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      max_coding_cases: 5,
       case_ordering_mode: 'continuous'
     });
+
+    expect(codingValidationService.getCodingIncompleteVariables).toHaveBeenCalledWith(
+      7,
+      undefined,
+      undefined,
+      false,
+      2
+    );
+    expect(jobDefinitionRepository.save).toHaveBeenCalled();
+  });
+
+  it('still rejects existing definition updates with created jobs when the adjusted pool is insufficient', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
     codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValueOnce([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 5 }
+    ]);
+    codingJobService.calculateDistributionVariableUsageBatch.mockResolvedValueOnce(new Map([
+      ['requested', new Map([['Unit 2::Var 2', 1]])]
+    ]));
 
     await expect(service.updateJobDefinition(2, 7, {
       assignedVariables: [{ unitName: 'Unit 2', variableId: 'Var 2' }]
