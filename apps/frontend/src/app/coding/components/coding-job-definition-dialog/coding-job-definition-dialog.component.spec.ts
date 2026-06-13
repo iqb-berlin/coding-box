@@ -116,7 +116,9 @@ describe('CodingJobDefinitionDialogComponent', () => {
       updateCodingJob: jest.fn(),
       createJobDefinition: jest.fn(),
       createCodingJob: jest.fn(),
-      updateJobDefinition: jest.fn()
+      updateJobDefinition: jest.fn(),
+      previewJobDefinitionUpdateRefresh: jest.fn(),
+      applyJobDefinitionUpdateRefresh: jest.fn()
     } as unknown as Partial<CodingJobBackendService>;
 
     mockDistributedCodingService = {
@@ -225,6 +227,30 @@ describe('CodingJobDefinitionDialogComponent', () => {
     });
 
     expect(fixture.nativeElement.querySelector('.readonly-definition-note')).toBeTruthy();
+  });
+
+  it('shows a guided refresh note for editable definitions with existing jobs', () => {
+    createComponent({
+      isEdit: true,
+      mode: 'definition',
+      jobDefinitionId: 55,
+      createdJobsCount: 2,
+      codingJob: {
+        id: 55,
+        status: 'approved',
+        assignedCoders: [1],
+        assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        missingsProfileId: 7,
+        maxCodingCases: 5,
+        doubleCodingAbsolute: 0,
+        doubleCodingPercentage: 0,
+        caseOrderingMode: 'continuous'
+      } as CodingJob
+    });
+
+    expect(component.hasExistingDefinitionJobs).toBe(true);
+    expect(fixture.nativeElement.querySelector('.readonly-definition-note')).toBeTruthy();
+    expect(component.codingJobForm.get('status')?.disabled).toBe(true);
   });
 
   it('should initialize form with default values', () => {
@@ -510,6 +536,118 @@ describe('CodingJobDefinitionDialogComponent', () => {
       assignedCoders: [1],
       assignedCoderConfigs: [{ coderId: 1, capacityPercent: 50 }]
     }));
+  });
+
+  it('saves display-only definition updates directly when coding jobs exist', fakeAsync(() => {
+    createComponent({
+      isEdit: true,
+      mode: 'definition',
+      jobDefinitionId: 55,
+      createdJobsCount: 2,
+      codingJob: {
+        id: 55,
+        status: 'approved',
+        assignedCoders: [1],
+        assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        missingsProfileId: 7,
+        maxCodingCases: 5,
+        doubleCodingAbsolute: 0,
+        doubleCodingPercentage: 0,
+        caseOrderingMode: 'continuous',
+        showScore: false,
+        allowComments: true,
+        suppressGeneralInstructions: false
+      } as CodingJob
+    });
+    (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 55 }));
+
+    component.codingJobForm.patchValue({ showScore: true });
+    component.onSubmit();
+    tick();
+
+    expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(
+      1,
+      55,
+      expect.objectContaining({
+        showScore: true
+      })
+    );
+    expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(
+      1,
+      55,
+      expect.not.objectContaining({
+        maxCodingCases: expect.anything(),
+        assignedVariables: expect.anything()
+      })
+    );
+    expect(mockCodingJobBackendService.previewJobDefinitionUpdateRefresh).not.toHaveBeenCalled();
+  }));
+
+  it('previews and applies distribution-relevant definition updates when coding jobs exist', async () => {
+    const preview = {
+      jobDefinitionId: 55,
+      existingJobsCount: 2,
+      staleJobsCount: 1,
+      existingCases: 5,
+      plannedCases: 4,
+      retainedCases: 4,
+      addedCases: 0,
+      removedCases: 1,
+      addedCodingTasks: 0,
+      removedCodingTasks: 1,
+      canApply: true
+    };
+    createComponent({
+      isEdit: true,
+      mode: 'definition',
+      jobDefinitionId: 55,
+      createdJobsCount: 2,
+      codingJob: {
+        id: 55,
+        status: 'approved',
+        assignedCoders: [1],
+        assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        missingsProfileId: 7,
+        maxCodingCases: 5,
+        doubleCodingAbsolute: 0,
+        doubleCodingPercentage: 0,
+        caseOrderingMode: 'continuous',
+        showScore: false,
+        allowComments: true,
+        suppressGeneralInstructions: false
+      } as CodingJob
+    });
+    (mockCodingJobBackendService.previewJobDefinitionUpdateRefresh as jest.Mock)
+      .mockReturnValue(of(preview));
+    (mockCodingJobBackendService.applyJobDefinitionUpdateRefresh as jest.Mock)
+      .mockReturnValue(of({
+        success: true,
+        message: 'updated',
+        preview,
+        jobsCreated: 2
+      }));
+    (mockMatDialog.open as jest.Mock).mockReturnValue({
+      afterClosed: () => of(true)
+    });
+
+    component.codingJobForm.patchValue({ maxCodingCases: 4 });
+    await component.onSubmit();
+
+    expect(mockCodingJobBackendService.previewJobDefinitionUpdateRefresh).toHaveBeenCalledWith(
+      1,
+      55,
+      expect.objectContaining({
+        maxCodingCases: 4
+      })
+    );
+    expect(mockCodingJobBackendService.applyJobDefinitionUpdateRefresh).toHaveBeenCalledWith(
+      1,
+      55,
+      expect.objectContaining({
+        maxCodingCases: 4
+      })
+    );
+    expect(mockCodingJobBackendService.updateJobDefinition).not.toHaveBeenCalled();
   });
 
   it('should include DERIVE_ERROR opt-in only for selected definition variables', async () => {

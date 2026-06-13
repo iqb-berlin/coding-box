@@ -1031,6 +1031,38 @@ export class CodingJobBackendService {
       );
   }
 
+  previewJobDefinitionUpdateRefresh(
+    workspaceId: number,
+    jobDefinitionId: number,
+    jobDefinition: Partial<JobDefinition>
+  ): Observable<JobDefinitionRefreshPreviewDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/update-refresh-preview`;
+    return this.http.post<JobDefinitionRefreshPreviewDto>(url, jobDefinition, {
+      headers: this.authHeader
+    });
+  }
+
+  applyJobDefinitionUpdateRefresh(
+    workspaceId: number,
+    jobDefinitionId: number,
+    jobDefinition: Partial<JobDefinition>
+  ): Observable<JobDefinitionRefreshApplyResultDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/update-refresh-apply`;
+    return this.http
+      .post<JobDefinitionRefreshApplyResultDto>(
+      url,
+      jobDefinition,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        tap(result => {
+          if (result.success) {
+            this.validationTaskStateService.invalidateWorkspace(workspaceId);
+          }
+        })
+      );
+  }
+
   startExportJob(
     workspaceId: number,
     exportConfig: CodingExportConfig
