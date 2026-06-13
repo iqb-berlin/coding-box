@@ -6,6 +6,32 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceCodingAnalysisController } from './workspace-coding-analysis.controller';
 
 describe('WorkspaceCodingAnalysisController', () => {
+  it('passes excludeJobDefinitionId to incomplete variable availability', async () => {
+    const codingValidationService = {
+      getCodingIncompleteVariables: jest.fn().mockResolvedValue([])
+    };
+    const controller = new WorkspaceCodingAnalysisController(
+      {} as never,
+      {} as never,
+      codingValidationService as never,
+      {} as never,
+      {} as never
+    );
+
+    await expect(
+      controller.getCodingIncompleteVariables(
+        7,
+        undefined,
+        'false',
+        'true',
+        '55'
+      )
+    ).resolves.toEqual([]);
+
+    expect(codingValidationService.getCodingIncompleteVariables)
+      .toHaveBeenCalledWith(7, undefined, false, true, 55);
+  });
+
   it('requires coding-manager access for getVariableAnalysis', () => {
     const handler = WorkspaceCodingAnalysisController.prototype.getVariableAnalysis;
 

@@ -2004,7 +2004,8 @@
       "create-btn": "Definition erstellen",
       "submit-for-review": "Zur Prüfung einreichen"
     },
-    "readonly-definition-note": "Diese Definition ist schreibgeschützt, weil daraus bereits Kodierjobs erzeugt wurden. Verteilungsänderungen erfolgen über „Kodierjobs neu verteilen“, solange noch keine Kodierarbeit vorliegt.",
+    "readonly-definition-note": "Diese Definition ist schreibgeschützt, weil der Status erzeugter Kodierjobs nicht geladen werden konnte.",
+    "existing-jobs-definition-note": "Diese Definition hat bereits Kodierjobs. Änderungen an Variablen, Bündeln, Kodierern, Missing-Profil, Obergrenzen oder Doppelkodierung werden erst nach Vorschau und Bestätigung auf bestehende Kodierjobs angewendet.",
     "job": {
       "edit": "Kodierjob bearbeiten",
       "create": "Neuer Kodierjob erstellen",
@@ -2160,6 +2161,8 @@
       "definition-updated-success": "Jobdefinition erfolgreich aktualisiert",
       "error-update-definition": "Fehler beim Aktualisieren der Jobdefinition",
       "error-updating-definition": "Fehler beim Aktualisieren der Jobdefinition: {{error}}",
+      "definition-update-refresh-applied": "Jobdefinition gespeichert und Kodierjobs aktualisiert: {{count}} Kodierjobs erstellt.",
+      "update-refresh-failed": "Änderung konnte nicht auf bestehende Kodierjobs angewendet werden: {{error}}",
       "definition-submitted-review": "Jobdefinition zur Prüfung eingereicht",
       "error-submit-review": "Fehler beim Einreichen zur Prüfung",
       "error-submitting-review": "Fehler beim Einreichen zur Prüfung: {{error}}"
@@ -2234,19 +2237,23 @@
     "refresh-dialog": {
       "title": {
         "apply": "Kodierjobs neu verteilen",
+        "update-apply": "Änderung anwenden und Kodierjobs aktualisieren",
         "blocked": "Neu verteilen nicht möglich"
       },
       "definition-label": "Definition #{{id}}",
       "intro": {
         "apply": "Die bestehenden, noch unbearbeiteten Kodierjobs werden gelöscht und anhand der aktuellen Definition neu erzeugt.",
-        "blocked": "Die Definition kann aktuell nicht neu verteilt werden, weil vorhandene Kodierjobs nicht sicher ersetzt werden können."
+        "update-apply": "Die Jobdefinition wird gespeichert. Die bestehenden, noch unbearbeiteten Kodierjobs werden gelöscht und anhand der geänderten Definition neu erzeugt.",
+        "blocked": "Die Definition kann aktuell nicht neu verteilt werden, weil vorhandene Kodierjobs nicht sicher ersetzt werden können.",
+        "update-blocked": "Die Änderung kann aktuell nicht angewendet werden, weil vorhandene Kodierjobs nicht sicher ersetzt werden können."
       },
       "blocking-fallback": "In vorhandenen Kodierjobs wurde bereits gearbeitet. Deshalb ist die Neuverteilung gesperrt.",
       "rules-label": "Wirkung der Neuverteilung",
       "rules": {
         "replace-open": "Nur unberührte Kodierjobs aus dieser Definition werden ersetzt.",
         "keep-work": "Kodierungen, Notizen und bereits geöffnete Fälle werden nicht überschrieben.",
-        "use-current-definition": "Die neue Verteilung nutzt Variablen, Kodierer, Obergrenzen und Doppelkodierung aus der aktuellen Definition."
+        "use-current-definition": "Die neue Verteilung nutzt Variablen, Kodierer, Obergrenzen und Doppelkodierung aus der aktuellen Definition.",
+        "use-updated-definition": "Die neue Verteilung nutzt Variablen, Kodierer, Missing-Profil, Obergrenzen und Doppelkodierung aus der geänderten Definition."
       },
       "preview-title": "Jobstatus",
       "case-title": "Fälle",
@@ -2264,7 +2271,8 @@
         "added-tasks": "Aufgaben hinzugefügt",
         "removed-tasks": "Aufgaben entfernt"
       },
-      "confirm": "Jobs neu verteilen"
+      "confirm": "Jobs neu verteilen",
+      "confirm-update": "Änderung anwenden"
     },
     "distribution-summary": {
       "title": "Verteilungsübersicht",

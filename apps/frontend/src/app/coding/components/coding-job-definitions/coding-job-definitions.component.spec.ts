@@ -187,7 +187,7 @@ describe('CodingJobDefinitionsComponent', () => {
     expect(component.getDefinitionsReadyForJobsCount()).toBe(0);
   });
 
-  it('opens locked definitions read-only and blocks delete while jobs still block deletion', async () => {
+  it('opens definitions with known existing jobs editable and blocks delete while jobs still block deletion', async () => {
     component.isLoading = false;
     component.selectionMode = false;
     const definition = {
@@ -220,7 +220,7 @@ describe('CodingJobDefinitionsComponent', () => {
       deleteJobDefinition: jest.Mock;
     };
 
-    expect(component.canModifyDefinition(definition)).toBe(false);
+    expect(component.canModifyDefinition(definition)).toBe(true);
     expect(component.canDeleteDefinition(definition)).toBe(false);
     expect(menuButtons[0].disabled).toBe(false);
     expect(deleteButton.disabled).toBe(false);
@@ -230,7 +230,8 @@ describe('CodingJobDefinitionsComponent', () => {
 
     expect(dialogOpenSpy).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({
       data: expect.objectContaining({
-        readOnly: true
+        readOnly: false,
+        createdJobsCount: 2
       })
     }));
     expect(codingJobBackendService.deleteJobDefinition).not.toHaveBeenCalled();

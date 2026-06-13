@@ -10,13 +10,24 @@ jest.mock('../coding/coding-validation.service', () => ({
   CodingValidationService: jest.fn()
 }));
 
-const createRepo = () => ({
-  find: jest.fn(),
-  findOne: jest.fn(),
-  create: jest.fn(value => value),
-  save: jest.fn(value => Promise.resolve(value)),
-  remove: jest.fn()
-});
+const createRepo = () => {
+  const repo = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn(value => value),
+    save: jest.fn(value => Promise.resolve(value)),
+    remove: jest.fn(),
+    manager: {
+      transaction: jest.fn(async (callback: (manager: {
+        getRepository: jest.Mock;
+      }) => Promise<unknown>) => callback({
+        getRepository: jest.fn(() => repo)
+      }))
+    }
+  };
+
+  return repo;
+};
 
 describe('JobDefinitionService', () => {
   let jobDefinitionRepository: ReturnType<typeof createRepo>;
@@ -25,7 +36,9 @@ describe('JobDefinitionService', () => {
   let codingJobService: {
     createCodingJob: jest.Mock;
     createDistributedCodingJobs: jest.Mock;
+    previewJobDefinitionRefresh: jest.Mock;
     refreshDistributedCodingJobs: jest.Mock;
+    updateCodingJobDisplayOptionsByDefinitionId: jest.Mock;
     calculateDistribution: jest.Mock;
     calculateDistributionVariableUsage: jest.Mock;
     calculateDistributionVariableUsageBatch: jest.Mock;
@@ -45,6 +58,19 @@ describe('JobDefinitionService', () => {
     codingJobService = {
       createCodingJob: jest.fn(),
       createDistributedCodingJobs: jest.fn().mockResolvedValue({ success: true, jobsCreated: 0, jobs: [] }),
+      previewJobDefinitionRefresh: jest.fn().mockResolvedValue({
+        jobDefinitionId: 1,
+        existingJobsCount: 0,
+        staleJobsCount: 0,
+        existingCases: 0,
+        plannedCases: 0,
+        retainedCases: 0,
+        addedCases: 0,
+        removedCases: 0,
+        addedCodingTasks: 0,
+        removedCodingTasks: 0,
+        canApply: true
+      }),
       refreshDistributedCodingJobs: jest.fn().mockResolvedValue({
         success: true,
         jobsCreated: 0,
@@ -63,6 +89,7 @@ describe('JobDefinitionService', () => {
           canApply: true
         }
       }),
+      updateCodingJobDisplayOptionsByDefinitionId: jest.fn().mockResolvedValue(0),
       calculateDistribution: jest.fn().mockResolvedValue({
         distribution: {},
         distributionByCoderId: {},
@@ -1263,8 +1290,8 @@ describe('JobDefinitionService', () => {
     ]);
   });
 
-  it('rejects updates once coding jobs exist for a definition', async () => {
-    jobDefinitionRepository.findOne.mockResolvedValue({
+  it('allows display option updates once coding jobs exist for a definition', async () => {
+    const existingDefinition = {
       id: 2,
       workspace_id: 7,
       status: 'approved',
@@ -1272,9 +1299,384 @@ describe('JobDefinitionService', () => {
       assigned_variable_bundles: [],
       assigned_coders: [1],
       duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+    codingJobService.calculateDistributionVariableUsageBatch.mockClear();
+
+    await expect(service.updateJobDefinition(2, 7, {
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true
+    })).resolves.toMatchObject({
+      id: 2,
+      show_score: true,
+      allow_comments: false,
+      suppress_general_instructions: true
+    });
+
+    expect(codingJobService.calculateDistributionVariableUsageBatch).not.toHaveBeenCalled();
+    expect(codingJobService.updateCodingJobDisplayOptionsByDefinitionId).toHaveBeenCalledWith(
+      7,
+      2,
+      {
+        showScore: true,
+        allowComments: false,
+        suppressGeneralInstructions: true
+      },
+      expect.objectContaining({
+        getRepository: expect.any(Function)
+      })
+    );
+    expect(jobDefinitionRepository.manager.transaction).toHaveBeenCalledTimes(1);
+    expect(jobDefinitionRepository.save).toHaveBeenCalled();
+    expect(jobDefinitionRepository.save.mock.calls[0][0]).not.toHaveProperty(
+      'missings_profile_id'
+    );
+  });
+
+  it('keeps existing variable and bundle order when an update only reorders the same selections', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [
+        { unitName: 'Unit 1', variableId: 'Var 1' },
+        { unitName: 'Unit 2', variableId: 'Var 2' }
+      ],
+      assigned_variable_bundles: [
+        { id: 1, name: 'Bundle 1', caseOrderingMode: 'continuous' },
+        { id: 2, name: 'Bundle 2', caseOrderingMode: 'alternating' }
+      ],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous'
+    };
+    const bundles = [
+      {
+        id: 1,
+        name: 'Bundle 1',
+        variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+      },
+      {
+        id: 2,
+        name: 'Bundle 2',
+        variables: [{ unitName: 'Unit 2', variableId: 'Var 2' }]
+      }
+    ];
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    variableBundleRepository.find.mockResolvedValue(bundles);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+
+    await expect(service.updateJobDefinition(2, 7, {
+      assignedVariables: [
+        { unitName: 'Unit 2', variableId: 'Var 2' },
+        { unitName: 'Unit 1', variableId: 'Var 1' }
+      ],
+      assignedVariableBundles: [
+        { id: 2, name: 'Bundle 2', caseOrderingMode: 'alternating' },
+        { id: 1, name: 'Bundle 1', caseOrderingMode: 'continuous' }
+      ]
+    })).resolves.toMatchObject({ id: 2 });
+
+    expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      assigned_variables: [
+        { unitName: 'Unit 1', variableId: 'Var 1' },
+        { unitName: 'Unit 2', variableId: 'Var 2' }
+      ],
+      assigned_variable_bundles: [
+        { id: 1, name: 'Bundle 1', caseOrderingMode: 'continuous' },
+        { id: 2, name: 'Bundle 2', caseOrderingMode: 'alternating' }
+      ]
+    }));
+  });
+
+  it('rejects distribution-relevant direct updates once coding jobs exist for a definition', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+
+    await expect(service.updateJobDefinition(2, 7, {
+      maxCodingCases: 4
+    })).rejects.toThrow(/must be refreshed/);
+
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('previews refresh for proposed distribution-relevant updates', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+
+    await expect(service.previewJobDefinitionUpdateRefresh(2, 7, {
+      maxCodingCases: 4
+    })).resolves.toMatchObject({
+      canApply: true
+    });
+
+    expect(codingJobService.previewJobDefinitionRefresh).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        jobDefinitionId: 2,
+        maxCodingCases: 4,
+        distributionSeed: 'seed-2',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+      })
+    );
+  });
+
+  it('keeps bundle order while applying proposed bundle mode changes in update refresh previews', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [],
+      assigned_variable_bundles: [
+        { id: 1, name: 'Bundle 1', caseOrderingMode: 'continuous' },
+        { id: 2, name: 'Bundle 2', caseOrderingMode: 'continuous' }
+      ],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2'
+    };
+    const bundles = [
+      {
+        id: 2,
+        name: 'Bundle 2',
+        variables: [{ unitName: 'Unit 2', variableId: 'Var 2' }]
+      },
+      {
+        id: 1,
+        name: 'Bundle 1',
+        variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+      }
+    ];
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    variableBundleRepository.find.mockResolvedValue(bundles);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+
+    await expect(service.previewJobDefinitionUpdateRefresh(2, 7, {
+      assignedVariableBundles: [
+        { id: 2, name: 'Bundle 2', caseOrderingMode: 'alternating' },
+        { id: 1, name: 'Bundle 1', caseOrderingMode: 'continuous' }
+      ]
+    })).resolves.toMatchObject({
+      canApply: true
+    });
+
+    expect(codingJobService.previewJobDefinitionRefresh).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        selectedVariableBundles: [
+          expect.objectContaining({ id: 1, caseOrderingMode: 'continuous' }),
+          expect.objectContaining({ id: 2, caseOrderingMode: 'alternating' })
+        ]
+      })
+    );
+  });
+
+  it('applies proposed definition updates inside the refresh transaction', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      assigned_coder_configs: [{ coderId: 1, capacityPercent: 100 }],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    };
+    const refreshResult = {
+      success: true,
+      jobsCreated: 1,
+      message: 'Updated',
+      distribution: { 'Unit 1::Var 1': { 'Coder 1': 1 } },
+      distributionByCoderId: { 'Unit 1::Var 1': { 1: 1 } },
+      doubleCodingInfo: {},
+      aggregationInfo: {},
+      matchingFlags: [],
+      pairDistribution: {},
+      tasksPerCoder: {},
+      coderWeights: {},
+      jobs: [],
+      preview: {
+        jobDefinitionId: 2,
+        existingJobsCount: 1,
+        staleJobsCount: 1,
+        existingCases: 5,
+        plannedCases: 4,
+        retainedCases: 4,
+        addedCases: 0,
+        removedCases: 1,
+        addedCodingTasks: 0,
+        removedCodingTasks: 1,
+        canApply: true
+      }
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+    codingJobService.refreshDistributedCodingJobs.mockImplementation(
+      async (_workspaceId, _request, afterRefreshInTransaction) => {
+        if (afterRefreshInTransaction) {
+          await afterRefreshInTransaction(
+            { getRepository: () => jobDefinitionRepository } as never,
+            refreshResult
+          );
+        }
+
+        return refreshResult;
+      }
+    );
+
+    await expect(service.refreshCodingJobFromUpdatedDefinition(2, 7, {
+      maxCodingCases: 4
+    })).resolves.toMatchObject({
+      success: true,
+      jobsCreated: 1
+    });
+
+    expect(codingJobService.refreshDistributedCodingJobs).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        jobDefinitionId: 2,
+        maxCodingCases: 4,
+        distributionSeed: 'seed-2'
+      }),
+      expect.any(Function)
+    );
+    expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      id: 2,
+      max_coding_cases: 4
+    }));
+    expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      distribution_snapshots: [
+        expect.objectContaining({
+          source: 'refresh',
+          settings: expect.objectContaining({
+            maxCodingCases: 4
+          }),
+          refreshPreview: expect.objectContaining({
+            removedCases: 1
+          })
+        })
+      ]
+    }));
+  });
+
+  it('allows saving an existing definition with created jobs when its own cases cover the request', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValueOnce([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 5 }
+    ]);
+    codingJobService.calculateDistributionVariableUsageBatch.mockResolvedValueOnce(new Map([
+      ['requested', new Map([['Unit 1::Var 1', 5]])]
+    ]));
+
+    await expect(service.updateJobDefinition(2, 7, {
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedVariableBundles: [],
+      maxCodingCases: 5,
+      caseOrderingMode: 'continuous'
+    })).resolves.toMatchObject({
+      id: 2,
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      max_coding_cases: 5,
       case_ordering_mode: 'continuous'
     });
+
+    expect(codingValidationService.getCodingIncompleteVariables).toHaveBeenCalledWith(
+      7,
+      undefined,
+      undefined,
+      false,
+      2
+    );
+    expect(jobDefinitionRepository.save).toHaveBeenCalled();
+  });
+
+  it('still rejects existing definition updates with created jobs when the adjusted pool is insufficient', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
     codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValueOnce([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 5 }
+    ]);
+    codingJobService.calculateDistributionVariableUsageBatch.mockResolvedValueOnce(new Map([
+      ['requested', new Map([['Unit 2::Var 2', 1]])]
+    ]));
 
     await expect(service.updateJobDefinition(2, 7, {
       assignedVariables: [{ unitName: 'Unit 2', variableId: 'Var 2' }]
