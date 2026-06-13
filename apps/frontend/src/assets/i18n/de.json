@@ -2138,7 +2138,8 @@
     },
     "validation": {
       "coder-required": "Es muss mindestens ein Kodierer ausgewählt werden",
-      "variable-or-bundle-required": "Es muss mindestens eine Variable oder ein Variablenbündel ausgewählt werden"
+      "variable-or-bundle-required": "Es muss mindestens eine Variable oder ein Variablenbündel ausgewählt werden",
+      "derive-error-required": "Für ausgewählte Variablen ohne regulär verfügbare Fälle muss DERIVE_ERROR einbezogen werden"
     },
     "snackbars": {
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",

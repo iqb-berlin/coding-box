@@ -16,6 +16,7 @@ import type {
 import type { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
 import {
   CodingJob,
+  DistributionVariableUsageByStatus,
   JobDefinitionCoderConfig,
   Variable,
   VariableBundle
@@ -81,6 +82,8 @@ interface JobDefinitionApiResponse {
   distributionSeed?: string;
   planned_variable_usage?: Record<string, number>;
   plannedVariableUsage?: Record<string, number>;
+  planned_variable_usage_by_status?: Record<string, DistributionVariableUsageByStatus>;
+  plannedVariableUsageByStatus?: Record<string, DistributionVariableUsageByStatus>;
   duration_seconds?: number;
   max_coding_cases?: number;
   double_coding_absolute?: number;
@@ -163,6 +166,7 @@ export interface JobDefinition {
   missingsProfileId?: number | null;
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
+  plannedVariableUsageByStatus?: Record<string, DistributionVariableUsageByStatus>;
   durationSeconds?: number;
   maxCodingCases?: number;
   doubleCodingAbsolute?: number;
@@ -942,6 +946,9 @@ export class CodingJobBackendService {
           distributionSeed: def.distributionSeed ?? def.distribution_seed,
           plannedVariableUsage:
               def.plannedVariableUsage ?? def.planned_variable_usage,
+          plannedVariableUsageByStatus:
+              def.plannedVariableUsageByStatus ??
+              def.planned_variable_usage_by_status,
           durationSeconds: def.duration_seconds,
           maxCodingCases: def.max_coding_cases,
           doubleCodingAbsolute: def.double_coding_absolute,
