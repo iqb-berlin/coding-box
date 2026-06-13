@@ -193,6 +193,14 @@ type DistributionVariableUsageBatchRequest =
     key: string | number;
   };
 
+export type DistributionVariableUsageByStatus = {
+  regular: number;
+  deriveError: number;
+  total: number;
+};
+
+type DistributionVariableUsageCaseStatus = 'regular' | 'deriveError';
+
 type DeriveErrorManualCodingRequest = {
   selectedVariables?: ManualCodingVariableReference[];
   selectedVariableBundles?: Array<{
@@ -219,6 +227,7 @@ type DistributionPlanItem = {
   uniqueCases: number;
   totalResponses: number;
   availableResponses: SlimResponse[];
+  caseStatusesByResponseId: Map<number, DistributionVariableUsageCaseStatus>;
   selectedResponses: SlimResponse[];
 };
 
@@ -352,6 +361,7 @@ interface DistributableResponses {
   filteredResponses: SlimResponse[];
   uniqueCases: number;
   totalResponses: number;
+  caseStatusesByResponseId: Map<number, DistributionVariableUsageCaseStatus>;
 }
 
 interface CodingJobCountRow {
@@ -5431,6 +5441,7 @@ export class CodingJobService {
     isDerivedResponse: (response: SlimResponse) => boolean
   ): DistributableResponses {
     const filteredResponses: SlimResponse[] = [];
+    const caseStatusesByResponseId = new Map<number, DistributionVariableUsageCaseStatus>();
     let uniqueCases = 0;
     let totalResponses = 0;
 
@@ -5448,7 +5459,12 @@ export class CodingJobService {
           );
           if (!groupAlreadyAssigned) {
             group.responses.sort((a, b) => a.id - b.id);
-            filteredResponses.push(group.responses[0]);
+            const representativeResponse = group.responses[0];
+            filteredResponses.push(representativeResponse);
+            caseStatusesByResponseId.set(
+              representativeResponse.id,
+              this.getAggregatedCaseUsageStatus(group.responses)
+            );
             uniqueCases += 1;
             totalResponses += group.responses.length;
           }
@@ -5459,22 +5475,54 @@ export class CodingJobService {
           response => !assignedResponseIds.has(response.id)
         );
         filteredResponses.push(...unassignedResponses);
+        unassignedResponses.forEach(response => {
+          caseStatusesByResponseId.set(
+            response.id,
+            this.getResponseUsageStatus(response)
+          );
+        });
         uniqueCases += unassignedResponses.length;
         totalResponses += unassignedResponses.length;
       });
 
-      return { filteredResponses, uniqueCases, totalResponses };
+      return {
+        filteredResponses,
+        uniqueCases,
+        totalResponses,
+        caseStatusesByResponseId
+      };
     }
 
     const unassignedResponses = allItemResponses.filter(
       response => !assignedResponseIds.has(response.id)
     );
+    unassignedResponses.forEach(response => {
+      caseStatusesByResponseId.set(
+        response.id,
+        this.getResponseUsageStatus(response)
+      );
+    });
 
     return {
       filteredResponses: unassignedResponses,
       uniqueCases: unassignedResponses.length,
-      totalResponses: unassignedResponses.length
+      totalResponses: unassignedResponses.length,
+      caseStatusesByResponseId
     };
+  }
+
+  private getAggregatedCaseUsageStatus(
+    responses: SlimResponse[]
+  ): DistributionVariableUsageCaseStatus {
+    return responses.some(response => response.statusV1 !== DERIVE_ERROR_STATUS) ?
+      'regular' :
+      'deriveError';
+  }
+
+  private getResponseUsageStatus(
+    response: SlimResponse
+  ): DistributionVariableUsageCaseStatus {
+    return response.statusV1 === DERIVE_ERROR_STATUS ? 'deriveError' : 'regular';
   }
 
   private buildAvailabilityWarning(
@@ -6163,14 +6211,18 @@ export class CodingJobService {
       const allItemResponses = allResponses.filter(response => itemVariables.some(variable => this.responseMatchesVariableReference(response, variable)
       )
       );
-      const { filteredResponses, uniqueCases, totalResponses } =
-        this.getDistributableResponses(
-          allItemResponses,
-          assignedResponseIds,
-          matchingFlags,
-          aggregationThreshold,
-          response => isDerivedVariable(response.unitName, response.variableid)
-        );
+      const {
+        filteredResponses,
+        uniqueCases,
+        totalResponses,
+        caseStatusesByResponseId
+      } = this.getDistributableResponses(
+        allItemResponses,
+        assignedResponseIds,
+        matchingFlags,
+        aggregationThreshold,
+        response => isDerivedVariable(response.unitName, response.variableid)
+      );
       const availableResponses = this.sortResponsesForDistribution(
         filteredResponses,
         itemCaseOrderingMode,
@@ -6187,6 +6239,7 @@ export class CodingJobService {
         uniqueCases,
         totalResponses,
         availableResponses,
+        caseStatusesByResponseId,
         selectedResponses: []
       };
 
@@ -6395,10 +6448,12 @@ export class CodingJobService {
       workspaceId,
       [request]
     );
-    return this.calculateDistributionVariableUsageFromContext(
-      workspaceId,
-      request,
-      context
+    return this.getTotalVariableUsageByVariable(
+      this.calculateDistributionVariableUsageByStatusFromContext(
+        workspaceId,
+        request,
+        context
+      )
     );
   }
 
@@ -6419,7 +6474,37 @@ export class CodingJobService {
     requests.forEach(request => {
       usageByRequestKey.set(
         request.key,
-        this.calculateDistributionVariableUsageFromContext(
+        this.getTotalVariableUsageByVariable(
+          this.calculateDistributionVariableUsageByStatusFromContext(
+            workspaceId,
+            request,
+            context
+          )
+        )
+      );
+    });
+
+    return usageByRequestKey;
+  }
+
+  async calculateDistributionVariableUsageByStatusBatch(
+    workspaceId: number,
+    requests: DistributionVariableUsageBatchRequest[]
+  ): Promise<Map<string | number, Map<string, DistributionVariableUsageByStatus>>> {
+    const usageByRequestKey = new Map<string | number, Map<string, DistributionVariableUsageByStatus>>();
+
+    if (requests.length === 0) {
+      return usageByRequestKey;
+    }
+
+    const context = await this.createDistributionVariableUsageContext(
+      workspaceId,
+      requests
+    );
+    requests.forEach(request => {
+      usageByRequestKey.set(
+        request.key,
+        this.calculateDistributionVariableUsageByStatusFromContext(
           workspaceId,
           request,
           context
@@ -6497,11 +6582,11 @@ export class CodingJobService {
     };
   }
 
-  private calculateDistributionVariableUsageFromContext(
+  private calculateDistributionVariableUsageByStatusFromContext(
     workspaceId: number,
     request: DistributionVariableUsageRequest,
     context: DistributionVariableUsageContext
-  ): Map<string, number> {
+  ): Map<string, DistributionVariableUsageByStatus> {
     const caseOrderingMode = request.caseOrderingMode || 'continuous';
     const distributionSeed = this.getDistributionSeed(workspaceId, request);
     const items = this.buildDistributionItems(request);
@@ -6537,14 +6622,18 @@ export class CodingJobService {
       const allItemResponses = context.allResponses.filter(response => itemVariables.some(variable => this.responseMatchesVariableReference(response, variable)
       )
       );
-      const { filteredResponses, uniqueCases, totalResponses } =
-        this.getDistributableResponses(
-          allItemResponses,
-          assignedResponseIds,
-          context.matchingFlags,
-          context.aggregationThreshold,
-          response => isDerivedVariable(response.unitName, response.variableid)
-        );
+      const {
+        filteredResponses,
+        uniqueCases,
+        totalResponses,
+        caseStatusesByResponseId
+      } = this.getDistributableResponses(
+        allItemResponses,
+        assignedResponseIds,
+        context.matchingFlags,
+        context.aggregationThreshold,
+        response => isDerivedVariable(response.unitName, response.variableid)
+      );
       const availableResponses = this.sortResponsesForDistribution(
         filteredResponses,
         itemCaseOrderingMode,
@@ -6562,6 +6651,7 @@ export class CodingJobService {
         uniqueCases,
         totalResponses,
         availableResponses,
+        caseStatusesByResponseId,
         selectedResponses: []
       });
     }
@@ -6570,17 +6660,50 @@ export class CodingJobService {
       planItems,
       request.maxCodingCases
     );
-    const usageByVariable = new Map<string, number>();
+    const usageByVariable = new Map<string, DistributionVariableUsageByStatus>();
 
-    selectedCases.forEach(({ response }) => {
-      const variableKey = `${response.unitName}::${response.variableid}`;
-      usageByVariable.set(
-        variableKey,
-        (usageByVariable.get(variableKey) || 0) + 1
+    selectedCases.forEach(({ item, response }) => {
+      this.addResponseToVariableUsageByStatus(
+        usageByVariable,
+        response,
+        item.caseStatusesByResponseId.get(response.id) ||
+          this.getResponseUsageStatus(response)
       );
     });
 
     return usageByVariable;
+  }
+
+  private addResponseToVariableUsageByStatus(
+    usageByVariable: Map<string, DistributionVariableUsageByStatus>,
+    response: SlimResponse,
+    caseStatus: DistributionVariableUsageCaseStatus
+  ): void {
+    const variableKey = `${response.unitName}::${response.variableid}`;
+    const usage = usageByVariable.get(variableKey) || {
+      regular: 0,
+      deriveError: 0,
+      total: 0
+    };
+
+    if (caseStatus === 'deriveError') {
+      usage.deriveError += 1;
+    } else {
+      usage.regular += 1;
+    }
+    usage.total += 1;
+    usageByVariable.set(variableKey, usage);
+  }
+
+  private getTotalVariableUsageByVariable(
+    usageByStatus: Map<string, DistributionVariableUsageByStatus>
+  ): Map<string, number> {
+    return new Map(
+      Array.from(usageByStatus.entries()).map(([variableKey, usage]) => [
+        variableKey,
+        usage.total
+      ])
+    );
   }
 
   async calculateDistribution(

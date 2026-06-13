@@ -15,6 +15,7 @@ export interface CodingJob {
   assignedCoderConfigs?: JobDefinitionCoderConfig[];
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
+  plannedVariableUsageByStatus?: Record<string, DistributionVariableUsageByStatus>;
   assignedVariables?: Variable[];
   assignedVariableBundles?: VariableBundle[];
   variables?: Variable[];
@@ -49,6 +50,12 @@ export interface CodingJob {
   freshnessUpdatedAt?: Date | string | null;
   freshnessAffectedUnits?: number;
   freshnessAffectedResponses?: number;
+}
+
+export interface DistributionVariableUsageByStatus {
+  regular: number;
+  deriveError: number;
+  total: number;
 }
 
 export interface CodingJobIssueSummary {
