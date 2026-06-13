@@ -874,6 +874,17 @@ export class CodingProcessService {
     return `${workspaceId}:${fileId}`;
   }
 
+  invalidateWorkspaceCaches(workspaceId: number): void {
+    this.testFileCache.delete(workspaceId);
+
+    const schemeCachePrefix = `${workspaceId}:`;
+    for (const key of Array.from(this.codingSchemeCache.keys())) {
+      if (key.startsWith(schemeCachePrefix)) {
+        this.codingSchemeCache.delete(key);
+      }
+    }
+  }
+
   private cleanupCaches(): void {
     const now = Date.now();
     for (const [key, entry] of this.codingSchemeCache.entries()) {

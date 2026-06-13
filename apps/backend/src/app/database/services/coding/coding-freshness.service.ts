@@ -464,6 +464,110 @@ export class CodingFreshnessService {
     );
   }
 
+  async markUnitsStaleAfterCodingSchemeChange(
+    workspaceId: number,
+    scope: {
+      autoCodingSchemeRefs?: string[];
+      manualCodingSchemeRefs?: string[];
+    }
+  ): Promise<void> {
+    const autoCodingUnitIds = await this.getUnitIdsByCodingSchemeRefs(
+      workspaceId,
+      scope.autoCodingSchemeRefs || []
+    );
+    const manualCodingUnitIds = await this.getUnitIdsByCodingSchemeRefs(
+      workspaceId,
+      [
+        ...(scope.manualCodingSchemeRefs || []),
+        ...(scope.autoCodingSchemeRefs || [])
+      ]
+    );
+    const allUnitIds = await this.filterIncludedUnitIds(
+      workspaceId,
+      this.uniquePositiveIds([
+        ...autoCodingUnitIds,
+        ...manualCodingUnitIds
+      ])
+    );
+    if (allUnitIds.length === 0) {
+      return;
+    }
+
+    const includedUnitIdSet = new Set(allUnitIds);
+    const includedAutoCodingUnitIds = autoCodingUnitIds
+      .filter(unitId => includedUnitIdSet.has(unitId));
+    const includedManualCodingUnitIds = manualCodingUnitIds
+      .filter(unitId => includedUnitIdSet.has(unitId));
+
+    const revision = await this.incrementRevision(workspaceId);
+    const responseCounts = await this.getResponseCountsByUnit(
+      workspaceId,
+      allUnitIds
+    );
+    const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
+    const unitPresence = await this.getUnitCodingPresence(workspaceId, allUnitIds);
+    const rows: FreshnessUpsert[] = [];
+
+    if (includedAutoCodingUnitIds.length > 0) {
+      this.getAutoCodingVersionsToRefresh(workspacePresence).forEach(version => {
+        includedAutoCodingUnitIds.forEach(unitId => {
+          const state: CodingFreshnessState =
+            unitPresence.get(unitId)?.[version] ? 'STALE' : 'PENDING';
+          rows.push(this.buildRow(
+            workspaceId,
+            unitId,
+            version,
+            state,
+            'CODING_SCHEME_CHANGED',
+            responseCounts.get(unitId) || 0,
+            revision,
+            null
+          ));
+        });
+      });
+    }
+
+    includedManualCodingUnitIds.forEach(unitId => {
+      const presence = unitPresence.get(unitId);
+      if (!presence?.v1 && !presence?.v2 && !presence?.v3) {
+        return;
+      }
+      rows.push(this.buildRow(
+        workspaceId,
+        unitId,
+        'v2',
+        'MANUAL_REVIEW_REQUIRED',
+        'CODING_SCHEME_CHANGED',
+        responseCounts.get(unitId) || 0,
+        revision,
+        null
+      ));
+    });
+
+    await this.upsertRows(rows);
+
+    if (includedAutoCodingUnitIds.length > 0) {
+      await this.markCodingJobsStaleForUnitIds(
+        workspaceId,
+        includedAutoCodingUnitIds,
+        'CODING_SCHEME_CHANGED',
+        'stale_source'
+      );
+    }
+
+    const includedAutoCodingUnitIdSet = new Set(includedAutoCodingUnitIds);
+    const includedManualOnlyUnitIds = includedManualCodingUnitIds
+      .filter(unitId => !includedAutoCodingUnitIdSet.has(unitId));
+    if (includedManualOnlyUnitIds.length > 0) {
+      await this.markCodingJobsStaleForUnitIds(
+        workspaceId,
+        includedManualOnlyUnitIds,
+        'CODING_SCHEME_CHANGED',
+        'review_required'
+      );
+    }
+  }
+
   async markVersionCurrent(
     workspaceId: number,
     unitIds: number[],
@@ -1096,6 +1200,82 @@ export class CodingFreshnessService {
     return Array.from(new Set(values
       .map(value => value?.trim())
       .filter((value): value is string => Boolean(value))));
+  }
+
+  private normalizeCodingSchemeRef(value: string): string {
+    return value
+      .trim()
+      .toUpperCase()
+      .replace(/\.VOCS$/i, '')
+      .replace(/\.XML$/i, '');
+  }
+
+  private getCodingSchemeRefCandidates(values: string[]): string[] {
+    const candidates = new Set<string>();
+    this.uniqueStrings(values).forEach(value => {
+      const normalized = this.normalizeCodingSchemeRef(value);
+      if (!normalized) {
+        return;
+      }
+
+      candidates.add(normalized);
+      const basename = normalized.split('/').pop();
+      if (basename) {
+        candidates.add(basename);
+      }
+    });
+    return Array.from(candidates);
+  }
+
+  private async getUnitIdsByCodingSchemeRefs(
+    workspaceId: number,
+    codingSchemeRefs: string[]
+  ): Promise<number[]> {
+    const schemeRefCandidates =
+      this.getCodingSchemeRefCandidates(codingSchemeRefs);
+    if (schemeRefCandidates.length === 0) {
+      return [];
+    }
+
+    const rows = await this.connection.query(
+      `
+        WITH unit_candidates AS (
+          SELECT
+            unit.id AS id,
+            REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') AS unit_name,
+            REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') AS unit_alias,
+            REGEXP_REPLACE(
+              UPPER(COALESCE(
+                (REGEXP_MATCH(unit_file.data, '<\\s*codingschemeref[^>]*>\\s*([^<]+)', 'i'))[1],
+                ''
+              )),
+              '\\.VOCS$',
+              '',
+              'i'
+            ) AS scheme_ref
+          FROM "unit" unit
+          INNER JOIN booklet booklet ON booklet.id = unit.bookletid
+          INNER JOIN persons person ON person.id = booklet.personid
+          LEFT JOIN file_upload unit_file
+            ON unit_file.workspace_id = person.workspace_id
+            AND unit_file.file_type = 'Unit'
+            AND REGEXP_REPLACE(UPPER(unit_file.file_id), '\\.XML$', '', 'i') IN (
+              REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i'),
+              REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i')
+            )
+          WHERE person.workspace_id = $1
+        )
+        SELECT DISTINCT id
+        FROM unit_candidates
+        WHERE unit_name = ANY($2::text[])
+          OR unit_alias = ANY($2::text[])
+          OR scheme_ref = ANY($2::text[])
+          OR REGEXP_REPLACE(scheme_ref, '^.*/', '') = ANY($2::text[])
+      `,
+      [workspaceId, schemeRefCandidates]
+    ) as Array<{ id: number | string }>;
+
+    return this.uniquePositiveIds(rows.map(row => Number(row.id)));
   }
 
   private async markCodingJobsStaleForAddedUnitIds(

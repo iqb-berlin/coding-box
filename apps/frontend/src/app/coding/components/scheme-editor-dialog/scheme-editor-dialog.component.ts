@@ -251,18 +251,11 @@ export class SchemeEditorDialogComponent implements OnInit {
       .subscribe({
         next: response => {
           const existingFile = response.data?.find(file => file.filename === schemeFilename && file.file_type === 'Resource');
-          if (existingFile) {
-            this.fileService.deleteFiles(this.data.workspaceId, [existingFile.id])
-              .subscribe(deleteSuccess => {
-                if (deleteSuccess) {
-                  this.uploadSchemeFile(schemeFilename);
-                } else {
-                  this.snackBar.open('Failed to update scheme', 'Error', { duration: 3000 });
-                }
-              });
-          } else {
-            this.uploadSchemeFile(schemeFilename);
-          }
+          this.uploadSchemeFile(
+            schemeFilename,
+            !!existingFile,
+            existingFile ? [schemeFilename] : undefined
+          );
         },
         error: () => {
           this.snackBar.open('Failed to fetch files list', 'Error', { duration: 3000 });
@@ -270,14 +263,23 @@ export class SchemeEditorDialogComponent implements OnInit {
       });
   }
 
-  private uploadSchemeFile(filename: string): void {
+  private uploadSchemeFile(
+    filename: string,
+    overwriteExisting: boolean = false,
+    overwriteFileIds?: string[]
+  ): void {
     const blob = new Blob([this.unitScheme.scheme], { type: 'application/octet-stream' });
     const file = new File([blob], filename, { type: 'application/octet-stream' });
 
     const formData = new FormData();
     formData.append('files', file);
 
-    this.fileService.uploadTestFiles(this.data.workspaceId, formData)
+    this.fileService.uploadTestFiles(
+      this.data.workspaceId,
+      formData,
+      overwriteExisting,
+      overwriteFileIds
+    )
       .subscribe(result => {
         const conflicts = result.conflicts || [];
         const ok = result.failed === 0 && conflicts.length === 0;
