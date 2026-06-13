@@ -278,10 +278,56 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   it('should load variables and coders on init', () => {
     createComponent();
-    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(1, undefined, undefined, undefined);
+    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(
+      1,
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    );
     expect(mockCoderService.getCoders).toHaveBeenCalled();
     expect(component.variables.length).toBe(3);
     expect(component.availableCoders.length).toBe(2);
+  });
+
+  it('loads edit availability excluding the current definition and keeps its variables editable', () => {
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock)
+      .mockReturnValue(of([
+        {
+          unitName: 'Unit 1',
+          variableId: 'Var 1',
+          responseCount: 10,
+          availableCases: 0,
+          uniqueCasesAfterAggregation: 10
+        },
+        {
+          unitName: 'Unit 2',
+          variableId: 'Var 2',
+          responseCount: 5,
+          availableCases: 0,
+          uniqueCasesAfterAggregation: 5
+        }
+      ]));
+
+    createComponent({
+      isEdit: true,
+      mode: 'definition',
+      jobDefinitionId: 55,
+      codingJob: {
+        id: 55,
+        assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+      } as CodingJob
+    });
+
+    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(
+      1,
+      undefined,
+      undefined,
+      undefined,
+      55
+    );
+    expect(component.isVariableDisabled(component.variables[0])).toBe(false);
+    expect(component.isVariableDisabled(component.variables[1])).toBe(true);
   });
 
   it('should apply availability filters correctly', () => {

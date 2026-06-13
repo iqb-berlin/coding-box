@@ -681,11 +681,16 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     this.loadManualCodingScopeSummary(unitNameFilter || undefined, trainingRequired);
+    const excludeJobDefinitionId = this.data.mode === 'definition' &&
+      this.data.isEdit ?
+      this.data.jobDefinitionId :
+      undefined;
     this.codingJobBackendService.getCodingIncompleteVariables(
       workspaceId,
       unitNameFilter || undefined,
       trainingRequired,
-      this.includeDeriveErrorInManualCoding ? true : undefined
+      this.includeDeriveErrorInManualCoding ? true : undefined,
+      excludeJobDefinitionId
     ).subscribe({
       next: variables => {
         this.variables = variables;
@@ -1034,13 +1039,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return false;
     }
 
-    if (variable.availableCases !== undefined && variable.availableCases === 0) {
-      return true;
-    }
-
     // Allow variables that were originally assigned to the current job definition being edited
     if (this.data.isEdit && this.isVariableOriginallyAssigned(variable)) {
       return false;
+    }
+
+    if (variable.availableCases !== undefined && variable.availableCases === 0) {
+      return true;
     }
 
     // Disable variables that are included in currently selected variable bundles

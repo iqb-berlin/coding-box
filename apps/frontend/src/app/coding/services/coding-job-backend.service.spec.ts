@@ -441,6 +441,26 @@ describe('CodingJobBackendService', () => {
     });
   });
 
+  describe('getCodingIncompleteVariables', () => {
+    it('should pass the excluded job definition id when loading availability', () => {
+      service
+        .getCodingIncompleteVariables(1, 'Unit 1', false, true, 55)
+        .subscribe(response => {
+          expect(response).toEqual([]);
+        });
+
+      const req = httpMock.expectOne(request => request.url ===
+          `${mockServerUrl}admin/workspace/1/coding/incomplete-variables` &&
+        request.params.get('unitName') === 'Unit 1' &&
+        request.params.get('trainingRequired') === 'false' &&
+        request.params.get('includeDeriveErrorOnly') === 'true' &&
+        request.params.get('excludeJobDefinitionId') === '55' &&
+        request.params.has('_t'));
+      expect(req.request.method).toBe('GET');
+      req.flush([]);
+    });
+  });
+
   describe('auth token override', () => {
     it('should use the supplied auth token when loading coding job units', () => {
       service.getCodingJobUnits(47, 123, 'url-token').subscribe();
