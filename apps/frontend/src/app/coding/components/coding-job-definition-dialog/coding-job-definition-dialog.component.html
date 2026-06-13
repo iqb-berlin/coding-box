@@ -566,12 +566,22 @@
                       @if (getVariableCount(bundle) > 0) {
                       <div class="variables-preview-header">Enthaltene Variablen:</div>
                       <div class="variables-preview-list">
-                        @for (variable of bundle.variables.slice(0, 3); track variable.unitName + variable.variableId) {
+                        @for (variable of getBundlePreviewVariables(bundle); track variable.unitName + variable.variableId) {
                         <div class="variable-preview-item">
                           {{ variable.unitName }}: {{ variable.variableId }}
+                          @if (selectedVariableBundles.isSelected(bundle) && data.mode === 'definition' && hasDeriveErrorResponses(variable)) {
+                          <mat-checkbox
+                            class="bundle-derive-error-checkbox"
+                            [checked]="isBundleVariableDeriveErrorIncluded(variable)"
+                            [disabled]="isReadOnly"
+                            (click)="$event.stopPropagation()"
+                            (change)="setBundleVariableDeriveErrorIncluded(bundle, variable, $event.checked)">
+                            DERIVE_ERROR
+                          </mat-checkbox>
+                          }
                         </div>
                         }
-                        @if (getVariableCount(bundle) > 3) {
+                        @if (!selectedVariableBundles.isSelected(bundle) && getVariableCount(bundle) > 3) {
                         <div class="variable-preview-more">
                           +{{ getVariableCount(bundle) - 3 }} weitere
                         </div>

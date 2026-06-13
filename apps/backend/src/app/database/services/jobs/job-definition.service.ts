@@ -17,7 +17,10 @@ import {
 } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import User from '../../entities/user.entity';
-import { CodingJobService } from '../coding/coding-job.service';
+import {
+  CodingJobService,
+  DistributionVariableUsageByStatus
+} from '../coding/coding-job.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
 import { MissingsProfilesService } from '../coding/missings-profiles.service';
 import { CreateJobDefinitionDto } from '../../../admin/coding-job/dto/create-job-definition.dto';
@@ -68,6 +71,8 @@ export type JobDefinitionWithCreatedJobsCount = JobDefinition & {
   open_created_jobs_count: number;
   plannedVariableUsage: Record<string, number>;
   planned_variable_usage: Record<string, number>;
+  plannedVariableUsageByStatus: Record<string, DistributionVariableUsageByStatus>;
+  planned_variable_usage_by_status: Record<string, DistributionVariableUsageByStatus>;
 };
 
 interface JobDefinitionValidationState {
@@ -230,20 +235,6 @@ export class JobDefinitionService {
       request.assignedVariableBundles,
       request.requireAssignedBundles
     );
-    const incompleteVariables = await this.codingValidationService.getCodingIncompleteVariables(
-      workspaceId,
-      undefined,
-      undefined,
-      false,
-      request.excludeJobDefinitionId
-    );
-    const availableCasesByVariable = new Map(
-      incompleteVariables.map(variable => [
-        this.makeVariableKey(variable.unitName, variable.variableId),
-        variable.availableCases
-      ])
-    );
-
     const existingDefinitions = await this.jobDefinitionRepository.find({
       where: { workspace_id: workspaceId }
     });
@@ -255,7 +246,7 @@ export class JobDefinitionService {
       existingDefinitionIds
     );
 
-    const reservedCases = new Map<string, number>();
+    const reservedCasesByVariable = new Map<string, DistributionVariableUsageByStatus>();
     const requestedUsageKey = 'requested';
     const requestedUsageRequest = this.buildPlannedVariableUsageBatchRequest(
       requestedUsageKey,
@@ -291,24 +282,59 @@ export class JobDefinitionService {
         });
       })
     )).filter((usageRequest): usageRequest is PlannedVariableUsageBatchRequest => usageRequest !== undefined);
-    const usageByRequestKey = await this.codingJobService.calculateDistributionVariableUsageBatch(
+    const requestedDeriveErrorVariableKeys = this.getDeriveErrorVariableKeysFromUsageRequests([
+      requestedUsageRequest
+    ]);
+    const incompleteVariables = await this.codingValidationService.getCodingIncompleteVariables(
+      workspaceId,
+      undefined,
+      undefined,
+      requestedDeriveErrorVariableKeys.size > 0,
+      request.excludeJobDefinitionId
+    );
+    const availableCasesByVariable = new Map(
+      incompleteVariables.map(variable => {
+        const variableKey = this.makeVariableKey(variable.unitName, variable.variableId);
+        return [
+          variableKey,
+          this.getAvailableCasesForConflict(
+            variable,
+            requestedDeriveErrorVariableKeys.has(variableKey)
+          )
+        ];
+      })
+    );
+    const usageByRequestKey = await this.codingJobService.calculateDistributionVariableUsageByStatusBatch(
       workspaceId,
       [requestedUsageRequest, ...existingUsageRequests]
     );
-    const requestedUsage = usageByRequestKey.get(requestedUsageKey) || new Map<string, number>();
+    const requestedUsage =
+      usageByRequestKey.get(requestedUsageKey) ||
+      new Map<string, DistributionVariableUsageByStatus>();
 
     existingUsageRequests.forEach(usageRequest => {
-      const usage = usageByRequestKey.get(usageRequest.key) || new Map<string, number>();
+      const usage =
+        usageByRequestKey.get(usageRequest.key) ||
+        new Map<string, DistributionVariableUsageByStatus>();
       usage.forEach((usageCount, variableKey) => {
-        reservedCases.set(variableKey, (reservedCases.get(variableKey) || 0) + usageCount);
+        this.addVariableUsageByStatus(reservedCasesByVariable, variableKey, usageCount);
       });
     });
 
     const unavailableVariables: string[] = [];
 
-    requestedUsage.forEach((requestedCases, variableKey) => {
+    requestedUsage.forEach((requestedUsageCount, variableKey) => {
+      const includeDeriveError = requestedDeriveErrorVariableKeys.has(variableKey);
       const availableCases = availableCasesByVariable.get(variableKey);
-      const remainingCases = (availableCases ?? 0) - (reservedCases.get(variableKey) || 0);
+      const requestedCases = this.getVariableUsageCountForConflict(
+        requestedUsageCount,
+        includeDeriveError
+      );
+      const reservedCases = this.getVariableUsageCountForConflict(
+        reservedCasesByVariable.get(variableKey),
+        includeDeriveError
+      );
+      const remainingCases = (availableCases ?? 0) - reservedCases;
 
       if (availableCases === undefined || remainingCases <= 0 || requestedCases > remainingCases) {
         unavailableVariables.push(variableKey.replace('::', ':'));
@@ -316,6 +342,79 @@ export class JobDefinitionService {
     });
 
     return unavailableVariables;
+  }
+
+  private getDeriveErrorVariableKeysFromUsageRequests(
+    requests: Pick<
+    PlannedVariableUsageBatchRequest,
+    'selectedVariables' | 'selectedVariableBundles'
+    >[]
+  ): Set<string> {
+    const keys = new Set<string>();
+
+    requests.forEach(request => {
+      (request.selectedVariables || []).forEach(variable => {
+        if (variable.includeDeriveError === true) {
+          keys.add(this.makeVariableKey(variable.unitName, variable.variableId));
+        }
+      });
+
+      (request.selectedVariableBundles || []).forEach(bundle => {
+        (bundle.variables || []).forEach(variable => {
+          if (variable.includeDeriveError === true) {
+            keys.add(this.makeVariableKey(variable.unitName, variable.variableId));
+          }
+        });
+      });
+    });
+
+    return keys;
+  }
+
+  private getAvailableCasesForConflict(
+    variable: {
+      availableCases: number;
+      availableCasesWithDeriveError?: number;
+    },
+    includeDeriveError: boolean
+  ): number {
+    if (
+      includeDeriveError &&
+      typeof variable.availableCasesWithDeriveError === 'number' &&
+      Number.isFinite(variable.availableCasesWithDeriveError)
+    ) {
+      return variable.availableCasesWithDeriveError;
+    }
+
+    return variable.availableCases;
+  }
+
+  private addVariableUsageByStatus(
+    usageByVariable: Map<string, DistributionVariableUsageByStatus>,
+    variableKey: string,
+    usageToAdd: DistributionVariableUsageByStatus
+  ): void {
+    const currentUsage = usageByVariable.get(variableKey) || {
+      regular: 0,
+      deriveError: 0,
+      total: 0
+    };
+
+    currentUsage.regular += usageToAdd.regular;
+    currentUsage.deriveError += usageToAdd.deriveError;
+    currentUsage.total += usageToAdd.total;
+    usageByVariable.set(variableKey, currentUsage);
+  }
+
+  private getVariableUsageCountForConflict(
+    usage: DistributionVariableUsageByStatus | undefined,
+    includeDeriveError: boolean
+  ): number {
+    if (!usage) {
+      return 0;
+    }
+
+    return includeDeriveError ? usage.total : usage.regular;
   }
 
   private makeVariableKey(unitName: string, variableId: string): string {
@@ -437,8 +536,36 @@ export class JobDefinitionService {
 
     return assignedVariableBundles.map(bundle => ({
       ...bundle,
-      variables: variableBundlesById.get(bundle.id)?.variables || []
+      variables: this.mergeSavedBundleVariableOptions(
+        variableBundlesById.get(bundle.id)?.variables || [],
+        bundle.variables || []
+      )
     }));
+  }
+
+  private mergeSavedBundleVariableOptions(
+    fullVariables: JobDefinitionVariable[] = [],
+    savedVariables: JobDefinitionVariable[] = []
+  ): JobDefinitionVariable[] {
+    const savedVariablesByKey = new Map(
+      savedVariables.map(variable => [
+        this.makeVariableKey(variable.unitName, variable.variableId),
+        variable
+      ])
+    );
+
+    return fullVariables.map(variable => {
+      const savedVariable = savedVariablesByKey.get(
+        this.makeVariableKey(variable.unitName, variable.variableId)
+      );
+
+      return {
+        ...variable,
+        ...(variable.includeDeriveError === true || savedVariable?.includeDeriveError === true ?
+          { includeDeriveError: true } :
+          {})
+      };
+    });
   }
 
   private async hydrateAssignedVariableBundles(jobDefinition: JobDefinition): Promise<JobDefinition> {
@@ -469,7 +596,10 @@ export class JobDefinitionService {
           description: fullBundle.description,
           createdAt: fullBundle.created_at,
           updatedAt: fullBundle.updated_at,
-          variables: fullBundle.variables,
+          variables: this.mergeSavedBundleVariableOptions(
+            fullBundle.variables || [],
+            savedBundle.variables || []
+          ),
           caseOrderingMode: savedBundleModes.get(fullBundle.id)
         };
       })
@@ -684,8 +814,21 @@ export class JobDefinitionService {
     }
   }
 
-  private mapVariableUsageToRecord(usage: Map<string, number>): Record<string, number> {
+  private mapVariableUsageByStatusToRecord(
+    usage: Map<string, DistributionVariableUsageByStatus>
+  ): Record<string, DistributionVariableUsageByStatus> {
     return Object.fromEntries(usage.entries());
+  }
+
+  private mapVariableUsageByStatusRecordToTotals(
+    usageByStatus: Record<string, DistributionVariableUsageByStatus>
+  ): Record<string, number> {
+    return Object.fromEntries(
+      Object.entries(usageByStatus).map(([variableKey, usage]) => [
+        variableKey,
+        usage.total
+      ])
+    );
   }
 
   private buildSnapshotDoubleCodingInfo(
@@ -785,7 +928,7 @@ export class JobDefinitionService {
       workspaceId,
       {
         selectedVariables: createDto.assignedVariables || [],
-        selectedVariableBundles: []
+        selectedVariableBundles: createDto.assignedVariableBundles || []
       }
     );
 
@@ -827,11 +970,9 @@ export class JobDefinitionService {
       workspace_id: workspaceId,
       status: createDto.status ?? 'draft',
       assigned_variables: createDto.assignedVariables,
-      assigned_variable_bundles: createDto.assignedVariableBundles?.map(bundle => ({
-        id: bundle.id,
-        name: bundle.name,
-        caseOrderingMode: bundle.caseOrderingMode as CaseOrderingMode
-      })),
+      assigned_variable_bundles: this.toStoredAssignedVariableBundles(
+        createDto.assignedVariableBundles
+      ),
       assigned_coders: coderAssignments.assignedCoders,
       assigned_coder_configs: coderAssignments.assignedCoderConfigs,
       missings_profile_id: missingsProfileId,
@@ -1045,6 +1186,8 @@ export class JobDefinitionService {
           )
         ]);
         const plannedUsageByDefinitionId = new Map<number, Record<string, number>>();
+        const plannedUsageByStatusByDefinitionId =
+          new Map<number, Record<string, DistributionVariableUsageByStatus>>();
 
         const usageRequestPromises: Promise<PlannedVariableUsageBatchRequest | undefined>[] =
           workspaceDefinitions.map(async definition => {
@@ -1055,6 +1198,7 @@ export class JobDefinitionService {
             const createdJobsCount = countsByDefinitionId.get(definition.id) || 0;
             if (createdJobsCount > 0) {
               plannedUsageByDefinitionId.set(definition.id, {});
+              plannedUsageByStatusByDefinitionId.set(definition.id, {});
               return undefined;
             }
 
@@ -1075,16 +1219,20 @@ export class JobDefinitionService {
           .filter((request): request is PlannedVariableUsageBatchRequest => request !== undefined);
 
         if (usageRequests.length > 0) {
-          const usageByDefinitionId = await this.codingJobService.calculateDistributionVariableUsageBatch(
+          const usageByDefinitionId = await this.codingJobService.calculateDistributionVariableUsageByStatusBatch(
             definitionWorkspaceId,
             usageRequests
           );
 
           usageRequests.forEach(request => {
             if (typeof request.key === 'number') {
+              const usageByStatus = this.mapVariableUsageByStatusToRecord(
+                usageByDefinitionId.get(request.key) || new Map()
+              );
+              plannedUsageByStatusByDefinitionId.set(request.key, usageByStatus);
               plannedUsageByDefinitionId.set(
                 request.key,
-                this.mapVariableUsageToRecord(usageByDefinitionId.get(request.key) || new Map())
+                this.mapVariableUsageByStatusRecordToTotals(usageByStatus)
               );
             }
           });
@@ -1109,7 +1257,13 @@ export class JobDefinitionService {
               plannedUsageByDefinitionId.get(definition.id) || {},
             planned_variable_usage: definition.id === undefined ?
               {} :
-              plannedUsageByDefinitionId.get(definition.id) || {}
+              plannedUsageByDefinitionId.get(definition.id) || {},
+            plannedVariableUsageByStatus: definition.id === undefined ?
+              {} :
+              plannedUsageByStatusByDefinitionId.get(definition.id) || {},
+            planned_variable_usage_by_status: definition.id === undefined ?
+              {} :
+              plannedUsageByStatusByDefinitionId.get(definition.id) || {}
           });
         });
       })
@@ -1125,7 +1279,9 @@ export class JobDefinitionService {
           openCreatedJobsCount: 0,
           open_created_jobs_count: 0,
           plannedVariableUsage: {},
-          planned_variable_usage: {}
+          planned_variable_usage: {},
+          plannedVariableUsageByStatus: {},
+          planned_variable_usage_by_status: {}
         });
       }
     });
@@ -1167,11 +1323,18 @@ export class JobDefinitionService {
   private toStoredAssignedVariableBundles(
     bundles?: JobDefinitionVariableBundle[]
   ): JobDefinitionVariableBundle[] {
-    return (bundles || []).map(bundle => ({
-      id: bundle.id,
-      name: bundle.name,
-      caseOrderingMode: bundle.caseOrderingMode
-    }));
+    return (bundles || []).map(bundle => {
+      const variablesWithOptions = (bundle.variables || [])
+        .filter(variable => variable.includeDeriveError === true)
+        .map(variable => this.normalizeVariableForSave(variable));
+
+      return {
+        id: bundle.id,
+        name: bundle.name,
+        caseOrderingMode: bundle.caseOrderingMode,
+        ...(variablesWithOptions.length > 0 ? { variables: variablesWithOptions } : {})
+      };
+    });
   }
 
   private normalizeVariablesForComparison(
@@ -1189,11 +1352,18 @@ export class JobDefinitionService {
 
   private normalizeBundlesForComparison(
     bundles?: JobDefinitionVariableBundle[]
-  ): { id: number; caseOrderingMode?: CaseOrderingMode }[] {
+  ): {
+      id: number;
+      caseOrderingMode?: CaseOrderingMode;
+      variables: JobDefinitionVariable[];
+    }[] {
     return (bundles || [])
       .map(bundle => ({
         id: Number(bundle.id),
-        caseOrderingMode: bundle.caseOrderingMode
+        caseOrderingMode: bundle.caseOrderingMode,
+        variables: this.normalizeVariablesForComparison(
+          (bundle.variables || []).filter(variable => variable.includeDeriveError === true)
+        )
       }))
       .sort((left, right) => left.id - right.id);
   }
@@ -1278,11 +1448,16 @@ export class JobDefinitionService {
 
     return (currentBundles || []).map(currentBundle => {
       const proposedBundle = proposedById.get(Number(currentBundle.id));
-      return {
-        id: currentBundle.id,
-        name: currentBundle.name,
-        caseOrderingMode: proposedBundle?.caseOrderingMode
-      };
+      return this.toStoredAssignedVariableBundles([
+        proposedBundle ?
+          {
+            ...currentBundle,
+            ...proposedBundle,
+            name: proposedBundle.name || currentBundle.name,
+            variables: proposedBundle.variables ?? currentBundle.variables
+          } :
+          currentBundle
+      ])[0];
     });
   }
 
@@ -1519,7 +1694,7 @@ export class JobDefinitionService {
         workspaceId,
         {
           selectedVariables: nextState.assignedVariables || [],
-          selectedVariableBundles: []
+          selectedVariableBundles: nextState.assignedVariableBundles || []
         }
       );
     }
@@ -1816,7 +1991,10 @@ export class JobDefinitionService {
         return {
           id: fullBundle.id,
           name: fullBundle.name,
-          variables: fullBundle.variables || [],
+          variables: this.mergeSavedBundleVariableOptions(
+            fullBundle.variables || [],
+            savedBundle.variables || []
+          ),
           caseOrderingMode: savedBundleModes.get(fullBundle.id)
         };
       })

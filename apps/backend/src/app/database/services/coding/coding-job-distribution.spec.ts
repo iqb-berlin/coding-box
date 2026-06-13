@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
+import { DERIVE_ERROR_STATUS } from '../../utils/manual-coding-candidate.util';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -11,6 +12,7 @@ type SlimResponseForTest = {
   id: number;
   variableid: string;
   value: string | null;
+  statusV1?: number | null;
   unitName: string;
   unitAlias: string | null;
   bookletName: string;
@@ -925,6 +927,75 @@ describe('CodingJobService distribution from job definitions', () => {
       { unitName: 'Unit 1', variableId: 'Var 1' },
       { unitName: 'Unit 2', variableId: 'Var 2' }
     ]);
+  });
+
+  it('calculates batched variable usage split by regular and DERIVE_ERROR cases', async () => {
+    const responses = [
+      makeResponse(1, 'Unit 1', 'Var 1'),
+      makeResponse(2, 'Unit 1', 'Var 1'),
+      {
+        ...makeResponse(3, 'Unit 1', 'Var 1'),
+        statusV1: DERIVE_ERROR_STATUS
+      },
+      {
+        ...makeResponse(4, 'Unit 1', 'Var 1'),
+        statusV1: DERIVE_ERROR_STATUS
+      }
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode')
+      .mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const usageByKey = await service.calculateDistributionVariableUsageByStatusBatch(5, [
+      {
+        key: 'regular',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        caseOrderingMode: 'continuous',
+        distributionSeed: 'seed-regular'
+      },
+      {
+        key: 'with-derive-error',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+        caseOrderingMode: 'continuous',
+        distributionSeed: 'seed-with-derive-error'
+      }
+    ]);
+
+    expect(Object.fromEntries(usageByKey.get('regular')?.entries() || [])).toEqual({
+      'Unit 1::Var 1': { regular: 2, deriveError: 0, total: 2 }
+    });
+    expect(Object.fromEntries(usageByKey.get('with-derive-error')?.entries() || [])).toEqual({
+      'Unit 1::Var 1': { regular: 2, deriveError: 2, total: 4 }
+    });
+  });
+
+  it('counts mixed aggregated regular and DERIVE_ERROR cases as regular usage', async () => {
+    const responses = [
+      {
+        ...makeResponse(1, 'Unit 1', 'Var 1', 'same-value'),
+        statusV1: DERIVE_ERROR_STATUS
+      },
+      makeResponse(2, 'Unit 1', 'Var 1', 'same-value')
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(2);
+
+    const usageByKey = await service.calculateDistributionVariableUsageByStatusBatch(5, [
+      {
+        key: 'with-derive-error',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
+        caseOrderingMode: 'continuous',
+        distributionSeed: 'seed-with-derive-error'
+      }
+    ]);
+
+    expect(Object.fromEntries(usageByKey.get('with-derive-error')?.entries() || [])).toEqual({
+      'Unit 1::Var 1': { regular: 1, deriveError: 0, total: 1 }
+    });
   });
 
   it('calculates usage for existing job definitions with their own assigned cases available', async () => {
