@@ -420,6 +420,38 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.variables[0].availableCases).toBe(2);
   });
 
+  it('should not subtract DERIVE_ERROR-only planned usage from regular frontend availability', () => {
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockImplementation(() => of([
+      {
+        unitName: 'Unit X',
+        variableId: 'Var X',
+        responseCount: 5,
+        deriveErrorResponseCount: 3,
+        availableCases: 5,
+        uniqueCasesAfterAggregation: 5,
+        availableCasesWithDeriveError: 8,
+        uniqueCasesAfterAggregationWithDeriveError: 8
+      }
+    ]));
+    (mockCodingJobBackendService.getVariableBundles as jest.Mock).mockImplementation(() => of([]));
+    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockImplementation(() => of([
+      {
+        id: 200,
+        assignedVariables: [{ unitName: 'Unit X', variableId: 'Var X', includeDeriveError: true }],
+        maxCodingCases: 3,
+        plannedVariableUsage: { 'Unit X::Var X': 3 },
+        plannedVariableUsageByStatus: {
+          'Unit X::Var X': { regular: 0, deriveError: 3, total: 3 }
+        }
+      }
+    ]));
+
+    createComponent(undefined, true);
+
+    expect(component.variables[0].availableCases).toBe(5);
+    expect(component.variables[0].availableCasesWithDeriveError).toBe(5);
+  });
+
   it('should not subtract planned usage for definitions with already created jobs', () => {
     (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockImplementation(() => of([
       {
@@ -731,6 +763,152 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.variables[1].includeDeriveError).toBe(false);
   });
 
+  it('should allow DERIVE_ERROR-only variables when the workspace opt-in is enabled', async () => {
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock)
+      .mockReturnValue(of([
+        {
+          unitName: 'Unit D',
+          variableId: 'Var D',
+          responseCount: 0,
+          deriveErrorResponseCount: 3,
+          availableCases: 0,
+          uniqueCasesAfterAggregation: 0,
+          availableCasesWithDeriveError: 3,
+          uniqueCasesAfterAggregationWithDeriveError: 3
+        }
+      ]));
+    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
+    (mockCodingJobBackendService.getVariableBundles as jest.Mock).mockReturnValue(of([]));
+    (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
+
+    createComponent(undefined, true);
+    const variable = component.variables[0];
+
+    expect(component.isVariableDisabled(variable)).toBe(false);
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedVariables.select(variable);
+    component.setDeriveErrorIncluded(variable, true);
+
+    expect(component.getAvailabilityText(variable)).toBe('3/3');
+    expect(component.getTotalCodingCases()).toBe(3);
+
+    await component.onSubmit();
+
+    expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledWith(1, expect.objectContaining({
+      assignedVariables: [{
+        unitName: 'Unit D',
+        variableId: 'Var D',
+        includeDeriveError: true
+      }]
+    }));
+  });
+
+  it('should not master-select DERIVE_ERROR-only variables before explicit opt-in', () => {
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock)
+      .mockReturnValue(of([
+        {
+          unitName: 'Unit R',
+          variableId: 'Var R',
+          responseCount: 4,
+          deriveErrorResponseCount: 0,
+          availableCases: 4,
+          uniqueCasesAfterAggregation: 4
+        },
+        {
+          unitName: 'Unit D',
+          variableId: 'Var D',
+          responseCount: 0,
+          deriveErrorResponseCount: 3,
+          availableCases: 0,
+          uniqueCasesAfterAggregation: 0,
+          availableCasesWithDeriveError: 3,
+          uniqueCasesAfterAggregationWithDeriveError: 3
+        }
+      ]));
+    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
+    (mockCodingJobBackendService.getVariableBundles as jest.Mock).mockReturnValue(of([]));
+
+    createComponent(undefined, true);
+
+    const regularVariable = component.variables.find(variable => variable.unitName === 'Unit R');
+    const deriveOnlyVariable = component.variables.find(variable => variable.unitName === 'Unit D');
+
+    expect(regularVariable).toBeDefined();
+    expect(deriveOnlyVariable).toBeDefined();
+    expect(component.isVariableDisabled(deriveOnlyVariable!)).toBe(false);
+
+    component.masterToggle();
+
+    expect(component.selectedVariables.isSelected(regularVariable!)).toBe(true);
+    expect(component.selectedVariables.isSelected(deriveOnlyVariable!)).toBe(false);
+    expect(component.isAllSelected()).toBe(true);
+  });
+
+  it('should not submit DERIVE_ERROR-only variables before explicit opt-in', async () => {
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock)
+      .mockReturnValue(of([
+        {
+          unitName: 'Unit D',
+          variableId: 'Var D',
+          responseCount: 0,
+          deriveErrorResponseCount: 3,
+          availableCases: 0,
+          uniqueCasesAfterAggregation: 0,
+          availableCasesWithDeriveError: 3,
+          uniqueCasesAfterAggregationWithDeriveError: 3
+        }
+      ]));
+    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
+    (mockCodingJobBackendService.getVariableBundles as jest.Mock).mockReturnValue(of([]));
+
+    createComponent(undefined, true);
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedVariables.select(component.variables[0]);
+
+    await component.onSubmit();
+
+    expect(mockCodingJobBackendService.createJobDefinition).not.toHaveBeenCalled();
+    expect(mockSnackBar.open).toHaveBeenCalledWith(
+      'coding-job-definition-dialog.validation.derive-error-required',
+      'common.close',
+      { duration: 5000 }
+    );
+  });
+
+  it('should not submit DERIVE_ERROR-only variables for review before explicit opt-in', () => {
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock)
+      .mockReturnValue(of([
+        {
+          unitName: 'Unit D',
+          variableId: 'Var D',
+          responseCount: 0,
+          deriveErrorResponseCount: 3,
+          availableCases: 0,
+          uniqueCasesAfterAggregation: 0,
+          availableCasesWithDeriveError: 3,
+          uniqueCasesAfterAggregationWithDeriveError: 3
+        }
+      ]));
+    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
+    (mockCodingJobBackendService.getVariableBundles as jest.Mock).mockReturnValue(of([]));
+
+    createComponent(undefined, true);
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedVariables.select(component.variables[0]);
+
+    component.onSubmitForReview();
+
+    expect(mockCodingJobBackendService.createJobDefinition).not.toHaveBeenCalled();
+    expect(mockSnackBar.open).toHaveBeenCalledWith(
+      'coding-job-definition-dialog.validation.derive-error-required',
+      'common.close',
+      { duration: 5000 }
+    );
+  });
+
   it('should send the selected missings profile when creating a definition', async () => {
     createComponent();
     (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
@@ -912,6 +1090,37 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     expect(restoredVariable).toBeDefined();
     expect(component.selectedVariables.selected).toContain(restoredVariable);
+    expect(restoredVariable?.includeDeriveError).toBe(true);
+  });
+
+  it('should restore DERIVE_ERROR opt-ins for selected bundle variables when editing a definition', () => {
+    const definitionAsCodingJob = {
+      id: 555,
+      assignedVariableBundles: [{
+        id: 1,
+        name: 'Bundle 1',
+        variables: [{
+          unitName: 'Unit 1',
+          variableId: 'Var 1',
+          includeDeriveError: true
+        }]
+      }]
+    } as Partial<CodingJob>;
+
+    createComponent({
+      mode: 'definition',
+      isEdit: true,
+      jobDefinitionId: 555,
+      codingJob: definitionAsCodingJob as CodingJob
+    }, true);
+
+    const restoredBundle = component.selectedVariableBundles.selected.find(bundle => bundle.id === 1);
+    const restoredVariable = restoredBundle?.variables.find(variable => (
+      variable.unitName === 'Unit 1' &&
+      variable.variableId === 'Var 1'
+    ));
+
+    expect(restoredBundle).toBeDefined();
     expect(restoredVariable?.includeDeriveError).toBe(true);
   });
 
@@ -1117,6 +1326,105 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     // Unit 1 -> 10 available, Unit 3 -> 4 available
     expect(component.getTotalCodingCases()).toBe(14);
+  });
+
+  it('should submit DERIVE_ERROR opt-ins for selected bundle variables', async () => {
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock)
+      .mockReturnValue(of([
+        {
+          unitName: 'Unit 1',
+          variableId: 'Var 1',
+          responseCount: 0,
+          deriveErrorResponseCount: 3,
+          availableCases: 0,
+          uniqueCasesAfterAggregation: 0,
+          availableCasesWithDeriveError: 3,
+          uniqueCasesAfterAggregationWithDeriveError: 3
+        }
+      ]));
+    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
+    (mockCodingJobBackendService.getVariableBundles as jest.Mock).mockReturnValue(of([
+      {
+        id: 77,
+        name: 'DERIVE Bundle',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+      }
+    ]));
+    (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
+
+    createComponent(undefined, true);
+    const bundle = component.variableBundles[0];
+    const bundleVariable = bundle.variables[0];
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedVariableBundles.select(bundle);
+
+    await component.onSubmit();
+    expect(mockCodingJobBackendService.createJobDefinition).not.toHaveBeenCalled();
+
+    component.setBundleVariableDeriveErrorIncluded(bundle, bundleVariable, true);
+    await component.onSubmit();
+
+    expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledWith(1, expect.objectContaining({
+      assignedVariableBundles: [expect.objectContaining({
+        id: 77,
+        variables: [{
+          unitName: 'Unit 1',
+          variableId: 'Var 1',
+          includeDeriveError: true
+        }]
+      })]
+    }));
+  });
+
+  it('should treat bundle DERIVE_ERROR opt-in changes as refresh-relevant for existing definition jobs', async () => {
+    const definitionAsCodingJob = {
+      id: 555,
+      assignedCoders: [1],
+      assignedVariableBundles: [{
+        id: 1,
+        name: 'Bundle 1',
+        variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+      }],
+      maxCodingCases: 5,
+      doubleCodingAbsolute: 0,
+      doubleCodingPercentage: 0,
+      caseOrderingMode: 'continuous'
+    } as Partial<CodingJob>;
+    (mockCodingJobBackendService.previewJobDefinitionUpdateRefresh as jest.Mock).mockReturnValue(of({
+      jobsToDelete: 0,
+      jobsToCreate: 0,
+      jobsToKeep: 0,
+      impactedJobs: []
+    }));
+    (mockCodingJobBackendService.applyJobDefinitionUpdateRefresh as jest.Mock).mockReturnValue(of({
+      jobsCreated: 0
+    }));
+    (mockMatDialog.open as jest.Mock).mockReturnValue({
+      afterClosed: () => of(true)
+    });
+
+    createComponent({
+      mode: 'definition',
+      isEdit: true,
+      jobDefinitionId: 555,
+      codingJob: definitionAsCodingJob as CodingJob,
+      createdJobsCount: 1
+    }, true);
+
+    component.selectedCoders.select(mockCoders[0]);
+    const bundle = component.selectedVariableBundles.selected.find(selectedBundle => selectedBundle.id === 1);
+    expect(bundle).toBeDefined();
+    const bundleVariable = bundle!.variables.find(variable => variable.unitName === 'Unit 1' && variable.variableId === 'Var 1');
+    expect(bundleVariable).toBeDefined();
+
+    component.setBundleVariableDeriveErrorIncluded(bundle!, bundleVariable!, true);
+    await component.onSubmit();
+
+    expect(mockCodingJobBackendService.previewJobDefinitionUpdateRefresh).toHaveBeenCalled();
+    expect(mockCodingJobBackendService.updateJobDefinition).not.toHaveBeenCalled();
   });
 
   it('should calculate double coding totals per selected variable', () => {

@@ -2228,7 +2228,7 @@ describe('CodingJobService', () => {
   it('counts DERIVE_ERROR distribution cases only for variables with job-definition opt-in', () => {
     const calculateFromContext = (
       service as unknown as {
-        calculateDistributionVariableUsageFromContext: (
+        calculateDistributionVariableUsageByStatusFromContext: (
           workspaceId: number,
           request: {
             selectedVariables: {
@@ -2239,9 +2239,9 @@ describe('CodingJobService', () => {
             selectedVariableBundles?: [];
           },
           context: unknown
-        ) => Map<string, number>;
+        ) => Map<string, { regular: number; deriveError: number; total: number }>;
       }
-    ).calculateDistributionVariableUsageFromContext.bind(service);
+    ).calculateDistributionVariableUsageByStatusFromContext.bind(service);
     const context = {
       matchingFlags: [ResponseMatchingFlag.NO_AGGREGATION],
       aggregationThreshold: null,
@@ -2284,7 +2284,7 @@ describe('CodingJobService', () => {
         },
         context
       ).get('UNIT::VAR')
-    ).toBe(1);
+    ).toEqual({ regular: 1, deriveError: 0, total: 1 });
     expect(
       calculateFromContext(
         3,
@@ -2296,7 +2296,7 @@ describe('CodingJobService', () => {
         },
         context
       ).get('UNIT::VAR')
-    ).toBe(2);
+    ).toEqual({ regular: 1, deriveError: 1, total: 2 });
   });
 
   it('returns no coding-job responses when no variables are assigned', async () => {
