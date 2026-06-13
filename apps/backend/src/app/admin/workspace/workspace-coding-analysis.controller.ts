@@ -211,6 +211,12 @@ export class WorkspaceCodingAnalysisController {
     description: 'Also include variables that only have DERIVE_ERROR responses and expose DERIVE_ERROR-aware case counts',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'excludeJobDefinitionId',
+    required: false,
+    description: 'Ignore coding jobs from this job definition when calculating remaining cases',
+    type: Number
+  })
   @ApiOkResponse({
     description: 'Manual coding variables retrieved successfully.',
     schema: {
@@ -261,7 +267,8 @@ export class WorkspaceCodingAnalysisController {
     @WorkspaceId() workspace_id: number,
       @Query('unitName') unitName?: string,
       @Query('trainingRequired') trainingRequired?: string,
-      @Query('includeDeriveErrorOnly') includeDeriveErrorOnly?: string
+      @Query('includeDeriveErrorOnly') includeDeriveErrorOnly?: string,
+      @Query('excludeJobDefinitionId') excludeJobDefinitionId?: string
   ): Promise<
       {
         unitName: string;
@@ -282,11 +289,18 @@ export class WorkspaceCodingAnalysisController {
     } else if (trainingRequired === 'false') {
       trainingRequiredParam = false;
     }
+    const parsedExcludeJobDefinitionId = Number(excludeJobDefinitionId);
+    const excludeJobDefinitionIdParam =
+      Number.isInteger(parsedExcludeJobDefinitionId) &&
+      parsedExcludeJobDefinitionId > 0 ?
+        parsedExcludeJobDefinitionId :
+        undefined;
     return this.codingValidationService.getCodingIncompleteVariables(
       workspace_id,
       unitName,
       trainingRequiredParam,
-      includeDeriveErrorOnly === 'true'
+      includeDeriveErrorOnly === 'true',
+      excludeJobDefinitionIdParam
     );
   }
 

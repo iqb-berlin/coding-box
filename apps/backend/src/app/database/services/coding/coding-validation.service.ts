@@ -509,7 +509,8 @@ export class CodingValidationService {
     workspaceId: number,
     unitName?: string,
     trainingRequired?: boolean,
-    includeDeriveErrorOnly = false
+    includeDeriveErrorOnly = false,
+    excludeJobDefinitionId?: number
   ): Promise<
     {
       unitName: string;
@@ -526,9 +527,19 @@ export class CodingValidationService {
     }[]
     > {
     try {
-      if (unitName || trainingRequired !== undefined || includeDeriveErrorOnly) {
+      if (
+        unitName ||
+        trainingRequired !== undefined ||
+        includeDeriveErrorOnly ||
+        excludeJobDefinitionId !== undefined
+      ) {
+        const queryDetails = [
+          unitName ? ` and unit ${unitName}` : '',
+          trainingRequired !== undefined ? ` (trainingRequired: ${trainingRequired})` : '',
+          excludeJobDefinitionId !== undefined ? ` excluding job definition ${excludeJobDefinitionId}` : ''
+        ].join('');
         this.logger.log(
-          `Querying manual coding variables for workspace ${workspaceId}${unitName ? ` and unit ${unitName}` : ''}${trainingRequired !== undefined ? ` (trainingRequired: ${trainingRequired})` : ''} (not cached)`
+          `Querying manual coding variables for workspace ${workspaceId}${queryDetails} (not cached)`
         );
         const variables = await this.fetchCodingIncompleteVariablesFromDb(
           workspaceId,
@@ -539,7 +550,8 @@ export class CodingValidationService {
         return await this.enrichVariablesWithCaseInfo(
           workspaceId,
           variables,
-          includeDeriveErrorOnly
+          includeDeriveErrorOnly,
+          excludeJobDefinitionId
         );
       }
       const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
@@ -701,12 +713,14 @@ export class CodingValidationService {
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
     variables: ManualCodingVariableCaseCounts[],
-    includeDeriveErrorInCaseInfo = false
+    includeDeriveErrorInCaseInfo = false,
+    excludeJobDefinitionId?: number
   ): Promise<ManualCodingVariableWithCaseInfo[]> {
     const caseInfoMap = await this.computeVariableCaseInfo(
       workspaceId,
       variables,
-      includeDeriveErrorInCaseInfo
+      includeDeriveErrorInCaseInfo,
+      excludeJobDefinitionId
     );
 
     return variables.map(variable => {
@@ -732,7 +746,8 @@ export class CodingValidationService {
   private async computeVariableCaseInfo(
     workspaceId: number,
     variables: ManualCodingVariableCaseCounts[],
-    includeDeriveErrorInCaseInfo = false
+    includeDeriveErrorInCaseInfo = false,
+    excludeJobDefinitionId?: number
   ): Promise<Map<string, VariableCaseInfo>> {
     const result = new Map<string, VariableCaseInfo>();
 
@@ -753,7 +768,11 @@ export class CodingValidationService {
         workspaceId,
         variableReferences
       ) as Promise<SlimCodingResponse[]>,
-      this.getAssignedResponseIdsByVariable(workspaceId, variableReferences)
+      this.getAssignedResponseIdsByVariable(
+        workspaceId,
+        variableReferences,
+        excludeJobDefinitionId
+      )
     ]);
 
     const derivedVariableMap = new Map<string, Set<string>>();
@@ -917,7 +936,8 @@ export class CodingValidationService {
 
   private async getAssignedResponseIdsByVariable(
     workspaceId: number,
-    variables: { unitName: string; variableId: string }[]
+    variables: { unitName: string; variableId: string }[],
+    excludeJobDefinitionId?: number
   ): Promise<Map<string, Set<number>>> {
     const result = new Map<string, Set<number>>();
 
@@ -934,6 +954,16 @@ export class CodingValidationService {
       .leftJoin('cju.coding_job', 'coding_job')
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL');
+
+    if (
+      excludeJobDefinitionId !== undefined &&
+      excludeJobDefinitionId !== null
+    ) {
+      query.andWhere(
+        '(coding_job.job_definition_id IS NULL OR coding_job.job_definition_id != :excludeJobDefinitionId)',
+        { excludeJobDefinitionId }
+      );
+    }
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};

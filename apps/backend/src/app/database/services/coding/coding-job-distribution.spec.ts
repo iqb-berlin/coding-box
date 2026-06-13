@@ -927,6 +927,92 @@ describe('CodingJobService distribution from job definitions', () => {
     ]);
   });
 
+  it('calculates usage for existing job definitions with their own assigned cases available', async () => {
+    const responses = [
+      ...Array.from(
+        { length: 3 },
+        (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1')
+      )
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode')
+      .mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+    const assignedResponseIdsSpy = (
+      service as unknown as { getAssignedResponseIdsForVariables: jest.Mock }
+    ).getAssignedResponseIdsForVariables;
+    assignedResponseIdsSpy.mockImplementation(
+      async (_workspaceId, _variables, excludeJobDefinitionId?: number) => (
+        excludeJobDefinitionId === 12 ?
+          new Set([2]) :
+          new Set([1, 2])
+      )
+    );
+
+    const usageByKey = await service.calculateDistributionVariableUsageBatch(5, [
+      {
+        key: 'edited-definition',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        maxCodingCases: 3,
+        caseOrderingMode: 'continuous',
+        distributionSeed: 'seed-1',
+        jobDefinitionId: 12,
+        excludeJobDefinitionId: 12
+      }
+    ]);
+
+    expect(
+      Object.fromEntries(usageByKey.get('edited-definition')?.entries() || [])
+    ).toEqual({ 'Unit 1::Var 1': 2 });
+    expect(assignedResponseIdsSpy).toHaveBeenCalledWith(
+      5,
+      [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+    );
+    expect(assignedResponseIdsSpy).toHaveBeenCalledWith(
+      5,
+      [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      12
+    );
+  });
+
+  it('does not run exclusion queries for job definition ids without explicit exclusion', async () => {
+    const responses = [
+      ...Array.from(
+        { length: 3 },
+        (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1')
+      )
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode')
+      .mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+    const assignedResponseIdsSpy = (
+      service as unknown as { getAssignedResponseIdsForVariables: jest.Mock }
+    ).getAssignedResponseIdsForVariables;
+
+    const usageByKey = await service.calculateDistributionVariableUsageBatch(5, [
+      {
+        key: 'listed-definition',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        maxCodingCases: 3,
+        caseOrderingMode: 'continuous',
+        distributionSeed: 'seed-1',
+        jobDefinitionId: 12
+      }
+    ]);
+
+    expect(
+      Object.fromEntries(usageByKey.get('listed-definition')?.entries() || [])
+    ).toEqual({ 'Unit 1::Var 1': 3 });
+    expect(assignedResponseIdsSpy).toHaveBeenCalledTimes(1);
+    expect(assignedResponseIdsSpy).toHaveBeenCalledWith(
+      5,
+      [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+    );
+  });
+
   it('does not aggregate derived variables even when their values are empty', async () => {
     const request = {
       selectedVariables: [{ unitName: 'Derived Unit', variableId: 'Derived Var' }],
