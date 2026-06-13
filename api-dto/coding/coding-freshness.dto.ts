@@ -12,7 +12,8 @@ export type CodingFreshnessReason =
   | 'RESULT_DELETED'
   | 'AUTOCODE_RUN'
   | 'MANUAL_CODING_APPLIED'
-  | 'RESET';
+  | 'RESET'
+  | 'CODING_SCHEME_CHANGED';
 
 export interface CodingFreshnessSummaryItemDto {
   version: CodingFreshnessVersion;
