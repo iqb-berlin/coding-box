@@ -564,7 +564,8 @@ export class CodingJobBackendService {
     workspaceId: number,
     unitName?: string,
     trainingRequired?: boolean,
-    includeDeriveErrorOnly?: boolean
+    includeDeriveErrorOnly?: boolean,
+    excludeJobDefinitionId?: number
   ): Observable<
     {
       unitName: string;
@@ -592,6 +593,12 @@ export class CodingJobBackendService {
       params = params.set(
         'includeDeriveErrorOnly',
         includeDeriveErrorOnly.toString()
+      );
+    }
+    if (excludeJobDefinitionId !== undefined) {
+      params = params.set(
+        'excludeJobDefinitionId',
+        excludeJobDefinitionId.toString()
       );
     }
     params = params.set('_t', Date.now().toString());
