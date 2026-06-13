@@ -100,6 +100,7 @@ type PlannedVariableUsageBatchRequest = {
   maxCodingCases?: number;
   caseOrderingMode?: CaseOrderingMode;
   jobDefinitionId?: number;
+  excludeJobDefinitionId?: number;
   distributionSeed?: string;
 };
 
@@ -206,7 +207,13 @@ export class JobDefinitionService {
       request.assignedVariableBundles,
       request.requireAssignedBundles
     );
-    const incompleteVariables = await this.codingValidationService.getCodingIncompleteVariables(workspaceId);
+    const incompleteVariables = await this.codingValidationService.getCodingIncompleteVariables(
+      workspaceId,
+      undefined,
+      undefined,
+      false,
+      request.excludeJobDefinitionId
+    );
     const availableCasesByVariable = new Map(
       incompleteVariables.map(variable => [
         this.makeVariableKey(variable.unitName, variable.variableId),
@@ -238,6 +245,9 @@ export class JobDefinitionService {
         distribution_seed: request.distributionSeed
       }
     );
+    if (request.excludeJobDefinitionId !== undefined) {
+      requestedUsageRequest.excludeJobDefinitionId = request.excludeJobDefinitionId;
+    }
     const existingUsageRequests = (await Promise.all(
       existingDefinitions.map(async definition => {
         if (definition.id === request.excludeJobDefinitionId) {
@@ -1117,20 +1127,6 @@ export class JobDefinitionService {
     return this.attachCreatedJobsCounts(definitions);
   }
 
-  private async assertJobDefinitionHasNoCreatedJobs(jobDefinition: JobDefinition): Promise<void> {
-    const countsByDefinitionId = await this.codingJobService.getCodingJobCountsByDefinitionIds(
-      jobDefinition.workspace_id,
-      [jobDefinition.id]
-    );
-    const createdJobsCount = countsByDefinitionId.get(jobDefinition.id) || 0;
-
-    if (createdJobsCount > 0) {
-      throw new BadRequestException(
-        `Cannot modify job definition ${jobDefinition.id} because ${createdJobsCount} coding jobs already exist`
-      );
-    }
-  }
-
   private async assertJobDefinitionHasNoBlockingCreatedJobs(jobDefinition: JobDefinition): Promise<void> {
     const countsByDefinitionId = await this.codingJobService.getBlockingCodingJobCountsByDefinitionIds(
       jobDefinition.workspace_id,
@@ -1147,7 +1143,6 @@ export class JobDefinitionService {
 
   async updateJobDefinition(id: number, workspaceId: number, updateDto: UpdateJobDefinitionDto): Promise<JobDefinition> {
     const jobDefinition = await this.getJobDefinition(id, workspaceId);
-    await this.assertJobDefinitionHasNoCreatedJobs(jobDefinition);
     const existingCoderAssignments = this.getStoredCoderAssignments(jobDefinition);
     const nextCoderAssignments = this.resolveCoderAssignments(updateDto, existingCoderAssignments);
     const distributionSeed = this.getDefinitionDistributionSeed(jobDefinition);

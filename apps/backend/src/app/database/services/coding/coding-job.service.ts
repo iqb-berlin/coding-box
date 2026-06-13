@@ -184,6 +184,7 @@ type DistributionVariableUsageRequest = {
   caseOrderingMode?: 'continuous' | 'alternating';
   maxCodingCases?: number;
   jobDefinitionId?: number;
+  excludeJobDefinitionId?: number;
   distributionSeed?: string | number;
 };
 
@@ -205,6 +206,7 @@ type DistributionVariableUsageContext = {
   derivedVariableSets: Map<string, Set<string>>;
   allResponses: SlimResponse[];
   assignedResponseIds: Set<number>;
+  assignedResponseIdsByExcludedJobDefinitionId: Map<number, Set<number>>;
 };
 
 type DistributionPlanItem = {
@@ -6402,22 +6404,44 @@ export class CodingJobService {
         aggregationThreshold: null,
         derivedVariableSets: new Map(),
         allResponses: [],
-        assignedResponseIds: new Set()
+        assignedResponseIds: new Set(),
+        assignedResponseIdsByExcludedJobDefinitionId: new Map()
       };
     }
 
+    const excludedJobDefinitionIds = Array.from(
+      new Set(
+        requests
+          .map(request => Number(request.excludeJobDefinitionId))
+          .filter(jobDefinitionId => (
+            Number.isInteger(jobDefinitionId) &&
+            jobDefinitionId > 0
+          ))
+      )
+    );
     const [
       matchingFlags,
       aggregationThreshold,
       derivedVariableMap,
       allResponses,
-      assignedResponseIds
+      assignedResponseIds,
+      assignedResponseIdsByExcludedJobDefinitionIdEntries
     ] = await Promise.all([
       this.getResponseMatchingMode(workspaceId),
       this.getAggregationThreshold(workspaceId),
       this.workspaceFilesService.getDerivedVariableMap(workspaceId),
       this.getSlimResponsesForVariables(workspaceId, allVariables),
-      this.getAssignedResponseIdsForVariables(workspaceId, allVariables)
+      this.getAssignedResponseIdsForVariables(workspaceId, allVariables),
+      Promise.all(
+        excludedJobDefinitionIds.map(async jobDefinitionId => [
+          jobDefinitionId,
+          await this.getAssignedResponseIdsForVariables(
+            workspaceId,
+            allVariables,
+            jobDefinitionId
+          )
+        ] as const)
+      )
     ]);
 
     return {
@@ -6425,7 +6449,10 @@ export class CodingJobService {
       aggregationThreshold,
       derivedVariableSets: this.buildDerivedVariableSets(derivedVariableMap),
       allResponses,
-      assignedResponseIds
+      assignedResponseIds,
+      assignedResponseIdsByExcludedJobDefinitionId: new Map(
+        assignedResponseIdsByExcludedJobDefinitionIdEntries
+      )
     };
   }
 
@@ -6438,6 +6465,16 @@ export class CodingJobService {
     const distributionSeed = this.getDistributionSeed(workspaceId, request);
     const items = this.buildDistributionItems(request);
     const bundleNameCounts = this.getBundleNameCounts(items);
+    const normalizedExcludeJobDefinitionId = Number(request.excludeJobDefinitionId);
+    const assignedResponseIdsByExcludedJobDefinitionId =
+      context.assignedResponseIdsByExcludedJobDefinitionId ||
+      new Map<number, Set<number>>();
+    const assignedResponseIds =
+      Number.isInteger(normalizedExcludeJobDefinitionId) &&
+      normalizedExcludeJobDefinitionId > 0 ?
+        assignedResponseIdsByExcludedJobDefinitionId.get(normalizedExcludeJobDefinitionId) ||
+          context.assignedResponseIds :
+        context.assignedResponseIds;
 
     if (items.length === 0) {
       return new Map();
@@ -6462,7 +6499,7 @@ export class CodingJobService {
       const { filteredResponses, uniqueCases, totalResponses } =
         this.getDistributableResponses(
           allItemResponses,
-          context.assignedResponseIds,
+          assignedResponseIds,
           context.matchingFlags,
           context.aggregationThreshold,
           response => isDerivedVariable(response.unitName, response.variableid)
