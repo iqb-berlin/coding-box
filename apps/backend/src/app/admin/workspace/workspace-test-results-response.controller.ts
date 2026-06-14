@@ -208,6 +208,21 @@ export class WorkspaceTestResultsResponseController {
     description: 'Responses retrieved successfully.'
   })
   @ApiQuery({
+    name: 'value',
+    required: false,
+    description: 'Response value text filter'
+  })
+  @ApiQuery({
+    name: 'codingCode',
+    required: false,
+    description: 'Coding code filter for the selected coding version'
+  })
+  @ApiQuery({
+    name: 'score',
+    required: false,
+    description: 'Coding score filter for the selected coding version'
+  })
+  @ApiQuery({
     name: 'sortBy',
     required: false,
     description: 'Column to sort by',
@@ -242,6 +257,8 @@ export class WorkspaceTestResultsResponseController {
       @Query('codedStatus') codedStatus?: string,
       @Query('group') group?: string,
       @Query('code') code?: string,
+      @Query('codingCode') codingCode?: string,
+      @Query('score') score?: string,
       @Query('version') version?: 'v1' | 'v2' | 'v3',
       @Query('geogebra') geogebra?: string,
       @Query('derivedOnly') derivedOnly?: string,
@@ -268,6 +285,8 @@ export class WorkspaceTestResultsResponseController {
           codedStatus,
           group,
           code,
+          codingCode,
+          score,
           version,
           geogebra: geogebra === 'true',
           derivedOnly: derivedOnly === 'true',

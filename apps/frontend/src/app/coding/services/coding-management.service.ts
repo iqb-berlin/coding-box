@@ -29,10 +29,13 @@ export type ResponseSource = 'base' | 'derived' | 'all';
 export type CodingResultsExportFormat = Exclude<ExportFormat, 'json'>;
 
 export interface FilterParams {
+  value?: string;
   unitName: string;
   codedStatus: string;
   version: StatisticsVersion;
   code: string;
+  codingCode?: string;
+  score?: string;
   group: string;
   bookletName: string;
   variableId: string;
@@ -241,10 +244,13 @@ export class CodingManagementService {
     if (!workspaceId) return of({ data: [], total: 0 });
 
     const backendParams: SearchResponsesParams = {
+      value: filterParams.value,
       unitName: filterParams.unitName,
       codedStatus: filterParams.codedStatus,
       version: filterParams.version,
       code: filterParams.code,
+      codingCode: filterParams.codingCode,
+      score: filterParams.score,
       group: filterParams.group,
       bookletName: filterParams.bookletName,
       variableId: filterParams.variableId,

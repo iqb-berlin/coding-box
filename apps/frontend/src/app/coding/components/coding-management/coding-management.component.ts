@@ -176,10 +176,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   activeFreshnessJobProgress: number | null = null;
 
   filterParams: FilterParams = {
+    value: '',
     unitName: '',
     codedStatus: '',
     version: 'v1',
     code: '',
+    codingCode: '',
+    score: '',
     group: '',
     bookletName: '',
     variableId: '',
@@ -1329,10 +1332,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   private createDefaultFilterParams(version: StatisticsVersion = this.selectedStatisticsVersion): FilterParams {
     return {
+      value: '',
       unitName: '',
       codedStatus: '',
       version,
       code: '',
+      codingCode: '',
+      score: '',
       group: '',
       bookletName: '',
       variableId: '',

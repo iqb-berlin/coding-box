@@ -155,7 +155,7 @@ export class ResponseService {
 
   searchResponses(
     workspaceId: number,
-    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3'; geogebra?: boolean; derivedOnly?: boolean; responseSource?: 'base' | 'derived' | 'all'; personLogin?: string; sortBy?: CodingResponseSortBy; sortDirection?: CodingResponseSortDirection },
+    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; codingCode?: string; score?: string; version?: 'v1' | 'v2' | 'v3'; geogebra?: boolean; derivedOnly?: boolean; responseSource?: 'base' | 'derived' | 'all'; personLogin?: string; sortBy?: CodingResponseSortBy; sortDirection?: CodingResponseSortDirection },
     page?: number,
     limit?: number
   ): Observable<{
@@ -212,6 +212,14 @@ export class ResponseService {
 
     if (searchParams.code) {
       params = params.set('code', searchParams.code);
+    }
+
+    if (searchParams.codingCode) {
+      params = params.set('codingCode', searchParams.codingCode);
+    }
+
+    if (searchParams.score) {
+      params = params.set('score', searchParams.score);
     }
 
     if (searchParams.version) {
