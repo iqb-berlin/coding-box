@@ -3302,7 +3302,8 @@ export class CodingJobService {
     const selectedCode = await this.validateProgressSelectedCode(
       progress,
       codingJobUnit,
-      codingJob.workspace_id
+      codingJob.workspace_id,
+      codingJob.allowComments !== false
     );
 
     this.applyProgressToCodingJobUnit(
@@ -3349,6 +3350,36 @@ export class CodingJobService {
     if (progress.notes !== undefined) {
       codingJobUnit.notes = progress.notes || null;
     }
+  }
+
+  private clearNewCodeNeededProgressWithoutNotes(
+    codingJobUnit: CodingJobUnit
+  ): boolean {
+    if (codingJobUnit.notes) return false;
+    if (
+      codingJobUnit.coding_issue_option === -2 &&
+      codingJobUnit.code !== null &&
+      codingJobUnit.code >= 0
+    ) {
+      codingJobUnit.coding_issue_option = null;
+      return false;
+    }
+    if (codingJobUnit.code !== -2 && codingJobUnit.coding_issue_option !== -2) {
+      return false;
+    }
+
+    codingJobUnit.code = null;
+    codingJobUnit.score = null;
+    codingJobUnit.coding_issue_option = null;
+    codingJobUnit.is_open = false;
+    return true;
+  }
+
+  private async reopenCodingJobAfterProgressCleared(
+    codingJob: CodingJob
+  ): Promise<void> {
+    if (!['completed', 'open'].includes(codingJob.status)) return;
+    await this.codingJobRepository.update(codingJob.id, { status: 'active' });
   }
 
   private getCodingJobUnitWhereForEntry(
@@ -3586,7 +3617,8 @@ export class CodingJobService {
     const selectedCode = await this.validateProgressSelectedCode(
       progress,
       sourceUnit,
-      sourceCodingJob.workspace_id
+      sourceCodingJob.workspace_id,
+      sourceCodingJob.allowComments !== false
     );
 
     if (progress.isOpen !== true && selectedCode === null) {
@@ -3628,7 +3660,8 @@ export class CodingJobService {
   private async validateProgressSelectedCode(
     progress: SaveCodingProgressDto,
     codingJobUnit: CodingJobUnit,
-    workspaceId: number
+    workspaceId: number,
+    allowComments: boolean
   ): Promise<NonNullable<SaveCodingProgressDto['selectedCode']> | null> {
     if (progress.isOpen === true) {
       return null;
@@ -3663,6 +3696,41 @@ export class CodingJobService {
     ) {
       throw new BadRequestException(
         `Unsupported coding issue option: ${selectedCode.codingIssueOption}`
+      );
+    }
+
+    const commentBoundIssueCodes = new Set([-1, -2]);
+    const codingIssueOption = selectedCode.codingIssueOption ?? null;
+    if (
+      !allowComments &&
+      (commentBoundIssueCodes.has(selectedCode.id) ||
+        (codingIssueOption !== null && commentBoundIssueCodes.has(codingIssueOption)))
+    ) {
+      throw new BadRequestException(
+        'Coding issue options requiring comments are disabled for this coding job'
+      );
+    }
+
+    if (
+      selectedCode.id === -1 ||
+      (selectedCode.codingIssueOption === -1 && selectedCode.id < 0)
+    ) {
+      throw new BadRequestException(
+        'Code assignment uncertain requires a regular code'
+      );
+    }
+
+    const newCodeNeededCode = -2;
+    const nextNotes = Object.prototype.hasOwnProperty.call(progress, 'notes') ?
+      progress.notes :
+      codingJobUnit.notes;
+    if (
+      (selectedCode.id === newCodeNeededCode ||
+        selectedCode.codingIssueOption === newCodeNeededCode) &&
+      !(nextNotes ?? '').trim()
+    ) {
+      throw new BadRequestException(
+        'New code needed requires coder notes'
       );
     }
 
@@ -3983,7 +4051,11 @@ export class CodingJobService {
     }
 
     codingJobUnit.notes = notesDto.notes?.trim() || null;
+    const clearedProgress = this.clearNewCodeNeededProgressWithoutNotes(codingJobUnit);
     await this.codingJobUnitRepository.save(codingJobUnit);
+    if (clearedProgress) {
+      await this.reopenCodingJobAfterProgressCleared(codingJob);
+    }
 
     return codingJob;
   }
@@ -4044,12 +4116,14 @@ export class CodingJobService {
       createdReviewUnit.is_open = false;
       createdReviewUnit.coding_issue_option = null;
       createdReviewUnit.notes = notesDto.notes?.trim() || null;
+      this.clearNewCodeNeededProgressWithoutNotes(createdReviewUnit);
       await this.codingJobUnitRepository.save(createdReviewUnit);
 
       return sourceCodingJob;
     }
 
     reviewUnit.notes = notesDto.notes?.trim() || null;
+    this.clearNewCodeNeededProgressWithoutNotes(reviewUnit);
     await this.codingJobUnitRepository.save(reviewUnit);
 
     return sourceCodingJob;

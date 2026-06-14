@@ -1055,6 +1055,8 @@
     "legacy-code-missing-note": "Dieser Code ist im aktuellen Kodierschema nicht mehr vorhanden.",
     "coder-notes": "Notiz zu diesem Kodierfall",
     "coder-notes-placeholder": "Notiz zu diesem Kodierfall",
+    "code-assignment-uncertain-requires-code": "Code-Vergabe unsicher kann erst nach einem regulären Code ausgewählt werden.",
+    "new-code-comment-required": "Bitte begründen Sie „Neuer Code nötig“ im Kommentar zu diesem Kodierfall.",
     "coding-issue-options": {
       "code-assignment-uncertain": "Code-Vergabe unsicher",
       "new-code-needed": "Neuer Code nötig",

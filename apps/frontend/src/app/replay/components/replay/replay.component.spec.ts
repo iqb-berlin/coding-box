@@ -447,7 +447,8 @@ describe('ReplayComponent', () => {
       'valid@test@person',
       'unit-123',
       'VAR1',
-      'note'
+      'note',
+      null
     );
   });
 
@@ -572,6 +573,34 @@ describe('ReplayComponent', () => {
     expect(component.page).toBe('1');
     expect(component.anchor).toBe('ANCHOR_2');
     expect(component.codingService.currentVariableId).toBe('VAR_2');
+  });
+
+  it('should not change coding units when the code selector blocks leaving the current case', async () => {
+    const canLeaveCurrentUnit = jest.fn().mockReturnValue(false);
+    const privateComponent = component as unknown as {
+      codeSelectorComponent: { canLeaveCurrentUnit: jest.Mock };
+    };
+
+    component.isCodingMode = true;
+    component.unitId = 'UNIT_1';
+    component.page = '0';
+    component.codingService.currentVariableId = 'VAR_1';
+    privateComponent.codeSelectorComponent = { canLeaveCurrentUnit };
+
+    await component.handleUnitChanged({
+      id: 2,
+      name: 'UNIT_2',
+      alias: null,
+      bookletId: 0,
+      variableId: 'VAR_2',
+      variableAnchor: 'VAR_2',
+      variablePage: '1'
+    });
+
+    expect(canLeaveCurrentUnit).toHaveBeenCalled();
+    expect(component.unitId).toBe('UNIT_1');
+    expect(component.page).toBe('0');
+    expect(component.codingService.currentVariableId).toBe('VAR_1');
   });
 
   it('should ignore external unit changes while a coding job switch is running', async () => {
