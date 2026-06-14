@@ -38,10 +38,13 @@ import { getResponseStatusLabel } from '../../../../../shared/utils/response-sta
 })
 export class ResponseFiltersComponent implements OnDestroy {
   @Input() filterParams: FilterParams = {
+    value: '',
     unitName: '',
     codedStatus: '',
     version: 'v1',
     code: '',
+    codingCode: '',
+    score: '',
     group: '',
     bookletName: '',
     variableId: '',

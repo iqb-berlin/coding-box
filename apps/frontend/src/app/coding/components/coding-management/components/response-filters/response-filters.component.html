@@ -33,6 +33,24 @@
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>{{ 'coding-management.filters.value' | translate }}</mat-label>
+        <input matInput [(ngModel)]="filterParams.value" (input)="onTextFilterChange()"
+            placeholder="{{ 'coding-management.filters.value-placeholder' | translate }}">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>{{ 'coding-management.filters.coding-code' | translate }}</mat-label>
+        <input matInput [(ngModel)]="filterParams.codingCode" (input)="onTextFilterChange()"
+            placeholder="{{ 'coding-management.filters.coding-code-placeholder' | translate }}">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>{{ 'coding-management.filters.score' | translate }}</mat-label>
+        <input matInput [(ngModel)]="filterParams.score" (input)="onTextFilterChange()"
+            placeholder="{{ 'coding-management.filters.score-placeholder' | translate }}">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.person-code' | translate }}</mat-label>
         <input matInput [(ngModel)]="filterParams.code" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.person-code-placeholder' | translate }}">

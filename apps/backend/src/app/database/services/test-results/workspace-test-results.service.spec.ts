@@ -838,6 +838,62 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
+    it('should filter response value by contains search', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { value: 'answer' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.value ILIKE :value',
+        { value: '%answer%' }
+      );
+    });
+
+    it('should filter coding code and score on the selected version', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { codingCode: '7', score: '1', version: 'v2' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.code_v2 = :codingCode',
+        { codingCode: 7 }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.score_v2 = :score',
+        { score: 1 }
+      );
+    });
+
+    it('should return no response search results for invalid coding code filters', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { codingCode: 'abc' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('1=0');
+      expect(qb.andWhere).not.toHaveBeenCalledWith(
+        expect.stringContaining('response.code_'),
+        expect.any(Object)
+      );
+    });
+
     it('should filter GeoGebra searches by raw and data-uri ggb response values', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);

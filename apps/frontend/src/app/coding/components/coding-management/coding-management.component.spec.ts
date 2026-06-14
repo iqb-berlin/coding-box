@@ -658,10 +658,13 @@ describe('CodingManagementComponent', () => {
       component.onDerivedClick();
 
       expect(component.filterParams).toEqual({
+        value: '',
         unitName: '',
         codedStatus: '',
         version: 'v2',
         code: '',
+        codingCode: '',
+        score: '',
         group: '',
         bookletName: '',
         variableId: '',
