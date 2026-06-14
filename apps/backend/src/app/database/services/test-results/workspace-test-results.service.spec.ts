@@ -800,6 +800,44 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
+    it('should filter variable IDs by contains search by default', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { variableId: '01' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.variableid ILIKE :variableId',
+        { variableId: '%01%' }
+      );
+    });
+
+    it('should filter variable IDs exactly when wrapped in double quotes', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { variableId: ' "01_unique" ' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'LOWER(response.variableid) = LOWER(:variableId)',
+        { variableId: '01_unique' }
+      );
+      expect(qb.andWhere).not.toHaveBeenCalledWith(
+        'response.variableid ILIKE :variableId',
+        expect.objectContaining({ variableId: expect.stringContaining('%') })
+      );
+    });
+
     it('should filter GeoGebra searches by raw and data-uri ggb response values', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
