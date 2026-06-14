@@ -20,6 +20,10 @@
   font-weight: 500;
 }
 
+.code-row.has-review-code-selection {
+  border-color: rgba(25, 118, 210, 0.32);
+}
+
 .code-row.read-only {
   opacity: 0.56;
 }
@@ -27,6 +31,15 @@
 .code-row.read-only:hover {
   background-color: transparent;
   border-color: transparent;
+}
+
+.code-row.read-only.has-review-code-selection:hover {
+  border-color: rgba(25, 118, 210, 0.32);
+}
+
+.code-row.selected.has-review-code-selection,
+.code-row.selected.read-only.has-review-code-selection:hover {
+  border-color: #2196f3;
 }
 
 .general-instruction-row {
@@ -105,6 +118,27 @@
 .code-score {
   color: rgba(0, 0, 0, 0.6);
   font-style: italic;
+}
+
+.review-code-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 26px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background-color: #e8f0fe;
+  color: #174ea6;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.review-code-badge mat-icon {
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
 }
 
 .code-instruction {

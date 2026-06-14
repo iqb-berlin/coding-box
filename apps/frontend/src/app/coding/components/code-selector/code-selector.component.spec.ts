@@ -1,7 +1,7 @@
 import { SimpleChange } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CodingScheme } from '../../../models/coding-interfaces';
 import { CodeSelectorComponent } from './code-selector.component';
 
@@ -297,6 +297,56 @@ describe('CodeSelectorComponent', () => {
       code: mixedCodingScheme.variableCodings[0].codes[0],
       codingIssueOption: null
     });
+  });
+
+  it('shows review coder badges for codes selected by previous coders', () => {
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('de', {
+      'code-selector': {
+        'review-coders-tooltip': 'Von folgenden Kodierern vergeben: {{coders}}'
+      }
+    });
+    translateService.setDefaultLang('de');
+    translateService.use('de');
+
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.reviewCodeSelections = [
+      { code: 1, coderNames: ['Coder A', 'Coder B'] },
+      { code: 2, coderNames: ['Coder C'] },
+      { code: -2, coderNames: ['Coder D', 'Coder E'] }
+    ];
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    fixture.detectChanges();
+
+    const badge = fixture.nativeElement.querySelector('.review-code-badge') as HTMLElement;
+    const codeRow = fixture.nativeElement.querySelector('.code-row.has-review-code-selection') as HTMLElement;
+    const issueBadge = fixture.nativeElement
+      .querySelector('.uncertain-codes-section .review-code-badge') as HTMLElement;
+    const issueRows = fixture.nativeElement
+      .querySelectorAll('.uncertain-codes-section .code-row.has-review-code-selection') as NodeListOf<HTMLElement>;
+
+    expect(component.hasReviewCodeSelection(1)).toBe(true);
+    expect(component.getReviewCodeSelectionCount(1)).toBe(2);
+    expect(component.hasReviewCodeSelection(2)).toBe(true);
+    expect(component.getReviewCodeSelectionCount(-2)).toBe(2);
+    expect(component.getReviewCodeSelectionCount(99)).toBe(0);
+    expect(badge.textContent).toContain('2');
+    expect(codeRow).toBeTruthy();
+    expect(issueBadge.textContent).toContain('2');
+    expect(issueRows).toHaveLength(1);
+    expect(component.getCodingIssueOptionRowTooltip(
+      component.codingIssueOptionCodes.find(item => item.id === -2)!
+    )).toContain('Coder D, Coder E');
+
+    component.onSelect(1);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.code-row.selected.has-review-code-selection')).toBeTruthy();
   });
 
   it('shows a stored legacy code without making it regularly selectable', () => {

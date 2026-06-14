@@ -1053,6 +1053,7 @@
     "legacy-code-label": "Bisher gespeicherter Code:",
     "legacy-code-note": "Dieser Code ist nicht mehr manuell auswählbar.",
     "legacy-code-missing-note": "Dieser Code ist im aktuellen Kodierschema nicht mehr vorhanden.",
+    "review-coders-tooltip": "Von folgenden Kodierern vergeben: {{coders}}",
     "coder-notes": "Notiz zu diesem Kodierfall",
     "coder-notes-placeholder": "Notiz zu diesem Kodierfall",
     "code-assignment-uncertain-requires-code": "Code-Vergabe unsicher kann erst nach einem regulären Code ausgewählt werden.",

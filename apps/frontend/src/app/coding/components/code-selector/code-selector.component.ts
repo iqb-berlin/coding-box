@@ -14,7 +14,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DomSanitizer } from '@angular/platform-browser';
-import { UnitsReplay, UnitsReplayUnit } from '../../../replay/services/units-replay.service';
+import { ReviewCodeSelection, UnitsReplay, UnitsReplayUnit } from '../../../replay/services/units-replay.service';
 import { ReplayCodingService } from '../../../replay/services/replay-coding.service';
 import {
   Code,
@@ -58,6 +58,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() isNavigationDisabled: boolean = false;
   @Input() hasSaveError: boolean = false;
   @Input() clearCodingIssueOnRegularSelection: boolean = false;
+  @Input() reviewCodeSelections: ReviewCodeSelection[] = [];
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() notesChanged = new EventEmitter<string>();
@@ -297,6 +298,32 @@ export class CodeSelectorComponent implements OnChanges {
     return this.selectableItems.filter(item => item.type !== 'codingIssueOption');
   }
 
+  hasReviewCodeSelection(codeId: number): boolean {
+    return this.getReviewCodeSelectionCount(codeId) > 0;
+  }
+
+  getReviewCodeSelectionCount(codeId: number): number {
+    return this.getReviewCodeSelection(codeId)?.coderNames.length || 0;
+  }
+
+  getReviewCodeSelectionTooltip(codeId: number): string {
+    const selection = this.getReviewCodeSelection(codeId);
+    if (!selection) {
+      return '';
+    }
+
+    return this.translateService.instant('code-selector.review-coders-tooltip', {
+      coders: selection.coderNames.join(', ')
+    });
+  }
+
+  private getReviewCodeSelection(codeId: number): ReviewCodeSelection | undefined {
+    return this.reviewCodeSelections.find(selection => (
+      selection.code === codeId &&
+      selection.coderNames.length > 0
+    ));
+  }
+
   get codingIssueOptionCodes(): SelectableItem[] {
     return this.selectableItems.filter(
       item => item.type === 'codingIssueOption' && this.isCodingIssueOptionAvailable(item)
@@ -322,6 +349,13 @@ export class CodeSelectorComponent implements OnChanges {
     }
 
     return '';
+  }
+
+  getCodingIssueOptionRowTooltip(item: SelectableItem): string {
+    return [
+      this.getCodingIssueOptionTooltip(item),
+      this.getReviewCodeSelectionTooltip(item.id)
+    ].filter(Boolean).join(' - ');
   }
 
   private isCodingIssueOptionAvailable(item: SelectableItem): boolean {
