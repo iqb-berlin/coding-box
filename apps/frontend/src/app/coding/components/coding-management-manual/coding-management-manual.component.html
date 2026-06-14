@@ -237,7 +237,7 @@
             class="subsection-title"
             [matTooltip]="
               responseAnalysis?.isCalculating
-                ? 'Einstellungen gesperrt während die Analyse läuft'
+                ? 'Analyse läuft'
                 : ''
             "
           >
@@ -249,7 +249,7 @@
             <mat-icon
               *ngIf="responseAnalysis?.isCalculating"
               class="aggregation-lock-icon"
-              matTooltip="Analyse läuft – Einstellungen gesperrt"
+              matTooltip="Analyse läuft"
               >lock</mat-icon
             >
           </h3>
@@ -319,29 +319,36 @@
                     </div>
 
                     <div class="settings-control matching-control">
-                      <div class="checkbox-group">
-                        <mat-checkbox
-                          [checked]="
-                            hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)
-                          "
-                          (change)="
-                            toggleMatchingFlag(
-                              ResponseMatchingFlag.NO_AGGREGATION
-                            )
-                          "
+                      <div class="aggregation-mode-control">
+                        <span
+                          class="mode-option"
+                          [class.active]="!isDuplicateAggregationActive"
+                        >
+                          {{
+                            'coding-management-manual.response-matching.no-aggregation-mode'
+                              | translate
+                          }}
+                        </span>
+                        <mat-slide-toggle
+                          [checked]="isDuplicateAggregationActive"
+                          (change)="onAggregationModeChanged($event.checked)"
                           [disabled]="
                             isLoadingMatchingMode ||
                             isSavingMatchingMode ||
+                            isApplyingDuplicateAggregation ||
+                            isLoadingResponseAnalysis ||
                             responseAnalysis?.isCalculating
                           "
                           color="primary"
                         >
                           {{
-                            'coding-management-manual.response-matching.no-aggregation'
+                            'coding-management-manual.response-matching.aggregate-responses'
                               | translate
                           }}
-                        </mat-checkbox>
+                        </mat-slide-toggle>
+                      </div>
 
+                      <div class="checkbox-group">
                         <mat-checkbox
                           [checked]="
                             hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)
@@ -352,10 +359,7 @@
                           [disabled]="
                             isLoadingMatchingMode ||
                             isSavingMatchingMode ||
-                            isMatchingOptionDisabled(
-                              ResponseMatchingFlag.IGNORE_CASE
-                            ) ||
-                            responseAnalysis?.isCalculating
+                            isApplyingDuplicateAggregation
                           "
                           color="primary"
                         >
@@ -379,10 +383,7 @@
                           [disabled]="
                             isLoadingMatchingMode ||
                             isSavingMatchingMode ||
-                            isMatchingOptionDisabled(
-                              ResponseMatchingFlag.IGNORE_WHITESPACE
-                            ) ||
-                            responseAnalysis?.isCalculating
+                            isApplyingDuplicateAggregation
                           "
                           color="primary"
                         >
@@ -391,6 +392,52 @@
                               | translate
                           }}
                         </mat-checkbox>
+                      </div>
+
+                      <div class="matching-actions">
+                        <span
+                          class="matching-state"
+                          *ngIf="hasPendingAggregationOptionsWithoutAggregation()"
+                        >
+                          <mat-icon>pending_actions</mat-icon>
+                          {{
+                            'coding-management-manual.response-matching.options-pending'
+                              | translate
+                          }}
+                        </span>
+                        <span
+                          class="matching-state warning"
+                          *ngIf="hasUnsavedResponseMatchingChanges()"
+                        >
+                          <mat-icon>edit</mat-icon>
+                          {{
+                            'coding-management-manual.response-matching.pending-changes'
+                              | translate
+                          }}
+                        </span>
+                        <button
+                          *ngIf="
+                            isDuplicateAggregationActive &&
+                            hasUnsavedResponseMatchingChanges()
+                          "
+                          mat-stroked-button
+                          color="primary"
+                          type="button"
+                          (click)="restartAnalysis()"
+                          [disabled]="
+                            isLoadingMatchingMode ||
+                            isSavingMatchingMode ||
+                            isApplyingDuplicateAggregation ||
+                            isLoadingResponseAnalysis ||
+                            responseAnalysis?.isCalculating
+                          "
+                        >
+                          <mat-icon>autorenew</mat-icon>
+                          {{
+                            'coding-management-manual.response-matching.apply-options'
+                              | translate
+                          }}
+                        </button>
                       </div>
                     </div>
                   </div>
