@@ -118,6 +118,8 @@ export interface SearchResponsesParams {
   codedStatus?: string;
   group?: string;
   code?: string;
+  codingCode?: string;
+  score?: string;
   version?: 'v1' | 'v2' | 'v3';
   geogebra?: boolean;
   derivedOnly?: boolean;

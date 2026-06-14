@@ -6496,6 +6496,8 @@ export class WorkspaceTestResultsService {
       codedStatus?: string;
       group?: string;
       code?: string;
+      codingCode?: string;
+      score?: string;
       version?: 'v1' | 'v2' | 'v3';
       geogebra?: boolean;
       derivedOnly?: boolean;
@@ -6615,6 +6617,26 @@ export class WorkspaceTestResultsService {
 
       if (searchParams.code) {
         query.andWhere('person.code = :code', { code: searchParams.code });
+      }
+
+      if (searchParams.codingCode) {
+        const codingCodeFilter = searchParams.codingCode.trim();
+        const codingCode = Number(codingCodeFilter);
+        if (codingCodeFilter !== '' && Number.isInteger(codingCode)) {
+          query.andWhere(`response.code_${version} = :codingCode`, { codingCode });
+        } else {
+          query.andWhere('1=0');
+        }
+      }
+
+      if (searchParams.score) {
+        const scoreFilter = searchParams.score.trim();
+        const score = Number(scoreFilter);
+        if (scoreFilter !== '' && Number.isInteger(score)) {
+          query.andWhere(`response.score_${version} = :score`, { score });
+        } else {
+          query.andWhere('1=0');
+        }
       }
 
       if (searchParams.personLogin) {
