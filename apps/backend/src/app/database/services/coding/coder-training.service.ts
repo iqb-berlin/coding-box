@@ -103,6 +103,7 @@ type SaveDiscussionResultResponse = {
   success: boolean;
   code: number | null;
   score: number | null;
+  notes: string | null;
   source: DiscussionSource;
   managerUserId: number | null;
   managerName: string | null;
@@ -960,7 +961,8 @@ export class CoderTrainingService {
     responseId: number,
     managerUserId: number | null,
     managerName: string | null,
-    code: number | null | undefined
+    code: number | null | undefined,
+    notes?: string | null
   ): Promise<SaveDiscussionResultResponse> {
     const training = await this.coderTrainingRepository.findOne({
       where: {
@@ -1012,6 +1014,7 @@ export class CoderTrainingService {
         success: true,
         code: automaticDiscussionResult?.code ?? null,
         score: automaticDiscussionResult?.score ?? null,
+        notes: null,
         source: automaticDiscussionResult ? 'auto_agreement' : null,
         managerUserId: null,
         managerName: null
@@ -1039,6 +1042,7 @@ export class CoderTrainingService {
 
     discussionResult.code = code;
     discussionResult.score = derivedScore;
+    discussionResult.notes = notes?.trim() || null;
     discussionResult.manager_user_id = managerUserId;
     discussionResult.manager_name = managerName;
 
@@ -1047,6 +1051,7 @@ export class CoderTrainingService {
       success: true,
       code: saved.code,
       score: saved.score,
+      notes: saved.notes ?? null,
       source: 'manual',
       managerUserId: saved.manager_user_id,
       managerName: saved.manager_name
@@ -1897,6 +1902,7 @@ export class CoderTrainingService {
       replayScore: number | null;
       discussionCode: number | null;
       discussionScore: number | null;
+      discussionNotes: string | null;
       discussionManagerUserId: number | null;
       discussionManagerName: string | null;
       discussionSource: DiscussionSource;
@@ -2046,6 +2052,7 @@ export class CoderTrainingService {
         );
       let discussionCode = automaticDiscussionResult?.code ?? null;
       let discussionScore = automaticDiscussionResult?.score ?? null;
+      let discussionNotes: string | null = null;
       let discussionManagerUserId: number | null = null;
       let discussionManagerName: string | null = null;
       let discussionSource: DiscussionSource = automaticDiscussionResult ? 'auto_agreement' : null;
@@ -2053,6 +2060,7 @@ export class CoderTrainingService {
       if (hasManualDiscussionResult) {
         discussionCode = discussionResult!.code;
         discussionScore = discussionResult!.score;
+        discussionNotes = discussionResult!.notes ?? null;
         discussionManagerUserId = discussionResult!.manager_user_id ?? null;
         discussionManagerName = discussionResult!.manager_user_id ?
           (managerNameById.get(discussionResult!.manager_user_id) ?? discussionResult!.manager_name ?? null) :
@@ -2073,6 +2081,7 @@ export class CoderTrainingService {
         replayScore: unitVar.replayScore,
         discussionCode,
         discussionScore,
+        discussionNotes,
         discussionManagerUserId,
         discussionManagerName,
         discussionSource,
