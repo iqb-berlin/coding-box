@@ -337,10 +337,16 @@ describe('DoubleCodedReviewComponent', () => {
     component.openReplay(501);
 
     expect(codingStatisticsService.getReplayUrl).toHaveBeenCalledWith(1, 501);
-    expect(openSpy).toHaveBeenCalledWith(
-      `${window.location.origin}/#/replay/person/unit/0/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=501`,
-      '_blank'
+    const openedUrl = openSpy.mock.calls[0][0] as string;
+    expect(openedUrl).toContain(
+      `${window.location.origin}/#/replay/person/unit/0/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=501`
     );
+    const reviewCodeSelections = new URLSearchParams(openedUrl.split('?')[1]).get('reviewCodeSelections');
+    expect(JSON.parse(reviewCodeSelections || '[]')).toEqual([
+      { code: 1, coderNames: ['Coder A'] },
+      { code: 2, coderNames: ['Coder B'] }
+    ]);
+    expect(openSpy).toHaveBeenCalledWith(openedUrl, '_blank');
   });
 
   it('selects an available coder result from a replay code selection', async () => {
