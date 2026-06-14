@@ -151,7 +151,7 @@ describe('CodeSelectorComponent', () => {
     expect(component.codingIssueOptionCodes).toHaveLength(4);
   });
 
-  it('keeps coding issue options and general instructions visible without regular manual codes', () => {
+  it('keeps available coding issue options and general instructions visible without regular manual codes', () => {
     component.codingScheme = issueOnlyCodingScheme;
     component.variableId = 'VAR2';
     const emitSpy = jest.spyOn(component.codeSelected, 'emit');
@@ -170,17 +170,113 @@ describe('CodeSelectorComponent', () => {
     expect(fixture.nativeElement.querySelectorAll('.uncertain-codes-section .code-row')).toHaveLength(4);
 
     component.onSelect(-1);
-    expect(emitSpy).toHaveBeenLastCalledWith({
-      variableId: 'VAR2',
-      code: null,
-      codingIssueOption: expect.objectContaining({ code: -1 })
-    });
+    expect(emitSpy).not.toHaveBeenCalled();
 
     component.onSelect(-2);
     expect(emitSpy).toHaveBeenLastCalledWith({
       variableId: 'VAR2',
       code: null,
       codingIssueOption: expect.objectContaining({ code: -2 })
+    });
+  });
+
+  it('hides comment-bound coding issue options when comments are disabled', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.allowComments = false;
+    const emitSpy = jest.spyOn(component.codeSelected, 'emit');
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    fixture.detectChanges();
+
+    expect(component.codingIssueOptionCodes.map(code => code.id)).toEqual([-3, -4]);
+    expect(fixture.nativeElement.querySelectorAll('.uncertain-codes-section .code-row')).toHaveLength(2);
+
+    component.onSelect(-1);
+    component.onSelect(-2);
+
+    expect(emitSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not preselect hidden comment-bound coding issue options when comments are disabled', () => {
+    jest.useFakeTimers();
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.allowComments = false;
+    component.preSelectedCodeId = -2;
+    component.preSelectedCodingIssueOptionId = -2;
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false),
+      preSelectedCodeId: new SimpleChange(null, -2, false),
+      preSelectedCodingIssueOptionId: new SimpleChange(null, -2, false)
+    });
+    jest.runOnlyPendingTimers();
+    fixture.detectChanges();
+
+    expect(component.codingIssueOptionCodes.map(code => code.id)).toEqual([-3, -4]);
+    expect(component.selectedCode).toBeNull();
+    expect(component.selectedCodingIssueOption).toBeNull();
+    expect(component.legacySelectedCode).toBeNull();
+    jest.useRealTimers();
+  });
+
+  it('clears selected comment-bound coding issue options when comments are disabled later', () => {
+    jest.useFakeTimers();
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.preSelectedCodeId = -2;
+    component.preSelectedCodingIssueOptionId = -2;
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false),
+      preSelectedCodeId: new SimpleChange(null, -2, false),
+      preSelectedCodingIssueOptionId: new SimpleChange(null, -2, false)
+    });
+    jest.runOnlyPendingTimers();
+
+    expect(component.selectedCodingIssueOption).toBe(-2);
+
+    component.allowComments = false;
+    component.ngOnChanges({
+      allowComments: new SimpleChange(true, false, false)
+    });
+
+    expect(component.selectedCode).toBeNull();
+    expect(component.selectedCodingIssueOption).toBeNull();
+    expect(component.legacySelectedCode).toBeNull();
+    jest.useRealTimers();
+  });
+
+  it('requires a regular code before selecting code-assignment-uncertain', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    const emitSpy = jest.spyOn(component.codeSelected, 'emit');
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+
+    component.onSelect(-1);
+
+    expect(component.selectedCodingIssueOption).toBeNull();
+    expect(emitSpy).not.toHaveBeenCalled();
+
+    component.onSelect(1);
+    component.onSelect(-1);
+
+    expect(component.selectedCode).toBe(1);
+    expect(component.selectedCodingIssueOption).toBe(-1);
+    expect(emitSpy).toHaveBeenLastCalledWith({
+      variableId: 'VAR1',
+      code: mixedCodingScheme.variableCodings[0].codes[0],
+      codingIssueOption: expect.objectContaining({ code: -1 })
     });
   });
 
@@ -291,7 +387,7 @@ describe('CodeSelectorComponent', () => {
     expect(component.selectedCode).toBe(1);
   });
 
-  it('clears stored legacy code when selecting a coding issue option', () => {
+  it('clears stored legacy code when selecting a standalone coding issue option', () => {
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
     component.preSelectedCodeId = 2;
@@ -302,14 +398,14 @@ describe('CodeSelectorComponent', () => {
       variableId: new SimpleChange(null, 'VAR1', false),
       preSelectedCodeId: new SimpleChange(null, 2, false)
     });
-    component.onSelect(-1);
+    component.onSelect(-2);
 
     expect(component.legacySelectedCode).toBeNull();
-    expect(component.selectedCodingIssueOption).toBe(-1);
+    expect(component.selectedCodingIssueOption).toBe(-2);
     expect(emitSpy).toHaveBeenCalledWith({
       variableId: 'VAR1',
       code: null,
-      codingIssueOption: expect.objectContaining({ code: -1 })
+      codingIssueOption: expect.objectContaining({ code: -2 })
     });
   });
 
@@ -367,6 +463,46 @@ describe('CodeSelectorComponent', () => {
     component.nextUnit();
 
     expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+  });
+
+  it('blocks nextUnit and focuses notes when new-code-needed has no comment', () => {
+    jest.useFakeTimers();
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.unitsData = {
+      ...interleavedUnitsData,
+      currentUnitIndex: 0
+    };
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    jest.runOnlyPendingTimers();
+    component.onSelect(-2);
+    fixture.detectChanges();
+
+    const notesTextarea = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+    const focusSpy = jest.spyOn(notesTextarea, 'focus').mockImplementation(() => { });
+    component.nextUnit();
+    jest.runAllTimers();
+    fixture.detectChanges();
+
+    expect(emitSpy).not.toHaveBeenCalled();
+    expect(component.newCodeCommentValidationError).toBe(true);
+    expect(fixture.nativeElement.querySelector('.notes-validation-error').textContent).toContain(
+      'code-selector.new-code-comment-required'
+    );
+    expect(focusSpy).toHaveBeenCalled();
+
+    component.coderNotes = 'needs a new code';
+    component.onNotesChanged();
+    component.nextUnit();
+
+    expect(component.newCodeCommentValidationError).toBe(false);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+    jest.useRealTimers();
   });
 
   it('previousUnit should navigate to immediate previous case for interleaved variables', () => {
