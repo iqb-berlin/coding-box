@@ -78,6 +78,24 @@
     margin-top: 16px;
   }
 
+  .training-apply-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+
+    button {
+      min-height: 36px;
+      white-space: normal;
+      line-height: 1.2;
+
+      mat-icon {
+        margin-right: 6px;
+      }
+    }
+  }
+
   .training-checkbox {
     display: block;
     margin: 6px 0;

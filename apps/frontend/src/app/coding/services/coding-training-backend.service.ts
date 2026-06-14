@@ -3,6 +3,12 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { CoderTraining } from '../models/coder-training.model';
+import {
+  ApplyTrainingDiscussionResultsRequestDto,
+  ApplyTrainingDiscussionResultsResultDto,
+  TrainingDiscussionApplyPreviewDto,
+  TrainingDiscussionApplySource
+} from '../../../../../../api-dto/coding/training-discussion-apply.dto';
 
 export interface CoderTrainingJob {
   coderId: number;
@@ -249,6 +255,32 @@ export class CodingTrainingBackendService {
       {
         responseId, code, score, notes
       },
+      { headers: this.authHeader }
+    );
+  }
+
+  previewApplyDiscussionResults(
+    workspaceId: number,
+    trainingId: number,
+    source: TrainingDiscussionApplySource
+  ): Observable<TrainingDiscussionApplyPreviewDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/apply-discussion-results-preview`;
+    return this.http.post<TrainingDiscussionApplyPreviewDto>(
+      url,
+      { source },
+      { headers: this.authHeader }
+    );
+  }
+
+  applyDiscussionResults(
+    workspaceId: number,
+    trainingId: number,
+    request: ApplyTrainingDiscussionResultsRequestDto
+  ): Observable<ApplyTrainingDiscussionResultsResultDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/apply-discussion-results`;
+    return this.http.post<ApplyTrainingDiscussionResultsResultDto>(
+      url,
+      request,
       { headers: this.authHeader }
     );
   }

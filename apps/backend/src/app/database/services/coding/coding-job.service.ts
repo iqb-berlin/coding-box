@@ -79,6 +79,7 @@ import {
   CODING_JOB_TYPE_CODING_ISSUE_REVIEW,
   isCodingIssueReviewJobType
 } from './coding-job-type.util';
+import { statusStringToNumber } from '../../utils/response-status-converter';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -3224,6 +3225,10 @@ export class CodingJobService {
     queryBuilder.andWhere(
       '(response.code_v2 IS NULL OR response.code_v2 != -111)'
     );
+    queryBuilder.andWhere(
+      '(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)',
+      { completedV2Status: statusStringToNumber('CODING_COMPLETE') }
+    );
     const exclusions =
       await this.workspaceExclusionService.resolveExclusionsForQueries(
         codingJob.workspace_id
@@ -4626,6 +4631,10 @@ export class CodingJobService {
         defaultMirCode: await this.getDefaultMirCode(workspaceId)
       }
     );
+    queryBuilder.andWhere(
+      '(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)',
+      { completedV2Status: statusStringToNumber('CODING_COMPLETE') }
+    );
     const exclusions =
       await this.workspaceExclusionService.resolveExclusionsForQueries(
         workspaceId
@@ -5336,7 +5345,10 @@ export class CodingJobService {
       .leftJoinAndSelect('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('(response.code_v2 IS NULL OR response.code_v2 != -111)');
+      .andWhere('(response.code_v2 IS NULL OR response.code_v2 != -111)')
+      .andWhere('(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)', {
+        completedV2Status: statusStringToNumber('CODING_COMPLETE')
+      });
     this.applyManualCodingCandidateStatusFilter(queryBuilder, variables);
     const exclusions =
       await this.workspaceExclusionService.resolveExclusionsForQueries(
@@ -5400,7 +5412,10 @@ export class CodingJobService {
           aggregatedCode: -111,
           defaultMirCode: await this.getDefaultMirCode(workspaceId)
         }
-      );
+      )
+      .andWhere('(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)', {
+        completedV2Status: statusStringToNumber('CODING_COMPLETE')
+      });
     this.applyManualCodingCandidateStatusFilter(queryBuilder, variables);
     const exclusions =
       await this.workspaceExclusionService.resolveExclusionsForQueries(
