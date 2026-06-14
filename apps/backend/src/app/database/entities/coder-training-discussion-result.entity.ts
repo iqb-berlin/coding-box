@@ -28,6 +28,9 @@ export class CoderTrainingDiscussionResult {
   @Column({ nullable: true })
     score: number | null;
 
+  @Column({ type: 'text', nullable: true })
+    notes: string | null;
+
   @Column({ nullable: true })
     manager_user_id: number | null;
 

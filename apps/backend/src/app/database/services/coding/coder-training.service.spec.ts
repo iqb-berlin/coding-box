@@ -2031,7 +2031,7 @@ describe('CoderTrainingService', () => {
       mockCodingJobService.getCodingSchemeScoreForUnitCode.mockResolvedValueOnce(2);
       mockDiscussionSave();
 
-      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', 7);
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', 7, 'Replay note');
 
       expect(mockCodingJobService.getCodingSchemeScoreForUnitCode).toHaveBeenCalledWith(unit, 1, 7);
       expect(coderTrainingDiscussionResultRepository.save).toHaveBeenCalledWith(expect.objectContaining({
@@ -2040,10 +2040,12 @@ describe('CoderTrainingService', () => {
         response_id: 101,
         code: 7,
         score: 2,
+        notes: 'Replay note',
         manager_user_id: 99,
         manager_name: 'Manager'
       }));
       expect(result.score).toBe(2);
+      expect(result.notes).toBe('Replay note');
       expect(result.source).toBe('manual');
     });
 
@@ -2217,6 +2219,7 @@ describe('CoderTrainingService', () => {
         success: true,
         code: 7,
         score: 2,
+        notes: null,
         source: 'auto_agreement',
         managerUserId: null,
         managerName: null

@@ -101,3 +101,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS "uq_coding_issue_review_source_reviewer"
 -- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "reviewer_user_id";
 -- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "source_coding_job_id";
 -- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "job_type";
+
+-- changeset jurei733:4
+-- comment: Persist optional notes for coder-training discussion results
+
+ALTER TABLE "public"."coder_training_discussion_result"
+  ADD COLUMN IF NOT EXISTS "notes" TEXT;
+
+-- rollback ALTER TABLE "public"."coder_training_discussion_result" DROP COLUMN IF EXISTS "notes";

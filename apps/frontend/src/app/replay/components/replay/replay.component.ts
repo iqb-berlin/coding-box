@@ -1181,6 +1181,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         variableId: event.variableId,
         code: savedCode.code,
         score: savedCode.score ?? null,
+        notes: this.codingService.getNotes(this.testPerson, this.unitId, event.variableId),
         responseId: this.originResponseId
       }, '*');
 
