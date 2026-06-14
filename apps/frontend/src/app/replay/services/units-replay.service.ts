@@ -8,6 +8,11 @@ import {
 } from 'rxjs';
 import { FileService } from '../../shared/services/file/file.service';
 
+export interface ReviewCodeSelection {
+  code: number;
+  coderNames: string[];
+}
+
 export interface UnitsReplayUnit {
   id: number;
   name: string;
@@ -19,6 +24,7 @@ export interface UnitsReplayUnit {
   variableId?: string;
   variableAnchor?: string;
   variablePage?: string;
+  reviewCodeSelections?: ReviewCodeSelection[];
 }
 
 export interface UnitsReplay {
