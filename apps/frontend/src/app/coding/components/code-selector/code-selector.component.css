@@ -20,6 +20,15 @@
   font-weight: 500;
 }
 
+.code-row.read-only {
+  opacity: 0.56;
+}
+
+.code-row.read-only:hover {
+  background-color: transparent;
+  border-color: transparent;
+}
+
 .general-instruction-row {
   cursor: default;
 }
@@ -147,6 +156,13 @@
 
 .notes-field {
   width: 100%;
+}
+
+.notes-validation-error {
+  margin: -8px 0 8px;
+  color: #ba1a1a;
+  font-size: 0.75rem;
+  line-height: 1.25;
 }
 
 ::ng-deep .notes-field .mat-mdc-form-field .mat-mdc-text-field-wrapper {

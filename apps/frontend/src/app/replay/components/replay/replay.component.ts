@@ -201,6 +201,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private replayTokenRefreshRunning = false;
   private codingJobWorkspaceNames = new Map<number, string>();
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
+  @ViewChild(CodeSelectorComponent) codeSelectorComponent: CodeSelectorComponent | undefined;
   @ViewChild('watermark')
   set watermarkRef(ref: ElementRef<HTMLElement> | undefined) {
     this.watermarkElement = ref ?? null;
@@ -965,7 +966,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   async handleUnitChanged(unit: UnitsReplayUnit): Promise<void> {
     if (this.isCodingInteractionBlockedByReAuthentication()) return;
     if (this.isSwitchingCodingJob) return;
+    if (!this.canLeaveCurrentCodingCase()) return;
     await this.applyUnitChanged(unit);
+  }
+
+  private canLeaveCurrentCodingCase(): boolean {
+    if (this.isCodingReadOnly()) return true;
+    return this.codeSelectorComponent?.canLeaveCurrentUnit() ?? true;
   }
 
   private async applyUnitChanged(unit: UnitsReplayUnit): Promise<void> {
@@ -1150,7 +1157,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.testPerson,
       this.unitId,
       this.codingService.currentVariableId,
-      notes
+      notes,
+      this.unitsData
     ).catch(() => undefined);
   }
 
