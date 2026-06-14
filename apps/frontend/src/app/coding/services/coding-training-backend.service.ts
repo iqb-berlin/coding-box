@@ -52,6 +52,7 @@ export interface WithinTrainingCodingResult {
   replayScore: number | null;
   discussionCode: number | null;
   discussionScore: number | null;
+  discussionNotes: string | null;
   discussionManagerUserId: number | null;
   discussionManagerName: string | null;
   discussionSource: 'manual' | 'auto_agreement' | null;
@@ -223,11 +224,13 @@ export class CodingTrainingBackendService {
     trainingId: number,
     responseId: number,
     code: number | null,
-    score: number | null
+    score: number | null,
+    notes?: string | null
   ): Observable<{
       success: boolean;
       code: number | null;
       score: number | null;
+      notes: string | null;
       source: 'manual' | 'auto_agreement' | null;
       managerUserId: number | null;
       managerName: string | null;
@@ -237,12 +240,15 @@ export class CodingTrainingBackendService {
       success: boolean;
       code: number | null;
       score: number | null;
+      notes: string | null;
       source: 'manual' | 'auto_agreement' | null;
       managerUserId: number | null;
       managerName: string | null;
     }>(
       url,
-      { responseId, code, score },
+      {
+        responseId, code, score, notes
+      },
       { headers: this.authHeader }
     );
   }

@@ -181,4 +181,20 @@ describe('CodingTrainingBackendService', () => {
       req.flush({});
     });
   });
+
+  describe('saveDiscussionResult', () => {
+    it('should include discussion notes', () => {
+      service.saveDiscussionResult(1, 5, 99, 7, 2, 'Replay note').subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/discussion-result`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        responseId: 99,
+        code: 7,
+        score: 2,
+        notes: 'Replay note'
+      });
+      req.flush({});
+    });
+  });
 });

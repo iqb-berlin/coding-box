@@ -405,6 +405,7 @@ describe('ReplayComponent', () => {
     component.testPerson = 'valid@test@person';
     component.unitId = 'unit-123';
     component.workspaceId = 5;
+    jest.spyOn(component.codingService, 'getNotes').mockReturnValue('Replay note');
     jest.spyOn(component.codingService, 'handleCodeSelected').mockResolvedValue({
       id: 7,
       code: '7',
@@ -428,6 +429,7 @@ describe('ReplayComponent', () => {
       variableId: 'VAR1',
       code: '7',
       score: 2,
+      notes: 'Replay note',
       responseId: 99
     }, '*');
   });

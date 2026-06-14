@@ -850,6 +850,15 @@
               width: 100%;
             }
 
+            .discussion-notes {
+              width: 100%;
+
+              textarea {
+                resize: vertical;
+                min-height: 48px;
+              }
+            }
+
             .discussion-score {
               font-size: 12px;
               color: #455a64;
@@ -974,8 +983,8 @@
         }
 
         .mat-column-discussion {
-          width: 230px;
-          max-width: 230px;
+          width: 280px;
+          max-width: 280px;
         }
       }
 

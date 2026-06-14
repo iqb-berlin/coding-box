@@ -540,6 +540,7 @@ export class WorkspaceCoderTrainingController {
           givenAnswer: { type: 'string', description: 'Given answer' },
           discussionCode: { type: 'number', nullable: true },
           discussionScore: { type: 'number', nullable: true },
+          discussionNotes: { type: 'string', nullable: true },
           discussionManagerUserId: { type: 'number', nullable: true },
           discussionManagerName: { type: 'string', nullable: true },
           discussionSource: { type: 'string', enum: ['manual', 'auto_agreement'], nullable: true },
@@ -582,6 +583,7 @@ export class WorkspaceCoderTrainingController {
         replayScore: number | null;
         discussionCode: number | null;
         discussionScore: number | null;
+        discussionNotes: string | null;
         discussionManagerUserId: number | null;
         discussionManagerName: string | null;
         discussionSource: 'manual' | 'auto_agreement' | null;
@@ -626,7 +628,8 @@ export class WorkspaceCoderTrainingController {
           type: 'number',
           nullable: true,
           description: 'Deprecated input; score is derived on the server from coding scheme, missings, or stored results.'
-        }
+        },
+        notes: { type: 'string', nullable: true }
       },
       required: ['responseId']
     }
@@ -634,12 +637,13 @@ export class WorkspaceCoderTrainingController {
   async saveDiscussionResult(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: { responseId: number; code: number | null; score: number | null },
+      @Body() body: { responseId: number; code: number | null; score: number | null; notes?: string | null },
       @Req() req: Request
   ): Promise<{
         success: boolean;
         code: number | null;
         score: number | null;
+        notes: string | null;
         source: 'manual' | 'auto_agreement' | null;
         managerUserId: number | null;
         managerName: string | null;
@@ -656,7 +660,8 @@ export class WorkspaceCoderTrainingController {
       Number(body.responseId),
       Number.isNaN(managerUserId) ? null : managerUserId,
       managerName,
-      body.code
+      body.code,
+      body.notes
     );
   }
 

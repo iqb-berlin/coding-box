@@ -6,6 +6,7 @@ describe('WorkspaceCoderTrainingController', () => {
   let coderTrainingService: {
     getWithinTrainingCodingComparison: jest.Mock;
     transformToCoderPairs: jest.Mock;
+    saveDiscussionResult: jest.Mock;
   };
   let codingStatisticsService: {
     calculateCohensKappa: jest.Mock;
@@ -15,7 +16,8 @@ describe('WorkspaceCoderTrainingController', () => {
   beforeEach(() => {
     coderTrainingService = {
       getWithinTrainingCodingComparison: jest.fn(),
-      transformToCoderPairs: jest.fn()
+      transformToCoderPairs: jest.fn(),
+      saveDiscussionResult: jest.fn()
     };
     codingStatisticsService = {
       calculateCohensKappa: jest.fn(),
@@ -159,5 +161,37 @@ describe('WorkspaceCoderTrainingController', () => {
     expect(result.workspaceSummary.weightingMethod).toBe('unweighted');
     expect(result.workspaceSummary.calculationLevel).toBe('code');
     expect(result.workspaceSummary.totalDoubleCodedResponses).toBe(2);
+  });
+
+  it('forwards discussion result notes to the service', async () => {
+    coderTrainingService.saveDiscussionResult.mockResolvedValue({
+      success: true,
+      code: 7,
+      score: 2,
+      notes: 'Replay note',
+      source: 'manual',
+      managerUserId: 23,
+      managerName: 'manager'
+    });
+
+    const result = await controller.saveDiscussionResult(
+      12,
+      5,
+      {
+        responseId: 101, code: 7, score: 2, notes: 'Replay note'
+      },
+      { user: { id: 23, username: 'manager' } } as never
+    );
+
+    expect(coderTrainingService.saveDiscussionResult).toHaveBeenCalledWith(
+      12,
+      5,
+      101,
+      23,
+      'manager',
+      7,
+      'Replay note'
+    );
+    expect(result.notes).toBe('Replay note');
   });
 });
