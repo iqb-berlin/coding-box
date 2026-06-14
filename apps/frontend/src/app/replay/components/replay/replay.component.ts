@@ -31,7 +31,7 @@ import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { ErrorMessages } from '../../models/error-messages.model';
 import { validateToken, isTestperson } from '../../utils/token-utils';
 import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
-import { UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.service';
+import { ReviewCodeSelection, UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.service';
 import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
 import { CodingJobCommentDialogComponent } from '../../../coding/components/coding-job-comment-dialog/coding-job-comment-dialog.component';
@@ -219,6 +219,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   protected reloadKey: number = 0;
   workspaceId: number = 0;
   originResponseId: number | null = null;
+  protected reviewCodeSelections: ReviewCodeSelection[] = [];
   private watermarkElement: ElementRef<HTMLElement> | null = null;
   private watermarkObserver: ResizeObserver | null = null;
   private watermarkCheckPending: boolean = false;
@@ -408,6 +409,48 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  private deserializeReviewCodeSelections(value: unknown): ReviewCodeSelection[] {
+    if (typeof value !== 'string' || value.trim() === '') {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      return parsed
+        .map(item => this.normalizeReviewCodeSelection(item))
+        .filter((item): item is ReviewCodeSelection => item !== null);
+    } catch {
+      return [];
+    }
+  }
+
+  private normalizeReviewCodeSelection(value: unknown): ReviewCodeSelection | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const candidate = value as { code?: unknown; coderNames?: unknown };
+    const code = typeof candidate.code === 'number' ? candidate.code : Number(candidate.code);
+    const coderNames = Array.isArray(candidate.coderNames) ?
+      candidate.coderNames
+        .filter((coderName): coderName is string => typeof coderName === 'string' && coderName.trim().length > 0)
+        .map(coderName => coderName.trim()) :
+      [];
+
+    if (!Number.isFinite(code) || coderNames.length === 0) {
+      return null;
+    }
+
+    return {
+      code,
+      coderNames: [...new Set(coderNames)]
+    };
+  }
+
   private getBooleanQueryParam(value: unknown): boolean | null {
     if (value === true || value === 'true') {
       return true;
@@ -444,6 +487,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           this.isCodingDecisionMode;
         this.isBookletReplayMode = queryParams.mode === 'booklet-view' || queryParams.mode === 'booklet';
         this.originResponseId = queryParams.originResponseId ? Number(queryParams.originResponseId) : null;
+        this.reviewCodeSelections = this.deserializeReviewCodeSelections(queryParams.reviewCodeSelections);
         const suppressGeneralInstructions = this.getBooleanQueryParam(queryParams.suppressGeneralInstructions);
         if (this.isCodingMode || this.isBookletReplayMode) {
           let deserializedUnits = null as UnitsReplay | null;
@@ -913,6 +957,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         const hashParams = new URLSearchParams(url.hash.slice(hashQueryStart + 1));
         hashParams.delete('auth');
         hashParams.delete('unitsData');
+        hashParams.delete('reviewCodeSelections');
 
         const query = hashParams.toString();
         url.hash = query ? `${hashPath}?${query}` : hashPath;
@@ -920,6 +965,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
       url.searchParams.delete('auth');
       url.searchParams.delete('unitsData');
+      url.searchParams.delete('reviewCodeSelections');
 
       return url.toString();
     } catch (error) {
@@ -1055,6 +1101,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.page = undefined;
     this.responses = undefined;
     this.serverTimings = null;
+    this.reviewCodeSelections = [];
     this.codingService.resetCodingData();
   }
 

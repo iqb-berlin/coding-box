@@ -94,6 +94,7 @@
         [isReadOnly]="isCodingReadOnly()" [isNavigationDisabled]="isCodingInteractionBlockedByReAuthentication()"
         [hasSaveError]="codingService.hasSaveError"
         [clearCodingIssueOnRegularSelection]="isCodingIssueReviewMode"
+        [reviewCodeSelections]="reviewCodeSelections"
         (codeSelected)="onCodeSelected($event)"
         (notesChanged)="onNotesChanged($event)" (openNavigateDialog)="openNavigateDialog()"
         (openCommentDialog)="openCommentDialog()" (pauseCodingJob)="pauseCodingJob()"

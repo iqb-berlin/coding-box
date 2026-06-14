@@ -37,6 +37,7 @@ import {
   appendReplayUrlParams,
   normalizeReplayUrlToCurrentOrigin
 } from '../../utils/replay-url.util';
+import { ReviewCodeSelection } from '../../../replay/services/units-replay.service';
 
 interface CoderResult {
   coderId: number;
@@ -729,8 +730,14 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return value;
   }
 
-  openReplay(responseId: number): void {
+  openReplay(itemOrResponseId: DoubleCodedItem | number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
+    const responseId = typeof itemOrResponseId === 'number' ?
+      itemOrResponseId :
+      itemOrResponseId.responseId;
+    const item = typeof itemOrResponseId === 'number' ?
+      this.allData.find(reviewItem => reviewItem.responseId === responseId) :
+      itemOrResponseId;
 
     if (!workspaceId || !responseId) {
       this.showError(this.translateService.instant('coding-management.descriptions.missing-replay-info'));
@@ -750,7 +757,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           return;
         }
 
-        const replayWindow = window.open(this.buildReplayDecisionUrl(result.replayUrl, responseId), '_blank');
+        const replayWindow = window.open(this.buildReplayDecisionUrl(result.replayUrl, responseId, item), '_blank');
         if (replayWindow) {
           this.replayWindowByResponseId.set(responseId, replayWindow);
         }
@@ -761,15 +768,46 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     });
   }
 
-  private buildReplayDecisionUrl(replayUrl: string, responseId: number): string {
+  private buildReplayDecisionUrl(
+    replayUrl: string,
+    responseId: number,
+    item?: DoubleCodedItem
+  ): string {
     return appendReplayUrlParams(
       normalizeReplayUrlToCurrentOrigin(replayUrl),
       {
         mode: 'coding-decision',
         originResponseId: responseId,
-        workspaceId: this.appService.selectedWorkspaceId
+        workspaceId: this.appService.selectedWorkspaceId,
+        reviewCodeSelections: item ? this.serializeReviewCodeSelections(item) : undefined
       }
     );
+  }
+
+  private serializeReviewCodeSelections(item: DoubleCodedItem): string | undefined {
+    const selections = this.getReviewCodeSelections(item);
+    return selections.length > 0 ? JSON.stringify(selections) : undefined;
+  }
+
+  private getReviewCodeSelections(item: DoubleCodedItem): ReviewCodeSelection[] {
+    const coderNamesByCode = new Map<number, string[]>();
+
+    item.coderResults.forEach(result => {
+      if (result.code === null || result.code === undefined) {
+        return;
+      }
+
+      const coderNames = coderNamesByCode.get(result.code) || [];
+      const coderName = this.getCoderDisplayName(result);
+      if (!coderNames.includes(coderName)) {
+        coderNames.push(coderName);
+      }
+      coderNamesByCode.set(result.code, coderNames);
+    });
+
+    return Array.from(coderNamesByCode.entries())
+      .sort(([codeA], [codeB]) => codeA - codeB)
+      .map(([code, coderNames]) => ({ code, coderNames }));
   }
 
   private handleReplayCodeSelected(

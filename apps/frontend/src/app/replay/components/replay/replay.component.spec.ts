@@ -352,7 +352,7 @@ describe('ReplayComponent', () => {
     window.history.pushState(
       {},
       '',
-      `/#/replay/login@@group@BOOKLET_A/UNIT_1/0/0?auth=secret&mode=booklet-view&unitsData=${unitsData}`
+      `/#/replay/login@@group@BOOKLET_A/UNIT_1/0/0?auth=secret&mode=booklet-view&unitsData=${unitsData}&reviewCodeSelections=${encodeURIComponent('[{"code":1,"coderNames":["Coder A"]}]')}`
     );
 
     replayBackendService.storeReplayStatistics.mockClear();
@@ -370,6 +370,7 @@ describe('ReplayComponent', () => {
     const replayUrl = replayBackendService.storeReplayStatistics.mock.calls[0][1].replayUrl as string;
     expect(replayUrl).not.toContain('auth=');
     expect(replayUrl).not.toContain('unitsData=');
+    expect(replayUrl).not.toContain('reviewCodeSelections=');
     expect(replayUrl.length).toBeLessThan(2000);
   });
 
@@ -1156,7 +1157,12 @@ describe('ReplayComponent', () => {
       auth: 'valid-token',
       mode: 'coding-decision',
       originResponseId: '77',
-      workspaceId: '47'
+      workspaceId: '47',
+      reviewCodeSelections: JSON.stringify([
+        { code: 1, coderNames: ['Coder A', 'Coder B', 'Coder A'] },
+        { code: '2', coderNames: ['Coder C'] },
+        { code: 'invalid', coderNames: ['Coder D'] }
+      ])
     };
     appService.needsReAuthentication = true;
     codingJobBackendServiceMock.getCodingJobUnits.mockClear();
@@ -1177,6 +1183,10 @@ describe('ReplayComponent', () => {
     expect(component.isReviewMode).toBe(false);
     expect(component.isCodingIssueReviewMode).toBe(false);
     expect(component.originResponseId).toBe(77);
+    expect((component as unknown as { reviewCodeSelections: unknown }).reviewCodeSelections).toEqual([
+      { code: 1, coderNames: ['Coder A', 'Coder B'] },
+      { code: 2, coderNames: ['Coder C'] }
+    ]);
     expect(component.isCodingReadOnly()).toBe(false);
     expect(component.isCodingInteractionBlockedByReAuthentication()).toBe(false);
     expect(component.canSwitchAssignedCodingJobs()).toBe(false);
