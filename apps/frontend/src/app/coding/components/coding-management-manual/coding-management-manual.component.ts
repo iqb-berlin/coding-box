@@ -12,13 +12,15 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import {
   Subject, takeUntil, debounceTime, finalize, Observable, of, tap,
-  distinctUntilChanged, filter,
+  distinctUntilChanged,
   firstValueFrom,
-  map
+  map,
+  switchMap
 } from 'rxjs';
 import * as ExcelJS from 'exceljs';
 import { Router } from '@angular/router';
@@ -155,6 +157,7 @@ type ManualCodingTab = 'preparation' | 'planning' | 'training' | 'execution' | '
     CommonModule,
     FormsModule,
     MatCheckboxModule,
+    MatSlideToggleModule,
     MatFormFieldModule,
     MatInputModule,
     MatPaginatorModule,
@@ -210,6 +213,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   // Response matching mode configuration
   responseMatchingFlags: ResponseMatchingFlag[] = [];
   private persistedResponseMatchingFlags: ResponseMatchingFlag[] = [];
+  private readonly aggregationOptionFlags = [
+    ResponseMatchingFlag.IGNORE_CASE,
+    ResponseMatchingFlag.IGNORE_WHITESPACE
+  ];
+
   isLoadingMatchingMode = false;
   isSavingMatchingMode = false;
   ResponseMatchingFlag = ResponseMatchingFlag; // Expose enum to template
@@ -260,8 +268,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private jobDefinitionChangeSubject = new Subject<void>();
 
   private thresholdChangeSubject = new Subject<number>();
-
-  private matchingFlagChangeSubject = new Subject<ResponseMatchingFlag[]>();
 
   private statisticsRefreshSubject = new Subject<void>();
 
@@ -425,9 +431,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe((threshold: number) => {
         const workspaceId = this.appService.selectedWorkspaceId;
         if (workspaceId) {
+          const localFlagsAfterSave = [...this.responseMatchingFlags];
+          const flagsToPersist = this.getPersistableResponseMatchingFlags(localFlagsAfterSave);
           this.isApplyingDuplicateAggregation = true;
           this.testPersonCodingService
-            .saveAggregationSettings(workspaceId, threshold, this.responseMatchingFlags)
+            .saveAggregationSettings(workspaceId, threshold, flagsToPersist)
             .pipe(
               finalize(() => {
                 this.isApplyingDuplicateAggregation = false;
@@ -440,8 +448,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
                   this.showError(result.message);
                   return;
                 }
-                this.responseMatchingFlags = result.flags;
                 this.persistedResponseMatchingFlags = [...result.flags];
+                this.responseMatchingFlags = this.buildResponseMatchingFlagsAfterSettingsSave(
+                  result.flags,
+                  localFlagsAfterSave
+                );
                 this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(result.threshold);
                 this.refreshAggregationDependentViews();
               },
@@ -450,36 +461,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               }
             });
         }
-      });
-
-    this.matchingFlagChangeSubject
-      .pipe(
-        debounceTime(500),
-        filter(flags => !this.areMatchingFlagsEqual(flags, this.persistedResponseMatchingFlags)),
-        takeUntil(this.destroy$)
-      )
-      .subscribe((flags: ResponseMatchingFlag[]) => {
-        const workspaceId = this.appService.selectedWorkspaceId;
-        if (!workspaceId) {
-          return;
-        }
-
-        this.isLoadingMatchingMode = true;
-        this.saveResponseMatchingMode(flags)
-          .pipe(
-            finalize(() => {
-              this.isLoadingMatchingMode = false;
-            }),
-            takeUntil(this.destroy$)
-          )
-          .subscribe({
-            next: () => {
-              this.onResponseMatchingModeChanged();
-            },
-            error: () => {
-              // Error handling is done in saveResponseMatchingMode.
-            }
-          });
       });
 
     this.testPersonCodingService.autoCodingCompleted$
@@ -3153,44 +3134,128 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.responseMatchingFlags.includes(flag);
   }
 
-  toggleMatchingFlag(flag: ResponseMatchingFlag): void {
+  hasUnsavedResponseMatchingChanges(): boolean {
+    return !this.areMatchingFlagsEqual(
+      this.getPersistableResponseMatchingFlags(),
+      this.persistedResponseMatchingFlags
+    );
+  }
+
+  hasPendingAggregationOptionsWithoutAggregation(): boolean {
+    return this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION) &&
+      this.getSelectedAggregationOptionFlags().length > 0;
+  }
+
+  onAggregationModeChanged(aggregateResponses: boolean): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId || this.responseAnalysis?.isCalculating) {
+    if (
+      !workspaceId ||
+      this.isLoadingMatchingMode ||
+      this.isSavingMatchingMode ||
+      this.isApplyingDuplicateAggregation ||
+      this.isLoadingResponseAnalysis ||
+      this.responseAnalysis?.isCalculating ||
+      aggregateResponses === this.isDuplicateAggregationActive
+    ) {
       return;
     }
 
-    let newFlags: ResponseMatchingFlag[];
-
-    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
-      if (this.hasMatchingFlag(flag)) {
-        newFlags = [];
-      } else {
-        newFlags = [ResponseMatchingFlag.NO_AGGREGATION];
-      }
-    } else {
-      newFlags = this.responseMatchingFlags.filter(
-        f => f !== ResponseMatchingFlag.NO_AGGREGATION
-      );
-      if (this.hasMatchingFlag(flag)) {
-        newFlags = newFlags.filter(f => f !== flag);
-      } else {
-        newFlags = [...newFlags, flag];
-      }
-    }
-
-    this.responseMatchingFlags = newFlags;
+    const rollbackFlags = [...this.responseMatchingFlags];
+    const optionFlags = this.getSelectedAggregationOptionFlags();
+    this.responseMatchingFlags = this.buildLocalResponseMatchingFlags(
+      aggregateResponses,
+      optionFlags
+    );
     this.emptyPageIndex = 0;
     this.duplicatePageIndex = 0;
-    this.matchingFlagChangeSubject.next(newFlags);
+    this.restartAnalysis(rollbackFlags);
   }
 
-  private saveResponseMatchingMode(flags: ResponseMatchingFlag[]): Observable<void> {
+  toggleMatchingFlag(flag: ResponseMatchingFlag): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (
+      !workspaceId ||
+      this.isLoadingMatchingMode ||
+      this.isSavingMatchingMode ||
+      this.isApplyingDuplicateAggregation
+    ) {
+      return;
+    }
+
+    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
+      this.onAggregationModeChanged(this.hasMatchingFlag(flag));
+      return;
+    }
+
+    const selectedOptionFlags = this.getSelectedAggregationOptionFlags();
+    const nextOptionFlags = selectedOptionFlags.includes(flag) ?
+      selectedOptionFlags.filter(f => f !== flag) :
+      [...selectedOptionFlags, flag];
+
+    this.responseMatchingFlags = this.buildLocalResponseMatchingFlags(
+      this.isDuplicateAggregationActive,
+      nextOptionFlags
+    );
+    this.emptyPageIndex = 0;
+    this.duplicatePageIndex = 0;
+  }
+
+  private getSelectedAggregationOptionFlags(
+    flags: ResponseMatchingFlag[] = this.responseMatchingFlags
+  ): ResponseMatchingFlag[] {
+    return this.aggregationOptionFlags.filter(flag => flags.includes(flag));
+  }
+
+  private buildLocalResponseMatchingFlags(
+    aggregateResponses: boolean,
+    optionFlags: ResponseMatchingFlag[]
+  ): ResponseMatchingFlag[] {
+    const selectedOptionFlags = this.getSelectedAggregationOptionFlags(optionFlags);
+    return aggregateResponses ?
+      selectedOptionFlags :
+      [ResponseMatchingFlag.NO_AGGREGATION, ...selectedOptionFlags];
+  }
+
+  private getPersistableResponseMatchingFlags(
+    flags: ResponseMatchingFlag[] = this.responseMatchingFlags
+  ): ResponseMatchingFlag[] {
+    const selectedOptionFlags = this.getSelectedAggregationOptionFlags(flags);
+    return flags.includes(ResponseMatchingFlag.NO_AGGREGATION) ?
+      [ResponseMatchingFlag.NO_AGGREGATION] :
+      selectedOptionFlags;
+  }
+
+  private buildResponseMatchingFlagsAfterSettingsSave(
+    savedFlags: ResponseMatchingFlag[],
+    localFlagsAfterSave: ResponseMatchingFlag[]
+  ): ResponseMatchingFlag[] {
+    return this.buildLocalResponseMatchingFlags(
+      !savedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
+      this.getSelectedAggregationOptionFlags(localFlagsAfterSave)
+    );
+  }
+
+  private saveResponseMatchingMode(
+    flags: ResponseMatchingFlag[],
+    options: {
+      localFlagsAfterSave?: ResponseMatchingFlag[];
+      rollbackFlags?: ResponseMatchingFlag[];
+      showSuccessMessage?: boolean;
+    } = {}
+  ): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return of(undefined);
     }
 
-    const rollbackFlags = [...this.persistedResponseMatchingFlags];
+    const rollbackFlags = options.rollbackFlags ?
+      [...options.rollbackFlags] :
+      [...this.persistedResponseMatchingFlags];
+    const localFlagsAfterSave = options.localFlagsAfterSave ?
+      [...options.localFlagsAfterSave] :
+      undefined;
+    const showSuccessMessage = options.showSuccessMessage ?? true;
+
     this.isSavingMatchingMode = true;
     return this.testPersonCodingService
       .saveAggregationSettings(
@@ -3207,14 +3272,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         }),
         tap({
           next: result => {
-            this.responseMatchingFlags = result.flags;
             this.persistedResponseMatchingFlags = [...result.flags];
+            this.responseMatchingFlags = localFlagsAfterSave ?? result.flags;
             this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(result.threshold);
-            this.showSuccess(
-              this.translateService.instant(
-                'coding-management-manual.response-matching.save-success'
-              )
-            );
+            if (showSuccessMessage) {
+              this.showSuccess(
+                this.translateService.instant(
+                  'coding-management-manual.response-matching.save-success'
+                )
+              );
+            }
           },
           error: () => {
             this.responseMatchingFlags = rollbackFlags;
@@ -3246,13 +3313,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return false;
     }
     return previous.every(flag => current.includes(flag));
-  }
-
-  isMatchingOptionDisabled(flag: ResponseMatchingFlag): boolean {
-    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
-      return false;
-    }
-    return this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION);
   }
 
   loadResponseAnalysis(): void {
@@ -3306,30 +3366,61 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       });
   }
 
-  restartAnalysis(): void {
+  restartAnalysis(rollbackResponseMatchingFlags?: ResponseMatchingFlag[]): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
+    const targetMatchingFlags = this.getPersistableResponseMatchingFlags();
+    const localFlagsAfterSave = [...this.responseMatchingFlags];
+    const shouldSaveMatchingMode = !this.areMatchingFlagsEqual(
+      targetMatchingFlags,
+      this.persistedResponseMatchingFlags
+    );
+    const shouldRefreshAggregationDependentViews = shouldSaveMatchingMode;
+    let settingsReadyForAnalysis = !shouldSaveMatchingMode;
+
     this.isLoadingResponseAnalysis = true;
     this.responseAnalysisError = null;
-    this.codingJobBackendService
-      .triggerResponseAnalysis(
-        workspaceId,
-        this.normalizeAggregationThreshold(this.duplicateAggregationThreshold)
+    const saveMatchingMode$ = shouldSaveMatchingMode ?
+      this.saveResponseMatchingMode(
+        targetMatchingFlags,
+        {
+          localFlagsAfterSave,
+          rollbackFlags: rollbackResponseMatchingFlags,
+          showSuccessMessage: false
+        }
+      ) :
+      of(undefined);
+
+    saveMatchingMode$
+      .pipe(
+        tap(() => {
+          settingsReadyForAnalysis = true;
+        }),
+        switchMap(() => this.codingJobBackendService
+          .triggerResponseAnalysis(
+            workspaceId,
+            this.normalizeAggregationThreshold(this.duplicateAggregationThreshold)
+          )),
+        takeUntil(this.destroy$)
       )
-      .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
           this.snackBar.open('Antwortanalyse wurde gestartet.', 'OK', { duration: 3000 });
+          if (shouldRefreshAggregationDependentViews) {
+            this.refreshAggregationDependentViews(false);
+          }
           this.loadResponseAnalysis(); // Start polling
         },
         error: error => {
           this.isLoadingResponseAnalysis = false;
-          this.snackBar.open(
-            `Fehler beim Starten der Antwortanalyse: ${error.message || error}`,
-            'OK',
-            { duration: 3000 }
-          );
+          if (settingsReadyForAnalysis) {
+            this.snackBar.open(
+              `Fehler beim Starten der Antwortanalyse: ${error.message || error}`,
+              'OK',
+              { duration: 3000 }
+            );
+          }
         }
       });
   }
