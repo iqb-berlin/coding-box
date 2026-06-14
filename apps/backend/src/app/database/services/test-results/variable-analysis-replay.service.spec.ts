@@ -10,7 +10,7 @@ const VARIABLE_PAIR_SEPARATOR = '\u001F';
 interface ResponseFixtureRow {
   unitId: string;
   variableId: string;
-  code_v1: string;
+  code_v1: string | null;
   score_v1: number;
   loginName?: string;
   loginCode?: string;
@@ -45,7 +45,7 @@ const toVariablePairKey = (unitId: string, variableId: string): string => (
 );
 
 const toAggregationKey = (row: ResponseFixtureRow): string => (
-  `${row.unitId}${VARIABLE_PAIR_SEPARATOR}${row.variableId}${VARIABLE_PAIR_SEPARATOR}${row.code_v1}`
+  `${row.unitId}${VARIABLE_PAIR_SEPARATOR}${row.variableId}${VARIABLE_PAIR_SEPARATOR}${row.code_v1 ?? ''}`
 );
 
 const createQueryBuilder = (
@@ -155,7 +155,7 @@ const getAggregatedRows = (rows: ResponseFixtureRow[]) => {
   const groupedRows = new Map<string, {
     unitId: string;
     variableId: string;
-    code_v1: string;
+    code_v1: string | null;
     occurrenceCount: number;
     score_V1: number;
   }>();
@@ -183,7 +183,7 @@ const getAggregatedRows = (rows: ResponseFixtureRow[]) => {
     .sort((a, b) => (
       a.unitId.localeCompare(b.unitId) ||
       a.variableId.localeCompare(b.variableId) ||
-      a.code_v1.localeCompare(b.code_v1)
+      (a.code_v1 ?? '').localeCompare(b.code_v1 ?? '')
     ))
     .map(row => ({
       ...row,
@@ -221,6 +221,7 @@ const getSampleInfoRows = (rows: ResponseFixtureRow[]) => {
   const groupedRows = new Map<string, {
     unitId: string;
     variableId: string;
+    code_v1: string | null;
     loginName: string;
     loginCode: string;
     loginGroup: string;
@@ -228,7 +229,7 @@ const getSampleInfoRows = (rows: ResponseFixtureRow[]) => {
   }>();
 
   rows.forEach(row => {
-    const key = toVariablePairKey(row.unitId, row.variableId);
+    const key = toAggregationKey(row);
     if (groupedRows.has(key)) {
       return;
     }
@@ -236,6 +237,7 @@ const getSampleInfoRows = (rows: ResponseFixtureRow[]) => {
     groupedRows.set(key, {
       unitId: row.unitId,
       variableId: row.variableId,
+      code_v1: row.code_v1,
       loginName: row.loginName || 'login',
       loginCode: row.loginCode || 'code',
       loginGroup: row.loginGroup || 'group',
@@ -265,13 +267,21 @@ describe('VariableAnalysisReplayService', () => {
       unitId: 'MDB002',
       variableId: '01',
       code_v1: '0',
-      score_v1: 0
+      score_v1: 0,
+      loginName: 'login-code-0',
+      loginCode: 'person-0',
+      loginGroup: 'group-0',
+      bookletId: 'booklet-0'
     },
     {
       unitId: 'MDB002',
       variableId: '01',
       code_v1: '1',
-      score_v1: 1
+      score_v1: 1,
+      loginName: 'login-code-1',
+      loginCode: 'person-1',
+      loginGroup: 'group-1',
+      bookletId: 'booklet-1'
     },
     {
       unitId: 'MDB002',
@@ -347,6 +357,20 @@ describe('VariableAnalysisReplayService', () => {
       relativeOccurrence: 0.5
     });
     expect(result.data[0].replayUrl).toContain('/MDB002/1/01?auth=token');
+    expect(result.data[0].replayUrl).toContain('login-code-0@person-0@group-0@booklet-0');
+  });
+
+  it('uses a replay sample from the matching code group for each distribution row', async () => {
+    const result = await service.getVariableAnalysis(7, 'token', 'http://server', 1, 10);
+    const rowByAggregationKey = new Map(result.data.map(row => [
+      `${row.unitId}${VARIABLE_PAIR_SEPARATOR}${row.variableId}${VARIABLE_PAIR_SEPARATOR}${row.code}`,
+      row
+    ]));
+
+    expect(rowByAggregationKey.get(`MDB002${VARIABLE_PAIR_SEPARATOR}01${VARIABLE_PAIR_SEPARATOR}0`)?.replayUrl)
+      .toContain('login-code-0@person-0@group-0@booklet-0');
+    expect(rowByAggregationKey.get(`MDB002${VARIABLE_PAIR_SEPARATOR}01${VARIABLE_PAIR_SEPARATOR}1`)?.replayUrl)
+      .toContain('login-code-1@person-1@group-1@booklet-1');
   });
 
   it('applies the derivation filter before counting and paginating', async () => {

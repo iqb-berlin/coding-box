@@ -28,9 +28,19 @@ interface UnitVariablePair {
 interface VariableAnalysisAggregationRow {
   unitId: string;
   variableId: string;
-  code_v1: string;
+  code_v1: string | null;
   occurrenceCount: string;
   score_V1: string;
+}
+
+interface VariableAnalysisSampleInfoRow {
+  unitId: string;
+  variableId: string;
+  code_v1: string | null;
+  loginName: string;
+  loginCode: string;
+  loginGroup: string;
+  bookletId: string;
 }
 
 @Injectable()
@@ -212,6 +222,7 @@ export class VariableAnalysisReplayService {
       const sampleInfoQuery = this.responseRepository.createQueryBuilder('response')
         .select('unit.name', 'unitId')
         .addSelect('response.variableid', 'variableId')
+        .addSelect('response.code_v1', 'code_v1')
         .addSelect('person.login', 'loginName')
         .addSelect('person.code', 'loginCode')
         .addSelect('person.group', 'loginGroup')
@@ -226,16 +237,21 @@ export class VariableAnalysisReplayService {
 
       sampleInfoQuery.groupBy('unit.name')
         .addGroupBy('response.variableid')
+        .addGroupBy('response.code_v1')
         .addGroupBy('person.login')
         .addGroupBy('person.code')
         .addGroupBy('person.group')
         .addGroupBy('bookletinfo.name');
 
-      const sampleInfoResults = await sampleInfoQuery.getRawMany();
+      const sampleInfoResults = await sampleInfoQuery.getRawMany<VariableAnalysisSampleInfoRow>();
 
       const sampleInfoMap = new Map<string, { loginName: string; loginCode: string; loginGroup: string; bookletId: string }>();
       for (const result of sampleInfoResults) {
-        const key = this.toVariablePairKey(result.unitId, result.variableId);
+        const key = this.toAggregationKey(result.unitId, result.variableId, result.code_v1);
+        if (sampleInfoMap.has(key)) {
+          continue;
+        }
+
         sampleInfoMap.set(key, {
           loginName: result.loginName || '',
           loginCode: result.loginCode || '',
@@ -257,7 +273,7 @@ export class VariableAnalysisReplayService {
       for (const item of aggregatedResults) {
         const unitId = item.unitId;
         const variableId = item.variableId;
-        const code = item.code_v1;
+        const code = item.code_v1?.toString() ?? '';
         const occurrenceCount = parseInt(item.occurrenceCount, 10);
         const score = parseFloat(item.score_V1) || 0;
 
@@ -269,7 +285,7 @@ export class VariableAnalysisReplayService {
         const derivation = variableCoding?.sourceType || '';
         const description = variableCoding?.label || '';
 
-        const sampleInfo = sampleInfoMap.get(this.toVariablePairKey(unitId, variableId));
+        const sampleInfo = sampleInfoMap.get(this.toAggregationKey(unitId, variableId, code));
         const loginName = sampleInfo?.loginName || '';
         const loginCode = sampleInfo?.loginCode || '';
         const loginGroup = sampleInfo?.loginGroup || '';
@@ -380,5 +396,9 @@ export class VariableAnalysisReplayService {
 
   private toVariablePairKey(unitId: string, variableId: string): string {
     return `${unitId}\u001F${variableId}`;
+  }
+
+  private toAggregationKey(unitId: string, variableId: string, code: string | number | null | undefined): string {
+    return `${this.toVariablePairKey(unitId, variableId)}\u001F${code ?? ''}`;
   }
 }
