@@ -101,6 +101,53 @@ describe('ReplayCodingService', () => {
       expect(service.showScore).toBe(true);
     });
 
+    it('preserves coding issue options on regular codes loaded from saved progress', async () => {
+      service.currentVariableId = 'VAR1';
+      service.codingScheme = {
+        id: 'scheme-1',
+        label: 'Scheme',
+        variableCodings: [
+          {
+            id: 'VAR1',
+            alias: 'VAR1',
+            sourceType: 'manual',
+            codes: [
+              {
+                id: 7,
+                code: '7',
+                label: 'Regular',
+                score: 1,
+                type: 'manual'
+              }
+            ]
+          }
+        ]
+      } as never;
+      const key = service.generateCompositeKey('p1', 'u1', 'VAR1');
+
+      codingJobBackendServiceMock.getCodingProgress.mockReturnValue(of({
+        [key]: {
+          id: 7,
+          code: '7',
+          label: 'Regular',
+          score: 1,
+          codingIssueOption: -1
+        }
+      }));
+      codingJobBackendServiceMock.getCodingNotes.mockReturnValue(of({}));
+      codingJobBackendServiceMock.getCodingJob.mockReturnValue(of({} as CodingJob));
+
+      await service.loadSavedCodingProgress(1, 100);
+
+      expect(service.selectedCodes.get(key)).toEqual({
+        id: 7,
+        code: '7',
+        label: 'Regular',
+        score: 1,
+        codingIssueOption: -1
+      });
+    });
+
     it('should pass the replay auth token while loading progress, notes, and job details', async () => {
       codingJobBackendServiceMock.getCodingProgress.mockReturnValue(of({}));
       codingJobBackendServiceMock.getCodingNotes.mockReturnValue(of({}));
@@ -468,6 +515,89 @@ describe('ReplayCodingService', () => {
       await expect(second).resolves.toBeNull();
       expect(service.selectedCodes.get(key)?.id).toBe(9);
     });
+
+    it('keeps new-code-needed without notes local and incomplete without persisting it', async () => {
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      service.codingJobId = 100;
+      const unitsData = {
+        id: 1,
+        name: 'job',
+        currentUnitIndex: 0,
+        units: [
+          {
+            id: 1,
+            name: 'u1',
+            alias: 'u1',
+            bookletId: 0,
+            testPerson: 'p1',
+            variableId: 'v1'
+          }
+        ]
+      };
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      service.openUnitKeys.add(key);
+
+      await service.handleCodeSelected(
+        {
+          variableId: 'v1',
+          code: null,
+          codingIssueOption: {
+            id: 'uncertain--2',
+            label: 'New code needed',
+            description: '',
+            code: -2
+          }
+        },
+        'p1',
+        'u1',
+        1,
+        unitsData
+      );
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+      expect(service.selectedCodes.get(key)?.id).toBe(-2);
+      expect(service.openUnitKeys.has(key)).toBe(false);
+      expect(service.getCompletedCount(unitsData)).toBe(0);
+      expect(service.isCodingJobCompleted).toBe(false);
+    });
+
+    it('does not clear persisted regular progress when new-code-needed is selected without notes', async () => {
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      service.codingJobId = 100;
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      service.selectedCodes.set(key, {
+        id: 7,
+        code: '7',
+        label: 'Regular',
+        score: 1
+      });
+
+      await service.handleCodeSelected(
+        {
+          variableId: 'v1',
+          code: { id: 7, label: 'Regular', score: 1 } as never,
+          codingIssueOption: {
+            id: 'uncertain--2',
+            label: 'New code needed',
+            description: '',
+            code: -2
+          }
+        },
+        'p1',
+        'u1',
+        1,
+        null
+      );
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+      expect(service.selectedCodes.get(key)).toMatchObject({
+        id: 7,
+        code: '7',
+        label: 'Regular',
+        score: 1,
+        codingIssueOption: -2
+      });
+    });
   });
 
   describe('resetCodingData', () => {
@@ -658,6 +788,287 @@ describe('ReplayCodingService', () => {
 
       expect(service.hasSaveError).toBe(false);
       expect(service.lastSaveError).toBeNull();
+    });
+
+    it('persists deferred new-code-needed progress after notes are added', async () => {
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      service.codingJobId = 100;
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      service.selectedCodes.set(key, {
+        id: -2,
+        code: '-2',
+        label: 'New code needed',
+        codingIssueOption: -2
+      });
+      service.openUnitKeys.add(key);
+      const unitsData = {
+        id: 1,
+        name: 'job',
+        currentUnitIndex: 0,
+        units: [
+          {
+            id: 1,
+            name: 'u1',
+            alias: 'u1',
+            bookletId: 0,
+            testPerson: 'p1',
+            variableId: 'v1'
+          }
+        ]
+      };
+
+      await service.saveNotes(1, 'p1', 'u1', 'v1', 'needs a new code', unitsData);
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: {
+            id: -2,
+            code: '-2',
+            label: 'New code needed',
+            score: null,
+            codingIssueOption: -2
+          }
+        }
+      );
+      expect(service.openUnitKeys.has(key)).toBe(false);
+      expect(service.isCodingJobCompleted).toBe(true);
+    });
+
+    it('does not let deferred new-code-needed note sync overwrite newer selections', async () => {
+      const noteSubject = new Subject<CodingJob>();
+      const progressSubjects: Subject<CodingJob>[] = [];
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(noteSubject.asObservable());
+      codingJobBackendServiceMock.saveCodingProgress.mockImplementation(() => {
+        const subject = new Subject<CodingJob>();
+        progressSubjects.push(subject);
+        return subject.asObservable();
+      });
+      service.codingJobId = 100;
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      service.selectedCodes.set(key, {
+        id: -2,
+        code: '-2',
+        label: 'New code needed',
+        codingIssueOption: -2
+      });
+
+      const noteSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'needs a new code');
+      await Promise.resolve();
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledTimes(1);
+
+      const regularSave = service.handleCodeSelected(
+        {
+          variableId: 'v1',
+          code: { id: 7, label: 'Regular', score: 1 } as never,
+          codingIssueOption: null
+        },
+        'p1',
+        'u1',
+        1,
+        null
+      );
+      await Promise.resolve();
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+
+      noteSubject.next({} as CodingJob);
+      noteSubject.complete();
+      await noteSave;
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledTimes(1);
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: {
+            id: 7,
+            code: '7',
+            label: 'Regular',
+            score: 1,
+            codingIssueOption: null
+          }
+        }
+      );
+
+      progressSubjects[0].next({} as CodingJob);
+      progressSubjects[0].complete();
+      await regularSave;
+      expect(service.selectedCodes.get(key)?.id).toBe(7);
+    });
+
+    it('persists latest new-code-needed selection when it is chosen during a note save', async () => {
+      const noteSubject = new Subject<CodingJob>();
+      const progressSubjects: Subject<CodingJob>[] = [];
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(noteSubject.asObservable());
+      codingJobBackendServiceMock.saveCodingProgress.mockImplementation(() => {
+        const subject = new Subject<CodingJob>();
+        progressSubjects.push(subject);
+        return subject.asObservable();
+      });
+      service.codingJobId = 100;
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+
+      const noteSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'needs a new code');
+      const newCodeNeededSelection = service.handleCodeSelected(
+        {
+          variableId: 'v1',
+          code: null,
+          codingIssueOption: {
+            id: 'uncertain--2',
+            label: 'New code needed',
+            description: '',
+            code: -2
+          }
+        },
+        'p1',
+        'u1',
+        1,
+        null
+      );
+      await newCodeNeededSelection;
+      await Promise.resolve();
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledTimes(1);
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+
+      noteSubject.next({} as CodingJob);
+      noteSubject.complete();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: {
+            id: -2,
+            code: '-2',
+            label: 'New code needed',
+            score: null,
+            description: '',
+            codingIssueOption: -2
+          }
+        }
+      );
+      progressSubjects[0].next({} as CodingJob);
+      progressSubjects[0].complete();
+      await noteSave;
+      expect(service.selectedCodes.get(key)?.id).toBe(-2);
+    });
+
+    it('clears persisted new-code-needed progress when required notes are deleted', async () => {
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      service.codingJobId = 100;
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      service.notes.set(key, 'old note');
+      service.selectedCodes.set(key, {
+        id: -2,
+        code: '-2',
+        label: 'New code needed',
+        codingIssueOption: -2
+      });
+      service.isCodingJobCompleted = true;
+      const unitsData = {
+        id: 1,
+        name: 'job',
+        currentUnitIndex: 0,
+        units: [
+          {
+            id: 1,
+            name: 'u1',
+            alias: 'u1',
+            bookletId: 0,
+            testPerson: 'p1',
+            variableId: 'v1'
+          }
+        ]
+      };
+
+      await service.saveNotes(1, 'p1', 'u1', 'v1', '   ', unitsData);
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: null
+        }
+      );
+      expect(service.selectedCodes.get(key)?.id).toBe(-2);
+      expect(service.notes.has(key)).toBe(false);
+      expect(service.isCodingJobCompleted).toBe(false);
+    });
+
+    it('keeps regular progress when notes for attached new-code-needed are deleted', async () => {
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      service.codingJobId = 100;
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      service.notes.set(key, 'old note');
+      service.selectedCodes.set(key, {
+        id: 7,
+        code: '7',
+        label: 'Regular',
+        score: 1,
+        codingIssueOption: -2
+      });
+      const unitsData = {
+        id: 1,
+        name: 'job',
+        currentUnitIndex: 0,
+        units: [
+          {
+            id: 1,
+            name: 'u1',
+            alias: 'u1',
+            bookletId: 0,
+            testPerson: 'p1',
+            variableId: 'v1'
+          }
+        ]
+      };
+
+      await service.saveNotes(1, 'p1', 'u1', 'v1', '   ', unitsData);
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: {
+            id: 7,
+            code: '7',
+            label: 'Regular',
+            score: 1,
+            codingIssueOption: null
+          }
+        }
+      );
+      expect(service.selectedCodes.get(key)).toEqual({
+        id: 7,
+        code: '7',
+        label: 'Regular',
+        score: 1
+      });
+      expect(service.notes.has(key)).toBe(false);
+      expect(service.isCodingJobCompleted).toBe(true);
     });
   });
 

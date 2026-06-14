@@ -127,9 +127,13 @@
   </div>
 
   <div class="uncertain-codes-section fixed-section">
-    <div class="code-row" [class.selected]="item.id === selectedCodingIssueOption" [class.read-only]="isReadOnly"
-      *ngFor="let item of codingIssueOptionCodes;" [style.cursor]="isReadOnly ? 'not-allowed' : 'pointer'"
-      (click)="isReadOnly ? null : onSelect(item.id)">
+    <div class="code-row" [class.selected]="item.id === selectedCodingIssueOption"
+      [class.read-only]="isCodingIssueOptionDisabled(item)" *ngFor="let item of codingIssueOptionCodes;"
+      [style.cursor]="isCodingIssueOptionDisabled(item) ? 'not-allowed' : 'pointer'"
+      [attr.aria-disabled]="isCodingIssueOptionDisabled(item)"
+      [matTooltip]="getCodingIssueOptionTooltip(item)"
+      [matTooltipDisabled]="!getCodingIssueOptionTooltip(item)"
+      (click)="isCodingIssueOptionDisabled(item) ? null : onSelect(item.id)">
       <div class="code-content">
         <span class="shortcut-icon" *ngIf="getShortcutLabel(item.id)">{{ getShortcutLabel(item.id) }}</span>
         <span class="uncertain-text">{{ item.label }}</span>
@@ -143,8 +147,12 @@
 
   @if (allowComments) {
   <mat-form-field appearance="outline" class="notes-field fixed-section">
-    <textarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()"
-      [disabled]="isReadOnly" placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
+    <textarea #notesTextarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()"
+      [disabled]="isReadOnly" [attr.aria-invalid]="newCodeCommentValidationError ? 'true' : null"
+      placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
   </mat-form-field>
+  <div *ngIf="newCodeCommentValidationError" class="notes-validation-error fixed-section" role="alert">
+    {{ 'code-selector.new-code-comment-required' | translate }}
+  </div>
   }
 </div>
