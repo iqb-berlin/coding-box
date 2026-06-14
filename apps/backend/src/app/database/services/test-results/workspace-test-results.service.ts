@@ -188,6 +188,11 @@ interface LogAnomalySqlFragment {
   params: Record<string, string | string[]>;
 }
 
+interface TextSearchFilter {
+  value: string;
+  exact: boolean;
+}
+
 interface LogAnomalyDashboardSummary {
   totalBooklets: number;
   affectedBooklets: number;
@@ -302,6 +307,21 @@ export class WorkspaceTestResultsService {
 
   private static createGeoGebraUnitExistsCondition(unitAlias: string): string {
     return `EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = ${unitAlias}.id AND ${WorkspaceTestResultsService.createGeoGebraValueCondition('r2')})`;
+  }
+
+  private static parseQuotedExactSearchFilter(filter: string): TextSearchFilter {
+    const trimmed = filter.trim();
+    if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      return {
+        value: trimmed.slice(1, -1),
+        exact: true
+      };
+    }
+
+    return {
+      value: filter,
+      exact: false
+    };
   }
 
   private static parseStoredResponseValue(value: string | null, variableId?: string): unknown {
@@ -6547,9 +6567,16 @@ export class WorkspaceTestResultsService {
       }
 
       if (searchParams.variableId) {
-        query.andWhere('response.variableid ILIKE :variableId', {
-          variableId: `%${searchParams.variableId}%`
-        });
+        const variableIdFilter = WorkspaceTestResultsService.parseQuotedExactSearchFilter(searchParams.variableId);
+        if (variableIdFilter.exact) {
+          query.andWhere('LOWER(response.variableid) = LOWER(:variableId)', {
+            variableId: variableIdFilter.value
+          });
+        } else {
+          query.andWhere('response.variableid ILIKE :variableId', {
+            variableId: `%${variableIdFilter.value}%`
+          });
+        }
       }
 
       if (searchParams.unitName) {
