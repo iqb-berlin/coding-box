@@ -47,6 +47,7 @@ describe('CodingResultsComparisonComponent', () => {
         success: true,
         code: 7,
         score: 2,
+        notes: 'Replay note',
         source: 'manual',
         managerUserId: 2,
         managerName: 'Test User'
@@ -785,6 +786,7 @@ describe('CodingResultsComparisonComponent', () => {
       testperson: 'login@code@booklet',
       discussionCode: null,
       discussionScore: null,
+      discussionNotes: null,
       discussionSource: 'auto_agreement' as 'manual' | 'auto_agreement' | null,
       coders: [
         {
@@ -807,6 +809,7 @@ describe('CodingResultsComparisonComponent', () => {
         variableId: string;
         code: string;
         score: number | null;
+        notes?: string | null;
         responseId: number;
       }) => void;
     }).handleReplayCodeSelected({
@@ -816,14 +819,17 @@ describe('CodingResultsComparisonComponent', () => {
       variableId: 'Var1',
       code: '7',
       score: 2,
+      notes: 'Replay note',
       responseId: 1
     });
 
-    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2);
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2, 'Replay note');
     expect(component.discussionCodeByResponseId[1]).toBe('7');
     expect(component.discussionScoreByResponseId[1]).toBe(2);
+    expect(component.discussionNotesByResponseId[1]).toBe('Replay note');
     expect(row.discussionCode).toBe(7);
     expect(row.discussionScore).toBe(2);
+    expect(row.discussionNotes).toBe('Replay note');
     expect(row.discussionSource).toBe('manual');
   });
 
@@ -1106,6 +1112,7 @@ describe('CodingResultsComparisonComponent', () => {
       success: true,
       code: 7,
       score: 2,
+      notes: null,
       source: 'auto_agreement',
       managerUserId: null,
       managerName: null
@@ -1139,7 +1146,7 @@ describe('CodingResultsComparisonComponent', () => {
 
     component.onDiscussionCodeBlur(row);
 
-    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, null, null);
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, null, null, null);
     expect(component.discussionCodeByResponseId[1]).toBe('7');
     expect(component.discussionScoreByResponseId[1]).toBe(2);
     expect(row.discussionCode).toBe(7);

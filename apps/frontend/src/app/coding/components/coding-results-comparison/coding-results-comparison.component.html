@@ -770,6 +770,22 @@
                     discussionScoreByResponseId[comparison.responseId] ?? '-'
                   }}</span
                 >
+                <mat-form-field appearance="outline" class="discussion-notes">
+                  <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
+                  <textarea
+                    matInput
+                    rows="2"
+                    [placeholder]="'double-coded-review.comment-placeholder' | translate"
+                    [value]="discussionNotesByResponseId[comparison.responseId] || ''"
+                    (input)="
+                      onDiscussionNotesInput(
+                        comparison,
+                        $any($event.target).value
+                      )
+                    "
+                    (blur)="onDiscussionNotesBlur(comparison)"
+                  ></textarea>
+                </mat-form-field>
                 <span
                   class="discussion-saving"
                   *ngIf="isSavingDiscussionByResponseId[comparison.responseId]"

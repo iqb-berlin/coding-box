@@ -41,6 +41,7 @@ interface ReplayCodeSelectedMessage extends PostMessage {
   variableId: string;
   code: string;
   score?: number | null;
+  notes?: string | null;
   responseId?: number;
 }
 
@@ -86,6 +87,7 @@ interface WithinTrainingComparison {
   replayScore?: number | null;
   discussionCode?: number | null;
   discussionScore?: number | null;
+  discussionNotes?: string | null;
   discussionManagerUserId?: number | null;
   discussionManagerName?: string | null;
   discussionSource?: 'manual' | 'auto_agreement' | null;
@@ -291,6 +293,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   discussionManagerLabel = '';
   discussionCodeByResponseId: Record<number, string> = {};
   discussionScoreByResponseId: Record<number, number | null> = {};
+  discussionNotesByResponseId: Record<number, string> = {};
   discussionErrorByResponseId: Record<number, string> = {};
   isSavingDiscussionByResponseId: Record<number, boolean> = {};
   readonly emptyModalValueDisplay: ModalValueDisplay = {
@@ -895,6 +898,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     comparison: WithinTrainingComparison,
     parsedCode: number | null,
     score: number | null,
+    notes: string | null,
     scoreOverride?: number | null
   ): boolean {
     if (scoreOverride !== undefined) {
@@ -902,7 +906,21 @@ export class CodingResultsComparisonComponent implements OnInit {
     }
 
     return parsedCode === (comparison.discussionCode ?? null) &&
-      score === (comparison.discussionScore ?? null);
+      score === (comparison.discussionScore ?? null) &&
+      notes === ((comparison.discussionNotes || '').trim() || null);
+  }
+
+  onDiscussionNotesInput(comparison: TrainingComparison | WithinTrainingComparison, value: string): void {
+    if (this.comparisonMode !== 'within-training') {
+      return;
+    }
+    const responseId = (comparison as WithinTrainingComparison).responseId;
+    this.discussionNotesByResponseId[responseId] = value;
+    this.discussionErrorByResponseId[responseId] = '';
+  }
+
+  onDiscussionNotesBlur(comparison: TrainingComparison | WithinTrainingComparison): void {
+    this.onDiscussionCodeBlur(comparison);
   }
 
   onDiscussionCodeBlur(
@@ -924,6 +942,8 @@ export class CodingResultsComparisonComponent implements OnInit {
       return;
     }
 
+    const notes = (this.discussionNotesByResponseId[responseId] || '').trim() || null;
+
     let score: number | null = null;
     if (parsedCode !== null) {
       score = scoreOverride !== undefined ?
@@ -932,9 +952,10 @@ export class CodingResultsComparisonComponent implements OnInit {
     }
     this.discussionErrorByResponseId[responseId] = '';
 
-    if (this.isUnchangedDiscussionValue(withinComparison, parsedCode, score, scoreOverride)) {
+    if (this.isUnchangedDiscussionValue(withinComparison, parsedCode, score, notes, scoreOverride)) {
       this.discussionCodeByResponseId[responseId] = parsedCode !== null ? parsedCode.toString() : '';
       this.discussionScoreByResponseId[responseId] = withinComparison.discussionScore ?? null;
+      this.discussionNotesByResponseId[responseId] = withinComparison.discussionNotes || '';
       return;
     }
 
@@ -945,13 +966,16 @@ export class CodingResultsComparisonComponent implements OnInit {
       this.selectedTrainingForWithin,
       responseId,
       parsedCode,
-      score
+      score,
+      notes
     ).subscribe({
       next: result => {
         this.discussionCodeByResponseId[responseId] = result.code !== null ? result.code.toString() : '';
         this.discussionScoreByResponseId[responseId] = result.score;
+        this.discussionNotesByResponseId[responseId] = result.notes || '';
         withinComparison.discussionCode = result.code;
         withinComparison.discussionScore = result.score;
+        withinComparison.discussionNotes = result.notes;
         withinComparison.discussionManagerUserId = result.managerUserId;
         withinComparison.discussionManagerName = result.managerName;
         withinComparison.discussionSource = result.source;
@@ -1015,6 +1039,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   private initDiscussionValues(data: WithinTrainingComparison[]): void {
     this.discussionCodeByResponseId = {};
     this.discussionScoreByResponseId = {};
+    this.discussionNotesByResponseId = {};
     this.discussionErrorByResponseId = {};
     this.isSavingDiscussionByResponseId = {};
 
@@ -1027,9 +1052,11 @@ export class CodingResultsComparisonComponent implements OnInit {
       if (item.discussionCode !== null && item.discussionCode !== undefined) {
         this.discussionCodeByResponseId[item.responseId] = this.mapCodeForDisplay(item.discussionCode.toString());
         this.discussionScoreByResponseId[item.responseId] = item.discussionScore ?? this.getDiscussionScoreFromKnownCodes(item, item.discussionCode);
+        this.discussionNotesByResponseId[item.responseId] = item.discussionNotes || '';
       } else {
         this.discussionCodeByResponseId[item.responseId] = '';
         this.discussionScoreByResponseId[item.responseId] = null;
+        this.discussionNotesByResponseId[item.responseId] = '';
       }
     });
   }
@@ -1377,6 +1404,7 @@ export class CodingResultsComparisonComponent implements OnInit {
             replayScore: item.replayScore,
             discussionCode: item.discussionCode,
             discussionScore: item.discussionScore,
+            discussionNotes: item.discussionNotes,
             discussionManagerUserId: item.discussionManagerUserId,
             discussionManagerName: item.discussionManagerName,
             discussionSource: item.discussionSource,
@@ -1740,6 +1768,7 @@ export class CodingResultsComparisonComponent implements OnInit {
       this.discussionCodeByResponseId[row.responseId] = this.mapCodeForDisplay(data.code);
       this.discussionScoreByResponseId[row.responseId] =
         data.score !== undefined ? data.score : this.getDiscussionScoreFromKnownCodes(row, parseInt(data.code, 10));
+      this.discussionNotesByResponseId[row.responseId] = data.notes || '';
       this.onDiscussionCodeBlur(row, data.score);
 
       this.snackBar.open(
