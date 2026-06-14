@@ -197,4 +197,32 @@ describe('CodingTrainingBackendService', () => {
       req.flush({});
     });
   });
+
+  describe('discussion result apply', () => {
+    it('should request an apply preview', () => {
+      service.previewApplyDiscussionResults(1, 5, 'manual').subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/apply-discussion-results-preview`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ source: 'manual' });
+      req.flush({});
+    });
+
+    it('should apply discussion results with conflict strategies', () => {
+      service.applyDiscussionResults(1, 5, {
+        source: 'auto_agreement',
+        existingResultStrategy: 'overwrite',
+        jobConflictStrategy: 'removeFromJobs'
+      }).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/apply-discussion-results`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        source: 'auto_agreement',
+        existingResultStrategy: 'overwrite',
+        jobConflictStrategy: 'removeFromJobs'
+      });
+      req.flush({});
+    });
+  });
 });

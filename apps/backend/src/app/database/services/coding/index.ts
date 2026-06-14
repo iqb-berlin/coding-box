@@ -27,6 +27,7 @@ export { CodingResultsExportService } from './coding-results-export.service';
 export { CodingTimesExportService } from './coding-times-export.service';
 export { CodebookGenerationService } from './codebook-generation.service';
 export { CoderTrainingService } from './coder-training.service';
+export { CoderTrainingResultsApplyService } from './coder-training-results-apply.service';
 export { ExternalCodingImportService } from './external-coding-import.service';
 export { MissingsProfilesService } from './missings-profiles.service';
 export { VariableBundleService } from './variable-bundle.service';

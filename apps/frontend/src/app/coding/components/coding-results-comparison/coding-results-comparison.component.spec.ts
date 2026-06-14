@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import {
+  MatDialog,
   MatDialogModule,
   MatDialogRef,
   MAT_DIALOG_DATA
@@ -24,10 +25,15 @@ describe('CodingResultsComparisonComponent', () => {
     compareTrainingCodingResults: jest.Mock;
     compareWithinTrainingCodingResults: jest.Mock;
     saveDiscussionResult: jest.Mock;
+    previewApplyDiscussionResults: jest.Mock;
+    applyDiscussionResults: jest.Mock;
     getTrainingCohensKappa: jest.Mock;
   };
   let codingStatisticsService: {
     getReplayUrl: jest.Mock;
+  };
+  let matDialog: {
+    open: jest.Mock;
   };
   let appService: {
     authData: { userName: string };
@@ -52,10 +58,15 @@ describe('CodingResultsComparisonComponent', () => {
         managerUserId: 2,
         managerName: 'Test User'
       })),
+      previewApplyDiscussionResults: jest.fn(),
+      applyDiscussionResults: jest.fn(),
       getTrainingCohensKappa: jest.fn()
     };
     codingStatisticsService = {
       getReplayUrl: jest.fn()
+    };
+    matDialog = {
+      open: jest.fn()
     };
     appService = {
       authData: { userName: 'Test User' },
@@ -91,6 +102,10 @@ describe('CodingResultsComparisonComponent', () => {
           useValue: snackBar
         },
         {
+          provide: MatDialog,
+          useValue: matDialog
+        },
+        {
           provide: CodingTrainingBackendService,
           useValue: codingTrainingBackendService
         },
@@ -107,6 +122,7 @@ describe('CodingResultsComparisonComponent', () => {
 
     fixture = TestBed.createComponent(CodingResultsComparisonComponent);
     component = fixture.componentInstance;
+    (component as unknown as { dialog: typeof matDialog }).dialog = matDialog;
     fixture.detectChanges();
   });
 
@@ -1152,6 +1168,80 @@ describe('CodingResultsComparisonComponent', () => {
     expect(row.discussionCode).toBe(7);
     expect(row.discussionScore).toBe(2);
     expect(row.discussionSource).toBe('auto_agreement');
+  });
+
+  it('should preview and apply training discussion results with selected strategies', async () => {
+    matDialog.open.mockReturnValue({
+      afterClosed: () => of({
+        existingResultStrategy: 'overwrite',
+        jobConflictStrategy: 'removeFromJobs'
+      })
+    } as never);
+    jest.spyOn(component, 'loadComparison').mockImplementation(() => undefined);
+    codingTrainingBackendService.previewApplyDiscussionResults.mockReturnValue(of({
+      trainingId: 5,
+      source: 'manual',
+      totalTrainingResponses: 1,
+      sourceResultsCount: 1,
+      applicableResultsCount: 1,
+      missingResultsCount: 0,
+      missingScoreCount: 0,
+      existingFinalResultsCount: 1,
+      productiveJobConflictCount: 1,
+      removableProductiveJobUnitCount: 1,
+      blockingProductiveJobUnitCount: 0,
+      approvedJobDefinitionConflictCount: 0,
+      staleTrainingJobCount: 0,
+      affectedJobIds: [10],
+      affectedJobDefinitionIds: [],
+      canApply: true
+    }));
+    codingTrainingBackendService.applyDiscussionResults.mockReturnValue(of({
+      success: true,
+      trainingId: 5,
+      source: 'manual',
+      totalTrainingResponses: 1,
+      sourceResultsCount: 1,
+      applicableResultsCount: 1,
+      missingResultsCount: 0,
+      missingScoreCount: 0,
+      existingFinalResultsCount: 1,
+      productiveJobConflictCount: 1,
+      removableProductiveJobUnitCount: 1,
+      blockingProductiveJobUnitCount: 0,
+      approvedJobDefinitionConflictCount: 0,
+      staleTrainingJobCount: 0,
+      affectedJobIds: [10],
+      affectedJobDefinitionIds: [],
+      canApply: true,
+      updatedResponsesCount: 1,
+      skippedExistingResultsCount: 0,
+      overwrittenExistingResultsCount: 1,
+      skippedJobConflictCount: 0,
+      skippedMissingScoreCount: 0,
+      removedJobUnitCount: 1,
+      messageKey: 'coding.trainings.apply.success'
+    }));
+
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.openApplyTrainingDiscussionResults('manual');
+    await fixture.whenStable();
+
+    expect(codingTrainingBackendService.previewApplyDiscussionResults)
+      .toHaveBeenCalledWith(1, 5, 'manual');
+    expect(matDialog.open).toHaveBeenCalled();
+
+    expect(codingTrainingBackendService.applyDiscussionResults).toHaveBeenCalledWith(
+      1,
+      5,
+      {
+        source: 'manual',
+        existingResultStrategy: 'overwrite',
+        jobConflictStrategy: 'removeFromJobs'
+      }
+    );
+    expect(component.loadComparison).toHaveBeenCalled();
   });
 
   it('should clear stale kappa values when changing comparison mode', () => {

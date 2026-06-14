@@ -148,6 +148,34 @@
           </mat-select>
         </mat-form-field>
       </div>
+
+      <div class="training-apply-actions" *ngIf="selectedTrainingForWithin">
+        <button
+          mat-stroked-button
+          type="button"
+          color="primary"
+          [disabled]="isLoading || isApplyingDiscussionResults"
+          (click)="openApplyTrainingDiscussionResults('auto_agreement')"
+        >
+          <mat-icon>verified</mat-icon>
+          Schulungsergebnisse ohne Abweichungen anwenden
+        </button>
+        <button
+          mat-raised-button
+          type="button"
+          color="primary"
+          [disabled]="isLoading || isApplyingDiscussionResults"
+          (click)="openApplyTrainingDiscussionResults('manual')"
+        >
+          <mat-icon>rule</mat-icon>
+          Diskussionsergebnisse anwenden
+        </button>
+        <mat-progress-spinner
+          *ngIf="isApplyingDiscussionResults"
+          mode="indeterminate"
+          diameter="24"
+        ></mat-progress-spinner>
+      </div>
     </div>
 
     <div class="loading-container" *ngIf="isLoading">

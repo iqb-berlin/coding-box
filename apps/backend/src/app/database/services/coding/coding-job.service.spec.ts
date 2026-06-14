@@ -77,6 +77,15 @@ const expectManualCodingCandidateStatusFilter = (
   expect(statuses).not.toContain(statusStringToNumber('DERIVE_ERROR'));
 };
 
+const expectCompletedV2Filter = (
+  qb: Record<string, jest.Mock>
+) => {
+  expect(qb.andWhere).toHaveBeenCalledWith(
+    '(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)',
+    { completedV2Status: statusStringToNumber('CODING_COMPLETE') }
+  );
+};
+
 describe('CodingJobService', () => {
   let service: CodingJobService;
   let codingJobRepository: ReturnType<typeof createRepo>;
@@ -2136,6 +2145,7 @@ describe('CodingJobService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith(
       '(response.code_v2 IS NULL OR response.code_v2 != -111)'
     );
+    expectCompletedV2Filter(qb);
   });
 
   it('does not include DERIVE_ERROR responses in coding-job variable selection', async () => {
@@ -2223,6 +2233,7 @@ describe('CodingJobService', () => {
     } as never);
 
     expectManualCodingCandidateStatusFilter(qb);
+    expectCompletedV2Filter(qb);
   });
 
   it('counts DERIVE_ERROR distribution cases only for variables with job-definition opt-in', () => {

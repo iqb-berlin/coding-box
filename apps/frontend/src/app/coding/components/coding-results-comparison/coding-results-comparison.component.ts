@@ -3,7 +3,12 @@ import {
   ViewChild
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import {
+  MAT_DIALOG_DATA,
+  MatDialog,
+  MatDialogModule,
+  MatDialogRef
+} from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatSort, MatSortModule } from '@angular/material/sort';
@@ -34,6 +39,12 @@ import {
   getTrainingOptionMeta,
   getTrainingOptionTitle
 } from '../../utils/coder-training-display';
+import {
+  ApplyTrainingDiscussionResultsDialogData,
+  ApplyTrainingDiscussionResultsDialogComponent,
+  ApplyTrainingDiscussionResultsDialogResult
+} from './apply-training-discussion-results-dialog.component';
+import { TrainingDiscussionApplySource } from '../../../../../../../api-dto/coding/training-discussion-apply.dto';
 
 interface ReplayCodeSelectedMessage extends PostMessage {
   testPerson: string;
@@ -227,10 +238,12 @@ export class CodingResultsComparisonComponent implements OnInit {
   private codingStatisticsService = inject(CodingStatisticsService);
   private appService = inject(AppService);
   private postMessageService = inject(PostMessageService);
+  private dialog = inject(MatDialog);
   private ngUnsubscribe = new Subject<void>();
 
   isLoading = false;
   isLoadingKappa = false;
+  isApplyingDiscussionResults = false;
   dataSource = new MatTableDataSource<TrainingComparison | WithinTrainingComparison>([]);
   displayedColumns: string[] = ['index', 'unitVariable', 'personInfo', 'replay', 'givenAnswer', 'match'];
   dynamicCoderColumns: string[] = [];
@@ -1034,6 +1047,132 @@ export class CodingResultsComparisonComponent implements OnInit {
     }
 
     return message;
+  }
+
+  openApplyTrainingDiscussionResults(source: TrainingDiscussionApplySource): void {
+    if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
+      this.snackBar.open('Bitte zuerst eine Schulung auswählen.', this.translate.instant('common.close'), { duration: 3000 });
+      return;
+    }
+
+    this.isApplyingDiscussionResults = true;
+    this.codingTrainingBackendService.previewApplyDiscussionResults(
+      this.data.workspaceId,
+      this.selectedTrainingForWithin,
+      source
+    ).subscribe({
+      next: preview => {
+        this.isApplyingDiscussionResults = false;
+        const dialogRef = this.dialog.open<ApplyTrainingDiscussionResultsDialogComponent, ApplyTrainingDiscussionResultsDialogData, ApplyTrainingDiscussionResultsDialogResult | undefined>(ApplyTrainingDiscussionResultsDialogComponent, {
+          width: '720px',
+          data: { preview, source }
+        });
+
+        dialogRef.afterClosed()
+          .pipe(takeUntil(this.ngUnsubscribe))
+          .subscribe(result => {
+            if (!result || !this.selectedTrainingForWithin) {
+              return;
+            }
+            this.applyTrainingDiscussionResults(source, result);
+          });
+      },
+      error: error => {
+        this.isApplyingDiscussionResults = false;
+        this.snackBar.open(
+          this.getApplyDiscussionResultsErrorMessage(error),
+          this.translate.instant('common.close'),
+          { duration: 4000 }
+        );
+      }
+    });
+  }
+
+  private applyTrainingDiscussionResults(
+    source: TrainingDiscussionApplySource,
+    strategies: ApplyTrainingDiscussionResultsDialogResult
+  ): void {
+    if (!this.selectedTrainingForWithin) {
+      return;
+    }
+
+    this.isApplyingDiscussionResults = true;
+    this.codingTrainingBackendService.applyDiscussionResults(
+      this.data.workspaceId,
+      this.selectedTrainingForWithin,
+      {
+        source,
+        existingResultStrategy: strategies.existingResultStrategy,
+        jobConflictStrategy: strategies.jobConflictStrategy
+      }
+    ).subscribe({
+      next: result => {
+        this.isApplyingDiscussionResults = false;
+        this.snackBar.open(
+          this.getApplyDiscussionResultsMessage(result),
+          this.translate.instant('common.close'),
+          { duration: 5000 }
+        );
+        this.loadComparison();
+      },
+      error: error => {
+        this.isApplyingDiscussionResults = false;
+        this.snackBar.open(
+          this.getApplyDiscussionResultsErrorMessage(error),
+          this.translate.instant('common.close'),
+          { duration: 5000 }
+        );
+      }
+    });
+  }
+
+  private getApplyDiscussionResultsMessage(result: {
+    success: boolean;
+    updatedResponsesCount: number;
+    skippedExistingResultsCount: number;
+    overwrittenExistingResultsCount: number;
+    skippedJobConflictCount: number;
+    skippedMissingScoreCount: number;
+    removedJobUnitCount: number;
+  }): string {
+    if (!result.success) {
+      return 'Schulungsergebnisse konnten nicht angewendet werden.';
+    }
+
+    const parts = [`${result.updatedResponsesCount} Ergebnisse angewendet`];
+    if (result.overwrittenExistingResultsCount > 0) {
+      parts.push(`${result.overwrittenExistingResultsCount} bestehende Ergebnisse überschrieben`);
+    }
+    if (result.skippedExistingResultsCount > 0) {
+      parts.push(`${result.skippedExistingResultsCount} bestehende Ergebnisse übersprungen`);
+    }
+    if (result.skippedJobConflictCount > 0) {
+      parts.push(`${result.skippedJobConflictCount} Fälle wegen Kodierjob-Konflikten übersprungen`);
+    }
+    if (result.skippedMissingScoreCount > 0) {
+      parts.push(`${result.skippedMissingScoreCount} Fälle ohne Score übersprungen`);
+    }
+    if (result.removedJobUnitCount > 0) {
+      parts.push(`${result.removedJobUnitCount} Fälle aus Kodierjobs entfernt`);
+    }
+
+    return `${parts.join(', ')}.`;
+  }
+
+  private getApplyDiscussionResultsErrorMessage(error: unknown): string {
+    const fallbackMessage = 'Schulungsergebnisse konnten nicht angewendet werden.';
+    if (!(error instanceof HttpErrorResponse)) {
+      return fallbackMessage;
+    }
+
+    const responseMessage = error.error?.message;
+    const message = Array.isArray(responseMessage) ?
+      responseMessage.join(' ') :
+      responseMessage || error.message;
+
+    return typeof message === 'string' && message.trim() ?
+      message :
+      fallbackMessage;
   }
 
   private initDiscussionValues(data: WithinTrainingComparison[]): void {
