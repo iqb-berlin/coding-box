@@ -491,6 +491,39 @@ describe('CodingFreshnessService', () => {
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
   });
 
+  it('batches reset freshness count queries and upserts for large reset scopes', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
+
+    const unitIds = Array.from({ length: 1201 }, (_, index) => index + 1);
+    const firstResponseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 1, count: '2' }])
+    });
+    const secondResponseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 1001, count: '3' }])
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(firstResponseCountsQb)
+      .mockReturnValueOnce(secondResponseCountsQb);
+
+    await service.markVersionsPendingAfterReset(1, {
+      v3: unitIds
+    });
+
+    expect(responseRepository.createQueryBuilder).toHaveBeenCalledTimes(2);
+    expect(firstResponseCountsQb.andWhere).toHaveBeenCalledWith(
+      'response.unitid IN (:...unitIds)',
+      { unitIds: unitIds.slice(0, 1000) }
+    );
+    expect(secondResponseCountsQb.andWhere).toHaveBeenCalledWith(
+      'response.unitid IN (:...unitIds)',
+      { unitIds: unitIds.slice(1000) }
+    );
+    expect(freshnessRepository.upsert).toHaveBeenCalledTimes(5);
+    (freshnessRepository.upsert as jest.Mock).mock.calls.forEach(([rows]) => {
+      expect(rows.length).toBeLessThanOrEqual(250);
+    });
+  });
+
   it('reopens existing auto-coding freshness rows in the reset response scope', async () => {
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
 

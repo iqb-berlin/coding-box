@@ -98,6 +98,8 @@ type ReconcileAppliedManualCodingJobsOptions = {
 @Injectable()
 export class CodingFreshnessService {
   private readonly logger = new Logger(CodingFreshnessService.name);
+  private readonly ID_QUERY_BATCH_SIZE = 1000;
+  private readonly FRESHNESS_UPSERT_BATCH_SIZE = 250;
 
   constructor(
     @InjectRepository(CodingUnitFreshness)
@@ -1489,20 +1491,22 @@ export class CodingFreshnessService {
     const responseRepository = manager ?
       manager.getRepository(ResponseEntity) :
       this.responseRepository;
-    const query = responseRepository
-      .createQueryBuilder('response')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person')
-      .select('DISTINCT response.unitid', 'unitId')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.id IN (:...responseIds)', { responseIds: ids });
+    const rows = await this.collectChunked(ids, this.ID_QUERY_BATCH_SIZE, async chunkIds => {
+      const query = responseRepository
+        .createQueryBuilder('response')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .innerJoin('booklet.person', 'person')
+        .select('DISTINCT response.unitid', 'unitId')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.id IN (:...responseIds)', { responseIds: chunkIds });
 
-    await this.applyWorkspaceExclusions(workspaceId, query);
+      await this.applyWorkspaceExclusions(workspaceId, query);
 
-    const rows = await query.getRawMany<{ unitId: number | string }>();
+      return query.getRawMany<{ unitId: number | string }>();
+    });
     return this.uniquePositiveIds(rows.map(row => Number(row.unitId)));
   }
 
@@ -1621,19 +1625,21 @@ export class CodingFreshnessService {
         return ids;
       }
 
-      const query = this.connection
-        .createQueryBuilder()
-        .select('unit.id', 'id')
-        .from('unit', 'unit')
-        .innerJoin('booklet', 'booklet', 'booklet.id = unit.bookletid')
-        .innerJoin('bookletinfo', 'bookletinfo', 'bookletinfo.id = booklet.infoid')
-        .innerJoin('persons', 'person', 'person.id = booklet.personid')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('unit.id IN (:...unitIds)', { unitIds: ids });
+      const rows = await this.collectChunked(ids, this.ID_QUERY_BATCH_SIZE, chunkIds => {
+        const query = this.connection
+          .createQueryBuilder()
+          .select('unit.id', 'id')
+          .from('unit', 'unit')
+          .innerJoin('booklet', 'booklet', 'booklet.id = unit.bookletid')
+          .innerJoin('bookletinfo', 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+          .innerJoin('persons', 'person', 'person.id = booklet.personid')
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('unit.id IN (:...unitIds)', { unitIds: chunkIds });
 
-      applyResolvedExclusionsToQuery(query, exclusions);
+        applyResolvedExclusionsToQuery(query, exclusions);
 
-      const rows = await query.getRawMany<{ id: number | string }>();
+        return query.getRawMany<{ id: number | string }>();
+      });
       const includedIds = new Set(rows.map(row => Number(row.id)));
       return ids.filter(id => includedIds.has(id));
     } catch (error) {
@@ -1823,29 +1829,31 @@ export class CodingFreshnessService {
       return presenceByUnit;
     }
 
-    const rows = await this.responseRepository
-      .createQueryBuilder('response')
-      .select('response.unitid', 'unitId')
-      .addSelect(this.existsVersionExpression('v1'), 'v1')
-      .addSelect(this.existsVersionExpression('v2'), 'v2')
-      .addSelect(this.existsVersionExpression('v3'), 'v3')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.unitid IN (:...unitIds)', { unitIds: ids })
-      .groupBy('response.unitid');
+    const presenceRows = await this.collectChunked(ids, this.ID_QUERY_BATCH_SIZE, async chunkIds => {
+      const query = this.responseRepository
+        .createQueryBuilder('response')
+        .select('response.unitid', 'unitId')
+        .addSelect(this.existsVersionExpression('v1'), 'v1')
+        .addSelect(this.existsVersionExpression('v2'), 'v2')
+        .addSelect(this.existsVersionExpression('v3'), 'v3')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.unitid IN (:...unitIds)', { unitIds: chunkIds })
+        .groupBy('response.unitid');
 
-    await this.applyWorkspaceExclusions(workspaceId, rows);
+      await this.applyWorkspaceExclusions(workspaceId, query);
 
-    const presenceRows = await rows.getRawMany<{
-      unitId: number | string;
-      v1: boolean;
-      v2: boolean;
-      v3: boolean
-    }>();
+      return query.getRawMany<{
+        unitId: number | string;
+        v1: boolean;
+        v2: boolean;
+        v3: boolean
+      }>();
+    });
 
     presenceRows.forEach(row => presenceByUnit.set(Number(row.unitId), {
       v1: this.toBoolean(row.v1),
@@ -1866,22 +1874,24 @@ export class CodingFreshnessService {
       return responseIdsByUnit;
     }
 
-    const query = this.responseRepository
-      .createQueryBuilder('response')
-      .select('response.id', 'responseId')
-      .addSelect('response.unitid', 'unitId')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.id IN (:...responseIds)', { responseIds: ids })
-      .andWhere('response.is_autocoder_generated IS NOT TRUE');
+    const rows = await this.collectChunked(ids, this.ID_QUERY_BATCH_SIZE, async chunkIds => {
+      const query = this.responseRepository
+        .createQueryBuilder('response')
+        .select('response.id', 'responseId')
+        .addSelect('response.unitid', 'unitId')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.id IN (:...responseIds)', { responseIds: chunkIds })
+        .andWhere('response.is_autocoder_generated IS NOT TRUE');
 
-    await this.applyWorkspaceExclusions(workspaceId, query);
+      await this.applyWorkspaceExclusions(workspaceId, query);
 
-    const rows = await query.getRawMany<ImportedResponseScopeRow>();
+      return query.getRawMany<ImportedResponseScopeRow>();
+    });
     rows.forEach(row => {
       const unitId = Number(row.unitId);
       const responseId = Number(row.responseId);
@@ -1915,23 +1925,25 @@ export class CodingFreshnessService {
     const responseRepository = manager ?
       manager.getRepository(ResponseEntity) :
       this.responseRepository;
-    const rows = await responseRepository
-      .createQueryBuilder('response')
-      .select('response.unitid', 'unitId')
-      .addSelect('COUNT(response.id)', 'count')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.unitid IN (:...unitIds)', { unitIds: ids })
-      .andWhere('response.is_autocoder_generated IS NOT TRUE')
-      .groupBy('response.unitid');
+    const countRows = await this.collectChunked(ids, this.ID_QUERY_BATCH_SIZE, async chunkIds => {
+      const query = responseRepository
+        .createQueryBuilder('response')
+        .select('response.unitid', 'unitId')
+        .addSelect('COUNT(response.id)', 'count')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.unitid IN (:...unitIds)', { unitIds: chunkIds })
+        .andWhere('response.is_autocoder_generated IS NOT TRUE')
+        .groupBy('response.unitid');
 
-    await this.applyWorkspaceExclusions(workspaceId, rows);
+      await this.applyWorkspaceExclusions(workspaceId, query);
 
-    const countRows = await rows.getRawMany<{ unitId: number | string; count: string }>();
+      return query.getRawMany<{ unitId: number | string; count: string }>();
+    });
 
     countRows.forEach(row => result.set(Number(row.unitId), Number(row.count || 0)));
     return result;
@@ -1974,12 +1986,34 @@ export class CodingFreshnessService {
     const freshnessRepository = manager ?
       manager.getRepository(CodingUnitFreshness) :
       this.freshnessRepository;
-    await freshnessRepository.upsert(rows, [
-      'workspace_id',
-      'unit_id',
-      'version'
-    ]);
+    for (const chunkRows of this.chunk(rows, this.FRESHNESS_UPSERT_BATCH_SIZE)) {
+      await freshnessRepository.upsert(chunkRows, [
+        'workspace_id',
+        'unit_id',
+        'version'
+      ]);
+    }
     this.logger.log(`Updated coding freshness for ${rows.length} unit/version pairs.`);
+  }
+
+  private chunk<T>(items: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let index = 0; index < items.length; index += size) {
+      chunks.push(items.slice(index, index + size));
+    }
+    return chunks;
+  }
+
+  private async collectChunked<T, R>(
+    items: T[],
+    size: number,
+    callback: (chunkItems: T[]) => Promise<R[]>
+  ): Promise<R[]> {
+    const results: R[] = [];
+    for (const chunkItems of this.chunk(items, size)) {
+      results.push(...await callback(chunkItems));
+    }
+    return results;
   }
 
   private uniquePositiveIds(ids: number[]): number[] {
