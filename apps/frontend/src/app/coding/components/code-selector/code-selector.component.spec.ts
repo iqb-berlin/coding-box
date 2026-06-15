@@ -280,6 +280,84 @@ describe('CodeSelectorComponent', () => {
     });
   });
 
+  it('shows progress in a compact summary with open count in the tooltip', () => {
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('de', {
+      replay: {
+        'coding-progress': 'Kodierfortschritt:',
+        'open-count': 'Offen:'
+      }
+    });
+    translateService.setDefaultLang('de');
+    translateService.use('de');
+
+    component.showProgress = true;
+    component.completedCount = 6;
+    component.totalUnits = 80;
+    component.progressPercentage = 8;
+    component.openCount = 74;
+
+    fixture.detectChanges();
+
+    expect(component.progressSummary).toBe('6/80 (8%)');
+    expect(component.progressTooltip).toBe('Kodierfortschritt: 6/80 (8%) · Offen: 74');
+    expect(fixture.nativeElement.querySelector('.progress-info').textContent).toContain('6/80 (8%)');
+  });
+
+  it('keeps general coding issue options and notes expanded by default and allows collapsing them', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    fixture.detectChanges();
+
+    expect(component.isAuxiliarySectionExpanded).toBe(true);
+    expect(fixture.nativeElement.querySelectorAll('.uncertain-codes-section .code-row')).toHaveLength(4);
+    expect(fixture.nativeElement.querySelector('textarea')).toBeTruthy();
+
+    component.toggleAuxiliarySection();
+    fixture.detectChanges();
+
+    expect(component.isAuxiliarySectionExpanded).toBe(false);
+    expect(fixture.nativeElement.querySelector('.uncertain-codes-section')).toBeNull();
+    expect(fixture.nativeElement.querySelector('textarea')).toBeNull();
+  });
+
+  it('expands and scrolls to a general code selected by numpad shortcut', () => {
+    jest.useFakeTimers();
+    const scrollSpy = jest.fn();
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scrollSpy;
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.isAuxiliarySectionExpanded = false;
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    jest.runOnlyPendingTimers();
+    fixture.detectChanges();
+
+    const event = new KeyboardEvent('keydown', { code: 'NumpadAdd' });
+    const preventDefaultSpy = jest.spyOn(event, 'preventDefault');
+    component.handleKeyboardEvent(event);
+    fixture.detectChanges();
+    jest.runOnlyPendingTimers();
+
+    expect(preventDefaultSpy).toHaveBeenCalled();
+    expect(component.isAuxiliarySectionExpanded).toBe(true);
+    expect(component.selectedCodingIssueOption).toBe(-2);
+    expect(fixture.nativeElement.querySelector('[data-code-selector-code-id="-2"].selected')).toBeTruthy();
+    expect(scrollSpy).toHaveBeenCalled();
+
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+    jest.useRealTimers();
+  });
+
   it('keeps manual codes selectable when mixed with empty manual instructions', () => {
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
@@ -589,6 +667,300 @@ describe('CodeSelectorComponent', () => {
     expect(scrollSpy).toHaveBeenCalled();
     expect(focusSpy).toHaveBeenCalled();
     jest.useRealTimers();
+  });
+
+  it('shows compact variable chips for small alternating bundles', () => {
+    component.showProgress = true;
+    component.unitsData = {
+      id: 1,
+      name: 'job',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT1',
+          alias: 'UNIT1',
+          bookletId: 0,
+          variableId: 'V1',
+          variableBundleId: 9,
+          variableBundleCaseOrderingMode: 'alternating'
+        },
+        {
+          id: 2,
+          name: 'UNIT1',
+          alias: 'UNIT1',
+          bookletId: 0,
+          variableId: 'V2',
+          variableBundleId: 9,
+          variableBundleCaseOrderingMode: 'alternating'
+        }
+      ]
+    };
+
+    fixture.detectChanges();
+
+    expect(component.shouldShowBundleVariableChips).toBe(true);
+    expect(fixture.nativeElement.querySelectorAll('.variable-chip')).toHaveLength(2);
+    expect(fixture.nativeElement.querySelector('.variable-trigger-btn')).toBeNull();
+  });
+
+  it('marks auto-coded bundle variables as disabled chips', () => {
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('de', {
+      coding: {
+        'auto-coded-short': 'Auto',
+        'auto-coded-bundle-variable-tooltip': 'Variable {{variableId}} ist in diesem Bundel automatisch kodiert.'
+      }
+    });
+    translateService.setDefaultLang('de');
+    translateService.use('de');
+
+    component.showProgress = true;
+    component.unitsData = {
+      id: 1,
+      name: 'job',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT1',
+          alias: 'UNIT1',
+          bookletId: 0,
+          variableId: 'V1',
+          variableBundleId: 9,
+          variableBundleCaseOrderingMode: 'alternating',
+          variableBundleCaseVariables: [
+            {
+              unitName: 'UNIT1',
+              variableId: 'V1',
+              responseId: 1,
+              statusV1: 8,
+              isManualCodingUnit: true,
+              isAutoCoded: false
+            },
+            {
+              unitName: 'UNIT1',
+              variableId: 'V2',
+              responseId: 2,
+              statusV1: 5,
+              isManualCodingUnit: false,
+              isAutoCoded: true
+            }
+          ]
+        }
+      ]
+    };
+
+    fixture.detectChanges();
+
+    const chips = fixture.nativeElement.querySelectorAll('.variable-chip');
+    expect(chips).toHaveLength(2);
+    expect(chips[1].classList.contains('auto-coded')).toBe(true);
+    expect(chips[1].disabled).toBe(true);
+    expect(chips[1].textContent).toContain('Auto');
+  });
+
+  it('uses unit aliases for bundle chip navigation when bundle variables use unit names', () => {
+    component.showProgress = true;
+    component.unitsData = {
+      id: 1,
+      name: 'job',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_KEY',
+          alias: 'UNIT_ALIAS',
+          bookletId: 0,
+          variableId: 'V1',
+          variableBundleId: 9,
+          variableBundleCaseOrderingMode: 'alternating',
+          variableBundleCaseVariables: [
+            {
+              unitName: 'UNIT_KEY',
+              variableId: 'V1',
+              responseId: 1,
+              statusV1: 8,
+              isManualCodingUnit: true,
+              isAutoCoded: false
+            },
+            {
+              unitName: 'UNIT_KEY',
+              variableId: 'V2',
+              responseId: 2,
+              statusV1: 8,
+              isManualCodingUnit: true,
+              isAutoCoded: false
+            }
+          ]
+        },
+        {
+          id: 2,
+          name: 'UNIT_KEY',
+          alias: 'UNIT_ALIAS',
+          bookletId: 0,
+          variableId: 'V2',
+          variableBundleId: 9,
+          variableBundleCaseOrderingMode: 'alternating'
+        }
+      ]
+    };
+    component.codingService = {
+      isUnitCoded: jest.fn().mockReturnValue(false)
+    } as never;
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+
+    fixture.detectChanges();
+
+    const chips = fixture.nativeElement.querySelectorAll('.variable-chip');
+    expect(chips).toHaveLength(2);
+    expect(chips[0].classList.contains('active')).toBe(true);
+    expect(component.activeBundleVariables.map(variable => variable.key)).toEqual([
+      'UNIT_ALIAS::V1',
+      'UNIT_ALIAS::V2'
+    ]);
+
+    chips[1].click();
+
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+  });
+
+  it('navigates bundle chips within the current bundle case only', () => {
+    component.showProgress = true;
+    component.unitsData = {
+      id: 1,
+      name: 'job',
+      currentUnitIndex: 2,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_KEY',
+          alias: 'UNIT_ALIAS',
+          bookletId: 0,
+          testPerson: 'person-a@code-a@group@booklet',
+          variableId: 'V1',
+          variableBundleId: 9,
+          variableBundleCaseOrderingMode: 'alternating'
+        },
+        {
+          id: 2,
+          name: 'UNIT_KEY',
+          alias: 'UNIT_ALIAS',
+          bookletId: 0,
+          testPerson: 'person-a@code-a@group@booklet',
+          variableId: 'V2',
+          variableBundleId: 9,
+          variableBundleCaseOrderingMode: 'alternating'
+        },
+        {
+          id: 3,
+          name: 'UNIT_KEY',
+          alias: 'UNIT_ALIAS',
+          bookletId: 0,
+          testPerson: 'person-b@code-b@group@booklet',
+          variableId: 'V1',
+          variableBundleId: 9,
+          variableBundleCaseOrderingMode: 'alternating',
+          variableBundleCaseVariables: [
+            {
+              unitName: 'UNIT_KEY',
+              variableId: 'V1',
+              responseId: 3,
+              statusV1: 8,
+              isManualCodingUnit: true,
+              isAutoCoded: false
+            },
+            {
+              unitName: 'UNIT_KEY',
+              variableId: 'V2',
+              responseId: 4,
+              statusV1: 8,
+              isManualCodingUnit: true,
+              isAutoCoded: false
+            }
+          ]
+        },
+        {
+          id: 4,
+          name: 'UNIT_KEY',
+          alias: 'UNIT_ALIAS',
+          bookletId: 0,
+          testPerson: 'person-b@code-b@group@booklet',
+          variableId: 'V2',
+          variableBundleId: 9,
+          variableBundleCaseOrderingMode: 'alternating'
+        }
+      ]
+    };
+    component.codingService = {
+      isUnitCoded: jest.fn().mockReturnValue(false)
+    } as never;
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+
+    fixture.detectChanges();
+
+    const chips = fixture.nativeElement.querySelectorAll('.variable-chip');
+    expect(chips).toHaveLength(2);
+
+    chips[1].click();
+
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[3]);
+  });
+
+  it('does not create navigable bundle chips for missing manual units from the current case', () => {
+    component.showProgress = true;
+    component.unitsData = {
+      id: 1,
+      name: 'job',
+      currentUnitIndex: 1,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_KEY',
+          alias: 'UNIT_ALIAS',
+          bookletId: 0,
+          testPerson: 'person-a@code-a@group@booklet',
+          variableId: 'V2',
+          variableBundleId: 9,
+          variableBundleCaseOrderingMode: 'alternating'
+        },
+        {
+          id: 2,
+          name: 'UNIT_KEY',
+          alias: 'UNIT_ALIAS',
+          bookletId: 0,
+          testPerson: 'person-b@code-b@group@booklet',
+          variableId: 'V1',
+          variableBundleId: 9,
+          variableBundleCaseOrderingMode: 'alternating',
+          variableBundleCaseVariables: [
+            {
+              unitName: 'UNIT_KEY',
+              variableId: 'V1',
+              responseId: 2,
+              statusV1: 8,
+              isManualCodingUnit: true,
+              isAutoCoded: false
+            },
+            {
+              unitName: 'UNIT_KEY',
+              variableId: 'V2',
+              responseId: 3,
+              statusV1: 8,
+              isManualCodingUnit: true,
+              isAutoCoded: false
+            }
+          ]
+        }
+      ]
+    };
+
+    fixture.detectChanges();
+
+    expect(component.activeBundleVariables.map(variable => variable.variableId)).toEqual(['V1']);
+    expect(component.shouldShowBundleVariableChips).toBe(false);
+    expect(fixture.nativeElement.querySelectorAll('.variable-chip')).toHaveLength(0);
+    expect(fixture.nativeElement.querySelector('.variable-trigger-btn')).toBeNull();
   });
 
   it('hides the pause button for completed job reviews', () => {

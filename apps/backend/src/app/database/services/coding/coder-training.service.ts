@@ -1176,6 +1176,92 @@ export class CoderTrainingService {
     });
   }
 
+  private getTrainingBundleCaseKey(response: CoderTrainingResponse): string {
+    return [
+      response.personLogin,
+      response.personCode,
+      response.personGroup,
+      response.bookletName,
+      response.unitName
+    ].join('\u001F');
+  }
+
+  private sampleBundleResponseGroups(
+    groupsByCaseKey: Map<string, CoderTrainingResponse[]>,
+    sampleCount: number,
+    caseSelectionMode: CaseSelectionMode
+  ): CoderTrainingResponse[][] {
+    const representativeByCaseKey = new Map<string, CoderTrainingResponse>();
+    groupsByCaseKey.forEach((responses, caseKey) => {
+      const representative = [...responses].sort((a, b) => {
+        const tsA = a.chunkTs ?? a.responseId;
+        const tsB = b.chunkTs ?? b.responseId;
+        return tsA - tsB || a.responseId - b.responseId;
+      })[0];
+      representativeByCaseKey.set(caseKey, representative);
+    });
+
+    const representatives = Array.from(representativeByCaseKey.values());
+    const selectedRepresentatives = this.sampleResponses(
+      representatives,
+      sampleCount,
+      caseSelectionMode
+    );
+
+    return selectedRepresentatives
+      .map(representative => groupsByCaseKey.get(this.getTrainingBundleCaseKey(representative)) || [])
+      .filter(responses => responses.length > 0);
+  }
+
+  private async applyBundleCaseSampling(
+    workspaceId: number,
+    sampledResponsesByConfig: Map<string, CoderTrainingResponse[]>,
+    candidateResponsesByConfig: Map<string, CoderTrainingResponse[]>,
+    assignedVariableBundles: JobDefinitionVariableBundle[],
+    caseSelectionMode: CaseSelectionMode
+  ): Promise<void> {
+    const bundleIds = this.getValidatedBundleIds(assignedVariableBundles);
+    if (bundleIds.length === 0) {
+      return;
+    }
+
+    const fetchedBundlesById = await this.getWorkspaceVariableBundlesById(
+      workspaceId,
+      bundleIds
+    );
+
+    for (const assignedBundle of assignedVariableBundles) {
+      const bundleVariables = fetchedBundlesById.get(assignedBundle.id)?.variables || [];
+      const groupsByCaseKey = new Map<string, CoderTrainingResponse[]>();
+
+      bundleVariables.forEach(variable => {
+        const configKey = `${variable.unitName}:${variable.variableId}`;
+        const candidates = candidateResponsesByConfig.get(configKey) || [];
+        candidates.forEach(response => {
+          const caseKey = this.getTrainingBundleCaseKey(response);
+          const responses = groupsByCaseKey.get(caseKey) || [];
+          responses.push(response);
+          groupsByCaseKey.set(caseKey, responses);
+        });
+      });
+
+      const selectedGroups = this.sampleBundleResponseGroups(
+        groupsByCaseKey,
+        assignedBundle.sampleCount || 10,
+        caseSelectionMode
+      );
+
+      bundleVariables.forEach(variable => {
+        const configKey = `${variable.unitName}:${variable.variableId}`;
+        const selectedResponses = selectedGroups.flatMap(group => group.filter(response => (
+          response.unitName === variable.unitName &&
+          response.variableId === variable.variableId
+        )));
+        sampledResponsesByConfig.set(configKey, selectedResponses);
+      });
+    }
+  }
+
   async generateCoderTrainingPackages(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
@@ -1184,6 +1270,7 @@ export class CoderTrainingService {
       caseSelectionMode?: CaseSelectionMode;
       referenceTrainingIds?: number[];
       referenceMode?: ReferenceMode;
+      assignedVariableBundles?: JobDefinitionVariableBundle[];
     }
   ): Promise<TrainingPackage[]> {
     const caseSelectionMode = options?.caseSelectionMode ?? 'oldest_first';
@@ -1212,6 +1299,7 @@ export class CoderTrainingService {
 
     // Pre-sample responses for each variable configuration to ensure consistency across all coders
     const sampledResponsesByConfig: Map<string, CoderTrainingResponse[]> = new Map();
+    const candidateResponsesByConfig: Map<string, CoderTrainingResponse[]> = new Map();
 
     for (const config of variableConfigs) {
       const variableId = config.variableId;
@@ -1358,12 +1446,21 @@ export class CoderTrainingService {
         referenceResponseIdsByConfig,
         configKey
       );
+      candidateResponsesByConfig.set(configKey, responsesForSampling);
 
       const sampledResponses = this.sampleResponses(responsesForSampling, sampleCount, caseSelectionMode);
       sampledResponsesByConfig.set(configKey, sampledResponses);
 
       this.logger.log(`Sampled ${sampledResponses.length} consistent responses for unit ${unitId}, variable ${variableId}`);
     }
+
+    await this.applyBundleCaseSampling(
+      workspaceId,
+      sampledResponsesByConfig,
+      candidateResponsesByConfig,
+      options?.assignedVariableBundles || [],
+      caseSelectionMode
+    );
 
     // Create training packages for each coder using the pre-sampled responses
     const result: TrainingPackage[] = [];
@@ -1480,7 +1577,8 @@ export class CoderTrainingService {
       const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, trainingVariableConfigs, {
         caseSelectionMode: caseSelectionMode ?? 'oldest_first',
         referenceTrainingIds,
-        referenceMode
+        referenceMode,
+        ...((assignedVariableBundles?.length || 0) > 0 ? { assignedVariableBundles } : {})
       });
 
       // Build mapping from variable to bundle id and bundle sorting mode
@@ -2325,7 +2423,10 @@ export class CoderTrainingService {
         const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, effectiveTrainingVariableConfigs, {
           caseSelectionMode: newCaseSelectionMode,
           referenceTrainingIds: effectiveReferenceTrainingIds,
-          referenceMode: newReferenceMode ?? undefined
+          referenceMode: newReferenceMode ?? undefined,
+          ...(effectiveAssignedVariableBundles.length > 0 ?
+            { assignedVariableBundles: effectiveAssignedVariableBundles } :
+            {})
         });
 
         // Build mapping from variable to bundle id and bundle sorting mode

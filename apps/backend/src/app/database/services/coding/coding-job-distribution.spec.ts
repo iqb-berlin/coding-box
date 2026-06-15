@@ -237,9 +237,9 @@ describe('CodingJobService distribution from job definitions', () => {
 
     const doubleCodingSummary = Object.values(result.doubleCodingInfo);
     expect(doubleCodingSummary.reduce((sum, item) => sum + item.distinctCases, 0)).toBe(7);
-    expect(doubleCodingSummary.reduce((sum, item) => sum + item.codingTasksTotal, 0)).toBe(10);
-    expect(doubleCodingSummary.reduce((sum, item) => sum + item.doubleCodedCases, 0)).toBe(3);
-    expect(doubleCodingSummary.reduce((sum, item) => sum + item.singleCodedCasesAssigned, 0)).toBe(4);
+    expect(doubleCodingSummary.reduce((sum, item) => sum + item.codingTasksTotal, 0)).toBe(9);
+    expect(doubleCodingSummary.reduce((sum, item) => sum + item.doubleCodedCases, 0)).toBe(2);
+    expect(doubleCodingSummary.reduce((sum, item) => sum + item.singleCodedCasesAssigned, 0)).toBe(5);
 
     expect(createdJobCalls.every(call => call.dto.jobDefinitionId === 77)).toBe(true);
     expect(createdJobCalls.every(call => call.subset.length > 0)).toBe(true);
@@ -259,7 +259,7 @@ describe('CodingJobService distribution from job definitions', () => {
     createdJobCalls.flatMap(call => call.subset).forEach(response => {
       assignedResponseCounts.set(response.id, (assignedResponseCounts.get(response.id) || 0) + 1);
     });
-    expect([...assignedResponseCounts.values()].filter(count => count === 2)).toHaveLength(3);
+    expect([...assignedResponseCounts.values()].filter(count => count === 2)).toHaveLength(2);
     expect(Math.max(...assignedResponseCounts.values())).toBe(2);
   });
 
@@ -782,6 +782,99 @@ describe('CodingJobService distribution from job definitions', () => {
     expect(result.aggregationInfo).toEqual(preview.aggregationInfo);
     expect(createdJobCalls).toHaveLength(1);
     expect(createdJobCalls[0].subset.map(response => response.id).sort((a, b) => a - b)).toEqual([1, 3]);
+  });
+
+  it('assigns all variables of the same bundle case to the same coder', async () => {
+    const responses = [
+      {
+        ...makeResponse(1, 'Unit 1', 'Var 1'),
+        personLogin: 'Person A',
+        personCode: 'A',
+        personGroup: 'G1'
+      },
+      {
+        ...makeResponse(2, 'Unit 1', 'Var 2'),
+        personLogin: 'Person A',
+        personCode: 'A',
+        personGroup: 'G1'
+      },
+      {
+        ...makeResponse(3, 'Unit 1', 'Var 1'),
+        personLogin: 'Person B',
+        personCode: 'B',
+        personGroup: 'G1'
+      },
+      {
+        ...makeResponse(4, 'Unit 1', 'Var 2'),
+        personLogin: 'Person B',
+        personCode: 'B',
+        personGroup: 'G1'
+      }
+    ];
+    const createdJobCalls: Array<{
+      dto: { assignedCoders?: number[] };
+      subset: SlimResponseForTest[];
+    }> = [];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+    jest.spyOn(
+      service as unknown as {
+        createCodingJobWithUnitSubsetInManager: (
+          workspaceId: number,
+          dto: { assignedCoders?: number[] },
+          subset: SlimResponseForTest[]
+        ) => Promise<CodingJob>
+      },
+      'createCodingJobWithUnitSubsetInManager'
+    ).mockImplementation(async (_workspaceId, dto, subset) => {
+      createdJobCalls.push({ dto, subset: subset as SlimResponseForTest[] });
+      return { id: 450 + createdJobCalls.length } as CodingJob;
+    });
+
+    const result = await service.createDistributedCodingJobs(5, {
+      selectedVariables: [],
+      selectedVariableBundles: [{
+        id: 9,
+        name: 'Bundle A',
+        caseOrderingMode: 'alternating',
+        variables: [
+          { unitName: 'Unit 1', variableId: 'Var 1' },
+          { unitName: 'Unit 1', variableId: 'Var 2' }
+        ]
+      }],
+      selectedCoders: [
+        { id: 1, name: 'Ada', username: 'ada' },
+        { id: 2, name: 'Bea', username: 'bea' }
+      ],
+      caseOrderingMode: 'continuous',
+      jobDefinitionId: 86,
+      distributionSeed: 'bundle-case-grouping'
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.distribution['bundle:9']).toEqual({ Ada: 1, Bea: 1 });
+    expect(result.doubleCodingInfo['bundle:9']).toMatchObject({
+      distinctCases: 2,
+      codingTasksTotal: 4,
+      doubleCodedCases: 0,
+      singleCodedCasesAssigned: 2
+    });
+    expect(createdJobCalls).toHaveLength(2);
+
+    const coderByResponseId = new Map<number, number>();
+    createdJobCalls.forEach(call => {
+      call.subset.forEach(response => {
+        coderByResponseId.set(response.id, call.dto.assignedCoders![0]);
+      });
+    });
+
+    expect(coderByResponseId.get(1)).toBe(coderByResponseId.get(2));
+    expect(coderByResponseId.get(3)).toBe(coderByResponseId.get(4));
+    expect([...coderByResponseId.keys()].sort((a, b) => a - b)).toEqual([
+      1, 2, 3, 4
+    ]);
   });
 
   it('keeps bundles with duplicate names separate by bundle id', async () => {

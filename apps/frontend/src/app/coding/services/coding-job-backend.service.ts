@@ -818,6 +818,16 @@ export class CodingJobBackendService {
       personLogin: string;
       personCode: string;
       personGroup: string;
+      variableBundleId?: number | null;
+      variableBundleCaseOrderingMode?: 'continuous' | 'alternating' | null;
+      variableBundleCaseVariables?: {
+        unitName: string;
+        variableId: string;
+        responseId: number | null;
+        statusV1: number | null;
+        isManualCodingUnit: boolean;
+        isAutoCoded: boolean;
+      }[];
       isDoubleCoded: boolean;
       otherCoders: string[];
     }>
@@ -839,6 +849,16 @@ export class CodingJobBackendService {
       personLogin: string;
       personCode: string;
       personGroup: string;
+      variableBundleId?: number | null;
+      variableBundleCaseOrderingMode?: 'continuous' | 'alternating' | null;
+      variableBundleCaseVariables?: {
+        unitName: string;
+        variableId: string;
+        responseId: number | null;
+        statusV1: number | null;
+        isManualCodingUnit: boolean;
+        isAutoCoded: boolean;
+      }[];
       isDoubleCoded: boolean;
       otherCoders: string[];
     }>

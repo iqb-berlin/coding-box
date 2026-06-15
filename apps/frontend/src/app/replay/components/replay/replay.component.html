@@ -35,50 +35,6 @@
     @if (isCodingMode && hasCodingJobPanelContent()) {
     <div class="resize-handle" (mousedown)="onResizeStart($event)"></div>
     <div class="code-selector-container" [style.width.px]="codePanelWidth" [style.min-width.px]="codePanelWidth">
-      @if (canSwitchAssignedCodingJobs() && assignedCodingJobs.length > 1) {
-      <div class="coding-job-switcher">
-        <mat-form-field appearance="outline" class="coding-job-select">
-          <mat-label>{{ 'replay.job-switcher.label' | translate }}</mat-label>
-          <mat-select
-            [value]="selectedCodingJobKey"
-            [disabled]="isCodingJobSwitchDisabled()"
-            [matTooltip]="getCodingJobSwitchDisabledTooltip()"
-            (selectionChange)="onCodingJobSelectionChange($event.value)">
-            @for (job of assignedCodingJobs; track getCodingJobOptionKey(job)) {
-            <mat-option [value]="getCodingJobOptionKey(job)">
-              <span class="coding-job-option">
-                <span class="coding-job-option-name">{{ job.name }}</span>
-                <span class="coding-job-option-meta">{{ getCodingJobOptionMeta(job) }}</span>
-              </span>
-            </mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-        @if (isLoadingAssignedCodingJobs || isSwitchingCodingJob) {
-        <mat-icon class="coding-job-switcher-icon">sync</mat-icon>
-        }
-      </div>
-      }
-      @if (canSwitchAssignedCodingJobs() && isLoadingAssignedCodingJobs && assignedCodingJobs.length <= 1) {
-      <div class="coding-job-switcher-message">
-        <mat-icon class="coding-job-switcher-icon">sync</mat-icon>
-        <span>{{ 'replay.job-switcher.loading' | translate }}</span>
-      </div>
-      }
-      @if (canSwitchAssignedCodingJobs() && hasAssignedCodingJobsLoadError) {
-      <div class="coding-job-switcher-message coding-job-switcher-error">
-        <mat-icon>warning</mat-icon>
-        <span>{{ 'replay.job-switcher.load-error' | translate }}</span>
-        <button
-          mat-icon-button
-          type="button"
-          [disabled]="isLoadingAssignedCodingJobs"
-          [matTooltip]="'replay.job-switcher.retry' | translate"
-          (click)="retryLoadAssignedCodingJobs()">
-          <mat-icon>refresh</mat-icon>
-        </button>
-      </div>
-      }
       @if (codingService.codingScheme && codingService.currentVariableId) {
       <app-code-selector [codingScheme]="codingService.codingScheme" [variableId]="codingService.currentVariableId"
         [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
@@ -98,6 +54,7 @@
         (codeSelected)="onCodeSelected($event)"
         (notesChanged)="onNotesChanged($event)" (openNavigateDialog)="openNavigateDialog()"
         (openCommentDialog)="openCommentDialog()" (pauseCodingJob)="pauseCodingJob()"
+        (navigateToJobList)="navigateToJobList()"
         (unitChanged)="handleUnitChanged($event)">
       </app-code-selector>
       }

@@ -661,6 +661,8 @@
     "details_request": "Anfrage:"
   },
   "coding": {
+    "auto-coded-short": "Auto",
+    "auto-coded-bundle-variable-tooltip": "Variable {{variableId}} ist in diesem Bündel automatisch kodiert.",
     "schemer": {
       "save-success": "Antwortschema erfolgreich gespeichert",
       "save-error": "Fehler beim Speichern des Antwortschemas",
@@ -1057,6 +1059,7 @@
     "review-coders-tooltip": "Von folgenden Kodierern vergeben: {{coders}}",
     "coder-notes": "Notiz zu diesem Kodierfall",
     "coder-notes-placeholder": "Notiz zu diesem Kodierfall",
+    "general-codes-and-notes": "Allgemeine Codes / Notiz",
     "code-assignment-uncertain-requires-code": "Code-Vergabe unsicher kann erst nach einem regulären Code ausgewählt werden.",
     "new-code-comment-required": "Bitte begründen Sie „Neuer Code nötig“ im Kommentar zu diesem Kodierfall.",
     "coding-issue-options": {

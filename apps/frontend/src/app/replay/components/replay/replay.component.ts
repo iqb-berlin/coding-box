@@ -2,18 +2,15 @@ import {
   Component, ElementRef, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, HostListener, inject,
   input
 } from '@angular/core';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { ActivatedRoute, Params } from '@angular/router';
+import { ActivatedRoute, Params, Router } from '@angular/router';
 import {
-  firstValueFrom, of, Subject, Subscription, catchError
+  firstValueFrom, forkJoin, of, Subject, Subscription, catchError
 } from 'rxjs';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
@@ -40,12 +37,12 @@ import { ReplayCodingService } from '../../services/replay-coding.service';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { hasManualInstruction } from '../../../coding/utils/manual-coding.util';
-import { CodingJob } from '../../../coding/models/coding-job.model';
-
-interface AssignedCodingJobWorkspace {
-  id: number;
-  name: string;
-}
+import { UserService } from '../../../shared/services/user/user.service';
+import { hasAdminBypass } from '../../../core/guards/admin-access';
+import {
+  getCurrentUserWorkspaceAccesses,
+  hasManagementWorkspaceAccess
+} from '../../../shared/utils/workspace-access';
 
 interface CodingJobUnitApi {
   responseId: number;
@@ -58,6 +55,16 @@ interface CodingJobUnitApi {
   personLogin: string;
   personCode: string;
   personGroup: string;
+  variableBundleId?: number | null;
+  variableBundleCaseOrderingMode?: 'continuous' | 'alternating' | null;
+  variableBundleCaseVariables?: {
+    unitName: string;
+    variableId: string;
+    responseId: number | null;
+    statusV1: number | null;
+    isManualCodingUnit: boolean;
+    isAutoCoded: boolean;
+  }[];
 }
 
 interface ReplayUnitPayload {
@@ -73,69 +80,13 @@ interface ReplayUnitPayload {
   serverTimings?: ReplayServerTimings;
 }
 
-interface ReplayCodingServiceSnapshot {
-  codingScheme: ReplayCodingService['codingScheme'];
-  currentVariableId: string;
-  codingJobId: number | null;
-  selectedCodes: ReplayCodingService['selectedCodes'];
-  openUnitKeys: ReplayCodingService['openUnitKeys'];
-  notes: ReplayCodingService['notes'];
-  codingJobComment: string;
-  isPausingJob: boolean;
-  isCodingJobCompleted: boolean;
-  isCodingJobPaused: boolean;
-  isSubmittingJob: boolean;
-  isResumingJob: boolean;
-  isCodingJobFinalized: boolean;
-  isCompletedJobReview: boolean;
-  isReviewMode: boolean;
-  isCodingIssueReviewMode: boolean;
-  hasSaveError: boolean;
-  lastSaveError: string | null;
-  currentCodingJobStatus: string | null;
-  showScore: boolean;
-  allowComments: boolean;
-  suppressGeneralInstructions: boolean;
-}
-
-interface ReplayCodingJobSwitchSnapshot {
-  authToken: string;
-  workspaceId: number;
-  isCodingMode: boolean;
-  isCodingDecisionMode: boolean;
-  isBookletReplayMode: boolean;
-  isReviewMode: boolean;
-  isCodingIssueReviewMode: boolean;
-  unitsData: UnitsReplay | null;
-  loadedCodingJobUnitsKey: string | null;
-  codingProgressLoadedForJobKey: string | null;
-  activeStatusUpdatedForJobKey: string | null;
-  selectedCodingJobKey: string;
-  totalUnits: number;
-  currentUnitIndex: number;
-  testPerson: string;
-  unitId: string;
-  player: string;
-  unitDef: string;
-  page: string | undefined;
-  anchor: string | undefined;
-  responses: unknown | undefined;
-  serverTimings: ReplayServerTimings | null;
-  successStoredForCurrentReplay: boolean;
-  reloadKey: number;
-  codingService: ReplayCodingServiceSnapshot;
-}
-
 @Component({
   providers: [ReplayCodingService],
   selector: 'coding-box-replay',
   imports: [
-    MatFormFieldModule,
-    MatInputModule,
     MatButtonModule,
     MatDialogModule,
     MatIconModule,
-    MatSelectModule,
     MatTooltipModule,
     ReactiveFormsModule,
     TranslateModule,
@@ -153,12 +104,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private replayBackendService = inject(ReplayBackendService);
   private appService = inject(AppService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private errorSnackBar = inject(MatSnackBar);
   private pageErrorSnackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private translateService = inject(TranslateService);
   codingService = inject(ReplayCodingService);
   private codingJobBackendService = inject(CodingJobBackendService);
+  private userService = inject(UserService);
 
   player: string = '';
   unitDef: string = '';
@@ -188,18 +141,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private loadedCodingJobUnitsKey: string | null = null;
   private codingProgressLoadedForJobKey: string | null = null;
   private activeStatusUpdatedForJobKey: string | null = null;
-  protected assignedCodingJobs: CodingJob[] = [];
-  protected selectedCodingJobKey: string = '';
-  protected isLoadingAssignedCodingJobs = false;
-  protected isSwitchingCodingJob = false;
-  protected hasAssignedCodingJobsLoadError = false;
-  private assignedCodingJobsLoaded = false;
-  private assignedCodingJobsReloadRequested = false;
-  private authDataSubscription: Subscription | null = null;
   private authBootstrapSubscription: Subscription | null = null;
   private replayReAuthenticationPending = false;
   private replayTokenRefreshRunning = false;
-  private codingJobWorkspaceNames = new Map<number, string>();
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   @ViewChild(CodeSelectorComponent) codeSelectorComponent: CodeSelectorComponent | undefined;
   @ViewChild('watermark')
@@ -239,11 +183,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   ngOnInit(): void {
     this.replayStartTime = performance.now();
-    this.authDataSubscription = this.appService.authData$.subscribe(() => {
-      if (this.canSwitchAssignedCodingJobs()) {
-        this.requestAssignedCodingJobsReload().catch(() => undefined);
-      }
-    });
     this.authBootstrapSubscription = this.appService.authBootstrapStatus$.subscribe(status => {
       if (status === 'session-expired') {
         this.replayReAuthenticationPending = true;
@@ -574,7 +513,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               if (this.codingService.codingJobId && this.workspaceId) {
                 const jobId = this.codingService.codingJobId;
                 const jobKey = this.getCodingJobKeyFromIds(this.workspaceId, jobId);
-                this.selectedCodingJobKey = jobKey;
                 if (this.codingProgressLoadedForJobKey !== jobKey) {
                   await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
                   this.codingProgressLoadedForJobKey = jobKey;
@@ -589,9 +527,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                 }
                 if (!this.codingService.isCompletedJobReview) {
                   this.codingService.checkCodingJobCompletion(this.unitsData);
-                }
-                if (this.canSwitchAssignedCodingJobs()) {
-                  this.requestAssignedCodingJobsReload().catch(() => undefined);
                 }
               }
             }
@@ -1019,7 +954,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   async handleUnitChanged(unit: UnitsReplayUnit): Promise<void> {
     if (this.isCodingInteractionBlockedByReAuthentication()) return;
-    if (this.isSwitchingCodingJob) return;
     if (!this.canLeaveCurrentCodingCase()) return;
     await this.applyUnitChanged(unit);
   }
@@ -1115,10 +1049,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
-    this.authDataSubscription?.unsubscribe();
     this.authBootstrapSubscription?.unsubscribe();
     this.routerSubscription = null;
-    this.authDataSubscription = null;
     this.authBootstrapSubscription = null;
     this.cancelPendingAnchorHighlight();
     this.resetSnackBars();
@@ -1231,8 +1163,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   isCodingReadOnly(): boolean {
-    return this.isSwitchingCodingJob ||
-      (!this.isCodingDecisionMode && this.appService.needsReAuthentication) ||
+    return (!this.isCodingDecisionMode && this.appService.needsReAuthentication) ||
       this.isReviewMode ||
       (this.codingService.isCompletedJobReview && !this.isCodingIssueReviewMode) ||
       this.codingService.isCodingJobFinalized;
@@ -1249,68 +1180,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return this.codingService.isSubmittingJob || this.isCodingInteractionBlockedByReAuthentication();
   }
 
-  getCodingJobSwitchDisabledTooltip(): string {
-    if (this.isCodingInteractionBlockedByReAuthentication()) {
-      return this.translateService.instant('replay.reauthentication-required');
-    }
-
-    return this.codingService.hasSaveError ? this.translateService.instant('replay.job-switcher.save-error') : '';
-  }
-
   hasCodingJobPanelContent(): boolean {
-    return this.hasCodingJobSwitchStatus() || this.hasCodingSchemeForCurrentVariable();
-  }
-
-  hasCodingJobSwitchStatus(): boolean {
-    return this.canSwitchAssignedCodingJobs() && (this.assignedCodingJobs.length > 1 ||
-      this.isLoadingAssignedCodingJobs ||
-      this.hasAssignedCodingJobsLoadError);
+    return this.hasCodingSchemeForCurrentVariable();
   }
 
   hasCodingSchemeForCurrentVariable(): boolean {
     return !!this.codingService.codingScheme && !!this.codingService.currentVariableId;
-  }
-
-  canSwitchAssignedCodingJobs(): boolean {
-    return this.isCodingMode &&
-      !this.isReviewMode &&
-      !this.isCodingIssueReviewMode &&
-      !this.isCodingDecisionMode;
-  }
-
-  isCodingJobSwitchDisabled(): boolean {
-    return !this.canSwitchAssignedCodingJobs() ||
-      this.isLoadingAssignedCodingJobs ||
-      this.isSwitchingCodingJob ||
-      this.isCodingInteractionBlockedByReAuthentication() ||
-      this.codingService.hasSaveError;
-  }
-
-  getCodingJobOptionKey(job: CodingJob): string {
-    return this.getCodingJobKeyFromIds(job.workspace_id, job.id);
-  }
-
-  getCodingJobOptionMeta(job: CodingJob): string {
-    const workspaceName = this.codingJobWorkspaceNames.get(job.workspace_id) || `Arbeitsbereich ${job.workspace_id}`;
-    return `${workspaceName} · ${this.getCodingJobStatusText(job.status)} · ${this.getCodingJobProgressText(job)}`;
-  }
-
-  async onCodingJobSelectionChange(jobKey: string): Promise<void> {
-    await this.switchToAssignedCodingJob(jobKey);
-  }
-
-  async retryLoadAssignedCodingJobs(): Promise<void> {
-    await this.requestAssignedCodingJobsReload();
-  }
-
-  private async requestAssignedCodingJobsReload(): Promise<void> {
-    this.assignedCodingJobsLoaded = false;
-    if (this.isLoadingAssignedCodingJobs) {
-      this.assignedCodingJobsReloadRequested = true;
-      return;
-    }
-
-    await this.loadAssignedCodingJobs();
   }
 
   getPreSelectedCodeId(variableId: string): number | null {
@@ -1324,7 +1199,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   pauseCodingJob(): void {
     if (
       this.codingService.codingJobId &&
-      !this.isSwitchingCodingJob &&
       !this.isCodingInteractionBlockedByReAuthentication() &&
       !this.isReviewMode &&
       !this.codingService.isCompletedJobReview &&
@@ -1332,6 +1206,53 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     ) {
       this.codingService.pauseCodingJob(this.workspaceId, this.codingService.codingJobId);
     }
+  }
+
+  navigateToJobList(): void {
+    this.getCodingJobListRoute()
+      .then(route => this.router.navigate(route).catch(() => undefined))
+      .catch(() => this.router.navigate(['/coding']).catch(() => undefined));
+  }
+
+  private async getCodingJobListRoute(): Promise<(string | number)[]> {
+    if (this.workspaceId > 0 && await this.shouldUseWorkspaceCodingJobsRoute()) {
+      return ['/workspace-admin', this.workspaceId, 'coding', 'my-jobs'];
+    }
+
+    return ['/coding'];
+  }
+
+  private async shouldUseWorkspaceCodingJobsRoute(): Promise<boolean> {
+    const authData = this.appService.authData;
+    if (hasAdminBypass(this.getLoggedUserRoles(), authData?.isAdmin)) {
+      return true;
+    }
+
+    const userId = authData?.userId ?? 0;
+    const workspaceIds = [...new Set(
+      (authData?.workspaces || [])
+        .map(workspace => workspace.id)
+        .filter((workspaceId): workspaceId is number => Number.isInteger(workspaceId) && workspaceId > 0)
+    )];
+
+    if (userId <= 0 || workspaceIds.length === 0) {
+      return false;
+    }
+
+    const workspaceUsers = await firstValueFrom(forkJoin(
+      workspaceIds.map(workspaceId => this.userService.getUsers(workspaceId))
+    ));
+    const currentUserAccess = getCurrentUserWorkspaceAccesses(workspaceUsers, userId);
+
+    return currentUserAccess.some(hasManagementWorkspaceAccess);
+  }
+
+  private getLoggedUserRoles(): string[] {
+    const loggedUser = this.appService.loggedUser as {
+      realm_access?: { roles?: string[] };
+      realmAccess?: { roles?: string[] };
+    } | undefined;
+    return loggedUser?.realm_access?.roles || loggedUser?.realmAccess?.roles || [];
   }
 
   resumeCodingJob(): void {
@@ -1382,7 +1303,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   openNavigateDialog(): void {
-    if (!this.unitsData || this.isSwitchingCodingJob || this.isCodingInteractionBlockedByReAuthentication()) return;
+    if (!this.unitsData || this.isCodingInteractionBlockedByReAuthentication()) return;
 
     const dialogData: NavigateCodingCasesDialogData = {
       unitsData: this.unitsData,
@@ -1416,7 +1337,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       return;
     }
 
-    if ((this.isSwitchingCodingJob || this.isCodingInteractionBlockedByReAuthentication()) &&
+    if (this.isCodingInteractionBlockedByReAuthentication() &&
       ['Enter', 'ArrowRight', 'ArrowLeft'].includes(keyboardEvent.key)) {
       keyboardEvent.preventDefault();
       return;
@@ -1478,10 +1399,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           if (variableCoding) {
             const code = variableCoding.codes.find((c: any) => c.id === codeId && hasManualInstruction(c));
             if (code) {
-              this.onCodeSelected({
-                variableId: this.codingService.currentVariableId,
-                code: code
-              });
+              if (this.codeSelectorComponent) {
+                this.codeSelectorComponent.onSelect(codeId, true);
+              } else {
+                this.onCodeSelected({
+                  variableId: this.codingService.currentVariableId,
+                  code: code
+                });
+              }
             }
           }
         }
@@ -2055,7 +1980,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           `${item.personLogin}@${item.personCode}@${item.bookletName}`,
         variableId: item.variableId,
         variableAnchor: item.variableAnchor,
-        variablePage: item.variablePage
+        variablePage: item.variablePage,
+        variableBundleId: item.variableBundleId ?? null,
+        variableBundleCaseOrderingMode: item.variableBundleCaseOrderingMode ?? null,
+        variableBundleCaseVariables: item.variableBundleCaseVariables || []
       })),
       currentUnitIndex: 0
     };

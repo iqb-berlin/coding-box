@@ -1,5 +1,5 @@
 // eslint-disable-next-line max-classes-per-file
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import {
   BehaviorSubject, of, Subject, throwError
@@ -22,6 +22,7 @@ import { CodingJob } from '../../../coding/models/coding-job.model';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 import { CodingScheme } from '../../../models/coding-interfaces';
+import { UserService } from '../../../shared/services/user/user.service';
 
 function createUnsignedJwt(payload: Record<string, unknown>): string {
   const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
@@ -29,6 +30,12 @@ function createUnsignedJwt(payload: Record<string, unknown>): string {
     .replace(/\//g, '_')
     .replace(/=+$/u, '');
   return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(payload)}.`;
+}
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 // Beispielhafte Mocks für Services, die im Component per inject() genutzt werden
@@ -64,6 +71,7 @@ class ReplayBackendServiceMock {
 
 interface AppServiceAuthDataMock {
   userId: number;
+  isAdmin?: boolean;
   workspaces: { id: number; name: string }[];
 }
 
@@ -71,6 +79,7 @@ class AppServiceMock {
   selectedWorkspaceId = 42;
   authData: AppServiceAuthDataMock = {
     userId: 1,
+    isAdmin: false,
     workspaces: [
       { id: 47, name: 'Workspace 47' },
       { id: 48, name: 'Workspace 48' }
@@ -104,6 +113,21 @@ class MatSnackBarMock {
   });
 
   dismiss = jest.fn();
+}
+
+class RouterMock {
+  navigate = jest.fn().mockResolvedValue(true);
+}
+
+class UserServiceMock {
+  getUsers = jest.fn().mockImplementation((workspaceId: number) => of([
+    {
+      id: 1,
+      accessLevel: 1,
+      canCode: true,
+      workspaceId
+    }
+  ]));
 }
 
 let routeParams: {
@@ -196,6 +220,8 @@ describe('ReplayComponent', () => {
         { provide: ReplayBackendService, useClass: ReplayBackendServiceMock },
         { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
         { provide: AppService, useClass: AppServiceMock },
+        { provide: Router, useClass: RouterMock },
+        { provide: UserService, useClass: UserServiceMock },
         { provide: MatSnackBar, useClass: MatSnackBarMock }
       ],
       imports: [ReplayComponent, TranslateModule.forRoot()]
@@ -1542,6 +1568,42 @@ describe('ReplayComponent', () => {
       });
     });
 
+    it('should scroll to regular codes selected by digit shortcuts when the code selector is available', () => {
+      component.isCodingMode = true;
+      const unitsData = {
+        id: 123,
+        name: 'job',
+        currentUnitIndex: 0,
+        units: [
+          {
+            id: 1,
+            name: 'UNIT1',
+            alias: 'UNIT1',
+            bookletId: 0,
+            testPerson: 'tp1@code1@grp@booklet',
+            variableId: 'V1',
+            variableAnchor: 'V1'
+          }
+        ]
+      };
+      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
+      const privateComponent = component as unknown as {
+        codeSelectorComponent: { onSelect: jest.Mock };
+      };
+      const onSelect = jest.fn();
+      replayComponent.unitsData = unitsData;
+      component.codingService.currentVariableId = 'V1';
+      component.codingService.codingScheme = digitShortcutCodingScheme;
+      privateComponent.codeSelectorComponent = { onSelect };
+      const onCodeSelectedSpy = jest.spyOn(component, 'onCodeSelected').mockResolvedValue();
+      const event = new KeyboardEvent('keydown', { key: '2', code: 'Numpad2' });
+
+      component.onKeyDown(event);
+
+      expect(onSelect).toHaveBeenCalledWith(2, true);
+      expect(onCodeSelectedSpy).not.toHaveBeenCalled();
+    });
+
     it('should ignore digit shortcuts in coding review mode', () => {
       component.isCodingMode = true;
       component.isReviewMode = true;
@@ -2181,7 +2243,7 @@ describe('ReplayComponent', () => {
       expect(component.codingService.codingScheme).toEqual(targetScheme);
     });
 
-    it('renders the coding job switcher even when no coding scheme is available', () => {
+    it('does not render the coding panel for assigned jobs alone when no coding scheme is available', () => {
       const currentJob = createJob(77, 47, 'Current Job', 'active');
       const targetJob = createJob(88, 47, 'Target Job', 'open');
       const privateComponent = component as unknown as {
@@ -2197,8 +2259,38 @@ describe('ReplayComponent', () => {
 
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.querySelector('.coding-job-switcher')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('.coding-job-switcher')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.code-selector-container')).toBeNull();
       expect(fixture.nativeElement.querySelector('app-code-selector')).toBeNull();
+    });
+
+    it('navigates back to the personal coding jobs view from the coding panel', async () => {
+      const router = TestBed.inject(Router) as unknown as RouterMock;
+      component.workspaceId = 47;
+
+      component.navigateToJobList();
+      await flushPromises();
+
+      expect(router.navigate).toHaveBeenCalledWith(['/coding']);
+    });
+
+    it('navigates back to the workspace coding jobs view when personal coding jobs are guarded away', async () => {
+      const router = TestBed.inject(Router) as unknown as RouterMock;
+      const userService = TestBed.inject(UserService) as unknown as UserServiceMock;
+      userService.getUsers.mockImplementation((workspaceId: number) => of([
+        {
+          id: 1,
+          accessLevel: workspaceId === 48 ? 2 : 1,
+          canCode: true,
+          workspaceId
+        }
+      ]));
+      component.workspaceId = 47;
+
+      component.navigateToJobList();
+      await flushPromises();
+
+      expect(router.navigate).toHaveBeenCalledWith(['/workspace-admin', 47, 'coding', 'my-jobs']);
     });
 
     it('does not render or use the coding job switcher in review mode', async () => {
@@ -2265,7 +2357,8 @@ describe('ReplayComponent', () => {
 
       expect(privateComponent.hasAssignedCodingJobsLoadError).toBe(true);
       expect(privateComponent.assignedCodingJobsLoaded).toBe(false);
-      expect(fixture.nativeElement.querySelector('.coding-job-switcher-error')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('.coding-job-switcher-error')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.code-selector-container')).toBeNull();
 
       await privateComponent.retryLoadAssignedCodingJobs();
 

@@ -42,6 +42,7 @@ const createQueryBuilder = (result: unknown = []) => {
     'innerJoinAndSelect',
     'where',
     'andWhere',
+    'orWhere',
     'groupBy',
     'addGroupBy',
     'orderBy',
@@ -4483,5 +4484,97 @@ describe('CodingJobService', () => {
       variableId: 'VAR_WITH_OVERRIDE',
       variablePage: '1'
     });
+  });
+
+  it('returns auto-coded bundle siblings for coding job units', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 10,
+      workspace_id: 3,
+      job_definition_id: 5,
+      training_id: null,
+      case_ordering_mode: 'continuous',
+      codingJobCoders: []
+    });
+    codingJobVariableBundleRepository.find.mockResolvedValue([
+      {
+        variable_bundle_id: 9,
+        case_ordering_mode: 'alternating'
+      }
+    ]);
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 9,
+        workspace_id: 3,
+        variables: [
+          { unitName: 'UNIT', variableId: 'MANUAL' },
+          { unitName: 'UNIT', variableId: 'AUTO' }
+        ]
+      }
+    ]);
+    codingJobUnitRepository.find
+      .mockResolvedValueOnce([
+        {
+          response_id: 99,
+          unit_name: 'UNIT',
+          unit_alias: 'UNIT',
+          variable_id: 'MANUAL',
+          variable_anchor: 'MANUAL',
+          booklet_name: 'BOOKLET',
+          person_login: 'login',
+          person_code: 'code',
+          person_group: 'group',
+          notes: null,
+          variable_bundle_id: 9
+        }
+      ])
+      .mockResolvedValueOnce([]);
+    responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([
+      {
+        responseId: 99,
+        variableId: 'MANUAL',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+        isAutocoderGenerated: false,
+        unitName: 'UNIT',
+        bookletName: 'BOOKLET',
+        personLogin: 'login',
+        personCode: 'code',
+        personGroup: 'group'
+      },
+      {
+        responseId: 100,
+        variableId: 'AUTO',
+        statusV1: statusStringToNumber('CODING_COMPLETE'),
+        isAutocoderGenerated: true,
+        unitName: 'UNIT',
+        bookletName: 'BOOKLET',
+        personLogin: 'login',
+        personCode: 'code',
+        personGroup: 'group'
+      }
+    ]));
+    codingFileCacheService.getVariablePageMap.mockResolvedValue(
+      new Map([['MANUAL', '0']])
+    );
+
+    const result = await service.getCodingJobUnits(10);
+
+    expect(result[0].variableBundleCaseVariables).toEqual([
+      {
+        unitName: 'UNIT',
+        variableId: 'AUTO',
+        responseId: 100,
+        statusV1: statusStringToNumber('CODING_COMPLETE'),
+        isManualCodingUnit: false,
+        isAutoCoded: true
+      },
+      {
+        unitName: 'UNIT',
+        variableId: 'MANUAL',
+        responseId: 99,
+        statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+        isManualCodingUnit: true,
+        isAutoCoded: false
+      }
+    ]);
   });
 });

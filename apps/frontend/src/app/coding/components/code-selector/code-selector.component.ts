@@ -26,6 +26,16 @@ import {
 } from '../../../models/coding-interfaces';
 import { hasManualInstruction } from '../../utils/manual-coding.util';
 
+type BundleVariableChip = {
+  key: string;
+  navigationKey: string;
+  variableId: string;
+  unitName: string;
+  isAutoCoded: boolean;
+  isManualCodingUnit: boolean;
+  isNavigable: boolean;
+};
+
 @Component({
   selector: 'app-code-selector',
   standalone: true,
@@ -65,6 +75,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Output() openNavigateDialog = new EventEmitter<void>();
   @Output() openCommentDialog = new EventEmitter<void>();
   @Output() pauseCodingJob = new EventEmitter<void>();
+  @Output() navigateToJobList = new EventEmitter<void>();
   @Output() unitChanged = new EventEmitter<UnitsReplayUnit>();
   @ViewChild('variablePanel') variablePanel?: ElementRef<HTMLElement>;
   @ViewChild('notesTextarea') notesTextarea?: ElementRef<HTMLTextAreaElement>;
@@ -72,6 +83,7 @@ export class CodeSelectorComponent implements OnChanges {
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
   selectedCodingIssueOption: number | null = null;
+  isAuxiliarySectionExpanded = true;
   newCodeCommentValidationError = false;
   variableManualInstruction: string | null = null;
   legacySelectedCode: SelectableItem | null = null;
@@ -257,7 +269,7 @@ export class CodeSelectorComponent implements OnChanges {
     throw new Error(`Invalid item type for conversion: ${item.type}`);
   }
 
-  onSelect(codeId: number): void {
+  onSelect(codeId: number, scrollIntoView = false): void {
     if (this.isReadOnly) return;
     const selectedItem = this.selectableItems.find(item => item.id === codeId);
     if (!selectedItem) return;
@@ -272,6 +284,9 @@ export class CodeSelectorComponent implements OnChanges {
       // Clear regular code selection when selecting -3 or -4
       if (codeId === -3 || codeId === -4) {
         this.selectedCode = null;
+      }
+      if (scrollIntoView) {
+        this.isAuxiliarySectionExpanded = true;
       }
     } else {
       this.selectedCode = codeId;
@@ -292,6 +307,10 @@ export class CodeSelectorComponent implements OnChanges {
       code: codeDto,
       codingIssueOption: codingIssueOption
     });
+
+    if (scrollIntoView) {
+      this.scrollCodeIntoView(codeId);
+    }
   }
 
   get regularCodes(): SelectableItem[] {
@@ -396,6 +415,14 @@ export class CodeSelectorComponent implements OnChanges {
     this.pauseCodingJob.emit();
   }
 
+  onNavigateToJobListClick(): void {
+    this.navigateToJobList.emit();
+  }
+
+  toggleAuxiliarySection(): void {
+    this.isAuxiliarySectionExpanded = !this.isAuxiliarySectionExpanded;
+  }
+
   onNotesChanged(): void {
     if (this.isReadOnly) return;
     this.updateNewCodeCommentValidationState();
@@ -409,6 +436,7 @@ export class CodeSelectorComponent implements OnChanges {
     }
 
     if (showValidationMessage) {
+      this.isAuxiliarySectionExpanded = true;
       this.newCodeCommentValidationError = true;
       setTimeout(() => this.notesTextarea?.nativeElement.focus(), 0);
     }
@@ -515,7 +543,7 @@ export class CodeSelectorComponent implements OnChanges {
       const option = this.selectableItems.find(item => item.id === targetId);
       if (option && this.isCodingIssueOptionAvailable(option) && !this.isCodingIssueOptionDisabled(option)) {
         event.preventDefault(); // Prevent default browser action (e.g. quick find with '/')
-        this.onSelect(targetId);
+        this.onSelect(targetId, true);
       }
     }
   }
@@ -536,6 +564,19 @@ export class CodeSelectorComponent implements OnChanges {
 
   get currentNavigationIndex(): number {
     return (this.unitsData?.currentUnitIndex || 0) + 1;
+  }
+
+  get progressSummary(): string {
+    return `${this.completedCount}/${this.totalUnits} (${this.progressPercentage}%)`;
+  }
+
+  get progressTooltip(): string {
+    const progressText = `${this.translateService.instant('replay.coding-progress')} ${this.progressSummary}`;
+    if (this.openCount <= 0) {
+      return progressText;
+    }
+
+    return `${progressText} · ${this.translateService.instant('replay.open-count')} ${this.openCount}`;
   }
 
   isVariablePanelOpen = false;
@@ -590,14 +631,99 @@ export class CodeSelectorComponent implements OnChanges {
     const result: { key: string; variableId: string; unitName: string }[] = [];
     for (const unit of this.unitsData.units) {
       if (unit.variableId) {
-        const key = `${unit.alias || unit.name}::${unit.variableId}`;
+        const key = this.getUnitVariableKey(unit);
         if (!seen.has(key)) {
           seen.add(key);
-          result.push({ key, variableId: unit.variableId, unitName: unit.alias || unit.name });
+          result.push({
+            key,
+            variableId: unit.variableId,
+            unitName: this.getUnitDisplayName(unit)
+          });
         }
       }
     }
     return result;
+  }
+
+  get activeBundleVariables(): BundleVariableChip[] {
+    if (!this.unitsData?.units) return [];
+    const currentUnit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    const bundleId = currentUnit?.variableBundleId;
+    if (!bundleId) return [];
+
+    const seen = new Set<string>();
+    const result: BundleVariableChip[] = [];
+    const bundleCaseVariables = currentUnit.variableBundleCaseVariables || [];
+    if (bundleCaseVariables.length > 0) {
+      for (const variable of bundleCaseVariables) {
+        const matchingUnit = this.findUnitForBundleVariable(currentUnit, variable.unitName, variable.variableId);
+        if (!matchingUnit && !variable.isAutoCoded) {
+          continue;
+        }
+        const unitName = matchingUnit ? this.getUnitDisplayName(matchingUnit) : variable.unitName;
+        const key = matchingUnit ?
+          this.getUnitVariableKey(matchingUnit) :
+          this.getVariableKey(unitName, variable.variableId);
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push({
+            key,
+            navigationKey: matchingUnit ? this.getUnitCaseVariableKey(matchingUnit) : '',
+            variableId: variable.variableId,
+            unitName,
+            isAutoCoded: variable.isAutoCoded,
+            isManualCodingUnit: variable.isManualCodingUnit,
+            isNavigable: !!matchingUnit && !variable.isAutoCoded
+          });
+        }
+      }
+      return result;
+    }
+
+    for (const unit of this.unitsData.units) {
+      if (
+        !unit.variableId ||
+        unit.variableBundleId !== bundleId ||
+        !this.isSameBundleCase(currentUnit, unit)
+      ) {
+        continue;
+      }
+
+      const unitName = this.getUnitDisplayName(unit);
+      const key = this.getUnitVariableKey(unit);
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push({
+          key,
+          navigationKey: this.getUnitCaseVariableKey(unit),
+          variableId: unit.variableId,
+          unitName,
+          isAutoCoded: false,
+          isManualCodingUnit: true,
+          isNavigable: true
+        });
+      }
+    }
+    return result;
+  }
+
+  get shouldShowBundleVariableChips(): boolean {
+    return this.usesCompactBundleVariableMode &&
+      this.activeBundleVariables.length > 1;
+  }
+
+  get usesCompactBundleVariableMode(): boolean {
+    if (!this.unitsData?.units) return false;
+    const currentUnit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    return currentUnit?.variableBundleCaseOrderingMode === 'alternating' &&
+      this.activeBundleVariables.length < 5;
+  }
+
+  get activeBundleVariableKey(): string {
+    if (!this.unitsData?.units) return '';
+    const unit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    if (!unit?.variableId) return '';
+    return this.getUnitCaseVariableKey(unit);
   }
 
   /** Composite key (unitName::variableId) for the unit currently being displayed. */
@@ -605,7 +731,7 @@ export class CodeSelectorComponent implements OnChanges {
     if (!this.unitsData?.units) return '';
     const unit = this.unitsData.units[this.unitsData.currentUnitIndex];
     if (!unit?.variableId) return '';
-    return `${unit.alias || unit.name}::${unit.variableId}`;
+    return this.getUnitVariableKey(unit);
   }
 
   /** Progress (coded / total) for the unit+variable of the current unit. */
@@ -613,7 +739,7 @@ export class CodeSelectorComponent implements OnChanges {
     if (!this.unitsData?.units || !this.codingService) return null;
     const currentUnit = this.unitsData.units[this.unitsData.currentUnitIndex];
     if (!currentUnit?.variableId) return null;
-    const unitName = currentUnit.alias || currentUnit.name;
+    const unitName = this.getUnitDisplayName(currentUnit);
     const varId = currentUnit.variableId;
     // Count all units with the same unitName+variableId combo
     const variableUnits = this.unitsData.units.filter(
@@ -632,10 +758,7 @@ export class CodeSelectorComponent implements OnChanges {
   jumpToVariable(key: string): void {
     if (this.isNavigationDisabled) return;
     if (!this.unitsData?.units) return;
-    const [unitName, variableId] = key.split('::');
-    const variableUnits = this.unitsData.units
-      .map((unit, index) => ({ unit, index }))
-      .filter(({ unit }) => (unit.alias || unit.name) === unitName && unit.variableId === variableId);
+    const variableUnits = this.getUnitsForVariableKey(key);
     if (variableUnits.length === 0) return;
 
     // Prefer first uncoded unit
@@ -644,5 +767,78 @@ export class CodeSelectorComponent implements OnChanges {
     );
     const target = firstUncoded ?? variableUnits[0];
     this.unitChanged.emit(target.unit);
+  }
+
+  private getUnitsForVariableKey(
+    key: string
+  ): { unit: UnitsReplayUnit; index: number }[] {
+    if (!this.unitsData?.units) return [];
+    if (key.includes('\u001F')) {
+      const [testPerson, unitName, variableId] = key.split('\u001F');
+      return this.unitsData.units
+        .map((unit, index) => ({ unit, index }))
+        .filter(({ unit }) => (
+          (unit.testPerson || '') === testPerson &&
+          this.getUnitDisplayName(unit) === unitName &&
+          unit.variableId === variableId
+        ));
+    }
+
+    const [unitName, variableId] = key.split('::');
+    const variableUnits = this.unitsData.units
+      .map((unit, index) => ({ unit, index }))
+      .filter(({ unit }) => (unit.alias || unit.name) === unitName && unit.variableId === variableId);
+    return variableUnits;
+  }
+
+  private scrollCodeIntoView(codeId: number): void {
+    setTimeout(() => {
+      const row = (this.elementRef.nativeElement as HTMLElement)
+        .querySelector<HTMLElement>(`[data-code-selector-code-id="${codeId}"]`);
+      row?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    }, 0);
+  }
+
+  private getUnitDisplayName(unit: Pick<UnitsReplayUnit, 'alias' | 'name'>): string {
+    return unit.alias || unit.name;
+  }
+
+  private getVariableKey(unitName: string, variableId: string): string {
+    return `${unitName}::${variableId}`;
+  }
+
+  private getUnitVariableKey(unit: UnitsReplayUnit): string {
+    return this.getVariableKey(this.getUnitDisplayName(unit), unit.variableId || '');
+  }
+
+  private getUnitCaseVariableKey(unit: UnitsReplayUnit): string {
+    return [
+      unit.testPerson || '',
+      this.getUnitDisplayName(unit),
+      unit.variableId || ''
+    ].join('\u001F');
+  }
+
+  private findUnitForBundleVariable(
+    currentUnit: UnitsReplayUnit,
+    unitName: string,
+    variableId: string
+  ): UnitsReplayUnit | undefined {
+    return this.unitsData?.units.find(unit => (
+      this.isSameBundleCase(currentUnit, unit) &&
+      (unit.name === unitName || unit.alias === unitName) &&
+      unit.variableId === variableId
+    ));
+  }
+
+  private isSameBundleCase(
+    currentUnit: UnitsReplayUnit,
+    candidate: UnitsReplayUnit
+  ): boolean {
+    return (
+      currentUnit.variableBundleId === candidate.variableBundleId &&
+      currentUnit.name === candidate.name &&
+      (currentUnit.testPerson || '') === (candidate.testPerson || '')
+    );
   }
 }

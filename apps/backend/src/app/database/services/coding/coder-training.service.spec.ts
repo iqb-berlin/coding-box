@@ -411,7 +411,8 @@ describe('CoderTrainingService', () => {
         {
           caseSelectionMode: 'oldest_first',
           referenceTrainingIds: undefined,
-          referenceMode: undefined
+          referenceMode: undefined,
+          assignedVariableBundles
         }
       );
 
@@ -1596,6 +1597,78 @@ describe('CoderTrainingService', () => {
       );
 
       expect(result[0].responses).toEqual([]);
+    });
+
+    it('samples bundle variables by shared case for training packages', async () => {
+      const responsesByVariable = new Map<string, Array<ReturnType<typeof makeResponseEntity>>>([
+        ['var1', [
+          {
+            ...makeResponseEntity(1, { personLogin: 'person-a', personCode: 'A' }),
+            unitid: undefined as never
+          },
+          {
+            ...makeResponseEntity(3, { personLogin: 'person-b', personCode: 'B' }),
+            unitid: undefined as never
+          }
+        ]],
+        ['var2', [
+          {
+            ...makeResponseEntity(2, { personLogin: 'person-a', personCode: 'A' }),
+            variableid: 'var2',
+            unitid: undefined as never
+          },
+          {
+            ...makeResponseEntity(4, { personLogin: 'person-b', personCode: 'B' }),
+            variableid: 'var2',
+            unitid: undefined as never
+          }
+        ]]
+      ]);
+      let currentVariableId = '';
+      const responseQb = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn((condition: unknown, parameters?: { variableId?: string }) => {
+          if (condition === 'response.variableid = :variableId' && parameters?.variableId) {
+            currentVariableId = parameters.variableId;
+          }
+          return responseQb;
+        }),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn(async () => responsesByVariable.get(currentVariableId) || [])
+      };
+      const responseRepository = {
+        createQueryBuilder: jest.fn().mockReturnValue(responseQb)
+      };
+      (service as unknown as { responseRepository: typeof responseRepository }).responseRepository = responseRepository;
+      mockRepository.find.mockResolvedValueOnce([{
+        id: 9,
+        workspace_id: 1,
+        variables: [
+          { unitName: 'Real Unit', variableId: 'var1' },
+          { unitName: 'Real Unit', variableId: 'var2' }
+        ]
+      }]);
+
+      const result = await service.generateCoderTrainingPackages(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [
+          { unitId: 'Real Unit', variableId: 'var1', sampleCount: 2 },
+          { unitId: 'Real Unit', variableId: 'var2', sampleCount: 2 }
+        ],
+        {
+          caseSelectionMode: 'oldest_first',
+          assignedVariableBundles: [{
+            id: 9,
+            name: 'Bundle',
+            sampleCount: 1
+          }]
+        }
+      );
+
+      expect(result[0].responses.map(response => response.responseId).sort()).toEqual([1, 2]);
+      expect(new Set(result[0].responses.map(response => response.personLogin))).toEqual(new Set(['person-a']));
     });
   });
 

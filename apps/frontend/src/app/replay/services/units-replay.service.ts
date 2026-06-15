@@ -24,6 +24,16 @@ export interface UnitsReplayUnit {
   variableId?: string;
   variableAnchor?: string;
   variablePage?: string;
+  variableBundleId?: number | null;
+  variableBundleCaseOrderingMode?: 'continuous' | 'alternating' | null;
+  variableBundleCaseVariables?: {
+    unitName: string;
+    variableId: string;
+    responseId: number | null;
+    statusV1: number | null;
+    isManualCodingUnit: boolean;
+    isAutoCoded: boolean;
+  }[];
   reviewCodeSelections?: ReviewCodeSelection[];
 }
 
