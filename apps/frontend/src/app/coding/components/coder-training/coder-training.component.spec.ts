@@ -186,6 +186,25 @@ describe('CoderTrainingComponent', () => {
     expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalled();
   });
 
+  it('renders coder selection as toggle cards without checkboxes', () => {
+    fixture.detectChanges();
+
+    const firstCoderCard = fixture.nativeElement.querySelector('.coder-grid .coder-item') as HTMLElement;
+
+    expect(fixture.nativeElement.querySelector('.coder-grid mat-checkbox')).toBeNull();
+    expect(firstCoderCard.classList.contains('selected')).toBe(false);
+    expect(firstCoderCard.querySelector('.coder-login')).toBeNull();
+
+    firstCoderCard.click();
+    fixture.detectChanges();
+
+    const selectedCoderCard = fixture.nativeElement.querySelector('.coder-grid .coder-item') as HTMLElement;
+
+    expect(component.isCoderSelected(component.coders[0])).toBe(true);
+    expect(selectedCoderCard.classList.contains('selected')).toBe(true);
+    expect(selectedCoderCard.querySelector('.selected-icon')).not.toBeNull();
+  });
+
   it('covers removal, validation and error paths', () => {
     coderService.getCoders.mockReturnValueOnce(throwError(() => new Error('load failed')));
     component.loadCoders();
