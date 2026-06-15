@@ -15,6 +15,7 @@ import {
   ILike,
   Connection,
   EntityManager,
+  FindOneOptions,
   SelectQueryBuilder,
   Brackets
 } from 'typeorm';
@@ -1064,9 +1065,16 @@ export class CodingJobService {
   }
 
   async getCodingJobProgress(
-    jobId: number
+    jobId: number,
+    manager?: EntityManager
   ): Promise<{ progress: number; coded: number; total: number; open: number }> {
-    const codingJob = await this.codingJobRepository.findOne({
+    const codingJobRepository = manager ?
+      manager.getRepository(CodingJob) :
+      this.codingJobRepository;
+    const codingJobUnitRepository = manager ?
+      manager.getRepository(CodingJobUnit) :
+      this.codingJobUnitRepository;
+    const codingJob = await codingJobRepository.findOne({
       where: { id: jobId },
       select: ['id', 'workspace_id']
     });
@@ -1080,7 +1088,7 @@ export class CodingJobService {
       };
     }
 
-    const totalUnitsQuery = this.codingJobUnitRepository
+    const totalUnitsQuery = codingJobUnitRepository
       .createQueryBuilder('cju')
       .where('cju.coding_job_id = :jobId', { jobId });
     await this.applyCodingJobUnitExclusions(
@@ -1099,7 +1107,7 @@ export class CodingJobService {
       };
     }
 
-    const codedUnitsQuery = this.codingJobUnitRepository
+    const codedUnitsQuery = codingJobUnitRepository
       .createQueryBuilder('cju')
       .where('cju.coding_job_id = :jobId', { jobId })
       .andWhere('cju.code IS NOT NULL');
@@ -1109,7 +1117,7 @@ export class CodingJobService {
       'codingJobProgressCoded'
     );
 
-    const openUnitsQuery = this.codingJobUnitRepository
+    const openUnitsQuery = codingJobUnitRepository
       .createQueryBuilder('cju')
       .where('cju.coding_job_id = :jobId', { jobId })
       .andWhere('cju.is_open = :isOpen', { isOpen: true });
@@ -2471,6 +2479,10 @@ export class CodingJobService {
 
     const createdCodingJob = await this.connection.transaction(
       async manager => {
+        await lockWorkspaceTestResultsMutationInTransaction(
+          manager,
+          workspaceId
+        );
         const codingJobRepo = manager.getRepository(CodingJob);
         const aggregationSettings =
           await this.getCurrentAggregationSettingsSnapshot(workspaceId);
@@ -3242,86 +3254,52 @@ export class CodingJobService {
     codingJobId: number,
     progress: SaveCodingProgressDto
   ): Promise<CodingJob> {
-    const codingJob = await this.codingJobRepository.findOne({
-      where: { id: codingJobId }
+    return this.connection.transaction(async manager => {
+      const codingJobRepository = manager.getRepository(CodingJob);
+      const codingJobUnitRepository = manager.getRepository(CodingJobUnit);
+      const codingJob = await codingJobRepository.findOne({
+        where: { id: codingJobId }
+      });
+
+      if (!codingJob) {
+        throw new NotFoundException(
+          `Coding job with ID ${codingJobId} not found`
+        );
+      }
+
+      if (['review', 'results_applied'].includes(codingJob.status)) {
+        throw new BadRequestException(
+          `Cannot save progress for a coding job with status ${codingJob.status}`
+        );
+      }
+
+      const codingJobUnit = await this.getCodingJobUnitForEntry(
+        codingJob,
+        progress,
+        'Coding job unit not found for progress entry',
+        manager,
+        true
+      );
+
+      const selectedCode = await this.validateProgressSelectedCode(
+        progress,
+        codingJobUnit,
+        codingJob.workspace_id,
+        codingJob.allowComments !== false
+      );
+
+      this.applyProgressToCodingJobUnit(
+        codingJobUnit,
+        progress,
+        selectedCode
+      );
+
+      await codingJobUnitRepository.save(codingJobUnit);
+
+      await this.checkAndUpdateCodingJobCompletion(codingJobId, manager);
+
+      return codingJob;
     });
-
-    if (!codingJob) {
-      throw new NotFoundException(
-        `Coding job with ID ${codingJobId} not found`
-      );
-    }
-
-    if (['review', 'results_applied'].includes(codingJob.status)) {
-      throw new BadRequestException(
-        `Cannot save progress for a coding job with status ${codingJob.status}`
-      );
-    }
-
-    const {
-      login: personLogin,
-      code: personCode,
-      group: personGroup,
-      booklet: bookletName
-    } = parseCodingTestPerson(progress.testPerson);
-
-    const whereCondition: Partial<CodingJobUnit> = {
-      coding_job_id: codingJobId,
-      unit_name: progress.unitId,
-      variable_id: progress.variableId,
-      person_login: personLogin,
-      person_code: personCode,
-      booklet_name: bookletName
-    };
-
-    if (personGroup !== undefined) {
-      whereCondition.person_group = personGroup;
-    }
-
-    const codingJobUnit = await this.codingJobUnitRepository.findOne({
-      where: whereCondition
-    });
-
-    if (!codingJobUnit) {
-      throw new NotFoundException(
-        'Coding job unit not found for progress entry'
-      );
-    }
-
-    const exclusions =
-      await this.workspaceExclusionService.resolveExclusionsForQueries(
-        codingJob.workspace_id
-      );
-    if (
-      isExcludedByResolvedExclusions(
-        exclusions,
-        codingJobUnit.booklet_name,
-        codingJobUnit.unit_name
-      )
-    ) {
-      throw new NotFoundException(
-        'Coding job unit not found for progress entry'
-      );
-    }
-
-    const selectedCode = await this.validateProgressSelectedCode(
-      progress,
-      codingJobUnit,
-      codingJob.workspace_id,
-      codingJob.allowComments !== false
-    );
-
-    this.applyProgressToCodingJobUnit(
-      codingJobUnit,
-      progress,
-      selectedCode
-    );
-
-    await this.codingJobUnitRepository.save(codingJobUnit);
-
-    await this.checkAndUpdateCodingJobCompletion(codingJobId);
-
-    return codingJob;
   }
 
   private applyProgressToCodingJobUnit(
@@ -3381,10 +3359,14 @@ export class CodingJobService {
   }
 
   private async reopenCodingJobAfterProgressCleared(
-    codingJob: CodingJob
+    codingJob: CodingJob,
+    manager?: EntityManager
   ): Promise<void> {
     if (!['completed', 'open'].includes(codingJob.status)) return;
-    await this.codingJobRepository.update(codingJob.id, { status: 'active' });
+    const codingJobRepository = manager ?
+      manager.getRepository(CodingJob) :
+      this.codingJobRepository;
+    await codingJobRepository.update(codingJob.id, { status: 'active' });
   }
 
   private getCodingJobUnitWhereForEntry(
@@ -3417,11 +3399,22 @@ export class CodingJobService {
   private async getCodingJobUnitForEntry(
     codingJob: Pick<CodingJob, 'id' | 'workspace_id'>,
     entry: Pick<SaveCodingProgressDto, 'testPerson' | 'unitId' | 'variableId'>,
-    notFoundMessage: string
+    notFoundMessage: string,
+    manager?: EntityManager,
+    lockRows = false
   ): Promise<CodingJobUnit> {
-    const codingJobUnit = await this.codingJobUnitRepository.findOne({
+    const codingJobUnitRepository = manager ?
+      manager.getRepository(CodingJobUnit) :
+      this.codingJobUnitRepository;
+    const findOptions: FindOneOptions<CodingJobUnit> = {
       where: this.getCodingJobUnitWhereForEntry(codingJob.id, entry)
-    });
+    };
+
+    if (lockRows) {
+      findOptions.lock = { mode: 'pessimistic_write' };
+    }
+
+    const codingJobUnit = await codingJobUnitRepository.findOne(findOptions);
 
     if (!codingJobUnit) {
       throw new NotFoundException(notFoundMessage);
@@ -3997,72 +3990,42 @@ export class CodingJobService {
     codingJobId: number,
     notesDto: SaveCodingNotesDto
   ): Promise<CodingJob> {
-    const codingJob = await this.codingJobRepository.findOne({
-      where: { id: codingJobId }
+    return this.connection.transaction(async manager => {
+      const codingJobRepository = manager.getRepository(CodingJob);
+      const codingJobUnitRepository = manager.getRepository(CodingJobUnit);
+      const codingJob = await codingJobRepository.findOne({
+        where: { id: codingJobId }
+      });
+
+      if (!codingJob) {
+        throw new NotFoundException(
+          `Coding job with ID ${codingJobId} not found`
+        );
+      }
+
+      if (['review', 'results_applied'].includes(codingJob.status)) {
+        throw new BadRequestException(
+          `Cannot save notes for a coding job with status ${codingJob.status}`
+        );
+      }
+
+      const codingJobUnit = await this.getCodingJobUnitForEntry(
+        codingJob,
+        notesDto,
+        'Coding job unit not found for notes entry',
+        manager,
+        true
+      );
+
+      codingJobUnit.notes = notesDto.notes?.trim() || null;
+      const clearedProgress = this.clearNewCodeNeededProgressWithoutNotes(codingJobUnit);
+      await codingJobUnitRepository.save(codingJobUnit);
+      if (clearedProgress) {
+        await this.reopenCodingJobAfterProgressCleared(codingJob, manager);
+      }
+
+      return codingJob;
     });
-
-    if (!codingJob) {
-      throw new NotFoundException(
-        `Coding job with ID ${codingJobId} not found`
-      );
-    }
-
-    if (['review', 'results_applied'].includes(codingJob.status)) {
-      throw new BadRequestException(
-        `Cannot save notes for a coding job with status ${codingJob.status}`
-      );
-    }
-
-    const {
-      login: personLogin,
-      code: personCode,
-      group: personGroup,
-      booklet: bookletName
-    } = parseCodingTestPerson(notesDto.testPerson);
-
-    const whereCondition: Partial<CodingJobUnit> = {
-      coding_job_id: codingJobId,
-      unit_name: notesDto.unitId,
-      variable_id: notesDto.variableId,
-      person_login: personLogin,
-      person_code: personCode,
-      booklet_name: bookletName
-    };
-
-    if (personGroup !== undefined) {
-      whereCondition.person_group = personGroup;
-    }
-
-    const codingJobUnit = await this.codingJobUnitRepository.findOne({
-      where: whereCondition
-    });
-
-    if (!codingJobUnit) {
-      throw new NotFoundException('Coding job unit not found for notes entry');
-    }
-
-    const exclusions =
-      await this.workspaceExclusionService.resolveExclusionsForQueries(
-        codingJob.workspace_id
-      );
-    if (
-      isExcludedByResolvedExclusions(
-        exclusions,
-        codingJobUnit.booklet_name,
-        codingJobUnit.unit_name
-      )
-    ) {
-      throw new NotFoundException('Coding job unit not found for notes entry');
-    }
-
-    codingJobUnit.notes = notesDto.notes?.trim() || null;
-    const clearedProgress = this.clearNewCodeNeededProgressWithoutNotes(codingJobUnit);
-    await this.codingJobUnitRepository.save(codingJobUnit);
-    if (clearedProgress) {
-      await this.reopenCodingJobAfterProgressCleared(codingJob);
-    }
-
-    return codingJob;
   }
 
   async saveCodingIssueReviewNotes(
@@ -4797,16 +4760,20 @@ export class CodingJobService {
   }
 
   private async checkAndUpdateCodingJobCompletion(
-    codingJobId: number
+    codingJobId: number,
+    manager?: EntityManager
   ): Promise<void> {
-    const progress = await this.getCodingJobProgress(codingJobId);
+    const progress = await this.getCodingJobProgress(codingJobId, manager);
 
     if (
       progress.total > 0 &&
       progress.coded + progress.open >= progress.total
     ) {
       const newStatus = progress.open > 0 ? 'open' : 'completed';
-      await this.codingJobRepository.update(codingJobId, { status: newStatus });
+      const codingJobRepository = manager ?
+        manager.getRepository(CodingJob) :
+        this.codingJobRepository;
+      await codingJobRepository.update(codingJobId, { status: newStatus });
     }
   }
 
