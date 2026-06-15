@@ -1819,7 +1819,9 @@
     "buttons": {
       "try-again": "Erneut versuchen",
       "close": "Schließen",
-      "download-excel": "Als Excel herunterladen"
+      "download-excel": "Als Excel herunterladen",
+      "show-more-manual-code-warnings": "+{{count}} weitere anzeigen",
+      "show-fewer-manual-code-warnings": "Weniger anzeigen"
     },
     "table": {
       "headers": {
