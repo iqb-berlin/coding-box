@@ -15,3 +15,14 @@
 :host ::ng-deep .mat-mdc-form-field-infix{
   overflow:hidden
 }
+
+:host ::ng-deep .regex-filter-invalid .mdc-notched-outline__leading,
+:host ::ng-deep .regex-filter-invalid .mdc-notched-outline__notch,
+:host ::ng-deep .regex-filter-invalid .mdc-notched-outline__trailing {
+  border-color: #d32f2f !important;
+  border-width: 2px;
+}
+
+.regex-filter-error {
+  color: #d32f2f;
+}

@@ -178,6 +178,37 @@ export class WorkspaceSettingsService {
     );
   }
 
+  getEnableRegexSearch(workspaceId: number): Observable<boolean> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(workspaceId, 'enable-regex-search', true)
+        .subscribe({
+          next: setting => {
+            try {
+              const parsed = JSON.parse(setting.value);
+              observer.next(parsed.enabled ?? false);
+            } catch {
+              observer.next(false);
+            }
+            observer.complete();
+          },
+          error: () => {
+            observer.next(false);
+            observer.complete();
+          }
+        });
+    });
+  }
+
+  setEnableRegexSearch(workspaceId: number, enabled: boolean): Observable<WorkspaceSettings> {
+    const value = JSON.stringify({ enabled });
+    return this.setWorkspaceSetting(
+      workspaceId,
+      'enable-regex-search',
+      value,
+      'Controls whether selected workspace search fields interpret input as regular expressions'
+    );
+  }
+
   getResponseMatchingMode(workspaceId: number): Observable<ResponseMatchingFlag[]> {
     return new Observable(observer => {
       this.getWorkspaceSetting(workspaceId, 'response-matching-mode')

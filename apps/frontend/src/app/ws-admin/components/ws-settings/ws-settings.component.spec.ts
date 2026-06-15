@@ -60,7 +60,9 @@ describe('WsSettingsComponent', () => {
       getIncludeDeriveErrorInManualCoding: jest.fn().mockReturnValue(of(false)),
       setIncludeDeriveErrorInManualCoding: jest.fn().mockReturnValue(of({})),
       getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false)),
-      setShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of({}))
+      setShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of({})),
+      getEnableRegexSearch: jest.fn().mockReturnValue(of(false)),
+      setEnableRegexSearch: jest.fn().mockReturnValue(of({}))
     } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     mockClipboard = {
@@ -126,6 +128,8 @@ describe('WsSettingsComponent', () => {
       expect(component.includeDeriveErrorInManualCoding).toBe(false);
       expect(mockWorkspaceSettingsService.getShowTestResultsLogAnomalies).toHaveBeenCalledWith(1);
       expect(component.showTestResultsLogAnomalies).toBe(false);
+      expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledWith(1);
+      expect(component.enableRegexSearch).toBe(false);
     });
   });
 
@@ -270,6 +274,22 @@ describe('WsSettingsComponent', () => {
       component.showTestResultsLogAnomalies = true;
       component.toggleShowTestResultsLogAnomalies({ checked: false });
       expect(component.showTestResultsLogAnomalies).toBe(true);
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('toggleEnableRegexSearch', () => {
+    it('should call service with true', () => {
+      component.toggleEnableRegexSearch({ checked: true });
+      expect(component.enableRegexSearch).toBe(true);
+      expect(mockWorkspaceSettingsService.setEnableRegexSearch).toHaveBeenCalledWith(1, true);
+    });
+
+    it('should revert state on error', () => {
+      mockWorkspaceSettingsService.setEnableRegexSearch.mockReturnValue(throwError(() => new Error('error')));
+      component.enableRegexSearch = true;
+      component.toggleEnableRegexSearch({ checked: false });
+      expect(component.enableRegexSearch).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });

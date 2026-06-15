@@ -90,6 +90,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   autoFetchCodingStatistics = true;
   autoRefreshManualCodingJobs = true;
   includeDeriveErrorInManualCoding = false;
+  enableRegexSearch = false;
   showTestResultsLogAnomalies = false;
   isExporting = false;
   databaseExportProgress = 0;
@@ -113,6 +114,11 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .getIncludeDeriveErrorInManualCoding(workspaceId)
         .subscribe(enabled => {
           this.includeDeriveErrorInManualCoding = enabled;
+        });
+      this.workspaceSettingsService
+        .getEnableRegexSearch(workspaceId)
+        .subscribe(enabled => {
+          this.enableRegexSearch = enabled;
         });
       this.workspaceSettingsService
         .getShowTestResultsLogAnomalies(workspaceId)
@@ -335,6 +341,42 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
             this.includeDeriveErrorInManualCoding =
               !this.includeDeriveErrorInManualCoding;
+          }
+        });
+    }
+  }
+
+  toggleEnableRegexSearch(toggleEvent: { checked: boolean }): void {
+    this.enableRegexSearch = toggleEvent.checked;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService
+        .setEnableRegexSearch(workspaceId, this.enableRegexSearch)
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.enableRegexSearch ?
+                this.translateService.instant(
+                  'ws-settings.enable-regex-search-enabled'
+                ) :
+                this.translateService.instant(
+                  'ws-settings.enable-regex-search-disabled'
+                ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
+            this.enableRegexSearch = !this.enableRegexSearch;
           }
         });
     }
