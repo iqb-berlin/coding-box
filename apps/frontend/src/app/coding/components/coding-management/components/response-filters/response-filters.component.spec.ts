@@ -69,6 +69,33 @@ describe('ResponseFiltersComponent', () => {
     expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
   });
 
+  it('should emit a copy of local filter params', () => {
+    jest.spyOn(component.filterChange, 'emit');
+
+    component.filterParams.unitName = 'Unit';
+    component.onInstantFilterChange();
+
+    const emittedFilterParams = (component.filterChange.emit as jest.Mock).mock.calls[0][0];
+    expect(emittedFilterParams).toEqual(component.filterParams);
+    expect(emittedFilterParams).not.toBe(component.filterParams);
+  });
+
+  it('should not mutate input filter params when a regex filter becomes invalid', () => {
+    jest.spyOn(component.filterChange, 'emit');
+    const parentFilterParams = {
+      ...component.filterParams,
+      variableId: 'VAR_01'
+    };
+    component.filterParams = parentFilterParams;
+    component.enableRegexSearch = true;
+
+    component.filterParams.variableId = '[';
+    component.onTextFilterChange();
+
+    expect(parentFilterParams.variableId).toBe('VAR_01');
+    expect(component.filterChange.emit).not.toHaveBeenCalled();
+  });
+
   it('should keep DERIVE_ERROR as the visible status label', () => {
     expect(component.mapStatusToString('4')).toBe('DERIVE_ERROR');
     expect(component.mapStatusToString('DERIVE_ERROR')).toBe('DERIVE_ERROR');

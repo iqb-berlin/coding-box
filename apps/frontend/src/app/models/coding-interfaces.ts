@@ -125,6 +125,7 @@ export interface SearchResponsesParams {
   derivedOnly?: boolean;
   responseSource?: 'base' | 'derived' | 'all';
   personLogin?: string;
+  regexSearch?: boolean;
   sortBy?: CodingResponseSortBy;
   sortDirection?: CodingResponseSortDirection;
 }

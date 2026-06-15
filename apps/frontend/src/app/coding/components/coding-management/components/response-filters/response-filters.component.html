@@ -26,10 +26,13 @@
         </mat-select>
     </mat-form-field>
 
-    <mat-form-field appearance="outline" class="filter-field">
+    <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('unitName')">
         <mat-label>{{ 'coding-management.filters.unit-name' | translate }}</mat-label>
         <input matInput [(ngModel)]="filterParams.unitName" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.unit-name-placeholder' | translate }}">
+        @if (isRegexFilterInvalid('unitName')) {
+        <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+        }
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="filter-field">
@@ -50,34 +53,49 @@
             placeholder="{{ 'coding-management.filters.score-placeholder' | translate }}">
     </mat-form-field>
 
-    <mat-form-field appearance="outline" class="filter-field">
+    <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('code')">
         <mat-label>{{ 'coding-management.filters.person-code' | translate }}</mat-label>
         <input matInput [(ngModel)]="filterParams.code" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.person-code-placeholder' | translate }}">
+        @if (isRegexFilterInvalid('code')) {
+        <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+        }
     </mat-form-field>
 
-    <mat-form-field appearance="outline" class="filter-field">
+    <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('personLogin')">
         <mat-label>{{ 'coding-management.filters.person-login' | translate }}</mat-label>
         <input matInput [(ngModel)]="filterParams.personLogin" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.person-login-placeholder' | translate }}">
+        @if (isRegexFilterInvalid('personLogin')) {
+        <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+        }
     </mat-form-field>
 
-    <mat-form-field appearance="outline" class="filter-field">
+    <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('group')">
         <mat-label>{{ 'coding-management.filters.person-group' | translate }}</mat-label>
         <input matInput [(ngModel)]="filterParams.group" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.person-group-placeholder' | translate }}">
+        @if (isRegexFilterInvalid('group')) {
+        <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+        }
     </mat-form-field>
 
-    <mat-form-field appearance="outline" class="filter-field">
+    <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('bookletName')">
         <mat-label>{{ 'coding-management.filters.booklet-name' | translate }}</mat-label>
         <input matInput [(ngModel)]="filterParams.bookletName" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.booklet-name-placeholder' | translate }}">
+        @if (isRegexFilterInvalid('bookletName')) {
+        <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+        }
     </mat-form-field>
 
-    <mat-form-field appearance="outline" class="filter-field">
+    <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('variableId')">
         <mat-label>{{ 'coding-management.filters.variable-id' | translate }}</mat-label>
         <input matInput [(ngModel)]="filterParams.variableId" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.variable-id-placeholder' | translate }}">
+        @if (isRegexFilterInvalid('variableId')) {
+        <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+        }
     </mat-form-field>
 
     @if (isGeogebraAvailable) {

@@ -540,7 +540,8 @@
     "enter-filter": "Suchbegriff",
     "filter-test-persons": "Suche nach Testpersonen",
     "filter-test-groups": "Suche nach Testgruppen",
-    "filter-test-files": "Suche nach Testdateien"
+    "filter-test-files": "Suche nach Testdateien",
+    "invalid-regex": "Ungültiger regulärer Ausdruck"
   },
   "access-rights": {
     "hint": "Zugriffsrechte: Bitte links Nutzer:in wählen",
@@ -1090,6 +1091,10 @@
     "include-derive-error-in-manual-coding-description": "Wenn aktiviert, können DERIVE_ERROR-Fälle bei Kodierjobdefinitionen gezielt in die manuelle Kodierung aufgenommen werden. Standardmäßig ist diese Funktion deaktiviert.",
     "include-derive-error-in-manual-coding-enabled": "DERIVE_ERROR-Fälle können in die manuelle Kodierung aufgenommen werden",
     "include-derive-error-in-manual-coding-disabled": "DERIVE_ERROR-Fälle werden nicht in die manuelle Kodierung aufgenommen",
+    "enable-regex-search": "Reguläre Ausdrücke in Suchfeldern",
+    "enable-regex-search-description": "Wenn aktiviert, werden ausgewählte Suchfelder in diesem Arbeitsbereich als reguläre Ausdrücke ausgewertet. Die Suche ist dann groß-/kleinschreibungssensitiv und findet Teiltreffer, sofern keine Anker wie ^ und $ verwendet werden.",
+    "enable-regex-search-enabled": "Reguläre Ausdrücke in Suchfeldern aktiviert",
+    "enable-regex-search-disabled": "Reguläre Ausdrücke in Suchfeldern deaktiviert",
     "test-results": "Testergebnisse",
     "show-test-results-log-anomalies": "Log-Auffälligkeiten in Testergebnissen anzeigen",
     "show-test-results-log-anomalies-description": "Wenn aktiviert, werden die Log-Qualität und die Logstatus-Spalte in der Ergebnistabelle angezeigt. Wenn deaktiviert, werden diese Anzeigen ausgeblendet; die Logfilter bleiben verfügbar.",

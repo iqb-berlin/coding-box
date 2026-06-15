@@ -84,7 +84,8 @@ export class FileService {
     limit: number = 10000,
     fileType?: string,
     fileSize?: string,
-    searchText?: string
+    searchText?: string,
+    regexSearch?: boolean
   ): Observable<PaginatedResponse<FilesInListDto> & { fileTypes: string[] }> {
     let params = new HttpParams()
       .set('page', page.toString())
@@ -92,6 +93,7 @@ export class FileService {
     if (fileType) params = params.set('fileType', fileType);
     if (fileSize) params = params.set('fileSize', fileSize);
     if (searchText) params = params.set('searchText', searchText);
+    if (regexSearch) params = params.set('regexSearch', 'true');
 
     return this.http.get<
     PaginatedResponse<FilesInListDto> & { fileTypes: string[] }

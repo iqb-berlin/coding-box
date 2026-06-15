@@ -139,6 +139,19 @@
             </mat-slide-toggle>
           </div>
         </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <h4>{{ 'ws-settings.enable-regex-search' | translate }}</h4>
+            <p>{{ 'ws-settings.enable-regex-search-description' | translate }}</p>
+          </div>
+          <div class="setting-control">
+            <mat-slide-toggle
+              [checked]="enableRegexSearch"
+              (change)="toggleEnableRegexSearch($event)">
+              {{enableRegexSearch ? ('ws-settings.enabled' | translate) : ('ws-settings.disabled' | translate)}}
+            </mat-slide-toggle>
+          </div>
+        </div>
       </div>
     </mat-card-content>
   </mat-card>

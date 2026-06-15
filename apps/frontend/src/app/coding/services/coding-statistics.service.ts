@@ -115,7 +115,8 @@ export class CodingStatisticsService {
     limit: number = 100,
     unitId?: string,
     variableId?: string,
-    derivation?: string
+    derivation?: string,
+    regexSearch?: boolean
   ): Observable<PaginatedResponse<VariableAnalysisItemDto>> {
     return this.appService.createOwnToken(workspace_id, 60).pipe(
       catchError(() => of('')),
@@ -136,6 +137,10 @@ export class CodingStatisticsService {
 
         if (derivation) {
           params = params.set('derivation', derivation);
+        }
+
+        if (regexSearch) {
+          params = params.set('regexSearch', 'true');
         }
 
         return this.http
