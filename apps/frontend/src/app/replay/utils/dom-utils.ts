@@ -5,6 +5,8 @@
 const HIGHLIGHT_BORDER = '3px solid #4285f4';
 const HIGHLIGHT_FIELD_SHADOW = 'inset 0 0 0 2px #4285f4';
 const HIGHLIGHT_ATTR = 'data-coding-box-anchor-highlight';
+const HIGHLIGHT_OVERLAY_ATTR = 'data-coding-box-anchor-highlight-overlay';
+const HIGHLIGHT_PREVIOUS_POSITION_ATTR = 'data-coding-box-anchor-highlight-previous-position';
 const NATIVE_FIELD_SELECTOR = [
   'input:not([type="hidden"])',
   'textarea',
@@ -12,6 +14,18 @@ const NATIVE_FIELD_SELECTOR = [
   '[role="textbox"]',
   '[role="spinbutton"]',
   '[contenteditable="true"]'
+].join(',');
+const OVERLAY_HOST_UNSUPPORTED_SELECTOR = [
+  'input',
+  'textarea',
+  'select',
+  'img',
+  'iframe',
+  'embed',
+  'object',
+  'video',
+  'audio',
+  'canvas'
 ].join(',');
 const FIELD_HOST_SELECTOR = [
   'aspect-text-field',
@@ -25,10 +39,25 @@ const FIELD_CONTROL_SELECTOR = [
 const FIELD_OUTLINE_SELECTOR = '.mdc-notched-outline';
 
 function clearHighlight(element: HTMLElement): void {
+  if (element.getAttribute(HIGHLIGHT_OVERLAY_ATTR) === 'true') {
+    element.remove();
+    return;
+  }
+
+  element.querySelectorAll(`[${HIGHLIGHT_OVERLAY_ATTR}="true"]`).forEach(el => {
+    el.remove();
+  });
+
   element.style.border = '';
   element.style.outline = '';
   element.style.outlineOffset = '';
   element.style.boxShadow = '';
+
+  if (element.hasAttribute(HIGHLIGHT_PREVIOUS_POSITION_ATTR)) {
+    element.style.position = element.getAttribute(HIGHLIGHT_PREVIOUS_POSITION_ATTR) || '';
+    element.removeAttribute(HIGHLIGHT_PREVIOUS_POSITION_ATTR);
+  }
+
   element.removeAttribute(HIGHLIGHT_ATTR);
 }
 
@@ -37,10 +66,31 @@ function highlightWithBorder(element: HTMLElement): void {
   element.setAttribute(HIGHLIGHT_ATTR, 'true');
 }
 
-function highlightWithOutline(element: HTMLElement, outlineOffset = '-3px'): void {
-  element.style.outline = HIGHLIGHT_BORDER;
-  element.style.outlineOffset = outlineOffset;
+function highlightWithOverlay(element: HTMLElement): void {
+  const view = element.ownerDocument.defaultView;
+  const computedPosition = view?.getComputedStyle(element).position;
+
+  if (!computedPosition || computedPosition === 'static') {
+    element.setAttribute(HIGHLIGHT_PREVIOUS_POSITION_ATTR, element.style.position);
+    element.style.position = 'relative';
+  }
+
+  const overlay = element.ownerDocument.createElement('div');
+  overlay.setAttribute(HIGHLIGHT_ATTR, 'true');
+  overlay.setAttribute(HIGHLIGHT_OVERLAY_ATTR, 'true');
+  overlay.style.position = 'absolute';
+  overlay.style.inset = '0';
+  overlay.style.boxSizing = 'border-box';
+  overlay.style.border = HIGHLIGHT_BORDER;
+  overlay.style.pointerEvents = 'none';
+  overlay.style.zIndex = '2147483647';
+
+  element.appendChild(overlay);
   element.setAttribute(HIGHLIGHT_ATTR, 'true');
+}
+
+function canHighlightWithOverlay(element: HTMLElement): boolean {
+  return !element.matches(OVERLAY_HOST_UNSUPPORTED_SELECTOR);
 }
 
 function highlightField(element: HTMLElement): void {
@@ -161,8 +211,8 @@ function getFieldHighlightTarget(anchorElement: HTMLElement): HTMLElement | null
 /**
  * Highlights the direct child div elements of aspect-section tags that contain an element with the specified anchor.
  * If an anchor is provided, finds aspect-section tags that contain the element with that data-element-alias
- * and highlights their direct child div elements with a blue border. Multi-field cloze and table elements
- * are highlighted directly instead, using a border or outline on the focused field or cell.
+ * and highlights their direct child div elements with a blue border. Multi-field cloze elements
+ * are highlighted directly, while table cells get a non-layout-shifting overlay.
  *
  * @param iframe The iframe element containing the player's HTML
  * @param anchor Optional data-element-alias to filter aspect-section tags
@@ -206,7 +256,11 @@ export function highlightAspectSectionWithAnchor(iframe: HTMLIFrameElement, anch
 
         const tableHighlightTarget = getTableHighlightTarget(anchorElement);
         if (tableHighlightTarget) {
-          highlightWithOutline(tableHighlightTarget);
+          if (canHighlightWithOverlay(tableHighlightTarget)) {
+            highlightWithOverlay(tableHighlightTarget);
+          } else {
+            highlightField(tableHighlightTarget);
+          }
           const parentSection = getParentSection(anchorElement);
           if (parentSection) {
             result.push(parentSection);
