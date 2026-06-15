@@ -14,6 +14,9 @@ import { CoderService } from '../../services/coder.service';
 import { ExportJobService } from '../../../shared/services/file/export-job.service';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 import { ManualCodingExportDialogComponent } from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
+import type {
+  ManualCodeAvailabilityWarningDto
+} from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 
 type VariableCoverageOverview = NonNullable<
 CodingManagementManualComponent['variableCoverageOverview']
@@ -27,6 +30,22 @@ CodingManagementManualComponent['codingProgressOverview']
 type ManualAppliedResultsOverview = NonNullable<
 CodingManagementManualComponent['appliedResultsOverview']
 >;
+
+const createManualCodeAvailabilityWarning = (
+  unitName: string,
+  variableId: string
+): ManualCodeAvailabilityWarningDto => ({
+  unitName,
+  variableId,
+  responseCount: 5,
+  casesInJobs: 0,
+  availableCases: 5,
+  uniqueCasesAfterAggregation: 5,
+  regularCodeCount: 2,
+  selectableRegularCodeCount: 0,
+  onlySpecialOptionsAvailable: true,
+  message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
+});
 
 describe('CodingManagementManualComponent', () => {
   let component: CodingManagementManualComponent;
@@ -106,6 +125,10 @@ describe('CodingManagementManualComponent', () => {
         },
         'completed-jobs': {
           'readonly-note': 'Nur lesbar'
+        },
+        buttons: {
+          'show-more-manual-code-warnings': '+{{count}} weitere anzeigen',
+          'show-fewer-manual-code-warnings': 'Weniger anzeigen'
         }
       }
     });
@@ -911,18 +934,7 @@ describe('CodingManagementManualComponent', () => {
     setCodingProgress(10, 4);
     setAppliedResults(10, 0, 10);
     component.manualCodeAvailabilityWarnings = [
-      {
-        unitName: 'UNIT1',
-        variableId: 'VAR1',
-        responseCount: 5,
-        casesInJobs: 0,
-        availableCases: 5,
-        uniqueCasesAfterAggregation: 5,
-        regularCodeCount: 2,
-        selectableRegularCodeCount: 0,
-        onlySpecialOptionsAvailable: true,
-        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
-      }
+      createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
     ];
 
     expect(component.hasManualCodeAvailabilityWarnings).toBe(true);
@@ -955,22 +967,47 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
+  it('should expand all manual code availability warnings from the status banner', () => {
+    setCompletePlanningState();
+    component.manualCodeAvailabilityWarnings = [
+      createManualCodeAvailabilityWarning('UNIT1', 'VAR1'),
+      createManualCodeAvailabilityWarning('UNIT2', 'VAR2'),
+      createManualCodeAvailabilityWarning('UNIT3', 'VAR3'),
+      createManualCodeAvailabilityWarning('UNIT4', 'VAR4'),
+      createManualCodeAvailabilityWarning('UNIT5', 'VAR5'),
+      createManualCodeAvailabilityWarning('UNIT6', 'VAR6'),
+      createManualCodeAvailabilityWarning('UNIT7', 'VAR7')
+    ];
+
+    fixture.detectChanges();
+
+    const statusBanner = fixture.nativeElement.querySelector(
+      '.planning-status-banner'
+    ) as HTMLElement;
+    const toggleButton = statusBanner.querySelector(
+      '.manual-code-availability-toggle'
+    ) as HTMLButtonElement;
+
+    expect(statusBanner.textContent).toContain('UNIT1 / VAR1');
+    expect(statusBanner.textContent).toContain('UNIT5 / VAR5');
+    expect(statusBanner.textContent).not.toContain('UNIT6 / VAR6');
+    expect(toggleButton.textContent).toContain('+2 weitere anzeigen');
+    expect(toggleButton.getAttribute('aria-expanded')).toBe('false');
+
+    toggleButton.click();
+    fixture.detectChanges();
+
+    expect(statusBanner.textContent).toContain('UNIT6 / VAR6');
+    expect(statusBanner.textContent).toContain('UNIT7 / VAR7');
+    expect(toggleButton.textContent).toContain('Weniger anzeigen');
+    expect(toggleButton.getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('should keep the affected variables scroll target while coverage is loading', () => {
     component.selectedManualTabIndex = component.manualCodingTabs.indexOf('planning');
     component.variableCoverageOverview = null;
     component.manualCodeAvailabilityWarnings = [
-      {
-        unitName: 'UNIT1',
-        variableId: 'VAR1',
-        responseCount: 5,
-        casesInJobs: 0,
-        availableCases: 5,
-        uniqueCasesAfterAggregation: 5,
-        regularCodeCount: 2,
-        selectableRegularCodeCount: 0,
-        onlySpecialOptionsAvailable: true,
-        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
-      }
+      createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
     ];
 
     fixture.detectChanges();
@@ -1024,18 +1061,7 @@ describe('CodingManagementManualComponent', () => {
       }
     };
     component.manualCodeAvailabilityWarnings = [
-      {
-        unitName: 'UNIT1',
-        variableId: 'VAR1',
-        responseCount: 5,
-        casesInJobs: 0,
-        availableCases: 5,
-        uniqueCasesAfterAggregation: 5,
-        regularCodeCount: 2,
-        selectableRegularCodeCount: 0,
-        onlySpecialOptionsAvailable: true,
-        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
-      }
+      createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
     ];
 
     expect(component.getPlanningStatusClass()).toBe('status-warning');
