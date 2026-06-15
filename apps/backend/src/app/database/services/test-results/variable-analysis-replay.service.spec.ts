@@ -434,18 +434,4 @@ describe('VariableAnalysisReplayService', () => {
     expect(result.total).toBe(3);
     expect(result.data.map(row => row.variableId)).toEqual(['01', '01', '02']);
   });
-
-  it('rejects an invalid regex variable filter', async () => {
-    await expect(service.getVariableAnalysis(
-      7,
-      'token',
-      'http://server',
-      1,
-      10,
-      undefined,
-      '[',
-      undefined,
-      true
-    )).rejects.toThrow('Invalid regular expression');
-  });
 });

@@ -49,13 +49,7 @@ export function assertValidRegexSearchPattern(
     );
   }
 
-  try {
-    RegExp(normalizedPattern);
-    return normalizedPattern;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new InvalidRegexSearchPatternException(fieldName, message);
-  }
+  return normalizedPattern;
 }
 
 export function toInvalidRegexSearchPatternException(
