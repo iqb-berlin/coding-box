@@ -42,4 +42,18 @@ describe('WorkspaceSettingsController', () => {
         'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
     });
   });
+
+  it('returns regex search disabled by default when it is missing', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'enable-regex-search')
+    ).resolves.toEqual({
+      id: 0,
+      key: 'workspace-5-enable-regex-search',
+      value: JSON.stringify({ enabled: false }),
+      description:
+        'Controls whether selected workspace search fields interpret input as regular expressions'
+    });
+  });
 });

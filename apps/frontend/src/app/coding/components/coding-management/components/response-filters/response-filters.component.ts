@@ -17,6 +17,27 @@ import { MatIcon } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
 import { FilterParams } from '../../../../services/coding-management.service';
 import { getResponseStatusLabel } from '../../../../../shared/utils/response-status-metadata.util';
+import { hasInvalidRegexFilter } from '../../../../../shared/utils/regex-filter.util';
+
+type RegexFilterField = 'unitName' | 'code' | 'personLogin' | 'group' | 'bookletName' | 'variableId';
+
+function createDefaultFilterParams(): FilterParams {
+  return {
+    value: '',
+    unitName: '',
+    codedStatus: '',
+    version: 'v1',
+    code: '',
+    codingCode: '',
+    score: '',
+    group: '',
+    bookletName: '',
+    variableId: '',
+    geogebra: false,
+    responseSource: 'all',
+    personLogin: ''
+  };
+}
 
 @Component({
   selector: 'app-response-filters',
@@ -37,25 +58,24 @@ import { getResponseStatusLabel } from '../../../../../shared/utils/response-sta
   ]
 })
 export class ResponseFiltersComponent implements OnDestroy {
-  @Input() filterParams: FilterParams = {
-    value: '',
-    unitName: '',
-    codedStatus: '',
-    version: 'v1',
-    code: '',
-    codingCode: '',
-    score: '',
-    group: '',
-    bookletName: '',
-    variableId: '',
-    geogebra: false,
-    responseSource: 'all',
-    personLogin: ''
-  };
+  private localFilterParams: FilterParams = createDefaultFilterParams();
+
+  @Input()
+  set filterParams(value: FilterParams) {
+    this.localFilterParams = {
+      ...createDefaultFilterParams(),
+      ...value
+    };
+  }
+
+  get filterParams(): FilterParams {
+    return this.localFilterParams;
+  }
 
   @Input() availableStatuses: string[] = [];
   @Input() isLoading = false;
   @Input() isGeogebraAvailable = false;
+  @Input() enableRegexSearch = false;
 
   @Output() filterChange = new EventEmitter<FilterParams>();
   @Output() clearFilters = new EventEmitter<void>();
@@ -75,14 +95,21 @@ export class ResponseFiltersComponent implements OnDestroy {
   onTextFilterChange(): void {
     this.clearFilterTimer();
 
+    if (this.hasInvalidRegexFilters()) {
+      return;
+    }
+
     this.filterTimer = setTimeout(() => {
-      this.filterChange.emit(this.filterParams);
+      this.emitFilterChange();
     }, 500);
   }
 
   onInstantFilterChange(): void {
     this.clearFilterTimer();
-    this.filterChange.emit(this.filterParams);
+    if (this.hasInvalidRegexFilters()) {
+      return;
+    }
+    this.emitFilterChange();
   }
 
   onGeoGebraFilterChange(): void {
@@ -103,7 +130,28 @@ export class ResponseFiltersComponent implements OnDestroy {
     }
   }
 
+  private emitFilterChange(): void {
+    this.filterChange.emit({ ...this.filterParams });
+  }
+
   mapStatusToString(status: string): string {
     return getResponseStatusLabel(status) || status;
+  }
+
+  isRegexFilterInvalid(field: RegexFilterField): boolean {
+    return hasInvalidRegexFilter(this.filterParams[field], this.enableRegexSearch);
+  }
+
+  private hasInvalidRegexFilters(): boolean {
+    const fields: RegexFilterField[] = [
+      'unitName',
+      'code',
+      'personLogin',
+      'group',
+      'bookletName',
+      'variableId'
+    ];
+
+    return fields.some(field => this.isRegexFilterInvalid(field));
   }
 }

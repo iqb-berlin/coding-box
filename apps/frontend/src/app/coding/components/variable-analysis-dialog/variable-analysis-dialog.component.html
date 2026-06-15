@@ -14,12 +14,15 @@
           </button>
         </mat-form-field>
 
-        <mat-form-field class="filter-field">
+        <mat-form-field class="filter-field" [class.regex-filter-invalid]="isVariableIdRegexInvalid()">
           <mat-label>Variablen-ID Filter</mat-label>
           <input matInput [(ngModel)]="variableIdFilter" placeholder="Filter nach Variablen-ID" (input)="onVariableAnalysisFilterChange()">
           <button *ngIf="variableIdFilter" matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter=''; onVariableAnalysisFilterChange()">
             <mat-icon>close</mat-icon>
           </button>
+          @if (isVariableIdRegexInvalid()) {
+            <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+          }
         </mat-form-field>
 
 

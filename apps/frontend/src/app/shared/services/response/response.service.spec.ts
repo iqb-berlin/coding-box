@@ -83,7 +83,8 @@ describe('ResponseService', () => {
         value: 'test',
         codingCode: '12',
         score: '1',
-        responseSource: 'all' as const
+        responseSource: 'all' as const,
+        regexSearch: true
       };
       const mockResponse = { data: [], total: 0 };
 
@@ -96,7 +97,8 @@ describe('ResponseService', () => {
         request.params.get('value') === 'test' &&
         request.params.get('codingCode') === '12' &&
         request.params.get('score') === '1' &&
-        request.params.get('responseSource') === 'all'
+        request.params.get('responseSource') === 'all' &&
+        request.params.get('regexSearch') === 'true'
       );
       req.flush(mockResponse);
     });

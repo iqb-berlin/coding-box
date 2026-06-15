@@ -460,6 +460,7 @@ export class WorkspaceCoderTrainingController {
           personCode: { type: 'string', description: 'Person Code' },
           personLogin: { type: 'string', description: 'Person Login' },
           personGroup: { type: 'string', description: 'Person Group' },
+          bookletName: { type: 'string', description: 'Test booklet name' },
           testPerson: { type: 'string', description: 'Test Person' },
           coders: {
             type: 'array',
@@ -499,6 +500,7 @@ export class WorkspaceCoderTrainingController {
         personCode: string;
         personLogin: string;
         personGroup: string;
+        bookletName: string;
         testPerson: string;
         coders: Array<{
           trainingId: number;
@@ -548,6 +550,9 @@ export class WorkspaceCoderTrainingController {
           unitName: { type: 'string', description: 'Name of the unit' },
           variableId: { type: 'string', description: 'Variable ID' },
           personCode: { type: 'string', description: 'Person code' },
+          personLogin: { type: 'string', description: 'Person login' },
+          personGroup: { type: 'string', description: 'Person group' },
+          bookletName: { type: 'string', description: 'Test booklet name' },
           testPerson: { type: 'string', description: 'Test person details' },
           givenAnswer: { type: 'string', description: 'Given answer' },
           discussionCode: { type: 'number', nullable: true },
@@ -589,6 +594,7 @@ export class WorkspaceCoderTrainingController {
         personCode: string;
         personLogin: string;
         personGroup: string;
+        bookletName: string;
         testPerson: string;
         givenAnswer: string;
         replayCode: number | null;

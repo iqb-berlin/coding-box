@@ -21,11 +21,14 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
+import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { hasInvalidRegexFilter } from '../../../shared/utils/regex-filter.util';
 
 export interface VariableAnalysisDialogData {
   workspaceId: number;
@@ -82,7 +85,8 @@ function createVariableAnalysisPaginatorIntl(): MatPaginatorIntl {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatTooltipModule
+    MatTooltipModule,
+    TranslateModule
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit {
@@ -112,6 +116,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
   variableAnalysisPageSizeOptions = [100, 200, 500];
   unitIdFilter = '';
   variableIdFilter = '';
+  enableRegexSearch = false;
   isLoadingVariableAnalysis = false;
   variableAnalysisFilterChanged = new Subject<void>();
 
@@ -124,10 +129,15 @@ export class VariableAnalysisDialogComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: VariableAnalysisDialogData,
     private statisticsService: CodingStatisticsService,
     private appService: AppService,
+    private workspaceSettingsService: WorkspaceSettingsService,
     private snackBar: MatSnackBar
   ) { }
 
   ngOnInit(): void {
+    this.workspaceSettingsService.getEnableRegexSearch(this.data.workspaceId).subscribe(enabled => {
+      this.enableRegexSearch = enabled;
+    });
+
     this.variableAnalysisFilterChanged.pipe(
       debounceTime(500),
       distinctUntilChanged()
@@ -147,6 +157,10 @@ export class VariableAnalysisDialogComponent implements OnInit {
   }
 
   fetchVariableAnalysis(page: number = 1, limit: number = 100): void {
+    if (this.isVariableIdRegexInvalid()) {
+      return;
+    }
+
     const workspaceId = this.data.workspaceId;
     this.isLoadingVariableAnalysis = true;
 
@@ -158,7 +172,9 @@ export class VariableAnalysisDialogComponent implements OnInit {
       page,
       limit,
       unitId,
-      variableId
+      variableId,
+      undefined,
+      this.enableRegexSearch
     )
       .subscribe({
         next: response => {
@@ -199,7 +215,15 @@ export class VariableAnalysisDialogComponent implements OnInit {
   }
 
   onVariableAnalysisFilterChange(): void {
+    if (this.isVariableIdRegexInvalid()) {
+      return;
+    }
+
     this.variableAnalysisFilterChanged.next();
+  }
+
+  isVariableIdRegexInvalid(): boolean {
+    return hasInvalidRegexFilter(this.variableIdFilter, this.enableRegexSearch);
   }
 
   close(): void {

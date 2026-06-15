@@ -93,6 +93,8 @@ import { ContentPoolIntegrationService } from '../../services/content-pool-integ
 import { ContentPoolSettings } from '../../models/content-pool.model';
 import { ValidationService } from '../../../shared/services/validation/validation.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
+import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { hasInvalidRegexFilter } from '../../../shared/utils/regex-filter.util';
 import {
   ContentPoolImportDialogComponent,
   ContentPoolImportDialogResult
@@ -157,6 +159,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private translate = inject(TranslateService);
   private contentPoolIntegrationService = inject(ContentPoolIntegrationService);
   private validationService = inject(ValidationService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
 
   displayedColumns: string[] = [
     'selectCheckbox',
@@ -202,6 +205,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   selectedFileType: string = '';
   selectedFileSize: string = '';
+  enableRegexSearch = false;
   fileTypes: string[] = [];
   fileSizeRanges: { value: string; display: string }[] = [
     { value: '', display: 'Alle Größen' },
@@ -232,6 +236,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   total: number = 0;
 
   ngOnInit(): void {
+    this.workspaceSettingsService
+      .getEnableRegexSearch(this.appService.selectedWorkspaceId)
+      .subscribe(enabled => {
+        this.enableRegexSearch = enabled;
+      });
     this.loadTestFiles();
     this.loadContentPoolSettings();
     this.textFilterSubscription = this.textFilterChanged
@@ -313,6 +322,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   loadTestFiles(): void {
+    if (this.isTextFilterRegexInvalid()) {
+      return;
+    }
+
     this.isLoading = true;
     this.isValidating = false;
     this.fileService
@@ -322,7 +335,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         this.limit,
         this.selectedFileType,
         this.selectedFileSize,
-        this.textFilterValue
+        this.textFilterValue,
+        this.enableRegexSearch
       )
       .pipe(
         finalize(() => {
@@ -355,6 +369,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   applyFilters(): void {
+    if (this.isTextFilterRegexInvalid()) {
+      return;
+    }
+
     this.page = 1;
     this.tableCheckboxSelection.clear();
     this.loadTestFiles();
@@ -362,6 +380,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   onTextFilterChange(value: string): void {
     this.textFilterValue = value.trim();
+    if (this.isTextFilterRegexInvalid()) {
+      return;
+    }
     this.textFilterChanged.next(this.textFilterValue);
   }
 
@@ -370,6 +391,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.selectedFileType = '';
     this.selectedFileSize = '';
     this.applyFilters();
+  }
+
+  isTextFilterRegexInvalid(): boolean {
+    return hasInvalidRegexFilter(this.textFilterValue, this.enableRegexSearch);
   }
 
   private loadContentPoolSettings(): void {

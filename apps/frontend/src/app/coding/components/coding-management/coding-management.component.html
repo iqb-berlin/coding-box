@@ -181,7 +181,8 @@
       <!-- Filter Section -->
       <div class="filters-section">
         <app-response-filters [filterParams]="filterParams" [availableStatuses]="getAvailableStatuses()"
-          [isLoading]="isLoading" [isGeogebraAvailable]="isGeogebraAvailable" (filterChange)="onFilterChange($event)"
+          [isLoading]="isLoading" [isGeogebraAvailable]="isGeogebraAvailable"
+          [enableRegexSearch]="enableRegexSearch" (filterChange)="onFilterChange($event)"
           (clearFilters)="onClearFilters()">
         </app-response-filters>
       </div>

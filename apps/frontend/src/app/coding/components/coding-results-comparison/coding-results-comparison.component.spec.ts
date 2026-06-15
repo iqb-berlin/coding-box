@@ -16,6 +16,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { CoderTraining } from '../../models/coder-training.model';
+import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 
 describe('CodingResultsComparisonComponent', () => {
   let component: CodingResultsComparisonComponent;
@@ -42,6 +43,9 @@ describe('CodingResultsComparisonComponent', () => {
   };
   let snackBar: {
     open: jest.Mock;
+  };
+  let workspaceSettingsService: {
+    getEnableRegexSearch: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -75,6 +79,9 @@ describe('CodingResultsComparisonComponent', () => {
     };
     snackBar = {
       open: jest.fn()
+    };
+    workspaceSettingsService = {
+      getEnableRegexSearch: jest.fn().mockReturnValue(of(false))
     };
 
     await TestBed.configureTestingModule({
@@ -116,6 +123,10 @@ describe('CodingResultsComparisonComponent', () => {
         {
           provide: AppService,
           useValue: appService
+        },
+        {
+          provide: WorkspaceSettingsService,
+          useValue: workspaceSettingsService
         }
       ]
     }).compileComponents();
@@ -485,6 +496,7 @@ describe('CodingResultsComparisonComponent', () => {
       variableId: 'var_2',
       personLogin: 'LOGIN-2',
       personGroup: 'group a',
+      bookletName: '',
       match: 'differ',
       notesMode: 'with-notes'
     };
@@ -494,6 +506,82 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([2]);
     expect(component.totalComparisons).toBe(1);
     expect(component.matchingComparisons).toBe(0);
+  });
+
+  it('should apply regex filters when workspace regex search is enabled', () => {
+    component.enableRegexSearch = true;
+    component.comparisonMode = 'between-trainings';
+    component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
+    component.selectedCodersFromTrainings = new Set(['1_101', '2_201']);
+    component.comparisonData = [
+      {
+        responseId: 1,
+        unitName: 'Unit A',
+        variableId: 'VAR_100',
+        testPerson: 'Test1',
+        personLogin: 'alpha',
+        personCode: 'Code1',
+        personGroup: 'Group A',
+        bookletName: 'Booklet-01',
+        coders: [
+          {
+            trainingId: 1,
+            trainingLabel: 'Training 1',
+            coderId: 101,
+            coderName: 'Coder 101',
+            code: '1',
+            score: 1,
+            notes: null
+          },
+          {
+            trainingId: 2,
+            trainingLabel: 'Training 2',
+            coderId: 201,
+            coderName: 'Coder 201',
+            code: '1',
+            score: 1,
+            notes: null
+          }
+        ]
+      },
+      {
+        responseId: 2,
+        unitName: 'Unit B',
+        variableId: 'VAR_200',
+        testPerson: 'Test2',
+        personLogin: 'beta',
+        personCode: 'Code2',
+        personGroup: 'Group B',
+        bookletName: 'Practice-01',
+        coders: [
+          {
+            trainingId: 1,
+            trainingLabel: 'Training 1',
+            coderId: 101,
+            coderName: 'Coder 101',
+            code: '1',
+            score: 1,
+            notes: null
+          },
+          {
+            trainingId: 2,
+            trainingLabel: 'Training 2',
+            coderId: 201,
+            coderName: 'Coder 201',
+            code: '1',
+            score: 1,
+            notes: null
+          }
+        ]
+      }
+    ];
+    component.dataSource.data = component.comparisonData;
+    component.tableFilters.variableId = '^VAR_1';
+    component.tableFilters.bookletName = 'Booklet-\\d+$';
+
+    component.applyTableFilters();
+
+    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([1]);
   });
 
   it('should distinguish rows without visible coder notes from rows with visible coder notes', () => {

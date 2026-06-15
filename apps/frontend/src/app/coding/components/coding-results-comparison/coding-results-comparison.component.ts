@@ -35,6 +35,11 @@ import { CodingTrainingBackendService } from '../../services/coding-training-bac
 import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
+import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import {
+  hasInvalidRegexFilter,
+  matchesTextFilter
+} from '../../../shared/utils/regex-filter.util';
 import {
   getTrainingOptionMeta,
   getTrainingOptionTitle
@@ -71,6 +76,7 @@ interface TrainingComparison {
   personCode: string;
   personLogin: string;
   personGroup: string;
+  bookletName?: string;
   testPerson: string;
   givenAnswer?: string;
   coders: Array<{
@@ -93,6 +99,7 @@ interface WithinTrainingComparison {
   personLogin?: string;
   personCode?: string;
   personGroup?: string;
+  bookletName?: string;
   givenAnswer?: string;
   replayCode?: number | null;
   replayScore?: number | null;
@@ -128,9 +135,12 @@ interface ComparisonFilters {
   variableId: string;
   personLogin: string;
   personGroup: string;
+  bookletName: string;
   match: 'all' | 'match' | 'differ';
   notesMode: NotesFilterMode;
 }
+
+type RegexComparisonFilterField = 'unitName' | 'variableId' | 'personLogin' | 'personGroup' | 'bookletName';
 
 interface KappaCoderPair {
   coder1Id: number;
@@ -243,6 +253,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   private codingStatisticsService = inject(CodingStatisticsService);
   private appService = inject(AppService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
   private postMessageService = inject(PostMessageService);
   private dialog = inject(MatDialog);
   private ngUnsubscribe = new Subject<void>();
@@ -305,9 +316,12 @@ export class CodingResultsComparisonComponent implements OnInit {
     variableId: '',
     personLogin: '',
     personGroup: '',
+    bookletName: '',
     match: 'all',
     notesMode: 'all'
   };
+
+  enableRegexSearch = false;
 
   discussionManagerLabel = '';
   discussionCodeByResponseId: Record<number, string> = {};
@@ -347,6 +361,13 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.discussionManagerLabel = this.appService.authData.userName || this.appService.loggedUser?.preferred_username || 'Diskussion';
     this.comparisonMode = this.data.initialMode || 'between-trainings';
 
+    this.workspaceSettingsService.getEnableRegexSearch(this.data.workspaceId)
+      .pipe(takeUntil(this.ngUnsubscribe))
+      .subscribe(enabled => {
+        this.enableRegexSearch = enabled;
+        this.applyTableFilters();
+      });
+
     this.loadCoderTrainings().then(() => {
       if (this.data.selectedTraining) {
         this.comparisonMode = 'within-training';
@@ -371,10 +392,6 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.dataSource.sort = this.sort;
   }
 
-  private getFilterValue(value: string | undefined): string {
-    return (value || '').trim().toLowerCase();
-  }
-
   private getSelectedCoderResults(comparison: TrainingComparison | WithinTrainingComparison): ComparisonCoderResult[] {
     if (this.comparisonMode === 'between-trainings') {
       const selectedKeys = this.codersFromTrainingsFormControl.value || [];
@@ -396,22 +413,22 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   private setupFilterPredicate(): void {
     this.dataSource.filterPredicate = (row: TrainingComparison | WithinTrainingComparison, filterJson: string): boolean => {
-      const filters = JSON.parse(filterJson) as ComparisonFilters;
-      const unitName = this.getFilterValue((row as TrainingComparison).unitName);
-      const variableId = this.getFilterValue((row as TrainingComparison).variableId);
-      const personLogin = this.getFilterValue((row as TrainingComparison).personLogin);
-      const personGroup = this.getFilterValue((row as TrainingComparison).personGroup);
+      const filters = JSON.parse(filterJson) as ComparisonFilters & { regexSearch?: boolean };
+      const regexSearch = filters.regexSearch === true;
 
-      if (filters.unitName && !unitName.includes(this.getFilterValue(filters.unitName))) {
+      if (!matchesTextFilter((row as TrainingComparison).unitName, filters.unitName, regexSearch)) {
         return false;
       }
-      if (filters.variableId && !variableId.includes(this.getFilterValue(filters.variableId))) {
+      if (!matchesTextFilter((row as TrainingComparison).variableId, filters.variableId, regexSearch)) {
         return false;
       }
-      if (filters.personLogin && !personLogin.includes(this.getFilterValue(filters.personLogin))) {
+      if (!matchesTextFilter((row as TrainingComparison).personLogin, filters.personLogin, regexSearch)) {
         return false;
       }
-      if (filters.personGroup && !personGroup.includes(this.getFilterValue(filters.personGroup))) {
+      if (!matchesTextFilter((row as TrainingComparison).personGroup, filters.personGroup, regexSearch)) {
+        return false;
+      }
+      if (!matchesTextFilter((row as TrainingComparison).bookletName, filters.bookletName, regexSearch)) {
         return false;
       }
 
@@ -432,7 +449,14 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   applyTableFilters(): void {
-    this.dataSource.filter = JSON.stringify(this.tableFilters);
+    if (this.hasInvalidTableRegexFilters()) {
+      return;
+    }
+
+    this.dataSource.filter = JSON.stringify({
+      ...this.tableFilters,
+      regexSearch: this.enableRegexSearch
+    });
     this.dataSource.paginator?.firstPage();
     this.calculateStatistics();
   }
@@ -443,6 +467,7 @@ export class CodingResultsComparisonComponent implements OnInit {
       variableId: '',
       personLogin: '',
       personGroup: '',
+      bookletName: '',
       match: 'all',
       notesMode: 'all'
     };
@@ -463,9 +488,24 @@ export class CodingResultsComparisonComponent implements OnInit {
       this.tableFilters.variableId.trim() ||
       this.tableFilters.personLogin.trim() ||
       this.tableFilters.personGroup.trim() ||
+      this.tableFilters.bookletName.trim() ||
       this.tableFilters.match !== 'all' ||
       this.tableFilters.notesMode !== 'all'
     );
+  }
+
+  isTableRegexFilterInvalid(field: RegexComparisonFilterField): boolean {
+    return hasInvalidRegexFilter(this.tableFilters[field], this.enableRegexSearch);
+  }
+
+  private hasInvalidTableRegexFilters(): boolean {
+    return ([
+      'unitName',
+      'variableId',
+      'personLogin',
+      'personGroup',
+      'bookletName'
+    ] as RegexComparisonFilterField[]).some(field => this.isTableRegexFilterInvalid(field));
   }
 
   hasNoSelectedCodersState(): boolean {
@@ -1552,6 +1592,7 @@ export class CodingResultsComparisonComponent implements OnInit {
             personLogin: item.personLogin,
             personCode: item.personCode,
             personGroup: item.personGroup,
+            bookletName: item.bookletName,
             givenAnswer: item.givenAnswer,
             replayCode: item.replayCode,
             replayScore: item.replayScore,

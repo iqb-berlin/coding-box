@@ -171,6 +171,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   manualAppliedResultsOverview: AppliedResultsOverview | null = null;
   isLoadingManualAppliedResultsOverview = false;
   manualAppliedResultsOverviewLoadFailed = false;
+  enableRegexSearch = false;
   isStartingFreshnessCoding = false;
   activeFreshnessJobId: string | null = null;
   activeFreshnessJobProgress: number | null = null;
@@ -204,6 +205,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           if (autoFetch) {
             this.fetchCodingStatistics();
           }
+        });
+      this.workspaceSettingsService
+        .getEnableRegexSearch(workspaceId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(enabled => {
+          this.enableRegexSearch = enabled;
         });
 
       this.codingManagementService.hasGeogebraResponses()
@@ -618,7 +625,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingReview = true;
-    const reviewFilterParams = { ...this.filterParams };
+    const reviewFilterParams = {
+      ...this.filterParams,
+      regexSearch: this.enableRegexSearch
+    };
     const reviewBatchSize = Math.min(this.reviewBatchSize, totalReviewRecords);
     const reviewPageCount = Math.ceil(totalReviewRecords / reviewBatchSize);
 
@@ -1065,7 +1075,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
 
     this.codingManagementService.searchResponses(
-      this.filterParams,
+      {
+        ...this.filterParams,
+        regexSearch: this.enableRegexSearch
+      },
       this.pageIndex + 1,
       this.pageSize,
       this.sortBy || undefined,
@@ -1363,6 +1376,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return Object.entries(filterParams).some(
       ([key, value]) => {
         if (key === 'version') return false;
+        if (key === 'regexSearch') return false;
         if (key === 'responseSource') return value !== 'all';
         return typeof value === 'string' ? value.trim() !== '' : value === true;
       }

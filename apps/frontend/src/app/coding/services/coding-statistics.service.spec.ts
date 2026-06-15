@@ -122,12 +122,14 @@ describe('CodingStatisticsService', () => {
     const mockRes = {
       data: [], total: 0, page: 1, limit: 10
     };
-    service.getVariableAnalysis(1, 1, 10, 'unit1').subscribe(res => {
+    service.getVariableAnalysis(1, 1, 10, 'unit1', 'VAR_.*', undefined, true).subscribe(res => {
       expect(res.total).toBe(0);
     });
 
     const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/1/coding/variable-analysis` &&
-            request.params.get('unitId') === 'unit1'
+            request.params.get('unitId') === 'unit1' &&
+            request.params.get('variableId') === 'VAR_.*' &&
+            request.params.get('regexSearch') === 'true'
     );
     expect(req.request.method).toBe('GET');
     req.flush(mockRes);
