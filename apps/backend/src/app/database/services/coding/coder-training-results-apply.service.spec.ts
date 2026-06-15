@@ -1,12 +1,12 @@
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
-import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CoderTrainingResultsApplyService } from './coder-training-results-apply.service';
 import { CoderTrainingService } from './coder-training.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingValidationService } from './coding-validation.service';
 import { CodingAnalysisService } from './coding-analysis.service';
 import { CodingFreshnessService } from './coding-freshness.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 describe('CoderTrainingResultsApplyService', () => {
   let service: CoderTrainingResultsApplyService;
@@ -16,6 +16,7 @@ describe('CoderTrainingResultsApplyService', () => {
   let codingValidationService: jest.Mocked<Pick<CodingValidationService, 'invalidateIncompleteVariablesCache'>>;
   let codingAnalysisService: jest.Mocked<Pick<CodingAnalysisService, 'invalidateCache'>>;
   let codingFreshnessService: jest.Mocked<Pick<CodingFreshnessService, 'markManualCodingCurrent'>>;
+  let workspaceExclusionService: jest.Mocked<Pick<WorkspaceExclusionService, 'resolveExclusionsForQueries'>>;
   let queryRunner: {
     isTransactionActive: boolean;
     connect: jest.Mock;
@@ -26,7 +27,6 @@ describe('CoderTrainingResultsApplyService', () => {
     manager: {
       query: jest.Mock;
       getRepository: jest.Mock;
-      delete: jest.Mock;
       update: jest.Mock;
     };
   };
@@ -62,7 +62,6 @@ describe('CoderTrainingResultsApplyService', () => {
         getRepository: jest.fn().mockReturnValue({
           createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
         }),
-        delete: jest.fn().mockResolvedValue({ affected: 1 }),
         update: jest.fn().mockResolvedValue({ affected: 1 })
       }
     };
@@ -115,6 +114,13 @@ describe('CoderTrainingResultsApplyService', () => {
     codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
+    workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
 
     service = new CoderTrainingResultsApplyService(
       responseRepository,
@@ -122,28 +128,51 @@ describe('CoderTrainingResultsApplyService', () => {
       codingStatisticsService as unknown as CodingStatisticsService,
       codingValidationService as unknown as CodingValidationService,
       codingAnalysisService as unknown as CodingAnalysisService,
-      codingFreshnessService as unknown as CodingFreshnessService
+      codingFreshnessService as unknown as CodingFreshnessService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService
     );
   });
 
-  function mockRawQueries(target: { query: jest.Mock }, conflicts: unknown[] = []): void {
+  function mockRawQueries(
+    target: { query: jest.Mock },
+    conflicts: Array<{ jobUnitId?: number; id?: number; [key: string]: unknown }> = [],
+    options: { deletedJobUnitIds?: number[]; staleTrainingJobCount?: number } = {}
+  ): void {
     target.query.mockImplementation(async (sql: string) => {
+      const normalizedSql = sql.replace(/\s+/g, ' ').trim();
+
+      if (normalizedSql.startsWith('DELETE FROM coding_job_unit')) {
+        const deletedJobUnitIds = options.deletedJobUnitIds ??
+          conflicts
+            .map(conflict => Number(conflict.jobUnitId ?? conflict.id))
+            .filter(id => Number.isInteger(id));
+        return deletedJobUnitIds.map(id => ({ id }));
+      }
+      if (normalizedSql.startsWith('WITH progress AS') || normalizedSql.includes('UPDATE coding_job cj')) {
+        return [];
+      }
       if (sql.includes('FROM coding_job_unit')) {
         return conflicts;
       }
       if (sql.includes('FROM coding_job')) {
-        return [{ count: '0' }];
+        return [{ count: String(options.staleTrainingJobCount ?? 0) }];
       }
       return [];
     });
   }
 
+  function getProductiveConflictQuery(target: { query: jest.Mock }): string | undefined {
+    return target.query.mock.calls.find(([sql]) => (
+      typeof sql === 'string' &&
+      sql.includes('FROM coding_job_unit cju') &&
+      sql.includes('INNER JOIN coding_job cj')
+    ))?.[0];
+  }
+
   function expectProductiveConflictQueryIncludesOpenUnitCheck(
     target: { query: jest.Mock }
   ): void {
-    const conflictQuery = target.query.mock.calls.find(([sql]) => (
-      typeof sql === 'string' && sql.includes('FROM coding_job_unit')
-    ))?.[0];
+    const conflictQuery = getProductiveConflictQuery(target);
 
     expect(conflictQuery).toContain('cju.is_open = true');
   }
@@ -212,10 +241,23 @@ describe('CoderTrainingResultsApplyService', () => {
       jobConflictStrategy: 'removeFromJobs'
     });
 
-    expect(queryRunner.manager.delete).toHaveBeenCalledWith(
-      CodingJobUnit,
-      expect.objectContaining({ id: expect.anything() })
-    );
+    const conflictQuery = getProductiveConflictQuery(queryRunner.manager);
+    expect(conflictQuery).toContain('cj.status IN');
+    expect(conflictQuery).toContain('FOR UPDATE OF cju, cj');
+
+    const deleteCall = queryRunner.manager.query.mock.calls.find(([sql]) => (
+      typeof sql === 'string' && sql.includes('DELETE FROM coding_job_unit')
+    ));
+    expect(deleteCall?.[0]).toContain('RETURNING cju.id');
+    expect(deleteCall?.[0]).toContain("cj.status NOT IN ('review', 'results_applied')");
+    expect(deleteCall?.[1]).toEqual([[500], 1]);
+
+    const statusUpdateCall = queryRunner.manager.query.mock.calls.find(([sql]) => (
+      typeof sql === 'string' && sql.includes('UPDATE coding_job cj')
+    ));
+    expect(statusUpdateCall?.[0]).toContain('COUNT(cju.id)');
+    expect(statusUpdateCall?.[1]).toEqual([1, [700]]);
+
     expect(queryRunner.manager.update).toHaveBeenCalledWith(
       ResponseEntity,
       101,
@@ -236,6 +278,112 @@ describe('CoderTrainingResultsApplyService', () => {
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
     expect(result.updatedResponsesCount).toBe(1);
     expect(result.removedJobUnitCount).toBe(1);
+  });
+
+  it('does not remove untouched units from immutable productive jobs', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([]);
+    mockRawQueries(queryRunner.manager, [
+      {
+        jobUnitId: 500,
+        responseId: 101,
+        jobId: 700,
+        jobDefinitionId: null,
+        jobDefinitionStatus: null,
+        jobStatus: 'review',
+        hasCodingWork: false
+      }
+    ]);
+
+    const result = await service.applyTrainingDiscussionResults(1, 5, {
+      source: 'manual',
+      existingResultStrategy: 'overwrite',
+      jobConflictStrategy: 'removeFromJobs'
+    });
+
+    expect(queryRunner.manager.query.mock.calls.some(([sql]) => (
+      typeof sql === 'string' && sql.includes('DELETE FROM coding_job_unit')
+    ))).toBe(false);
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markManualCodingCurrent).not.toHaveBeenCalled();
+    expect(queryRunner.commitTransaction).toHaveBeenCalled();
+    expect(result.updatedResponsesCount).toBe(0);
+    expect(result.skippedJobConflictCount).toBe(1);
+    expect(result.blockingProductiveJobUnitCount).toBe(1);
+    expect(result.removedJobUnitCount).toBe(0);
+    expect(result.removableProductiveJobUnitCount).toBe(0);
+  });
+
+  it('recalculates productive job status with workspace exclusions', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([]);
+    workspaceExclusionService.resolveExclusionsForQueries.mockResolvedValueOnce({
+      globalIgnoredUnits: ['Ignored.XML'],
+      ignoredBooklets: ['booklet-b'],
+      testletIgnoredUnits: [{ bookletId: 'booklet-c', unitId: 'Unit-C.XML' }]
+    });
+    mockRawQueries(queryRunner.manager, [
+      {
+        jobUnitId: 500,
+        responseId: 101,
+        jobId: 700,
+        jobDefinitionId: null,
+        jobDefinitionStatus: null,
+        hasCodingWork: false
+      }
+    ]);
+
+    await service.applyTrainingDiscussionResults(1, 5, {
+      source: 'manual',
+      existingResultStrategy: 'overwrite',
+      jobConflictStrategy: 'removeFromJobs'
+    });
+
+    const statusUpdateCall = queryRunner.manager.query.mock.calls.find(([sql]) => (
+      typeof sql === 'string' && sql.includes('UPDATE coding_job cj')
+    ));
+    expect(statusUpdateCall?.[0]).toContain(
+      'REGEXP_REPLACE(UPPER(cju.unit_name)'
+    );
+    expect(statusUpdateCall?.[0]).toContain(
+      'UPPER(cju.booklet_name) NOT IN'
+    );
+    expect(statusUpdateCall?.[0]).toContain('AND NOT (');
+    expect(statusUpdateCall?.[1]).toEqual([
+      1,
+      [700],
+      'IGNORED',
+      'BOOKLET-B',
+      'BOOKLET-C',
+      'UNIT-C'
+    ]);
+  });
+
+  it('rolls back when untouched job units changed before defensive deletion', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([]);
+    mockRawQueries(
+      queryRunner.manager,
+      [
+        {
+          jobUnitId: 500,
+          responseId: 101,
+          jobId: 700,
+          jobDefinitionId: null,
+          jobDefinitionStatus: null,
+          hasCodingWork: false
+        }
+      ],
+      { deletedJobUnitIds: [] }
+    );
+
+    await expect(service.applyTrainingDiscussionResults(1, 5, {
+      source: 'manual',
+      existingResultStrategy: 'overwrite',
+      jobConflictStrategy: 'removeFromJobs'
+    })).rejects.toThrow('Coding job conflicts changed');
+
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markManualCodingCurrent).not.toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
   });
 
   it('does not roll back committed changes when post-commit invalidation fails', async () => {
@@ -290,7 +438,9 @@ describe('CoderTrainingResultsApplyService', () => {
       jobConflictStrategy: 'removeFromJobs'
     });
 
-    expect(queryRunner.manager.delete).not.toHaveBeenCalled();
+    expect(queryRunner.manager.query.mock.calls.some(([sql]) => (
+      typeof sql === 'string' && sql.includes('DELETE FROM coding_job_unit')
+    ))).toBe(false);
     expect(queryRunner.manager.update).not.toHaveBeenCalled();
     expect(codingFreshnessService.markManualCodingCurrent).not.toHaveBeenCalled();
     expect(queryRunner.commitTransaction).toHaveBeenCalled();

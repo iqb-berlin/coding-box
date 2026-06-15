@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import {
   ApplyTrainingDiscussionResultsRequestDto,
   ApplyTrainingDiscussionResultsResultDto,
@@ -10,9 +10,14 @@ import {
   TrainingDiscussionJobConflictStrategy
 } from '../../../../../../../api-dto/coding/training-discussion-apply.dto';
 import { ResponseEntity } from '../../entities/response.entity';
-import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import {
+  normalizeExclusionBookletId,
+  normalizeExclusionUnitId,
+  ResolvedWorkspaceExclusions,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 import { CodingAnalysisService } from './coding-analysis.service';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
@@ -34,6 +39,7 @@ interface ProductiveJobConflict {
   jobId: number;
   jobDefinitionId: number | null;
   jobDefinitionStatus: string | null;
+  jobStatus: string | null;
   hasCodingWork: boolean;
 }
 
@@ -43,6 +49,11 @@ interface ApplyContext {
   applicableCandidates: TrainingDiscussionCandidate[];
   existingFinalResponseIds: Set<number>;
   conflicts: ProductiveJobConflict[];
+}
+
+interface BuildApplyContextOptions {
+  manager?: EntityManager;
+  lockProductiveJobConflicts?: boolean;
 }
 
 @Injectable()
@@ -56,7 +67,8 @@ export class CoderTrainingResultsApplyService {
     private codingStatisticsService: CodingStatisticsService,
     private codingValidationService: CodingValidationService,
     private codingAnalysisService: CodingAnalysisService,
-    private codingFreshnessService: CodingFreshnessService
+    private codingFreshnessService: CodingFreshnessService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   async previewTrainingDiscussionResults(
@@ -102,7 +114,10 @@ export class CoderTrainingResultsApplyService {
         workspaceId,
         trainingId,
         source,
-        queryRunner.manager
+        {
+          manager: queryRunner.manager,
+          lockProductiveJobConflicts: true
+        }
       );
 
       if (!context.preview.canApply) {
@@ -160,10 +175,29 @@ export class CoderTrainingResultsApplyService {
         });
 
         if (removableJobUnitIds.length > 0) {
-          await queryRunner.manager.delete(CodingJobUnit, {
-            id: In(removableJobUnitIds)
-          });
-          removedJobUnitCount = removableJobUnitIds.length;
+          const removedJobUnitIds = await this.deleteUntouchedProductiveJobUnits(
+            queryRunner.manager,
+            workspaceId,
+            removableJobUnitIds
+          );
+          if (removedJobUnitIds.length !== removableJobUnitIds.length) {
+            throw new BadRequestException(
+              'Coding job conflicts changed while applying training discussion results. Please refresh the preview.'
+            );
+          }
+          removedJobUnitCount = removedJobUnitIds.length;
+
+          const removedJobUnitIdSet = new Set(removedJobUnitIds);
+          const affectedJobIdsForRemovedUnits = Array.from(new Set(
+            context.conflicts
+              .filter(conflict => removedJobUnitIdSet.has(conflict.jobUnitId))
+              .map(conflict => conflict.jobId)
+          ));
+          await this.recalculateProductiveJobStatusesAfterUnitRemoval(
+            workspaceId,
+            affectedJobIdsForRemovedUnits,
+            queryRunner.manager
+          );
         }
       }
 
@@ -255,7 +289,7 @@ export class CoderTrainingResultsApplyService {
     workspaceId: number,
     trainingId: number,
     source: TrainingDiscussionApplySource,
-    manager?: EntityManager
+    options: BuildApplyContextOptions = {}
   ): Promise<ApplyContext> {
     const rows = await this.coderTrainingService.getWithinTrainingCodingComparison(
       workspaceId,
@@ -284,9 +318,14 @@ export class CoderTrainingResultsApplyService {
       conflicts,
       staleTrainingJobCount
     ] = await Promise.all([
-      this.getExistingFinalResponseIds(applicableResponseIds, manager),
-      this.getProductiveJobConflicts(workspaceId, applicableResponseIds, manager),
-      this.getStaleTrainingJobCount(workspaceId, trainingId, manager)
+      this.getExistingFinalResponseIds(applicableResponseIds, options.manager),
+      this.getProductiveJobConflicts(
+        workspaceId,
+        applicableResponseIds,
+        options.manager,
+        options.lockProductiveJobConflicts === true
+      ),
+      this.getStaleTrainingJobCount(workspaceId, trainingId, options.manager)
     ]);
     const affectedJobIds = Array.from(new Set(
       conflicts.map(conflict => conflict.jobId)
@@ -375,7 +414,8 @@ export class CoderTrainingResultsApplyService {
   private async getProductiveJobConflicts(
     workspaceId: number,
     responseIds: number[],
-    manager?: EntityManager
+    manager?: EntityManager,
+    lockRows = false
   ): Promise<ProductiveJobConflict[]> {
     if (responseIds.length === 0) {
       return [];
@@ -387,9 +427,11 @@ export class CoderTrainingResultsApplyService {
           cju.id as "jobUnitId",
           cju.response_id as "responseId",
           cj.id as "jobId",
+          cj.status as "jobStatus",
           cj.job_definition_id as "jobDefinitionId",
           jd.status as "jobDefinitionStatus",
           (
+            cj.status IN ('review', 'results_applied') OR
             cju.code IS NOT NULL OR
             cju.score IS NOT NULL OR
             cju.is_open = true OR
@@ -404,6 +446,7 @@ export class CoderTrainingResultsApplyService {
           AND cju.response_id = ANY($2::int[])
           AND cj.training_id IS NULL
           AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
+        ${lockRows ? 'FOR UPDATE OF cju, cj' : ''}
       `,
       [workspaceId, responseIds]
     );
@@ -415,10 +458,170 @@ export class CoderTrainingResultsApplyService {
       jobDefinitionId: row.jobDefinitionId === null ||
         row.jobDefinitionId === undefined ? null : Number(row.jobDefinitionId),
       jobDefinitionStatus: row.jobDefinitionStatus ?? null,
-      hasCodingWork: row.hasCodingWork === true ||
+      jobStatus: row.jobStatus ?? null,
+      hasCodingWork: this.isImmutableCodingJobStatus(row.jobStatus) ||
+        row.hasCodingWork === true ||
         row.hasCodingWork === 'true' ||
         row.hasCodingWork === 1
     }));
+  }
+
+  private async deleteUntouchedProductiveJobUnits(
+    manager: EntityManager,
+    workspaceId: number,
+    jobUnitIds: number[]
+  ): Promise<number[]> {
+    if (jobUnitIds.length === 0) {
+      return [];
+    }
+
+    const rows = await manager.query(
+      `
+        DELETE FROM coding_job_unit cju
+        USING coding_job cj
+        WHERE cju.id = ANY($1::int[])
+          AND cj.id = cju.coding_job_id
+          AND cj.workspace_id = $2
+          AND cj.training_id IS NULL
+          AND cj.status NOT IN ('review', 'results_applied')
+          AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
+          AND cju.code IS NULL
+          AND cju.score IS NULL
+          AND COALESCE(cju.is_open, false) = false
+          AND cju.notes IS NULL
+          AND cju.supervisor_comment IS NULL
+          AND cju.coding_issue_option IS NULL
+        RETURNING cju.id
+      `,
+      [jobUnitIds, workspaceId]
+    );
+
+    return rows.map((row: { id: number | string }) => Number(row.id));
+  }
+
+  private async recalculateProductiveJobStatusesAfterUnitRemoval(
+    workspaceId: number,
+    jobIds: number[],
+    manager: EntityManager
+  ): Promise<void> {
+    const ids = Array.from(new Set(
+      jobIds.filter(jobId => Number.isInteger(jobId) && jobId > 0)
+    ));
+    if (ids.length === 0) {
+      return;
+    }
+
+    const exclusions = await this.workspaceExclusionService
+      .resolveExclusionsForQueries(workspaceId);
+    const exclusionJoin = this.buildCodingJobUnitExclusionJoinSql(
+      exclusions,
+      3
+    );
+
+    await manager.query(
+      `
+        WITH progress AS (
+          SELECT
+            cj.id AS "jobId",
+            COUNT(cju.id)::int AS "total",
+            COUNT(cju.id) FILTER (WHERE cju.code IS NOT NULL)::int AS "coded",
+            COUNT(cju.id) FILTER (WHERE cju.is_open = true)::int AS "open"
+          FROM coding_job cj
+          LEFT JOIN coding_job_unit cju ON cju.coding_job_id = cj.id
+            ${exclusionJoin.sql}
+          WHERE cj.workspace_id = $1
+            AND cj.id = ANY($2::int[])
+            AND cj.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
+          GROUP BY cj.id
+        )
+        UPDATE coding_job cj
+        SET status = CASE
+              WHEN progress."total" = 0 THEN 'pending'
+              WHEN progress."coded" + progress."open" >= progress."total" AND progress."open" > 0 THEN 'open'
+              WHEN progress."coded" + progress."open" >= progress."total" THEN 'completed'
+              WHEN cj.status IN ('completed', 'open') THEN 'active'
+              ELSE cj.status
+            END,
+            updated_at = now()
+        FROM progress
+        WHERE cj.id = progress."jobId"
+          AND cj.status NOT IN ('review', 'results_applied')
+          AND cj.status IS DISTINCT FROM CASE
+              WHEN progress."total" = 0 THEN 'pending'
+              WHEN progress."coded" + progress."open" >= progress."total" AND progress."open" > 0 THEN 'open'
+              WHEN progress."coded" + progress."open" >= progress."total" THEN 'completed'
+              WHEN cj.status IN ('completed', 'open') THEN 'active'
+              ELSE cj.status
+            END
+      `,
+      [workspaceId, ids, ...exclusionJoin.params]
+    );
+  }
+
+  private buildCodingJobUnitExclusionJoinSql(
+    exclusions: ResolvedWorkspaceExclusions,
+    startParameterIndex: number
+  ): { sql: string; params: string[] } {
+    const clauses: string[] = [];
+    const params: string[] = [];
+    let parameterIndex = startParameterIndex;
+    const unitExpression =
+      "REGEXP_REPLACE(UPPER(cju.unit_name), '\\.XML$', '', 'i')";
+
+    const addParameter = (value: string): string => {
+      params.push(value);
+      const placeholder = `$${parameterIndex}`;
+      parameterIndex += 1;
+      return placeholder;
+    };
+    const addInClauseParameters = (values: string[]): string => (
+      values.map(value => addParameter(value)).join(', ')
+    );
+
+    const ignoredUnits = exclusions.globalIgnoredUnits
+      .map(normalizeExclusionUnitId)
+      .filter(unitId => unitId.length > 0);
+    if (ignoredUnits.length > 0) {
+      clauses.push(
+        `${unitExpression} NOT IN (${addInClauseParameters(ignoredUnits)})`
+      );
+    }
+
+    const ignoredBooklets = exclusions.ignoredBooklets
+      .map(normalizeExclusionBookletId)
+      .filter(bookletId => bookletId.length > 0);
+    if (ignoredBooklets.length > 0) {
+      clauses.push(
+        `UPPER(cju.booklet_name) NOT IN (${addInClauseParameters(ignoredBooklets)})`
+      );
+    }
+
+    const ignoredTestletUnits = exclusions.testletIgnoredUnits
+      .map(testletUnit => ({
+        bookletId: normalizeExclusionBookletId(testletUnit.bookletId),
+        unitId: normalizeExclusionUnitId(testletUnit.unitId)
+      }))
+      .filter(testletUnit => (
+        testletUnit.bookletId.length > 0 &&
+        testletUnit.unitId.length > 0
+      ));
+    if (ignoredTestletUnits.length > 0) {
+      const ignoredPairConditions = ignoredTestletUnits.map(testletUnit => (
+        `(
+          UPPER(cju.booklet_name) = ${addParameter(testletUnit.bookletId)}
+          AND ${unitExpression} = ${addParameter(testletUnit.unitId)}
+        )`
+      ));
+      clauses.push(`NOT (${ignoredPairConditions.join(' OR ')})`);
+    }
+
+    return {
+      sql: clauses.length > 0 ?
+        `AND ${clauses.join('\n            AND ')}` :
+        '',
+      params
+    };
   }
 
   private async getStaleTrainingJobCount(
@@ -483,6 +686,10 @@ export class CoderTrainingResultsApplyService {
       return strategy;
     }
     throw new BadRequestException('Invalid job conflict strategy.');
+  }
+
+  private isImmutableCodingJobStatus(status: unknown): boolean {
+    return status === 'review' || status === 'results_applied';
   }
 
   private getCompletedStatus(): number {
