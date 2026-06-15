@@ -46,10 +46,13 @@
     </div>
     <mat-divider></mat-divider>
     <div class="table-container">
-        <table mat-table [dataSource]="dataSource" matSort class="coding-table">
+        <table mat-table [dataSource]="dataSource" matSort [matSortActive]="sortBy"
+            [matSortDirection]="sortDirection" (matSortChange)="onSortChange($event)" class="coding-table">
             @for (column of displayedColumns; track column) {
             <ng-container matColumnDef="{{ column }}">
-                <th mat-header-cell *matHeaderCellDef mat-sort-header> {{ getColumnHeader(column) }} </th>
+                <th mat-header-cell *matHeaderCellDef mat-sort-header [disabled]="column === 'actions'">
+                    {{ getColumnHeader(column) }}
+                </th>
                 <td mat-cell *matCellDef="let element"
                     [attr.colspan]="element.id === 0 ? displayedColumns.length : null">
                     @if (element.id === 0) {

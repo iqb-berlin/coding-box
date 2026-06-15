@@ -13,22 +13,34 @@ import {
   DefaultValuePipe,
   Logger
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
+import { Repository } from 'typeorm';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceTestResultsService, ResponseManagementService } from '../../database/services/test-results';
+import {
+  ResponseSearchSortBy,
+  ResponseSearchSortDirection
+} from '../../database/services/test-results/workspace-test-results.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { RequestWithUser, ResolveDuplicateResponsesRequest, ResponseSearchResult } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
+import { Setting } from '../../database/entities/setting.entity';
+import {
+  getWorkspaceRegexSearchEnabled,
+  toRegexSearchException
+} from '../../utils/regex-search.util';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
@@ -39,7 +51,9 @@ export class WorkspaceTestResultsResponseController {
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private responseManagementService: ResponseManagementService,
     private cacheService: CacheService,
-    private jobQueueService: JobQueueService
+    private jobQueueService: JobQueueService,
+    @InjectRepository(Setting)
+    private readonly settingRepository: Repository<Setting>
   ) { }
 
   private async invalidateFlatResponseFilterOptionsCache(
@@ -202,6 +216,50 @@ export class WorkspaceTestResultsResponseController {
   @ApiOkResponse({
     description: 'Responses retrieved successfully.'
   })
+  @ApiQuery({
+    name: 'value',
+    required: false,
+    description: 'Response value text filter'
+  })
+  @ApiQuery({
+    name: 'codingCode',
+    required: false,
+    description: 'Coding code filter for the selected coding version'
+  })
+  @ApiQuery({
+    name: 'score',
+    required: false,
+    description: 'Coding score filter for the selected coding version'
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    description: 'Column to sort by',
+    enum: [
+      'unitname',
+      'variableid',
+      'value',
+      'codedstatus',
+      'code',
+      'score',
+      'person_code',
+      'person_login',
+      'person_group',
+      'booklet_id'
+    ]
+  })
+  @ApiQuery({
+    name: 'sortDirection',
+    required: false,
+    description: 'Sort direction',
+    enum: ['asc', 'desc']
+  })
+  @ApiQuery({
+    name: 'regexSearch',
+    required: false,
+    description: 'Interpret selected text filters as case-sensitive regular expressions',
+    type: Boolean
+  })
   @ApiBadRequestResponse({ description: 'Failed to search for responses' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async searchResponses(
@@ -214,11 +272,16 @@ export class WorkspaceTestResultsResponseController {
       @Query('codedStatus') codedStatus?: string,
       @Query('group') group?: string,
       @Query('code') code?: string,
+      @Query('codingCode') codingCode?: string,
+      @Query('score') score?: string,
       @Query('version') version?: 'v1' | 'v2' | 'v3',
       @Query('geogebra') geogebra?: string,
       @Query('derivedOnly') derivedOnly?: string,
       @Query('responseSource') responseSource?: 'base' | 'derived' | 'all',
       @Query('personLogin') personLogin?: string,
+      @Query('sortBy') sortBy?: ResponseSearchSortBy,
+      @Query('sortDirection') sortDirection?: ResponseSearchSortDirection,
+      @Query('regexSearch') regexSearch?: string,
                                          @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
                                          @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<ResponseSearchResult> {
@@ -227,6 +290,8 @@ export class WorkspaceTestResultsResponseController {
     }
 
     try {
+      const effectiveRegexSearch = regexSearch === 'true' &&
+        await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
       return await this.workspaceTestResultsService.searchResponses(
         workspace_id,
         {
@@ -238,15 +303,28 @@ export class WorkspaceTestResultsResponseController {
           codedStatus,
           group,
           code,
+          codingCode,
+          score,
           version,
           geogebra: geogebra === 'true',
           derivedOnly: derivedOnly === 'true',
           responseSource,
-          personLogin
+          personLogin,
+          regexSearch: effectiveRegexSearch
         },
-        { page, limit }
+        {
+          page,
+          limit,
+          sortBy,
+          sortDirection
+        }
       );
     } catch (error) {
+      const regexError = toRegexSearchException(error);
+      if (regexError) {
+        throw regexError;
+      }
+
       this.logger.error(`Error searching for responses: ${error}`);
       throw new BadRequestException(
         `Failed to search for responses. ${error.message}`

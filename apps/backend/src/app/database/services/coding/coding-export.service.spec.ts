@@ -329,6 +329,8 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         training_id: 5,
         response_id: 123,
         code: 4,
+        score: 2,
+        notes: 'Replay note',
         manager_user_id: 2,
         manager_name: 'stored-manager',
         updated_at: new Date('2026-04-14T11:00:00.000Z')
@@ -352,8 +354,19 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     const csv = buffer.toString('utf-8');
 
     expect(csv).not.toContain('"coder1";"U1";"V1"');
-    expect(csv).toContain('"p-login";"p-code";"G1";"manager1";"U1";"V1";"";');
-    expect(csv).toContain(';"4";""');
+    const managerRow = csv.split('\n').find(row => row.includes('"manager1";"U1";"V1"'));
+    expect(managerRow?.split(';')).toEqual([
+      '"p-login"',
+      '"p-code"',
+      '"G1"',
+      '"manager1"',
+      '"U1"',
+      '"V1"',
+      '"Replay note"',
+      expect.any(String),
+      '"4"',
+      '""'
+    ]);
   });
 
   it('leaves training discussion results empty when no manager result was stored', async () => {
@@ -443,7 +456,10 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       [0, -3]
     );
 
-    expect(queryBuilder.andWhere).not.toHaveBeenCalled();
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
   });
 
   it('applies normalized scoped filters for job/training/coder ids', () => {
@@ -461,13 +477,18 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
 
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
       1,
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
+    expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
+      2,
       expect.stringContaining('cj.job_definition_id IN (:...jobDefinitionIds)'),
       { jobDefinitionIds: [1], coderTrainingIds: [3] }
     );
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('coding_job_variable_bundle');
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cj.training_id IN (:...coderTrainingIds)');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('coding_job_variable_bundle');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('cj.training_id IN (:...coderTrainingIds)');
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.stringContaining('EXISTS'),
       { coderIds: [7] }
     );
@@ -483,7 +504,11 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
     }).applyJobFilters(queryBuilder, [11], undefined, undefined);
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(2);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('coding_job_variable_bundle'),
       { jobDefinitionIds: [11] }
@@ -510,9 +535,9 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       expect.stringContaining('scope_vb.variables'),
       { jobDefinitionIds: [11] }
     );
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('variable_bundle scope_vb');
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cju.unit_name');
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cju.variable_id');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('variable_bundle scope_vb');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('cju.unit_name');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('cju.variable_id');
   });
 
   it('applies only training filter when only training ids are selected', () => {
@@ -525,7 +550,11 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
     }).applyJobFilters(queryBuilder, undefined, [22], undefined);
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(2);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       '(cj.training_id IN (:...coderTrainingIds))',
       { coderTrainingIds: [22] }
@@ -542,7 +571,11 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
     }).applyJobFilters(queryBuilder, undefined, undefined, [33]);
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(2);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('EXISTS'),
       { coderIds: [33] }
@@ -819,11 +852,123 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     expect(worksheet.getRow(2).getCell(scoreColumn).value).toBe(0);
   });
 
+  it('does not fall back to response scores for discussion manager rows without stored score', async () => {
+    const createQueryBuilder = (rawRows: unknown[] = []) => ({
+      innerJoin: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      addGroupBy: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue(rawRows)
+    });
+
+    const variableRecordsQuery = createQueryBuilder([{
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      bookletName: 'BOOKLET-A'
+    }]);
+    const coderRecordsQuery = createQueryBuilder([{ userName: 'Coder A' }]);
+    const personResultsQuery = createQueryBuilder([{
+      id: '10',
+      login: 'login-a',
+      code: 'code-a',
+      group: 'group-a',
+      bookletName: 'BOOKLET-A'
+    }]);
+    const manualCodingQuery = createQueryBuilder([{
+      personId: '10',
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      cju_code: '7',
+      cju_score: '1',
+      coding_issue_option: null,
+      code_v1: '3',
+      score_v1: '9',
+      code_v2: null,
+      score_v2: null,
+      code_v3: null,
+      score_v3: null,
+      notes: null,
+      username: 'Coder A',
+      jobId: '1',
+      trainingId: '5',
+      missingsProfileId: null,
+      responseId: '100'
+    }]);
+    const discussionResult = {
+      training_id: 5,
+      response_id: 100,
+      code: 4,
+      score: null,
+      notes: 'Stored note',
+      manager_user_id: 2,
+      manager_name: null,
+      updated_at: new Date('2026-04-14T11:00:00.000Z')
+    };
+
+    const service = new CodingExportService(
+      { createQueryBuilder: jest.fn().mockReturnValue(personResultsQuery) } as unknown as Repository<ResponseEntity>,
+      { createQueryBuilder: jest.fn().mockReturnValue(coderRecordsQuery) } as unknown as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      {
+        createQueryBuilder: jest.fn()
+          .mockReturnValueOnce(variableRecordsQuery)
+          .mockReturnValueOnce(manualCodingQuery)
+      } as unknown as Repository<CodingJobUnit>,
+      { find: jest.fn().mockResolvedValue([discussionResult]) } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn().mockResolvedValue([{ id: 2, username: 'manager1' }]) } as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+          globalIgnoredUnits: [],
+          ignoredBooklets: [],
+          testletIgnoredUnits: []
+        })
+      } as unknown as WorkspaceExclusionService
+    );
+
+    const buffer = await service.exportCodingResultsAggregated(
+      7,
+      false,
+      false,
+      false,
+      false,
+      'new-row-per-variable',
+      true,
+      false,
+      '',
+      undefined,
+      false,
+      undefined,
+      undefined,
+      [5]
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.getWorksheet('Coding Results')!;
+    const headerValues = worksheet.getRow(1).values as unknown[];
+    const managerCodeColumn = headerValues.findIndex(value => value === 'manager1 Code');
+    const managerScoreColumn = headerValues.findIndex(value => value === 'manager1 Score');
+    const managerNoteColumn = headerValues.findIndex(value => value === 'manager1 Note');
+
+    expect(worksheet.getRow(2).getCell(managerCodeColumn).value).toBe('4');
+    expect(worksheet.getRow(2).getCell(managerScoreColumn).value).toBeNull();
+    expect(worksheet.getRow(2).getCell(managerNoteColumn).value).toBe('Stored note');
+  });
+
   it('keeps stored discussion manager names when manager users cannot be resolved', async () => {
     const discussionResult = {
       training_id: 5,
       response_id: 100,
       code: 2,
+      score: 1,
+      notes: 'Stored note',
       manager_user_id: 12,
       manager_name: 'Stored Manager',
       updated_at: new Date('2026-04-14T11:00:00.000Z')
@@ -857,6 +1002,8 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
 
     expect(discussionResults.get('5|100')).toMatchObject({
       code: 2,
+      score: 1,
+      notes: 'Stored note',
       managerUsername: 'Stored Manager',
       updatedAt: discussionResult.updated_at
     });
@@ -1195,16 +1342,21 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
     }).applyJobFilters(queryBuilder, [44], [55], [66]);
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(2);
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(3);
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
       1,
+      '(cj.job_type IS NULL OR cj.job_type != :codingExportReviewJobType)',
+      { codingExportReviewJobType: 'coding_issue_review' }
+    );
+    expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
+      2,
       expect.stringContaining('cj.job_definition_id IN (:...jobDefinitionIds)'),
       { jobDefinitionIds: [44], coderTrainingIds: [55] }
     );
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('coding_job_variable_bundle');
-    expect(queryBuilder.andWhere.mock.calls[0][0]).toContain('cj.training_id IN (:...coderTrainingIds)');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('coding_job_variable_bundle');
+    expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('cj.training_id IN (:...coderTrainingIds)');
     expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.stringContaining('EXISTS'),
       { coderIds: [66] }
     );

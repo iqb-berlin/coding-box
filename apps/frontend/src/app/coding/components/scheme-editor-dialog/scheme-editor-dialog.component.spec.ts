@@ -149,8 +149,13 @@ describe('SchemeEditorDialogComponent', () => {
     component.save();
     tick();
 
-    expect(mockFileService.deleteFiles).toHaveBeenCalledWith(1, ['r1']);
-    expect(mockFileService.uploadTestFiles).toHaveBeenCalled();
+    expect(mockFileService.deleteFiles).not.toHaveBeenCalled();
+    expect(mockFileService.uploadTestFiles).toHaveBeenCalledWith(
+      1,
+      expect.any(FormData),
+      true,
+      ['test-scheme.json']
+    );
     expect(mockSnackBar.open).toHaveBeenCalledWith('coding.schemer.save-success', 'Success', expect.any(Object));
     expect(mockDialogRef.close).toHaveBeenCalledWith(true);
   }));

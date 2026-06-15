@@ -407,7 +407,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   canModifyDefinition(definition: JobDefinition): boolean {
-    return this.getCreatedJobsCount(definition) === 0;
+    return this.getCreatedJobsCount(definition) !== undefined;
   }
 
   canDeleteDefinition(definition: JobDefinition): boolean {
@@ -559,6 +559,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       mode: 'definition',
       jobDefinitionId: definition.id,
       readOnly: !this.canModifyDefinition(definition),
+      createdJobsCount: this.getCreatedJobsCount(definition),
       codingJob: {
         id: definition.id!,
         workspace_id: workspaceId,

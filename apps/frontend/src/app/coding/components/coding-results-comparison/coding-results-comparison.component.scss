@@ -78,6 +78,24 @@
     margin-top: 16px;
   }
 
+  .training-apply-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+
+    button {
+      min-height: 36px;
+      white-space: normal;
+      line-height: 1.2;
+
+      mat-icon {
+        margin-right: 6px;
+      }
+    }
+  }
+
   .training-checkbox {
     display: block;
     margin: 6px 0;
@@ -179,6 +197,18 @@
       button {
         height: 40px;
         margin-top: 4px;
+      }
+
+      mat-form-field.regex-filter-invalid {
+        ::ng-deep .mdc-notched-outline__leading,
+        ::ng-deep .mdc-notched-outline__notch,
+        ::ng-deep .mdc-notched-outline__trailing {
+          border-color: #f44336 !important;
+        }
+      }
+
+      .regex-filter-error {
+        color: #f44336;
       }
     }
 
@@ -711,7 +741,8 @@
             }
 
             .person-code,
-            .person-group {
+            .person-group,
+            .booklet-name {
               font-size: 12px;
               color: #616161;
             }
@@ -850,6 +881,15 @@
               width: 100%;
             }
 
+            .discussion-notes {
+              width: 100%;
+
+              textarea {
+                resize: vertical;
+                min-height: 48px;
+              }
+            }
+
             .discussion-score {
               font-size: 12px;
               color: #455a64;
@@ -974,8 +1014,8 @@
         }
 
         .mat-column-discussion {
-          width: 230px;
-          max-width: 230px;
+          width: 280px;
+          max-width: 280px;
         }
       }
 

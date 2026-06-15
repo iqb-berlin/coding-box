@@ -161,6 +161,40 @@ describe('CodingManagementService', () => {
     });
   });
 
+  describe('searchResponses', () => {
+    it('should forward response value, coding code and score filters', () => {
+      responseServiceMock.searchResponses.mockReturnValue(of({ data: [], total: 0 }) as never);
+
+      service.searchResponses({
+        value: 'antwort',
+        unitName: '',
+        codedStatus: '',
+        version: 'v2',
+        code: '',
+        codingCode: '7',
+        score: '1',
+        group: '',
+        bookletName: '',
+        variableId: '',
+        geogebra: false,
+        responseSource: 'all',
+        personLogin: ''
+      }, 1, 100).subscribe();
+
+      expect(responseServiceMock.searchResponses).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          value: 'antwort',
+          codingCode: '7',
+          score: '1',
+          version: 'v2'
+        }),
+        1,
+        100
+      );
+    });
+  });
+
   describe('downloadCodingList', () => {
     it('should download CSV', async () => {
       exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));

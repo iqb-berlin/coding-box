@@ -105,8 +105,11 @@
         <div class="legacy-code-note">{{ legacyCodeNoteTranslationKey | translate }}</div>
       </div>
       <div class="code-row" [class.selected]="item.id === selectedCode"
+        [class.has-review-code-selection]="hasReviewCodeSelection(item.id)"
         [class.read-only]="isReadOnly || isRegularSelectionDisabled" *ngFor="let item of regularCodes;"
         [style.cursor]="(isReadOnly || isRegularSelectionDisabled) ? 'not-allowed' : 'pointer'"
+        [matTooltip]="getReviewCodeSelectionTooltip(item.id)"
+        [matTooltipDisabled]="!hasReviewCodeSelection(item.id)"
         (click)="(isReadOnly || isRegularSelectionDisabled) ? null : onSelect(item.id)">
 
         <div class="code-content">
@@ -114,6 +117,10 @@
             <span class="code-id">{{ item.id }}</span>
             <span class="code-score" *ngIf="showScore && item.score !== undefined">{{ 'code-selector.score-label' |
               translate }} {{ item.score }}</span>
+            <span class="review-code-badge" *ngIf="getReviewCodeSelectionCount(item.id) as reviewCoderCount">
+              <mat-icon>group</mat-icon>
+              <span>{{ reviewCoderCount }}</span>
+            </span>
           </span>
         </div>
         <div class="code-instruction" *ngIf="item.manualInstruction"
@@ -127,12 +134,21 @@
   </div>
 
   <div class="uncertain-codes-section fixed-section">
-    <div class="code-row" [class.selected]="item.id === selectedCodingIssueOption" [class.read-only]="isReadOnly"
-      *ngFor="let item of codingIssueOptionCodes;" [style.cursor]="isReadOnly ? 'not-allowed' : 'pointer'"
-      (click)="isReadOnly ? null : onSelect(item.id)">
+    <div class="code-row" [class.selected]="item.id === selectedCodingIssueOption"
+      [class.has-review-code-selection]="hasReviewCodeSelection(item.id)"
+      [class.read-only]="isCodingIssueOptionDisabled(item)" *ngFor="let item of codingIssueOptionCodes;"
+      [style.cursor]="isCodingIssueOptionDisabled(item) ? 'not-allowed' : 'pointer'"
+      [attr.aria-disabled]="isCodingIssueOptionDisabled(item)"
+      [matTooltip]="getCodingIssueOptionRowTooltip(item)"
+      [matTooltipDisabled]="!getCodingIssueOptionRowTooltip(item)"
+      (click)="isCodingIssueOptionDisabled(item) ? null : onSelect(item.id)">
       <div class="code-content">
         <span class="shortcut-icon" *ngIf="getShortcutLabel(item.id)">{{ getShortcutLabel(item.id) }}</span>
         <span class="uncertain-text">{{ item.label }}</span>
+        <span class="review-code-badge" *ngIf="getReviewCodeSelectionCount(item.id) as reviewCoderCount">
+          <mat-icon>group</mat-icon>
+          <span>{{ reviewCoderCount }}</span>
+        </span>
       </div>
     </div>
   </div>
@@ -143,8 +159,12 @@
 
   @if (allowComments) {
   <mat-form-field appearance="outline" class="notes-field fixed-section">
-    <textarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()"
-      [disabled]="isReadOnly" placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
+    <textarea #notesTextarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()"
+      [disabled]="isReadOnly" [attr.aria-invalid]="newCodeCommentValidationError ? 'true' : null"
+      placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
   </mat-form-field>
+  <div *ngIf="newCodeCommentValidationError" class="notes-validation-error fixed-section" role="alert">
+    {{ 'code-selector.new-code-comment-required' | translate }}
+  </div>
   }
 </div>

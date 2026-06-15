@@ -14,6 +14,9 @@ import { CoderService } from '../../services/coder.service';
 import { ExportJobService } from '../../../shared/services/file/export-job.service';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 import { ManualCodingExportDialogComponent } from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
+import type {
+  ManualCodeAvailabilityWarningDto
+} from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 
 type VariableCoverageOverview = NonNullable<
 CodingManagementManualComponent['variableCoverageOverview']
@@ -27,6 +30,22 @@ CodingManagementManualComponent['codingProgressOverview']
 type ManualAppliedResultsOverview = NonNullable<
 CodingManagementManualComponent['appliedResultsOverview']
 >;
+
+const createManualCodeAvailabilityWarning = (
+  unitName: string,
+  variableId: string
+): ManualCodeAvailabilityWarningDto => ({
+  unitName,
+  variableId,
+  responseCount: 5,
+  casesInJobs: 0,
+  availableCases: 5,
+  uniqueCasesAfterAggregation: 5,
+  regularCodeCount: 2,
+  selectableRegularCodeCount: 0,
+  onlySpecialOptionsAvailable: true,
+  message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
+});
 
 describe('CodingManagementManualComponent', () => {
   let component: CodingManagementManualComponent;
@@ -106,6 +125,10 @@ describe('CodingManagementManualComponent', () => {
         },
         'completed-jobs': {
           'readonly-note': 'Nur lesbar'
+        },
+        buttons: {
+          'show-more-manual-code-warnings': '+{{count}} weitere anzeigen',
+          'show-fewer-manual-code-warnings': 'Weniger anzeigen'
         }
       }
     });
@@ -146,19 +169,155 @@ describe('CodingManagementManualComponent', () => {
     expect(component.hasPreparationWarnings()).toBe(true);
   });
 
-  it('debounces response matching changes into one analysis restart', () => {
-    jest.useFakeTimers();
+  it('keeps response matching option changes local until aggregation is started', () => {
     const componentInternals = component as unknown as {
       appService: { selectedWorkspaceId: number };
       testPersonCodingService: {
         saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
       };
+      codingJobBackendService: {
+        triggerResponseAnalysis: (...args: unknown[]) => Observable<void>;
+      };
     };
     const appService = componentInternals.appService;
     const testPersonCodingService = componentInternals.testPersonCodingService;
+    const codingJobBackendService = componentInternals.codingJobBackendService;
+
+    appService.selectedWorkspaceId = 5;
+    component.responseMatchingFlags = [ResponseMatchingFlag.NO_AGGREGATION];
+
+    const saveSpy = jest
+      .spyOn(testPersonCodingService, 'saveAggregationSettings')
+      .mockReturnValue(of({ success: true }));
+    const triggerSpy = jest
+      .spyOn(codingJobBackendService, 'triggerResponseAnalysis')
+      .mockReturnValue(of(undefined));
+
+    component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
+    component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE);
+
+    expect(component.responseMatchingFlags).toEqual([
+      ResponseMatchingFlag.NO_AGGREGATION,
+      ResponseMatchingFlag.IGNORE_CASE,
+      ResponseMatchingFlag.IGNORE_WHITESPACE
+    ]);
+    expect(component.hasPendingAggregationOptionsWithoutAggregation()).toBe(true);
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(triggerSpy).not.toHaveBeenCalled();
+  });
+
+  it('preserves pending response matching options when the aggregation threshold is saved', () => {
+    jest.useFakeTimers();
+    try {
+      const componentInternals = component as unknown as {
+        appService: { selectedWorkspaceId: number };
+        persistedResponseMatchingFlags: ResponseMatchingFlag[];
+        testPersonCodingService: {
+          saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
+        };
+        refreshAggregationDependentViews: (
+          includeResponseAnalysis?: boolean
+        ) => void;
+      };
+      const appService = componentInternals.appService;
+      const testPersonCodingService = componentInternals.testPersonCodingService;
+
+      appService.selectedWorkspaceId = 5;
+      component.duplicateAggregationThreshold = 2;
+      component.responseMatchingFlags = [
+        ResponseMatchingFlag.NO_AGGREGATION,
+        ResponseMatchingFlag.IGNORE_CASE,
+        ResponseMatchingFlag.IGNORE_WHITESPACE
+      ];
+      componentInternals.persistedResponseMatchingFlags = [
+        ResponseMatchingFlag.NO_AGGREGATION
+      ];
+
+      const saveSpy = jest
+        .spyOn(testPersonCodingService, 'saveAggregationSettings')
+        .mockReturnValue(
+          of({
+            success: true,
+            threshold: 3,
+            flags: [ResponseMatchingFlag.NO_AGGREGATION],
+            aggregationActive: false,
+            revertedResponses: 0,
+            message: 'saved'
+          })
+        );
+      jest
+        .spyOn(componentInternals, 'refreshAggregationDependentViews')
+        .mockImplementation(() => undefined);
+
+      component.onThresholdChanged(3);
+      jest.advanceTimersByTime(1000);
+
+      expect(saveSpy).toHaveBeenCalledWith(5, 3, [
+        ResponseMatchingFlag.NO_AGGREGATION
+      ]);
+      expect(component.responseMatchingFlags).toEqual([
+        ResponseMatchingFlag.NO_AGGREGATION,
+        ResponseMatchingFlag.IGNORE_CASE,
+        ResponseMatchingFlag.IGNORE_WHITESPACE
+      ]);
+      expect(componentInternals.persistedResponseMatchingFlags).toEqual([
+        ResponseMatchingFlag.NO_AGGREGATION
+      ]);
+      expect(component.hasPendingAggregationOptionsWithoutAggregation()).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('ignores response matching changes while aggregation settings are saving', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+    };
+
+    componentInternals.appService.selectedWorkspaceId = 5;
+    component.responseMatchingFlags = [
+      ResponseMatchingFlag.NO_AGGREGATION,
+      ResponseMatchingFlag.IGNORE_CASE
+    ];
+    component.isApplyingDuplicateAggregation = true;
+
+    component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE);
+    component.onAggregationModeChanged(true);
+
+    expect(component.responseMatchingFlags).toEqual([
+      ResponseMatchingFlag.NO_AGGREGATION,
+      ResponseMatchingFlag.IGNORE_CASE
+    ]);
+  });
+
+  it('starts aggregation once with selected response matching options', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      persistedResponseMatchingFlags: ResponseMatchingFlag[];
+      testPersonCodingService: {
+        saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
+      };
+      codingJobBackendService: {
+        triggerResponseAnalysis: (...args: unknown[]) => Observable<void>;
+      };
+      refreshAggregationDependentViews: (
+        includeResponseAnalysis?: boolean
+      ) => void;
+    };
+    const appService = componentInternals.appService;
+    const testPersonCodingService = componentInternals.testPersonCodingService;
+    const codingJobBackendService = componentInternals.codingJobBackendService;
 
     appService.selectedWorkspaceId = 5;
     component.duplicateAggregationThreshold = 2;
+    component.responseMatchingFlags = [
+      ResponseMatchingFlag.NO_AGGREGATION,
+      ResponseMatchingFlag.IGNORE_CASE,
+      ResponseMatchingFlag.IGNORE_WHITESPACE
+    ];
+    componentInternals.persistedResponseMatchingFlags = [
+      ResponseMatchingFlag.NO_AGGREGATION
+    ];
 
     const saveSpy = jest
       .spyOn(testPersonCodingService, 'saveAggregationSettings')
@@ -175,138 +334,147 @@ describe('CodingManagementManualComponent', () => {
           message: 'saved'
         })
       );
-    const restartSpy = jest
-      .spyOn(component, 'restartAnalysis')
-      .mockImplementation(() => undefined);
+    const triggerSpy = jest
+      .spyOn(codingJobBackendService, 'triggerResponseAnalysis')
+      .mockReturnValue(of(undefined));
     const refreshSpy = jest
-      .spyOn(
-        component as unknown as {
-          refreshAggregationDependentViews: (
-            includeResponseAnalysis?: boolean
-          ) => void;
-        },
-        'refreshAggregationDependentViews'
-      )
+      .spyOn(componentInternals, 'refreshAggregationDependentViews')
+      .mockImplementation(() => undefined);
+    const loadSpy = jest
+      .spyOn(component, 'loadResponseAnalysis')
       .mockImplementation(() => undefined);
 
-    component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
-    component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE);
-
-    expect(saveSpy).not.toHaveBeenCalled();
-
-    jest.advanceTimersByTime(500);
+    component.onAggregationModeChanged(true);
 
     expect(saveSpy).toHaveBeenCalledTimes(1);
     expect(saveSpy).toHaveBeenCalledWith(5, 2, [
       ResponseMatchingFlag.IGNORE_CASE,
       ResponseMatchingFlag.IGNORE_WHITESPACE
     ]);
-    expect(restartSpy).toHaveBeenCalledTimes(1);
+    expect(triggerSpy).toHaveBeenCalledTimes(1);
+    expect(triggerSpy).toHaveBeenCalledWith(5, 2);
+    expect(component.responseMatchingFlags).toEqual([
+      ResponseMatchingFlag.IGNORE_CASE,
+      ResponseMatchingFlag.IGNORE_WHITESPACE
+    ]);
+    expect(componentInternals.persistedResponseMatchingFlags).toEqual([
+      ResponseMatchingFlag.IGNORE_CASE,
+      ResponseMatchingFlag.IGNORE_WHITESPACE
+    ]);
     expect(refreshSpy).toHaveBeenCalledWith(false);
-
-    jest.useRealTimers();
+    expect(loadSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('rolls response matching flags back when saving fails', () => {
-    jest.useFakeTimers();
-    try {
-      const componentInternals = component as unknown as {
-        appService: { selectedWorkspaceId: number };
-        persistedResponseMatchingFlags: ResponseMatchingFlag[];
-        testPersonCodingService: {
-          saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
-        };
+  it('rolls response matching flags back when starting aggregation fails', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      persistedResponseMatchingFlags: ResponseMatchingFlag[];
+      testPersonCodingService: {
+        saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
       };
-      const appService = componentInternals.appService;
-      const testPersonCodingService =
-        componentInternals.testPersonCodingService;
+      codingJobBackendService: {
+        triggerResponseAnalysis: (...args: unknown[]) => Observable<void>;
+      };
+    };
+    const appService = componentInternals.appService;
+    const testPersonCodingService = componentInternals.testPersonCodingService;
+    const codingJobBackendService = componentInternals.codingJobBackendService;
 
-      appService.selectedWorkspaceId = 5;
-      component.responseMatchingFlags = [ResponseMatchingFlag.NO_AGGREGATION];
-      componentInternals.persistedResponseMatchingFlags = [
-        ResponseMatchingFlag.NO_AGGREGATION
-      ];
+    appService.selectedWorkspaceId = 5;
+    component.responseMatchingFlags = [
+      ResponseMatchingFlag.NO_AGGREGATION,
+      ResponseMatchingFlag.IGNORE_CASE
+    ];
+    componentInternals.persistedResponseMatchingFlags = [
+      ResponseMatchingFlag.NO_AGGREGATION
+    ];
 
-      jest
-        .spyOn(testPersonCodingService, 'saveAggregationSettings')
-        .mockReturnValue(throwError(() => new Error('save failed')));
+    jest
+      .spyOn(testPersonCodingService, 'saveAggregationSettings')
+      .mockReturnValue(throwError(() => new Error('save failed')));
+    const triggerSpy = jest
+      .spyOn(codingJobBackendService, 'triggerResponseAnalysis')
+      .mockReturnValue(of(undefined));
 
-      component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
+    component.onAggregationModeChanged(true);
 
-      expect(component.responseMatchingFlags).toEqual([
-        ResponseMatchingFlag.IGNORE_CASE
-      ]);
-
-      jest.advanceTimersByTime(500);
-
-      expect(component.responseMatchingFlags).toEqual([
-        ResponseMatchingFlag.NO_AGGREGATION
-      ]);
-    } finally {
-      jest.useRealTimers();
-    }
+    expect(component.responseMatchingFlags).toEqual([
+      ResponseMatchingFlag.NO_AGGREGATION,
+      ResponseMatchingFlag.IGNORE_CASE
+    ]);
+    expect(triggerSpy).not.toHaveBeenCalled();
   });
 
-  it('allows retrying the same response matching flags after a failed save', () => {
-    jest.useFakeTimers();
-    try {
-      const componentInternals = component as unknown as {
-        appService: { selectedWorkspaceId: number };
-        persistedResponseMatchingFlags: ResponseMatchingFlag[];
-        testPersonCodingService: {
-          saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
-        };
+  it('allows retrying aggregation start after a failed save', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      persistedResponseMatchingFlags: ResponseMatchingFlag[];
+      testPersonCodingService: {
+        saveAggregationSettings: (...args: unknown[]) => Observable<unknown>;
       };
-      const appService = componentInternals.appService;
-      const testPersonCodingService =
-        componentInternals.testPersonCodingService;
+      codingJobBackendService: {
+        triggerResponseAnalysis: (...args: unknown[]) => Observable<void>;
+      };
+      refreshAggregationDependentViews: (
+        includeResponseAnalysis?: boolean
+      ) => void;
+    };
+    const appService = componentInternals.appService;
+    const testPersonCodingService = componentInternals.testPersonCodingService;
+    const codingJobBackendService = componentInternals.codingJobBackendService;
 
-      appService.selectedWorkspaceId = 5;
-      component.duplicateAggregationThreshold = 2;
-      component.responseMatchingFlags = [ResponseMatchingFlag.NO_AGGREGATION];
-      componentInternals.persistedResponseMatchingFlags = [
-        ResponseMatchingFlag.NO_AGGREGATION
-      ];
+    appService.selectedWorkspaceId = 5;
+    component.duplicateAggregationThreshold = 2;
+    component.responseMatchingFlags = [
+      ResponseMatchingFlag.NO_AGGREGATION,
+      ResponseMatchingFlag.IGNORE_CASE
+    ];
+    componentInternals.persistedResponseMatchingFlags = [
+      ResponseMatchingFlag.NO_AGGREGATION
+    ];
 
-      const saveSpy = jest
-        .spyOn(testPersonCodingService, 'saveAggregationSettings')
-        .mockReturnValueOnce(throwError(() => new Error('save failed')))
-        .mockReturnValueOnce(
-          of({
-            success: true,
-            threshold: 2,
-            flags: [ResponseMatchingFlag.IGNORE_CASE],
-            aggregationActive: true,
-            revertedResponses: 0,
-            message: 'saved'
-          })
-        );
-      const restartSpy = jest
-        .spyOn(component, 'restartAnalysis')
-        .mockImplementation(() => undefined);
+    const saveSpy = jest
+      .spyOn(testPersonCodingService, 'saveAggregationSettings')
+      .mockReturnValueOnce(throwError(() => new Error('save failed')))
+      .mockReturnValueOnce(
+        of({
+          success: true,
+          threshold: 2,
+          flags: [ResponseMatchingFlag.IGNORE_CASE],
+          aggregationActive: true,
+          revertedResponses: 0,
+          message: 'saved'
+        })
+      );
+    const triggerSpy = jest
+      .spyOn(codingJobBackendService, 'triggerResponseAnalysis')
+      .mockReturnValue(of(undefined));
+    jest
+      .spyOn(componentInternals, 'refreshAggregationDependentViews')
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn(component, 'loadResponseAnalysis')
+      .mockImplementation(() => undefined);
 
-      component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
-      jest.advanceTimersByTime(500);
+    component.onAggregationModeChanged(true);
 
-      expect(saveSpy).toHaveBeenCalledTimes(1);
-      expect(component.responseMatchingFlags).toEqual([
-        ResponseMatchingFlag.NO_AGGREGATION
-      ]);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(component.responseMatchingFlags).toEqual([
+      ResponseMatchingFlag.NO_AGGREGATION,
+      ResponseMatchingFlag.IGNORE_CASE
+    ]);
+    expect(triggerSpy).not.toHaveBeenCalled();
 
-      component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE);
-      jest.advanceTimersByTime(500);
+    component.onAggregationModeChanged(true);
 
-      expect(saveSpy).toHaveBeenCalledTimes(2);
-      expect(saveSpy).toHaveBeenLastCalledWith(5, 2, [
-        ResponseMatchingFlag.IGNORE_CASE
-      ]);
-      expect(component.responseMatchingFlags).toEqual([
-        ResponseMatchingFlag.IGNORE_CASE
-      ]);
-      expect(restartSpy).toHaveBeenCalledTimes(1);
-    } finally {
-      jest.useRealTimers();
-    }
+    expect(saveSpy).toHaveBeenCalledTimes(2);
+    expect(saveSpy).toHaveBeenLastCalledWith(5, 2, [
+      ResponseMatchingFlag.IGNORE_CASE
+    ]);
+    expect(component.responseMatchingFlags).toEqual([
+      ResponseMatchingFlag.IGNORE_CASE
+    ]);
+    expect(triggerSpy).toHaveBeenCalledTimes(1);
   });
 
   it('should not block preparation for duplicates when aggregation is active', () => {
@@ -415,6 +583,114 @@ describe('CodingManagementManualComponent', () => {
     expect(component.canShowCompletedJobApplyActions()).toBe(true);
   });
 
+  it('should explain bulk apply keeps coding issue reviews open', () => {
+    const dialogOpen = jest.fn().mockReturnValue({
+      afterClosed: () => of(undefined)
+    });
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      dialog: { open: jest.Mock };
+    };
+    const staleBulkApplySkipMessage = [
+      'Jobs mit Kodierungsproblemen',
+      'werden übersprungen'
+    ].join(' ');
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.dialog = { open: dialogOpen };
+    component.completedJobsReadyForApply = [
+      {
+        id: 1,
+        workspace_id: 1,
+        name: 'Job 1',
+        status: 'completed',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 5,
+        codedUnits: 5
+      }
+    ];
+    jest.spyOn(component, 'canApplyCompletedJobResults').mockReturnValue(true);
+
+    component.applyAllCompletedJobResults();
+
+    expect(dialogOpen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          message: expect.stringContaining('offenen Kodierungshinweisen')
+        })
+      })
+    );
+    expect(dialogOpen).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          message: expect.stringContaining(staleBulkApplySkipMessage)
+        })
+      })
+    );
+  });
+
+  it('should keep completed and review jobs with review issues ready for bulk apply', () => {
+    const jobs = [
+      {
+        id: 1,
+        workspace_id: 5,
+        name: 'Job mit Hinweis',
+        status: 'completed',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 5,
+        codedUnits: 5
+      },
+      {
+        id: 2,
+        workspace_id: 5,
+        name: 'Job ohne Hinweis',
+        status: 'review',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 3,
+        codedUnits: 3
+      }
+    ];
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      codingJobBackendService: {
+        getCodingJobs: jest.Mock;
+        getBulkCodingProgress: jest.Mock;
+      };
+      loadCompletedJobsReadyForApply: () => void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.codingJobBackendService = {
+      getCodingJobs: jest.fn().mockReturnValue(of({ data: jobs })),
+      getBulkCodingProgress: jest.fn().mockReturnValue(of({
+        1: {
+          'person@code@booklet::booklet::UNIT::VAR': {
+            id: -2
+          }
+        },
+        2: {
+          'person@code@booklet::booklet::UNIT::VAR': {
+            id: 1
+          }
+        }
+      }))
+    };
+
+    componentInternals.loadCompletedJobsReadyForApply();
+
+    expect(component.completedJobsReadyForApply).toHaveLength(2);
+    expect(component.completedJobsReadyForApply.map(job => job.id)).toEqual([1, 2]);
+    expect(component.completedJobsReadyForApply[0].hasIssues).toBe(true);
+    expect(component.completedJobsBlockedForReview.map(job => job.id)).toEqual([1]);
+    expect(component.getCompletionActionTitle()).toContain('1 mit offenen Hinweisen');
+  });
+
   it('should use parent apply permission when the coding jobs table is not rendered', () => {
     component.completedJobsReadyForApply = [
       {
@@ -438,7 +714,8 @@ describe('CodingManagementManualComponent', () => {
     expect(component.canShowCompletedJobApplyActions()).toBe(true);
   });
 
-  it('should keep completed jobs visible as read-only without study-manager permission', () => {
+  it('should hide the completion tab without study-manager permission', () => {
+    component.canApplyManualCodingResults = false;
     component.selectedManualTabIndex = 4;
     setAppliedResults(5, 0, 5);
     component.completedJobsReadyForApply = [
@@ -458,23 +735,27 @@ describe('CodingManagementManualComponent', () => {
 
     fixture.detectChanges();
 
+    expect(component.visibleManualCodingTabs).not.toContain('completion');
+    expect(component.activeManualTab).toBe('preparation');
+
     const row = fixture.nativeElement.querySelector(
       '.completed-job-apply-row'
     ) as HTMLElement | null;
-    const applyButtons = Array.from(
-      fixture.nativeElement.querySelectorAll('.completed-job-apply-row button')
-    ) as HTMLButtonElement[];
-    const readonlyNote = fixture.nativeElement.querySelector(
-      '.completed-job-readonly-note'
-    ) as HTMLElement | null;
+    const pageText = fixture.nativeElement.textContent as string;
 
-    expect(row?.textContent).toContain('Job 1');
-    expect(row?.textContent).toContain('5/5 Ergebnisse kodiert');
-    expect(
-      applyButtons.some(button => button.textContent?.includes('Ergebnisse anwenden')
-      )
-    ).toBe(false);
-    expect(readonlyNote?.textContent).toContain('Nur lesbar');
+    expect(row).toBeNull();
+    expect(pageText).not.toContain('Abschluss');
+    expect(pageText).not.toContain('Job 1');
+  });
+
+  it('should keep the completion tab available with study-manager permission', () => {
+    component.canApplyManualCodingResults = true;
+
+    expect(component.visibleManualCodingTabs).toContain('completion');
+
+    component.goToManualTab('completion');
+
+    expect(component.activeManualTab).toBe('completion');
   });
 
   it('blocks transfer action without coding-manager permission', () => {
@@ -575,6 +856,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should describe completed coding with pending applied results as ready for completion', () => {
+    component.canApplyManualCodingResults = true;
     setCompletePlanningState();
     setCodingProgress(582, 582);
     setAppliedResults(581, 0, 581);
@@ -584,6 +866,28 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getPlanningStatusTitle()).toBe('Bereit für den Abschluss');
     expect(component.getPlanningStatusDescription()).toBe(
       'Alle Kodierfälle sind abgeschlossen. Übernehmen Sie nun die Kodierergebnisse in den Datenbestand.'
+    );
+    expect(component.getPlanningNextStepTitle()).toBe('Ergebnisse übernehmen');
+    expect(component.getPlanningNextStepDescription()).toBe(
+      'Alle Kodierfälle sind bearbeitet. Übernehmen Sie jetzt die abgeschlossenen Ergebnisse in den Datenbestand.'
+    );
+  });
+
+  it('should describe completed coding as read-only for coding managers', () => {
+    component.canApplyManualCodingResults = false;
+    setCompletePlanningState();
+    setCodingProgress(582, 582);
+    setAppliedResults(581, 0, 581);
+
+    expect(component.getPlanningStatusClass()).toBe('status-attention');
+    expect(component.getPlanningStatusIcon()).toBe('published_with_changes');
+    expect(component.getPlanningStatusTitle()).toBe('Kodierfälle abgeschlossen');
+    expect(component.getPlanningStatusDescription()).toBe(
+      'Alle Kodierfälle sind abgeschlossen. Die Übernahme der Ergebnisse in den Datenbestand bleibt Studienmanager:innen vorbehalten.'
+    );
+    expect(component.getPlanningNextStepTitle()).toBe('Kodierjobs prüfen');
+    expect(component.getPlanningNextStepDescription()).toBe(
+      'Alle Kodierfälle sind bearbeitet. Sie können die abgeschlossenen Kodierjobs in der Durchführung einsehen.'
     );
   });
 
@@ -630,18 +934,7 @@ describe('CodingManagementManualComponent', () => {
     setCodingProgress(10, 4);
     setAppliedResults(10, 0, 10);
     component.manualCodeAvailabilityWarnings = [
-      {
-        unitName: 'UNIT1',
-        variableId: 'VAR1',
-        responseCount: 5,
-        casesInJobs: 0,
-        availableCases: 5,
-        uniqueCasesAfterAggregation: 5,
-        regularCodeCount: 2,
-        selectableRegularCodeCount: 0,
-        onlySpecialOptionsAvailable: true,
-        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
-      }
+      createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
     ];
 
     expect(component.hasManualCodeAvailabilityWarnings).toBe(true);
@@ -674,22 +967,47 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
+  it('should expand all manual code availability warnings from the status banner', () => {
+    setCompletePlanningState();
+    component.manualCodeAvailabilityWarnings = [
+      createManualCodeAvailabilityWarning('UNIT1', 'VAR1'),
+      createManualCodeAvailabilityWarning('UNIT2', 'VAR2'),
+      createManualCodeAvailabilityWarning('UNIT3', 'VAR3'),
+      createManualCodeAvailabilityWarning('UNIT4', 'VAR4'),
+      createManualCodeAvailabilityWarning('UNIT5', 'VAR5'),
+      createManualCodeAvailabilityWarning('UNIT6', 'VAR6'),
+      createManualCodeAvailabilityWarning('UNIT7', 'VAR7')
+    ];
+
+    fixture.detectChanges();
+
+    const statusBanner = fixture.nativeElement.querySelector(
+      '.planning-status-banner'
+    ) as HTMLElement;
+    const toggleButton = statusBanner.querySelector(
+      '.manual-code-availability-toggle'
+    ) as HTMLButtonElement;
+
+    expect(statusBanner.textContent).toContain('UNIT1 / VAR1');
+    expect(statusBanner.textContent).toContain('UNIT5 / VAR5');
+    expect(statusBanner.textContent).not.toContain('UNIT6 / VAR6');
+    expect(toggleButton.textContent).toContain('+2 weitere anzeigen');
+    expect(toggleButton.getAttribute('aria-expanded')).toBe('false');
+
+    toggleButton.click();
+    fixture.detectChanges();
+
+    expect(statusBanner.textContent).toContain('UNIT6 / VAR6');
+    expect(statusBanner.textContent).toContain('UNIT7 / VAR7');
+    expect(toggleButton.textContent).toContain('Weniger anzeigen');
+    expect(toggleButton.getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('should keep the affected variables scroll target while coverage is loading', () => {
     component.selectedManualTabIndex = component.manualCodingTabs.indexOf('planning');
     component.variableCoverageOverview = null;
     component.manualCodeAvailabilityWarnings = [
-      {
-        unitName: 'UNIT1',
-        variableId: 'VAR1',
-        responseCount: 5,
-        casesInJobs: 0,
-        availableCases: 5,
-        uniqueCasesAfterAggregation: 5,
-        regularCodeCount: 2,
-        selectableRegularCodeCount: 0,
-        onlySpecialOptionsAvailable: true,
-        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
-      }
+      createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
     ];
 
     fixture.detectChanges();
@@ -743,18 +1061,7 @@ describe('CodingManagementManualComponent', () => {
       }
     };
     component.manualCodeAvailabilityWarnings = [
-      {
-        unitName: 'UNIT1',
-        variableId: 'VAR1',
-        responseCount: 5,
-        casesInJobs: 0,
-        availableCases: 5,
-        uniqueCasesAfterAggregation: 5,
-        regularCodeCount: 2,
-        selectableRegularCodeCount: 0,
-        onlySpecialOptionsAvailable: true,
-        message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
-      }
+      createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
     ];
 
     expect(component.getPlanningStatusClass()).toBe('status-warning');
@@ -1039,11 +1346,12 @@ describe('CodingManagementManualComponent', () => {
     expect(refreshSpy).not.toHaveBeenCalled();
   });
 
-  it('should open training reliability with a coder-training kappa scope', () => {
+  it('should open training reliability with available coder trainings', () => {
     const dialog = { open: jest.fn() };
     (component as unknown as { dialog: typeof dialog }).dialog = dialog;
+    const training = { id: 7 };
     component.coderTrainingsListComponent = {
-      originalData: [{ id: 7 }],
+      originalData: [training],
       coderTrainings: [],
       openResultsComparison: jest.fn()
     } as unknown as CodingManagementManualComponent['coderTrainingsListComponent'];
@@ -1055,7 +1363,7 @@ describe('CodingManagementManualComponent', () => {
       expect.objectContaining({
         data: {
           excludeTrainings: false,
-          scope: { coderTrainingIds: [7] }
+          availableCoderTrainings: [training]
         }
       })
     );
@@ -1106,7 +1414,7 @@ describe('CodingManagementManualComponent', () => {
     const exportJobService = TestBed.inject(ExportJobService);
     const dialog = {
       open: jest.fn().mockReturnValue({
-        afterClosed: () => of({ exportType: 'detailed' })
+        afterClosed: () => of({ exportType: 'detailed', includeReplayUrl: true })
       })
     };
     const componentInternals = component as unknown as {
@@ -1163,6 +1471,7 @@ describe('CodingManagementManualComponent', () => {
       expect.objectContaining({
         exportType: 'detailed',
         userId: 9,
+        includeReplayUrl: true,
         excludeAutoCoded: true,
         jobDefinitionIds: [11]
       })
@@ -1277,6 +1586,7 @@ describe('CodingManagementManualComponent', () => {
   it('should switch to the completion tab before scrolling to completion work', () => {
     jest.useFakeTimers();
     try {
+      component.canApplyManualCodingResults = true;
       setCompletePlanningState();
       setCodingProgress(582, 582);
       setAppliedResults(581, 0, 581);
@@ -1306,9 +1616,46 @@ describe('CodingManagementManualComponent', () => {
     }
   });
 
+  it('should keep coding managers away from the hidden completion tab', () => {
+    jest.useFakeTimers();
+    try {
+      component.canApplyManualCodingResults = false;
+      setCompletePlanningState();
+      setCodingProgress(582, 582);
+      setAppliedResults(581, 0, 581);
+      component.selectedManualTabIndex = 1;
+
+      const componentInternals = component as unknown as {
+        loadManualTabData(tab: 'execution'): void;
+      };
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      expect(component.visibleManualCodingTabs).not.toContain('completion');
+      expect(component.getPlanningNextStepTargetTab()).toBe('execution');
+      expect(component.getPlanningNextStepActionLabel()).toBe('Zu den Kodierjobs');
+
+      component.performPlanningNextStep();
+
+      expect(component.selectedManualTabIndex).toBe(3);
+      expect(loadManualTabDataSpy).toHaveBeenCalledWith('execution');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-execution');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('should switch from completion to execution when navigating to coding jobs', () => {
     jest.useFakeTimers();
     try {
+      component.canApplyManualCodingResults = true;
       component.selectedManualTabIndex = 4;
 
       const componentInternals = component as unknown as {
@@ -1427,6 +1774,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('shows aggregation savings in the completion overview as a positive count', () => {
+    component.canApplyManualCodingResults = true;
     component.selectedManualTabIndex = 4;
     setCompletePlanningState();
     setAppliedResults(543, 415, 128);

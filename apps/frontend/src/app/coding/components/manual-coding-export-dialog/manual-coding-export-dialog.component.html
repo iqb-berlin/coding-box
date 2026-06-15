@@ -23,13 +23,13 @@
     <h3>{{ 'manual-coding-export.double-coding-method' | translate }}</h3>
     <mat-radio-group class="manual-export-radio-group" [(ngModel)]="doubleCodingMethod">
       <mat-radio-button value="most-frequent">
-        {{ 'ws-admin.export-options.double-coding-methods.most-frequent' | translate }}
+        {{ 'ws-admin.export-options.most-frequent-random' | translate }}
       </mat-radio-button>
       <mat-radio-button value="new-column-per-coder">
-        {{ 'ws-admin.export-options.double-coding-methods.new-column-per-coder' | translate }}
+        {{ 'ws-admin.export-options.new-column-per-coder' | translate }}
       </mat-radio-button>
       <mat-radio-button value="new-row-per-variable">
-        {{ 'ws-admin.export-options.double-coding-methods.new-row-per-variable' | translate }}
+        {{ 'ws-admin.export-options.new-row-per-variable' | translate }}
       </mat-radio-button>
     </mat-radio-group>
   </section>
@@ -98,6 +98,11 @@
     <mat-checkbox [(ngModel)]="outputCommentsInsteadOfCodes">
       {{ 'ws-admin.export-options.output-comments-instead-of-codes' | translate }}
     </mat-checkbox>
+    @if (canIncludeReplayUrl) {
+    <mat-checkbox [(ngModel)]="includeReplayUrl">
+      {{ 'ws-admin.export-options.include-replay-url' | translate }}
+    </mat-checkbox>
+    }
     <mat-checkbox [(ngModel)]="anonymizeCoders">
       {{ 'ws-admin.export-options.anonymize-coders' | translate }}
     </mat-checkbox>

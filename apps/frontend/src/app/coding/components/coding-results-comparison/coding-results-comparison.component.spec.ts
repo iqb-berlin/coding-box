@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import {
+  MatDialog,
   MatDialogModule,
   MatDialogRef,
   MAT_DIALOG_DATA
@@ -15,6 +16,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { CoderTraining } from '../../models/coder-training.model';
+import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 
 describe('CodingResultsComparisonComponent', () => {
   let component: CodingResultsComparisonComponent;
@@ -24,10 +26,15 @@ describe('CodingResultsComparisonComponent', () => {
     compareTrainingCodingResults: jest.Mock;
     compareWithinTrainingCodingResults: jest.Mock;
     saveDiscussionResult: jest.Mock;
+    previewApplyDiscussionResults: jest.Mock;
+    applyDiscussionResults: jest.Mock;
     getTrainingCohensKappa: jest.Mock;
   };
   let codingStatisticsService: {
     getReplayUrl: jest.Mock;
+  };
+  let matDialog: {
+    open: jest.Mock;
   };
   let appService: {
     authData: { userName: string };
@@ -36,6 +43,9 @@ describe('CodingResultsComparisonComponent', () => {
   };
   let snackBar: {
     open: jest.Mock;
+  };
+  let workspaceSettingsService: {
+    getEnableRegexSearch: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -47,14 +57,20 @@ describe('CodingResultsComparisonComponent', () => {
         success: true,
         code: 7,
         score: 2,
+        notes: 'Replay note',
         source: 'manual',
         managerUserId: 2,
         managerName: 'Test User'
       })),
+      previewApplyDiscussionResults: jest.fn(),
+      applyDiscussionResults: jest.fn(),
       getTrainingCohensKappa: jest.fn()
     };
     codingStatisticsService = {
       getReplayUrl: jest.fn()
+    };
+    matDialog = {
+      open: jest.fn()
     };
     appService = {
       authData: { userName: 'Test User' },
@@ -63,6 +79,9 @@ describe('CodingResultsComparisonComponent', () => {
     };
     snackBar = {
       open: jest.fn()
+    };
+    workspaceSettingsService = {
+      getEnableRegexSearch: jest.fn().mockReturnValue(of(false))
     };
 
     await TestBed.configureTestingModule({
@@ -90,6 +109,10 @@ describe('CodingResultsComparisonComponent', () => {
           useValue: snackBar
         },
         {
+          provide: MatDialog,
+          useValue: matDialog
+        },
+        {
           provide: CodingTrainingBackendService,
           useValue: codingTrainingBackendService
         },
@@ -100,12 +123,17 @@ describe('CodingResultsComparisonComponent', () => {
         {
           provide: AppService,
           useValue: appService
+        },
+        {
+          provide: WorkspaceSettingsService,
+          useValue: workspaceSettingsService
         }
       ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(CodingResultsComparisonComponent);
     component = fixture.componentInstance;
+    (component as unknown as { dialog: typeof matDialog }).dialog = matDialog;
     fixture.detectChanges();
   });
 
@@ -228,7 +256,7 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.withinTrainingData[0].modalValueDisplay?.valueText).toBe('7*');
   });
 
-  it('should open replay for the row response with coding context', () => {
+  it('should open replay for the row response with coding decision context', () => {
     const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
     codingStatisticsService.getReplayUrl.mockReturnValue(of({
       replayUrl: 'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1'
@@ -248,7 +276,40 @@ describe('CodingResultsComparisonComponent', () => {
     expect(appService.createOwnToken).not.toHaveBeenCalled();
     expect(codingStatisticsService.getReplayUrl).toHaveBeenCalledWith(1, 77);
     expect(openSpy).toHaveBeenCalledWith(
-      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding&originResponseId=77',
+      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=77',
+      '_blank'
+    );
+  });
+
+  it('should pass selected training display options to the discussion replay', () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    codingStatisticsService.getReplayUrl.mockReturnValue(of({
+      replayUrl: 'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1'
+    }));
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.availableTrainings = [{
+      id: 5,
+      workspace_id: 1,
+      label: 'Training with hidden instructions',
+      created_at: new Date('2026-06-11T12:00:00Z'),
+      updated_at: new Date('2026-06-11T12:00:00Z'),
+      jobsCount: 2,
+      show_score: true,
+      allow_comments: false,
+      suppress_general_instructions: true
+    }];
+
+    component.openReplay({
+      responseId: 77,
+      unitName: 'UNIT_1',
+      variableId: 'VAR_1',
+      testperson: 'login@code@booklet',
+      coders: []
+    } as never);
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=77&showScore=true&allowComments=false&suppressGeneralInstructions=true',
       '_blank'
     );
   });
@@ -435,6 +496,7 @@ describe('CodingResultsComparisonComponent', () => {
       variableId: 'var_2',
       personLogin: 'LOGIN-2',
       personGroup: 'group a',
+      bookletName: '',
       match: 'differ',
       notesMode: 'with-notes'
     };
@@ -444,6 +506,82 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([2]);
     expect(component.totalComparisons).toBe(1);
     expect(component.matchingComparisons).toBe(0);
+  });
+
+  it('should apply regex filters when workspace regex search is enabled', () => {
+    component.enableRegexSearch = true;
+    component.comparisonMode = 'between-trainings';
+    component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
+    component.selectedCodersFromTrainings = new Set(['1_101', '2_201']);
+    component.comparisonData = [
+      {
+        responseId: 1,
+        unitName: 'Unit A',
+        variableId: 'VAR_100',
+        testPerson: 'Test1',
+        personLogin: 'alpha',
+        personCode: 'Code1',
+        personGroup: 'Group A',
+        bookletName: 'Booklet-01',
+        coders: [
+          {
+            trainingId: 1,
+            trainingLabel: 'Training 1',
+            coderId: 101,
+            coderName: 'Coder 101',
+            code: '1',
+            score: 1,
+            notes: null
+          },
+          {
+            trainingId: 2,
+            trainingLabel: 'Training 2',
+            coderId: 201,
+            coderName: 'Coder 201',
+            code: '1',
+            score: 1,
+            notes: null
+          }
+        ]
+      },
+      {
+        responseId: 2,
+        unitName: 'Unit B',
+        variableId: 'VAR_200',
+        testPerson: 'Test2',
+        personLogin: 'beta',
+        personCode: 'Code2',
+        personGroup: 'Group B',
+        bookletName: 'Practice-01',
+        coders: [
+          {
+            trainingId: 1,
+            trainingLabel: 'Training 1',
+            coderId: 101,
+            coderName: 'Coder 101',
+            code: '1',
+            score: 1,
+            notes: null
+          },
+          {
+            trainingId: 2,
+            trainingLabel: 'Training 2',
+            coderId: 201,
+            coderName: 'Coder 201',
+            code: '1',
+            score: 1,
+            notes: null
+          }
+        ]
+      }
+    ];
+    component.dataSource.data = component.comparisonData;
+    component.tableFilters.variableId = '^VAR_1';
+    component.tableFilters.bookletName = 'Booklet-\\d+$';
+
+    component.applyTableFilters();
+
+    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([1]);
   });
 
   it('should distinguish rows without visible coder notes from rows with visible coder notes', () => {
@@ -754,6 +892,7 @@ describe('CodingResultsComparisonComponent', () => {
       testperson: 'login@code@booklet',
       discussionCode: null,
       discussionScore: null,
+      discussionNotes: null,
       discussionSource: 'auto_agreement' as 'manual' | 'auto_agreement' | null,
       coders: [
         {
@@ -776,6 +915,7 @@ describe('CodingResultsComparisonComponent', () => {
         variableId: string;
         code: string;
         score: number | null;
+        notes?: string | null;
         responseId: number;
       }) => void;
     }).handleReplayCodeSelected({
@@ -785,14 +925,17 @@ describe('CodingResultsComparisonComponent', () => {
       variableId: 'Var1',
       code: '7',
       score: 2,
+      notes: 'Replay note',
       responseId: 1
     });
 
-    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2);
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2, 'Replay note');
     expect(component.discussionCodeByResponseId[1]).toBe('7');
     expect(component.discussionScoreByResponseId[1]).toBe(2);
+    expect(component.discussionNotesByResponseId[1]).toBe('Replay note');
     expect(row.discussionCode).toBe(7);
     expect(row.discussionScore).toBe(2);
+    expect(row.discussionNotes).toBe('Replay note');
     expect(row.discussionSource).toBe('manual');
   });
 
@@ -1075,6 +1218,7 @@ describe('CodingResultsComparisonComponent', () => {
       success: true,
       code: 7,
       score: 2,
+      notes: null,
       source: 'auto_agreement',
       managerUserId: null,
       managerName: null
@@ -1108,12 +1252,86 @@ describe('CodingResultsComparisonComponent', () => {
 
     component.onDiscussionCodeBlur(row);
 
-    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, null, null);
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, null, null, null);
     expect(component.discussionCodeByResponseId[1]).toBe('7');
     expect(component.discussionScoreByResponseId[1]).toBe(2);
     expect(row.discussionCode).toBe(7);
     expect(row.discussionScore).toBe(2);
     expect(row.discussionSource).toBe('auto_agreement');
+  });
+
+  it('should preview and apply training discussion results with selected strategies', async () => {
+    matDialog.open.mockReturnValue({
+      afterClosed: () => of({
+        existingResultStrategy: 'overwrite',
+        jobConflictStrategy: 'removeFromJobs'
+      })
+    } as never);
+    jest.spyOn(component, 'loadComparison').mockImplementation(() => undefined);
+    codingTrainingBackendService.previewApplyDiscussionResults.mockReturnValue(of({
+      trainingId: 5,
+      source: 'manual',
+      totalTrainingResponses: 1,
+      sourceResultsCount: 1,
+      applicableResultsCount: 1,
+      missingResultsCount: 0,
+      missingScoreCount: 0,
+      existingFinalResultsCount: 1,
+      productiveJobConflictCount: 1,
+      removableProductiveJobUnitCount: 1,
+      blockingProductiveJobUnitCount: 0,
+      approvedJobDefinitionConflictCount: 0,
+      staleTrainingJobCount: 0,
+      affectedJobIds: [10],
+      affectedJobDefinitionIds: [],
+      canApply: true
+    }));
+    codingTrainingBackendService.applyDiscussionResults.mockReturnValue(of({
+      success: true,
+      trainingId: 5,
+      source: 'manual',
+      totalTrainingResponses: 1,
+      sourceResultsCount: 1,
+      applicableResultsCount: 1,
+      missingResultsCount: 0,
+      missingScoreCount: 0,
+      existingFinalResultsCount: 1,
+      productiveJobConflictCount: 1,
+      removableProductiveJobUnitCount: 1,
+      blockingProductiveJobUnitCount: 0,
+      approvedJobDefinitionConflictCount: 0,
+      staleTrainingJobCount: 0,
+      affectedJobIds: [10],
+      affectedJobDefinitionIds: [],
+      canApply: true,
+      updatedResponsesCount: 1,
+      skippedExistingResultsCount: 0,
+      overwrittenExistingResultsCount: 1,
+      skippedJobConflictCount: 0,
+      skippedMissingScoreCount: 0,
+      removedJobUnitCount: 1,
+      messageKey: 'coding.trainings.apply.success'
+    }));
+
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.openApplyTrainingDiscussionResults('manual');
+    await fixture.whenStable();
+
+    expect(codingTrainingBackendService.previewApplyDiscussionResults)
+      .toHaveBeenCalledWith(1, 5, 'manual');
+    expect(matDialog.open).toHaveBeenCalled();
+
+    expect(codingTrainingBackendService.applyDiscussionResults).toHaveBeenCalledWith(
+      1,
+      5,
+      {
+        source: 'manual',
+        existingResultStrategy: 'overwrite',
+        jobConflictStrategy: 'removeFromJobs'
+      }
+    );
+    expect(component.loadComparison).toHaveBeenCalled();
   });
 
   it('should clear stale kappa values when changing comparison mode', () => {

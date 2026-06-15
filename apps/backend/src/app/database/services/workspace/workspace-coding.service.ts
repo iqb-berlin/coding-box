@@ -492,7 +492,7 @@ export class WorkspaceCodingService {
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
-      skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
+      skippedReason?: 'training-job' | 'not-completed' | 'freshness-stale';
       result?: {
         success: boolean;
         updatedResponsesCount: number;
@@ -626,7 +626,9 @@ export class WorkspaceCodingService {
     workspaceId: number,
     decisions: Array<{
       responseId: number;
-      selectedJobId: number;
+      selectedJobId?: number | null;
+      code?: number | null;
+      score?: number | null;
       resolutionComment?: string;
     }>
   ): Promise<{

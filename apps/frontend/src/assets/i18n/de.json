@@ -540,7 +540,8 @@
     "enter-filter": "Suchbegriff",
     "filter-test-persons": "Suche nach Testpersonen",
     "filter-test-groups": "Suche nach Testgruppen",
-    "filter-test-files": "Suche nach Testdateien"
+    "filter-test-files": "Suche nach Testdateien",
+    "invalid-regex": "Ungültiger regulärer Ausdruck"
   },
   "access-rights": {
     "hint": "Zugriffsrechte: Bitte links Nutzer:in wählen",
@@ -703,6 +704,14 @@
       "total-progress-incomplete": "Nicht abgeschlossene Kodierjobs",
       "actions": "Aktionen",
       "start-coding": "Kodierjob starten",
+      "restart-coding": "Kodierjob erneut starten",
+      "open-review": "Review öffnen",
+      "submit-for-review": "Zur Überprüfung einreichen",
+      "submit-for-review-title": "Kodierjob zur Überprüfung einreichen",
+      "submit-for-review-message": "Möchten Sie diesen Kodierjob zur Überprüfung einreichen? Danach kann die Kodierung nicht mehr geändert werden.",
+      "submit-for-review-confirm": "Zur Überprüfung einreichen",
+      "submit-for-review-success": "Kodierjob \"{{name}}\" wurde zur Überprüfung eingereicht",
+      "submit-for-review-error": "Fehler beim Einreichen zur Überprüfung",
       "job-name": "Name",
       "job-description": "Beschreibung",
       "job-status": "Status",
@@ -998,8 +1007,8 @@
     "pause-coding": "Kodierung anhalten",
     "CODING_JOB_COMPLETED": "Kodierungsauftrag abgeschlossen",
     "ALL_REPLAYS_CODED_MESSAGE": "Alle Replays wurden kodiert",
-    "SUBMITTING_JOB": "Auftrag wird eingereicht...",
-    "SUBMIT_JOB": "Auftrag einreichen",
+    "SUBMITTING_JOB": "Kodierung wird abgeschlossen...",
+    "SUBMIT_JOB": "Kodierung abschließen",
     "coding-job-paused": "Kodierungsauftrag pausiert",
     "pausing-coding-job": "Kodierungsauftrag wird angehalten...",
     "coding-job-paused-successfully": "Kodierungsauftrag erfolgreich angehalten",
@@ -1008,9 +1017,9 @@
     "coding-job-resumed-successfully": "Kodierungsauftrag erfolgreich fortgesetzt",
     "failed-to-resume-coding-job": "Fehler beim Fortsetzen des Kodierungsauftrags",
     "resume-coding": "Kodierung fortsetzen",
-    "submitting-coding-job": "Kodierungsauftrag wird eingereicht...",
-    "coding-job-submitted-successfully": "Kodierungsauftrag erfolgreich eingereicht",
-    "failed-to-submit-coding-job": "Fehler beim Einreichen des Kodierungsauftrags",
+    "submitting-coding-job": "Kodierung wird abgeschlossen...",
+    "coding-job-submitted-successfully": "Kodierung erfolgreich abgeschlossen",
+    "failed-to-submit-coding-job": "Fehler beim Abschließen der Kodierung",
     "failed-to-save-coding-progress": "Die Kodierung konnte nicht gespeichert werden. Bitte erneut auswählen oder die Verbindung prüfen.",
     "failed-to-save-coding-notes": "Die Notiz konnte nicht gespeichert werden. Bitte Verbindung prüfen und erneut versuchen.",
     "reauthentication-required": "Bitte melden Sie sich erneut an, bevor Sie mit der Kodierung fortfahren.",
@@ -1045,8 +1054,11 @@
     "legacy-code-label": "Bisher gespeicherter Code:",
     "legacy-code-note": "Dieser Code ist nicht mehr manuell auswählbar.",
     "legacy-code-missing-note": "Dieser Code ist im aktuellen Kodierschema nicht mehr vorhanden.",
+    "review-coders-tooltip": "Von folgenden Kodierern vergeben: {{coders}}",
     "coder-notes": "Notiz zu diesem Kodierfall",
     "coder-notes-placeholder": "Notiz zu diesem Kodierfall",
+    "code-assignment-uncertain-requires-code": "Code-Vergabe unsicher kann erst nach einem regulären Code ausgewählt werden.",
+    "new-code-comment-required": "Bitte begründen Sie „Neuer Code nötig“ im Kommentar zu diesem Kodierfall.",
     "coding-issue-options": {
       "code-assignment-uncertain": "Code-Vergabe unsicher",
       "new-code-needed": "Neuer Code nötig",
@@ -1079,6 +1091,10 @@
     "include-derive-error-in-manual-coding-description": "Wenn aktiviert, können DERIVE_ERROR-Fälle bei Kodierjobdefinitionen gezielt in die manuelle Kodierung aufgenommen werden. Standardmäßig ist diese Funktion deaktiviert.",
     "include-derive-error-in-manual-coding-enabled": "DERIVE_ERROR-Fälle können in die manuelle Kodierung aufgenommen werden",
     "include-derive-error-in-manual-coding-disabled": "DERIVE_ERROR-Fälle werden nicht in die manuelle Kodierung aufgenommen",
+    "enable-regex-search": "Reguläre Ausdrücke in Suchfeldern",
+    "enable-regex-search-description": "Wenn aktiviert, werden ausgewählte Suchfelder in diesem Arbeitsbereich als reguläre Ausdrücke ausgewertet. Die Suche ist dann groß-/kleinschreibungssensitiv und findet Teiltreffer, sofern keine Anker wie ^ und $ verwendet werden.",
+    "enable-regex-search-enabled": "Reguläre Ausdrücke in Suchfeldern aktiviert",
+    "enable-regex-search-disabled": "Reguläre Ausdrücke in Suchfeldern deaktiviert",
     "test-results": "Testergebnisse",
     "show-test-results-log-anomalies": "Log-Auffälligkeiten in Testergebnissen anzeigen",
     "show-test-results-log-anomalies-description": "Wenn aktiviert, werden die Log-Qualität und die Logstatus-Spalte in der Ergebnistabelle angezeigt. Wenn deaktiviert, werden diese Anzeigen ausgeblendet; die Logfilter bleiben verfügbar.",
@@ -1387,6 +1403,12 @@
       "coded-status": "Kodier-Status",
       "run": "Lauf",
       "active-run": "Tabelle zeigt: {{run}}",
+      "value": "Wert",
+      "value-placeholder": "Wert eingeben...",
+      "coding-code": "Code",
+      "coding-code-placeholder": "Code eingeben...",
+      "score": "Bewertung",
+      "score-placeholder": "Bewertung eingeben...",
       "person-code": "Person-Code",
       "person-code-placeholder": "Person-Code eingeben...",
       "person-login": "Person-Login",
@@ -1797,7 +1819,9 @@
     "buttons": {
       "try-again": "Erneut versuchen",
       "close": "Schließen",
-      "download-excel": "Als Excel herunterladen"
+      "download-excel": "Als Excel herunterladen",
+      "show-more-manual-code-warnings": "+{{count}} weitere anzeigen",
+      "show-fewer-manual-code-warnings": "Weniger anzeigen"
     },
     "table": {
       "headers": {
@@ -1840,8 +1864,13 @@
       "title": "Antwort-Matching",
       "description": "Legen Sie fest, wann Antworten von verschiedenen Testpersonen als gleicher Fall behandelt werden sollen.",
       "no-aggregation": "Nicht aggregieren (jede Antwort ist ein eigener Fall)",
+      "no-aggregation-mode": "Nicht aggregieren",
+      "aggregate-responses": "Antworten aggregieren",
       "ignore-case": "Groß-/Kleinschreibung ignorieren",
       "ignore-whitespace": "Leerzeichen ignorieren",
+      "options-pending": "Optionen vorgemerkt",
+      "pending-changes": "Optionen geändert",
+      "apply-options": "Aggregation aktualisieren",
       "hint-exact": "Aktuelle Einstellung: Exakte Übereinstimmung - Antworten werden nur bei identischem Wert zusammengefasst.",
       "hint-no-aggregation": "Aktuelle Einstellung: Keine Aggregation - Jede Antwort wird als separater Fall behandelt.",
       "hint-aggregating": "Aktuelle Einstellung: Antworten werden unter Berücksichtigung der gewählten Optionen zusammengefasst.",
@@ -1996,7 +2025,8 @@
       "create-btn": "Definition erstellen",
       "submit-for-review": "Zur Prüfung einreichen"
     },
-    "readonly-definition-note": "Diese Definition ist schreibgeschützt, weil daraus bereits Kodierjobs erzeugt wurden. Verteilungsänderungen erfolgen über „Kodierjobs neu verteilen“, solange noch keine Kodierarbeit vorliegt.",
+    "readonly-definition-note": "Diese Definition ist schreibgeschützt, weil der Status erzeugter Kodierjobs nicht geladen werden konnte.",
+    "existing-jobs-definition-note": "Diese Definition hat bereits Kodierjobs. Änderungen an Variablen, Bündeln, Kodierern, Missing-Profil, Obergrenzen oder Doppelkodierung werden erst nach Vorschau und Bestätigung auf bestehende Kodierjobs angewendet.",
     "job": {
       "edit": "Kodierjob bearbeiten",
       "create": "Neuer Kodierjob erstellen",
@@ -2007,7 +2037,7 @@
       "general-info": "Allgemeine Informationen",
       "double-coding": {
         "title": "Doppelkodierung",
-        "description": "Konfiguriere, welche Fälle doppelt kodiert werden sollen."
+        "description": "Konfiguriere, wie viele Fälle für jede Variable doppelt kodiert werden sollen."
       },
       "variable-bundles": {
         "title": "Variablenbündel",
@@ -2129,7 +2159,8 @@
     },
     "validation": {
       "coder-required": "Es muss mindestens ein Kodierer ausgewählt werden",
-      "variable-or-bundle-required": "Es muss mindestens eine Variable oder ein Variablenbündel ausgewählt werden"
+      "variable-or-bundle-required": "Es muss mindestens eine Variable oder ein Variablenbündel ausgewählt werden",
+      "derive-error-required": "Für ausgewählte Variablen ohne regulär verfügbare Fälle muss DERIVE_ERROR einbezogen werden"
     },
     "snackbars": {
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
@@ -2152,6 +2183,8 @@
       "definition-updated-success": "Jobdefinition erfolgreich aktualisiert",
       "error-update-definition": "Fehler beim Aktualisieren der Jobdefinition",
       "error-updating-definition": "Fehler beim Aktualisieren der Jobdefinition: {{error}}",
+      "definition-update-refresh-applied": "Jobdefinition gespeichert und Kodierjobs aktualisiert: {{count}} Kodierjobs erstellt.",
+      "update-refresh-failed": "Änderung konnte nicht auf bestehende Kodierjobs angewendet werden: {{error}}",
       "definition-submitted-review": "Jobdefinition zur Prüfung eingereicht",
       "error-submit-review": "Fehler beim Einreichen zur Prüfung",
       "error-submitting-review": "Fehler beim Einreichen zur Prüfung: {{error}}"
@@ -2226,19 +2259,23 @@
     "refresh-dialog": {
       "title": {
         "apply": "Kodierjobs neu verteilen",
+        "update-apply": "Änderung anwenden und Kodierjobs aktualisieren",
         "blocked": "Neu verteilen nicht möglich"
       },
       "definition-label": "Definition #{{id}}",
       "intro": {
         "apply": "Die bestehenden, noch unbearbeiteten Kodierjobs werden gelöscht und anhand der aktuellen Definition neu erzeugt.",
-        "blocked": "Die Definition kann aktuell nicht neu verteilt werden, weil vorhandene Kodierjobs nicht sicher ersetzt werden können."
+        "update-apply": "Die Jobdefinition wird gespeichert. Die bestehenden, noch unbearbeiteten Kodierjobs werden gelöscht und anhand der geänderten Definition neu erzeugt.",
+        "blocked": "Die Definition kann aktuell nicht neu verteilt werden, weil vorhandene Kodierjobs nicht sicher ersetzt werden können.",
+        "update-blocked": "Die Änderung kann aktuell nicht angewendet werden, weil vorhandene Kodierjobs nicht sicher ersetzt werden können."
       },
       "blocking-fallback": "In vorhandenen Kodierjobs wurde bereits gearbeitet. Deshalb ist die Neuverteilung gesperrt.",
       "rules-label": "Wirkung der Neuverteilung",
       "rules": {
         "replace-open": "Nur unberührte Kodierjobs aus dieser Definition werden ersetzt.",
         "keep-work": "Kodierungen, Notizen und bereits geöffnete Fälle werden nicht überschrieben.",
-        "use-current-definition": "Die neue Verteilung nutzt Variablen, Kodierer, Obergrenzen und Doppelkodierung aus der aktuellen Definition."
+        "use-current-definition": "Die neue Verteilung nutzt Variablen, Kodierer, Obergrenzen und Doppelkodierung aus der aktuellen Definition.",
+        "use-updated-definition": "Die neue Verteilung nutzt Variablen, Kodierer, Missing-Profil, Obergrenzen und Doppelkodierung aus der geänderten Definition."
       },
       "preview-title": "Jobstatus",
       "case-title": "Fälle",
@@ -2256,7 +2293,8 @@
         "added-tasks": "Aufgaben hinzugefügt",
         "removed-tasks": "Aufgaben entfernt"
       },
-      "confirm": "Jobs neu verteilen"
+      "confirm": "Jobs neu verteilen",
+      "confirm-update": "Änderung anwenden"
     },
     "distribution-summary": {
       "title": "Verteilungsübersicht",
@@ -2368,6 +2406,10 @@
   "cohens-kappa-statistics": {
     "dialog-title": "Interrater-Reliabilität",
     "loading": "Statistiken werden geladen...",
+    "training-selection-title": "Schulung auswählen",
+    "training-selection-subtitle": "Die Interrater-Reliabilität wird für die ausgewählte Kodierer-Schulung berechnet.",
+    "training-select-label": "Schulung",
+    "select-training-hint": "Bitte wählen Sie eine Schulung aus.",
     "workspace-title": "Inter-Rater Zuverlässigkeit (Cohen's Kappa)",
     "workspace-subtitle": "Arbeitsbereichsübergreifende Analyse der Übereinstimmung zwischen Kodierern bei doppelt kodierten Variablen.",
     "exclude-trainings": "Kodierer-Trainings ausschließen",
@@ -2463,6 +2505,11 @@
     "coders-done": "Kodierer fertig",
     "pending": "Ausstehend",
     "applied": "Angewandt",
+    "applied-result": {
+      "label": "Angewendeter Code",
+      "final-source": "Endgültige Entscheidung",
+      "match-tooltip": "Entspricht dem angewendeten Code"
+    },
     "decision": {
       "select-label": "Endgültiger Code",
       "no-selection": "Kein Code gewählt",
@@ -2472,6 +2519,7 @@
       "status-mixed-conflict": "Mehrere Abweichungen",
       "status-match": "Übereinstimmung",
       "status-incomplete": "Unvollständig",
+      "replay-source": "Replay-Entscheidung",
       "tooltip-inter-coder-conflict": "Unterschiedliche Kodierer haben abweichende Ergebnisse",
       "tooltip-same-coder-conflict": "Derselbe Kodierer hat mehrere abweichende Ergebnisse",
       "tooltip-mixed-conflict": "Es gibt Abweichungen innerhalb eines Kodierers und zwischen Kodierern"
@@ -2542,10 +2590,12 @@
       "failed-to-apply": "Fehler beim Anwenden der Auflösungen",
       "no-decisions": "Keine Entscheidungen zum Anwenden ausgewählt",
       "no-decision-for-item": "Keine Entscheidung für diese Variable ausgewählt",
-      "replay-failed": "Replay konnte für diese Antwort nicht geöffnet werden"
+      "replay-failed": "Replay konnte für diese Antwort nicht geöffnet werden",
+      "replay-code-not-in-decisions": "Der im Replay gewählte Code kommt in den verfügbaren Kodierergebnissen nicht vor."
     },
     "success": {
-      "resolutions-applied": "{{count}} Auflösung(en) erfolgreich angewendet"
+      "resolutions-applied": "{{count}} Auflösung(en) erfolgreich angewendet",
+      "replay-code-selected": "Replay-Code als Entscheidung ausgewählt"
     }
   },
   "applied-results-overview": {

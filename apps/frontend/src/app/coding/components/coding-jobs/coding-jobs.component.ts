@@ -14,6 +14,7 @@ import {
   debounceTime,
   distinctUntilChanged,
   firstValueFrom,
+  filter,
   Subject,
   Subscription
 } from 'rxjs';
@@ -96,7 +97,6 @@ interface BulkApplyResultItem {
   hasIssues: boolean;
   skipped: boolean;
   skippedReason?:
-  | 'coding-issues'
   | 'training-job'
   | 'not-completed'
   | 'freshness-stale';
@@ -742,6 +742,10 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return 'apply';
     }
 
+    if (job.status === 'review') {
+      return this.canReviewCodingJob(job) ? 'review' : 'results';
+    }
+
     if (
       this.canReviewCodingJob(job) &&
       (job.status === 'completed' ||
@@ -791,7 +795,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     return (
       this.showApplyActions &&
       this.canApplyResults &&
-      job.status === 'completed' &&
+      ['completed', 'review'].includes(job.status) &&
       this.isCodingJobFreshnessApplyable(job) &&
       !job.training?.id &&
       !job.training_id
@@ -1217,12 +1221,23 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       height: '85vh',
       maxHeight: '90vh',
       panelClass: 'coding-results-dialog-panel',
+      disableClose: true,
       data: {
         codingJob: job,
         workspaceId: workspaceId,
         canApplyResults: this.canApplyResults
       }
     });
+
+    dialogRef.backdropClick().subscribe(() => {
+      dialogRef.componentInstance.closeDialog();
+    });
+
+    dialogRef.keydownEvents()
+      .pipe(filter(event => event.key === 'Escape'))
+      .subscribe(() => {
+        dialogRef.componentInstance.closeDialog();
+      });
 
     dialogRef.afterClosed().subscribe(result => {
       if (result?.resultsApplied) {
@@ -1589,8 +1604,11 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const confirmMessage =
-      'Möchten Sie die Ergebnisse für alle Kodierjobs ohne Kodierungsprobleme anwenden? Jobs mit Problemen werden übersprungen.';
+    const confirmMessage = [
+      'Möchten Sie die Ergebnisse für alle geeigneten Kodierjobs anwenden?',
+      'Bei Jobs mit offenen Kodierungshinweisen werden gültige Antworten angewendet;',
+      'offene Hinweise bleiben zur manuellen Prüfung bestehen.'
+    ].join(' ');
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '500px',
@@ -1643,8 +1661,12 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             failedCount > 0 ?
               `, ${failedCount} Jobs mit Konflikten/Fehlern nicht angewendet` :
               '';
+          const reviewInfo =
+            result.totalSkippedReview > 0 ?
+              `, ${result.totalSkippedReview} Ergebnisse zur manuellen Prüfung offen` :
+              '';
           this.snackBar.open(
-            `Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${alreadyCodedInfo}${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}${failedInfo}`,
+            `Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${alreadyCodedInfo}${reviewInfo}${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}${failedInfo}`,
             'Schließen',
             { duration: 5000 }
           );

@@ -375,6 +375,90 @@ describe('CodingJobBackendService', () => {
         validationTaskStateServiceMock.invalidateWorkspace
       ).toHaveBeenCalledWith(1);
     });
+
+    it('should preview a job definition update refresh with the proposed definition', () => {
+      const update = { maxCodingCases: 4 };
+
+      service.previewJobDefinitionUpdateRefresh(1, 42, update).subscribe(response => {
+        expect(response.plannedCases).toBe(4);
+        expect(response.canApply).toBe(true);
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/1/coding/job-definitions/42/update-refresh-preview`
+      );
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual(update);
+      req.flush({
+        jobDefinitionId: 42,
+        existingJobsCount: 2,
+        staleJobsCount: 1,
+        existingCases: 5,
+        plannedCases: 4,
+        retainedCases: 4,
+        addedCases: 0,
+        removedCases: 1,
+        addedCodingTasks: 0,
+        removedCodingTasks: 1,
+        canApply: true
+      });
+    });
+
+    it('should apply a job definition update refresh and invalidate validation state', () => {
+      const update = { maxCodingCases: 4 };
+
+      service.applyJobDefinitionUpdateRefresh(1, 42, update).subscribe(response => {
+        expect(response.success).toBe(true);
+        expect(response.jobsCreated).toBe(2);
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/1/coding/job-definitions/42/update-refresh-apply`
+      );
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual(update);
+      req.flush({
+        success: true,
+        message: 'updated',
+        jobsCreated: 2,
+        preview: {
+          jobDefinitionId: 42,
+          existingJobsCount: 2,
+          staleJobsCount: 1,
+          existingCases: 5,
+          plannedCases: 4,
+          retainedCases: 4,
+          addedCases: 0,
+          removedCases: 1,
+          addedCodingTasks: 0,
+          removedCodingTasks: 1,
+          canApply: true
+        }
+      });
+      expect(
+        validationTaskStateServiceMock.invalidateWorkspace
+      ).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('getCodingIncompleteVariables', () => {
+    it('should pass the excluded job definition id when loading availability', () => {
+      service
+        .getCodingIncompleteVariables(1, 'Unit 1', false, true, 55)
+        .subscribe(response => {
+          expect(response).toEqual([]);
+        });
+
+      const req = httpMock.expectOne(request => request.url ===
+          `${mockServerUrl}admin/workspace/1/coding/incomplete-variables` &&
+        request.params.get('unitName') === 'Unit 1' &&
+        request.params.get('trainingRequired') === 'false' &&
+        request.params.get('includeDeriveErrorOnly') === 'true' &&
+        request.params.get('excludeJobDefinitionId') === '55' &&
+        request.params.has('_t'));
+      expect(req.request.method).toBe('GET');
+      req.flush([]);
+    });
   });
 
   describe('auth token override', () => {
@@ -408,6 +492,44 @@ describe('CodingJobBackendService', () => {
       );
       expect(req.request.method).toBe('GET');
       req.flush({ total: 1, firstReplayUrl: 'http://replay.url' });
+    });
+
+    it('should submit coding jobs for review through the coder endpoint', () => {
+      service.submitCodingJobForReview(47, 123).subscribe(job => {
+        expect(job).toEqual(
+          expect.objectContaining({
+            id: 123,
+            workspace_id: 47,
+            status: 'review'
+          })
+        );
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}wsg-admin/workspace/47/coding-job/123/submit-review`
+      );
+      expect(req.request.method).toBe('POST');
+      req.flush({
+        id: 123,
+        workspace_id: 47,
+        status: 'review'
+      });
+    });
+
+    it.each([
+      ['pauseCodingJob', 'pause'],
+      ['resumeCodingJob', 'resume'],
+      ['submitCodingJob', 'submit']
+    ] as const)('should use the %s endpoint with auth token override', (methodName, path) => {
+      service[methodName](47, 123, 'url-token').subscribe();
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}wsg-admin/workspace/47/coding-job/123/${path}`
+      );
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({});
+      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
+      req.flush({});
     });
 
     it('should use the supplied auth token when saving coding progress', () => {

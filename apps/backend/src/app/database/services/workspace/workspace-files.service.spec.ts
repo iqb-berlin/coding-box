@@ -129,6 +129,243 @@ describe('WorkspaceFilesService.handleFile', () => {
   });
 });
 
+describe('WorkspaceFilesService coding scheme freshness', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const createCodingScheme = (
+    options: {
+      processing?: string[];
+      codeModel?: string;
+      manualInstruction?: string;
+    } = {}
+  ): string => JSON.stringify({
+    version: '3.4',
+    variableCodings: [
+      {
+        id: 'VAR_A',
+        alias: 'var_a',
+        sourceType: 'BASE',
+        processing: options.processing || [],
+        codeModel: options.codeModel || 'MANUAL_AND_RULES',
+        codes: [
+          {
+            id: 1,
+            score: 1,
+            manualInstruction: options.manualInstruction || '<p>old</p>',
+            ruleSets: [
+              {
+                rules: [
+                  {
+                    method: 'MATCH',
+                    parameters: ['A']
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  });
+
+  const createVocsFile = (data: string): FileIo => ({
+    fieldname: 'files',
+    originalname: 'UNIT_A.vocs',
+    encoding: '7bit',
+    mimetype: 'application/octet-stream',
+    buffer: Buffer.from(data),
+    size: Buffer.byteLength(data)
+  });
+
+  const mockFileUploadRepository = {
+    create: jest.fn((value: unknown) => value),
+    createQueryBuilder: jest.fn(),
+    find: jest.fn(),
+    findOne: jest.fn(),
+    upsert: jest.fn().mockResolvedValue(undefined)
+  };
+  const mockCodingFreshnessService = {
+    markUnitsStaleAfterCodingSchemeChange: jest.fn().mockResolvedValue(undefined)
+  };
+
+  function makeService(): WorkspaceFilesService {
+    return new WorkspaceFilesService(
+      mockFileUploadRepository as unknown as CtorParams[0],
+      {} as unknown as CtorParams[1],
+      {} as unknown as CtorParams[2],
+      {} as unknown as CtorParams[3],
+      {} as unknown as CtorParams[4],
+      {} as unknown as CtorParams[5],
+      {} as unknown as CtorParams[6],
+      {} as unknown as CtorParams[7],
+      {} as unknown as CtorParams[8],
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
+      undefined,
+      mockCodingFreshnessService as unknown as CtorParams[13]
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('marks auto-coding and manual coding stale after coding scheme rule changes', async () => {
+    const service = makeService();
+    const oldData = createCodingScheme({ processing: [] });
+    const newData = createCodingScheme({ processing: ['IGNORE_CASE'] });
+    mockFileUploadRepository.findOne.mockResolvedValue({
+      file_id: 'UNIT_A.VOCS',
+      data: oldData
+    });
+
+    await (
+      service as unknown as {
+        handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
+      }
+    ).handleOctetStreamFile(1, createVocsFile(newData), true);
+
+    expect(mockCodingFreshnessService.markUnitsStaleAfterCodingSchemeChange)
+      .toHaveBeenCalledWith(1, {
+        autoCodingSchemeRefs: ['UNIT_A'],
+        manualCodingSchemeRefs: ['UNIT_A']
+      });
+  });
+
+  it('marks auto-coding and manual coding stale after coding scheme code model changes', async () => {
+    const service = makeService();
+    const oldData = createCodingScheme({ codeModel: 'MANUAL_ONLY' });
+    const newData = createCodingScheme({ codeModel: 'MANUAL_AND_RULES' });
+    mockFileUploadRepository.findOne.mockResolvedValue({
+      file_id: 'UNIT_A.VOCS',
+      data: oldData
+    });
+
+    await (
+      service as unknown as {
+        handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
+      }
+    ).handleOctetStreamFile(1, createVocsFile(newData), true);
+
+    expect(mockCodingFreshnessService.markUnitsStaleAfterCodingSchemeChange)
+      .toHaveBeenCalledWith(1, {
+        autoCodingSchemeRefs: ['UNIT_A'],
+        manualCodingSchemeRefs: ['UNIT_A']
+      });
+  });
+
+  it('marks only manual coding stale after instruction-only coding scheme changes', async () => {
+    const service = makeService();
+    const oldData = createCodingScheme({ manualInstruction: '<p>old</p>' });
+    const newData = createCodingScheme({ manualInstruction: '<p>new</p>' });
+    mockFileUploadRepository.findOne.mockResolvedValue({
+      file_id: 'UNIT_A.VOCS',
+      data: oldData
+    });
+
+    await (
+      service as unknown as {
+        handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
+      }
+    ).handleOctetStreamFile(1, createVocsFile(newData), true);
+
+    expect(mockCodingFreshnessService.markUnitsStaleAfterCodingSchemeChange)
+      .toHaveBeenCalledWith(1, {
+        autoCodingSchemeRefs: [],
+        manualCodingSchemeRefs: ['UNIT_A']
+      });
+  });
+
+  it('does not mark coding freshness when coding scheme JSON is semantically unchanged', async () => {
+    const service = makeService();
+    const oldData = JSON.stringify({
+      version: '3.4',
+      variableCodings: [
+        {
+          id: 'VAR_A',
+          alias: 'var_a',
+          sourceType: 'BASE',
+          codes: [{ id: 1, manualInstruction: '<p>old</p>' }]
+        }
+      ]
+    });
+    const newData = JSON.stringify({
+      variableCodings: [
+        {
+          sourceType: 'BASE',
+          alias: 'var_a',
+          codes: [{ manualInstruction: '<p>old</p>', id: 1 }],
+          id: 'VAR_A'
+        }
+      ],
+      version: '3.4'
+    });
+    mockFileUploadRepository.findOne.mockResolvedValue({
+      file_id: 'UNIT_A.VOCS',
+      data: oldData
+    });
+
+    await (
+      service as unknown as {
+        handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
+      }
+    ).handleOctetStreamFile(1, createVocsFile(newData), true);
+
+    expect(mockCodingFreshnessService.markUnitsStaleAfterCodingSchemeChange)
+      .not.toHaveBeenCalled();
+  });
+
+  it('invalidates workspace file caches after Testcenter import writes files', async () => {
+    const service = makeService();
+    const conflictQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([])
+    };
+    const insertQueryBuilder = {
+      insert: jest.fn().mockReturnThis(),
+      into: jest.fn().mockReturnThis(),
+      values: jest.fn().mockReturnThis(),
+      orIgnore: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue(undefined)
+    };
+    mockFileUploadRepository.createQueryBuilder
+      .mockReturnValueOnce(conflictQueryBuilder)
+      .mockReturnValueOnce(insertQueryBuilder);
+    mockFileUploadRepository.find.mockResolvedValue([]);
+    const invalidateSpy = jest
+      .spyOn(
+        service as unknown as {
+          invalidateWorkspaceFileCaches: (workspaceId: number) => Promise<void>;
+        },
+        'invalidateWorkspaceFileCaches'
+      )
+      .mockResolvedValue(undefined);
+
+    await service.testCenterImport([
+      {
+        workspace_id: 1,
+        file_id: 'UNIT_A.VOCS',
+        filename: 'UNIT_A.VOCS',
+        file_type: 'Resource',
+        file_size: 12,
+        data: createCodingScheme()
+      }
+    ]);
+
+    expect(invalidateSpy).toHaveBeenCalledWith(1);
+  });
+});
+
 describe('WorkspaceFilesService.onModuleInit', () => {
   type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
 
@@ -422,7 +659,19 @@ describe('WorkspaceFilesService.findAllFileTypes', () => {
   };
 
   const mockFileUploadRepository = {
-    createQueryBuilder: jest.fn()
+    createQueryBuilder: jest.fn(),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn().mockReturnValue({
+          connect: jest.fn().mockResolvedValue(undefined),
+          startTransaction: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockResolvedValue(undefined),
+          commitTransaction: jest.fn().mockResolvedValue(undefined),
+          rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+          release: jest.fn().mockResolvedValue(undefined)
+        })
+      }
+    }
   };
 
   function makeService(): WorkspaceFilesService {
@@ -497,7 +746,19 @@ describe('WorkspaceFilesService.findFiles', () => {
   };
 
   const mockFileUploadRepository = {
-    createQueryBuilder: jest.fn()
+    createQueryBuilder: jest.fn(),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn().mockReturnValue({
+          connect: jest.fn().mockResolvedValue(undefined),
+          startTransaction: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockResolvedValue(undefined),
+          commitTransaction: jest.fn().mockResolvedValue(undefined),
+          rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+          release: jest.fn().mockResolvedValue(undefined)
+        })
+      }
+    }
   };
 
   const mockService = () => new WorkspaceFilesService(
@@ -533,6 +794,21 @@ describe('WorkspaceFilesService.findFiles', () => {
     expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
       'LOWER(file.filename) LIKE :extension',
       { extension: '%.vocs' }
+    );
+  });
+
+  it('should use a case-sensitive regex search when enabled', async () => {
+    const service = mockService();
+    await service.findFiles(1, {
+      page: 1,
+      limit: 20,
+      searchText: '^Unit_\\d+\\.xml$',
+      regexSearch: true
+    });
+
+    expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+      "(file.filename ~ :searchRegex OR file.file_type ~ :searchRegex OR TO_CHAR(file.created_at, 'DD.MM.YYYY HH24:MI') ~ :searchRegex)",
+      { searchRegex: '^Unit_\\d+\\.xml$' }
     );
   });
 });
@@ -629,7 +905,12 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
         sourceType: 'MANUAL',
         type: 'integer',
         deriveSources: ['B1'],
-        codes: [{ id: 1, label: 'Code 1', score: 1 }]
+        codes: [{
+          id: 1,
+          label: 'Code 1',
+          score: 1,
+          manualInstruction: '<p>Manual</p>'
+        }]
       },
       {
         id: 'DX',
@@ -645,6 +926,19 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
         sourceType: 'SUM_SCORE',
         type: 'number',
         codes: [{ id: 2, label: 'Code 2', score: 2 }]
+      },
+      {
+        id: 'G1',
+        alias: 'general_instruction_only',
+        sourceType: 'MANUAL',
+        type: 'string',
+        manualInstruction: '<p>General instruction only</p>',
+        codes: [{
+          id: 3,
+          label: 'Code 3',
+          score: 3,
+          manualInstruction: ''
+        }]
       },
       {
         id: 'N1',
@@ -785,7 +1079,7 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
     expect(sourceMap.get(getManualCodingScopeKey('UnitA', 'base_alias')))
       .toEqual(new Set(['derived_alias', 'xml_derived_alias']));
     expect(mockCacheService.set).toHaveBeenCalledWith(
-      'workspace_files:derived_variables_by_source:1',
+      'workspace_files:v2:derived_variables_by_source:1',
       {
         [getManualCodingScopeKey('UnitA', 'base_alias')]: [
           'derived_alias',
@@ -793,5 +1087,28 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
         ]
       }
     );
+  });
+
+  it('should cache variables with manual instructions by response alias', async () => {
+    const service = makeService();
+
+    const manualInstructionMap = await service.getManualInstructionVariableMap(1);
+
+    expect(manualInstructionMap.get('UnitA')).toEqual(new Set(['derived_alias']));
+    expect(mockCacheService.set).toHaveBeenCalledWith(
+      'workspace_files:v2:manual_instruction_variables:1',
+      {
+        UnitA: ['derived_alias']
+      }
+    );
+  });
+
+  it('should not treat variable-level instructions as selectable manual codes', async () => {
+    const service = makeService();
+
+    const manualInstructionMap = await service.getManualInstructionVariableMap(1);
+
+    expect(manualInstructionMap.get('UnitA'))
+      .not.toContain('general_instruction_only');
   });
 });

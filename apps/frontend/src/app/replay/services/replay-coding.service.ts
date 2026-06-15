@@ -32,6 +32,7 @@ export class ReplayCodingService {
   private translate = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
   private authToken?: string;
+  private readonly newCodeNeededOptionId = -2;
 
   codingScheme: CodingScheme | null = null;
   currentVariableId: string = '';
@@ -48,12 +49,14 @@ export class ReplayCodingService {
   isCodingJobFinalized: boolean = false;
   isCompletedJobReview: boolean = false;
   isReviewMode: boolean = false;
+  isCodingIssueReviewMode: boolean = false;
   hasSaveError: boolean = false;
   lastSaveError: string | null = null;
   private failedSaveKeys = new Set<string>();
   private rowMutationChains = new Map<string, Promise<void>>();
   private pendingRowMutations = new Set<Promise<void>>();
   private latestSelectionRevisionByKey = new Map<string, number>();
+  private latestRequestedSelectionByKey = new Map<string, SavedCode | null>();
   private selectionRevision = 0;
   private codingDataRunId = 0;
   currentCodingJobStatus: string | null = null;
@@ -79,12 +82,14 @@ export class ReplayCodingService {
     this.isCodingJobFinalized = false;
     this.isCompletedJobReview = false;
     this.isReviewMode = false;
+    this.isCodingIssueReviewMode = false;
     this.hasSaveError = false;
     this.lastSaveError = null;
     this.failedSaveKeys.clear();
     this.rowMutationChains.clear();
     this.pendingRowMutations.clear();
     this.latestSelectionRevisionByKey.clear();
+    this.latestRequestedSelectionByKey.clear();
     this.selectionRevision = 0;
     this.currentCodingJobStatus = null;
     this.showScore = false;
@@ -102,6 +107,21 @@ export class ReplayCodingService {
 
   async updateCodingJobStatus(workspaceId: number, jobId: number, status: 'active' | 'paused' | 'completed' | 'open') {
     if (this.isReviewMode) return Promise.resolve(undefined);
+    if (status === 'active') {
+      return firstValueFrom(
+        this.codingJobBackendService.resumeCodingJob(workspaceId, jobId, ...this.authTokenArg)
+      );
+    }
+    if (status === 'paused') {
+      return firstValueFrom(
+        this.codingJobBackendService.pauseCodingJob(workspaceId, jobId, ...this.authTokenArg)
+      );
+    }
+    if (status === 'completed') {
+      return firstValueFrom(
+        this.codingJobBackendService.submitCodingJob(workspaceId, jobId, ...this.authTokenArg)
+      );
+    }
     return firstValueFrom(
       this.codingJobBackendService.updateCodingJob(workspaceId, jobId, { status }, ...this.authTokenArg)
     );
@@ -129,7 +149,7 @@ export class ReplayCodingService {
     this.allowComments = codingJob.allowComments !== undefined ? codingJob.allowComments : true;
     this.suppressGeneralInstructions = codingJob.suppressGeneralInstructions || false;
     this.isCodingJobFinalized = status === 'results_applied';
-    this.isCompletedJobReview = status === 'completed' || status === 'results_applied';
+    this.isCompletedJobReview = status === 'review' || status === 'results_applied';
   }
 
   async loadSavedCodingProgress(workspaceId: number, jobId: number): Promise<void> {
@@ -138,6 +158,7 @@ export class ReplayCodingService {
     this.selectedCodes.clear();
     this.openUnitKeys.clear();
     this.notes.clear();
+    this.latestRequestedSelectionByKey.clear();
 
     try {
       const savedProgress = await firstValueFrom(
@@ -153,6 +174,9 @@ export class ReplayCodingService {
         if (partialCode?.id !== null && partialCode?.id !== undefined) {
           const fullCode = this.findCodeById(partialCode.id);
           const toStore: SavedCode = fullCode ? this.convertCodeToSavedCode(fullCode) : partialCode;
+          if (partialCode.codingIssueOption !== undefined && partialCode.codingIssueOption !== null) {
+            toStore.codingIssueOption = partialCode.codingIssueOption;
+          }
           this.selectedCodes.set(compositeKey, toStore);
           this.openUnitKeys.delete(compositeKey);
         }
@@ -238,12 +262,17 @@ export class ReplayCodingService {
           }
         }
 
+        const currentNotes = this.notes.get(compositeKey)?.trim();
         await firstValueFrom(
           this.codingJobBackendService.saveCodingProgress(workspaceId, jobId, {
             testPerson,
             unitId,
             variableId,
-            selectedCode: backendSelectedCode
+            selectedCode: backendSelectedCode,
+            ...(this.isCodingIssueReviewMode ? {
+              issueReview: true,
+              notes: currentNotes || undefined
+            } : {})
           }, ...authTokenArg)
         );
         if (this.isCurrentCodingContext(contextSnapshot)) {
@@ -280,7 +309,18 @@ export class ReplayCodingService {
         const unitId = parts[2];
         const variableId = parts[3];
 
-        savePromises.push(this.saveCodingProgress(workspaceId, jobId, testPerson, unitId, variableId, selectedCode));
+        if (this.isSelectedCodePersistable(compositeKey, selectedCode)) {
+          savePromises.push(
+            this.saveCodingProgress(
+              workspaceId,
+              jobId,
+              testPerson,
+              unitId,
+              variableId,
+              selectedCode
+            )
+          );
+        }
       }
     }
 
@@ -316,6 +356,7 @@ export class ReplayCodingService {
     const revision = this.nextSelectionRevision(compositeKey);
 
     if (event.code === null && event.codingIssueOption === null) {
+      this.latestRequestedSelectionByKey.set(compositeKey, null);
       if (this.codingJobId) {
         await this.saveCodingProgress(workspaceId, this.codingJobId, testPerson, unitId, event.variableId, null);
       }
@@ -342,9 +383,18 @@ export class ReplayCodingService {
       if (event.codingIssueOption) {
         normalizedCode.codingIssueOption = event.codingIssueOption.code;
       }
+      this.latestRequestedSelectionByKey.set(compositeKey, normalizedCode);
 
       if (this.codingJobId) {
-        await this.saveCodingProgress(workspaceId, this.codingJobId, testPerson, unitId, event.variableId, normalizedCode);
+        await this.saveCodingProgressIfSelectedCodePersistable(
+          compositeKey,
+          workspaceId,
+          this.codingJobId,
+          testPerson,
+          unitId,
+          event.variableId,
+          normalizedCode
+        );
       }
       if (!this.shouldApplySelectionMutation(compositeKey, revision, contextSnapshot)) {
         return null;
@@ -362,8 +412,17 @@ export class ReplayCodingService {
         description: codingIssueOption.description,
         codingIssueOption: codingIssueOption.code
       };
+      this.latestRequestedSelectionByKey.set(compositeKey, normalizedCode);
       if (this.codingJobId) {
-        await this.saveCodingProgress(workspaceId, this.codingJobId, testPerson, unitId, event.variableId, normalizedCode);
+        await this.saveCodingProgressIfSelectedCodePersistable(
+          compositeKey,
+          workspaceId,
+          this.codingJobId,
+          testPerson,
+          unitId,
+          event.variableId,
+          normalizedCode
+        );
       }
       if (!this.shouldApplySelectionMutation(compositeKey, revision, contextSnapshot)) {
         return null;
@@ -404,9 +463,7 @@ export class ReplayCodingService {
     if (!unitsData || !unitsData.units || unitsData.units.length === 0) return;
     const totalReplays = unitsData.units.length;
     const completedReplays = this.getCompletedCount(unitsData);
-    if (completedReplays === totalReplays) {
-      this.isCodingJobCompleted = true;
-    }
+    this.isCodingJobCompleted = completedReplays === totalReplays;
   }
 
   getCompletedCount(unitsData: UnitsReplay | null): number {
@@ -418,7 +475,7 @@ export class ReplayCodingService {
           unit.name || '',
           unit.variableId
         );
-        return this.selectedCodes.has(compositeKey);
+        return this.isUnitCodedByCompositeKey(compositeKey);
       }
       return false;
     }).length;
@@ -465,7 +522,8 @@ export class ReplayCodingService {
     testPerson: string,
     unitId: string,
     variableId: string,
-    notes: string
+    notes: string,
+    unitsData: UnitsReplay | null = null
   ): Promise<void> {
     const jobId = this.codingJobId;
     const authToken = this.authToken;
@@ -475,6 +533,7 @@ export class ReplayCodingService {
     if (this.isReviewMode) return;
 
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+    const selectionRevisionAtStart = this.latestSelectionRevisionByKey.get(compositeKey) ?? 0;
     const saveFailureKey = this.getSaveFailureKey('notes', compositeKey);
     const trimmedNotes = notes.trim();
     await this.enqueueRowMutation(compositeKey, async () => {
@@ -492,7 +551,8 @@ export class ReplayCodingService {
             testPerson,
             unitId,
             variableId,
-            notes: trimmedNotes || undefined
+            notes: trimmedNotes || undefined,
+            ...(this.isCodingIssueReviewMode ? { issueReview: true } : {})
           }, ...authTokenArg)
         );
         if (this.isCurrentCodingContext(contextSnapshot)) {
@@ -514,6 +574,21 @@ export class ReplayCodingService {
         throw error;
       }
     });
+
+    if (this.isCurrentCodingContext(contextSnapshot)) {
+      await this.syncNewCodeNeededProgressAfterNotes(
+        workspaceId,
+        jobId,
+        testPerson,
+        unitId,
+        variableId,
+        compositeKey,
+        selectionRevisionAtStart
+      );
+      if (unitsData) {
+        this.checkCodingJobCompletion(unitsData);
+      }
+    }
   }
 
   async saveCodingJobComment(workspaceId: number, comment: string): Promise<void> {
@@ -549,10 +624,9 @@ export class ReplayCodingService {
     if (!jobId || !workspaceId) return;
     if (this.isReviewMode) return;
     if (this.isCodingJobCompleted || this.isCompletedJobReview || this.isCodingJobFinalized) return;
-    this.codingJobBackendService.updateCodingJobKeepalive(
+    this.codingJobBackendService.pauseCodingJobKeepalive(
       workspaceId,
       jobId,
-      { status: 'paused' },
       ...this.authTokenArg
     );
   }
@@ -628,7 +702,7 @@ export class ReplayCodingService {
           unit.variableId
         );
 
-        if (!this.selectedCodes.has(compositeKey)) {
+        if (!this.isUnitCodedByCompositeKey(compositeKey)) {
           return i;
         }
       }
@@ -647,7 +721,100 @@ export class ReplayCodingService {
       unit.variableId
     );
 
-    return this.selectedCodes.has(compositeKey);
+    return this.isUnitCodedByCompositeKey(compositeKey);
+  }
+
+  private isUnitCodedByCompositeKey(compositeKey: string): boolean {
+    return this.isCompletedSelection(compositeKey, this.selectedCodes.get(compositeKey));
+  }
+
+  private isCompletedSelection(compositeKey: string, selectedCode: SavedCode | undefined): boolean {
+    if (!selectedCode) return false;
+    return !this.isNewCodeNeededSelection(selectedCode) || this.hasNewCodeNeededNote(compositeKey);
+  }
+
+  private isSelectedCodePersistable(compositeKey: string, selectedCode: SavedCode): boolean {
+    return this.isCompletedSelection(compositeKey, selectedCode);
+  }
+
+  private async saveCodingProgressIfSelectedCodePersistable(
+    compositeKey: string,
+    workspaceId: number,
+    jobId: number,
+    testPerson: string,
+    unitId: string,
+    variableId: string,
+    selectedCode: SavedCode
+  ): Promise<void> {
+    if (!this.isSelectedCodePersistable(compositeKey, selectedCode)) return;
+
+    await this.saveCodingProgress(
+      workspaceId,
+      jobId,
+      testPerson,
+      unitId,
+      variableId,
+      selectedCode
+    );
+  }
+
+  private isNewCodeNeededSelection(selectedCode: SavedCode): boolean {
+    return selectedCode.id === this.newCodeNeededOptionId ||
+      selectedCode.codingIssueOption === this.newCodeNeededOptionId;
+  }
+
+  private hasNewCodeNeededNote(compositeKey: string): boolean {
+    return !!this.notes.get(compositeKey)?.trim();
+  }
+
+  private async syncNewCodeNeededProgressAfterNotes(
+    workspaceId: number,
+    jobId: number,
+    testPerson: string,
+    unitId: string,
+    variableId: string,
+    compositeKey: string,
+    selectionRevisionAtStart: number
+  ): Promise<void> {
+    const latestSelectionRevision = this.latestSelectionRevisionByKey.get(compositeKey) ?? 0;
+    const didSelectionChange = latestSelectionRevision !== selectionRevisionAtStart;
+    const selectedCode = didSelectionChange ?
+      this.latestRequestedSelectionByKey.get(compositeKey) :
+      this.selectedCodes.get(compositeKey);
+    if (!selectedCode || !this.isNewCodeNeededSelection(selectedCode)) return;
+
+    const isPersistable = this.isSelectedCodePersistable(compositeKey, selectedCode);
+    const selectedCodeToSave = isPersistable ?
+      selectedCode :
+      this.getSelectionAfterNewCodeNeededNoteRemoval(selectedCode);
+    if (didSelectionChange && selectedCodeToSave === null) return;
+    if (selectedCodeToSave === undefined) return;
+
+    this.openUnitKeys.delete(compositeKey);
+    if (selectedCodeToSave !== null) {
+      this.selectedCodes.set(compositeKey, selectedCodeToSave);
+      this.latestRequestedSelectionByKey.set(compositeKey, selectedCodeToSave);
+    }
+    await this.saveCodingProgress(
+      workspaceId,
+      jobId,
+      testPerson,
+      unitId,
+      variableId,
+      selectedCodeToSave
+    );
+  }
+
+  private getSelectionAfterNewCodeNeededNoteRemoval(selectedCode: SavedCode): SavedCode | null | undefined {
+    if (selectedCode.codingIssueOption === this.newCodeNeededOptionId && selectedCode.id !== this.newCodeNeededOptionId) {
+      const selectionWithoutNewCodeNeeded = { ...selectedCode };
+      delete selectionWithoutNewCodeNeeded.codingIssueOption;
+      return {
+        ...selectionWithoutNewCodeNeeded
+      };
+    }
+
+    return selectedCode.id === this.newCodeNeededOptionId ? null : undefined;
   }
 
   getNextJumpableUnitIndex(unitsData: UnitsReplay | null, fromIndex: number): number {

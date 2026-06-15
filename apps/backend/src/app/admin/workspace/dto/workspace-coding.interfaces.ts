@@ -28,6 +28,9 @@ export interface DoubleCodedReviewItem {
   bookletName: string;
   givenAnswer: string;
   isResolved: boolean;
+  appliedCode: number | null;
+  appliedScore: number | null;
+  appliedComment: string | null;
   coderResults: Array<{
     coderId: number;
     coderName: string;
@@ -49,6 +52,14 @@ export interface DoubleCodedReviewResponse {
   total: number;
   page: number;
   limit: number;
+}
+
+export interface DoubleCodedResolutionDecision {
+  responseId: number;
+  selectedJobId?: number | null;
+  code?: number | null;
+  score?: number | null;
+  resolutionComment?: string;
 }
 
 export interface DoubleCodedResolutionResponse {

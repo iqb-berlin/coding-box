@@ -5,9 +5,7 @@
     </mat-icon>
     <div>
       <h2 mat-dialog-title>
-        {{ (preview.canApply
-          ? 'coding-job-definitions.refresh-dialog.title.apply'
-          : 'coding-job-definitions.refresh-dialog.title.blocked') | translate }}
+        {{ getApplyTitleKey() | translate }}
       </h2>
       <p class="definition-label">
         {{ 'coding-job-definitions.refresh-dialog.definition-label' | translate: { id: data.definitionId } }}
@@ -17,9 +15,7 @@
 
   <mat-dialog-content>
     <p class="intro">
-      {{ (preview.canApply
-        ? 'coding-job-definitions.refresh-dialog.intro.apply'
-        : 'coding-job-definitions.refresh-dialog.intro.blocked') | translate }}
+      {{ getIntroKey() | translate }}
     </p>
 
     @if (!preview.canApply) {
@@ -42,7 +38,7 @@
       </div>
       <div class="rule-item">
         <mat-icon>schema</mat-icon>
-        <span>{{ 'coding-job-definitions.refresh-dialog.rules.use-current-definition' | translate }}</span>
+        <span>{{ getDefinitionRuleKey() | translate }}</span>
       </div>
     </div>
 
@@ -103,7 +99,7 @@
     @if (preview.canApply) {
     <button mat-raised-button color="primary" type="button" (click)="confirm()">
       <mat-icon>sync</mat-icon>
-      {{ 'coding-job-definitions.refresh-dialog.confirm' | translate }}
+      {{ getConfirmKey() | translate }}
     </button>
     }
   </mat-dialog-actions>

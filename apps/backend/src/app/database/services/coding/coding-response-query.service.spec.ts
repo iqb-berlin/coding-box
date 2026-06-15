@@ -24,7 +24,9 @@ describe('CodingResponseQueryService', () => {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     getCount: jest.fn(),
+    addSelect: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
     skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
     getMany: jest.fn()
@@ -214,6 +216,52 @@ describe('CodingResponseQueryService', () => {
       });
       expect(mockQueryBuilder.skip).toHaveBeenCalledWith(10); // (page - 1) * limit
       expect(mockQueryBuilder.take).toHaveBeenCalledWith(10);
+    });
+
+    it('should sort globally by requested response column before pagination', async () => {
+      (statusConverter.statusStringToNumber as jest.Mock).mockReturnValue(5);
+      mockQueryBuilder.getCount.mockResolvedValue(2);
+
+      await service.getResponsesByStatus(1, 'CODING_COMPLETE', 'v2', 1, 100, 'score', 'desc');
+
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('response.score_v2', 'DESC');
+      expect(mockQueryBuilder.addOrderBy).toHaveBeenCalledWith('response.id', 'ASC');
+      expect(mockQueryBuilder.skip).toHaveBeenCalledWith(0);
+    });
+
+    it('should sort codedstatus through a selected alias before pagination', async () => {
+      (statusConverter.statusStringToNumber as jest.Mock).mockReturnValue(5);
+      mockQueryBuilder.getCount.mockResolvedValue(2);
+
+      await service.getResponsesByStatus(1, 'CODING_COMPLETE', 'v3', 1, 100, 'codedstatus', 'asc');
+
+      expect(mockQueryBuilder.addSelect).toHaveBeenCalledWith(
+        getEffectiveCodingStatusExpression('v3'),
+        'effective_coding_status_sort'
+      );
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('effective_coding_status_sort', 'ASC');
+      expect(mockQueryBuilder.addOrderBy).toHaveBeenCalledWith('response.id', 'ASC');
+    });
+
+    it('should normalize invalid version values before building sort expressions', async () => {
+      (statusConverter.statusStringToNumber as jest.Mock).mockReturnValue(5);
+      mockQueryBuilder.getCount.mockResolvedValue(2);
+
+      await service.getResponsesByStatus(
+        1,
+        'CODING_COMPLETE',
+        'v2); DROP TABLE response; --' as unknown as 'v1',
+        1,
+        100,
+        'score',
+        'desc'
+      );
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 = :status',
+        { status: 5 }
+      );
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('response.score_v1', 'DESC');
     });
 
     it('should return empty result for invalid status', async () => {

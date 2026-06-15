@@ -31,7 +31,7 @@ import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { ErrorMessages } from '../../models/error-messages.model';
 import { validateToken, isTestperson } from '../../utils/token-utils';
 import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
-import { UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.service';
+import { ReviewCodeSelection, UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.service';
 import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
 import { CodingJobCommentDialogComponent } from '../../../coding/components/coding-job-comment-dialog/coding-job-comment-dialog.component';
@@ -89,6 +89,7 @@ interface ReplayCodingServiceSnapshot {
   isCodingJobFinalized: boolean;
   isCompletedJobReview: boolean;
   isReviewMode: boolean;
+  isCodingIssueReviewMode: boolean;
   hasSaveError: boolean;
   lastSaveError: string | null;
   currentCodingJobStatus: string | null;
@@ -101,8 +102,10 @@ interface ReplayCodingJobSwitchSnapshot {
   authToken: string;
   workspaceId: number;
   isCodingMode: boolean;
+  isCodingDecisionMode: boolean;
   isBookletReplayMode: boolean;
   isReviewMode: boolean;
+  isCodingIssueReviewMode: boolean;
   unitsData: UnitsReplay | null;
   loadedCodingJobUnitsKey: string | null;
   codingProgressLoadedForJobKey: string | null;
@@ -168,8 +171,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   testPerson: string = '';
   unitId: string = '';
   isCodingMode: boolean = false;
+  isCodingDecisionMode: boolean = false;
   isBookletReplayMode: boolean = false; // for replays without coding features
   isReviewMode: boolean = false;
+  isCodingIssueReviewMode: boolean = false;
   currentUnitIndex: number = 0;
   totalUnits: number = 0;
   isWatermarkTruncated: boolean = false;
@@ -196,6 +201,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private replayTokenRefreshRunning = false;
   private codingJobWorkspaceNames = new Map<number, string>();
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
+  @ViewChild(CodeSelectorComponent) codeSelectorComponent: CodeSelectorComponent | undefined;
   @ViewChild('watermark')
   set watermarkRef(ref: ElementRef<HTMLElement> | undefined) {
     this.watermarkElement = ref ?? null;
@@ -213,6 +219,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   protected reloadKey: number = 0;
   workspaceId: number = 0;
   originResponseId: number | null = null;
+  protected reviewCodeSelections: ReviewCodeSelection[] = [];
   private watermarkElement: ElementRef<HTMLElement> | null = null;
   private watermarkObserver: ResizeObserver | null = null;
   private watermarkCheckPending: boolean = false;
@@ -402,6 +409,60 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  private deserializeReviewCodeSelections(value: unknown): ReviewCodeSelection[] {
+    if (typeof value !== 'string' || value.trim() === '') {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      return parsed
+        .map(item => this.normalizeReviewCodeSelection(item))
+        .filter((item): item is ReviewCodeSelection => item !== null);
+    } catch {
+      return [];
+    }
+  }
+
+  private normalizeReviewCodeSelection(value: unknown): ReviewCodeSelection | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const candidate = value as { code?: unknown; coderNames?: unknown };
+    const code = typeof candidate.code === 'number' ? candidate.code : Number(candidate.code);
+    const coderNames = Array.isArray(candidate.coderNames) ?
+      candidate.coderNames
+        .filter((coderName): coderName is string => typeof coderName === 'string' && coderName.trim().length > 0)
+        .map(coderName => coderName.trim()) :
+      [];
+
+    if (!Number.isFinite(code) || coderNames.length === 0) {
+      return null;
+    }
+
+    return {
+      code,
+      coderNames: [...new Set(coderNames)]
+    };
+  }
+
+  private getBooleanQueryParam(value: unknown): boolean | null {
+    if (value === true || value === 'true') {
+      return true;
+    }
+
+    if (value === false || value === 'false') {
+      return false;
+    }
+
+    return null;
+  }
+
   subscribeRouter(): void {
     this.routerSubscription = this.route.params
       ?.subscribe(async params => {
@@ -416,10 +477,20 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.codingService.setAuthToken(this.authToken);
         const workspace = this.workspaceId ? String(this.workspaceId) : undefined;
         this.isReviewMode = queryParams.mode === 'coding-review';
+        this.isCodingIssueReviewMode = queryParams.mode === 'coding-issue-review';
+        this.isCodingDecisionMode = queryParams.mode === 'coding-decision';
         this.codingService.isReviewMode = this.isReviewMode;
-        this.isCodingMode = queryParams.mode === 'coding' || this.isReviewMode;
+        this.codingService.isCodingIssueReviewMode = this.isCodingIssueReviewMode;
+        this.isCodingMode = queryParams.mode === 'coding' ||
+          this.isReviewMode ||
+          this.isCodingIssueReviewMode ||
+          this.isCodingDecisionMode;
         this.isBookletReplayMode = queryParams.mode === 'booklet-view' || queryParams.mode === 'booklet';
         this.originResponseId = queryParams.originResponseId ? Number(queryParams.originResponseId) : null;
+        this.reviewCodeSelections = this.deserializeReviewCodeSelections(queryParams.reviewCodeSelections);
+        const showScore = this.getBooleanQueryParam(queryParams.showScore);
+        const allowComments = this.getBooleanQueryParam(queryParams.allowComments);
+        const suppressGeneralInstructions = this.getBooleanQueryParam(queryParams.suppressGeneralInstructions);
         if (this.isCodingMode || this.isBookletReplayMode) {
           let deserializedUnits = null as UnitsReplay | null;
 
@@ -476,8 +547,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           if (deserializedUnits) {
             this.unitsData = deserializedUnits;
             // Check if this is a review session (contains " - Review: " in name)
-            this.isReviewMode = this.isReviewMode || this.unitsData.name.includes(' - Review: ');
+            this.isReviewMode = this.isReviewMode || (
+              !this.isCodingIssueReviewMode && this.unitsData.name.includes(' - Review: ')
+            );
             this.codingService.isReviewMode = this.isReviewMode;
+            this.codingService.isCodingIssueReviewMode = this.isCodingIssueReviewMode;
             this.currentUnitIndex = deserializedUnits.currentUnitIndex;
             this.totalUnits = deserializedUnits.units.length;
             const unitAny = (this.unitsData.units[this.currentUnitIndex] || {}) as unknown as {
@@ -506,6 +580,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                   this.codingProgressLoadedForJobKey = jobKey;
                 }
                 if (!this.isReviewMode &&
+                  !this.isCodingIssueReviewMode &&
                   !this.codingService.isCompletedJobReview &&
                   !this.codingService.isCodingJobFinalized &&
                   this.activeStatusUpdatedForJobKey !== jobKey) {
@@ -521,6 +596,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               }
             }
           }
+        }
+
+        if (suppressGeneralInstructions !== null) {
+          this.codingService.suppressGeneralInstructions = suppressGeneralInstructions;
+        }
+        if (showScore !== null) {
+          this.codingService.showScore = showScore;
+        }
+        if (allowComments !== null) {
+          this.codingService.allowComments = allowComments;
         }
 
         if (this.authToken) {
@@ -880,6 +965,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         const hashParams = new URLSearchParams(url.hash.slice(hashQueryStart + 1));
         hashParams.delete('auth');
         hashParams.delete('unitsData');
+        hashParams.delete('reviewCodeSelections');
 
         const query = hashParams.toString();
         url.hash = query ? `${hashPath}?${query}` : hashPath;
@@ -887,6 +973,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
       url.searchParams.delete('auth');
       url.searchParams.delete('unitsData');
+      url.searchParams.delete('reviewCodeSelections');
 
       return url.toString();
     } catch (error) {
@@ -933,7 +1020,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   async handleUnitChanged(unit: UnitsReplayUnit): Promise<void> {
     if (this.isCodingInteractionBlockedByReAuthentication()) return;
     if (this.isSwitchingCodingJob) return;
+    if (!this.canLeaveCurrentCodingCase()) return;
     await this.applyUnitChanged(unit);
+  }
+
+  private canLeaveCurrentCodingCase(): boolean {
+    if (this.isCodingReadOnly()) return true;
+    return this.codeSelectorComponent?.canLeaveCurrentUnit() ?? true;
   }
 
   private async applyUnitChanged(unit: UnitsReplayUnit): Promise<void> {
@@ -1016,6 +1109,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.page = undefined;
     this.responses = undefined;
     this.serverTimings = null;
+    this.reviewCodeSelections = [];
     this.codingService.resetCodingData();
   }
 
@@ -1095,6 +1189,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         variableId: event.variableId,
         code: savedCode.code,
         score: savedCode.score ?? null,
+        notes: this.codingService.getNotes(this.testPerson, this.unitId, event.variableId),
         responseId: this.originResponseId
       }, '*');
 
@@ -1118,7 +1213,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.testPerson,
       this.unitId,
       this.codingService.currentVariableId,
-      notes
+      notes,
+      this.unitsData
     ).catch(() => undefined);
   }
 
@@ -1136,14 +1232,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   isCodingReadOnly(): boolean {
     return this.isSwitchingCodingJob ||
-      this.appService.needsReAuthentication ||
+      (!this.isCodingDecisionMode && this.appService.needsReAuthentication) ||
       this.isReviewMode ||
-      this.codingService.isCompletedJobReview ||
+      (this.codingService.isCompletedJobReview && !this.isCodingIssueReviewMode) ||
       this.codingService.isCodingJobFinalized;
   }
 
   isCodingInteractionBlockedByReAuthentication(): boolean {
-    return this.isCodingMode && !this.isReviewMode && this.appService.needsReAuthentication;
+    return this.isCodingMode &&
+      !this.isReviewMode &&
+      !this.isCodingDecisionMode &&
+      this.appService.needsReAuthentication;
   }
 
   isSubmitCodingJobDisabled(): boolean {
@@ -1173,7 +1272,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   canSwitchAssignedCodingJobs(): boolean {
-    return this.isCodingMode && !this.isReviewMode;
+    return this.isCodingMode &&
+      !this.isReviewMode &&
+      !this.isCodingIssueReviewMode &&
+      !this.isCodingDecisionMode;
   }
 
   isCodingJobSwitchDisabled(): boolean {
@@ -1738,8 +1840,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       authToken: this.authToken,
       workspaceId: this.workspaceId,
       isCodingMode: this.isCodingMode,
+      isCodingDecisionMode: this.isCodingDecisionMode,
       isBookletReplayMode: this.isBookletReplayMode,
       isReviewMode: this.isReviewMode,
+      isCodingIssueReviewMode: this.isCodingIssueReviewMode,
       unitsData: this.unitsData,
       loadedCodingJobUnitsKey: this.loadedCodingJobUnitsKey,
       codingProgressLoadedForJobKey: this.codingProgressLoadedForJobKey,
@@ -1773,6 +1877,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         isCodingJobFinalized: this.codingService.isCodingJobFinalized,
         isCompletedJobReview: this.codingService.isCompletedJobReview,
         isReviewMode: this.codingService.isReviewMode,
+        isCodingIssueReviewMode: this.codingService.isCodingIssueReviewMode,
         hasSaveError: this.codingService.hasSaveError,
         lastSaveError: this.codingService.lastSaveError,
         currentCodingJobStatus: this.codingService.currentCodingJobStatus,
@@ -1789,8 +1894,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.authToken = snapshot.authToken;
     this.workspaceId = snapshot.workspaceId;
     this.isCodingMode = snapshot.isCodingMode;
+    this.isCodingDecisionMode = snapshot.isCodingDecisionMode;
     this.isBookletReplayMode = snapshot.isBookletReplayMode;
     this.isReviewMode = snapshot.isReviewMode;
+    this.isCodingIssueReviewMode = snapshot.isCodingIssueReviewMode;
     this.unitsData = snapshot.unitsData;
     this.loadedCodingJobUnitsKey = snapshot.loadedCodingJobUnitsKey;
     this.codingProgressLoadedForJobKey = snapshot.codingProgressLoadedForJobKey;
@@ -1827,6 +1934,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.codingService.isCodingJobFinalized = snapshot.isCodingJobFinalized;
     this.codingService.isCompletedJobReview = snapshot.isCompletedJobReview;
     this.codingService.isReviewMode = snapshot.isReviewMode;
+    this.codingService.isCodingIssueReviewMode = snapshot.isCodingIssueReviewMode;
     this.codingService.hasSaveError = snapshot.hasSaveError;
     this.codingService.lastSaveError = snapshot.lastSaveError;
     this.codingService.currentCodingJobStatus = snapshot.currentCodingJobStatus;
@@ -1878,9 +1986,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.codingService.setAuthToken(authToken);
     this.workspaceId = job.workspace_id;
     this.isCodingMode = true;
+    this.isCodingDecisionMode = false;
     this.isBookletReplayMode = false;
     this.isReviewMode = false;
     this.codingService.isReviewMode = false;
+    this.isCodingIssueReviewMode = false;
+    this.codingService.isCodingIssueReviewMode = false;
     this.unitsData = unitsData;
     this.loadedCodingJobUnitsKey = this.getCodingJobUnitsCacheKey(job.workspace_id, job.id, onlyOpen);
     this.totalUnits = unitsData.units.length;

@@ -137,12 +137,16 @@ describe('ReplayComponent', () => {
     getCodingJobs: jest.Mock;
     getCodingJobUnits: jest.Mock;
     updateCodingJob: jest.Mock;
+    pauseCodingJob: jest.Mock;
+    resumeCodingJob: jest.Mock;
+    submitCodingJob: jest.Mock;
     getCodingProgress: jest.Mock;
     getCodingNotes: jest.Mock;
     getCodingJob: jest.Mock;
     saveCodingProgress: jest.Mock;
     saveCodingNotes: jest.Mock;
     updateCodingJobKeepalive: jest.Mock;
+    pauseCodingJobKeepalive: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -169,12 +173,16 @@ describe('ReplayComponent', () => {
       })),
       getCodingJobUnits: jest.fn().mockReturnValue(of([])),
       updateCodingJob: jest.fn().mockReturnValue(of({})),
+      pauseCodingJob: jest.fn().mockReturnValue(of({})),
+      resumeCodingJob: jest.fn().mockReturnValue(of({})),
+      submitCodingJob: jest.fn().mockReturnValue(of({})),
       getCodingProgress: jest.fn().mockReturnValue(of({})),
       getCodingNotes: jest.fn().mockReturnValue(of({})),
       getCodingJob: jest.fn().mockReturnValue(of({})),
       saveCodingProgress: jest.fn().mockReturnValue(of({})),
       saveCodingNotes: jest.fn().mockReturnValue(of({})),
-      updateCodingJobKeepalive: jest.fn()
+      updateCodingJobKeepalive: jest.fn(),
+      pauseCodingJobKeepalive: jest.fn()
     };
 
     await TestBed.configureTestingModule({
@@ -217,6 +225,36 @@ describe('ReplayComponent', () => {
     expect(component.player).toBe('player data');
     expect(component.unitDef).toBe('unitDef data');
     expect(component.responses).toBeDefined();
+  });
+
+  it('should apply display options from query params', async () => {
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      workspaceId: '47',
+      showScore: 'true',
+      allowComments: 'false',
+      suppressGeneralInstructions: 'true'
+    };
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(component.codingService.showScore).toBe(true);
+    expect(component.codingService.allowComments).toBe(false);
+    expect(component.codingService.suppressGeneralInstructions).toBe(true);
   });
 
   it('should keep server timings from replay payload', () => {
@@ -318,7 +356,7 @@ describe('ReplayComponent', () => {
     window.history.pushState(
       {},
       '',
-      `/#/replay/login@@group@BOOKLET_A/UNIT_1/0/0?auth=secret&mode=booklet-view&unitsData=${unitsData}`
+      `/#/replay/login@@group@BOOKLET_A/UNIT_1/0/0?auth=secret&mode=booklet-view&unitsData=${unitsData}&reviewCodeSelections=${encodeURIComponent('[{"code":1,"coderNames":["Coder A"]}]')}`
     );
 
     replayBackendService.storeReplayStatistics.mockClear();
@@ -336,6 +374,7 @@ describe('ReplayComponent', () => {
     const replayUrl = replayBackendService.storeReplayStatistics.mock.calls[0][1].replayUrl as string;
     expect(replayUrl).not.toContain('auth=');
     expect(replayUrl).not.toContain('unitsData=');
+    expect(replayUrl).not.toContain('reviewCodeSelections=');
     expect(replayUrl.length).toBeLessThan(2000);
   });
 
@@ -370,6 +409,7 @@ describe('ReplayComponent', () => {
     component.testPerson = 'valid@test@person';
     component.unitId = 'unit-123';
     component.workspaceId = 5;
+    jest.spyOn(component.codingService, 'getNotes').mockReturnValue('Replay note');
     jest.spyOn(component.codingService, 'handleCodeSelected').mockResolvedValue({
       id: 7,
       code: '7',
@@ -393,6 +433,7 @@ describe('ReplayComponent', () => {
       variableId: 'VAR1',
       code: '7',
       score: 2,
+      notes: 'Replay note',
       responseId: 99
     }, '*');
   });
@@ -413,7 +454,8 @@ describe('ReplayComponent', () => {
       'valid@test@person',
       'unit-123',
       'VAR1',
-      'note'
+      'note',
+      null
     );
   });
 
@@ -538,6 +580,34 @@ describe('ReplayComponent', () => {
     expect(component.page).toBe('1');
     expect(component.anchor).toBe('ANCHOR_2');
     expect(component.codingService.currentVariableId).toBe('VAR_2');
+  });
+
+  it('should not change coding units when the code selector blocks leaving the current case', async () => {
+    const canLeaveCurrentUnit = jest.fn().mockReturnValue(false);
+    const privateComponent = component as unknown as {
+      codeSelectorComponent: { canLeaveCurrentUnit: jest.Mock };
+    };
+
+    component.isCodingMode = true;
+    component.unitId = 'UNIT_1';
+    component.page = '0';
+    component.codingService.currentVariableId = 'VAR_1';
+    privateComponent.codeSelectorComponent = { canLeaveCurrentUnit };
+
+    await component.handleUnitChanged({
+      id: 2,
+      name: 'UNIT_2',
+      alias: null,
+      bookletId: 0,
+      variableId: 'VAR_2',
+      variableAnchor: 'VAR_2',
+      variablePage: '1'
+    });
+
+    expect(canLeaveCurrentUnit).toHaveBeenCalled();
+    expect(component.unitId).toBe('UNIT_1');
+    expect(component.page).toBe('0');
+    expect(component.codingService.currentVariableId).toBe('VAR_1');
   });
 
   it('should ignore external unit changes while a coding job switch is running', async () => {
@@ -1011,6 +1081,7 @@ describe('ReplayComponent', () => {
       otherCoders: []
     }]));
     codingJobBackendServiceMock.updateCodingJob.mockClear();
+    codingJobBackendServiceMock.resumeCodingJob.mockClear();
 
     fixture.destroy();
     fixture = TestBed.createComponent(ReplayComponent);
@@ -1027,6 +1098,107 @@ describe('ReplayComponent', () => {
     expect(component.isCodingReadOnly()).toBe(true);
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', false);
     expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
+  });
+
+  it('should load coding-issue-review mode as editable without coding job status side effects', async () => {
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding-issue-review',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'unit-123',
+      unitAlias: 'Unit 123',
+      variableId: 'VAR1',
+      variableAnchor: 'VAR1',
+      bookletName: 'Booklet 1',
+      personLogin: 'valid',
+      personCode: 'test',
+      personGroup: '',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+    codingJobBackendServiceMock.getCodingJob.mockReturnValue(of({ status: 'completed' }));
+    codingJobBackendServiceMock.updateCodingJob.mockClear();
+    codingJobBackendServiceMock.resumeCodingJob.mockClear();
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(component.isCodingMode).toBe(true);
+    expect(component.isReviewMode).toBe(false);
+    expect(component.isCodingIssueReviewMode).toBe(true);
+    expect(component.codingService.isReviewMode).toBe(false);
+    expect(component.codingService.isCompletedJobReview).toBe(false);
+    expect(component.isCodingReadOnly()).toBe(false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', false);
+    expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
+  });
+
+  it('should load coding-decision mode as editable without coding job access side effects', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding-decision',
+      originResponseId: '77',
+      workspaceId: '47',
+      reviewCodeSelections: JSON.stringify([
+        { code: 1, coderNames: ['Coder A', 'Coder B', 'Coder A'] },
+        { code: '2', coderNames: ['Coder C'] },
+        { code: 'invalid', coderNames: ['Coder D'] }
+      ])
+    };
+    appService.needsReAuthentication = true;
+    codingJobBackendServiceMock.getCodingJobUnits.mockClear();
+    codingJobBackendServiceMock.updateCodingJob.mockClear();
+    codingJobBackendServiceMock.resumeCodingJob.mockClear();
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(component.isCodingMode).toBe(true);
+    expect(component.isCodingDecisionMode).toBe(true);
+    expect(component.isReviewMode).toBe(false);
+    expect(component.isCodingIssueReviewMode).toBe(false);
+    expect(component.originResponseId).toBe(77);
+    expect((component as unknown as { reviewCodeSelections: unknown }).reviewCodeSelections).toEqual([
+      { code: 1, coderNames: ['Coder A', 'Coder B'] },
+      { code: 2, coderNames: ['Coder C'] }
+    ]);
+    expect(component.isCodingReadOnly()).toBe(false);
+    expect(component.isCodingInteractionBlockedByReAuthentication()).toBe(false);
+    expect(component.canSwitchAssignedCodingJobs()).toBe(false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
   });
 
   it('should reuse coding job units loaded from query params during replay navigation', async () => {
@@ -1579,7 +1751,7 @@ describe('ReplayComponent', () => {
       expect(window.location.href).toContain('codingJobId=88');
     });
 
-    it('keeps switched completed coding jobs read-only', async () => {
+    it('keeps switched completed coding jobs editable', async () => {
       const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
       const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
       const handleCodeSelectedSpy = jest.spyOn(component.codingService, 'handleCodeSelected');
@@ -1603,6 +1775,7 @@ describe('ReplayComponent', () => {
       appService.createOwnToken.mockReturnValueOnce(of('workspace-token'));
       codingJobBackendServiceMock.getCodingProgress.mockReturnValueOnce(throwError(() => new Error('Progress error')));
       codingJobBackendServiceMock.updateCodingJob.mockClear();
+      codingJobBackendServiceMock.resumeCodingJob.mockClear();
       codingJobBackendServiceMock.getCodingJobUnits.mockReturnValueOnce(of([{
         responseId: 1,
         unitName: 'UNIT_COMPLETED',
@@ -1622,9 +1795,14 @@ describe('ReplayComponent', () => {
       await privateComponent.onCodingJobSelectionChange('48:88');
 
       expect(saveAllSpy).toHaveBeenCalledWith(47, 77);
-      expect(component.codingService.isCompletedJobReview).toBe(true);
-      expect(component.isCodingReadOnly()).toBe(true);
+      expect(component.codingService.isCompletedJobReview).toBe(false);
+      expect(component.isCodingReadOnly()).toBe(false);
       expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.resumeCodingJob).toHaveBeenCalledWith(
+        48,
+        88,
+        'workspace-token'
+      );
 
       await component.onCodeSelected({
         variableId: 'VAR_COMPLETED',
@@ -1633,10 +1811,10 @@ describe('ReplayComponent', () => {
           label: 'Code 1'
         }
       });
-      component.onNotesChanged('should not be saved');
+      component.onNotesChanged('can be saved again');
 
-      expect(handleCodeSelectedSpy).not.toHaveBeenCalled();
-      expect(saveNotesSpy).not.toHaveBeenCalled();
+      expect(handleCodeSelectedSpy).toHaveBeenCalled();
+      expect(saveNotesSpy).toHaveBeenCalled();
     });
 
     it('rolls back to the previous coding job when the target replay payload fails', async () => {
@@ -1718,7 +1896,7 @@ describe('ReplayComponent', () => {
       expect(component.codingService.currentVariableId).toBe('VAR_CURRENT');
       expect(component.codingService.selectedCodes.get('current-key')).toEqual({ id: 1, code: '1', label: 'Current Code' });
       expect(component.codingService.notes.get('current-note-key')).toBe('Current Note');
-      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalledWith(48, 88, { status: 'active' }, targetToken);
+      expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalledWith(48, 88, targetToken);
       expect(snackBar.open).toHaveBeenCalledWith(
         'replay.job-switcher.switch-error',
         'close',

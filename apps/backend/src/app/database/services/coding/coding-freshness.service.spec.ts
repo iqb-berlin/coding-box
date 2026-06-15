@@ -50,6 +50,21 @@ describe('CodingFreshnessService', () => {
     );
   });
 
+  const mockCodingSchemeChangeQueries = (
+    unitIds: number[],
+    revision: number
+  ): void => {
+    (connection.query as jest.Mock).mockImplementation((sql: string) => {
+      if (sql.includes('WITH unit_candidates')) {
+        return Promise.resolve(unitIds.map(id => ({ id })));
+      }
+      if (sql.includes('workspace_test_results_revision')) {
+        return Promise.resolve([{ revision }]);
+      }
+      return Promise.resolve([]);
+    });
+  };
+
   it('summarizes freshness rows by version and state', async () => {
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 7 }]);
     (freshnessRepository.createQueryBuilder as jest.Mock).mockReturnValue(
@@ -262,6 +277,118 @@ describe('CodingFreshnessService', () => {
     );
   });
 
+  it('marks coding scheme rule changes stale for auto-coding and manual review', async () => {
+    mockCodingSchemeChangeQueries([10], 11);
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '3' }])
+    });
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: true, v2: true, v3: true })
+    });
+    const unitPresenceQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([
+        {
+          unitId: 10,
+          v1: true,
+          v2: false,
+          v3: false
+        }
+      ])
+    });
+
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(responseCountsQb)
+      .mockReturnValueOnce(workspacePresenceQb)
+      .mockReturnValueOnce(unitPresenceQb);
+
+    await service.markUnitsStaleAfterCodingSchemeChange(1, {
+      autoCodingSchemeRefs: ['SEPARATE_SCHEME']
+    });
+
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('codingschemeref'),
+      [1, ['SEPARATE_SCHEME']]
+    );
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v1',
+          state: 'STALE',
+          reason: 'CODING_SCHEME_CHANGED',
+          affected_response_count: 3,
+          source_revision: 11
+        }),
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v3',
+          state: 'PENDING',
+          reason: 'CODING_SCHEME_CHANGED'
+        }),
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v2',
+          state: 'MANUAL_REVIEW_REQUIRED',
+          reason: 'CODING_SCHEME_CHANGED'
+        })
+      ]),
+      ['workspace_id', 'unit_id', 'version']
+    );
+    expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0])
+      .toHaveLength(3);
+    expect(connection.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('UPDATE coding_job cj'),
+      [1, [10], 'stale_source', 'CODING_SCHEME_CHANGED']
+    );
+  });
+
+  it('marks coding scheme instruction-only changes for manual review only', async () => {
+    mockCodingSchemeChangeQueries([10], 12);
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '3' }])
+    });
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: true, v2: false, v3: false })
+    });
+    const unitPresenceQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([
+        {
+          unitId: 10,
+          v1: true,
+          v2: false,
+          v3: false
+        }
+      ])
+    });
+
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(responseCountsQb)
+      .mockReturnValueOnce(workspacePresenceQb)
+      .mockReturnValueOnce(unitPresenceQb);
+
+    await service.markUnitsStaleAfterCodingSchemeChange(1, {
+      manualCodingSchemeRefs: ['UNIT_A']
+    });
+
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v2',
+          state: 'MANUAL_REVIEW_REQUIRED',
+          reason: 'CODING_SCHEME_CHANGED',
+          affected_response_count: 3,
+          source_revision: 12
+        })
+      ],
+      ['workspace_id', 'unit_id', 'version']
+    );
+    expect(connection.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('UPDATE coding_job cj'),
+      [1, [10], 'review_required', 'CODING_SCHEME_CHANGED']
+    );
+  });
+
   it('does not mark excluded imported units as pending', async () => {
     const workspaceExclusionService = {
       resolveExclusionsForQueries: jest.fn().mockResolvedValue({
@@ -362,6 +489,39 @@ describe('CodingFreshnessService', () => {
       ['workspace_id', 'unit_id', 'version']
     );
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
+  });
+
+  it('batches reset freshness count queries and upserts for large reset scopes', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
+
+    const unitIds = Array.from({ length: 1201 }, (_, index) => index + 1);
+    const firstResponseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 1, count: '2' }])
+    });
+    const secondResponseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 1001, count: '3' }])
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(firstResponseCountsQb)
+      .mockReturnValueOnce(secondResponseCountsQb);
+
+    await service.markVersionsPendingAfterReset(1, {
+      v3: unitIds
+    });
+
+    expect(responseRepository.createQueryBuilder).toHaveBeenCalledTimes(2);
+    expect(firstResponseCountsQb.andWhere).toHaveBeenCalledWith(
+      'response.unitid IN (:...unitIds)',
+      { unitIds: unitIds.slice(0, 1000) }
+    );
+    expect(secondResponseCountsQb.andWhere).toHaveBeenCalledWith(
+      'response.unitid IN (:...unitIds)',
+      { unitIds: unitIds.slice(1000) }
+    );
+    expect(freshnessRepository.upsert).toHaveBeenCalledTimes(5);
+    (freshnessRepository.upsert as jest.Mock).mock.calls.forEach(([rows]) => {
+      expect(rows.length).toBeLessThanOrEqual(250);
+    });
   });
 
   it('reopens existing auto-coding freshness rows in the reset response scope', async () => {

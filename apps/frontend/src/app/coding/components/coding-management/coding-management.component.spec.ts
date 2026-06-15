@@ -86,7 +86,8 @@ describe('CodingManagementComponent', () => {
     };
 
     mockWorkspaceSettingsService = {
-      getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(false))
+      getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(false)),
+      getEnableRegexSearch: jest.fn().mockReturnValue(of(false))
     };
 
     mockTestPersonCodingService = {
@@ -268,6 +269,10 @@ describe('CodingManagementComponent', () => {
 
     it('should check auto-fetch setting on init', () => {
       expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
+    });
+
+    it('should check regex search setting on init', () => {
+      expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledWith(1);
     });
 
     it('should load autocoding readiness for the first autocoder run', () => {
@@ -548,9 +553,11 @@ describe('CodingManagementComponent', () => {
         version: 'v1'
       }));
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        component.filterParams,
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
         1,
-        100
+        100,
+        undefined,
+        undefined
       );
     });
   });
@@ -593,9 +600,11 @@ describe('CodingManagementComponent', () => {
 
       expect(component.filterParams.version).toBe('v2');
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        component.filterParams,
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
         1,
-        100
+        100,
+        undefined,
+        undefined
       );
     });
 
@@ -615,9 +624,11 @@ describe('CodingManagementComponent', () => {
 
       expect(component.filterParams.responseSource).toBe('base');
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        component.filterParams,
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
         1,
-        100
+        100,
+        undefined,
+        undefined
       );
     });
 
@@ -652,10 +663,13 @@ describe('CodingManagementComponent', () => {
       component.onDerivedClick();
 
       expect(component.filterParams).toEqual({
+        value: '',
         unitName: '',
         codedStatus: '',
         version: 'v2',
         code: '',
+        codingCode: '',
+        score: '',
         group: '',
         bookletName: '',
         variableId: '',
@@ -666,9 +680,11 @@ describe('CodingManagementComponent', () => {
       expect(component.currentStatusFilter).toBeNull();
       expect(component.pageIndex).toBe(0);
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        component.filterParams,
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
         1,
-        100
+        100,
+        undefined,
+        undefined
       );
     });
 
@@ -704,7 +720,30 @@ describe('CodingManagementComponent', () => {
         '200',
         'v1',
         2, // pageIndex + 1
-        200
+        200,
+        undefined,
+        undefined
+      );
+    });
+
+    it('should reset to the first page and reload data when sorting changes', () => {
+      component.filterParams = {
+        ...component.filterParams,
+        codedStatus: '200'
+      };
+      component.pageIndex = 2;
+
+      component.onSortChange({ active: 'score', direction: 'desc' });
+
+      expect(component.sortBy).toBe('score');
+      expect(component.sortDirection).toBe('desc');
+      expect(component.pageIndex).toBe(0);
+      expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        1,
+        100,
+        'score',
+        'desc'
       );
     });
 
@@ -775,9 +814,11 @@ describe('CodingManagementComponent', () => {
       component.onReviewClick();
 
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        component.filterParams,
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
         1,
-        2
+        2,
+        undefined,
+        undefined
       );
       expect(mockDialog.open).toHaveBeenCalledWith(
         expect.any(Function),
@@ -828,19 +869,25 @@ describe('CodingManagementComponent', () => {
         1,
         expect.objectContaining({ geogebra: true }),
         1,
-        500
+        500,
+        undefined,
+        undefined
       );
       expect(mockCodingManagementService.searchResponses).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({ geogebra: true }),
         2,
-        500
+        500,
+        undefined,
+        undefined
       );
       expect(mockCodingManagementService.searchResponses).toHaveBeenNthCalledWith(
         3,
         expect.objectContaining({ geogebra: true }),
         3,
-        500
+        500,
+        undefined,
+        undefined
       );
       expect(mockDialog.open).toHaveBeenCalledWith(
         expect.any(Function),

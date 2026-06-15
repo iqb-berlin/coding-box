@@ -71,7 +71,7 @@ export interface BulkApplyResultItem {
   jobName: string;
   hasIssues: boolean;
   skipped: boolean;
-  skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
+  skippedReason?: 'training-job' | 'not-completed' | 'freshness-stale';
   result?: {
     success: boolean;
     updatedResponsesCount: number;
@@ -123,6 +123,8 @@ interface DistributedCodingCoderSelection {
 }
 
 interface CoderTrainingDisplayOptions {
+  showScore?: boolean;
+  allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
 }
 
@@ -251,6 +253,8 @@ export class CodingFacadeService {
       undefined,
       undefined,
       undefined,
+      displayOptions?.showScore,
+      displayOptions?.allowComments,
       displayOptions?.suppressGeneralInstructions
     );
   }
@@ -418,8 +422,8 @@ export class CodingFacadeService {
     return this.replayBackendService.getFailureDistributionByHour(workspaceId, options);
   }
 
-  getVariableAnalysis(workspaceId: number, page: number = 1, limit: number = 100, unitId?: string, variableId?: string, derivation?: string): Observable<PaginatedResponse<VariableAnalysisItemDto>> {
-    return this.codingStatisticsService.getVariableAnalysis(workspaceId, page, limit, unitId, variableId, derivation);
+  getVariableAnalysis(workspaceId: number, page: number = 1, limit: number = 100, unitId?: string, variableId?: string, derivation?: string, regexSearch?: boolean): Observable<PaginatedResponse<VariableAnalysisItemDto>> {
+    return this.codingStatisticsService.getVariableAnalysis(workspaceId, page, limit, unitId, variableId, derivation, regexSearch);
   }
 
   createDistributedCodingJobs(workspaceId: number, selectedVariables: { unitName: string; variableId: string }[], selectedCoders: DistributedCodingCoderSelection[], doubleCodingAbsolute?: number, doubleCodingPercentage?: number, selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[], caseOrderingMode?: 'continuous' | 'alternating', maxCodingCases?: number, displayOptions?: DistributedCodingDisplayOptions, distributionSeed?: string): Observable<DistributedCodingJobsResponse> {

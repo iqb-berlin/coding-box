@@ -18,6 +18,7 @@ import { TestFilesUploadConflictsDialogComponent } from './test-files-upload-con
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
+import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 
 describe('TestFilesComponent', () => {
   let component: TestFilesComponent;
@@ -85,6 +86,10 @@ describe('TestFilesComponent', () => {
         {
           provide: ContentPoolIntegrationService,
           useValue: contentPoolIntegrationServiceMock
+        },
+        {
+          provide: WorkspaceSettingsService,
+          useValue: { getEnableRegexSearch: jest.fn().mockReturnValue(of(false)) }
         }
       ]
     }).compileComponents();
@@ -108,7 +113,7 @@ describe('TestFilesComponent', () => {
 
   describe('ngOnInit', () => {
     it('should load test files on init', () => {
-      expect(fileService.getFilesList).toHaveBeenCalledWith(1, 1, 100, '', '', '');
+      expect(fileService.getFilesList).toHaveBeenCalledWith(1, 1, 100, '', '', '', false);
     });
   });
 

@@ -93,10 +93,16 @@ export class CodingListQueryService {
       // 2) Load variable maps from WorkspaceFilesService
       //    unitVariableMap: unitName → Set of valid variable aliases (includes derived vars, excludes BASE/BASE_NO_VALUE)
       //    trainingRequiredMap: unitName → Set of variable aliases that have CODER_TRAINING_REQUIRED property
-      const [unitVariableMap, trainingRequiredMap, derivedVariablesBySourceMap] = await Promise.all([
+      const [
+        unitVariableMap,
+        trainingRequiredMap,
+        derivedVariablesBySourceMap,
+        manualInstructionMap
+      ] = await Promise.all([
         this.workspaceFilesService.getUnitVariableMap(workspace_id),
         this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspace_id),
-        this.workspaceFilesService.getDerivedVariablesBySourceMap(workspace_id)
+        this.workspaceFilesService.getDerivedVariablesBySourceMap(workspace_id),
+        this.workspaceFilesService.getManualInstructionVariableMap(workspace_id)
       ]);
 
       const validVariableSets = new Map<string, Set<string>>();
@@ -107,6 +113,11 @@ export class CodingListQueryService {
       const trainingRequiredSets = new Map<string, Set<string>>();
       trainingRequiredMap.forEach((variables: Set<string>, unitNameKey: string) => {
         trainingRequiredSets.set(unitNameKey.toUpperCase(), variables);
+      });
+
+      const manualInstructionSets = new Map<string, Set<string>>();
+      manualInstructionMap.forEach((variables: Set<string>, unitNameKey: string) => {
+        manualInstructionSets.set(unitNameKey.toUpperCase(), variables);
       });
 
       // 3) Filter responses:
@@ -127,6 +138,13 @@ export class CodingListQueryService {
 
         const validVars = validVariableSets.get(unitKey.toUpperCase());
         if (!validVars?.has(variableId)) return false;
+
+        if (
+          Number(r.status_v1) === INTENDED_INCOMPLETE_STATUS &&
+          !manualInstructionSets.get(unitKey.toUpperCase())?.has(variableId)
+        ) {
+          return false;
+        }
 
         // Apply trainingRequired filter
         if (trainingRequired !== undefined) {
@@ -333,10 +351,16 @@ export class CodingListQueryService {
     // Load variable maps from WorkspaceFilesService:
     //   unitVariableMap: includes all valid variables (derived + base, excluding BASE/BASE_NO_VALUE)
     //   trainingRequiredMap: variables with CODER_TRAINING_REQUIRED property
-    const [unitVariableMap, trainingRequiredMap, derivedVariablesBySourceMap] = await Promise.all([
+    const [
+      unitVariableMap,
+      trainingRequiredMap,
+      derivedVariablesBySourceMap,
+      manualInstructionMap
+    ] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
       this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId),
-      this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId)
+      this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId),
+      this.workspaceFilesService.getManualInstructionVariableMap(workspaceId)
     ]);
 
     const validVariableSets = new Map<string, Set<string>>();
@@ -349,6 +373,11 @@ export class CodingListQueryService {
       trainingRequiredSets.set(unitName.toUpperCase(), variables);
     });
 
+    const manualInstructionSets = new Map<string, Set<string>>();
+    manualInstructionMap.forEach((variables: Set<string>, unitName: string) => {
+      manualInstructionSets.set(unitName.toUpperCase(), variables);
+    });
+
     const baseFilteredResults = rawResults.filter(row => {
       const unitNameUpper = row.unitName?.toUpperCase();
       const variableId: string = row.variableId;
@@ -357,6 +386,13 @@ export class CodingListQueryService {
 
       const validVars = validVariableSets.get(unitNameUpper);
       if (!validVars?.has(variableId)) return false;
+
+      if (
+        Number(row.statusV1) === INTENDED_INCOMPLETE_STATUS &&
+        !manualInstructionSets.get(unitNameUpper)?.has(variableId)
+      ) {
+        return false;
+      }
 
       if (trainingRequired !== undefined) {
         const isTrainingRequired = trainingRequiredSets.get(unitNameUpper)?.has(variableId) || false;

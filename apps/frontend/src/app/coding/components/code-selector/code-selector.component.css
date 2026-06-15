@@ -20,6 +20,28 @@
   font-weight: 500;
 }
 
+.code-row.has-review-code-selection {
+  border-color: rgba(25, 118, 210, 0.32);
+}
+
+.code-row.read-only {
+  opacity: 0.56;
+}
+
+.code-row.read-only:hover {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.code-row.read-only.has-review-code-selection:hover {
+  border-color: rgba(25, 118, 210, 0.32);
+}
+
+.code-row.selected.has-review-code-selection,
+.code-row.selected.read-only.has-review-code-selection:hover {
+  border-color: #2196f3;
+}
+
 .general-instruction-row {
   cursor: default;
 }
@@ -98,6 +120,27 @@
   font-style: italic;
 }
 
+.review-code-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 26px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background-color: #e8f0fe;
+  color: #174ea6;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.review-code-badge mat-icon {
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
+}
+
 .code-instruction {
   margin-left: 24px;
   margin-top: 4px;
@@ -147,6 +190,13 @@
 
 .notes-field {
   width: 100%;
+}
+
+.notes-validation-error {
+  margin: -8px 0 8px;
+  color: #ba1a1a;
+  font-size: 0.75rem;
+  line-height: 1.25;
 }
 
 ::ng-deep .notes-field .mat-mdc-form-field .mat-mdc-text-field-wrapper {

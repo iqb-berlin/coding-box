@@ -26,6 +26,7 @@ describe('CoderTrainingComponent', () => {
   let fixture: ComponentFixture<CoderTrainingComponent>;
   let component: CoderTrainingComponent;
   let coderService: Record<string, jest.Mock>;
+  let variableBundleService: Record<string, jest.Mock>;
   let codingJobBackendService: Record<string, jest.Mock>;
   let codingTrainingBackendService: Record<string, jest.Mock>;
 
@@ -33,7 +34,7 @@ describe('CoderTrainingComponent', () => {
     coderService = createDependencyMock();
     codingJobBackendService = createDependencyMock();
     codingTrainingBackendService = createDependencyMock();
-    const variableBundleService = createDependencyMock();
+    variableBundleService = createDependencyMock();
 
     coderService.getCoders.mockReturnValue(of([
       { id: 1, name: 'Coder 1', username: 'coder1' },
@@ -183,6 +184,25 @@ describe('CoderTrainingComponent', () => {
     component.onStartTraining();
 
     expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalled();
+  });
+
+  it('renders coder selection as toggle cards without checkboxes', () => {
+    fixture.detectChanges();
+
+    const firstCoderCard = fixture.nativeElement.querySelector('.coder-grid .coder-item') as HTMLElement;
+
+    expect(fixture.nativeElement.querySelector('.coder-grid mat-checkbox')).toBeNull();
+    expect(firstCoderCard.classList.contains('selected')).toBe(false);
+    expect(firstCoderCard.querySelector('.coder-login')).toBeNull();
+
+    firstCoderCard.click();
+    fixture.detectChanges();
+
+    const selectedCoderCard = fixture.nativeElement.querySelector('.coder-grid .coder-item') as HTMLElement;
+
+    expect(component.isCoderSelected(component.coders[0])).toBe(true);
+    expect(selectedCoderCard.classList.contains('selected')).toBe(true);
+    expect(selectedCoderCard.querySelector('.selected-icon')).not.toBeNull();
   });
 
   it('covers removal, validation and error paths', () => {
@@ -337,6 +357,8 @@ describe('CoderTrainingComponent', () => {
       'oldest_first',
       undefined,
       undefined,
+      false,
+      true,
       false
     );
   });
@@ -401,6 +423,67 @@ describe('CoderTrainingComponent', () => {
     component.isLoading = true;
 
     expect(component.getPrimaryActionLabel()).toBe('Schulung wird aktualisiert...');
+  });
+
+  it('populates saved edit settings even when no variables or bundles are available', () => {
+    codingJobBackendService.getCodingIncompleteVariables.mockReturnValueOnce(of([]));
+    variableBundleService.getBundles.mockReturnValueOnce(of({ bundles: [], total: 0 }));
+    component.editTraining = {
+      id: 80,
+      workspace_id: 1,
+      label: 'Saved empty training',
+      case_ordering_mode: 'alternating',
+      case_selection_mode: 'random',
+      reference_training_ids: [99],
+      reference_mode: 'same',
+      suppress_general_instructions: true,
+      assigned_coders: [2],
+      assigned_variables: [],
+      assigned_variable_bundles: [],
+      jobsCount: 1,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+
+    component.ngOnInit();
+
+    expect(component.trainingForm.get('trainingLabel')?.value).toBe('Saved empty training');
+    expect(component.trainingForm.get('caseOrderingMode')?.value).toBe('alternating');
+    expect(component.trainingForm.get('caseSelectionMode')?.value).toBe('random');
+    expect(component.trainingForm.get('referenceTrainingIds')?.value).toEqual([99]);
+    expect(component.trainingForm.get('referenceMode')?.value).toBe('same');
+    expect(component.trainingForm.get('suppressGeneralInstructions')?.value).toBe(true);
+    expect(component.isCoderSelected(component.coders[1])).toBe(true);
+  });
+
+  it('keeps saved manual variables when bundle loading fails while editing', () => {
+    variableBundleService.getBundles.mockReturnValueOnce(throwError(() => new Error('bundle load failed')));
+    component.editTraining = {
+      id: 81,
+      workspace_id: 1,
+      label: 'Manual variables only',
+      case_ordering_mode: 'continuous',
+      assigned_coders: [1],
+      assigned_variables: [
+        {
+          unitName: 'UNIT',
+          variableId: 'VAR',
+          sampleCount: 3
+        }
+      ],
+      assigned_variable_bundles: [],
+      jobsCount: 1,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+
+    component.ngOnInit();
+
+    expect(component.trainingForm.get('trainingLabel')?.value).toBe('Manual variables only');
+    expect(component.variablesFormArray.length).toBe(1);
+    expect(component.variablesFormArray.at(0).get('unitId')?.value).toBe('UNIT');
+    expect(component.variablesFormArray.at(0).get('variableId')?.value).toBe('VAR');
+    expect(component.variablesFormArray.at(0).get('sampleCount')?.value).toBe(3);
   });
 
   it('preserves saved bundle ordering when editing and updating a training', () => {
@@ -558,6 +641,8 @@ describe('CoderTrainingComponent', () => {
       'oldest_first',
       undefined,
       undefined,
+      false,
+      true,
       false
     );
   });
@@ -602,6 +687,8 @@ describe('CoderTrainingComponent', () => {
       'oldest_first',
       undefined,
       undefined,
+      false,
+      true,
       false
     );
   });
@@ -638,6 +725,8 @@ describe('CoderTrainingComponent', () => {
       'oldest_first',
       undefined,
       undefined,
+      false,
+      true,
       false
     );
   });

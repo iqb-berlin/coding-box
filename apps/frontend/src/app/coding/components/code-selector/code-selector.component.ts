@@ -14,7 +14,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DomSanitizer } from '@angular/platform-browser';
-import { UnitsReplay, UnitsReplayUnit } from '../../../replay/services/units-replay.service';
+import { ReviewCodeSelection, UnitsReplay, UnitsReplayUnit } from '../../../replay/services/units-replay.service';
 import { ReplayCodingService } from '../../../replay/services/replay-coding.service';
 import {
   Code,
@@ -57,6 +57,8 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() isReadOnly: boolean = false;
   @Input() isNavigationDisabled: boolean = false;
   @Input() hasSaveError: boolean = false;
+  @Input() clearCodingIssueOnRegularSelection: boolean = false;
+  @Input() reviewCodeSelections: ReviewCodeSelection[] = [];
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() notesChanged = new EventEmitter<string>();
@@ -65,14 +67,23 @@ export class CodeSelectorComponent implements OnChanges {
   @Output() pauseCodingJob = new EventEmitter<void>();
   @Output() unitChanged = new EventEmitter<UnitsReplayUnit>();
   @ViewChild('variablePanel') variablePanel?: ElementRef<HTMLElement>;
+  @ViewChild('notesTextarea') notesTextarea?: ElementRef<HTMLTextAreaElement>;
 
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
   selectedCodingIssueOption: number | null = null;
+  newCodeCommentValidationError = false;
   variableManualInstruction: string | null = null;
   legacySelectedCode: SelectableItem | null = null;
   private allRegularCodeItems: SelectableItem[] = [];
   private hasResolvedCodingScheme = false;
+  private readonly codeAssignmentUncertainOptionId = -1;
+  private readonly newCodeNeededOptionId = -2;
+  private readonly commentBoundCodingIssueOptionIds = new Set<number>([
+    this.codeAssignmentUncertainOptionId,
+    this.newCodeNeededOptionId
+  ]);
+
   constructor(private sanitizer: DomSanitizer, private translateService: TranslateService, private elementRef: ElementRef) { }
 
   @HostListener('document:click', ['$event'])
@@ -86,7 +97,7 @@ export class CodeSelectorComponent implements OnChanges {
     if (changes.codingScheme || changes.variableId || changes.missings) {
       this.loadCodes();
     }
-    if (changes.preSelectedCodeId || changes.preSelectedCodingIssueOptionId) {
+    if (changes.preSelectedCodeId || changes.preSelectedCodingIssueOptionId || changes.allowComments) {
       this.selectPreSelectedCode();
     }
   }
@@ -137,7 +148,7 @@ export class CodeSelectorComponent implements OnChanges {
 
       const codingIssueOptions: SelectableItem[] = [
         {
-          id: -1,
+          id: this.codeAssignmentUncertainOptionId,
           label: this.translateService.instant('code-selector.coding-issue-options.code-assignment-uncertain'),
           type: 'codingIssueOption'
         },
@@ -152,7 +163,7 @@ export class CodeSelectorComponent implements OnChanges {
           type: 'codingIssueOption'
         },
         {
-          id: -2,
+          id: this.newCodeNeededOptionId,
           label: this.translateService.instant('code-selector.coding-issue-options.new-code-needed'),
           type: 'codingIssueOption'
         }
@@ -182,7 +193,9 @@ export class CodeSelectorComponent implements OnChanges {
       const preSelectedItem = this.selectableItems.find(item => item.id === this.preSelectedCodeId);
       if (preSelectedItem) {
         if (preSelectedItem.type === 'codingIssueOption') {
-          this.selectedCodingIssueOption = this.preSelectedCodeId;
+          if (this.isCodingIssueOptionAvailable(preSelectedItem)) {
+            this.selectedCodingIssueOption = this.preSelectedCodeId;
+          }
         } else {
           this.selectedCode = this.preSelectedCodeId;
         }
@@ -196,7 +209,11 @@ export class CodeSelectorComponent implements OnChanges {
 
     if (this.preSelectedCodingIssueOptionId !== null) {
       const codingIssueItem = this.selectableItems.find(item => item.id === this.preSelectedCodingIssueOptionId);
-      if (codingIssueItem && codingIssueItem.type === 'codingIssueOption') {
+      if (
+        codingIssueItem &&
+        codingIssueItem.type === 'codingIssueOption' &&
+        this.isCodingIssueOptionAvailable(codingIssueItem)
+      ) {
         this.selectedCodingIssueOption = this.preSelectedCodingIssueOptionId;
         // Clear regular code selection when pre-selecting -3 or -4
         if (this.preSelectedCodingIssueOptionId === -3 || this.preSelectedCodingIssueOptionId === -4) {
@@ -249,6 +266,7 @@ export class CodeSelectorComponent implements OnChanges {
     if (selectedItem.type !== 'codingIssueOption' && this.isRegularSelectionDisabled) return;
 
     if (selectedItem.type === 'codingIssueOption') {
+      if (!this.isCodingIssueOptionAvailable(selectedItem) || this.isCodingIssueOptionDisabled(selectedItem)) return;
       this.selectedCodingIssueOption = codeId;
       this.legacySelectedCode = null;
       // Clear regular code selection when selecting -3 or -4
@@ -258,7 +276,11 @@ export class CodeSelectorComponent implements OnChanges {
     } else {
       this.selectedCode = codeId;
       this.legacySelectedCode = null;
+      if (this.clearCodingIssueOnRegularSelection) {
+        this.selectedCodingIssueOption = null;
+      }
     }
+    this.updateNewCodeCommentValidationState();
     const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
       this.selectableItems.find(item => item.id === this.selectedCode)!
     ) : null;
@@ -276,8 +298,36 @@ export class CodeSelectorComponent implements OnChanges {
     return this.selectableItems.filter(item => item.type !== 'codingIssueOption');
   }
 
+  hasReviewCodeSelection(codeId: number): boolean {
+    return this.getReviewCodeSelectionCount(codeId) > 0;
+  }
+
+  getReviewCodeSelectionCount(codeId: number): number {
+    return this.getReviewCodeSelection(codeId)?.coderNames.length || 0;
+  }
+
+  getReviewCodeSelectionTooltip(codeId: number): string {
+    const selection = this.getReviewCodeSelection(codeId);
+    if (!selection) {
+      return '';
+    }
+
+    return this.translateService.instant('code-selector.review-coders-tooltip', {
+      coders: selection.coderNames.join(', ')
+    });
+  }
+
+  private getReviewCodeSelection(codeId: number): ReviewCodeSelection | undefined {
+    return this.reviewCodeSelections.find(selection => (
+      selection.code === codeId &&
+      selection.coderNames.length > 0
+    ));
+  }
+
   get codingIssueOptionCodes(): SelectableItem[] {
-    return this.selectableItems.filter(item => item.type === 'codingIssueOption');
+    return this.selectableItems.filter(
+      item => item.type === 'codingIssueOption' && this.isCodingIssueOptionAvailable(item)
+    );
   }
 
   get hasVariableManualInstruction(): boolean {
@@ -286,6 +336,30 @@ export class CodeSelectorComponent implements OnChanges {
 
   get isRegularSelectionDisabled(): boolean {
     return this.selectedCodingIssueOption === -3 || this.selectedCodingIssueOption === -4;
+  }
+
+  isCodingIssueOptionDisabled(item: SelectableItem): boolean {
+    if (this.isReadOnly) return true;
+    return item.id === this.codeAssignmentUncertainOptionId && this.selectedCode === null;
+  }
+
+  getCodingIssueOptionTooltip(item: SelectableItem): string {
+    if (!this.isReadOnly && item.id === this.codeAssignmentUncertainOptionId && this.selectedCode === null) {
+      return this.translateService.instant('code-selector.code-assignment-uncertain-requires-code');
+    }
+
+    return '';
+  }
+
+  getCodingIssueOptionRowTooltip(item: SelectableItem): string {
+    return [
+      this.getCodingIssueOptionTooltip(item),
+      this.getReviewCodeSelectionTooltip(item.id)
+    ].filter(Boolean).join(' - ');
+  }
+
+  private isCodingIssueOptionAvailable(item: SelectableItem): boolean {
+    return this.allowComments || !this.commentBoundCodingIssueOptionIds.has(item.id);
   }
 
   private hasCurrentSelection(): boolean {
@@ -299,6 +373,7 @@ export class CodeSelectorComponent implements OnChanges {
     this.selectedCode = null;
     this.selectedCodingIssueOption = null;
     this.legacySelectedCode = null;
+    this.newCodeCommentValidationError = false;
     this.codeSelected.emit({
       variableId: this.variableId,
       code: null,
@@ -323,7 +398,35 @@ export class CodeSelectorComponent implements OnChanges {
 
   onNotesChanged(): void {
     if (this.isReadOnly) return;
+    this.updateNewCodeCommentValidationState();
     this.notesChanged.emit(this.coderNotes);
+  }
+
+  canLeaveCurrentUnit(showValidationMessage = true): boolean {
+    if (!this.requiresNewCodeComment() || this.hasNewCodeComment()) {
+      this.newCodeCommentValidationError = false;
+      return true;
+    }
+
+    if (showValidationMessage) {
+      this.newCodeCommentValidationError = true;
+      setTimeout(() => this.notesTextarea?.nativeElement.focus(), 0);
+    }
+    return false;
+  }
+
+  private requiresNewCodeComment(): boolean {
+    return this.allowComments && this.selectedCodingIssueOption === this.newCodeNeededOptionId;
+  }
+
+  private hasNewCodeComment(): boolean {
+    return this.coderNotes.trim().length > 0;
+  }
+
+  private updateNewCodeCommentValidationState(): void {
+    if (!this.requiresNewCodeComment() || this.hasNewCodeComment()) {
+      this.newCodeCommentValidationError = false;
+    }
   }
 
   nextUnit(): void {
@@ -333,6 +436,7 @@ export class CodeSelectorComponent implements OnChanges {
     if (this.isNavigationDisabled) return;
     if (this.hasSaveError) return;
     if (!this.isReadOnly && !this.hasCurrentSelection()) return;
+    if (!this.isReadOnly && !this.canLeaveCurrentUnit()) return;
 
     const currentIndex = data.currentUnitIndex;
     const nextIndex = currentIndex + 1;
@@ -408,8 +512,8 @@ export class CodeSelectorComponent implements OnChanges {
     }
 
     if (targetId !== null) {
-      const optionExists = this.selectableItems.some(item => item.id === targetId);
-      if (optionExists) {
+      const option = this.selectableItems.find(item => item.id === targetId);
+      if (option && this.isCodingIssueOptionAvailable(option) && !this.isCodingIssueOptionDisabled(option)) {
         event.preventDefault(); // Prevent default browser action (e.g. quick find with '/')
         this.onSelect(targetId);
       }

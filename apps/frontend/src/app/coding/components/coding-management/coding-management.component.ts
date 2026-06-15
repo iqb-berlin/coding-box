@@ -21,6 +21,7 @@ import {
 } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
+import { Sort } from '@angular/material/sort';
 import { Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -53,7 +54,11 @@ import { CodingManagementUiService } from './services/coding-management-ui.servi
 import { StatisticsCardComponent } from './components/statistics-card/statistics-card.component';
 import { ResponseFiltersComponent } from './components/response-filters/response-filters.component';
 import { ResponseTableComponent } from './components/response-table/response-table.component';
-import { SearchResponseItem } from '../../../models/coding-interfaces';
+import {
+  CodingResponseSortBy,
+  CodingResponseSortDirection,
+  SearchResponseItem
+} from '../../../models/coding-interfaces';
 import { ItemListDialogComponent } from '../../../shared/dialogs/item-list-dialog/item-list-dialog.component';
 import { ReviewListDialogComponent } from './components/review-list-dialog/review-list-dialog.component';
 import {
@@ -153,6 +158,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   pageSize = 100;
   totalRecords = 0;
   pageIndex = 0;
+  sortBy: CodingResponseSortBy | '' = '';
+  sortDirection: CodingResponseSortDirection | '' = '';
 
   selectedStatisticsVersion: 'v1' | 'v2' | 'v3' = 'v1';
   codingFreshnessSummary: CodingFreshnessSummaryDto | null = null;
@@ -164,15 +171,19 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   manualAppliedResultsOverview: AppliedResultsOverview | null = null;
   isLoadingManualAppliedResultsOverview = false;
   manualAppliedResultsOverviewLoadFailed = false;
+  enableRegexSearch = false;
   isStartingFreshnessCoding = false;
   activeFreshnessJobId: string | null = null;
   activeFreshnessJobProgress: number | null = null;
 
   filterParams: FilterParams = {
+    value: '',
     unitName: '',
     codedStatus: '',
     version: 'v1',
     code: '',
+    codingCode: '',
+    score: '',
     group: '',
     bookletName: '',
     variableId: '',
@@ -194,6 +205,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           if (autoFetch) {
             this.fetchCodingStatistics();
           }
+        });
+      this.workspaceSettingsService
+        .getEnableRegexSearch(workspaceId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(enabled => {
+          this.enableRegexSearch = enabled;
         });
 
       this.codingManagementService.hasGeogebraResponses()
@@ -528,6 +545,22 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
   }
 
+  onSortChange(sort: Sort): void {
+    this.sortBy = this.isSupportedResponseSort(sort.active) && sort.direction ?
+      sort.active :
+      '';
+    this.sortDirection = sort.direction === 'asc' || sort.direction === 'desc' ?
+      sort.direction :
+      '';
+    this.pageIndex = 0;
+
+    if (this.currentStatusFilter) {
+      this.fetchResponsesByStatus(this.currentStatusFilter, 1, this.pageSize);
+    } else if (this.hasActiveFilters()) {
+      this.fetchResponsesWithFilters();
+    }
+  }
+
   onReplayClick(response: Success): void {
     this.uiService.openReplayForResponse(response).subscribe(replayUrl => {
       if (replayUrl) {
@@ -592,7 +625,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingReview = true;
-    const reviewFilterParams = { ...this.filterParams };
+    const reviewFilterParams = {
+      ...this.filterParams,
+      regexSearch: this.enableRegexSearch
+    };
     const reviewBatchSize = Math.min(this.reviewBatchSize, totalReviewRecords);
     const reviewPageCount = Math.ceil(totalReviewRecords / reviewBatchSize);
 
@@ -600,7 +636,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       concatMap(batchIndex => this.codingManagementService.searchResponses(
         reviewFilterParams,
         batchIndex + 1,
-        reviewBatchSize
+        reviewBatchSize,
+        this.sortBy || undefined,
+        this.sortDirection || undefined
       )),
       reduce(
         (
@@ -980,7 +1018,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       status,
       this.selectedStatisticsVersion,
       page,
-      limit
+      limit,
+      this.sortBy || undefined,
+      this.sortDirection || undefined
     ).subscribe({
       next: response => {
         this.data = response.data.map((item: ResponseEntity) => {
@@ -1035,9 +1075,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
 
     this.codingManagementService.searchResponses(
-      this.filterParams,
+      {
+        ...this.filterParams,
+        regexSearch: this.enableRegexSearch
+      },
       this.pageIndex + 1,
-      this.pageSize
+      this.pageSize,
+      this.sortBy || undefined,
+      this.sortDirection || undefined
     ).subscribe({
       next: (response: { data: SearchResponseItem[]; total: number }) => {
         this.data = this.mapSearchResponseItemsToSuccess(response.data);
@@ -1092,6 +1137,21 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       status_v2: item.status_v2,
       status_v3: item.status_v3
     };
+  }
+
+  private isSupportedResponseSort(sortBy: string): sortBy is CodingResponseSortBy {
+    return [
+      'unitname',
+      'variableid',
+      'value',
+      'codedstatus',
+      'code',
+      'score',
+      'person_code',
+      'person_login',
+      'person_group',
+      'booklet_id'
+    ].includes(sortBy);
   }
 
   // Dialog Methods
@@ -1285,10 +1345,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   private createDefaultFilterParams(version: StatisticsVersion = this.selectedStatisticsVersion): FilterParams {
     return {
+      value: '',
       unitName: '',
       codedStatus: '',
       version,
       code: '',
+      codingCode: '',
+      score: '',
       group: '',
       bookletName: '',
       variableId: '',
@@ -1313,6 +1376,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return Object.entries(filterParams).some(
       ([key, value]) => {
         if (key === 'version') return false;
+        if (key === 'regexSearch') return false;
         if (key === 'responseSource') return value !== 'all';
         return typeof value === 'string' ? value.trim() !== '' : value === true;
       }

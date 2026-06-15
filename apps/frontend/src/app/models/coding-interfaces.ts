@@ -72,7 +72,7 @@ export interface BulkApplyResultItem {
   jobName: string;
   hasIssues: boolean;
   skipped: boolean;
-  skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
+  skippedReason?: 'training-job' | 'not-completed' | 'freshness-stale';
   result?: {
     success: boolean;
     updatedResponsesCount: number;
@@ -118,12 +118,30 @@ export interface SearchResponsesParams {
   codedStatus?: string;
   group?: string;
   code?: string;
+  codingCode?: string;
+  score?: string;
   version?: 'v1' | 'v2' | 'v3';
   geogebra?: boolean;
   derivedOnly?: boolean;
   responseSource?: 'base' | 'derived' | 'all';
   personLogin?: string;
+  regexSearch?: boolean;
+  sortBy?: CodingResponseSortBy;
+  sortDirection?: CodingResponseSortDirection;
 }
+
+export type CodingResponseSortBy =
+  'unitname' |
+  'variableid' |
+  'value' |
+  'codedstatus' |
+  'code' |
+  'score' |
+  'person_code' |
+  'person_login' |
+  'person_group' |
+  'booklet_id';
+export type CodingResponseSortDirection = 'asc' | 'desc';
 
 export interface SearchResponseItem {
   responseId: number;

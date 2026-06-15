@@ -4,7 +4,7 @@
       <h1 mat-dialog-title>Kodierergebnisse: {{data.codingJob.name}}</h1>
       <p class="aggregation-snapshot">{{ getAggregationSettingsText() }}</p>
     </div>
-    <button mat-icon-button mat-dialog-close aria-label="Dialog schließen">
+    <button mat-icon-button type="button" aria-label="Dialog schließen" (click)="closeDialog()">
       <mat-icon>close</mat-icon>
     </button>
   </div>
@@ -202,7 +202,7 @@
   }
 
   <div class="dialog-actions">
-    <button mat-raised-button mat-dialog-close color="primary">Schließen</button>
+    <button mat-raised-button color="primary" type="button" (click)="closeDialog()">Schließen</button>
     @if (data.canApplyResults !== false) {
     <button mat-raised-button color="accent"
       [disabled]="!canApplyCodingResults()"

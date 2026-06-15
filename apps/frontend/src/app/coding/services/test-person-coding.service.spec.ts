@@ -532,6 +532,9 @@ describe('TestPersonCodingService', () => {
           bookletName: 'BOOKLET_1',
           givenAnswer: 'answer',
           isResolved: false,
+          appliedCode: null,
+          appliedScore: null,
+          appliedComment: null,
           coderResults: [{
             coderId: 1,
             coderName: 'Coder 1',
@@ -596,6 +599,37 @@ describe('TestPersonCodingService', () => {
         { message: 'review query failed' },
         { status: 500, statusText: 'Server Error' }
       );
+    });
+  });
+
+  describe('applyDoubleCodedResolutions', () => {
+    it('should post explicit replay code decisions for double-coded review resolutions', () => {
+      const mockResponse = {
+        success: true,
+        appliedCount: 1,
+        failedCount: 0,
+        skippedCount: 0,
+        message: 'ok'
+      };
+      const body = {
+        decisions: [{
+          responseId: 10,
+          code: 3,
+          score: 2,
+          resolutionComment: 'Replay checked'
+        }]
+      };
+
+      service.applyDoubleCodedResolutions(mockWorkspaceId, body).subscribe(response => {
+        expect(response).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/double-coded-review/apply-resolutions`
+      );
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual(body);
+      req.flush(mockResponse);
     });
   });
 

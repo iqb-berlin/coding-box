@@ -4,6 +4,7 @@ import {
   Controller,
   DefaultValuePipe,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
@@ -157,6 +158,31 @@ export class WsgCodingJobController {
       codingJobId,
       workspaceId,
       this.getRequestUserId(req)
+    );
+  }
+
+  private async assertCodingIssueReviewAccess(
+    workspaceId: number,
+    codingJobId: number,
+    req: Request
+  ): Promise<number> {
+    const userId = this.getRequestUserId(req);
+    await this.codingJobService.getCodingJob(codingJobId, workspaceId);
+
+    if (await this.usersService.getUserIsAdmin(userId)) {
+      return userId;
+    }
+
+    const accessLevel = await this.usersService.getUserAccessLevel(
+      userId,
+      workspaceId
+    );
+    if ((accessLevel ?? 0) >= 2) {
+      return userId;
+    }
+
+    throw new ForbiddenException(
+      'User is not allowed to review coding issues in this workspace'
     );
   }
 
@@ -559,6 +585,47 @@ export class WsgCodingJobController {
     );
   }
 
+  @Post(':id/submit-review')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Submit a completed coding job for review',
+    description:
+      'Allows an assigned coder to submit a completed coding job for review'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job has been submitted for review.',
+    type: CodingJobDto
+  })
+  @ApiBadRequestResponse({
+    description: 'Coding job is not completed or cannot be submitted.'
+  })
+  async submitCodingJobForReview(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
+    const codingJob = await this.codingJobService.updateCodingJob(
+      id,
+      workspaceId,
+      { status: 'review' }
+    );
+    return CodingJobDto.fromEntity(codingJob);
+  }
+
   @Post(':id/start')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
@@ -598,14 +665,128 @@ export class WsgCodingJobController {
     const job = await this.codingJobService.getCodingJob(id, workspaceId);
 
     const onlyOpen = job.codingJob.status === 'open';
+    const isFinalizedJob = ['review', 'results_applied'].includes(
+      job.codingJob.status
+    );
 
-    if (!['completed', 'results_applied'].includes(job.codingJob.status)) {
+    if (!isFinalizedJob) {
       await this.codingJobService.updateCodingJob(id, workspaceId, {
         status: 'active'
       });
     }
 
     return this.prepareCodingJobReplay(workspaceId, id, req, onlyOpen);
+  }
+
+  @Post(':id/pause')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Pause an assigned coding job',
+    description: 'Pauses a coding job assigned to the current coder'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job has been paused.',
+    type: CodingJobDto
+  })
+  async pauseCodingJob(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
+    const codingJob = await this.codingJobService.pauseCodingJob(
+      id,
+      workspaceId
+    );
+    return CodingJobDto.fromEntity(codingJob);
+  }
+
+  @Post(':id/resume')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Resume an assigned coding job',
+    description: 'Marks a coding job assigned to the current coder as active'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job has been resumed.',
+    type: CodingJobDto
+  })
+  async resumeCodingJob(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
+    const codingJob = await this.codingJobService.resumeCodingJob(
+      id,
+      workspaceId
+    );
+    return CodingJobDto.fromEntity(codingJob);
+  }
+
+  @Post(':id/submit')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Submit an assigned coding job',
+    description: 'Completes a coding job assigned to the current coder'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job has been submitted.',
+    type: CodingJobDto
+  })
+  @ApiBadRequestResponse({
+    description: 'The coding job cannot be completed yet.'
+  })
+  async submitCodingJob(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
+    const codingJob = await this.codingJobService.submitCodingJob(
+      id,
+      workspaceId
+    );
+    return CodingJobDto.fromEntity(codingJob);
   }
 
   @Get(':id/review')
@@ -723,12 +904,23 @@ export class WsgCodingJobController {
                    saveCodingProgressDto: SaveCodingProgressDto,
                    @Req() req: Request
   ): Promise<CodingJobDto> {
-    await this.assertCodingJobCodingAccess(workspaceId, id, req);
-    await this.codingJobService.getCodingJob(id, workspaceId);
-    const codingJob = await this.codingJobService.saveCodingProgress(
-      id,
-      saveCodingProgressDto
-    );
+    const userId = saveCodingProgressDto.issueReview ?
+      await this.assertCodingIssueReviewAccess(workspaceId, id, req) :
+      undefined;
+    if (!saveCodingProgressDto.issueReview) {
+      await this.assertCodingJobCodingAccess(workspaceId, id, req);
+      await this.codingJobService.getCodingJob(id, workspaceId);
+    }
+    const codingJob = saveCodingProgressDto.issueReview ?
+      await this.codingJobService.saveCodingIssueReviewProgress(
+        id,
+        userId as number,
+        saveCodingProgressDto
+      ) :
+      await this.codingJobService.saveCodingProgress(
+        id,
+        saveCodingProgressDto
+      );
     return CodingJobDto.fromEntity(codingJob);
   }
 
@@ -769,12 +961,23 @@ export class WsgCodingJobController {
                    saveCodingNotesDto: SaveCodingNotesDto,
                    @Req() req: Request
   ): Promise<CodingJobDto> {
-    await this.assertCodingJobCodingAccess(workspaceId, id, req);
-    await this.codingJobService.getCodingJob(id, workspaceId);
-    const codingJob = await this.codingJobService.saveCodingNotes(
-      id,
-      saveCodingNotesDto
-    );
+    const userId = saveCodingNotesDto.issueReview ?
+      await this.assertCodingIssueReviewAccess(workspaceId, id, req) :
+      undefined;
+    if (!saveCodingNotesDto.issueReview) {
+      await this.assertCodingJobCodingAccess(workspaceId, id, req);
+      await this.codingJobService.getCodingJob(id, workspaceId);
+    }
+    const codingJob = saveCodingNotesDto.issueReview ?
+      await this.codingJobService.saveCodingIssueReviewNotes(
+        id,
+        userId as number,
+        saveCodingNotesDto
+      ) :
+      await this.codingJobService.saveCodingNotes(
+        id,
+        saveCodingNotesDto
+      );
     return CodingJobDto.fromEntity(codingJob);
   }
 
