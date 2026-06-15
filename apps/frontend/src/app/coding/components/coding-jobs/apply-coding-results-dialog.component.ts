@@ -71,13 +71,13 @@ export interface ApplyCodingResultsDialogResult {
       </div>
 
       <mat-checkbox [(ngModel)]="overwriteExisting" color="warn">
-        Bestehende Kodierungen für passende aggregierte Antworten überschreiben
+        Bestehende v2-Kodierungen überschreiben
       </mat-checkbox>
 
       <div class="warning-box" *ngIf="overwriteExisting">
         <mat-icon>warning</mat-icon>
         <span>
-          Vorhandene v2-Kodierungen in passenden Aggregationsgruppen werden ersetzt.
+          Vorhandene v2-Kodierungen für direkte Ergebnisse und passende Aggregationsgruppen werden ersetzt.
           Diese Option sollte nur für bewusst neu zu berechnende Ergebnisse genutzt werden.
         </span>
       </div>
