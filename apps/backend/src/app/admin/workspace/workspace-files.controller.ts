@@ -16,6 +16,7 @@ import {
   UploadedFiles,
   Put
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import {
   ApiBearerAuth,
   ApiConsumes,
@@ -26,6 +27,7 @@ import {
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
+import { Repository } from 'typeorm';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -37,6 +39,11 @@ import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-f
 import { WorkspaceSettingsDto } from '../../../../../../api-dto/workspaces/workspace-settings-dto';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatisticsService, CodingValidationService } from '../../database/services/coding';
+import { Setting } from '../../database/entities/setting.entity';
+import {
+  getWorkspaceRegexSearchEnabled,
+  toRegexSearchException
+} from '../../utils/regex-search.util';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
@@ -48,7 +55,9 @@ export class WorkspaceFilesController {
     private readonly workspaceCoreService: WorkspaceCoreService,
     private readonly personService: PersonService,
     private readonly codingStatisticsService: CodingStatisticsService,
-    private readonly codingValidationService: CodingValidationService
+    private readonly codingValidationService: CodingValidationService,
+    @InjectRepository(Setting)
+    private readonly settingRepository: Repository<Setting>
   ) { }
 
   @Get(':workspace_id/files')
@@ -95,7 +104,8 @@ export class WorkspaceFilesController {
                            @Query('limit') limit: number = 20,
                            @Query('fileType') fileType?: string,
                            @Query('fileSize') fileSize?: string,
-                           @Query('searchText') searchText?: string
+                           @Query('searchText') searchText?: string,
+                           @Query('regexSearch') regexSearch?: string
   ): Promise<{
         data: FilesDto[];
         total: number;
@@ -109,13 +119,16 @@ export class WorkspaceFilesController {
       );
     }
     try {
+      const effectiveRegexSearch = regexSearch === 'true' &&
+        await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
       const [files, total, fileTypes] =
         await this.workspaceFilesService.findFiles(workspace_id, {
           page,
           limit,
           fileType,
           fileSize,
-          searchText
+          searchText,
+          regexSearch: effectiveRegexSearch
         });
       return {
         data: files,
@@ -125,6 +138,11 @@ export class WorkspaceFilesController {
         fileTypes
       };
     } catch (error) {
+      const regexError = toRegexSearchException(error, 'searchText');
+      if (regexError) {
+        throw regexError;
+      }
+
       throw new BadRequestException(
         `An error occurred while fetching files for workspace ${workspace_id}: ${error.message} `
       );

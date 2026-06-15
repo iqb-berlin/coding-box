@@ -659,7 +659,19 @@ describe('WorkspaceFilesService.findAllFileTypes', () => {
   };
 
   const mockFileUploadRepository = {
-    createQueryBuilder: jest.fn()
+    createQueryBuilder: jest.fn(),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn().mockReturnValue({
+          connect: jest.fn().mockResolvedValue(undefined),
+          startTransaction: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockResolvedValue(undefined),
+          commitTransaction: jest.fn().mockResolvedValue(undefined),
+          rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+          release: jest.fn().mockResolvedValue(undefined)
+        })
+      }
+    }
   };
 
   function makeService(): WorkspaceFilesService {
@@ -734,7 +746,19 @@ describe('WorkspaceFilesService.findFiles', () => {
   };
 
   const mockFileUploadRepository = {
-    createQueryBuilder: jest.fn()
+    createQueryBuilder: jest.fn(),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn().mockReturnValue({
+          connect: jest.fn().mockResolvedValue(undefined),
+          startTransaction: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockResolvedValue(undefined),
+          commitTransaction: jest.fn().mockResolvedValue(undefined),
+          rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+          release: jest.fn().mockResolvedValue(undefined)
+        })
+      }
+    }
   };
 
   const mockService = () => new WorkspaceFilesService(
@@ -770,6 +794,21 @@ describe('WorkspaceFilesService.findFiles', () => {
     expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
       'LOWER(file.filename) LIKE :extension',
       { extension: '%.vocs' }
+    );
+  });
+
+  it('should use a case-sensitive regex search when enabled', async () => {
+    const service = mockService();
+    await service.findFiles(1, {
+      page: 1,
+      limit: 20,
+      searchText: '^Unit_\\d+\\.xml$',
+      regexSearch: true
+    });
+
+    expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+      "(file.filename ~ :searchRegex OR file.file_type ~ :searchRegex OR TO_CHAR(file.created_at, 'DD.MM.YYYY HH24:MI') ~ :searchRegex)",
+      { searchRegex: '^Unit_\\d+\\.xml$' }
     );
   });
 });

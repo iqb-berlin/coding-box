@@ -15,6 +15,7 @@ describe('WorkspaceCodingAnalysisController', () => {
       {} as never,
       codingValidationService as never,
       {} as never,
+      {} as never,
       {} as never
     );
 

@@ -126,6 +126,11 @@ const filterRows = (
   let filteredRows = [...responseRows];
   const unitIdFilter = getLikeFilter(qb.params.unitId);
   const variableIdFilter = getLikeFilter(qb.params.variableId);
+  const variableIdRegexFilter = [
+    qb.params.variableIdRegex,
+    qb.params.aggregationVariableIdRegex,
+    qb.params.totalCountVariableIdRegex
+  ].find((value): value is string => typeof value === 'string');
   const pairKeyFilters = Object.values(qb.params)
     .filter((value): value is string[] => (
       Array.isArray(value) &&
@@ -138,6 +143,11 @@ const filterRows = (
 
   if (variableIdFilter) {
     filteredRows = filteredRows.filter(row => row.variableId.includes(variableIdFilter));
+  }
+
+  if (variableIdRegexFilter) {
+    const variableIdRegex = new RegExp(variableIdRegexFilter);
+    filteredRows = filteredRows.filter(row => variableIdRegex.test(row.variableId));
   }
 
   pairKeyFilters.forEach(pairKeys => {
@@ -251,7 +261,7 @@ const getSampleInfoRows = (rows: ResponseFixtureRow[]) => {
 describe('VariableAnalysisReplayService', () => {
   let service: VariableAnalysisReplayService;
   let fileUploadRepository: { find: jest.Mock };
-  let responseRepository: { createQueryBuilder: jest.Mock };
+  let responseRepository: { createQueryBuilder: jest.Mock; manager: { connection: { createQueryRunner: jest.Mock } } };
   let workspaceFilesService: { getUnitVariableMap: jest.Mock };
   let codingListService: { getVariablePageMap: jest.Mock };
   let workspaceExclusionService: { resolveExclusionsForQueries: jest.Mock };
@@ -313,7 +323,19 @@ describe('VariableAnalysisReplayService', () => {
           queryKinds[responseRepository.createQueryBuilder.mock.calls.length - 1],
           responseRows
         )
-      ))
+      )),
+      manager: {
+        connection: {
+          createQueryRunner: jest.fn().mockReturnValue({
+            connect: jest.fn().mockResolvedValue(undefined),
+            startTransaction: jest.fn().mockResolvedValue(undefined),
+            query: jest.fn().mockResolvedValue(undefined),
+            commitTransaction: jest.fn().mockResolvedValue(undefined),
+            rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+            release: jest.fn().mockResolvedValue(undefined)
+          })
+        }
+      }
     };
     workspaceFilesService = {
       getUnitVariableMap: jest.fn().mockResolvedValue(new Map([
@@ -394,5 +416,36 @@ describe('VariableAnalysisReplayService', () => {
       totalCount: 1
     });
     expect(result.data[0].replayUrl).toContain('/MDB002/2/02?auth=token');
+  });
+
+  it('uses a regex variable filter when requested', async () => {
+    const result = await service.getVariableAnalysis(
+      7,
+      'token',
+      'http://server',
+      1,
+      10,
+      undefined,
+      '^0[12]$',
+      undefined,
+      true
+    );
+
+    expect(result.total).toBe(3);
+    expect(result.data.map(row => row.variableId)).toEqual(['01', '01', '02']);
+  });
+
+  it('rejects an invalid regex variable filter', async () => {
+    await expect(service.getVariableAnalysis(
+      7,
+      'token',
+      'http://server',
+      1,
+      10,
+      undefined,
+      '[',
+      undefined,
+      true
+    )).rejects.toThrow('Invalid regular expression');
   });
 });

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { DatabaseModule } from '../../database/database.module';
 import { WorkspaceModule } from '../../workspace/workspace.module';
 import { AuthModule } from '../../auth/auth.module';
@@ -13,6 +14,7 @@ import { WorkspaceTestResultsResponseController } from '../workspace/workspace-t
 import { WorkspaceTestResultsAnalysisController } from '../workspace/workspace-test-results-analysis.controller';
 import { WorkspaceTestResultsImportController } from '../workspace/workspace-test-results-import.controller';
 import { WorkspaceTestResultsExportController } from '../workspace/workspace-test-results-export.controller';
+import { Setting } from '../../database/entities/setting.entity';
 
 @Module({
   imports: [
@@ -23,7 +25,8 @@ import { WorkspaceTestResultsExportController } from '../workspace/workspace-tes
       name: 'database-export'
     }),
     JobQueueModule,
-    CacheModule
+    CacheModule,
+    TypeOrmModule.forFeature([Setting])
   ],
   controllers: [
     WorkspaceTestResultsController,

@@ -193,7 +193,10 @@ describe('WorkspaceTestResultsService', () => {
     dataSource = {
       createQueryRunner: jest.fn().mockReturnValue({
         connect: jest.fn().mockResolvedValue(undefined),
+        startTransaction: jest.fn().mockResolvedValue(undefined),
         query: jest.fn().mockResolvedValue([]),
+        commitTransaction: jest.fn().mockResolvedValue(undefined),
+        rollbackTransaction: jest.fn().mockResolvedValue(undefined),
         release: jest.fn().mockResolvedValue(undefined)
       }),
       createQueryBuilder: jest.fn(() => mockQueryBuilder()),
@@ -815,6 +818,62 @@ describe('WorkspaceTestResultsService', () => {
         'response.variableid ILIKE :variableId',
         { variableId: '%01%' }
       );
+    });
+
+    it('should filter selected response fields with regex when requested', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        {
+          variableId: '^VAR_\\d+$',
+          unitName: '^Unit',
+          bookletName: 'Booklet-[AB]',
+          group: '^G[12]$',
+          code: '^P-',
+          personLogin: 'user-[0-9]+',
+          regexSearch: true
+        },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.variableid ~ :variableIdRegex',
+        { variableIdRegex: '^VAR_\\d+$' }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'unit.name ~ :unitNameRegex',
+        { unitNameRegex: '^Unit' }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'bookletinfo.name ~ :bookletNameRegex',
+        { bookletNameRegex: 'Booklet-[AB]' }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'person.group ~ :groupRegex',
+        { groupRegex: '^G[12]$' }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'person.code ~ :codeRegex',
+        { codeRegex: '^P-' }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'person.login ~ :personLoginRegex',
+        { personLoginRegex: 'user-[0-9]+' }
+      );
+    });
+
+    it('should reject invalid regex filters', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+
+      await expect(service.searchResponses(
+        1,
+        { variableId: '[', regexSearch: true },
+        { page: 1, limit: 100 }
+      )).rejects.toThrow('Invalid regular expression');
     });
 
     it('should filter variable IDs exactly when wrapped in double quotes', async () => {
