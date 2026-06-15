@@ -67,6 +67,14 @@ describe('CodingJobOperationsService', () => {
         status: 'completed',
         training_id: null,
         freshness_status: 'stale_source'
+      },
+      {
+        id: 5,
+        name: 'Hidden review job',
+        status: 'completed',
+        training_id: null,
+        job_type: 'coding_issue_review',
+        source_coding_job_id: 3
       }
     ] as CodingJob[]);
 
@@ -84,10 +92,18 @@ describe('CodingJobOperationsService', () => {
 
     expect(codingJobRepository.find).toHaveBeenCalledWith({
       where: { workspace_id: 5 },
-      select: ['id', 'name', 'status', 'training_id', 'freshness_status']
+      select: [
+        'id',
+        'name',
+        'status',
+        'training_id',
+        'freshness_status',
+        'job_type'
+      ]
     });
     expect(codingResultsService.applyCodingResults).toHaveBeenCalledTimes(1);
     expect(codingResultsService.applyCodingResults).toHaveBeenCalledWith(5, 3, {});
+    expect(codingJobService.hasCodingIssues).not.toHaveBeenCalled();
     expect(result.jobsProcessed).toBe(0);
     expect(result.totalUpdatedResponses).toBe(0);
     expect(result.results).toEqual([
@@ -131,5 +147,99 @@ describe('CodingJobOperationsService', () => {
     expect(result.message).toContain('1 jobs skipped because they are not completed');
     expect(result.message).toContain('1 jobs skipped because their source responses changed');
     expect(result.message).toContain('1 jobs could not be applied due to conflicts or errors');
+  });
+
+  it('bulk apply applies completed jobs with coding issues and reports review skips from the apply result', async () => {
+    codingJobRepository.find.mockResolvedValue([
+      {
+        id: 7,
+        name: 'Completed job with coding issue',
+        status: 'completed',
+        training_id: null
+      }
+    ] as CodingJob[]);
+    codingJobService.hasCodingIssues.mockResolvedValueOnce(true);
+    codingResultsService.applyCodingResults.mockResolvedValue({
+      success: true,
+      updatedResponsesCount: 2,
+      skippedReviewCount: 1,
+      skippedAlreadyCodedCount: 3,
+      overwrittenExistingCount: 0,
+      messageKey: 'coding-results.apply.success.bulk',
+      messageParams: { count: 2, skipped: 1 }
+    });
+
+    const result = await service.bulkApplyCodingResults(5);
+
+    expect(codingJobService.hasCodingIssues).not.toHaveBeenCalled();
+    expect(codingResultsService.applyCodingResults).toHaveBeenCalledTimes(1);
+    expect(codingResultsService.applyCodingResults).toHaveBeenCalledWith(5, 7, {});
+    expect(result.jobsProcessed).toBe(1);
+    expect(result.totalUpdatedResponses).toBe(2);
+    expect(result.totalSkippedReview).toBe(1);
+    expect(result.totalSkippedAlreadyCoded).toBe(3);
+    expect(result.totalOverwrittenExisting).toBe(0);
+    expect(result.results).toEqual([
+      {
+        jobId: 7,
+        jobName: 'Completed job with coding issue',
+        hasIssues: true,
+        skipped: false,
+        result: {
+          success: true,
+          updatedResponsesCount: 2,
+          skippedReviewCount: 1,
+          skippedAlreadyCodedCount: 3,
+          overwrittenExistingCount: 0,
+          message: 'coding-results.apply.success.bulk'
+        }
+      }
+    ]);
+    expect(result.message).toContain('Processed 1 jobs');
+    expect(result.message).toContain('updated 2 responses');
+    expect(result.message).toContain('skipped 1 for review');
+    expect(result.message).not.toContain('jobs skipped due to coding issues');
+  });
+
+  it('bulk apply includes jobs submitted for review', async () => {
+    codingJobRepository.find.mockResolvedValue([
+      {
+        id: 8,
+        name: 'Submitted review job',
+        status: 'review',
+        training_id: null
+      }
+    ] as CodingJob[]);
+    codingResultsService.applyCodingResults.mockResolvedValue({
+      success: true,
+      updatedResponsesCount: 4,
+      skippedReviewCount: 0,
+      skippedAlreadyCodedCount: 0,
+      overwrittenExistingCount: 0,
+      messageKey: 'coding-results.apply.success.bulk',
+      messageParams: { count: 4 }
+    });
+
+    const result = await service.bulkApplyCodingResults(5);
+
+    expect(codingResultsService.applyCodingResults).toHaveBeenCalledWith(5, 8, {});
+    expect(result.jobsProcessed).toBe(1);
+    expect(result.totalUpdatedResponses).toBe(4);
+    expect(result.results).toEqual([
+      {
+        jobId: 8,
+        jobName: 'Submitted review job',
+        hasIssues: false,
+        skipped: false,
+        result: {
+          success: true,
+          updatedResponsesCount: 4,
+          skippedReviewCount: 0,
+          skippedAlreadyCodedCount: 0,
+          overwrittenExistingCount: 0,
+          message: 'coding-results.apply.success.bulk'
+        }
+      }
+    ]);
   });
 });

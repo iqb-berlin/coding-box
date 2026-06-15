@@ -25,6 +25,10 @@ import {
   ManualCodingExcludedSourceSummary,
   summarizeCoveredSourceVariables
 } from '../../utils/manual-coding-scope.util';
+import {
+  applyNonCodingIssueReviewJobFilter,
+  getNonCodingIssueReviewJobSqlCondition
+} from './coding-job-type.util';
 
 type ResponseMatchingFlag =
   | 'NO_AGGREGATION'
@@ -425,6 +429,7 @@ export class CodingProgressService {
               ON manual_derive_cj.id = manual_derive_cju.coding_job_id
             WHERE manual_derive_cju.response_id = response.id
               AND manual_derive_cj.training_id IS NULL
+              AND ${getNonCodingIssueReviewJobSqlCondition('manual_derive_cj')}
           )`,
         { deriveErrorStatus }
       );
@@ -530,6 +535,7 @@ export class CodingProgressService {
               .innerJoin('coding_job', 'manual_cj', 'manual_cj.id = manual_cju.coding_job_id')
               .where('manual_cju.response_id = response.id')
               .andWhere('manual_cj.training_id IS NULL')
+              .andWhere(getNonCodingIssueReviewJobSqlCondition('manual_cj'))
               .getQuery();
             return `EXISTS (${exists})`;
           });
@@ -589,6 +595,11 @@ export class CodingProgressService {
             return `EXISTS (${exists})`;
           });
       }));
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'assignedCoverageRowsReviewJobType'
+    );
     this.applyManualProgressStatusFilter(query, 'andWhere');
     applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: 'assignedCoverageRows' });
     const raw = await query.getRawMany();
@@ -612,6 +623,11 @@ export class CodingProgressService {
       .andWhere('cju.code IS NOT NULL')
       .andWhere('person.consider = :consider', { consider: true })
       .select('DISTINCT cju.response_id', 'responseId');
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'completedCoverageReviewJobType'
+    );
     this.applyManualProgressStatusFilter(query, 'andWhere');
     applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: 'completedCoverage' });
     const raw = await query.getRawMany();
@@ -659,6 +675,11 @@ export class CodingProgressService {
             return `EXISTS (${exists})`;
           });
       }));
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'assignedCoverageReviewJobType'
+    );
     this.applyManualProgressStatusFilter(query, 'andWhere');
     applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: 'assignedCoverage' });
     const raw = await query.getRawMany();
@@ -777,6 +798,7 @@ export class CodingProgressService {
                 .innerJoin('coding_job', 'manual_cj', 'manual_cj.id = manual_cju.coding_job_id')
                 .where('manual_cju.response_id = response.id')
                 .andWhere('manual_cj.training_id IS NULL')
+                .andWhere(getNonCodingIssueReviewJobSqlCondition('manual_cj'))
                 .getQuery();
               return `EXISTS (${exists})`;
             });
@@ -1028,6 +1050,11 @@ export class CodingProgressService {
       .andWhere('coding_job.training_id IS NULL')
       .groupBy('cju.unit_name')
       .addGroupBy('cju.variable_id');
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'variableCasesInJobsReviewJobType'
+    );
     applyResolvedExclusionsToQuery(query, exclusions, {
       unitNameExpression: 'cju.unit_name',
       bookletNameExpression: 'cju.booklet_name',
@@ -1072,6 +1099,11 @@ export class CodingProgressService {
         ]
       })
       .andWhere('person.consider = :consider', { consider: true });
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'crossDefinitionConflictsReviewJobType'
+    );
     applyResolvedExclusionsToQuery(query, exclusions, {
       unitNameExpression: 'cju.unit_name',
       bookletNameExpression: 'cju.booklet_name',

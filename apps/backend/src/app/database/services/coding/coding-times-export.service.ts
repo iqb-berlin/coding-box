@@ -13,6 +13,10 @@ import {
   createManualCodingVariablePairKeySet,
   toManualCodingVariablePairKey
 } from '../../utils/manual-coding-candidate.util';
+import {
+  applyNonCodingIssueReviewJobFilter,
+  CODING_JOB_TYPE_CODING_ISSUE_REVIEW
+} from './coding-job-type.util';
 
 @Injectable()
 export class CodingTimesExportService {
@@ -34,12 +38,21 @@ export class CodingTimesExportService {
       .innerJoin('coding_job_unit.coding_job', 'coding_job')
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL')
-      .distinct(true)
-      .getRawMany<{ unitName: string; variableId: string }>();
+      .distinct(true);
+    applyNonCodingIssueReviewJobFilter(
+      manualJobVariables,
+      'coding_job',
+      'codingTimesManualVariablesReviewJobType'
+    );
+    const manualJobVariableRows =
+      await manualJobVariables.getRawMany<{
+        unitName: string;
+        variableId: string;
+      }>();
 
     const manualCodingVariableSet = createManualCodingVariablePairKeySet([
       ...codingListVariables,
-      ...manualJobVariables
+      ...manualJobVariableRows
     ]);
 
     if (manualCodingVariableSet.size === 0) {
@@ -65,7 +78,8 @@ export class CodingTimesExportService {
       where: {
         coding_job: {
           workspace_id: workspaceId,
-          training_id: IsNull()
+          training_id: IsNull(),
+          job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
         },
         code: Not(IsNull()) // Only include units that have been coded
       },

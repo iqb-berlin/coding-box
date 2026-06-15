@@ -77,6 +77,15 @@ const expectManualCodingCandidateStatusFilter = (
   expect(statuses).not.toContain(statusStringToNumber('DERIVE_ERROR'));
 };
 
+const expectCompletedV2Filter = (
+  qb: Record<string, jest.Mock>
+) => {
+  expect(qb.andWhere).toHaveBeenCalledWith(
+    '(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)',
+    { completedV2Status: statusStringToNumber('CODING_COMPLETE') }
+  );
+};
+
 describe('CodingJobService', () => {
   let service: CodingJobService;
   let codingJobRepository: ReturnType<typeof createRepo>;
@@ -115,7 +124,8 @@ describe('CodingJobService', () => {
     variableId = 'VAR',
     variableAlias,
     codeId = 7,
-    score = 2
+    score = 2,
+    manualInstruction = '<p>Manual instruction</p>'
   }: {
     unitFileId?: string;
     schemeRef?: string;
@@ -124,6 +134,7 @@ describe('CodingJobService', () => {
     variableAlias?: string;
     codeId?: number;
     score?: number | null;
+    manualInstruction?: string | null;
   } = {}) => {
     fileUploadRepository.find
       .mockResolvedValueOnce([
@@ -147,7 +158,8 @@ describe('CodingJobService', () => {
                     id: codeId,
                     code: String(codeId),
                     label: `Code ${codeId}`,
-                    score
+                    score,
+                    manualInstruction
                   }
                 ]
               }
@@ -765,9 +777,17 @@ describe('CodingJobService', () => {
   });
 
   it('loads coding jobs with assignments, bundles and progress', async () => {
-    const job = { id: 11, workspace_id: 3, name: 'Job' };
+    const job = {
+      id: 11,
+      workspace_id: 3,
+      name: 'Job',
+      comment: '[coding-issue-review-source-job:user-comment]',
+      job_type: 'regular'
+    };
     codingJobRepository.count.mockResolvedValue(1);
-    codingJobRepository.find.mockResolvedValue([job]);
+    codingJobRepository.find
+      .mockResolvedValueOnce([job])
+      .mockResolvedValueOnce([]);
     codingJobCoderRepository.find.mockResolvedValue([
       { coding_job_id: 11, user_id: 5 }
     ]);
@@ -797,36 +817,88 @@ describe('CodingJobService', () => {
       .mockReturnValueOnce(
         createQueryBuilder([
           {
-            jobId: '11',
-            open: '1',
-            codeAssignmentUncertain: '1',
-            newCodeNeeded: '1'
+            coding_job_id: 11,
+            is_open: true,
+            code: null,
+            coding_issue_option: null,
+            person_login: 'login',
+            person_code: 'code',
+            person_group: null,
+            booklet_name: 'BOOKLET',
+            unit_name: 'UNIT',
+            variable_id: 'OPEN'
+          },
+          {
+            coding_job_id: 11,
+            is_open: false,
+            code: -1,
+            coding_issue_option: null,
+            person_login: 'login',
+            person_code: 'code',
+            person_group: null,
+            booklet_name: 'BOOKLET',
+            unit_name: 'UNIT',
+            variable_id: 'VAR'
+          },
+          {
+            coding_job_id: 11,
+            is_open: false,
+            code: -2,
+            coding_issue_option: null,
+            person_login: 'login',
+            person_code: 'code',
+            person_group: null,
+            booklet_name: 'BOOKLET',
+            unit_name: 'UNIT',
+            variable_id: 'VAR2'
           }
         ])
       )
       .mockReturnValueOnce(createQueryBuilder(9));
+    const getCodingProgressSpy = jest
+      .spyOn(service, 'getCodingProgress')
+      .mockRejectedValue(new Error('getCodingProgress must stay batched'));
 
-    const result = await service.getCodingJobs(3, 0, 25, undefined, {
-      includeIssueSummary: true,
-      excludeStatus: 'review',
-      jobName: 'Job',
-      sortBy: 'updatedAt',
-      sortDirection: 'asc'
-    });
+    let result!: Awaited<ReturnType<CodingJobService['getCodingJobs']>>;
+    try {
+      result = await service.getCodingJobs(3, 0, 25, undefined, {
+        includeIssueSummary: true,
+        excludeStatus: 'review',
+        jobName: 'Job',
+        sortBy: 'updatedAt',
+        sortDirection: 'asc'
+      });
+      expect(getCodingProgressSpy).not.toHaveBeenCalled();
+    } finally {
+      getCodingProgressSpy.mockRestore();
+    }
 
     expect(
       codingFreshnessService.reconcileAppliedManualCodingJobs
     ).toHaveBeenCalledWith(3, 'RESET', 'current');
     expect(codingJobRepository.find).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          workspace_id: 3,
-          status: expect.any(Object),
-          name: expect.any(Object)
-        }),
+        where: expect.any(Array),
         order: { updated_at: 'ASC' }
       })
     );
+    expect(codingJobRepository.find.mock.calls[0][0].where).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          workspace_id: 3,
+          status: expect.any(Object),
+          name: expect.any(Object),
+          job_type: expect.any(Object)
+        })
+      ])
+    );
+    expect(
+      codingJobRepository.find.mock.calls[0][0].where.some(
+        (where: Record<string, unknown>) => (
+          Object.prototype.hasOwnProperty.call(where, 'comment')
+        )
+      )
+    ).toBe(false);
     expect(result.page).toBe(1);
     expect(result.total).toBe(1);
     expect(result.totalOpenUnits).toBe(9);
@@ -852,6 +924,116 @@ describe('CodingJobService', () => {
         newCodeNeeded: 1
       }
     });
+  });
+
+  it('applies review overlays to coding job issue summaries in batch', async () => {
+    const sourceCodeAssignmentUncertainUnit = {
+      coding_job_id: 11,
+      is_open: false,
+      code: -1,
+      coding_issue_option: null,
+      person_login: 'login',
+      person_code: 'code',
+      person_group: null,
+      booklet_name: 'BOOKLET',
+      unit_name: 'UNIT',
+      variable_id: 'VAR1'
+    } as CodingJobUnit;
+    const sourceNewCodeNeededUnit = {
+      coding_job_id: 11,
+      is_open: false,
+      code: -2,
+      coding_issue_option: null,
+      person_login: 'login',
+      person_code: 'code',
+      person_group: null,
+      booklet_name: 'BOOKLET',
+      unit_name: 'UNIT',
+      variable_id: 'VAR2'
+    } as CodingJobUnit;
+    const sourceOpenReviewUnit = {
+      coding_job_id: 11,
+      is_open: false,
+      code: -1,
+      coding_issue_option: null,
+      person_login: 'login',
+      person_code: 'code',
+      person_group: null,
+      booklet_name: 'BOOKLET',
+      unit_name: 'UNIT',
+      variable_id: 'VAR3'
+    } as CodingJobUnit;
+    const reviewResolvedUnit = {
+      coding_job_id: 77,
+      is_open: false,
+      code: 3,
+      coding_issue_option: null,
+      person_login: 'login',
+      person_code: 'code',
+      person_group: null,
+      booklet_name: 'BOOKLET',
+      unit_name: 'UNIT',
+      variable_id: 'VAR2'
+    } as CodingJobUnit;
+    const reviewOpenUnit = {
+      coding_job_id: 77,
+      is_open: true,
+      code: null,
+      coding_issue_option: null,
+      person_login: 'login',
+      person_code: 'code',
+      person_group: null,
+      booklet_name: 'BOOKLET',
+      unit_name: 'UNIT',
+      variable_id: 'VAR3'
+    } as CodingJobUnit;
+    codingJobUnitRepository.createQueryBuilder.mockReturnValueOnce(
+      createQueryBuilder([
+        sourceCodeAssignmentUncertainUnit,
+        sourceNewCodeNeededUnit,
+        sourceOpenReviewUnit
+      ])
+    );
+    codingJobRepository.find.mockResolvedValueOnce([
+      {
+        id: 77,
+        job_type: 'coding_issue_review',
+        source_coding_job_id: 11
+      }
+    ]);
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      reviewResolvedUnit,
+      reviewOpenUnit
+    ]);
+    const getCodingProgressSpy = jest
+      .spyOn(service, 'getCodingProgress')
+      .mockRejectedValue(new Error('getCodingProgress must stay batched'));
+
+    try {
+      const summaries = await (
+        service as unknown as {
+          getCodingJobIssueSummariesByJobIds: (
+            jobIds: number[],
+            workspaceId: number
+          ) => Promise<Map<number, {
+            total: number;
+            open: number;
+            codeAssignmentUncertain: number;
+            newCodeNeeded: number;
+          }>>;
+        }
+      ).getCodingJobIssueSummariesByJobIds([11], 3);
+
+      expect(summaries.get(11)).toEqual({
+        total: 2,
+        open: 1,
+        codeAssignmentUncertain: 2,
+        newCodeNeeded: 0
+      });
+      expect(getCodingProgressSpy).not.toHaveBeenCalled();
+    } finally {
+      getCodingProgressSpy.mockRestore();
+    }
   });
 
   it('filters coding jobs by assigned coder before loading assignments and progress', async () => {
@@ -899,7 +1081,9 @@ describe('CodingJobService', () => {
     );
     expect(codingJobRepository.find).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ workspace_id: 3 }),
+        where: expect.arrayContaining([
+          expect.objectContaining({ workspace_id: 3 })
+        ]),
         relations: ['training']
       })
     );
@@ -1522,7 +1706,50 @@ describe('CodingJobService', () => {
       'job_definition_id'
     );
     expect(cacheService.delete).toHaveBeenCalledWith(
-      'coding_incomplete_variables_v7:7'
+      'coding_incomplete_variables_v8:7'
+    );
+  });
+
+  it('locks workspace test-result mutations before selecting direct coding-job units', async () => {
+    const transactionManager = {
+      query: jest.fn().mockResolvedValue([]),
+      getRepository: (entity: unknown) => {
+        if (entity === CodingJob) return codingJobRepository;
+        if (entity === CodingJobCoder) return codingJobCoderRepository;
+        if (entity === CodingJobVariable) return codingJobVariableRepository;
+        if (entity === CodingJobVariableBundle) return codingJobVariableBundleRepository;
+        if (entity === CodingJobUnit) return codingJobUnitRepository;
+        if (entity === JobDefinition) return jobDefinitionRepository;
+        if (entity === VariableBundle) return variableBundleRepository;
+        if (entity === ResponseEntity) return responseRepository;
+        return createRepo();
+      }
+    };
+    connection.transaction.mockImplementationOnce(callback => (
+      callback(transactionManager)
+    ));
+    const qb = createQueryBuilder([]);
+    responseRepository.createQueryBuilder.mockReturnValue(qb);
+    codingJobRepository.save.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobVariableRepository.find.mockResolvedValue([
+      { unit_name: 'UNIT', variable_id: 'VAR' }
+    ]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+
+    await service.createCodingJob(3, {
+      name: 'Direct job',
+      variables: [{ unitName: 'UNIT', variableId: 'VAR' }]
+    } as never);
+
+    expect(transactionManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+      [expect.any(Number), 3]
+    );
+    expect(
+      transactionManager.query.mock.invocationCallOrder[0]
+    ).toBeLessThan(
+      responseRepository.createQueryBuilder.mock.invocationCallOrder[0]
     );
   });
 
@@ -1678,7 +1905,7 @@ describe('CodingJobService', () => {
     });
   });
 
-  it('rejects status changes away from completed coding jobs', async () => {
+  it('rejects unsupported status changes away from completed coding jobs', async () => {
     codingJobRepository.findOne.mockResolvedValue({
       id: 1,
       workspace_id: 3,
@@ -1692,6 +1919,89 @@ describe('CodingJobService', () => {
     await expect(
       service.updateCodingJob(1, 3, { status: 'paused' })
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it.each(['active', 'review'])(
+    'allows completed coding jobs to change to %s',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValue({
+        id: 1,
+        workspace_id: 3,
+        status: 'completed'
+      });
+      codingJobCoderRepository.find.mockResolvedValue([]);
+      codingJobVariableRepository.find.mockResolvedValue([]);
+      codingJobVariableBundleRepository.find.mockResolvedValue([]);
+      variableBundleRepository.find.mockResolvedValue([]);
+
+      await expect(
+        service.updateCodingJob(1, 3, { status })
+      ).resolves.toMatchObject({ status });
+      expect(codingJobRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status })
+      );
+    }
+  );
+
+  it('pauses active coding jobs through the coder action', async () => {
+    const codingJob = {
+      id: 1,
+      workspace_id: 3,
+      status: 'active'
+    };
+    codingJobRepository.findOne.mockResolvedValue(codingJob);
+
+    await expect(service.pauseCodingJob(1, 3)).resolves.toMatchObject({
+      status: 'paused'
+    });
+
+    expect(codingJobRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 1, workspace_id: 3 }
+    });
+    expect(codingJobRepository.save).toHaveBeenCalledWith({
+      ...codingJob,
+      status: 'paused'
+    });
+  });
+
+  it('leaves completed coding jobs unchanged when a pause arrives late', async () => {
+    const codingJob = {
+      id: 1,
+      workspace_id: 3,
+      status: 'completed'
+    };
+    codingJobRepository.findOne.mockResolvedValue(codingJob);
+
+    await expect(service.pauseCodingJob(1, 3)).resolves.toBe(codingJob);
+
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('resumes paused coding jobs through the coder action', async () => {
+    const codingJob = {
+      id: 1,
+      workspace_id: 3,
+      status: 'paused'
+    };
+    codingJobRepository.findOne.mockResolvedValue(codingJob);
+
+    await expect(service.resumeCodingJob(1, 3)).resolves.toMatchObject({
+      status: 'active'
+    });
+
+    expect(codingJobRepository.save).toHaveBeenCalledWith({
+      ...codingJob,
+      status: 'active'
+    });
+  });
+
+  it('rejects coder status actions for unknown coding jobs', async () => {
+    codingJobRepository.findOne.mockResolvedValue(null);
+
+    await expect(service.pauseCodingJob(1, 3)).rejects.toBeInstanceOf(
+      NotFoundException
+    );
     expect(codingJobRepository.save).not.toHaveBeenCalled();
   });
 
@@ -1736,7 +2046,41 @@ describe('CodingJobService', () => {
     variableBundleRepository.find.mockResolvedValue([]);
 
     await expect(
+      service.updateCodingJob(1, 3, { status: 'archived' })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects review submission before the coding job is completed', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 1,
+      workspace_id: 3,
+      status: 'active'
+    });
+    codingJobCoderRepository.find.mockResolvedValue([]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    variableBundleRepository.find.mockResolvedValue([]);
+
+    await expect(
       service.updateCodingJob(1, 3, { status: 'review' })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects changes away from coding jobs submitted for review', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 1,
+      workspace_id: 3,
+      status: 'review'
+    });
+    codingJobCoderRepository.find.mockResolvedValue([]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    variableBundleRepository.find.mockResolvedValue([]);
+
+    await expect(
+      service.updateCodingJob(1, 3, { status: 'active' })
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(codingJobRepository.save).not.toHaveBeenCalled();
   });
@@ -1758,27 +2102,30 @@ describe('CodingJobService', () => {
     expect(codingJobRepository.save).not.toHaveBeenCalled();
   });
 
-  it('allows the internal apply flow to mark completed coding jobs as results applied', async () => {
-    codingJobRepository.findOne.mockResolvedValue({
-      id: 1,
-      workspace_id: 3,
-      status: 'completed'
-    });
-    codingJobCoderRepository.find.mockResolvedValue([]);
-    codingJobVariableRepository.find.mockResolvedValue([]);
-    codingJobVariableBundleRepository.find.mockResolvedValue([]);
-    variableBundleRepository.find.mockResolvedValue([]);
-
-    await expect(
-      service.markCodingJobResultsApplied(1, 3)
-    ).resolves.toMatchObject({ status: 'results_applied' });
-    expect(codingJobRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({
+  it.each(['completed', 'review'])(
+    'allows the internal apply flow to mark %s coding jobs as results applied',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValue({
         id: 1,
-        status: 'results_applied'
-      })
-    );
-  });
+        workspace_id: 3,
+        status
+      });
+      codingJobCoderRepository.find.mockResolvedValue([]);
+      codingJobVariableRepository.find.mockResolvedValue([]);
+      codingJobVariableBundleRepository.find.mockResolvedValue([]);
+      variableBundleRepository.find.mockResolvedValue([]);
+
+      await expect(
+        service.markCodingJobResultsApplied(1, 3)
+      ).resolves.toMatchObject({ status: 'results_applied' });
+      expect(codingJobRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 1,
+          status: 'results_applied'
+        })
+      );
+    }
+  );
 
   it('uses the provided transaction manager when marking coding job results applied', async () => {
     const transactionalCodingJobRepository = createRepo();
@@ -1844,6 +2191,7 @@ describe('CodingJobService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith(
       '(response.code_v2 IS NULL OR response.code_v2 != -111)'
     );
+    expectCompletedV2Filter(qb);
   });
 
   it('does not include DERIVE_ERROR responses in coding-job variable selection', async () => {
@@ -1931,12 +2279,13 @@ describe('CodingJobService', () => {
     } as never);
 
     expectManualCodingCandidateStatusFilter(qb);
+    expectCompletedV2Filter(qb);
   });
 
   it('counts DERIVE_ERROR distribution cases only for variables with job-definition opt-in', () => {
     const calculateFromContext = (
       service as unknown as {
-        calculateDistributionVariableUsageFromContext: (
+        calculateDistributionVariableUsageByStatusFromContext: (
           workspaceId: number,
           request: {
             selectedVariables: {
@@ -1947,9 +2296,9 @@ describe('CodingJobService', () => {
             selectedVariableBundles?: [];
           },
           context: unknown
-        ) => Map<string, number>;
+        ) => Map<string, { regular: number; deriveError: number; total: number }>;
       }
-    ).calculateDistributionVariableUsageFromContext.bind(service);
+    ).calculateDistributionVariableUsageByStatusFromContext.bind(service);
     const context = {
       matchingFlags: [ResponseMatchingFlag.NO_AGGREGATION],
       aggregationThreshold: null,
@@ -1992,7 +2341,7 @@ describe('CodingJobService', () => {
         },
         context
       ).get('UNIT::VAR')
-    ).toBe(1);
+    ).toEqual({ regular: 1, deriveError: 0, total: 1 });
     expect(
       calculateFromContext(
         3,
@@ -2004,7 +2353,7 @@ describe('CodingJobService', () => {
         },
         context
       ).get('UNIT::VAR')
-    ).toBe(2);
+    ).toEqual({ regular: 1, deriveError: 1, total: 2 });
   });
 
   it('returns no coding-job responses when no variables are assigned', async () => {
@@ -2069,6 +2418,377 @@ describe('CodingJobService', () => {
         score: null,
         coding_issue_option: null,
         is_open: true
+      })
+    );
+  });
+
+  it.each(['review', 'results_applied'])(
+    'rejects saving progress for %s coding jobs',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValue({
+        id: 1,
+        workspace_id: 3,
+        status
+      });
+
+      await expect(
+        service.saveCodingProgress(1, {
+          testPerson: 'login@code@booklet',
+          unitId: 'UNIT',
+          variableId: 'VAR',
+          selectedCode: { id: 7 }
+        } as never)
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(codingJobUnitRepository.findOne).not.toHaveBeenCalled();
+      expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+    }
+  );
+
+  it('stores coding issue review progress as the manager coder without changing the source unit', async () => {
+    const sourceJob = {
+      id: 1,
+      workspace_id: 3,
+      name: 'Original job',
+      description: 'description',
+      showScore: true,
+      allowComments: true,
+      suppressGeneralInstructions: false,
+      training_id: null,
+      missings_profile_id: 55,
+      job_definition_id: 9,
+      case_ordering_mode: 'continuous',
+      aggregation_enabled: true,
+      aggregation_threshold: 2,
+      response_matching_flags: null,
+      aggregation_settings_version: 1,
+      freshness_status: 'current',
+      freshness_reason: null
+    };
+    const sourceUnit = {
+      coding_job_id: 1,
+      workspace_id: 3,
+      response_id: 99,
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR',
+      variable_anchor: 'VAR',
+      variable_bundle_id: null,
+      person_login: 'login',
+      person_code: 'code',
+      person_group: '',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: -2,
+      score: null,
+      coding_issue_option: -2,
+      notes: 'source note'
+    };
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobUnitRepository.findOne
+      .mockResolvedValueOnce(sourceUnit)
+      .mockResolvedValueOnce(null);
+    codingJobRepository.find.mockResolvedValueOnce([]);
+    codingJobRepository.save.mockImplementation(value => Promise.resolve({
+      ...value,
+      id: 77
+    }));
+    mockCodingScheme();
+
+    await service.saveCodingIssueReviewProgress(1, 42, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: { id: 7 },
+      notes: 'manager note'
+    } as never);
+
+    expect(codingJobRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        comment: null,
+        job_type: 'coding_issue_review',
+        source_coding_job_id: 1,
+        reviewer_user_id: 42,
+        job_definition_id: 9,
+        status: 'completed'
+      })
+    );
+    expect(codingJobCoderRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coding_job_id: 77,
+        user_id: 42
+      })
+    );
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coding_job_id: 77,
+        response_id: 99,
+        code: 7,
+        score: 2,
+        coding_issue_option: null,
+        notes: 'manager note'
+      })
+    );
+    expect(sourceUnit.code).toBe(-2);
+    expect(sourceUnit.coding_issue_option).toBe(-2);
+  });
+
+  it('reuses a concurrently created coding issue review job', async () => {
+    const sourceJob = {
+      id: 1,
+      workspace_id: 3,
+      name: 'Original job',
+      description: null,
+      showScore: true,
+      allowComments: true,
+      suppressGeneralInstructions: false,
+      training_id: null,
+      missings_profile_id: 55,
+      job_definition_id: 9,
+      case_ordering_mode: 'continuous',
+      aggregation_enabled: true,
+      aggregation_threshold: 2,
+      response_matching_flags: null,
+      aggregation_settings_version: 1,
+      freshness_status: 'current',
+      freshness_reason: null
+    };
+    const sourceUnit = {
+      coding_job_id: 1,
+      workspace_id: 3,
+      response_id: 99,
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR',
+      variable_anchor: 'VAR',
+      variable_bundle_id: null,
+      person_login: 'login',
+      person_code: 'code',
+      person_group: '',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: -2,
+      score: null,
+      coding_issue_option: -2,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobUnitRepository.findOne
+      .mockResolvedValueOnce(sourceUnit)
+      .mockResolvedValueOnce(null);
+    codingJobRepository.find
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 77,
+          workspace_id: 3,
+          job_type: 'coding_issue_review',
+          source_coding_job_id: 1,
+          reviewer_user_id: 42,
+          codingJobCoders: []
+        }
+      ]);
+    codingJobRepository.save.mockRejectedValueOnce({ code: '23505' });
+    mockCodingScheme();
+
+    await service.saveCodingIssueReviewProgress(1, 42, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: { id: 7 }
+    } as never);
+
+    expect(codingJobCoderRepository.save).not.toHaveBeenCalled();
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coding_job_id: 77,
+        response_id: 99,
+        code: 7,
+        score: 2,
+        coding_issue_option: null
+      })
+    );
+  });
+
+  it('rejects coding issue review progress for units that do not require review', async () => {
+    const sourceJob = { id: 1, workspace_id: 3, status: 'completed' };
+    const sourceUnit = {
+      coding_job_id: 1,
+      workspace_id: 3,
+      response_id: 99,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: '',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: 7,
+      score: 2,
+      coding_issue_option: null
+    };
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobUnitRepository.findOne.mockResolvedValueOnce(sourceUnit);
+
+    await expect(service.saveCodingIssueReviewProgress(1, 42, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: null
+    } as never)).rejects.toThrow(
+      'Coding issue review can only be saved for units that require review'
+    );
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+    expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects coding issue review notes for units that do not require review', async () => {
+    const sourceJob = { id: 1, workspace_id: 3, status: 'completed' };
+    const sourceUnit = {
+      coding_job_id: 1,
+      workspace_id: 3,
+      response_id: 99,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: '',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: 7,
+      score: 2,
+      coding_issue_option: null
+    };
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobUnitRepository.findOne.mockResolvedValueOnce(sourceUnit);
+
+    await expect(service.saveCodingIssueReviewNotes(1, 42, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      notes: 'note'
+    })).rejects.toThrow(
+      'Coding issue review can only be saved for units that require review'
+    );
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+    expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('does not create a blank coding issue review unit for notes-only saves', async () => {
+    const sourceJob = { id: 1, workspace_id: 3, status: 'completed' };
+    const sourceUnit = {
+      coding_job_id: 1,
+      workspace_id: 3,
+      response_id: 99,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: '',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: -2,
+      score: null,
+      coding_issue_option: -2
+    };
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobUnitRepository.findOne.mockResolvedValueOnce(sourceUnit);
+    codingJobRepository.find.mockResolvedValueOnce([]);
+
+    await service.saveCodingIssueReviewNotes(1, 42, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      notes: 'note'
+    });
+
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+    expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('creates a coding issue review from the source code when saving notes only', async () => {
+    const sourceJob = {
+      id: 1,
+      workspace_id: 3,
+      name: 'Original job',
+      description: 'description',
+      showScore: true,
+      allowComments: true,
+      suppressGeneralInstructions: false,
+      training_id: null,
+      missings_profile_id: 55,
+      job_definition_id: 9,
+      case_ordering_mode: 'continuous',
+      aggregation_enabled: true,
+      aggregation_threshold: 2,
+      response_matching_flags: null,
+      aggregation_settings_version: 1,
+      freshness_status: 'current',
+      freshness_reason: null,
+      status: 'completed'
+    };
+    const sourceUnit = {
+      coding_job_id: 1,
+      workspace_id: 3,
+      response_id: 99,
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR',
+      variable_anchor: 'VAR',
+      variable_bundle_id: null,
+      person_login: 'login',
+      person_code: 'code',
+      person_group: '',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: 7,
+      score: 2,
+      coding_issue_option: -2,
+      notes: 'source note'
+    };
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobUnitRepository.findOne
+      .mockResolvedValueOnce(sourceUnit)
+      .mockResolvedValueOnce(null);
+    codingJobRepository.find
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    codingJobRepository.save.mockImplementation(value => Promise.resolve({
+      ...value,
+      id: 77
+    }));
+
+    await service.saveCodingIssueReviewNotes(1, 42, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      notes: ' manager note '
+    });
+
+    expect(codingJobRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        comment: null,
+        job_type: 'coding_issue_review',
+        source_coding_job_id: 1,
+        reviewer_user_id: 42,
+        job_definition_id: 9,
+        status: 'completed'
+      })
+    );
+    expect(codingJobCoderRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coding_job_id: 77,
+        user_id: 42
+      })
+    );
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coding_job_id: 77,
+        response_id: 99,
+        code: 7,
+        score: 2,
+        is_open: false,
+        coding_issue_option: null,
+        notes: 'manager note'
       })
     );
   });
@@ -2152,6 +2872,203 @@ describe('CodingJobService', () => {
     );
   });
 
+  it.each([
+    { id: -2, codingIssueOption: -2 },
+    { id: 7, codingIssueOption: -1 }
+  ])(
+    'rejects comment-bound coding issue options when comments are disabled',
+    async selectedCode => {
+      const job = { id: 1, workspace_id: 3, allowComments: false };
+      const unit = {
+        coding_job_id: 1,
+        unit_name: 'UNIT',
+        variable_id: 'VAR',
+        person_login: 'login',
+        person_code: 'code',
+        booklet_name: 'booklet',
+        is_open: false,
+        code: null,
+        score: null,
+        coding_issue_option: null,
+        notes: null
+      };
+      codingJobRepository.findOne.mockResolvedValue(job);
+      codingJobUnitRepository.findOne.mockResolvedValue(unit);
+
+      await expect(
+        service.saveCodingProgress(1, {
+          testPerson: 'login@code@booklet',
+          unitId: 'UNIT',
+          variableId: 'VAR',
+          selectedCode
+        } as never)
+      ).rejects.toThrow(
+        'Coding issue options requiring comments are disabled for this coding job'
+      );
+
+      expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+    }
+  );
+
+  it('rejects code-assignment-uncertain without a regular code', async () => {
+    const job = { id: 1, workspace_id: 3, allowComments: true };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+
+    await expect(
+      service.saveCodingProgress(1, {
+        testPerson: 'login@code@booklet',
+        unitId: 'UNIT',
+        variableId: 'VAR',
+        selectedCode: { id: -1, codingIssueOption: -1 }
+      } as never)
+    ).rejects.toThrow('Code assignment uncertain requires a regular code');
+
+    expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects code-assignment-uncertain attached to a non-regular code', async () => {
+    const job = { id: 1, workspace_id: 3, allowComments: true };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: 'needs a new code'
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+
+    await expect(
+      service.saveCodingProgress(1, {
+        testPerson: 'login@code@booklet',
+        unitId: 'UNIT',
+        variableId: 'VAR',
+        selectedCode: { id: -2, codingIssueOption: -1 }
+      } as never)
+    ).rejects.toThrow('Code assignment uncertain requires a regular code');
+
+    expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects new-code-needed without coder notes', async () => {
+    const job = { id: 1, workspace_id: 3, allowComments: true };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+
+    await expect(
+      service.saveCodingProgress(1, {
+        testPerson: 'login@code@booklet',
+        unitId: 'UNIT',
+        variableId: 'VAR',
+        selectedCode: { id: -2, codingIssueOption: -2 }
+      } as never)
+    ).rejects.toThrow('New code needed requires coder notes');
+
+    expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('accepts new-code-needed when coder notes already exist', async () => {
+    const job = { id: 1, workspace_id: 3, allowComments: true };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: 'needs a new code'
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    (
+      service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }
+    ).checkAndUpdateCodingJobCompletion = jest.fn();
+
+    await service.saveCodingProgress(1, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: { id: -2, codingIssueOption: -2 }
+    } as never);
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: -2,
+        score: null,
+        coding_issue_option: -2,
+        notes: 'needs a new code'
+      })
+    );
+  });
+
+  it('rejects new-code-needed when progress explicitly clears existing coder notes', async () => {
+    const job = { id: 1, workspace_id: 3, allowComments: true };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: 'old note'
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+
+    await expect(
+      service.saveCodingProgress(1, {
+        testPerson: 'login@code@booklet',
+        unitId: 'UNIT',
+        variableId: 'VAR',
+        selectedCode: { id: -2, codingIssueOption: -2 },
+        notes: null
+      } as never)
+    ).rejects.toThrow('New code needed requires coder notes');
+
+    expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+  });
+
   it('rejects unsupported negative coding issue codes', async () => {
     const job = { id: 1, workspace_id: 3 };
     const unit = {
@@ -2213,6 +3130,45 @@ describe('CodingJobService', () => {
 
     expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { manualInstruction: '', label: 'empty' },
+    { manualInstruction: '   ', label: 'whitespace-only' },
+    { manualInstruction: null, label: 'missing' }
+  ])(
+    'rejects positive selected codes with $label manual instructions',
+    async ({ manualInstruction }) => {
+      const job = { id: 1, workspace_id: 3 };
+      const unit = {
+        coding_job_id: 1,
+        unit_name: 'UNIT',
+        unit_alias: 'ALIAS',
+        variable_id: 'VAR',
+        person_login: 'login',
+        person_code: 'code',
+        booklet_name: 'booklet',
+        is_open: false,
+        code: null,
+        score: null,
+        coding_issue_option: null,
+        notes: null
+      };
+      codingJobRepository.findOne.mockResolvedValue(job);
+      codingJobUnitRepository.findOne.mockResolvedValue(unit);
+      mockCodingScheme({ codeId: 7, score: 2, manualInstruction });
+
+      await expect(
+        service.saveCodingProgress(1, {
+          testPerson: 'login@code@booklet',
+          unitId: 'UNIT',
+          variableId: 'VAR',
+          selectedCode: { id: 7 }
+        } as never)
+      ).rejects.toThrow('Code is not available for manual coding: 7');
+
+      expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+    }
+  );
 
   it('uses the coding scheme score instead of a client-provided score', async () => {
     const job = { id: 1, workspace_id: 3 };
@@ -2377,6 +3333,7 @@ describe('CodingJobService', () => {
     } as never);
 
     expect(codingJobUnitRepository.findOne).toHaveBeenCalledWith({
+      lock: { mode: 'pessimistic_write' },
       where: expect.objectContaining({
         person_login: 'login',
         person_code: 'code',
@@ -2412,6 +3369,15 @@ describe('CodingJobService', () => {
       notes: ' remember '
     });
 
+    expect(codingJobUnitRepository.findOne).toHaveBeenCalledWith({
+      lock: { mode: 'pessimistic_write' },
+      where: expect.objectContaining({
+        person_login: 'login',
+        person_code: 'code',
+        person_group: 'group',
+        booklet_name: 'booklet'
+      })
+    });
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         notes: 'remember',
@@ -2422,6 +3388,104 @@ describe('CodingJobService', () => {
     );
     expect(codingJobRepository.update).not.toHaveBeenCalled();
   });
+
+  it('clears new-code-needed progress and reopens a completed job when required notes are deleted', async () => {
+    const job = { id: 1, workspace_id: 3, status: 'completed' };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: 'group',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: -2,
+      score: null,
+      coding_issue_option: -2,
+      notes: 'needs a new code'
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+
+    await service.saveCodingNotes(1, {
+      testPerson: 'login@code@group@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      notes: '   '
+    });
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notes: null,
+        code: null,
+        score: null,
+        coding_issue_option: null,
+        is_open: false
+      })
+    );
+    expect(codingJobRepository.update).toHaveBeenCalledWith(1, { status: 'active' });
+  });
+
+  it('keeps regular progress and clears only new-code-needed marker when required notes are deleted', async () => {
+    const job = { id: 1, workspace_id: 3, status: 'completed' };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: 'group',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: 7,
+      score: 1,
+      coding_issue_option: -2,
+      notes: 'needs a new code'
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+
+    await service.saveCodingNotes(1, {
+      testPerson: 'login@code@group@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      notes: '   '
+    });
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notes: null,
+        code: 7,
+        score: 1,
+        coding_issue_option: null,
+        is_open: false
+      })
+    );
+    expect(codingJobRepository.update).not.toHaveBeenCalled();
+  });
+
+  it.each(['review', 'results_applied'])(
+    'rejects saving notes for %s coding jobs',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValue({
+        id: 1,
+        workspace_id: 3,
+        status
+      });
+
+      await expect(
+        service.saveCodingNotes(1, {
+          testPerson: 'login@code@group@booklet',
+          unitId: 'UNIT',
+          variableId: 'VAR',
+          notes: 'remember'
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(codingJobUnitRepository.findOne).not.toHaveBeenCalled();
+      expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+    }
+  );
 
   it('does not create a discussion result when saving progress for a training job', async () => {
     const trainingJob = { id: 1, workspace_id: 3, training_id: 42 };
@@ -2560,6 +3624,500 @@ describe('CodingJobService', () => {
 
     await expect(service.getCodingNotes(1)).resolves.toEqual({
       'login@code@group@booklet::booklet::UNIT::VAR': 'remember'
+    });
+  });
+
+  it('overlays resolved coding issue review progress on the source coding job', async () => {
+    codingJobRepository.findOne.mockResolvedValueOnce({
+      id: 1,
+      workspace_id: 3,
+      job_type: 'regular'
+    });
+    codingJobUnitRepository.find
+      .mockResolvedValueOnce([
+        {
+          coding_job_id: 1,
+          workspace_id: 3,
+          response_id: 99,
+          person_login: 'login',
+          person_code: 'code',
+          person_group: '',
+          booklet_name: 'booklet',
+          unit_name: 'UNIT',
+          unit_alias: 'ALIAS',
+          variable_id: 'VAR',
+          variable_anchor: 'VAR',
+          is_open: false,
+          code: -2,
+          score: null,
+          coding_issue_option: -2
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          coding_job_id: 77,
+          workspace_id: 3,
+          response_id: 99,
+          person_login: 'login',
+          person_code: 'code',
+          person_group: '',
+          booklet_name: 'booklet',
+          unit_name: 'UNIT',
+          unit_alias: 'ALIAS',
+          variable_id: 'VAR',
+          variable_anchor: 'VAR',
+          is_open: false,
+          code: 7,
+          score: 2,
+          coding_issue_option: null
+        }
+      ]);
+    codingJobRepository.find.mockResolvedValueOnce([
+      {
+        id: 77,
+        workspace_id: 3,
+        job_type: 'coding_issue_review',
+        source_coding_job_id: 1,
+        codingJobCoders: [{ user_id: 42 }]
+      }
+    ]);
+    mockCodingScheme({ codeId: 7, score: 2 });
+
+    await expect(service.getCodingProgress(1)).resolves.toEqual({
+      'login@code@booklet::booklet::UNIT::VAR': {
+        id: 7,
+        code: '7',
+        label: 'Code 7',
+        score: 2
+      }
+    });
+  });
+
+  it('uses the latest coding issue review progress when multiple managers reviewed the same unit', async () => {
+    codingJobRepository.findOne.mockResolvedValueOnce({
+      id: 1,
+      workspace_id: 3,
+      job_type: 'regular'
+    });
+    codingJobUnitRepository.find
+      .mockResolvedValueOnce([
+        {
+          coding_job_id: 1,
+          workspace_id: 3,
+          response_id: 99,
+          person_login: 'login',
+          person_code: 'code',
+          person_group: '',
+          booklet_name: 'booklet',
+          unit_name: 'UNIT',
+          unit_alias: 'ALIAS',
+          variable_id: 'VAR',
+          variable_anchor: 'VAR',
+          is_open: false,
+          code: -2,
+          score: null,
+          coding_issue_option: -2
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 101,
+          coding_job_id: 77,
+          workspace_id: 3,
+          response_id: 99,
+          person_login: 'login',
+          person_code: 'code',
+          person_group: '',
+          booklet_name: 'booklet',
+          unit_name: 'UNIT',
+          unit_alias: 'ALIAS',
+          variable_id: 'VAR',
+          variable_anchor: 'VAR',
+          is_open: false,
+          code: 7,
+          score: 2,
+          coding_issue_option: null,
+          updated_at: new Date('2026-01-01T00:00:00Z')
+        },
+        {
+          id: 102,
+          coding_job_id: 78,
+          workspace_id: 3,
+          response_id: 99,
+          person_login: 'login',
+          person_code: 'code',
+          person_group: '',
+          booklet_name: 'booklet',
+          unit_name: 'UNIT',
+          unit_alias: 'ALIAS',
+          variable_id: 'VAR',
+          variable_anchor: 'VAR',
+          is_open: false,
+          code: 9,
+          score: 3,
+          coding_issue_option: null,
+          updated_at: new Date('2026-01-02T00:00:00Z')
+        }
+      ]);
+    codingJobRepository.find.mockResolvedValueOnce([
+      {
+        id: 77,
+        workspace_id: 3,
+        job_type: 'coding_issue_review',
+        source_coding_job_id: 1,
+        codingJobCoders: [{ user_id: 42 }]
+      },
+      {
+        id: 78,
+        workspace_id: 3,
+        job_type: 'coding_issue_review',
+        source_coding_job_id: 1,
+        codingJobCoders: [{ user_id: 43 }]
+      }
+    ]);
+    mockCodingScheme({ codeId: 9, score: 3 });
+
+    await expect(service.getCodingProgress(1)).resolves.toEqual({
+      'login@code@booklet::booklet::UNIT::VAR': {
+        id: 9,
+        code: '9',
+        label: 'Code 9',
+        score: 3
+      }
+    });
+    expect(codingJobUnitRepository.find).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        order: {
+          updated_at: 'ASC',
+          id: 'ASC'
+        }
+      })
+    );
+  });
+
+  it('ignores older open coding issue review units when the latest review unit resolves the issue', async () => {
+    const arrangeReviewUnits = () => {
+      codingJobRepository.findOne.mockResolvedValueOnce({
+        id: 1,
+        workspace_id: 3,
+        job_type: 'regular'
+      });
+      codingJobUnitRepository.find
+        .mockResolvedValueOnce([
+          {
+            coding_job_id: 1,
+            workspace_id: 3,
+            response_id: 99,
+            person_login: 'login',
+            person_code: 'code',
+            person_group: '',
+            booklet_name: 'booklet',
+            unit_name: 'UNIT',
+            unit_alias: 'ALIAS',
+            variable_id: 'VAR',
+            variable_anchor: 'VAR',
+            is_open: false,
+            code: -2,
+            score: null,
+            coding_issue_option: -2
+          }
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 101,
+            coding_job_id: 77,
+            workspace_id: 3,
+            response_id: 99,
+            person_login: 'login',
+            person_code: 'code',
+            person_group: '',
+            booklet_name: 'booklet',
+            unit_name: 'UNIT',
+            unit_alias: 'ALIAS',
+            variable_id: 'VAR',
+            variable_anchor: 'VAR',
+            is_open: true,
+            code: null,
+            score: null,
+            coding_issue_option: null,
+            updated_at: new Date('2026-01-01T00:00:00Z')
+          },
+          {
+            id: 102,
+            coding_job_id: 78,
+            workspace_id: 3,
+            response_id: 99,
+            person_login: 'login',
+            person_code: 'code',
+            person_group: '',
+            booklet_name: 'booklet',
+            unit_name: 'UNIT',
+            unit_alias: 'ALIAS',
+            variable_id: 'VAR',
+            variable_anchor: 'VAR',
+            is_open: false,
+            code: 7,
+            score: 2,
+            coding_issue_option: null,
+            updated_at: new Date('2026-01-02T00:00:00Z')
+          }
+        ]);
+      codingJobRepository.find.mockResolvedValueOnce([
+        {
+          id: 77,
+          workspace_id: 3,
+          job_type: 'coding_issue_review',
+          source_coding_job_id: 1,
+          codingJobCoders: [{ user_id: 42 }]
+        },
+        {
+          id: 78,
+          workspace_id: 3,
+          job_type: 'coding_issue_review',
+          source_coding_job_id: 1,
+          codingJobCoders: [{ user_id: 43 }]
+        }
+      ]);
+    };
+
+    arrangeReviewUnits();
+    await expect(service.getOpenCodingIssueReviewResponseIds(1))
+      .resolves.toEqual([]);
+
+    arrangeReviewUnits();
+    await expect(service.getResolvedCodingIssueReviewResponseIds(1))
+      .resolves.toEqual([99]);
+  });
+
+  it('uses the latest open coding issue review unit for response id lookups', async () => {
+    const arrangeReviewUnits = () => {
+      codingJobRepository.findOne.mockResolvedValueOnce({
+        id: 1,
+        workspace_id: 3,
+        job_type: 'regular'
+      });
+      codingJobUnitRepository.find
+        .mockResolvedValueOnce([
+          {
+            coding_job_id: 1,
+            workspace_id: 3,
+            response_id: 99,
+            person_login: 'login',
+            person_code: 'code',
+            person_group: '',
+            booklet_name: 'booklet',
+            unit_name: 'UNIT',
+            unit_alias: 'ALIAS',
+            variable_id: 'VAR',
+            variable_anchor: 'VAR',
+            is_open: false,
+            code: -2,
+            score: null,
+            coding_issue_option: -2
+          }
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 101,
+            coding_job_id: 77,
+            workspace_id: 3,
+            response_id: 99,
+            person_login: 'login',
+            person_code: 'code',
+            person_group: '',
+            booklet_name: 'booklet',
+            unit_name: 'UNIT',
+            unit_alias: 'ALIAS',
+            variable_id: 'VAR',
+            variable_anchor: 'VAR',
+            is_open: false,
+            code: 7,
+            score: 2,
+            coding_issue_option: null,
+            updated_at: new Date('2026-01-01T00:00:00Z')
+          },
+          {
+            id: 102,
+            coding_job_id: 78,
+            workspace_id: 3,
+            response_id: 99,
+            person_login: 'login',
+            person_code: 'code',
+            person_group: '',
+            booklet_name: 'booklet',
+            unit_name: 'UNIT',
+            unit_alias: 'ALIAS',
+            variable_id: 'VAR',
+            variable_anchor: 'VAR',
+            is_open: true,
+            code: null,
+            score: null,
+            coding_issue_option: null,
+            updated_at: new Date('2026-01-02T00:00:00Z')
+          }
+        ]);
+      codingJobRepository.find.mockResolvedValueOnce([
+        {
+          id: 77,
+          workspace_id: 3,
+          job_type: 'coding_issue_review',
+          source_coding_job_id: 1,
+          codingJobCoders: [{ user_id: 42 }]
+        },
+        {
+          id: 78,
+          workspace_id: 3,
+          job_type: 'coding_issue_review',
+          source_coding_job_id: 1,
+          codingJobCoders: [{ user_id: 43 }]
+        }
+      ]);
+    };
+
+    arrangeReviewUnits();
+    await expect(service.getResolvedCodingIssueReviewResponseIds(1))
+      .resolves.toEqual([]);
+
+    arrangeReviewUnits();
+    await expect(service.getOpenCodingIssueReviewResponseIds(1))
+      .resolves.toEqual([99]);
+  });
+
+  it('keeps the source coding issue visible when a review unit has no progress', async () => {
+    codingJobRepository.findOne.mockResolvedValueOnce({
+      id: 1,
+      workspace_id: 3,
+      job_type: 'regular'
+    });
+    codingJobUnitRepository.find
+      .mockResolvedValueOnce([
+        {
+          coding_job_id: 1,
+          workspace_id: 3,
+          response_id: 99,
+          person_login: 'login',
+          person_code: 'code',
+          person_group: '',
+          booklet_name: 'booklet',
+          unit_name: 'UNIT',
+          unit_alias: 'ALIAS',
+          variable_id: 'VAR',
+          variable_anchor: 'VAR',
+          is_open: false,
+          code: -2,
+          score: null,
+          coding_issue_option: -2
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          coding_job_id: 77,
+          workspace_id: 3,
+          response_id: 99,
+          person_login: 'login',
+          person_code: 'code',
+          person_group: '',
+          booklet_name: 'booklet',
+          unit_name: 'UNIT',
+          unit_alias: 'ALIAS',
+          variable_id: 'VAR',
+          variable_anchor: 'VAR',
+          is_open: false,
+          code: null,
+          score: null,
+          coding_issue_option: null,
+          notes: 'review note'
+        }
+      ]);
+    codingJobRepository.find.mockResolvedValueOnce([
+      {
+        id: 77,
+        workspace_id: 3,
+        job_type: 'coding_issue_review',
+        source_coding_job_id: 1,
+        codingJobCoders: [{ user_id: 42 }]
+      }
+    ]);
+
+    await expect(service.getCodingProgress(1)).resolves.toEqual({
+      'login@code@booklet::booklet::UNIT::VAR': {
+        id: -2,
+        code: undefined,
+        label: undefined,
+        codingIssueOption: -2
+      }
+    });
+  });
+
+  it('keeps an open coding issue review visible as the source issue', async () => {
+    codingJobRepository.findOne.mockResolvedValueOnce({
+      id: 1,
+      workspace_id: 3,
+      job_type: 'regular'
+    });
+    codingJobUnitRepository.find
+      .mockResolvedValueOnce([
+        {
+          coding_job_id: 1,
+          workspace_id: 3,
+          response_id: 99,
+          person_login: 'login',
+          person_code: 'code',
+          person_group: '',
+          booklet_name: 'booklet',
+          unit_name: 'UNIT',
+          unit_alias: 'ALIAS',
+          variable_id: 'VAR',
+          variable_anchor: 'VAR',
+          is_open: false,
+          code: 7,
+          score: 2,
+          coding_issue_option: -2
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          coding_job_id: 77,
+          workspace_id: 3,
+          response_id: 99,
+          person_login: 'login',
+          person_code: 'code',
+          person_group: '',
+          booklet_name: 'booklet',
+          unit_name: 'UNIT',
+          unit_alias: 'ALIAS',
+          variable_id: 'VAR',
+          variable_anchor: 'VAR',
+          is_open: true,
+          code: null,
+          score: null,
+          coding_issue_option: null
+        }
+      ]);
+    codingJobRepository.find.mockResolvedValueOnce([
+      {
+        id: 77,
+        workspace_id: 3,
+        job_type: 'coding_issue_review',
+        source_coding_job_id: 1,
+        codingJobCoders: [{ user_id: 42 }]
+      }
+    ]);
+    mockCodingScheme({ codeId: 7, score: 2 });
+
+    await expect(service.getCodingProgress(1)).resolves.toEqual({
+      'login@code@booklet::booklet::UNIT::VAR:open': {
+        id: -1,
+        code: '',
+        label: 'OPEN'
+      },
+      'login@code@booklet::booklet::UNIT::VAR': {
+        id: 7,
+        code: '7',
+        label: 'Code 7',
+        score: 2,
+        codingIssueOption: -2
+      }
     });
   });
 
@@ -2787,26 +4345,32 @@ describe('CodingJobService', () => {
   it('detects coding issues and builds bulk progress', async () => {
     codingJobRepository.findOne.mockResolvedValueOnce({
       id: 1,
-      workspace_id: 3
+      workspace_id: 3,
+      comment: null
     });
-    codingJobUnitRepository.createQueryBuilder.mockReturnValueOnce(
-      createQueryBuilder([{ code: 1 }, { code: -2 }])
-    );
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      { code: 1, coding_issue_option: null },
+      { code: -2, coding_issue_option: null }
+    ]);
     await expect(service.hasCodingIssues(1)).resolves.toBe(true);
 
     codingJobRepository.find.mockResolvedValue([
       { id: 1, workspace_id: 3 },
       { id: 2, workspace_id: 3 }
     ]);
-    jest
+    const bulkProgressSpy = jest
       .spyOn(service, 'getCodingProgress')
       .mockResolvedValueOnce({ a: { id: 1 } } as never)
       .mockResolvedValueOnce({ b: { id: 2 } } as never);
 
-    await expect(service.getBulkCodingProgress([1, 2], 3)).resolves.toEqual({
-      1: { a: { id: 1 } },
-      2: { b: { id: 2 } }
-    });
+    try {
+      await expect(service.getBulkCodingProgress([1, 2], 3)).resolves.toEqual({
+        1: { a: { id: 1 } },
+        2: { b: { id: 2 } }
+      });
+    } finally {
+      bulkProgressSpy.mockRestore();
+    }
   });
 
   it('filters current coder and unrelated scopes from double-coding markers', async () => {

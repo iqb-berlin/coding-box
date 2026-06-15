@@ -513,6 +513,11 @@
             color: #666;
             font-size: 13px;
           }
+
+          .completed-job-review-note {
+            color: #8a5a00;
+            font-weight: 600;
+          }
         }
       }
     }
@@ -634,6 +639,25 @@
       font-weight: 650;
       line-height: 1.2;
       padding: 5px 8px;
+    }
+
+    .manual-code-availability-toggle {
+      min-height: 28px;
+      height: auto;
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: #5f4217;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.2;
+
+      mat-icon {
+        color: currentColor;
+        margin-right: 2px;
+        font-size: 18px;
+        height: 18px;
+        width: 18px;
+      }
     }
 
     &.status-attention {
@@ -1682,6 +1706,52 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px 18px;
+  }
+
+  .matching-control {
+    gap: 12px;
+  }
+
+  .aggregation-mode-control,
+  .matching-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    min-width: 0;
+  }
+
+  .mode-option {
+    font-size: 13px;
+    color: #5f6368;
+
+    &.active {
+      color: #1976d2;
+      font-weight: 600;
+    }
+  }
+
+  .matching-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background-color: #eef6ff;
+    color: #17456f;
+    font-size: 12px;
+    line-height: 1.2;
+
+    &.warning {
+      background-color: #fff8e1;
+      color: #5f3b00;
+    }
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
   }
 
   .aggregation-impact {

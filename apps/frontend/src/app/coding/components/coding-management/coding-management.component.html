@@ -181,7 +181,8 @@
       <!-- Filter Section -->
       <div class="filters-section">
         <app-response-filters [filterParams]="filterParams" [availableStatuses]="getAvailableStatuses()"
-          [isLoading]="isLoading" [isGeogebraAvailable]="isGeogebraAvailable" (filterChange)="onFilterChange($event)"
+          [isLoading]="isLoading" [isGeogebraAvailable]="isGeogebraAvailable"
+          [enableRegexSearch]="enableRegexSearch" (filterChange)="onFilterChange($event)"
           (clearFilters)="onClearFilters()">
         </app-response-filters>
       </div>
@@ -192,10 +193,10 @@
           [pageSize]="pageSize" [pageIndex]="pageIndex" [pageSizeOptions]="pageSizeOptions" [isLoading]="isLoading"
           [currentStatusFilter]="filterParams.codedStatus || currentStatusFilter" [selectedVersion]="selectedStatisticsVersion"
           [isGeogebraFilterActive]="filterParams.geogebra" [isDerivedFilterActive]="filterParams.responseSource === 'derived'"
-          [isReviewLoading]="isLoadingReview"
+          [isReviewLoading]="isLoadingReview" [sortBy]="sortBy" [sortDirection]="sortDirection"
           (pageChange)="onPageChange($event)"
           (replayClick)="onReplayClick($event)" (showCodingScheme)="onShowCodingScheme($event)"
-          (showUnitXml)="onShowUnitXml($event)" (reviewClick)="onReviewClick()">
+          (showUnitXml)="onShowUnitXml($event)" (reviewClick)="onReviewClick()" (sortChange)="onSortChange($event)">
         </app-response-table>
       </div>
     </div>

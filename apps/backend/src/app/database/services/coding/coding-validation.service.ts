@@ -42,6 +42,10 @@ import {
   createManualCodingVariableReferences,
   DERIVE_ERROR_STATUS
 } from '../../utils/manual-coding-candidate.util';
+import {
+  applyNonCodingIssueReviewJobFilter,
+  getNonCodingIssueReviewJobSqlCondition
+} from './coding-job-type.util';
 
 interface NormalizedExpectedCombination {
   unitKey: string;
@@ -505,7 +509,8 @@ export class CodingValidationService {
     workspaceId: number,
     unitName?: string,
     trainingRequired?: boolean,
-    includeDeriveErrorOnly = false
+    includeDeriveErrorOnly = false,
+    excludeJobDefinitionId?: number
   ): Promise<
     {
       unitName: string;
@@ -522,9 +527,19 @@ export class CodingValidationService {
     }[]
     > {
     try {
-      if (unitName || trainingRequired !== undefined || includeDeriveErrorOnly) {
+      if (
+        unitName ||
+        trainingRequired !== undefined ||
+        includeDeriveErrorOnly ||
+        excludeJobDefinitionId !== undefined
+      ) {
+        const queryDetails = [
+          unitName ? ` and unit ${unitName}` : '',
+          trainingRequired !== undefined ? ` (trainingRequired: ${trainingRequired})` : '',
+          excludeJobDefinitionId !== undefined ? ` excluding job definition ${excludeJobDefinitionId}` : ''
+        ].join('');
         this.logger.log(
-          `Querying manual coding variables for workspace ${workspaceId}${unitName ? ` and unit ${unitName}` : ''}${trainingRequired !== undefined ? ` (trainingRequired: ${trainingRequired})` : ''} (not cached)`
+          `Querying manual coding variables for workspace ${workspaceId}${queryDetails} (not cached)`
         );
         const variables = await this.fetchCodingIncompleteVariablesFromDb(
           workspaceId,
@@ -535,7 +550,8 @@ export class CodingValidationService {
         return await this.enrichVariablesWithCaseInfo(
           workspaceId,
           variables,
-          includeDeriveErrorOnly
+          includeDeriveErrorOnly,
+          excludeJobDefinitionId
         );
       }
       const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
@@ -697,12 +713,14 @@ export class CodingValidationService {
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
     variables: ManualCodingVariableCaseCounts[],
-    includeDeriveErrorInCaseInfo = false
+    includeDeriveErrorInCaseInfo = false,
+    excludeJobDefinitionId?: number
   ): Promise<ManualCodingVariableWithCaseInfo[]> {
     const caseInfoMap = await this.computeVariableCaseInfo(
       workspaceId,
       variables,
-      includeDeriveErrorInCaseInfo
+      includeDeriveErrorInCaseInfo,
+      excludeJobDefinitionId
     );
 
     return variables.map(variable => {
@@ -728,7 +746,8 @@ export class CodingValidationService {
   private async computeVariableCaseInfo(
     workspaceId: number,
     variables: ManualCodingVariableCaseCounts[],
-    includeDeriveErrorInCaseInfo = false
+    includeDeriveErrorInCaseInfo = false,
+    excludeJobDefinitionId?: number
   ): Promise<Map<string, VariableCaseInfo>> {
     const result = new Map<string, VariableCaseInfo>();
 
@@ -749,7 +768,11 @@ export class CodingValidationService {
         workspaceId,
         variableReferences
       ) as Promise<SlimCodingResponse[]>,
-      this.getAssignedResponseIdsByVariable(workspaceId, variableReferences)
+      this.getAssignedResponseIdsByVariable(
+        workspaceId,
+        variableReferences,
+        excludeJobDefinitionId
+      )
     ]);
 
     const derivedVariableMap = new Map<string, Set<string>>();
@@ -913,7 +936,8 @@ export class CodingValidationService {
 
   private async getAssignedResponseIdsByVariable(
     workspaceId: number,
-    variables: { unitName: string; variableId: string }[]
+    variables: { unitName: string; variableId: string }[],
+    excludeJobDefinitionId?: number
   ): Promise<Map<string, Set<number>>> {
     const result = new Map<string, Set<number>>();
 
@@ -931,6 +955,16 @@ export class CodingValidationService {
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL');
 
+    if (
+      excludeJobDefinitionId !== undefined &&
+      excludeJobDefinitionId !== null
+    ) {
+      query.andWhere(
+        '(coding_job.job_definition_id IS NULL OR coding_job.job_definition_id != :excludeJobDefinitionId)',
+        { excludeJobDefinitionId }
+      );
+    }
+
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};
 
@@ -943,6 +977,11 @@ export class CodingValidationService {
     });
 
     query.andWhere(`(${conditions.join(' OR ')})`, parameters);
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'codingValidationAssignedResponsesReviewJobType'
+    );
     applyResolvedExclusionsToQuery(query, exclusions, {
       unitNameExpression: 'cju.unit_name',
       bookletNameExpression: 'cju.booklet_name',
@@ -1037,12 +1076,14 @@ export class CodingValidationService {
       unitVariableMap,
       derivedVariableMap,
       trainingRequiredMap,
-      derivedVariablesBySourceMap
+      derivedVariablesBySourceMap,
+      manualInstructionMap
     ] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
       this.workspaceFilesService.getDerivedVariableMap(workspaceId),
       this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId),
-      this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId)
+      this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId),
+      this.workspaceFilesService.getManualInstructionVariableMap(workspaceId)
     ]);
 
     // Build case-insensitive lookup structures
@@ -1059,6 +1100,11 @@ export class CodingValidationService {
     const trainingRequiredSets = new Map<string, Set<string>>();
     trainingRequiredMap.forEach((variables: Set<string>, unitNameKey: string) => {
       trainingRequiredSets.set(unitNameKey.toUpperCase(), variables);
+    });
+
+    const manualInstructionSets = new Map<string, Set<string>>();
+    manualInstructionMap.forEach((variables: Set<string>, unitNameKey: string) => {
+      manualInstructionSets.set(unitNameKey.toUpperCase(), variables);
     });
 
     this.logger.debug(
@@ -1089,7 +1135,14 @@ export class CodingValidationService {
       derivedVariablesBySourceMap
     );
     const filteredIntendedIncompleteBeforeSourceExclusion =
-      intendedIncompleteRaw.filter(filterFn);
+      intendedIncompleteRaw.filter(row => {
+        if (!filterFn(row)) {
+          return false;
+        }
+
+        const unitKey = row.unitName?.toUpperCase();
+        return manualInstructionSets.get(unitKey)?.has(row.variableId) || false;
+      });
     const filteredIntendedIncomplete =
       filteredIntendedIncompleteBeforeSourceExclusion.filter(
         row => !isCoveredSourceVariable(row, coveredSourceKeys)
@@ -1246,6 +1299,11 @@ export class CodingValidationService {
       .andWhere('coding_job.training_id IS NULL')
       .groupBy('cju.unit_name')
       .addGroupBy('cju.variable_id');
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'codingValidationCasesInJobsReviewJobType'
+    );
     applyResolvedExclusionsToQuery(query, exclusions, {
       unitNameExpression: 'cju.unit_name',
       bookletNameExpression: 'cju.booklet_name',
@@ -1283,6 +1341,11 @@ export class CodingValidationService {
         deriveErrorStatus: statusStringToNumber('DERIVE_ERROR')
       })
       .distinct(true);
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'appliedResultsDeriveErrorVariablesReviewJobType'
+    );
 
     applyResolvedExclusionsToQuery(query, exclusions, {
       unitNameExpression: 'cju.unit_name',
@@ -1358,6 +1421,7 @@ export class CodingValidationService {
                     ON manual_derive_cj.id = manual_derive_cju.coding_job_id
                   WHERE manual_derive_cju.response_id = response.id
                     AND manual_derive_cj.training_id IS NULL
+                    AND ${getNonCodingIssueReviewJobSqlCondition('manual_derive_cj')}
                 )`,
               { deriveErrorStatus: statusStringToNumber('DERIVE_ERROR') }
             );

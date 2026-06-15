@@ -11,7 +11,12 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIconButton } from '@angular/material/button';
 import { MatInput } from '@angular/material/input';
-import { MatFormField, MatLabel, MatSuffix } from '@angular/material/form-field';
+import {
+  MatFormField,
+  MatHint,
+  MatLabel,
+  MatSuffix
+} from '@angular/material/form-field';
 import {
   Subject,
   fromEvent,
@@ -28,6 +33,7 @@ import { WrappedIconComponent } from '../wrapped-icon/wrapped-icon.component';
   imports: [
     MatFormField,
     MatLabel,
+    MatHint,
     MatInput,
     MatIconButton,
     MatSuffix,
@@ -42,6 +48,8 @@ export class SearchFilterComponent implements OnInit, OnDestroy {
   value: string = '';
   readonly title = input.required<string>();
   readonly initialValue = input<string>('');
+  readonly invalid = input<boolean>(false);
+  readonly errorText = input<string>('search-filter.invalid-regex');
   readonly valueChange = output<string>();
 
   // Debounce time in milliseconds

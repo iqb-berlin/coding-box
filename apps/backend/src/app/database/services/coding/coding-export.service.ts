@@ -39,6 +39,7 @@ import {
   ManualCodingVariableReference,
   toManualCodingVariablePairKey
 } from '../../utils/manual-coding-candidate.util';
+import { applyNonCodingIssueReviewJobFilter } from './coding-job-type.util';
 
 interface ByVariableCombination {
   unitName: string;
@@ -81,6 +82,14 @@ interface CompactByVariableCoding {
   notes: string | null;
   codingIssueOption: number | null;
   updatedAt: Date | string | null;
+}
+
+interface TrainingDiscussionExportResult {
+  code: number | null;
+  score: number | null;
+  notes: string | null;
+  managerUsername: string | null;
+  updatedAt: Date | null;
 }
 
 interface AggregatedMostFrequentCoding {
@@ -197,12 +206,21 @@ export class CodingExportService {
       .innerJoin('coding_job_unit.coding_job', 'coding_job')
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL')
-      .distinct(true)
-      .getRawMany<{ unitName: string; variableId: string }>();
+      .distinct(true);
+    applyNonCodingIssueReviewJobFilter(
+      manualJobVariables,
+      'coding_job',
+      'manualCodingVariablesReviewJobType'
+    );
+    const manualJobVariableRows =
+      await manualJobVariables.getRawMany<{
+        unitName: string;
+        variableId: string;
+      }>();
 
     const manualCodingVariables = createManualCodingVariableReferences([
       ...codingListVariables,
-      ...manualJobVariables
+      ...manualJobVariableRows
     ]);
 
     if (manualCodingVariables.length === 0) {
@@ -1069,7 +1087,14 @@ export class CodingExportService {
             ...row,
             username: discussionResult.managerUsername,
             cju_code: discussionResult.code,
-            notes: null
+            cju_score: discussionResult.score,
+            code_v1: null,
+            code_v2: null,
+            code_v3: null,
+            score_v1: null,
+            score_v2: null,
+            score_v3: null,
+            notes: discussionResult.notes
           });
         }
 
@@ -1460,8 +1485,14 @@ export class CodingExportService {
             ...row,
             username: discussionResult.managerUsername,
             cju_code: discussionResult.code,
-            cju_score: null,
-            notes: null
+            cju_score: discussionResult.score,
+            code_v1: null,
+            code_v2: null,
+            code_v3: null,
+            score_v1: null,
+            score_v2: null,
+            score_v3: null,
+            notes: discussionResult.notes
           });
         }
 
@@ -1892,7 +1923,14 @@ export class CodingExportService {
             ...row,
             username: discussionResult.managerUsername,
             cju_code: discussionResult.code,
-            notes: null
+            cju_score: discussionResult.score,
+            code_v1: null,
+            code_v2: null,
+            code_v3: null,
+            score_v1: null,
+            score_v2: null,
+            score_v3: null,
+            notes: discussionResult.notes
           });
         }
 
@@ -2260,7 +2298,7 @@ export class CodingExportService {
               const pData = personDataMap.get(pid)!;
               const variableKey = JSON.stringify([managerCase.unitName, managerCase.variableId]);
               const mappedCode = mapCodeForExport(discussion.code);
-              pData[variableKey] = outputCommentsInsteadOfCodes ? '' : mappedCode ?? '';
+              pData[variableKey] = outputCommentsInsteadOfCodes ? discussion.notes || '' : mappedCode ?? '';
               pData[`_metadata_${variableKey}`] = {
                 unitName: managerCase.unitName,
                 variableId: managerCase.variableId,
@@ -2505,7 +2543,7 @@ export class CodingExportService {
         .getRawMany();
 
       const coderNames = coderQuery.map(c => c.username).sort();
-      let discussionResultMap = new Map<string, { code: number | null, managerUsername: string | null, updatedAt: Date | null }>();
+      let discussionResultMap = new Map<string, TrainingDiscussionExportResult>();
       if (normalizedCoderTrainingIds.length > 0) {
         const managerCasesQuery = this.responseRepository.createQueryBuilder('resp')
           .innerJoin('resp.unit', 'unit')
@@ -2658,7 +2696,7 @@ export class CodingExportService {
               if (discussion?.managerUsername && !p.codings[discussion.managerUsername]) {
                 p.codings[discussion.managerUsername] = {
                   code: mapCodeForExport(discussion.code),
-                  notes: null,
+                  notes: discussion.notes,
                   status: d.status_v1,
                   codingIssueOption: null
                 };
@@ -2952,7 +2990,7 @@ export class CodingExportService {
               .filter((responseId): responseId is number => responseId !== null)
           ))
         ) :
-        new Map<string, { code: number | null, managerUsername: string | null, updatedAt: Date | null }>();
+        new Map<string, TrainingDiscussionExportResult>();
 
       for (const row of rows) {
         if (
@@ -3149,7 +3187,7 @@ export class CodingExportService {
   private addCompactDiscussionToGroup(
     group: CompactByVariableGroup,
     row: CompactByVariableRawRow,
-    discussionResultMap: Map<string, { code: number | null, managerUsername: string | null, updatedAt: Date | null }>
+    discussionResultMap: Map<string, TrainingDiscussionExportResult>
   ): void {
     const trainingId = this.toIntegerOrNull(row.trainingId);
     const responseId = this.toIntegerOrNull(row.responseId);
@@ -3160,7 +3198,7 @@ export class CodingExportService {
 
     group.codings.set(discussion.managerUsername, {
       code: mapCodeForExport(discussion.code),
-      notes: null,
+      notes: discussion.notes,
       codingIssueOption: null,
       updatedAt: discussion.updatedAt
     });
@@ -3397,7 +3435,7 @@ export class CodingExportService {
         );
         const unitsBatch = await unitsBatchQuery.getMany();
 
-        let discussionResultMap = new Map<string, { code: number | null, managerUsername: string | null, updatedAt: Date | null }>();
+        let discussionResultMap = new Map<string, TrainingDiscussionExportResult>();
         if (includeDiscussionResult && unitsBatch.length > 0) {
           const trainingIdSet = new Set<number>();
           const responseIdSet = new Set<number>();
@@ -3457,6 +3495,7 @@ export class CodingExportService {
           const discussionTimestamp = discussion.updatedAt ? new Date(discussion.updatedAt).toLocaleString('de-DE').replace(',', '') : '';
           const mappedDiscussionCode = mapCodeForExport(discussion.code);
           const discussionCodeValue = mappedDiscussionCode === null ? '' : mappedDiscussionCode.toString();
+          const discussionNoteValue = discussion.notes || '';
 
           const discussionRowFields = [
             escapeCsvField(personLogin),
@@ -3465,7 +3504,7 @@ export class CodingExportService {
             escapeCsvField(managerDisplayName),
             escapeCsvField(unitName),
             escapeCsvField(currentCaseRepresentative.variable_id),
-            escapeCsvField(''),
+            escapeCsvField(discussionNoteValue),
             escapeCsvField(discussionTimestamp),
             escapeCsvField(discussionCodeValue),
             escapeCsvField('')
@@ -3866,7 +3905,7 @@ export class CodingExportService {
     workspaceId: number,
     trainingIds?: number[],
     responseIds?: number[]
-  ): Promise<Map<string, { code: number | null, managerUsername: string | null, updatedAt: Date | null }>> {
+  ): Promise<Map<string, TrainingDiscussionExportResult>> {
     if (!trainingIds?.length) {
       return new Map();
     }
@@ -3915,6 +3954,8 @@ export class CodingExportService {
 
         return [`${result.training_id}|${result.response_id}`, {
           code: result.code,
+          score: result.score ?? null,
+          notes: result.notes ?? null,
           managerUsername,
           updatedAt: result.updated_at
         }];
@@ -3982,6 +4023,12 @@ export class CodingExportService {
     coderIds?: number[],
     codingJobUnitAlias?: string
   ): void {
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'cj',
+      'codingExportReviewJobType'
+    );
+
     const normalizedJobDefinitionIds = this.normalizeFilterIds(jobDefinitionIds);
     const normalizedCoderTrainingIds = this.normalizeFilterIds(coderTrainingIds);
     const normalizedCoderIds = this.normalizeFilterIds(coderIds);

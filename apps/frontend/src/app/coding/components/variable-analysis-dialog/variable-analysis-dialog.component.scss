@@ -60,6 +60,18 @@
     input {
       font-size: 15px;
     }
+
+    &.regex-filter-invalid {
+      ::ng-deep .mdc-notched-outline__leading,
+      ::ng-deep .mdc-notched-outline__notch,
+      ::ng-deep .mdc-notched-outline__trailing {
+        border-color: #f44336 !important;
+      }
+    }
+  }
+
+  .regex-filter-error {
+    color: #f44336;
   }
 }
 

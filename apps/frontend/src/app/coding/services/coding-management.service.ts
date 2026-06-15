@@ -13,7 +13,11 @@ import { CodingVersionService, ResetVersionJobStatus } from './coding-version.se
 import { CodingExportService } from './coding-export.service';
 import { ResponseService } from '../../shared/services/response/response.service';
 import {
-  SearchResponseItem, SearchResponsesParams, CodingJobStatus
+  SearchResponseItem,
+  SearchResponsesParams,
+  CodingJobStatus,
+  CodingResponseSortBy,
+  CodingResponseSortDirection
 } from '../../models/coding-interfaces';
 import { AppService } from '../../core/services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
@@ -25,16 +29,20 @@ export type ResponseSource = 'base' | 'derived' | 'all';
 export type CodingResultsExportFormat = Exclude<ExportFormat, 'json'>;
 
 export interface FilterParams {
+  value?: string;
   unitName: string;
   codedStatus: string;
   version: StatisticsVersion;
   code: string;
+  codingCode?: string;
+  score?: string;
   group: string;
   bookletName: string;
   variableId: string;
   geogebra: boolean;
   responseSource: ResponseSource;
   personLogin: string;
+  regexSearch?: boolean;
 }
 
 @Injectable({
@@ -201,12 +209,14 @@ export class CodingManagementService {
     status: string,
     version: StatisticsVersion,
     page: number,
-    limit: number
+    limit: number,
+    sortBy?: CodingResponseSortBy,
+    sortDirection?: CodingResponseSortDirection
   ): Observable<{ data: ResponseEntity[], total: number }> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return of({ data: [], total: 0 });
 
-    return this.statisticsService.getResponsesByStatus(workspaceId, status, version, page, limit)
+    return this.statisticsService.getResponsesByStatus(workspaceId, status, version, page, limit, sortBy, sortDirection)
       .pipe(
         catchError(() => {
           this.snackBar.open(`Fehler beim Abrufen der Antworten mit Status ${status}`, 'Schließen', {
@@ -227,22 +237,30 @@ export class CodingManagementService {
   searchResponses(
     filterParams: FilterParams,
     page: number,
-    limit: number
+    limit: number,
+    sortBy?: CodingResponseSortBy,
+    sortDirection?: CodingResponseSortDirection
   ): Observable<{ data: SearchResponseItem[], total: number }> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return of({ data: [], total: 0 });
 
     const backendParams: SearchResponsesParams = {
+      value: filterParams.value,
       unitName: filterParams.unitName,
       codedStatus: filterParams.codedStatus,
       version: filterParams.version,
       code: filterParams.code,
+      codingCode: filterParams.codingCode,
+      score: filterParams.score,
       group: filterParams.group,
       bookletName: filterParams.bookletName,
       variableId: filterParams.variableId,
       geogebra: filterParams.geogebra,
       responseSource: filterParams.responseSource,
-      personLogin: filterParams.personLogin
+      personLogin: filterParams.personLogin,
+      regexSearch: filterParams.regexSearch,
+      sortBy,
+      sortDirection
     };
 
     return this.responseService.searchResponses(workspaceId, backendParams, page, limit)

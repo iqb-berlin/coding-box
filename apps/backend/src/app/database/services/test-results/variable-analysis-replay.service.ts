@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Like, Repository } from 'typeorm';
+import { Like, QueryRunner, Repository } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
@@ -10,6 +10,11 @@ import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+import {
+  assertValidRegexSearchPattern,
+  toRegexSearchException,
+  withRegexSearchStatementTimeout
+} from '../../../utils/regex-search.util';
 
 interface CodingScheme {
   variableCodings?: {
@@ -28,9 +33,19 @@ interface UnitVariablePair {
 interface VariableAnalysisAggregationRow {
   unitId: string;
   variableId: string;
-  code_v1: string;
+  code_v1: string | null;
   occurrenceCount: string;
   score_V1: string;
+}
+
+interface VariableAnalysisSampleInfoRow {
+  unitId: string;
+  variableId: string;
+  code_v1: string | null;
+  loginName: string;
+  loginCode: string;
+  loginGroup: string;
+  bookletId: string;
 }
 
 @Injectable()
@@ -55,7 +70,8 @@ export class VariableAnalysisReplayService {
     limit: number = 100,
     unitIdFilter?: string,
     variableIdFilter?: string,
-    derivationFilter?: string
+    derivationFilter?: string,
+    regexSearch?: boolean
   ): Promise<{
       data: VariableAnalysisItemDto[];
       total: number;
@@ -63,246 +79,296 @@ export class VariableAnalysisReplayService {
       limit: number;
     }> {
     try {
-      this.logger.log(`Getting variable analysis for workspace ${workspace_id} (page ${page}, limit ${limit})`);
-      const startTime = Date.now();
-      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
+      const runAnalysis = async (
+        queryRunner?: QueryRunner
+      ): Promise<{
+        data: VariableAnalysisItemDto[];
+        total: number;
+        page: number;
+        limit: number;
+      }> => {
+        this.logger.log(`Getting variable analysis for workspace ${workspace_id} (page ${page}, limit ${limit})`);
+        const startTime = Date.now();
+        const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
 
-      this.logger.log('Getting unit variables mapping...');
-      const unitVariablesMap = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
-      this.logger.log(`Retrieved unit variables map with ${unitVariablesMap.size} units`);
+        this.logger.log('Getting unit variables mapping...');
+        const unitVariablesMap = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
+        this.logger.log(`Retrieved unit variables map with ${unitVariablesMap.size} units`);
 
-      // Step 2: Pre-fetch all coding schemes for the workspace to get derivations and descriptions for the response
-      this.logger.log('Pre-fetching coding schemes for derivation info...');
-      const codingSchemes = await this.fileUploadRepository.find({
-        where: {
-          workspace_id,
-          file_type: 'Resource',
-          file_id: Like('%.VOCS')
+        // Step 2: Pre-fetch all coding schemes for the workspace to get derivations and descriptions for the response
+        this.logger.log('Pre-fetching coding schemes for derivation info...');
+        const codingSchemes = await this.fileUploadRepository.find({
+          where: {
+            workspace_id,
+            file_type: 'Resource',
+            file_id: Like('%.VOCS')
+          }
+        });
+
+        const codingSchemeMap = new Map<string, CodingScheme>();
+        for (const scheme of codingSchemes) {
+          try {
+            const unitId = scheme.file_id.replace('.VOCS', '');
+            const parsedScheme = JSON.parse(scheme.data) as CodingScheme;
+            codingSchemeMap.set(unitId, parsedScheme);
+          } catch (error) {
+            this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${error.message}`, error.stack);
+          }
         }
-      });
+        this.logger.log(`Pre-fetched ${codingSchemeMap.size} coding schemes in ${Date.now() - startTime}ms`);
 
-      const codingSchemeMap = new Map<string, CodingScheme>();
-      for (const scheme of codingSchemes) {
-        try {
-          const unitId = scheme.file_id.replace('.VOCS', '');
-          const parsedScheme = JSON.parse(scheme.data) as CodingScheme;
-          codingSchemeMap.set(unitId, parsedScheme);
-        } catch (error) {
-          this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${error.message}`, error.stack);
+        const validVariablePairKeys = this.getValidVariablePairKeys(
+          unitVariablesMap,
+          codingSchemeMap,
+          derivationFilter
+        );
+
+        if (validVariablePairKeys.length === 0) {
+          return {
+            data: [],
+            total: 0,
+            page,
+            limit
+          };
         }
-      }
-      this.logger.log(`Pre-fetched ${codingSchemeMap.size} coding schemes in ${Date.now() - startTime}ms`);
 
-      const validVariablePairKeys = this.getValidVariablePairKeys(
-        unitVariablesMap,
-        codingSchemeMap,
-        derivationFilter
-      );
+        const countQuery = this.responseRepository.createQueryBuilder('response', queryRunner)
+          .select('COUNT(DISTINCT CONCAT(unit.name, CHR(31), response.variableid, CHR(31), response.code_v1))', 'count')
+          .leftJoin('response.unit', 'unit')
+          .leftJoin('unit.booklet', 'booklet')
+          .leftJoin('booklet.bookletinfo', 'bookletinfo')
+          .leftJoin('booklet.person', 'person')
+          .where('person.workspace_id = :workspace_id', { workspace_id });
+        applyResolvedExclusionsToQuery(countQuery, exclusions);
+        this.applyVariablePairFilter(countQuery, validVariablePairKeys, 'validVariablePairKeys');
 
-      if (validVariablePairKeys.length === 0) {
+        if (unitIdFilter) {
+          countQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
+        }
+
+        if (variableIdFilter) {
+          if (regexSearch) {
+            const variableIdRegex = assertValidRegexSearchPattern(variableIdFilter, 'variableId');
+            if (variableIdRegex) {
+              countQuery.andWhere('response.variableid ~ :variableIdRegex', { variableIdRegex });
+            }
+          } else {
+            countQuery.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableIdFilter}%` });
+          }
+        }
+
+        const totalCountResult = await countQuery.getRawOne();
+        const totalCount = parseInt(totalCountResult?.count || '0', 10);
+        this.logger.log(`Total unique combinations: ${totalCount}`);
+
+        const aggregationQuery = this.responseRepository.createQueryBuilder('response', queryRunner)
+          .select('unit.name', 'unitId')
+          .addSelect('response.variableid', 'variableId')
+          .addSelect('response.code_v1', 'code_v1')
+          .addSelect('COUNT(response.id)', 'occurrenceCount')
+          .addSelect('MAX(response.score_v1)', 'score_V1') // Use MAX as a sample score
+          .leftJoin('response.unit', 'unit')
+          .leftJoin('unit.booklet', 'booklet')
+          .leftJoin('booklet.person', 'person')
+          .leftJoin('booklet.bookletinfo', 'bookletinfo')
+          .where('person.workspace_id = :workspace_id', { workspace_id });
+        applyResolvedExclusionsToQuery(aggregationQuery, exclusions);
+        this.applyVariablePairFilter(aggregationQuery, validVariablePairKeys, 'aggregationVariablePairKeys');
+
+        if (unitIdFilter) {
+          aggregationQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
+        }
+
+        if (variableIdFilter) {
+          if (regexSearch) {
+            const aggregationVariableIdRegex = assertValidRegexSearchPattern(variableIdFilter, 'variableId');
+            if (aggregationVariableIdRegex) {
+              aggregationQuery.andWhere('response.variableid ~ :aggregationVariableIdRegex', { aggregationVariableIdRegex });
+            }
+          } else {
+            aggregationQuery.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableIdFilter}%` });
+          }
+        }
+
+        aggregationQuery
+          .groupBy('unit.name')
+          .addGroupBy('response.variableid')
+          .addGroupBy('response.code_v1')
+          .orderBy('unit.name', 'ASC')
+          .addOrderBy('response.variableid', 'ASC')
+          .addOrderBy('response.code_v1', 'ASC')
+          .offset((page - 1) * limit)
+          .limit(limit);
+
+        const aggregatedResults = await aggregationQuery.getRawMany<VariableAnalysisAggregationRow>();
+        this.logger.log(`Retrieved ${aggregatedResults.length} aggregated combinations for page ${page}`);
+
+        if (aggregatedResults.length === 0) {
+          return {
+            data: [],
+            total: totalCount,
+            page,
+            limit
+          };
+        }
+        const unitVariableCounts = new Map<string, Map<string, number>>();
+        const unitVariableCombinations = this.getUniqueUnitVariablePairs(aggregatedResults);
+        const pageVariablePairKeys = unitVariableCombinations.map(combo => this.toVariablePairKey(combo.unitId, combo.variableId));
+
+        const totalCountsQuery = this.responseRepository.createQueryBuilder('response', queryRunner)
+          .select('unit.name', 'unitId')
+          .addSelect('response.variableid', 'variableId')
+          .addSelect('COUNT(response.id)', 'totalCount')
+          .leftJoin('response.unit', 'unit')
+          .leftJoin('unit.booklet', 'booklet')
+          .leftJoin('booklet.bookletinfo', 'bookletinfo')
+          .leftJoin('booklet.person', 'person')
+          .where('person.workspace_id = :workspace_id', { workspace_id });
+        applyResolvedExclusionsToQuery(totalCountsQuery, exclusions, { parameterPrefix: 'variableAnalysisTotals' });
+        this.applyVariablePairFilter(totalCountsQuery, pageVariablePairKeys, 'totalCountVariablePairKeys');
+
+        if (unitIdFilter) {
+          totalCountsQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
+        }
+
+        if (variableIdFilter) {
+          if (regexSearch) {
+            const totalCountVariableIdRegex = assertValidRegexSearchPattern(variableIdFilter, 'variableId');
+            if (totalCountVariableIdRegex) {
+              totalCountsQuery.andWhere('response.variableid ~ :totalCountVariableIdRegex', { totalCountVariableIdRegex });
+            }
+          } else {
+            totalCountsQuery.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableIdFilter}%` });
+          }
+        }
+
+        totalCountsQuery.groupBy('unit.name')
+          .addGroupBy('response.variableid');
+
+        const totalCountsResults = await totalCountsQuery.getRawMany();
+
+        for (const result of totalCountsResults) {
+          if (!unitVariableCounts.has(result.unitId)) {
+            unitVariableCounts.set(result.unitId, new Map<string, number>());
+          }
+          unitVariableCounts.get(result.unitId)?.set(result.variableId, parseInt(result.totalCount, 10));
+        }
+
+        const sampleInfoQuery = this.responseRepository.createQueryBuilder('response', queryRunner)
+          .select('unit.name', 'unitId')
+          .addSelect('response.variableid', 'variableId')
+          .addSelect('response.code_v1', 'code_v1')
+          .addSelect('person.login', 'loginName')
+          .addSelect('person.code', 'loginCode')
+          .addSelect('person.group', 'loginGroup')
+          .addSelect('bookletinfo.name', 'bookletId')
+          .leftJoin('response.unit', 'unit')
+          .leftJoin('unit.booklet', 'booklet')
+          .leftJoin('booklet.person', 'person')
+          .leftJoin('booklet.bookletinfo', 'bookletinfo')
+          .where('person.workspace_id = :workspace_id', { workspace_id });
+        applyResolvedExclusionsToQuery(sampleInfoQuery, exclusions, { parameterPrefix: 'variableAnalysisSample' });
+        this.applyVariablePairFilter(sampleInfoQuery, pageVariablePairKeys, 'sampleVariablePairKeys');
+
+        sampleInfoQuery.groupBy('unit.name')
+          .addGroupBy('response.variableid')
+          .addGroupBy('response.code_v1')
+          .addGroupBy('person.login')
+          .addGroupBy('person.code')
+          .addGroupBy('person.group')
+          .addGroupBy('bookletinfo.name');
+
+        const sampleInfoResults = await sampleInfoQuery.getRawMany<VariableAnalysisSampleInfoRow>();
+
+        const sampleInfoMap = new Map<string, { loginName: string; loginCode: string; loginGroup: string; bookletId: string }>();
+        for (const result of sampleInfoResults) {
+          const key = this.toAggregationKey(result.unitId, result.variableId, result.code_v1);
+          if (sampleInfoMap.has(key)) {
+            continue;
+          }
+
+          sampleInfoMap.set(key, {
+            loginName: result.loginName || '',
+            loginCode: result.loginCode || '',
+            loginGroup: result.loginGroup || '',
+            bookletId: result.bookletId || ''
+          });
+        }
+
+        const result: VariableAnalysisItemDto[] = [];
+
+        // Pre-load variable page maps for all unique units
+        const uniqueUnitIds = new Set(unitVariableCombinations.map(item => item.unitId));
+        const variablePageMaps = new Map<string, Map<string, string>>();
+        for (const unitId of uniqueUnitIds) {
+          const pageMap = await this.codingListService.getVariablePageMap(unitId, workspace_id);
+          variablePageMaps.set(unitId, pageMap);
+        }
+
+        for (const item of aggregatedResults) {
+          const unitId = item.unitId;
+          const variableId = item.variableId;
+          const code = item.code_v1?.toString() ?? '';
+          const occurrenceCount = parseInt(item.occurrenceCount, 10);
+          const score = parseFloat(item.score_V1) || 0;
+
+          const variableTotalCount = unitVariableCounts.get(unitId)?.get(variableId) || 0;
+
+          const relativeOccurrence = variableTotalCount > 0 ? occurrenceCount / variableTotalCount : 0;
+
+          const variableCoding = this.getVariableCoding(codingSchemeMap, unitId, variableId);
+          const derivation = variableCoding?.sourceType || '';
+          const description = variableCoding?.label || '';
+
+          const sampleInfo = sampleInfoMap.get(this.toAggregationKey(unitId, variableId, code));
+          const loginName = sampleInfo?.loginName || '';
+          const loginCode = sampleInfo?.loginCode || '';
+          const loginGroup = sampleInfo?.loginGroup || '';
+          const bookletId = sampleInfo?.bookletId || '';
+
+          // Get variable page from VOUD data
+          const variablePage = variablePageMaps.get(unitId)?.get(variableId) || '0';
+          const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
+
+          result.push({
+            replayUrl,
+            unitId,
+            variableId,
+            derivation,
+            code,
+            description,
+            score,
+            occurrenceCount,
+            totalCount: variableTotalCount,
+            relativeOccurrence
+          });
+        }
+
+        const endTime = Date.now();
+        this.logger.log(`Variable analysis completed in ${endTime - startTime}ms`);
+
         return {
-          data: [],
-          total: 0,
-          page,
-          limit
-        };
-      }
-
-      const countQuery = this.responseRepository.createQueryBuilder('response')
-        .select('COUNT(DISTINCT CONCAT(unit.name, CHR(31), response.variableid, CHR(31), response.code_v1))', 'count')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.bookletinfo', 'bookletinfo')
-        .leftJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspace_id', { workspace_id });
-      applyResolvedExclusionsToQuery(countQuery, exclusions);
-      this.applyVariablePairFilter(countQuery, validVariablePairKeys, 'validVariablePairKeys');
-
-      if (unitIdFilter) {
-        countQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
-      }
-
-      if (variableIdFilter) {
-        countQuery.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableIdFilter}%` });
-      }
-
-      const totalCountResult = await countQuery.getRawOne();
-      const totalCount = parseInt(totalCountResult?.count || '0', 10);
-      this.logger.log(`Total unique combinations: ${totalCount}`);
-
-      const aggregationQuery = this.responseRepository.createQueryBuilder('response')
-        .select('unit.name', 'unitId')
-        .addSelect('response.variableid', 'variableId')
-        .addSelect('response.code_v1', 'code_v1')
-        .addSelect('COUNT(response.id)', 'occurrenceCount')
-        .addSelect('MAX(response.score_v1)', 'score_V1') // Use MAX as a sample score
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
-        .leftJoin('booklet.bookletinfo', 'bookletinfo')
-        .where('person.workspace_id = :workspace_id', { workspace_id });
-      applyResolvedExclusionsToQuery(aggregationQuery, exclusions);
-      this.applyVariablePairFilter(aggregationQuery, validVariablePairKeys, 'aggregationVariablePairKeys');
-
-      if (unitIdFilter) {
-        aggregationQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
-      }
-
-      if (variableIdFilter) {
-        aggregationQuery.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableIdFilter}%` });
-      }
-
-      aggregationQuery
-        .groupBy('unit.name')
-        .addGroupBy('response.variableid')
-        .addGroupBy('response.code_v1')
-        .orderBy('unit.name', 'ASC')
-        .addOrderBy('response.variableid', 'ASC')
-        .addOrderBy('response.code_v1', 'ASC')
-        .offset((page - 1) * limit)
-        .limit(limit);
-
-      const aggregatedResults = await aggregationQuery.getRawMany<VariableAnalysisAggregationRow>();
-      this.logger.log(`Retrieved ${aggregatedResults.length} aggregated combinations for page ${page}`);
-
-      if (aggregatedResults.length === 0) {
-        return {
-          data: [],
+          data: result,
           total: totalCount,
           page,
           limit
         };
-      }
-      const unitVariableCounts = new Map<string, Map<string, number>>();
-      const unitVariableCombinations = this.getUniqueUnitVariablePairs(aggregatedResults);
-      const pageVariablePairKeys = unitVariableCombinations.map(combo => this.toVariablePairKey(combo.unitId, combo.variableId));
-
-      const totalCountsQuery = this.responseRepository.createQueryBuilder('response')
-        .select('unit.name', 'unitId')
-        .addSelect('response.variableid', 'variableId')
-        .addSelect('COUNT(response.id)', 'totalCount')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.bookletinfo', 'bookletinfo')
-        .leftJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspace_id', { workspace_id });
-      applyResolvedExclusionsToQuery(totalCountsQuery, exclusions, { parameterPrefix: 'variableAnalysisTotals' });
-      this.applyVariablePairFilter(totalCountsQuery, pageVariablePairKeys, 'totalCountVariablePairKeys');
-
-      if (unitIdFilter) {
-        totalCountsQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
-      }
-
-      if (variableIdFilter) {
-        totalCountsQuery.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableIdFilter}%` });
-      }
-
-      totalCountsQuery.groupBy('unit.name')
-        .addGroupBy('response.variableid');
-
-      const totalCountsResults = await totalCountsQuery.getRawMany();
-
-      for (const result of totalCountsResults) {
-        if (!unitVariableCounts.has(result.unitId)) {
-          unitVariableCounts.set(result.unitId, new Map<string, number>());
-        }
-        unitVariableCounts.get(result.unitId)?.set(result.variableId, parseInt(result.totalCount, 10));
-      }
-
-      const sampleInfoQuery = this.responseRepository.createQueryBuilder('response')
-        .select('unit.name', 'unitId')
-        .addSelect('response.variableid', 'variableId')
-        .addSelect('person.login', 'loginName')
-        .addSelect('person.code', 'loginCode')
-        .addSelect('person.group', 'loginGroup')
-        .addSelect('bookletinfo.name', 'bookletId')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
-        .leftJoin('booklet.bookletinfo', 'bookletinfo')
-        .where('person.workspace_id = :workspace_id', { workspace_id });
-      applyResolvedExclusionsToQuery(sampleInfoQuery, exclusions, { parameterPrefix: 'variableAnalysisSample' });
-      this.applyVariablePairFilter(sampleInfoQuery, pageVariablePairKeys, 'sampleVariablePairKeys');
-
-      sampleInfoQuery.groupBy('unit.name')
-        .addGroupBy('response.variableid')
-        .addGroupBy('person.login')
-        .addGroupBy('person.code')
-        .addGroupBy('person.group')
-        .addGroupBy('bookletinfo.name');
-
-      const sampleInfoResults = await sampleInfoQuery.getRawMany();
-
-      const sampleInfoMap = new Map<string, { loginName: string; loginCode: string; loginGroup: string; bookletId: string }>();
-      for (const result of sampleInfoResults) {
-        const key = this.toVariablePairKey(result.unitId, result.variableId);
-        sampleInfoMap.set(key, {
-          loginName: result.loginName || '',
-          loginCode: result.loginCode || '',
-          loginGroup: result.loginGroup || '',
-          bookletId: result.bookletId || ''
-        });
-      }
-
-      const result: VariableAnalysisItemDto[] = [];
-
-      // Pre-load variable page maps for all unique units
-      const uniqueUnitIds = new Set(unitVariableCombinations.map(item => item.unitId));
-      const variablePageMaps = new Map<string, Map<string, string>>();
-      for (const unitId of uniqueUnitIds) {
-        const pageMap = await this.codingListService.getVariablePageMap(unitId, workspace_id);
-        variablePageMaps.set(unitId, pageMap);
-      }
-
-      for (const item of aggregatedResults) {
-        const unitId = item.unitId;
-        const variableId = item.variableId;
-        const code = item.code_v1;
-        const occurrenceCount = parseInt(item.occurrenceCount, 10);
-        const score = parseFloat(item.score_V1) || 0;
-
-        const variableTotalCount = unitVariableCounts.get(unitId)?.get(variableId) || 0;
-
-        const relativeOccurrence = variableTotalCount > 0 ? occurrenceCount / variableTotalCount : 0;
-
-        const variableCoding = this.getVariableCoding(codingSchemeMap, unitId, variableId);
-        const derivation = variableCoding?.sourceType || '';
-        const description = variableCoding?.label || '';
-
-        const sampleInfo = sampleInfoMap.get(this.toVariablePairKey(unitId, variableId));
-        const loginName = sampleInfo?.loginName || '';
-        const loginCode = sampleInfo?.loginCode || '';
-        const loginGroup = sampleInfo?.loginGroup || '';
-        const bookletId = sampleInfo?.bookletId || '';
-
-        // Get variable page from VOUD data
-        const variablePage = variablePageMaps.get(unitId)?.get(variableId) || '0';
-        const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
-
-        result.push({
-          replayUrl,
-          unitId,
-          variableId,
-          derivation,
-          code,
-          description,
-          score,
-          occurrenceCount,
-          totalCount: variableTotalCount,
-          relativeOccurrence
-        });
-      }
-
-      const endTime = Date.now();
-      this.logger.log(`Variable analysis completed in ${endTime - startTime}ms`);
-
-      return {
-        data: result,
-        total: totalCount,
-        page,
-        limit
       };
+
+      if (regexSearch) {
+        return await withRegexSearchStatementTimeout(
+          this.responseRepository.manager.connection,
+          runAnalysis
+        );
+      }
+
+      return await runAnalysis();
     } catch (error) {
+      const regexError = toRegexSearchException(error);
+      if (regexError) {
+        throw regexError;
+      }
+
       this.logger.error(`Error getting variable analysis: ${error.message}`, error.stack);
       throw new Error('Could not retrieve variable analysis data. Please check the database connection or query.');
     }
@@ -380,5 +446,9 @@ export class VariableAnalysisReplayService {
 
   private toVariablePairKey(unitId: string, variableId: string): string {
     return `${unitId}\u001F${variableId}`;
+  }
+
+  private toAggregationKey(unitId: string, variableId: string, code: string | number | null | undefined): string {
+    return `${this.toVariablePairKey(unitId, variableId)}\u001F${code ?? ''}`;
   }
 }

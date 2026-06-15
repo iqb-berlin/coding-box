@@ -56,6 +56,8 @@ describe('CodingTrainingBackendService', () => {
         caseSelectionMode: undefined,
         referenceTrainingIds: undefined,
         referenceMode: undefined,
+        showScore: undefined,
+        allowComments: undefined,
         suppressGeneralInstructions: undefined
       });
       req.flush({});
@@ -89,6 +91,8 @@ describe('CodingTrainingBackendService', () => {
         'random',
         [10, 11],
         'same',
+        true,
+        false,
         true
       ).subscribe();
 
@@ -120,6 +124,8 @@ describe('CodingTrainingBackendService', () => {
         caseSelectionMode: 'random',
         referenceTrainingIds: [10, 11],
         referenceMode: 'same',
+        showScore: true,
+        allowComments: false,
         suppressGeneralInstructions: true
       });
       req.flush({});
@@ -150,6 +156,8 @@ describe('CodingTrainingBackendService', () => {
         'newest_first',
         [5],
         'different',
+        true,
+        false,
         true
       ).subscribe();
 
@@ -166,7 +174,53 @@ describe('CodingTrainingBackendService', () => {
         caseSelectionMode: 'newest_first',
         referenceTrainingIds: [5],
         referenceMode: 'different',
+        showScore: true,
+        allowComments: false,
         suppressGeneralInstructions: true
+      });
+      req.flush({});
+    });
+  });
+
+  describe('saveDiscussionResult', () => {
+    it('should include discussion notes', () => {
+      service.saveDiscussionResult(1, 5, 99, 7, 2, 'Replay note').subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/discussion-result`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        responseId: 99,
+        code: 7,
+        score: 2,
+        notes: 'Replay note'
+      });
+      req.flush({});
+    });
+  });
+
+  describe('discussion result apply', () => {
+    it('should request an apply preview', () => {
+      service.previewApplyDiscussionResults(1, 5, 'manual').subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/apply-discussion-results-preview`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ source: 'manual' });
+      req.flush({});
+    });
+
+    it('should apply discussion results with conflict strategies', () => {
+      service.applyDiscussionResults(1, 5, {
+        source: 'auto_agreement',
+        existingResultStrategy: 'overwrite',
+        jobConflictStrategy: 'removeFromJobs'
+      }).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/apply-discussion-results`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        source: 'auto_agreement',
+        existingResultStrategy: 'overwrite',
+        jobConflictStrategy: 'removeFromJobs'
       });
       req.flush({});
     });

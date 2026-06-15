@@ -17,6 +17,25 @@ describe('DoubleCodedReviewComponent', () => {
   let fixture: ComponentFixture<DoubleCodedReviewComponent>;
   let overlayContainer: OverlayContainer;
 
+  type ReplaySelectionMessage = {
+    type: 'replayCodeSelected';
+    testPerson: string;
+    unitId: string;
+    variableId: unknown;
+    code: unknown;
+    score?: unknown;
+    responseId: number;
+  };
+
+  type ReplaySelectionHarness = {
+    handleReplayCodeSelected: (
+      message: ReplaySelectionMessage,
+      source: MessageEventSource | null,
+      origin?: string
+    ) => void;
+    replayWindowByResponseId: Map<number, MessageEventSource>;
+  };
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [
@@ -68,6 +87,9 @@ describe('DoubleCodedReviewComponent', () => {
                   bookletName: 'Booklet 1',
                   givenAnswer: 'answer',
                   isResolved: false,
+                  appliedCode: null,
+                  appliedScore: null,
+                  appliedComment: null,
                   coderResults: [
                     {
                       coderId: 10,
@@ -102,6 +124,9 @@ describe('DoubleCodedReviewComponent', () => {
                   bookletName: 'Booklet 1',
                   givenAnswer: 'second answer',
                   isResolved: false,
+                  appliedCode: null,
+                  appliedScore: null,
+                  appliedComment: null,
                   coderResults: [
                     {
                       coderId: 10,
@@ -136,6 +161,9 @@ describe('DoubleCodedReviewComponent', () => {
                   bookletName: 'Booklet 2',
                   givenAnswer: 'third answer',
                   isResolved: false,
+                  appliedCode: null,
+                  appliedScore: null,
+                  appliedComment: null,
                   coderResults: [
                     {
                       coderId: 10,
@@ -160,9 +188,46 @@ describe('DoubleCodedReviewComponent', () => {
                       codedAt: '2026-05-20T11:10:00.000Z'
                     }
                   ]
+                },
+                {
+                  responseId: 504,
+                  unitName: 'Unit D',
+                  variableId: 'VAR_4',
+                  personLogin: 'person-4',
+                  personCode: 'P004',
+                  bookletName: 'Booklet 2',
+                  givenAnswer: 'fourth answer',
+                  isResolved: true,
+                  appliedCode: 2,
+                  appliedScore: 1,
+                  appliedComment: 'Final decision note',
+                  coderResults: [
+                    {
+                      coderId: 10,
+                      coderName: 'Coder A',
+                      jobId: 4001,
+                      jobName: 'Definition 103 / A',
+                      code: 1,
+                      score: 0,
+                      notes: null,
+                      supervisorComment: null,
+                      codedAt: '2026-05-20T12:00:00.000Z'
+                    },
+                    {
+                      coderId: 20,
+                      coderName: 'Coder B',
+                      jobId: 4002,
+                      jobName: 'Definition 103 / B',
+                      code: 2,
+                      score: 1,
+                      notes: null,
+                      supervisorComment: 'Final decision note',
+                      codedAt: '2026-05-20T12:10:00.000Z'
+                    }
+                  ]
                 }
               ],
-              total: 3,
+              total: 4,
               page: 1,
               limit: 50
             })),
@@ -258,6 +323,261 @@ describe('DoubleCodedReviewComponent', () => {
     expect(component.getCoderColumnTooltip('coder_10')).toContain('Weitere Namen: Coder A renamed');
   });
 
+  it('opens replay in coding decision mode for double-coded review decisions', async () => {
+    const codingStatisticsService = TestBed.inject(CodingStatisticsService) as unknown as {
+      getReplayUrl: jest.Mock;
+    };
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    codingStatisticsService.getReplayUrl.mockReturnValue(of({
+      replayUrl: 'http://localhost:3333/#/replay/person/unit/0/VAR_1?workspaceId=1'
+    }));
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    component.openReplay(501);
+
+    expect(codingStatisticsService.getReplayUrl).toHaveBeenCalledWith(1, 501);
+    const openedUrl = openSpy.mock.calls[0][0] as string;
+    expect(openedUrl).toContain(
+      `${window.location.origin}/#/replay/person/unit/0/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=501`
+    );
+    const reviewCodeSelections = new URLSearchParams(openedUrl.split('?')[1]).get('reviewCodeSelections');
+    expect(JSON.parse(reviewCodeSelections || '[]')).toEqual([
+      { code: 1, coderNames: ['Coder A'] },
+      { code: 2, coderNames: ['Coder B'] }
+    ]);
+    expect(openSpy).toHaveBeenCalledWith(openedUrl, '_blank');
+  });
+
+  it('selects an available coder result from a replay code selection', async () => {
+    const snackBar = TestBed.inject(MatSnackBar) as unknown as { open: jest.Mock };
+    const replaySource = {} as MessageEventSource;
+    const harness = component as unknown as ReplaySelectionHarness;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    snackBar.open.mockClear();
+    harness.replayWindowByResponseId.set(501, replaySource);
+    harness.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'person-1@P001@Booklet 1',
+      unitId: 'Unit A',
+      variableId: 'VAR_1',
+      code: '2',
+      score: 1,
+      responseId: 501
+    }, replaySource);
+
+    const item = component.dataSource.data.find(row => row.responseId === 501);
+    expect(component.selectionForm.get('item_501')?.value).toBe('1002');
+    expect(item?.selectedCoderResult?.jobId).toBe(1002);
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'double-coded-review.success.replay-code-selected',
+      'close',
+      expect.objectContaining({ panelClass: ['success-snackbar'] })
+    );
+  });
+
+  it('stores and applies a replay code selection that has no coder result', async () => {
+    const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
+      applyDoubleCodedResolutions: jest.Mock;
+    };
+    const replaySource = {} as MessageEventSource;
+    const harness = component as unknown as ReplaySelectionHarness;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    harness.replayWindowByResponseId.set(501, replaySource);
+    harness.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'person-1@P001@Booklet 1',
+      unitId: 'Unit A',
+      variableId: 'VAR_1',
+      code: '3',
+      score: 2,
+      responseId: 501
+    }, replaySource);
+
+    const item = component.dataSource.data.find(row => row.responseId === 501);
+    expect(item).toBeDefined();
+    expect(component.selectionForm.get('item_501')?.value).toBe('replay:501');
+    expect(component.getSelectedDecisionResult(item!)?.code).toBe(3);
+    expect(component.getSelectedDecisionResult(item!)?.score).toBe(2);
+    expect(component.getDecisionResultSourceLabel(item!, component.getSelectedDecisionResult(item!)!))
+      .toBe('double-coded-review.decision.replay-source');
+
+    testPersonCodingService.applyDoubleCodedResolutions.mockClear();
+    component.applySingleDecision(item!);
+
+    expect(testPersonCodingService.applyDoubleCodedResolutions).toHaveBeenCalledWith(1, {
+      decisions: [{ responseId: 501, code: 3, score: 2 }]
+    });
+  });
+
+  it('stores a replay code selection when only the score differs from coder results', async () => {
+    const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
+      applyDoubleCodedResolutions: jest.Mock;
+    };
+    const replaySource = {} as MessageEventSource;
+    const harness = component as unknown as ReplaySelectionHarness;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    harness.replayWindowByResponseId.set(501, replaySource);
+    harness.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'person-1@P001@Booklet 1',
+      unitId: 'Unit A',
+      variableId: 'VAR_1',
+      code: '2',
+      score: 2,
+      responseId: 501
+    }, replaySource);
+
+    const item = component.dataSource.data.find(row => row.responseId === 501);
+    expect(component.selectionForm.get('item_501')?.value).toBe('replay:501');
+
+    testPersonCodingService.applyDoubleCodedResolutions.mockClear();
+    component.applySingleDecision(item!);
+
+    expect(testPersonCodingService.applyDoubleCodedResolutions).toHaveBeenCalledWith(1, {
+      decisions: [{ responseId: 501, code: 2, score: 2 }]
+    });
+  });
+
+  it('stores a replay code selection when the score is explicitly null', async () => {
+    const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
+      applyDoubleCodedResolutions: jest.Mock;
+    };
+    const replaySource = {} as MessageEventSource;
+    const harness = component as unknown as ReplaySelectionHarness;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    harness.replayWindowByResponseId.set(501, replaySource);
+    harness.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'person-1@P001@Booklet 1',
+      unitId: 'Unit A',
+      variableId: 'VAR_1',
+      code: '2',
+      score: null,
+      responseId: 501
+    }, replaySource);
+
+    const item = component.dataSource.data.find(row => row.responseId === 501);
+    expect(component.selectionForm.get('item_501')?.value).toBe('replay:501');
+
+    testPersonCodingService.applyDoubleCodedResolutions.mockClear();
+    component.applySingleDecision(item!);
+
+    expect(testPersonCodingService.applyDoubleCodedResolutions).toHaveBeenCalledWith(1, {
+      decisions: [{ responseId: 501, code: 2, score: null }]
+    });
+  });
+
+  it('ignores malformed replay code selections without crashing', async () => {
+    const snackBar = TestBed.inject(MatSnackBar) as unknown as { open: jest.Mock };
+    const replaySource = {} as MessageEventSource;
+    const harness = component as unknown as ReplaySelectionHarness;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    snackBar.open.mockClear();
+    harness.replayWindowByResponseId.set(501, replaySource);
+    expect(() => harness.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'person-1@P001@Booklet 1',
+      unitId: 'Unit A',
+      variableId: { invalid: true },
+      code: { invalid: true },
+      responseId: 501
+    }, replaySource)).not.toThrow();
+
+    expect(component.selectionForm.get('item_501')?.value).toBe('1001');
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'double-coded-review.errors.replay-code-not-in-decisions',
+      'close',
+      expect.objectContaining({ panelClass: ['error-snackbar'] })
+    );
+  });
+
+  it('ignores replay code selections with malformed scores', async () => {
+    const snackBar = TestBed.inject(MatSnackBar) as unknown as { open: jest.Mock };
+    const replaySource = {} as MessageEventSource;
+    const harness = component as unknown as ReplaySelectionHarness;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    snackBar.open.mockClear();
+    harness.replayWindowByResponseId.set(501, replaySource);
+    harness.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'person-1@P001@Booklet 1',
+      unitId: 'Unit A',
+      variableId: 'VAR_1',
+      code: '2',
+      score: { invalid: true },
+      responseId: 501
+    }, replaySource);
+
+    expect(component.selectionForm.get('item_501')?.value).toBe('1001');
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'double-coded-review.errors.replay-code-not-in-decisions',
+      'close',
+      expect.objectContaining({ panelClass: ['error-snackbar'] })
+    );
+  });
+
+  it('ignores replay code selections from stale replay windows', async () => {
+    const snackBar = TestBed.inject(MatSnackBar) as unknown as { open: jest.Mock };
+    const expectedReplaySource = {} as MessageEventSource;
+    const staleReplaySource = {} as MessageEventSource;
+    const harness = component as unknown as ReplaySelectionHarness;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    snackBar.open.mockClear();
+    harness.replayWindowByResponseId.set(501, expectedReplaySource);
+    harness.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'person-1@P001@Booklet 1',
+      unitId: 'Unit A',
+      variableId: 'VAR_1',
+      code: '3',
+      score: 2,
+      responseId: 501
+    }, staleReplaySource);
+
+    expect(component.selectionForm.get('item_501')?.value).toBe('1001');
+    expect(component.getSelectedDecisionResult(component.dataSource.data[0])?.code).toBe(1);
+    expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
+  it('ignores replay code selections from another origin', async () => {
+    const snackBar = TestBed.inject(MatSnackBar) as unknown as { open: jest.Mock };
+    const replaySource = {} as MessageEventSource;
+    const harness = component as unknown as ReplaySelectionHarness;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    snackBar.open.mockClear();
+    harness.replayWindowByResponseId.set(501, replaySource);
+    harness.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'person-1@P001@Booklet 1',
+      unitId: 'Unit A',
+      variableId: 'VAR_1',
+      code: '3',
+      score: 2,
+      responseId: 501
+    }, replaySource, 'https://example.test');
+
+    expect(component.selectionForm.get('item_501')?.value).toBe('1001');
+    expect(component.getSelectedDecisionResult(component.dataSource.data[0])?.code).toBe(1);
+    expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
   it('shows multiple results from the same coder in one coder column cell', async () => {
     fixture.detectChanges();
     await fixture.whenStable();
@@ -275,6 +595,28 @@ describe('DoubleCodedReviewComponent', () => {
     expect(coderACell.textContent).toContain('Definition 102 / A');
     expect(coderACell.textContent).toContain('#3002');
     expect(coderBCell.textContent).toContain('-');
+  });
+
+  it('shows applied decisions and marks matching original codes for resolved rows', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const nativeElement = fixture.nativeElement as HTMLElement;
+    const rows = Array.from(nativeElement.querySelectorAll('tbody tr')) as HTMLElement[];
+    const resolvedRow = rows[3];
+
+    expect(resolvedRow.querySelector('.applied-result')?.textContent).toContain('2');
+    expect(resolvedRow.querySelector('.applied-result')?.textContent).toContain('Final decision note');
+    expect(resolvedRow.querySelector('.decision-status.resolved')?.textContent)
+      .toContain('double-coded-review.applied');
+
+    const coderACell = resolvedRow.querySelector('td.mat-column-coder_10') as HTMLElement;
+    const coderBCell = resolvedRow.querySelector('td.mat-column-coder_20') as HTMLElement;
+
+    expect(coderACell.querySelector('.applied-code-match')).toBeNull();
+    expect(coderBCell.querySelector('.applied-code-match')).toBeTruthy();
+    expect(coderBCell.querySelector('.applied-match-icon')).toBeTruthy();
   });
 
   it('labels duplicate coder decisions with job source and counts progress by unique coders', async () => {

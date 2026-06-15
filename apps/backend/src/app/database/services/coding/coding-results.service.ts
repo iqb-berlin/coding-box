@@ -15,6 +15,7 @@ import { CodingFreshnessService } from './coding-freshness.service';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 import { CodingValidationService } from './coding-validation.service';
 import { MissingsProfilesService } from './missings-profiles.service';
+import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
 
 export interface ApplyCodingResultsOptions {
   overwriteExisting?: boolean;
@@ -28,6 +29,12 @@ export interface ApplyCodingResultsResult {
   overwrittenExistingCount: number;
   messageKey: string;
   messageParams?: Record<string, unknown>;
+}
+
+interface ExistingV2State {
+  status: number | null;
+  code: number | null;
+  score: number | null;
 }
 
 @Injectable()
@@ -78,7 +85,7 @@ export class CodingResultsService {
       };
     }
 
-    if (codingJob.status !== 'completed') {
+    if (!['completed', 'review'].includes(codingJob.status)) {
       return {
         success: false,
         updatedResponsesCount: 0,
@@ -101,35 +108,39 @@ export class CodingResultsService {
       const codingJobUnits = await this.codingJobService.getCodingJobUnits(codingJobId);
       const codingProgress = await this.codingJobService.getCodingProgress(codingJobId);
       const directResponseIds = Array.from(new Set(codingJobUnits.map(unit => unit.responseId)));
-      const existingV2StatusByResponseId = await this.getExistingV2StatusByResponseId(directResponseIds);
+      const existingV2StateByResponseId = await this.getExistingV2StateByResponseId(directResponseIds);
+      const resolvedIssueReviewResponseIds = new Set(
+        await this.codingJobService.getResolvedCodingIssueReviewResponseIds(codingJobId)
+      );
+      const openIssueReviewResponseIds = new Set(
+        await this.codingJobService.getOpenCodingIssueReviewResponseIds(codingJobId)
+      );
+      const getProgressKeyForUnit = (unit: typeof codingJobUnits[number]) => {
+        const testPerson = formatCodingTestPerson({
+          login: unit.personLogin,
+          code: unit.personCode,
+          group: unit.personGroup || undefined,
+          booklet: unit.bookletName
+        });
 
-      const uncertainIssues = Object.values(codingProgress).filter(p => {
-        if (!p || typeof p !== 'object') {
-          return false;
-        }
-
-        const codeId = typeof p.id === 'number' ? p.id : null;
-        const codingIssueOption = typeof p.codingIssueOption === 'number' ? p.codingIssueOption : null;
-
-        return codeId === -1 || codeId === -2 || codingIssueOption === -1 || codingIssueOption === -2;
-      });
-
-      if (uncertainIssues.length > 0) {
-        return {
-          success: false,
-          updatedResponsesCount: 0,
-          skippedReviewCount: 0,
-          skippedAlreadyCodedCount: 0,
-          overwrittenExistingCount: 0,
-          messageKey: 'coding-results.apply.error.uncertain-issues-present',
-          messageParams: { count: uncertainIssues.length }
-        };
-      }
+        return generateCodingProgressKey(testPerson, unit.unitName, unit.variableId);
+      };
+      const unitRequiresIssueReview = (unit: typeof codingJobUnits[number]) => (
+        openIssueReviewResponseIds.has(unit.responseId) ||
+        this.requiresCodingIssueReview(codingProgress[getProgressKeyForUnit(unit)])
+      );
+      const reviewResponseIds = new Set(codingJobUnits
+        .filter(unitRequiresIssueReview)
+        .map(unit => unit.responseId));
+      const conflictCheckResponseIds = directResponseIds.filter(responseId => (
+        !reviewResponseIds.has(responseId) &&
+        !resolvedIssueReviewResponseIds.has(responseId)
+      ));
 
       const doubleCodingConflicts = await this.getDoubleCodingConflicts(
         workspaceId,
         codingJob,
-        directResponseIds
+        conflictCheckResponseIds
       );
       const blockingDoubleCodingConflicts = doubleCodingConflicts.filter(conflict => (
         conflict.statusV2 !== completedStatus || overwriteExisting
@@ -152,23 +163,22 @@ export class CodingResultsService {
       let overwrittenExistingCount = 0;
 
       for (const unit of codingJobUnits) {
-        const existingStatusV2 = existingV2StatusByResponseId.get(unit.responseId);
-        if (existingStatusV2 === completedStatus) {
+        const progressKey = getProgressKeyForUnit(unit);
+        const progress = codingProgress[progressKey];
+
+        if (unitRequiresIssueReview(unit)) {
+          skippedReviewCount += 1;
+          continue;
+        }
+
+        const existingV2State = existingV2StateByResponseId.get(unit.responseId);
+        if (this.hasExistingV2Value(existingV2State)) {
           if (!overwriteExisting) {
             skippedAlreadyCodedCount += 1;
             continue;
           }
           overwrittenExistingCount += 1;
         }
-
-        const testPerson = formatCodingTestPerson({
-          login: unit.personLogin,
-          code: unit.personCode,
-          group: unit.personGroup || undefined,
-          booklet: unit.bookletName
-        });
-        const progressKey = generateCodingProgressKey(testPerson, unit.unitName, unit.variableId);
-        const progress = codingProgress[progressKey];
 
         if (!progress || (progress.id === undefined && progress.score === undefined)) {
           responsesToUpdate.push({
@@ -182,15 +192,7 @@ export class CodingResultsService {
           let code = null;
           let score = progress.score !== undefined ? progress.score : null;
 
-          if (progress.codingIssueOption === -1 || progress.codingIssueOption === -2) {
-            skippedReviewCount += 1;
-            continue;
-          }
-
-          // Handle uncertain options (negative IDs)
-          if (progress.id === -1) {
-            status = statusStringToNumber('CODING_INCOMPLETE');
-          } else if (this.manualMissingIdsByIssueOptionId.has(progress.id)) {
+          if (this.manualMissingIdsByIssueOptionId.has(progress.id)) {
             const missingId = this.manualMissingIdsByIssueOptionId.get(progress.id) as string;
             const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
               workspaceId,
@@ -199,9 +201,14 @@ export class CodingResultsService {
             );
             code = missing.code;
             score = missing.score;
-          } else if (progress.id === -2) {
-            skippedReviewCount += 1;
-            continue;
+          } else if (progress.id < 0) {
+            const missing = await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
+              workspaceId,
+              codingJob.missings_profile_id,
+              progress.id
+            );
+            code = missing.code;
+            score = missing.score;
           } else if (progress.id >= 0) {
             code = progress.id;
           }
@@ -238,7 +245,10 @@ export class CodingResultsService {
         } else {
           const derivedVariableMap = await this.codingJobService.getDerivedVariableMapForAggregation(workspaceId);
           // Collect the response IDs that are already being updated (avoid double-adding)
-          const alreadyUpdatedIds = new Set(responsesToUpdate.map(r => r.responseId));
+          const alreadyUpdatedIds = new Set([
+            ...responsesToUpdate.map(r => r.responseId),
+            ...reviewResponseIds
+          ]);
 
           // Only propagate results for CODING_COMPLETE responses with a real code
           const completedUpdates = responsesToUpdate.filter(
@@ -435,21 +445,28 @@ export class CodingResultsService {
           this.logger.log(`Updated batch of ${batch.length} responses (${totalUpdated}/${responsesToUpdate.length})`);
         }
 
-        await this.markManualFreshnessCurrent(
-          workspaceId,
+        const updatedResponseIds = responsesToUpdate.map(response => response.responseId);
+        const freshnessResponseIds = skippedReviewCount === 0 ?
           Array.from(new Set([
             ...directResponseIds,
-            ...responsesToUpdate.map(response => response.responseId)
-          ])),
+            ...updatedResponseIds
+          ])) :
+          Array.from(new Set(updatedResponseIds));
+
+        await this.markManualFreshnessCurrent(
+          workspaceId,
+          freshnessResponseIds,
           codingJobId,
           queryRunner.manager
         );
 
-        await this.codingJobService.markCodingJobResultsApplied(
-          codingJobId,
-          workspaceId,
-          queryRunner.manager
-        );
+        if (skippedReviewCount === 0) {
+          await this.codingJobService.markCodingJobResultsApplied(
+            codingJobId,
+            workspaceId,
+            queryRunner.manager
+          );
+        }
 
         await queryRunner.commitTransaction();
 
@@ -501,6 +518,13 @@ export class CodingResultsService {
     );
   }
 
+  private requiresCodingIssueReview(progress?: { id?: unknown; codingIssueOption?: unknown } | null): boolean {
+    return progress?.id === -1 ||
+      progress?.id === -2 ||
+      progress?.codingIssueOption === -1 ||
+      progress?.codingIssueOption === -2;
+  }
+
   private async getFreshnessApplyBlockerInTransaction(
     workspaceId: number,
     codingJobId: number,
@@ -544,14 +568,27 @@ export class CodingResultsService {
     this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }
 
-  private async getExistingV2StatusByResponseId(responseIds: number[]): Promise<Map<number, number | null>> {
+  private hasExistingV2Value(state: ExistingV2State | undefined): boolean {
+    return state !== undefined &&
+      (
+        state.status !== null ||
+        state.code !== null ||
+        state.score !== null
+      );
+  }
+
+  private async getExistingV2StateByResponseId(responseIds: number[]): Promise<Map<number, ExistingV2State>> {
     if (responseIds.length === 0) {
       return new Map();
     }
 
     const rows = await this.responseRepository.manager.query(
       `
-        SELECT id, status_v2 as "statusV2"
+        SELECT
+          id,
+          status_v2 as "statusV2",
+          code_v2 as "codeV2",
+          score_v2 as "scoreV2"
         FROM response
         WHERE id = ANY($1::int[])
       `,
@@ -560,7 +597,11 @@ export class CodingResultsService {
 
     return new Map(rows.map(row => [
       Number(row.id),
-      row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2)
+      {
+        status: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
+        code: row.codeV2 === null || row.codeV2 === undefined ? null : Number(row.codeV2),
+        score: row.scoreV2 === null || row.scoreV2 === undefined ? null : Number(row.scoreV2)
+      }
     ]));
   }
 
@@ -584,6 +625,7 @@ export class CodingResultsService {
       scopeClauses.push(`cj.training_id = $${params.length}`);
     } else {
       scopeClauses.push('cj.training_id IS NULL');
+      scopeClauses.push(getNonCodingIssueReviewJobSqlCondition('cj'));
 
       if (codingJob.job_definition_id !== null && codingJob.job_definition_id !== undefined) {
         params.push(codingJob.job_definition_id);

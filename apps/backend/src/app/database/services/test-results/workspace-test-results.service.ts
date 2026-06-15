@@ -7,6 +7,7 @@ import {
   EntityManager,
   EntityTarget,
   ObjectLiteral,
+  QueryRunner,
   Repository,
   SelectQueryBuilder
 } from 'typeorm';
@@ -21,7 +22,10 @@ import {
   statusNumberToString,
   statusStringToNumber
 } from '../../utils/response-status-converter';
-import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
+import {
+  CodingVersion,
+  getEffectiveCodingStatusExpression
+} from '../../utils/effective-coding-status-expression.util';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -71,6 +75,11 @@ import {
   TestResultsResponseCleanupSampleDto,
   TestResultsTimestampSource
 } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
+import {
+  assertValidRegexSearchPattern,
+  toRegexSearchException,
+  withRegexSearchStatementTimeout
+} from '../../../utils/regex-search.util';
 
 interface PersonWhere {
   code: string;
@@ -79,6 +88,20 @@ interface PersonWhere {
   consider: boolean;
   group?: string;
 }
+
+export type ResponseSearchSortBy =
+  'unitname' |
+  'variableid' |
+  'value' |
+  'codedstatus' |
+  'code' |
+  'score' |
+  'person_code' |
+  'person_login' |
+  'person_group' |
+  'booklet_id';
+export type ResponseSearchSortDirection = 'asc' | 'desc';
+const EFFECTIVE_CODING_STATUS_SORT_ALIAS = 'effective_coding_status_sort';
 
 export type WorkspaceOverviewStats = {
   testPersons: number;
@@ -169,6 +192,11 @@ interface LogAnomalyThresholds {
 interface LogAnomalySqlFragment {
   sql: string;
   params: Record<string, string | string[]>;
+}
+
+interface TextSearchFilter {
+  value: string;
+  exact: boolean;
 }
 
 interface LogAnomalyDashboardSummary {
@@ -285,6 +313,21 @@ export class WorkspaceTestResultsService {
 
   private static createGeoGebraUnitExistsCondition(unitAlias: string): string {
     return `EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = ${unitAlias}.id AND ${WorkspaceTestResultsService.createGeoGebraValueCondition('r2')})`;
+  }
+
+  private static parseQuotedExactSearchFilter(filter: string): TextSearchFilter {
+    const trimmed = filter.trim();
+    if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      return {
+        value: trimmed.slice(1, -1),
+        exact: true
+      };
+    }
+
+    return {
+      value: filter,
+      exact: false
+    };
   }
 
   private static parseStoredResponseValue(value: string | null, variableId?: string): unknown {
@@ -6459,13 +6502,21 @@ export class WorkspaceTestResultsService {
       codedStatus?: string;
       group?: string;
       code?: string;
+      codingCode?: string;
+      score?: string;
       version?: 'v1' | 'v2' | 'v3';
       geogebra?: boolean;
       derivedOnly?: boolean;
       responseSource?: 'base' | 'derived' | 'all';
       personLogin?: string;
+      regexSearch?: boolean;
     },
-    options: { page?: number; limit?: number } = {}
+    options: {
+      page?: number;
+      limit?: number;
+      sortBy?: ResponseSearchSortBy;
+      sortDirection?: ResponseSearchSortDirection;
+    } = {}
   ): Promise<{
       data: {
         responseId: number;
@@ -6495,6 +6546,7 @@ export class WorkspaceTestResultsService {
     const page = options.page || 1;
     const limit = options.limit || 10;
     const skip = (page - 1) * limit;
+    const version = this.normalizeCodingVersion(searchParams.version);
 
     this.logger.log(`Searching for responses in workspace ${workspaceId}`);
 
@@ -6505,188 +6557,286 @@ export class WorkspaceTestResultsService {
         )} (page: ${page}, limit: ${limit})`
       );
 
-      const query = this.responseRepository
-        .createQueryBuilder('response')
-        .innerJoinAndSelect('response.unit', 'unit')
-        .innerJoinAndSelect('unit.booklet', 'booklet')
-        .innerJoinAndSelect('booklet.person', 'person')
-        .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true });
+      const runSearch = async (
+        queryRunner?: QueryRunner
+      ): Promise<{
+        data: {
+          responseId: number;
+          variableId: string;
+          value: string;
+          status: string;
+          code?: number;
+          score?: number;
+          codedStatus?: string;
+          unitId: number;
+          unitName: string;
+          unitAlias: string | null;
+          bookletId: number;
+          bookletName: string;
+          personId: number;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+          variablePage?: string;
+        }[];
+        total: number;
+      }> => {
+        const query = this.responseRepository
+          .createQueryBuilder('response', queryRunner)
+          .innerJoinAndSelect('response.unit', 'unit')
+          .innerJoinAndSelect('unit.booklet', 'booklet')
+          .innerJoinAndSelect('booklet.person', 'person')
+          .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true });
 
-      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-      this.applyExclusionsToQuery(query, exclusions);
+        const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+        this.applyExclusionsToQuery(query, exclusions);
 
-      if (searchParams.value) {
-        query.andWhere('response.value ILIKE :value', {
-          value: `%${searchParams.value}%`
-        });
-      }
-
-      if (searchParams.variableId) {
-        query.andWhere('response.variableid ILIKE :variableId', {
-          variableId: `%${searchParams.variableId}%`
-        });
-      }
-
-      if (searchParams.unitName) {
-        query.andWhere('unit.name ILIKE :unitName', {
-          unitName: `%${searchParams.unitName}%`
-        });
-      }
-
-      if (searchParams.bookletName) {
-        query.andWhere('bookletinfo.name ILIKE :bookletName', {
-          bookletName: `%${searchParams.bookletName}%`
-        });
-      }
-
-      if (searchParams.status) {
-        query.andWhere('response.status = :status', {
-          status: searchParams.status
-        });
-      }
-
-      if (searchParams.codedStatus) {
-        const codedStatusNumber = statusStringToNumber(searchParams.codedStatus);
-        if (codedStatusNumber === null) {
-          query.andWhere('1=0');
-        } else {
-          const effectiveStatusExpression = getEffectiveCodingStatusExpression(
-            searchParams.version || 'v1'
-          );
-          query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
-            codedStatus: codedStatusNumber
+        if (searchParams.value) {
+          query.andWhere('response.value ILIKE :value', {
+            value: `%${searchParams.value}%`
           });
         }
-      }
 
-      if (searchParams.group) {
-        query.andWhere('person.group = :group', { group: searchParams.group });
-      }
+        if (searchParams.variableId) {
+          const variableIdFilter = WorkspaceTestResultsService.parseQuotedExactSearchFilter(searchParams.variableId);
+          if (searchParams.regexSearch) {
+            const variableIdRegex = assertValidRegexSearchPattern(searchParams.variableId, 'variableId');
+            if (variableIdRegex) {
+              query.andWhere('response.variableid ~ :variableIdRegex', { variableIdRegex });
+            }
+          } else if (variableIdFilter.exact) {
+            query.andWhere('LOWER(response.variableid) = LOWER(:variableId)', {
+              variableId: variableIdFilter.value
+            });
+          } else {
+            query.andWhere('response.variableid ILIKE :variableId', {
+              variableId: `%${variableIdFilter.value}%`
+            });
+          }
+        }
 
-      if (searchParams.code) {
-        query.andWhere('person.code = :code', { code: searchParams.code });
-      }
+        if (searchParams.unitName) {
+          if (searchParams.regexSearch) {
+            const unitNameRegex = assertValidRegexSearchPattern(searchParams.unitName, 'unitName');
+            if (unitNameRegex) {
+              query.andWhere('unit.name ~ :unitNameRegex', { unitNameRegex });
+            }
+          } else {
+            query.andWhere('unit.name ILIKE :unitName', {
+              unitName: `%${searchParams.unitName}%`
+            });
+          }
+        }
 
-      if (searchParams.personLogin) {
-        query.andWhere('person.login ILIKE :personLogin', {
-          personLogin: `%${searchParams.personLogin}%`
-        });
-      }
+        if (searchParams.bookletName) {
+          if (searchParams.regexSearch) {
+            const bookletNameRegex = assertValidRegexSearchPattern(searchParams.bookletName, 'bookletName');
+            if (bookletNameRegex) {
+              query.andWhere('bookletinfo.name ~ :bookletNameRegex', { bookletNameRegex });
+            }
+          } else {
+            query.andWhere('bookletinfo.name ILIKE :bookletName', {
+              bookletName: `%${searchParams.bookletName}%`
+            });
+          }
+        }
 
-      if (searchParams.geogebra) {
-        query.andWhere(
-          WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
-          WorkspaceTestResultsService.geoGebraValueParams
+        if (searchParams.status) {
+          query.andWhere('response.status = :status', {
+            status: searchParams.status
+          });
+        }
+
+        if (searchParams.codedStatus) {
+          const codedStatusNumber = statusStringToNumber(searchParams.codedStatus);
+          if (codedStatusNumber === null) {
+            query.andWhere('1=0');
+          } else {
+            const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
+            query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
+              codedStatus: codedStatusNumber
+            });
+          }
+        }
+
+        if (searchParams.group) {
+          if (searchParams.regexSearch) {
+            const groupRegex = assertValidRegexSearchPattern(searchParams.group, 'group');
+            if (groupRegex) {
+              query.andWhere('person.group ~ :groupRegex', { groupRegex });
+            }
+          } else {
+            query.andWhere('person.group = :group', { group: searchParams.group });
+          }
+        }
+
+        if (searchParams.code) {
+          if (searchParams.regexSearch) {
+            const codeRegex = assertValidRegexSearchPattern(searchParams.code, 'code');
+            if (codeRegex) {
+              query.andWhere('person.code ~ :codeRegex', { codeRegex });
+            }
+          } else {
+            query.andWhere('person.code = :code', { code: searchParams.code });
+          }
+        }
+
+        if (searchParams.codingCode) {
+          const codingCodeFilter = searchParams.codingCode.trim();
+          const codingCode = Number(codingCodeFilter);
+          if (codingCodeFilter !== '' && Number.isInteger(codingCode)) {
+            query.andWhere(`response.code_${version} = :codingCode`, { codingCode });
+          } else {
+            query.andWhere('1=0');
+          }
+        }
+
+        if (searchParams.score) {
+          const scoreFilter = searchParams.score.trim();
+          const score = Number(scoreFilter);
+          if (scoreFilter !== '' && Number.isInteger(score)) {
+            query.andWhere(`response.score_${version} = :score`, { score });
+          } else {
+            query.andWhere('1=0');
+          }
+        }
+
+        if (searchParams.personLogin) {
+          if (searchParams.regexSearch) {
+            const personLoginRegex = assertValidRegexSearchPattern(searchParams.personLogin, 'personLogin');
+            if (personLoginRegex) {
+              query.andWhere('person.login ~ :personLoginRegex', { personLoginRegex });
+            }
+          } else {
+            query.andWhere('person.login ILIKE :personLogin', {
+              personLogin: `%${searchParams.personLogin}%`
+            });
+          }
+        }
+
+        if (searchParams.geogebra) {
+          query.andWhere(
+            WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
+            WorkspaceTestResultsService.geoGebraValueParams
+          );
+        }
+
+        const requestedResponseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
+        const responseSource = searchParams.geogebra && requestedResponseSource === 'all' ?
+          'base' :
+          requestedResponseSource;
+
+        if (responseSource === 'derived') {
+          const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
+          query.andWhere('response.is_autocoder_generated = :derivedOnly', {
+            derivedOnly: true
+          });
+          query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
+          query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
+            ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
+          });
+          await this.applyValidCodingVariableFilter(query, workspaceId);
+        } else if (responseSource === 'all') {
+          const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
+          query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
+          query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
+            ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
+          });
+          await this.applyValidCodingVariableFilter(query, workspaceId);
+        } else {
+          this.excludeAutocoderGeneratedResponses(query);
+        }
+
+        const total = await query.getCount();
+        this.applyResponseSearchSorting(
+          query,
+          version,
+          searchParams.geogebra === true,
+          options.sortBy,
+          options.sortDirection
         );
-        const version = searchParams.version || 'v1';
-        query.addOrderBy(`response.code_${version}`, 'ASC');
-        query.addOrderBy('person.code', 'ASC');
-      }
 
-      const requestedResponseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
-      const responseSource = searchParams.geogebra && requestedResponseSource === 'all' ?
-        'base' :
-        requestedResponseSource;
+        if (total === 0) {
+          this.logger.log(
+            `No responses found matching the criteria in workspace: ${workspaceId}`
+          );
+          return { data: [], total: 0 };
+        }
 
-      if (responseSource === 'derived') {
-        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
-          searchParams.version || 'v1'
-        );
-        query.andWhere('response.is_autocoder_generated = :derivedOnly', {
-          derivedOnly: true
-        });
-        query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
-        query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
-          ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
-        });
-        await this.applyValidCodingVariableFilter(query, workspaceId);
-      } else if (responseSource === 'all') {
-        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
-          searchParams.version || 'v1'
-        );
-        query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
-        query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
-          ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
-        });
-        await this.applyValidCodingVariableFilter(query, workspaceId);
-      } else {
-        this.excludeAutocoderGeneratedResponses(query);
-      }
+        query.skip(skip).take(limit);
 
-      const total = await query.getCount();
+        const responses = await query.getMany();
 
-      if (total === 0) {
         this.logger.log(
-          `No responses found matching the criteria in workspace: ${workspaceId}`
+          `Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`
         );
-        return { data: [], total: 0 };
-      }
 
-      query.skip(skip).take(limit);
+        // Pre-load variable page maps for all unique units
+        const uniqueUnitNames = [...new Set(responses.map(r => r.unit.name))];
+        const variablePageMaps = new Map<string, Map<string, string>>();
+        for (const unitName of uniqueUnitNames) {
+          const pageMap = await this.codingListService.getVariablePageMap(
+            unitName,
+            workspaceId
+          );
+          variablePageMaps.set(unitName, pageMap);
+        }
 
-      const responses = await query.getMany();
-
-      this.logger.log(
-        `Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`
-      );
-
-      // Pre-load variable page maps for all unique units
-      const uniqueUnitNames = [...new Set(responses.map(r => r.unit.name))];
-      const variablePageMaps = new Map<string, Map<string, string>>();
-      for (const unitName of uniqueUnitNames) {
-        const pageMap = await this.codingListService.getVariablePageMap(
-          unitName,
-          workspaceId
-        );
-        variablePageMaps.set(unitName, pageMap);
-      }
-
-      const version = searchParams.version || 'v1';
-      const data = responses.map(response => {
-        const code = response[
-          `code_${version}` as keyof ResponseEntity
-        ] as number;
-        const score = response[
-          `score_${version}` as keyof ResponseEntity
-        ] as number;
-        const codedStatus = response[
-          `status_${version}` as keyof ResponseEntity
-        ] as number;
-        const variablePage =
+        const data = responses.map(response => {
+          const code = response[
+            `code_${version}` as keyof ResponseEntity
+          ] as number;
+          const score = response[
+            `score_${version}` as keyof ResponseEntity
+          ] as number;
+          const codedStatus = response[
+            `status_${version}` as keyof ResponseEntity
+          ] as number;
+          const variablePage =
           variablePageMaps.get(response.unit.name)?.get(response.variableid) ||
           '0';
 
-        return {
-          responseId: response.id,
-          variableId: response.variableid,
-          value: response.value || '',
-          status: statusNumberToString(response.status) || 'UNSET',
-          code,
-          score,
-          codedStatus: statusNumberToString(codedStatus) || 'UNSET',
-          code_v1: response.code_v1,
-          code_v2: response.code_v2,
-          code_v3: response.code_v3,
-          status_v1: statusNumberToString(response.status_v1) || 'UNSET',
-          status_v2: statusNumberToString(response.status_v2) || 'UNSET',
-          status_v3: statusNumberToString(response.status_v3) || 'UNSET',
-          unitId: response.unit.id,
-          unitName: response.unit.name,
-          unitAlias: response.unit.alias,
-          bookletId: response.unit.booklet.id,
-          bookletName: response.unit.booklet.bookletinfo.name,
-          personId: response.unit.booklet.person.id,
-          personLogin: response.unit.booklet.person.login,
-          personCode: response.unit.booklet.person.code,
-          personGroup: response.unit.booklet.person.group,
-          variablePage
-        };
-      });
+          return {
+            responseId: response.id,
+            variableId: response.variableid,
+            value: response.value || '',
+            status: statusNumberToString(response.status) || 'UNSET',
+            code,
+            score,
+            codedStatus: statusNumberToString(codedStatus) || 'UNSET',
+            code_v1: response.code_v1,
+            code_v2: response.code_v2,
+            code_v3: response.code_v3,
+            status_v1: statusNumberToString(response.status_v1) || 'UNSET',
+            status_v2: statusNumberToString(response.status_v2) || 'UNSET',
+            status_v3: statusNumberToString(response.status_v3) || 'UNSET',
+            unitId: response.unit.id,
+            unitName: response.unit.name,
+            unitAlias: response.unit.alias,
+            bookletId: response.unit.booklet.id,
+            bookletName: response.unit.booklet.bookletinfo.name,
+            personId: response.unit.booklet.person.id,
+            personLogin: response.unit.booklet.person.login,
+            personCode: response.unit.booklet.person.code,
+            personGroup: response.unit.booklet.person.group,
+            variablePage
+          };
+        });
 
-      return { data, total };
+        return { data, total };
+      };
+
+      return searchParams.regexSearch ?
+        await withRegexSearchStatementTimeout(this.connection, runSearch) :
+        await runSearch();
     } catch (error) {
+      const regexError = toRegexSearchException(error);
+      if (regexError) {
+        throw regexError;
+      }
+
       this.logger.error(
         `Failed to search for responses in workspace: ${workspaceId}`,
         error.stack
@@ -6695,6 +6845,73 @@ export class WorkspaceTestResultsService {
         `An error occurred while searching for responses: ${error.message}`
       );
     }
+  }
+
+  private applyResponseSearchSorting(
+    query: SelectQueryBuilder<ResponseEntity>,
+    version: CodingVersion,
+    geogebra: boolean,
+    sortBy?: ResponseSearchSortBy,
+    sortDirection?: ResponseSearchSortDirection
+  ): void {
+    const direction = sortDirection === 'desc' ? 'DESC' : 'ASC';
+    if (!sortBy && geogebra) {
+      query
+        .orderBy(`response.code_${version}`, 'ASC')
+        .addOrderBy('person.code', 'ASC')
+        .addOrderBy('response.id', 'ASC');
+      return;
+    }
+
+    if (sortBy === 'codedstatus') {
+      query.addSelect(
+        getEffectiveCodingStatusExpression(version),
+        EFFECTIVE_CODING_STATUS_SORT_ALIAS
+      );
+      query
+        .orderBy(EFFECTIVE_CODING_STATUS_SORT_ALIAS, direction)
+        .addOrderBy('response.id', 'ASC');
+      return;
+    }
+
+    const sortExpression = this.getResponseSearchSortExpression(version, sortBy);
+
+    query.orderBy(sortExpression, direction);
+    if (sortExpression !== 'response.id') {
+      query.addOrderBy('response.id', 'ASC');
+    }
+  }
+
+  private getResponseSearchSortExpression(
+    version: CodingVersion,
+    sortBy?: ResponseSearchSortBy
+  ): string {
+    switch (sortBy) {
+      case 'unitname':
+        return 'unit.name';
+      case 'variableid':
+        return 'response.variableid';
+      case 'value':
+        return 'response.value';
+      case 'code':
+        return `response.code_${version}`;
+      case 'score':
+        return `response.score_${version}`;
+      case 'person_code':
+        return 'person.code';
+      case 'person_login':
+        return 'person.login';
+      case 'person_group':
+        return 'person.group';
+      case 'booklet_id':
+        return 'bookletinfo.name';
+      default:
+        return 'response.id';
+    }
+  }
+
+  private normalizeCodingVersion(version: unknown): CodingVersion {
+    return version === 'v2' || version === 'v3' ? version : 'v1';
   }
 
   private async applyValidCodingVariableFilter(

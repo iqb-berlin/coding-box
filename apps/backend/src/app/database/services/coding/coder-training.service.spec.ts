@@ -238,13 +238,19 @@ describe('CoderTrainingService', () => {
         undefined,
         undefined,
         undefined,
+        true,
+        false,
         true
       );
 
       expect(coderTrainingRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        show_score: true,
+        allow_comments: false,
         suppress_general_instructions: true
       }));
       expect(codingJobRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        showScore: true,
+        allowComments: false,
         suppressGeneralInstructions: true
       }));
 
@@ -508,7 +514,12 @@ describe('CoderTrainingService', () => {
     });
 
     it('should update display options on an existing training without recreating jobs', async () => {
-      const existingJob = { id: 100, suppressGeneralInstructions: false };
+      const existingJob = {
+        id: 100,
+        showScore: false,
+        allowComments: true,
+        suppressGeneralInstructions: false
+      };
       const existingTraining = {
         id: 1,
         workspace_id: 1,
@@ -516,6 +527,8 @@ describe('CoderTrainingService', () => {
         case_selection_mode: 'random',
         reference_training_ids: [44],
         reference_mode: 'same',
+        show_score: false,
+        allow_comments: true,
         suppress_general_instructions: false,
         coders: [{ user_id: 10 }],
         variables: [{ variable_id: 'v1', unit_name: 'u1', sample_count: 5 }],
@@ -543,10 +556,14 @@ describe('CoderTrainingService', () => {
         undefined,
         undefined,
         undefined,
+        true,
+        false,
         true
       );
 
       expect(coderTrainingRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        show_score: true,
+        allow_comments: false,
         suppress_general_instructions: true,
         reference_training_ids: [44],
         reference_mode: 'same'
@@ -555,6 +572,8 @@ describe('CoderTrainingService', () => {
       expect(mockRepository.count).not.toHaveBeenCalled();
       expect(codingJobRepository.save).toHaveBeenCalledWith(expect.objectContaining({
         id: 100,
+        showScore: true,
+        allowComments: false,
         suppressGeneralInstructions: true
       }));
     });
@@ -1198,6 +1217,8 @@ describe('CoderTrainingService', () => {
         label: 'Training 1',
         created_at: new Date(),
         updated_at: new Date(),
+        show_score: true,
+        allow_comments: false,
         suppress_general_instructions: true,
         codingJobs: [],
         variables: [{ variable_id: 'v1', unit_name: 'u1', sample_count: 5 }],
@@ -1223,6 +1244,8 @@ describe('CoderTrainingService', () => {
         sampleCount: 25
       });
       expect(result[0].assigned_coders).toEqual([10]);
+      expect(result[0].show_score).toBe(true);
+      expect(result[0].allow_comments).toBe(false);
       expect(result[0].suppress_general_instructions).toBe(true);
     });
   });
@@ -2008,7 +2031,7 @@ describe('CoderTrainingService', () => {
       mockCodingJobService.getCodingSchemeScoreForUnitCode.mockResolvedValueOnce(2);
       mockDiscussionSave();
 
-      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', 7);
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', 7, 'Replay note');
 
       expect(mockCodingJobService.getCodingSchemeScoreForUnitCode).toHaveBeenCalledWith(unit, 1, 7);
       expect(coderTrainingDiscussionResultRepository.save).toHaveBeenCalledWith(expect.objectContaining({
@@ -2017,10 +2040,12 @@ describe('CoderTrainingService', () => {
         response_id: 101,
         code: 7,
         score: 2,
+        notes: 'Replay note',
         manager_user_id: 99,
         manager_name: 'Manager'
       }));
       expect(result.score).toBe(2);
+      expect(result.notes).toBe('Replay note');
       expect(result.source).toBe('manual');
     });
 
@@ -2194,6 +2219,7 @@ describe('CoderTrainingService', () => {
         success: true,
         code: 7,
         score: 2,
+        notes: null,
         source: 'auto_agreement',
         managerUserId: null,
         managerName: null

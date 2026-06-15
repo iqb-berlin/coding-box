@@ -16,6 +16,7 @@ import type {
 import type { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
 import {
   CodingJob,
+  DistributionVariableUsageByStatus,
   JobDefinitionCoderConfig,
   Variable,
   VariableBundle
@@ -81,6 +82,8 @@ interface JobDefinitionApiResponse {
   distributionSeed?: string;
   planned_variable_usage?: Record<string, number>;
   plannedVariableUsage?: Record<string, number>;
+  planned_variable_usage_by_status?: Record<string, DistributionVariableUsageByStatus>;
+  plannedVariableUsageByStatus?: Record<string, DistributionVariableUsageByStatus>;
   duration_seconds?: number;
   max_coding_cases?: number;
   double_coding_absolute?: number;
@@ -163,6 +166,7 @@ export interface JobDefinition {
   missingsProfileId?: number | null;
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
+  plannedVariableUsageByStatus?: Record<string, DistributionVariableUsageByStatus>;
   durationSeconds?: number;
   maxCodingCases?: number;
   doubleCodingAbsolute?: number;
@@ -234,7 +238,6 @@ export interface BulkApplyCodingResultsResponse {
     hasIssues: boolean;
     skipped: boolean;
     skippedReason?:
-    | 'coding-issues'
     | 'training-job'
     | 'not-completed'
     | 'freshness-stale';
@@ -508,6 +511,39 @@ export class CodingJobBackendService {
     );
   }
 
+  pauseCodingJob(
+    workspaceId: number,
+    codingJobId: number,
+    authToken?: string
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/pause`;
+    return this.http.post<CodingJob>(url, {}, {
+      headers: this.getAuthHeader(authToken)
+    });
+  }
+
+  resumeCodingJob(
+    workspaceId: number,
+    codingJobId: number,
+    authToken?: string
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/resume`;
+    return this.http.post<CodingJob>(url, {}, {
+      headers: this.getAuthHeader(authToken)
+    });
+  }
+
+  submitCodingJob(
+    workspaceId: number,
+    codingJobId: number,
+    authToken?: string
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/submit`;
+    return this.http.post<CodingJob>(url, {}, {
+      headers: this.getAuthHeader(authToken)
+    });
+  }
+
   prepareCodingJobReview(
     workspaceId: number,
     codingJobId: number
@@ -518,11 +554,22 @@ export class CodingJobBackendService {
     });
   }
 
+  submitCodingJobForReview(
+    workspaceId: number,
+    codingJobId: number
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/submit-review`;
+    return this.http
+      .post<unknown>(url, {}, { headers: this.authHeader })
+      .pipe(map(job => this.mapApiCodingJob(job)));
+  }
+
   getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string,
     trainingRequired?: boolean,
-    includeDeriveErrorOnly?: boolean
+    includeDeriveErrorOnly?: boolean,
+    excludeJobDefinitionId?: number
   ): Observable<
     {
       unitName: string;
@@ -550,6 +597,12 @@ export class CodingJobBackendService {
       params = params.set(
         'includeDeriveErrorOnly',
         includeDeriveErrorOnly.toString()
+      );
+    }
+    if (excludeJobDefinitionId !== undefined) {
+      params = params.set(
+        'excludeJobDefinitionId',
+        excludeJobDefinitionId.toString()
       );
     }
     params = params.set('_t', Date.now().toString());
@@ -648,6 +701,7 @@ export class CodingJobBackendService {
       } | null;
       isOpen?: boolean;
       notes?: string;
+      issueReview?: boolean;
     },
     authToken?: string
   ): Observable<CodingJob> {
@@ -675,6 +729,19 @@ export class CodingJobBackendService {
     }).catch(() => undefined);
   }
 
+  pauseCodingJobKeepalive(
+    workspaceId: number,
+    codingJobId: number,
+    authToken?: string
+  ): void {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/pause`;
+    fetch(url, {
+      method: 'POST',
+      keepalive: true,
+      headers: this.getAuthHeader(authToken)
+    }).catch(() => undefined);
+  }
+
   saveCodingNotes(
     workspaceId: number,
     codingJobId: number,
@@ -683,6 +750,7 @@ export class CodingJobBackendService {
       unitId: string;
       variableId: string;
       notes?: string;
+      issueReview?: boolean;
     },
     authToken?: string
   ): Observable<CodingJob> {
@@ -878,6 +946,9 @@ export class CodingJobBackendService {
           distributionSeed: def.distributionSeed ?? def.distribution_seed,
           plannedVariableUsage:
               def.plannedVariableUsage ?? def.planned_variable_usage,
+          plannedVariableUsageByStatus:
+              def.plannedVariableUsageByStatus ??
+              def.planned_variable_usage_by_status,
           durationSeconds: def.duration_seconds,
           maxCodingCases: def.max_coding_cases,
           doubleCodingAbsolute: def.double_coding_absolute,
@@ -963,6 +1034,38 @@ export class CodingJobBackendService {
       .post<JobDefinitionRefreshApplyResultDto>(
       url,
       {},
+      { headers: this.authHeader }
+    )
+      .pipe(
+        tap(result => {
+          if (result.success) {
+            this.validationTaskStateService.invalidateWorkspace(workspaceId);
+          }
+        })
+      );
+  }
+
+  previewJobDefinitionUpdateRefresh(
+    workspaceId: number,
+    jobDefinitionId: number,
+    jobDefinition: Partial<JobDefinition>
+  ): Observable<JobDefinitionRefreshPreviewDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/update-refresh-preview`;
+    return this.http.post<JobDefinitionRefreshPreviewDto>(url, jobDefinition, {
+      headers: this.authHeader
+    });
+  }
+
+  applyJobDefinitionUpdateRefresh(
+    workspaceId: number,
+    jobDefinitionId: number,
+    jobDefinition: Partial<JobDefinition>
+  ): Observable<JobDefinitionRefreshApplyResultDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/update-refresh-apply`;
+    return this.http
+      .post<JobDefinitionRefreshApplyResultDto>(
+      url,
+      jobDefinition,
       { headers: this.authHeader }
     )
       .pipe(

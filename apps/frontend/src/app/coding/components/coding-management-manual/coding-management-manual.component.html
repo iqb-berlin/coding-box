@@ -84,24 +84,34 @@
             class="manual-code-availability-list"
           >
             <span
-              *ngFor="let warning of getManualCodeAvailabilityPreview()"
+              *ngFor="let warning of getVisibleManualCodeAvailabilityWarnings()"
               class="manual-code-availability-chip"
             >
               {{ warning.unitName }} / {{ warning.variableId }}
             </span>
-            <span
-              *ngIf="
-                manualCodeAvailabilityWarningCount >
-                getManualCodeAvailabilityPreview().length
-              "
-              class="manual-code-availability-chip"
+            <button
+              *ngIf="hasHiddenManualCodeAvailabilityWarnings"
+              mat-button
+              type="button"
+              class="manual-code-availability-toggle"
+              [attr.aria-expanded]="showAllManualCodeAvailabilityWarnings"
+              (click)="toggleManualCodeAvailabilityWarnings()"
             >
-              +{{
-                manualCodeAvailabilityWarningCount -
-                  getManualCodeAvailabilityPreview().length
+              <mat-icon>{{
+                showAllManualCodeAvailabilityWarnings
+                  ? 'expand_less'
+                  : 'expand_more'
+              }}</mat-icon>
+              {{
+                showAllManualCodeAvailabilityWarnings
+                  ? ('coding-management-manual.buttons.show-fewer-manual-code-warnings'
+                    | translate)
+                  : ('coding-management-manual.buttons.show-more-manual-code-warnings'
+                    | translate: {
+                      count: hiddenManualCodeAvailabilityWarningCount
+                    })
               }}
-              weitere
-            </span>
+            </button>
           </div>
         </div>
       </div>
@@ -130,11 +140,10 @@
         [selectedIndex]="selectedManualTabIndex"
         (selectedIndexChange)="onManualTabChanged($event)"
       >
-        <mat-tab label="Vorbereitung"></mat-tab>
-        <mat-tab label="Planung"></mat-tab>
-        <mat-tab label="Schulung"></mat-tab>
-        <mat-tab label="Durchführung"></mat-tab>
-        <mat-tab label="Abschluss"></mat-tab>
+        <mat-tab
+          *ngFor="let tab of visibleManualCodingTabs"
+          [label]="getManualTabLabel(tab)"
+        ></mat-tab>
       </mat-tab-group>
 
       <div
@@ -237,7 +246,7 @@
             class="subsection-title"
             [matTooltip]="
               responseAnalysis?.isCalculating
-                ? 'Einstellungen gesperrt während die Analyse läuft'
+                ? 'Analyse läuft'
                 : ''
             "
           >
@@ -249,7 +258,7 @@
             <mat-icon
               *ngIf="responseAnalysis?.isCalculating"
               class="aggregation-lock-icon"
-              matTooltip="Analyse läuft – Einstellungen gesperrt"
+              matTooltip="Analyse läuft"
               >lock</mat-icon
             >
           </h3>
@@ -319,29 +328,36 @@
                     </div>
 
                     <div class="settings-control matching-control">
-                      <div class="checkbox-group">
-                        <mat-checkbox
-                          [checked]="
-                            hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)
-                          "
-                          (change)="
-                            toggleMatchingFlag(
-                              ResponseMatchingFlag.NO_AGGREGATION
-                            )
-                          "
+                      <div class="aggregation-mode-control">
+                        <span
+                          class="mode-option"
+                          [class.active]="!isDuplicateAggregationActive"
+                        >
+                          {{
+                            'coding-management-manual.response-matching.no-aggregation-mode'
+                              | translate
+                          }}
+                        </span>
+                        <mat-slide-toggle
+                          [checked]="isDuplicateAggregationActive"
+                          (change)="onAggregationModeChanged($event.checked)"
                           [disabled]="
                             isLoadingMatchingMode ||
                             isSavingMatchingMode ||
+                            isApplyingDuplicateAggregation ||
+                            isLoadingResponseAnalysis ||
                             responseAnalysis?.isCalculating
                           "
                           color="primary"
                         >
                           {{
-                            'coding-management-manual.response-matching.no-aggregation'
+                            'coding-management-manual.response-matching.aggregate-responses'
                               | translate
                           }}
-                        </mat-checkbox>
+                        </mat-slide-toggle>
+                      </div>
 
+                      <div class="checkbox-group">
                         <mat-checkbox
                           [checked]="
                             hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)
@@ -352,10 +368,7 @@
                           [disabled]="
                             isLoadingMatchingMode ||
                             isSavingMatchingMode ||
-                            isMatchingOptionDisabled(
-                              ResponseMatchingFlag.IGNORE_CASE
-                            ) ||
-                            responseAnalysis?.isCalculating
+                            isApplyingDuplicateAggregation
                           "
                           color="primary"
                         >
@@ -379,10 +392,7 @@
                           [disabled]="
                             isLoadingMatchingMode ||
                             isSavingMatchingMode ||
-                            isMatchingOptionDisabled(
-                              ResponseMatchingFlag.IGNORE_WHITESPACE
-                            ) ||
-                            responseAnalysis?.isCalculating
+                            isApplyingDuplicateAggregation
                           "
                           color="primary"
                         >
@@ -391,6 +401,52 @@
                               | translate
                           }}
                         </mat-checkbox>
+                      </div>
+
+                      <div class="matching-actions">
+                        <span
+                          class="matching-state"
+                          *ngIf="hasPendingAggregationOptionsWithoutAggregation()"
+                        >
+                          <mat-icon>pending_actions</mat-icon>
+                          {{
+                            'coding-management-manual.response-matching.options-pending'
+                              | translate
+                          }}
+                        </span>
+                        <span
+                          class="matching-state warning"
+                          *ngIf="hasUnsavedResponseMatchingChanges()"
+                        >
+                          <mat-icon>edit</mat-icon>
+                          {{
+                            'coding-management-manual.response-matching.pending-changes'
+                              | translate
+                          }}
+                        </span>
+                        <button
+                          *ngIf="
+                            isDuplicateAggregationActive &&
+                            hasUnsavedResponseMatchingChanges()
+                          "
+                          mat-stroked-button
+                          color="primary"
+                          type="button"
+                          (click)="restartAnalysis()"
+                          [disabled]="
+                            isLoadingMatchingMode ||
+                            isSavingMatchingMode ||
+                            isApplyingDuplicateAggregation ||
+                            isLoadingResponseAnalysis ||
+                            responseAnalysis?.isCalculating
+                          "
+                        >
+                          <mat-icon>autorenew</mat-icon>
+                          {{
+                            'coding-management-manual.response-matching.apply-options'
+                              | translate
+                          }}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1733,6 +1789,12 @@
                   <div class="completed-job-copy">
                     <strong>{{ job.name }}</strong>
                     <span>{{ getCodingJobResultSummary(job) }}</span>
+                    <span
+                      *ngIf="job.hasIssues"
+                      class="completed-job-review-note"
+                    >
+                      Offene Hinweise bleiben zur manuellen Prüfung bestehen.
+                    </span>
                   </div>
                   <button
                     *ngIf="canApplyCompletedJobResults()"
@@ -1767,7 +1829,10 @@
               </div>
 
               <div
-                *ngIf="hasCompletedJobsBlockedForReview()"
+                *ngIf="
+                  hasCompletedJobsBlockedForReview() &&
+                  !hasCompletedJobsReadyForApply()
+                "
                 class="completed-jobs-apply-list review-required-list"
               >
                 <div

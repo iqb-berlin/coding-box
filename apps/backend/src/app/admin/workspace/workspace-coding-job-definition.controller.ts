@@ -589,6 +589,31 @@ export class WorkspaceCodingJobDefinitionController {
     );
   }
 
+  @Post(':workspace_id/coding/job-definitions/:id/update-refresh-preview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiBody({
+    description: 'Preview a job definition update and the required job refresh',
+    type: UpdateJobDefinitionDto
+  })
+  @ApiOkResponse({
+    description: 'Preview how existing coding jobs would change after updating the job definition.'
+  })
+  async previewJobDefinitionUpdateRefresh(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number,
+      @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto
+  ): Promise<JobDefinitionRefreshPreviewDto> {
+    return this.jobDefinitionService.previewJobDefinitionUpdateRefresh(
+      id,
+      workspace_id,
+      updateDto
+    );
+  }
+
   @Post(':workspace_id/coding/job-definitions/:id/refresh-apply')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
@@ -605,6 +630,31 @@ export class WorkspaceCodingJobDefinitionController {
     return this.jobDefinitionService.refreshCodingJobFromDefinition(
       id,
       workspace_id
+    );
+  }
+
+  @Post(':workspace_id/coding/job-definitions/:id/update-refresh-apply')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiBody({
+    description: 'Apply a job definition update and refresh its existing coding jobs',
+    type: UpdateJobDefinitionDto
+  })
+  @ApiOkResponse({
+    description: 'Updated job definition and regenerated coding jobs.'
+  })
+  async applyJobDefinitionUpdateRefresh(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number,
+      @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto
+  ): Promise<JobDefinitionRefreshApplyResultDto> {
+    return this.jobDefinitionService.refreshCodingJobFromUpdatedDefinition(
+      id,
+      workspace_id,
+      updateDto
     );
   }
 }

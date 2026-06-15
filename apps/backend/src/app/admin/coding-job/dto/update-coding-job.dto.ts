@@ -38,10 +38,10 @@ export class UpdateCodingJobDto {
   @ApiProperty({
     description: 'Status of the coding job',
     example: 'pending',
-    enum: ['pending', 'active', 'paused', 'open', 'completed'],
+    enum: ['pending', 'active', 'paused', 'open', 'completed', 'review'],
     required: false
   })
-  @IsEnum(['pending', 'active', 'paused', 'open', 'completed'])
+  @IsEnum(['pending', 'active', 'paused', 'open', 'completed', 'review'])
   @IsOptional()
     status?: string;
 

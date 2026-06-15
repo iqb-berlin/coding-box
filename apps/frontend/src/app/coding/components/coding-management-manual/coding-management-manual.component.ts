@@ -12,13 +12,15 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import {
   Subject, takeUntil, debounceTime, finalize, Observable, of, tap,
-  distinctUntilChanged, filter,
+  distinctUntilChanged,
   firstValueFrom,
-  map
+  map,
+  switchMap
 } from 'rxjs';
 import * as ExcelJS from 'exceljs';
 import { Router } from '@angular/router';
@@ -155,6 +157,7 @@ type ManualCodingTab = 'preparation' | 'planning' | 'training' | 'execution' | '
     CommonModule,
     FormsModule,
     MatCheckboxModule,
+    MatSlideToggleModule,
     MatFormFieldModule,
     MatInputModule,
     MatPaginatorModule,
@@ -200,6 +203,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     'completion'
   ];
 
+  private readonly manualCodingTabsWithoutCompletion: ManualCodingTab[] = [
+    'preparation',
+    'planning',
+    'training',
+    'execution'
+  ];
+
   // Granular loading states
   isLoadingVariableCoverage = false;
   isLoadingCaseCoverage = false;
@@ -210,6 +220,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   // Response matching mode configuration
   responseMatchingFlags: ResponseMatchingFlag[] = [];
   private persistedResponseMatchingFlags: ResponseMatchingFlag[] = [];
+  private readonly aggregationOptionFlags = [
+    ResponseMatchingFlag.IGNORE_CASE,
+    ResponseMatchingFlag.IGNORE_WHITESPACE
+  ];
+
   isLoadingMatchingMode = false;
   isSavingMatchingMode = false;
   ResponseMatchingFlag = ResponseMatchingFlag; // Expose enum to template
@@ -260,8 +275,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private jobDefinitionChangeSubject = new Subject<void>();
 
   private thresholdChangeSubject = new Subject<number>();
-
-  private matchingFlagChangeSubject = new Subject<ResponseMatchingFlag[]>();
 
   private statisticsRefreshSubject = new Subject<void>();
 
@@ -333,6 +346,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   manualCodingScopeSummary: ManualCodingScopeSummary | null = null;
   manualCodeAvailabilityWarnings: ManualCodeAvailabilityWarningDto[] = [];
+  showAllManualCodeAvailabilityWarnings = false;
+  readonly manualCodeAvailabilityPreviewLimit = 5;
 
   statusDistribution: { [status: string]: number } = {};
   statusDistributionV2: { [status: string]: number } = {};
@@ -425,9 +440,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe((threshold: number) => {
         const workspaceId = this.appService.selectedWorkspaceId;
         if (workspaceId) {
+          const localFlagsAfterSave = [...this.responseMatchingFlags];
+          const flagsToPersist = this.getPersistableResponseMatchingFlags(localFlagsAfterSave);
           this.isApplyingDuplicateAggregation = true;
           this.testPersonCodingService
-            .saveAggregationSettings(workspaceId, threshold, this.responseMatchingFlags)
+            .saveAggregationSettings(workspaceId, threshold, flagsToPersist)
             .pipe(
               finalize(() => {
                 this.isApplyingDuplicateAggregation = false;
@@ -440,8 +457,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
                   this.showError(result.message);
                   return;
                 }
-                this.responseMatchingFlags = result.flags;
                 this.persistedResponseMatchingFlags = [...result.flags];
+                this.responseMatchingFlags = this.buildResponseMatchingFlagsAfterSettingsSave(
+                  result.flags,
+                  localFlagsAfterSave
+                );
                 this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(result.threshold);
                 this.refreshAggregationDependentViews();
               },
@@ -450,36 +470,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               }
             });
         }
-      });
-
-    this.matchingFlagChangeSubject
-      .pipe(
-        debounceTime(500),
-        filter(flags => !this.areMatchingFlagsEqual(flags, this.persistedResponseMatchingFlags)),
-        takeUntil(this.destroy$)
-      )
-      .subscribe((flags: ResponseMatchingFlag[]) => {
-        const workspaceId = this.appService.selectedWorkspaceId;
-        if (!workspaceId) {
-          return;
-        }
-
-        this.isLoadingMatchingMode = true;
-        this.saveResponseMatchingMode(flags)
-          .pipe(
-            finalize(() => {
-              this.isLoadingMatchingMode = false;
-            }),
-            takeUntil(this.destroy$)
-          )
-          .subscribe({
-            next: () => {
-              this.onResponseMatchingModeChanged();
-            },
-            error: () => {
-              // Error handling is done in saveResponseMatchingMode.
-            }
-          });
       });
 
     this.testPersonCodingService.autoCodingCompleted$
@@ -515,7 +505,32 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   get activeManualTab(): ManualCodingTab {
-    return this.manualCodingTabs[this.selectedManualTabIndex] || 'preparation';
+    return this.visibleManualCodingTabs[this.selectedManualTabIndex] || 'preparation';
+  }
+
+  get visibleManualCodingTabs(): ManualCodingTab[] {
+    if (this.canShowManualCompletionTab()) {
+      return this.manualCodingTabs;
+    }
+
+    return this.manualCodingTabsWithoutCompletion;
+  }
+
+  getManualTabLabel(tab: ManualCodingTab): string {
+    switch (tab) {
+      case 'preparation':
+        return 'Vorbereitung';
+      case 'planning':
+        return 'Planung';
+      case 'training':
+        return 'Schulung';
+      case 'execution':
+        return 'Durchführung';
+      case 'completion':
+        return 'Abschluss';
+      default:
+        return '';
+    }
   }
 
   isManualTab(tab: ManualCodingTab): boolean {
@@ -532,7 +547,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   goToManualTab(tab: ManualCodingTab, sectionId?: string): void {
-    const tabIndex = this.manualCodingTabs.indexOf(tab);
+    const tabIndex = this.visibleManualCodingTabs.indexOf(tab);
     if (tabIndex < 0) {
       return;
     }
@@ -1032,9 +1047,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   openTrainingReliability(): void {
-    const coderTrainingIds = this.getCoderTrainingIds();
+    const coderTrainings = this.getCoderTrainingsForExport();
 
-    if (coderTrainingIds.length === 0) {
+    if (coderTrainings.length === 0) {
       this.showError('Die Schulungen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
       return;
     }
@@ -1045,7 +1060,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       height: '90vh',
       data: {
         excludeTrainings: false,
-        scope: { coderTrainingIds }
+        availableCoderTrainings: coderTrainings
       }
     });
   }
@@ -1164,7 +1179,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const exportConfig: ExportJobConfig = {
       exportType: result.exportType,
       userId: this.appService.userId,
-      includeReplayUrl: false,
+      includeReplayUrl: result.includeReplayUrl ?? false,
       outputCommentsInsteadOfCodes: result.outputCommentsInsteadOfCodes,
       anonymizeCoders: result.anonymizeCoders,
       usePseudoCoders: result.usePseudoCoders,
@@ -1580,6 +1595,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     if (this.hasCompletedJobsReadyForApply()) {
+      if (this.hasCompletedJobsBlockedForReview()) {
+        return `${this.completedJobsReadyForApply.length} abgeschlossene Kodierjob(s) bereit zum Anwenden, ${this.completedJobsBlockedForReview.length} mit offenen Hinweisen`;
+      }
       return `${this.completedJobsReadyForApply.length} abgeschlossene Kodierjob(s) bereit zum Anwenden`;
     }
 
@@ -1742,7 +1760,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       width: '500px',
       data: {
         title: 'Alle abgeschlossenen Ergebnisse anwenden',
-        message: `Möchten Sie die Ergebnisse für ${this.completedJobsReadyForApply.length} abgeschlossene Kodierjob(s) anwenden? Jobs mit Kodierungsproblemen werden übersprungen.`,
+        message: [
+          `Möchten Sie die Ergebnisse für ${this.completedJobsReadyForApply.length} abgeschlossene Kodierjob(s) anwenden?`,
+          'Bei Jobs mit offenen Kodierungshinweisen werden gültige Antworten angewendet;',
+          'offene Hinweise bleiben zur manuellen Prüfung bestehen.'
+        ].join(' '),
         confirmButtonText: 'Anwenden',
         cancelButtonText: 'Abbrechen'
       }
@@ -1856,7 +1878,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'execution-ready':
         return 'Bereit für die Durchführung';
       case 'completion-ready':
-        return 'Bereit für den Abschluss';
+        return this.canShowManualCompletionTab() ?
+          'Bereit für den Abschluss' :
+          'Kodierfälle abgeschlossen';
       case 'progress-unavailable':
         return 'Kodierfortschritt nicht verfügbar';
       case 'complete':
@@ -1908,7 +1932,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         !!this.appliedResultsOverview &&
         this.hasManualCodingProgressScope() &&
         !this.hasExecutionOpenWork()) {
-      return 'Alle Kodierfälle sind abgeschlossen. Übernehmen Sie nun die Kodierergebnisse in den Datenbestand.';
+      return this.canShowManualCompletionTab() ?
+        'Alle Kodierfälle sind abgeschlossen. Übernehmen Sie nun die Kodierergebnisse in den Datenbestand.' :
+        'Alle Kodierfälle sind abgeschlossen. Die Übernahme der Ergebnisse in den Datenbestand bleibt Studienmanager:innen vorbehalten.';
     }
 
     return 'Prüfen Sie die Antwortanalyse und erstellen Sie danach passende Kodierjob-Definitionen.';
@@ -1927,7 +1953,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'execution-ready':
         return 'Kodierjobs bearbeiten lassen';
       case 'completion-ready':
-        return 'Ergebnisse übernehmen';
+        return this.canShowManualCompletionTab() ?
+          'Ergebnisse übernehmen' :
+          'Kodierjobs prüfen';
       case 'complete':
         return 'Workflow abgeschlossen';
       case 'progress-unavailable':
@@ -1960,7 +1988,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'execution-ready':
         return 'Die Fälle sind verteilt. Kodierer können nun ihre zugewiesenen Kodierjobs bearbeiten.';
       case 'completion-ready':
-        return 'Alle Kodierfälle sind bearbeitet. Übernehmen Sie jetzt die abgeschlossenen Ergebnisse in den Datenbestand.';
+        return this.canShowManualCompletionTab() ?
+          'Alle Kodierfälle sind bearbeitet. Übernehmen Sie jetzt die abgeschlossenen Ergebnisse in den Datenbestand.' :
+          'Alle Kodierfälle sind bearbeitet. Sie können die abgeschlossenen Kodierjobs in der Durchführung einsehen.';
       case 'complete':
         return 'Alle manuellen Kodierungen wurden abgeschlossen und übernommen.';
       case 'progress-unavailable':
@@ -1979,9 +2009,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'execution-ready':
         return 'Zu den Kodierjobs';
       case 'completion-ready':
-        return 'Zum Abschluss';
+        return this.canShowManualCompletionTab() ? 'Zum Abschluss' : 'Zu den Kodierjobs';
       case 'complete':
-        return 'Abschluss ansehen';
+        return this.canShowManualCompletionTab() ? 'Abschluss ansehen' : 'Zu den Kodierjobs';
       case 'loading':
       case 'progress-unavailable':
         return 'Aktualisieren';
@@ -2000,7 +2030,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return 'manual-execution';
       case 'completion-ready':
       case 'complete':
-        return 'manual-completion';
+        return this.canShowManualCompletionTab() ? 'manual-completion' : 'manual-execution';
       default:
         return 'manual-planning';
     }
@@ -2012,7 +2042,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return 'execution';
       case 'completion-ready':
       case 'complete':
-        return 'completion';
+        return this.canShowManualCompletionTab() ? 'completion' : 'execution';
       default:
         return 'planning';
     }
@@ -2078,8 +2108,41 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.manualCodeAvailabilityWarningCount > 0;
   }
 
+  get hiddenManualCodeAvailabilityWarningCount(): number {
+    return Math.max(
+      0,
+      this.manualCodeAvailabilityWarningCount -
+        this.manualCodeAvailabilityPreviewLimit
+    );
+  }
+
+  get hasHiddenManualCodeAvailabilityWarnings(): boolean {
+    return this.hiddenManualCodeAvailabilityWarningCount > 0;
+  }
+
   getManualCodeAvailabilityPreview(): ManualCodeAvailabilityWarningDto[] {
-    return this.manualCodeAvailabilityWarnings.slice(0, 5);
+    return this.manualCodeAvailabilityWarnings.slice(
+      0,
+      this.manualCodeAvailabilityPreviewLimit
+    );
+  }
+
+  getVisibleManualCodeAvailabilityWarnings(): ManualCodeAvailabilityWarningDto[] {
+    return this.showAllManualCodeAvailabilityWarnings ?
+      this.manualCodeAvailabilityWarnings :
+      this.getManualCodeAvailabilityPreview();
+  }
+
+  toggleManualCodeAvailabilityWarnings(): void {
+    this.showAllManualCodeAvailabilityWarnings =
+      !this.showAllManualCodeAvailabilityWarnings;
+  }
+
+  private setManualCodeAvailabilityWarnings(
+    warnings: ManualCodeAvailabilityWarningDto[]
+  ): void {
+    this.manualCodeAvailabilityWarnings = warnings;
+    this.showAllManualCodeAvailabilityWarnings = false;
   }
 
   get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -2206,6 +2269,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     tab: ManualCodingTab,
     options: { reloadCodingJobs?: boolean } = {}
   ): void {
+    if (!this.isManualTabAvailable(tab)) {
+      return;
+    }
+
     const reloadCodingJobs = options.reloadCodingJobs ?? true;
     switch (tab) {
       case 'preparation':
@@ -2261,8 +2328,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const userId = this.appService.authData.userId;
 
     if (this.appService.authData.isAdmin || !workspaceId || userId <= 0) {
+      const activeTab = this.activeManualTab;
       this.canApplyManualCodingResults = this.appService.authData.isAdmin === true;
       this.canManageManualCodingJobs = this.appService.authData.isAdmin === true;
+      this.keepAvailableManualTabSelected(activeTab);
       return;
     }
 
@@ -2271,16 +2340,39 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: users => {
+          const activeTab = this.activeManualTab;
           const currentUser = users.find(user => user.id === userId);
           const accessLevel = currentUser?.accessLevel ?? 0;
           this.canManageManualCodingJobs = accessLevel >= 2;
           this.canApplyManualCodingResults = accessLevel >= 3;
+          this.keepAvailableManualTabSelected(activeTab);
         },
         error: () => {
+          const activeTab = this.activeManualTab;
           this.canManageManualCodingJobs = false;
           this.canApplyManualCodingResults = false;
+          this.keepAvailableManualTabSelected(activeTab);
         }
       });
+  }
+
+  private canShowManualCompletionTab(): boolean {
+    return this.canApplyManualCodingResults;
+  }
+
+  private isManualTabAvailable(tab: ManualCodingTab): boolean {
+    return this.visibleManualCodingTabs.includes(tab);
+  }
+
+  private keepAvailableManualTabSelected(previousActiveTab: ManualCodingTab): void {
+    if (this.isManualTabAvailable(previousActiveTab)) {
+      this.selectedManualTabIndex = this.visibleManualCodingTabs.indexOf(previousActiveTab);
+      return;
+    }
+
+    const executionTabIndex = this.visibleManualCodingTabs.indexOf('execution');
+    this.selectedManualTabIndex = executionTabIndex >= 0 ? executionTabIndex : 0;
+    this.loadManualTabData(this.activeManualTab);
   }
 
   private loadJobDefinitionsForExport(): void {
@@ -2626,7 +2718,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (!workspaceId) {
       this.codingIncompleteVariables = [];
       this.manualCodingScopeSummary = null;
-      this.manualCodeAvailabilityWarnings = [];
+      this.setManualCodeAvailabilityWarnings([]);
       this.isLoadingManualCodeAvailability = false;
       return;
     }
@@ -2676,10 +2768,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: result => {
-          this.manualCodeAvailabilityWarnings = result.warnings || [];
+          this.setManualCodeAvailabilityWarnings(result.warnings || []);
         },
         error: () => {
-          this.manualCodeAvailabilityWarnings = [];
+          this.setManualCodeAvailabilityWarnings([]);
         }
       });
   }
@@ -2809,15 +2901,22 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             .pipe(takeUntil(this.destroy$))
             .subscribe({
               next: progressByJobId => {
-                this.completedJobsBlockedForReview = completedJobs
-                  .filter(job => this.hasBlockingCodingIssues(progressByJobId[job.id]));
                 this.completedJobsReadyForApply = completedJobs
-                  .filter(job => !this.hasBlockingCodingIssues(progressByJobId[job.id]));
+                  .map(job => ({
+                    ...job,
+                    hasIssues: this.hasCodingIssuesForCompletedJob(
+                      job,
+                      progressByJobId[job.id]
+                    )
+                  }));
+                this.completedJobsBlockedForReview = this.completedJobsReadyForApply
+                  .filter(job => job.hasIssues === true);
                 this.isLoadingCompletedJobsReadyForApply = false;
               },
               error: () => {
-                this.completedJobsReadyForApply = [];
-                this.completedJobsBlockedForReview = completedJobs;
+                this.completedJobsReadyForApply = completedJobs;
+                this.completedJobsBlockedForReview = completedJobs
+                  .filter(job => job.hasIssues === true);
                 this.isLoadingCompletedJobsReadyForApply = false;
               }
             });
@@ -2848,8 +2947,19 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     });
   }
 
+  private hasCodingIssuesForCompletedJob(
+    job: CodingJob,
+    progress?: Record<string, unknown>
+  ): boolean {
+    if (progress === undefined) {
+      return job.hasIssues === true;
+    }
+
+    return this.hasBlockingCodingIssues(progress);
+  }
+
   private isCodingJobReadyForApply(job: CodingJob): boolean {
-    return job.status === 'completed' &&
+    return ['completed', 'review'].includes(job.status) &&
       job.freshnessStatus !== 'stale_source' &&
       !job.training?.id &&
       !job.training_id;
@@ -3128,44 +3238,128 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.responseMatchingFlags.includes(flag);
   }
 
-  toggleMatchingFlag(flag: ResponseMatchingFlag): void {
+  hasUnsavedResponseMatchingChanges(): boolean {
+    return !this.areMatchingFlagsEqual(
+      this.getPersistableResponseMatchingFlags(),
+      this.persistedResponseMatchingFlags
+    );
+  }
+
+  hasPendingAggregationOptionsWithoutAggregation(): boolean {
+    return this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION) &&
+      this.getSelectedAggregationOptionFlags().length > 0;
+  }
+
+  onAggregationModeChanged(aggregateResponses: boolean): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId || this.responseAnalysis?.isCalculating) {
+    if (
+      !workspaceId ||
+      this.isLoadingMatchingMode ||
+      this.isSavingMatchingMode ||
+      this.isApplyingDuplicateAggregation ||
+      this.isLoadingResponseAnalysis ||
+      this.responseAnalysis?.isCalculating ||
+      aggregateResponses === this.isDuplicateAggregationActive
+    ) {
       return;
     }
 
-    let newFlags: ResponseMatchingFlag[];
-
-    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
-      if (this.hasMatchingFlag(flag)) {
-        newFlags = [];
-      } else {
-        newFlags = [ResponseMatchingFlag.NO_AGGREGATION];
-      }
-    } else {
-      newFlags = this.responseMatchingFlags.filter(
-        f => f !== ResponseMatchingFlag.NO_AGGREGATION
-      );
-      if (this.hasMatchingFlag(flag)) {
-        newFlags = newFlags.filter(f => f !== flag);
-      } else {
-        newFlags = [...newFlags, flag];
-      }
-    }
-
-    this.responseMatchingFlags = newFlags;
+    const rollbackFlags = [...this.responseMatchingFlags];
+    const optionFlags = this.getSelectedAggregationOptionFlags();
+    this.responseMatchingFlags = this.buildLocalResponseMatchingFlags(
+      aggregateResponses,
+      optionFlags
+    );
     this.emptyPageIndex = 0;
     this.duplicatePageIndex = 0;
-    this.matchingFlagChangeSubject.next(newFlags);
+    this.restartAnalysis(rollbackFlags);
   }
 
-  private saveResponseMatchingMode(flags: ResponseMatchingFlag[]): Observable<void> {
+  toggleMatchingFlag(flag: ResponseMatchingFlag): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (
+      !workspaceId ||
+      this.isLoadingMatchingMode ||
+      this.isSavingMatchingMode ||
+      this.isApplyingDuplicateAggregation
+    ) {
+      return;
+    }
+
+    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
+      this.onAggregationModeChanged(this.hasMatchingFlag(flag));
+      return;
+    }
+
+    const selectedOptionFlags = this.getSelectedAggregationOptionFlags();
+    const nextOptionFlags = selectedOptionFlags.includes(flag) ?
+      selectedOptionFlags.filter(f => f !== flag) :
+      [...selectedOptionFlags, flag];
+
+    this.responseMatchingFlags = this.buildLocalResponseMatchingFlags(
+      this.isDuplicateAggregationActive,
+      nextOptionFlags
+    );
+    this.emptyPageIndex = 0;
+    this.duplicatePageIndex = 0;
+  }
+
+  private getSelectedAggregationOptionFlags(
+    flags: ResponseMatchingFlag[] = this.responseMatchingFlags
+  ): ResponseMatchingFlag[] {
+    return this.aggregationOptionFlags.filter(flag => flags.includes(flag));
+  }
+
+  private buildLocalResponseMatchingFlags(
+    aggregateResponses: boolean,
+    optionFlags: ResponseMatchingFlag[]
+  ): ResponseMatchingFlag[] {
+    const selectedOptionFlags = this.getSelectedAggregationOptionFlags(optionFlags);
+    return aggregateResponses ?
+      selectedOptionFlags :
+      [ResponseMatchingFlag.NO_AGGREGATION, ...selectedOptionFlags];
+  }
+
+  private getPersistableResponseMatchingFlags(
+    flags: ResponseMatchingFlag[] = this.responseMatchingFlags
+  ): ResponseMatchingFlag[] {
+    const selectedOptionFlags = this.getSelectedAggregationOptionFlags(flags);
+    return flags.includes(ResponseMatchingFlag.NO_AGGREGATION) ?
+      [ResponseMatchingFlag.NO_AGGREGATION] :
+      selectedOptionFlags;
+  }
+
+  private buildResponseMatchingFlagsAfterSettingsSave(
+    savedFlags: ResponseMatchingFlag[],
+    localFlagsAfterSave: ResponseMatchingFlag[]
+  ): ResponseMatchingFlag[] {
+    return this.buildLocalResponseMatchingFlags(
+      !savedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
+      this.getSelectedAggregationOptionFlags(localFlagsAfterSave)
+    );
+  }
+
+  private saveResponseMatchingMode(
+    flags: ResponseMatchingFlag[],
+    options: {
+      localFlagsAfterSave?: ResponseMatchingFlag[];
+      rollbackFlags?: ResponseMatchingFlag[];
+      showSuccessMessage?: boolean;
+    } = {}
+  ): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return of(undefined);
     }
 
-    const rollbackFlags = [...this.persistedResponseMatchingFlags];
+    const rollbackFlags = options.rollbackFlags ?
+      [...options.rollbackFlags] :
+      [...this.persistedResponseMatchingFlags];
+    const localFlagsAfterSave = options.localFlagsAfterSave ?
+      [...options.localFlagsAfterSave] :
+      undefined;
+    const showSuccessMessage = options.showSuccessMessage ?? true;
+
     this.isSavingMatchingMode = true;
     return this.testPersonCodingService
       .saveAggregationSettings(
@@ -3182,14 +3376,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         }),
         tap({
           next: result => {
-            this.responseMatchingFlags = result.flags;
             this.persistedResponseMatchingFlags = [...result.flags];
+            this.responseMatchingFlags = localFlagsAfterSave ?? result.flags;
             this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(result.threshold);
-            this.showSuccess(
-              this.translateService.instant(
-                'coding-management-manual.response-matching.save-success'
-              )
-            );
+            if (showSuccessMessage) {
+              this.showSuccess(
+                this.translateService.instant(
+                  'coding-management-manual.response-matching.save-success'
+                )
+              );
+            }
           },
           error: () => {
             this.responseMatchingFlags = rollbackFlags;
@@ -3221,13 +3417,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return false;
     }
     return previous.every(flag => current.includes(flag));
-  }
-
-  isMatchingOptionDisabled(flag: ResponseMatchingFlag): boolean {
-    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
-      return false;
-    }
-    return this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION);
   }
 
   loadResponseAnalysis(): void {
@@ -3281,30 +3470,61 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       });
   }
 
-  restartAnalysis(): void {
+  restartAnalysis(rollbackResponseMatchingFlags?: ResponseMatchingFlag[]): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
+    const targetMatchingFlags = this.getPersistableResponseMatchingFlags();
+    const localFlagsAfterSave = [...this.responseMatchingFlags];
+    const shouldSaveMatchingMode = !this.areMatchingFlagsEqual(
+      targetMatchingFlags,
+      this.persistedResponseMatchingFlags
+    );
+    const shouldRefreshAggregationDependentViews = shouldSaveMatchingMode;
+    let settingsReadyForAnalysis = !shouldSaveMatchingMode;
+
     this.isLoadingResponseAnalysis = true;
     this.responseAnalysisError = null;
-    this.codingJobBackendService
-      .triggerResponseAnalysis(
-        workspaceId,
-        this.normalizeAggregationThreshold(this.duplicateAggregationThreshold)
+    const saveMatchingMode$ = shouldSaveMatchingMode ?
+      this.saveResponseMatchingMode(
+        targetMatchingFlags,
+        {
+          localFlagsAfterSave,
+          rollbackFlags: rollbackResponseMatchingFlags,
+          showSuccessMessage: false
+        }
+      ) :
+      of(undefined);
+
+    saveMatchingMode$
+      .pipe(
+        tap(() => {
+          settingsReadyForAnalysis = true;
+        }),
+        switchMap(() => this.codingJobBackendService
+          .triggerResponseAnalysis(
+            workspaceId,
+            this.normalizeAggregationThreshold(this.duplicateAggregationThreshold)
+          )),
+        takeUntil(this.destroy$)
       )
-      .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
           this.snackBar.open('Antwortanalyse wurde gestartet.', 'OK', { duration: 3000 });
+          if (shouldRefreshAggregationDependentViews) {
+            this.refreshAggregationDependentViews(false);
+          }
           this.loadResponseAnalysis(); // Start polling
         },
         error: error => {
           this.isLoadingResponseAnalysis = false;
-          this.snackBar.open(
-            `Fehler beim Starten der Antwortanalyse: ${error.message || error}`,
-            'OK',
-            { duration: 3000 }
-          );
+          if (settingsReadyForAnalysis) {
+            this.snackBar.open(
+              `Fehler beim Starten der Antwortanalyse: ${error.message || error}`,
+              'OK',
+              { duration: 3000 }
+            );
+          }
         }
       });
   }

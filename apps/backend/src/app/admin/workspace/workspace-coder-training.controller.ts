@@ -21,15 +21,27 @@ import { Request } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CoderTrainingService, CodingStatisticsService } from '../../database/services/coding';
+import {
+  CoderTrainingResultsApplyService,
+  CoderTrainingService,
+  CodingStatisticsService
+} from '../../database/services/coding';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../database/entities/job-definition.entity';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
+import {
+  ApplyTrainingDiscussionResultsRequestDto,
+  ApplyTrainingDiscussionResultsResultDto,
+  TrainingDiscussionApplyPreviewDto,
+  TrainingDiscussionApplySource
+} from '../../../../../../api-dto/coding/training-discussion-apply.dto';
 
 @ApiTags('Admin Workspace Coder Training')
 @Controller('admin/workspace')
 export class WorkspaceCoderTrainingController {
   constructor(
     private coderTrainingService: CoderTrainingService,
-    private codingStatisticsService: CodingStatisticsService
+    private codingStatisticsService: CodingStatisticsService,
+    private coderTrainingResultsApplyService: CoderTrainingResultsApplyService
   ) { }
 
   private getTrainingKappaVariableKey(unitName: string, variableId: string): string {
@@ -201,6 +213,14 @@ export class WorkspaceCoderTrainingController {
             enum: ['continuous', 'alternating'],
             description: 'Global case ordering mode for this training'
           },
+          show_score: {
+            type: 'boolean',
+            description: 'Whether score values are shown in coding jobs created for this training'
+          },
+          allow_comments: {
+            type: 'boolean',
+            description: 'Whether comments are allowed in coding jobs created for this training'
+          },
           suppress_general_instructions: {
             type: 'boolean',
             description: 'Whether general variable instructions are hidden in coding jobs created for this training'
@@ -221,6 +241,8 @@ export class WorkspaceCoderTrainingController {
     case_selection_mode?: string;
     reference_training_ids?: number[];
     reference_mode?: string | null;
+    show_score?: boolean;
+    allow_comments?: boolean;
     suppress_general_instructions?: boolean;
   }[]
   > {
@@ -320,6 +342,14 @@ export class WorkspaceCoderTrainingController {
             }
           }
         },
+        showScore: {
+          type: 'boolean',
+          description: 'Whether score values are shown in coding jobs created for this training'
+        },
+        allowComments: {
+          type: 'boolean',
+          description: 'Whether comments are allowed in coding jobs created for this training'
+        },
         suppressGeneralInstructions: {
           type: 'boolean',
           description: 'Whether general variable instructions are hidden in coding jobs created for this training'
@@ -374,6 +404,8 @@ export class WorkspaceCoderTrainingController {
                      caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups';
                      referenceTrainingIds?: number[];
                      referenceMode?: 'same' | 'different';
+                     showScore?: boolean;
+                     allowComments?: boolean;
                      suppressGeneralInstructions?: boolean;
                    }
   ): Promise<{
@@ -400,6 +432,8 @@ export class WorkspaceCoderTrainingController {
       body.caseSelectionMode,
       body.referenceTrainingIds,
       body.referenceMode,
+      body.showScore,
+      body.allowComments,
       body.suppressGeneralInstructions
     );
   }
@@ -426,6 +460,7 @@ export class WorkspaceCoderTrainingController {
           personCode: { type: 'string', description: 'Person Code' },
           personLogin: { type: 'string', description: 'Person Login' },
           personGroup: { type: 'string', description: 'Person Group' },
+          bookletName: { type: 'string', description: 'Test booklet name' },
           testPerson: { type: 'string', description: 'Test Person' },
           coders: {
             type: 'array',
@@ -465,6 +500,7 @@ export class WorkspaceCoderTrainingController {
         personCode: string;
         personLogin: string;
         personGroup: string;
+        bookletName: string;
         testPerson: string;
         coders: Array<{
           trainingId: number;
@@ -514,10 +550,14 @@ export class WorkspaceCoderTrainingController {
           unitName: { type: 'string', description: 'Name of the unit' },
           variableId: { type: 'string', description: 'Variable ID' },
           personCode: { type: 'string', description: 'Person code' },
+          personLogin: { type: 'string', description: 'Person login' },
+          personGroup: { type: 'string', description: 'Person group' },
+          bookletName: { type: 'string', description: 'Test booklet name' },
           testPerson: { type: 'string', description: 'Test person details' },
           givenAnswer: { type: 'string', description: 'Given answer' },
           discussionCode: { type: 'number', nullable: true },
           discussionScore: { type: 'number', nullable: true },
+          discussionNotes: { type: 'string', nullable: true },
           discussionManagerUserId: { type: 'number', nullable: true },
           discussionManagerName: { type: 'string', nullable: true },
           discussionSource: { type: 'string', enum: ['manual', 'auto_agreement'], nullable: true },
@@ -554,12 +594,14 @@ export class WorkspaceCoderTrainingController {
         personCode: string;
         personLogin: string;
         personGroup: string;
+        bookletName: string;
         testPerson: string;
         givenAnswer: string;
         replayCode: number | null;
         replayScore: number | null;
         discussionCode: number | null;
         discussionScore: number | null;
+        discussionNotes: string | null;
         discussionManagerUserId: number | null;
         discussionManagerName: string | null;
         discussionSource: 'manual' | 'auto_agreement' | null;
@@ -604,7 +646,8 @@ export class WorkspaceCoderTrainingController {
           type: 'number',
           nullable: true,
           description: 'Deprecated input; score is derived on the server from coding scheme, missings, or stored results.'
-        }
+        },
+        notes: { type: 'string', nullable: true }
       },
       required: ['responseId']
     }
@@ -612,12 +655,13 @@ export class WorkspaceCoderTrainingController {
   async saveDiscussionResult(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: { responseId: number; code: number | null; score: number | null },
+      @Body() body: { responseId: number; code: number | null; score: number | null; notes?: string | null },
       @Req() req: Request
   ): Promise<{
         success: boolean;
         code: number | null;
         score: number | null;
+        notes: string | null;
         source: 'manual' | 'auto_agreement' | null;
         managerUserId: number | null;
         managerName: string | null;
@@ -634,7 +678,86 @@ export class WorkspaceCoderTrainingController {
       Number(body.responseId),
       Number.isNaN(managerUserId) ? null : managerUserId,
       managerName,
-      body.code
+      body.code,
+      body.notes
+    );
+  }
+
+  @Post(':workspace_id/coding/coder-trainings/:trainingId/apply-discussion-results-preview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'trainingId',
+    type: Number,
+    description: 'ID of the coder training'
+  })
+  @ApiBody({
+    description: 'Preview applying training discussion results to final v2 response results.',
+    schema: {
+      type: 'object',
+      properties: {
+        source: {
+          type: 'string',
+          enum: ['manual', 'auto_agreement']
+        }
+      },
+      required: ['source']
+    }
+  })
+  async previewApplyDiscussionResults(
+    @WorkspaceId() workspace_id: number,
+      @Param('trainingId') trainingId: number,
+      @Body('source') source: TrainingDiscussionApplySource
+  ): Promise<TrainingDiscussionApplyPreviewDto> {
+    return this.coderTrainingResultsApplyService.previewTrainingDiscussionResults(
+      workspace_id,
+      Number(trainingId),
+      source
+    );
+  }
+
+  @Post(':workspace_id/coding/coder-trainings/:trainingId/apply-discussion-results')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'trainingId',
+    type: Number,
+    description: 'ID of the coder training'
+  })
+  @ApiBody({
+    description: 'Apply training discussion results to final v2 response results.',
+    schema: {
+      type: 'object',
+      properties: {
+        source: {
+          type: 'string',
+          enum: ['manual', 'auto_agreement']
+        },
+        existingResultStrategy: {
+          type: 'string',
+          enum: ['skip', 'overwrite']
+        },
+        jobConflictStrategy: {
+          type: 'string',
+          enum: ['skip', 'removeFromJobs']
+        }
+      },
+      required: ['source']
+    }
+  })
+  async applyDiscussionResults(
+    @WorkspaceId() workspace_id: number,
+      @Param('trainingId') trainingId: number,
+      @Body() body: ApplyTrainingDiscussionResultsRequestDto
+  ): Promise<ApplyTrainingDiscussionResultsResultDto> {
+    return this.coderTrainingResultsApplyService.applyTrainingDiscussionResults(
+      workspace_id,
+      Number(trainingId),
+      body
     );
   }
 
@@ -702,6 +825,14 @@ export class WorkspaceCoderTrainingController {
         caseSelectionMode: { type: 'string', enum: ['oldest_first', 'newest_first', 'random', 'random_per_testgroup', 'random_testgroups'] },
         referenceTrainingIds: { type: 'array', items: { type: 'number' } },
         referenceMode: { type: 'string', enum: ['same', 'different'] },
+        showScore: {
+          type: 'boolean',
+          description: 'Whether score values are shown in coding jobs created for this training'
+        },
+        allowComments: {
+          type: 'boolean',
+          description: 'Whether comments are allowed in coding jobs created for this training'
+        },
         suppressGeneralInstructions: {
           type: 'boolean',
           description: 'Whether general variable instructions are hidden in coding jobs created for this training'
@@ -740,6 +871,8 @@ export class WorkspaceCoderTrainingController {
         caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups';
         referenceTrainingIds?: number[];
         referenceMode?: 'same' | 'different';
+        showScore?: boolean;
+        allowComments?: boolean;
         suppressGeneralInstructions?: boolean;
       }
   ): Promise<{ success: boolean; message: string; jobsCreated?: number }> {
@@ -760,6 +893,8 @@ export class WorkspaceCoderTrainingController {
       body.caseSelectionMode,
       body.referenceTrainingIds,
       body.referenceMode,
+      body.showScore,
+      body.allowComments,
       body.suppressGeneralInstructions
     );
   }

@@ -83,6 +83,8 @@ interface CoderTrainingWithJobs {
   case_selection_mode?: string;
   reference_training_ids?: number[];
   reference_mode?: string | null;
+  show_score?: boolean;
+  allow_comments?: boolean;
   suppress_general_instructions?: boolean;
 }
 
@@ -101,6 +103,7 @@ type SaveDiscussionResultResponse = {
   success: boolean;
   code: number | null;
   score: number | null;
+  notes: string | null;
   source: DiscussionSource;
   managerUserId: number | null;
   managerName: string | null;
@@ -958,7 +961,8 @@ export class CoderTrainingService {
     responseId: number,
     managerUserId: number | null,
     managerName: string | null,
-    code: number | null | undefined
+    code: number | null | undefined,
+    notes?: string | null
   ): Promise<SaveDiscussionResultResponse> {
     const training = await this.coderTrainingRepository.findOne({
       where: {
@@ -1010,6 +1014,7 @@ export class CoderTrainingService {
         success: true,
         code: automaticDiscussionResult?.code ?? null,
         score: automaticDiscussionResult?.score ?? null,
+        notes: null,
         source: automaticDiscussionResult ? 'auto_agreement' : null,
         managerUserId: null,
         managerName: null
@@ -1037,6 +1042,7 @@ export class CoderTrainingService {
 
     discussionResult.code = code;
     discussionResult.score = derivedScore;
+    discussionResult.notes = notes?.trim() || null;
     discussionResult.manager_user_id = managerUserId;
     discussionResult.manager_name = managerName;
 
@@ -1045,6 +1051,7 @@ export class CoderTrainingService {
       success: true,
       code: saved.code,
       score: saved.score,
+      notes: saved.notes ?? null,
       source: 'manual',
       managerUserId: saved.manager_user_id,
       managerName: saved.manager_name
@@ -1399,6 +1406,8 @@ export class CoderTrainingService {
     caseSelectionMode?: CaseSelectionMode,
     referenceTrainingIds?: number[],
     referenceMode?: ReferenceMode,
+    showScore?: boolean,
+    allowComments?: boolean,
     suppressGeneralInstructions?: boolean
   ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
     try {
@@ -1426,6 +1435,8 @@ export class CoderTrainingService {
       coderTraining.case_selection_mode = caseSelectionMode ?? 'oldest_first';
       coderTraining.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
       coderTraining.reference_mode = referenceMode ?? null;
+      coderTraining.show_score = showScore ?? false;
+      coderTraining.allow_comments = allowComments ?? true;
       coderTraining.suppress_general_instructions = suppressGeneralInstructions ?? false;
       coderTraining.created_at = new Date();
       coderTraining.updated_at = new Date();
@@ -1513,6 +1524,8 @@ export class CoderTrainingService {
         codingJob.training_id = trainingId;
         codingJob.missings_profile_id = resolvedMissingsProfileId;
         codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
+        codingJob.showScore = showScore ?? false;
+        codingJob.allowComments = allowComments ?? true;
         codingJob.suppressGeneralInstructions = suppressGeneralInstructions ?? false;
         codingJob.created_at = new Date();
         codingJob.updated_at = new Date();
@@ -1661,6 +1674,8 @@ export class CoderTrainingService {
         case_selection_mode: training.case_selection_mode,
         reference_training_ids: training.reference_training_ids ?? undefined,
         reference_mode: training.reference_mode ?? undefined,
+        show_score: training.show_score,
+        allow_comments: training.allow_comments,
         suppress_general_instructions: training.suppress_general_instructions,
         assigned_variables: training.variables
           ?.filter(v => !bundleVariableKeys.has(this.makeTrainingVariableKey(v.unit_name, v.variable_id)))
@@ -1701,6 +1716,7 @@ export class CoderTrainingService {
       personCode: string;
       personLogin: string;
       personGroup: string;
+      bookletName: string;
       testPerson: string;
       coders: Array<{
         trainingId: number;
@@ -1744,6 +1760,7 @@ export class CoderTrainingService {
       personCode: string;
       personLogin: string;
       personGroup: string;
+      bookletName: string;
       testPerson: string;
     }>();
 
@@ -1764,6 +1781,7 @@ export class CoderTrainingService {
               personCode: unit.person_code,
               personLogin: unit.person_login,
               personGroup: personGroup,
+              bookletName: unit.booklet_name,
               testPerson
             });
           }
@@ -1778,6 +1796,7 @@ export class CoderTrainingService {
       personCode: string;
       personLogin: string;
       personGroup: string;
+      bookletName: string;
       testPerson: string;
       coders: Array<{
         trainingId: number;
@@ -1852,6 +1871,7 @@ export class CoderTrainingService {
         personCode: info.personCode,
         personLogin: info.personLogin,
         personGroup: info.personGroup,
+        bookletName: info.bookletName,
         testPerson: info.testPerson,
         coders: codersData
       });
@@ -1881,12 +1901,14 @@ export class CoderTrainingService {
       personCode: string;
       personLogin: string;
       personGroup: string;
+      bookletName: string;
       testPerson: string;
       givenAnswer: string;
       replayCode: number | null;
       replayScore: number | null;
       discussionCode: number | null;
       discussionScore: number | null;
+      discussionNotes: string | null;
       discussionManagerUserId: number | null;
       discussionManagerName: string | null;
       discussionSource: DiscussionSource;
@@ -1917,6 +1939,7 @@ export class CoderTrainingService {
       personCode: string;
       personLogin: string;
       personGroup: string;
+      bookletName: string;
       testPerson: string;
       givenAnswer: string;
       replayCode: number | null;
@@ -1941,6 +1964,7 @@ export class CoderTrainingService {
             personCode: unit.person_code,
             personLogin: unit.person_login,
             personGroup: personGroup,
+            bookletName: unit.booklet_name,
             testPerson,
             givenAnswer,
             replayCode: unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null,
@@ -2036,6 +2060,7 @@ export class CoderTrainingService {
         );
       let discussionCode = automaticDiscussionResult?.code ?? null;
       let discussionScore = automaticDiscussionResult?.score ?? null;
+      let discussionNotes: string | null = null;
       let discussionManagerUserId: number | null = null;
       let discussionManagerName: string | null = null;
       let discussionSource: DiscussionSource = automaticDiscussionResult ? 'auto_agreement' : null;
@@ -2043,6 +2068,7 @@ export class CoderTrainingService {
       if (hasManualDiscussionResult) {
         discussionCode = discussionResult!.code;
         discussionScore = discussionResult!.score;
+        discussionNotes = discussionResult!.notes ?? null;
         discussionManagerUserId = discussionResult!.manager_user_id ?? null;
         discussionManagerName = discussionResult!.manager_user_id ?
           (managerNameById.get(discussionResult!.manager_user_id) ?? discussionResult!.manager_name ?? null) :
@@ -2057,12 +2083,14 @@ export class CoderTrainingService {
         personCode: unitVar.personCode,
         personLogin: unitVar.personLogin,
         personGroup: unitVar.personGroup,
+        bookletName: unitVar.bookletName,
         testPerson: unitVar.testPerson,
         givenAnswer: unitVar.givenAnswer,
         replayCode: unitVar.replayCode,
         replayScore: unitVar.replayScore,
         discussionCode,
         discussionScore,
+        discussionNotes,
         discussionManagerUserId,
         discussionManagerName,
         discussionSource,
@@ -2088,6 +2116,8 @@ export class CoderTrainingService {
     caseSelectionMode?: CaseSelectionMode,
     referenceTrainingIds?: number[],
     referenceMode?: ReferenceMode,
+    showScore?: boolean,
+    allowComments?: boolean,
     suppressGeneralInstructions?: boolean
   ): Promise<{ success: boolean; message: string; jobsCreated?: number; jobs?: TrainingJob[] }> {
     try {
@@ -2228,12 +2258,20 @@ export class CoderTrainingService {
       const resolvedSuppressGeneralInstructions = suppressGeneralInstructions ??
         training.suppress_general_instructions ??
         false;
+      const resolvedShowScore = showScore ??
+        training.show_score ??
+        false;
+      const resolvedAllowComments = allowComments ??
+        training.allow_comments ??
+        true;
 
       training.label = trainingLabel;
       training.case_ordering_mode = newCaseOrderingMode;
       training.case_selection_mode = newCaseSelectionMode;
       training.reference_training_ids = effectiveReferenceTrainingIds.length ? effectiveReferenceTrainingIds : null;
       training.reference_mode = newReferenceMode;
+      training.show_score = resolvedShowScore;
+      training.allow_comments = resolvedAllowComments;
       training.suppress_general_instructions = resolvedSuppressGeneralInstructions;
       training.updated_at = new Date();
 
@@ -2328,6 +2366,8 @@ export class CoderTrainingService {
           codingJob.training_id = trainingId;
           codingJob.missings_profile_id = resolvedMissingsProfileId;
           codingJob.case_ordering_mode = newCaseOrderingMode;
+          codingJob.showScore = resolvedShowScore;
+          codingJob.allowComments = resolvedAllowComments;
           codingJob.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
           codingJob.created_at = new Date();
           codingJob.updated_at = new Date();
@@ -2436,6 +2476,8 @@ export class CoderTrainingService {
       }
 
       for (const job of training.codingJobs || []) {
+        job.showScore = resolvedShowScore;
+        job.allowComments = resolvedAllowComments;
         job.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
         await this.codingJobRepository.save(job);
       }

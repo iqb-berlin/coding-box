@@ -32,6 +32,12 @@ import { CodingFacadeService } from '../../../services/facades/coding-facade.ser
 import { JobDefinition } from '../../services/coding-job-backend.service';
 import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
+import { PostMessage, PostMessageService } from '../../../core/services/post-message.service';
+import {
+  appendReplayUrlParams,
+  normalizeReplayUrlToCurrentOrigin
+} from '../../utils/replay-url.util';
+import { ReviewCodeSelection } from '../../../replay/services/units-replay.service';
 
 interface CoderResult {
   coderId: number;
@@ -54,9 +60,46 @@ interface DoubleCodedItem {
   bookletName: string;
   givenAnswer: string;
   isResolved: boolean;
+  appliedCode: number | null;
+  appliedScore: number | null;
+  appliedComment: string | null;
   coderResults: CoderResult[];
   selectedCoderResult?: CoderResult;
 }
+
+interface AppliedReviewResult {
+  code: number | null;
+  score: number | null;
+  comment: string | null;
+}
+
+interface ReplayDecisionResult {
+  source: 'replay';
+  code: number;
+  score: number | null;
+}
+
+type DecisionResult = CoderResult | ReplayDecisionResult;
+
+interface ReplayCodeSelectedMessage extends PostMessage {
+  testPerson: string;
+  unitId: string;
+  variableId: unknown;
+  code: unknown;
+  score?: unknown;
+  responseId?: number;
+}
+
+type ValidReplayScore = { isValid: true; hasScore: boolean; value: number | null };
+type ParsedReplayScore = ValidReplayScore | { isValid: false };
+
+type DoubleCodedResolutionDecision = {
+  responseId: number;
+  selectedJobId?: number;
+  code?: number;
+  score?: number | null;
+  resolutionComment?: string;
+};
 
 interface CoderColumnMeta {
   columnId: string;
@@ -103,6 +146,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private workspaceService = inject(WorkspaceBackendService);
   private codingFacadeService = inject(CodingFacadeService);
   private codingStatisticsService = inject(CodingStatisticsService);
+  private postMessageService = inject(PostMessageService);
 
   constructor(
     @Optional() public dialogRef: MatDialogRef<DoubleCodedReviewComponent>,
@@ -137,12 +181,18 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   selectionForm!: FormGroup;
   selectedItem: DoubleCodedItem | null = null;
   replayLoadingByResponseId: Record<number, boolean> = {};
+  private replayDecisionByResponseId = new Map<number, ReplayDecisionResult>();
+  private replayWindowByResponseId = new Map<number, MessageEventSource>();
+  private readonly replayDecisionPrefix = 'replay:';
 
   ngOnInit(): void {
     this.initializeForm();
     this.setupFilters();
     this.loadCoders();
     this.loadFilterOptions();
+    this.postMessageService.getMessages<ReplayCodeSelectedMessage>('replayCodeSelected')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(data => this.handleReplayCodeSelected(data.message, data.source, data.origin));
   }
 
   ngOnDestroy(): void {
@@ -375,7 +425,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     currentItems.forEach(item => {
       const controlName = this.getItemControlName(item);
 
-      const resolvedResult = item.coderResults.find(cr => !!cr.supervisorComment);
+      const resolvedResult = this.getAppliedMatchingCoderResult(item) ||
+        item.coderResults.find(cr => !!cr.supervisorComment);
       const firstCodedResult = item.coderResults.find(cr => cr.code !== null);
 
       let defaultValue = '';
@@ -494,7 +545,11 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return item.coderResults.filter(coderResult => coderResult.coderId === result.coderId).length > 1;
   }
 
-  getDecisionResultSourceLabel(item: DoubleCodedItem, result: CoderResult): string {
+  getDecisionResultSourceLabel(item: DoubleCodedItem, result: DecisionResult): string {
+    if (this.isReplayDecisionResult(result)) {
+      return this.translateService.instant('double-coded-review.decision.replay-source');
+    }
+
     if (!this.hasMultipleResultsForCoder(item, result)) {
       return this.getCoderDisplayName(result);
     }
@@ -502,13 +557,84 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return `${this.getCoderDisplayName(result)} - ${this.getCoderResultSourceLabel(result)}`;
   }
 
-  getSelectedDecisionResult(item: DoubleCodedItem): CoderResult | undefined {
-    const selectedJobId = this.selectionForm?.get(this.getItemControlName(item))?.value;
-    const selectedResult = selectedJobId ?
-      item.coderResults.find(result => result.jobId.toString() === selectedJobId) :
+  getSelectedDecisionResult(item: DoubleCodedItem): DecisionResult | undefined {
+    const selectedValue = this.selectionForm?.get(this.getItemControlName(item))?.value;
+    const replayDecision = this.getReplayDecisionForControlValue(item, selectedValue);
+    if (replayDecision) {
+      return replayDecision;
+    }
+
+    const selectedResult = selectedValue ?
+      item.coderResults.find(result => result.jobId.toString() === selectedValue) :
       item.selectedCoderResult;
 
     return selectedResult && selectedResult.code !== null ? selectedResult : undefined;
+  }
+
+  private isReplayDecisionResult(result: DecisionResult): result is ReplayDecisionResult {
+    return 'source' in result && result.source === 'replay';
+  }
+
+  getAppliedReviewResult(item: DoubleCodedItem): AppliedReviewResult | null {
+    if (!item.isResolved) {
+      return null;
+    }
+
+    const code = item.appliedCode ?? null;
+    const score = item.appliedScore ?? null;
+    const comment = item.appliedComment?.trim() ||
+      item.coderResults.find(result => !!result.supervisorComment)?.supervisorComment?.trim() ||
+      null;
+
+    if (code === null && score === null && !comment) {
+      return null;
+    }
+
+    return {
+      code,
+      score,
+      comment
+    };
+  }
+
+  getAppliedMatchingCoderResult(item: DoubleCodedItem): CoderResult | undefined {
+    const appliedResult = this.getAppliedReviewResult(item);
+    if (!appliedResult || appliedResult.code === null) {
+      return undefined;
+    }
+
+    return item.coderResults.find(result => (
+      result.code === appliedResult.code &&
+      (result.score ?? null) === (appliedResult.score ?? null)
+    )) || item.coderResults.find(result => result.code === appliedResult.code);
+  }
+
+  getAppliedResultSourceLabel(item: DoubleCodedItem): string {
+    const matchingResult = this.getAppliedMatchingCoderResult(item);
+    if (matchingResult) {
+      return this.getDecisionResultSourceLabel(item, matchingResult);
+    }
+
+    return this.translateService.instant('double-coded-review.applied-result.final-source');
+  }
+
+  getAppliedResultTooltip(item: DoubleCodedItem): string {
+    const appliedResult = this.getAppliedReviewResult(item);
+    if (!appliedResult) {
+      return '';
+    }
+
+    const codeDisplay = this.getCodeDisplay(appliedResult.code) || this.getCodeLabel(appliedResult.code) || 'N/A';
+    const scoreDisplay = appliedResult.score !== null ? ` (${appliedResult.score})` : '';
+
+    return `${this.translateService.instant('double-coded-review.applied-result.label')}: ${codeDisplay}${scoreDisplay}`;
+  }
+
+  isAppliedCodeMatch(item: DoubleCodedItem, result: CoderResult): boolean {
+    const appliedResult = this.getAppliedReviewResult(item);
+    return !!appliedResult &&
+      appliedResult.code !== null &&
+      result.code === appliedResult.code;
   }
 
   getDecisionStatusClass(item: DoubleCodedItem): string {
@@ -604,8 +730,14 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return value;
   }
 
-  openReplay(responseId: number): void {
+  openReplay(itemOrResponseId: DoubleCodedItem | number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
+    const responseId = typeof itemOrResponseId === 'number' ?
+      itemOrResponseId :
+      itemOrResponseId.responseId;
+    const item = typeof itemOrResponseId === 'number' ?
+      this.allData.find(reviewItem => reviewItem.responseId === responseId) :
+      itemOrResponseId;
 
     if (!workspaceId || !responseId) {
       this.showError(this.translateService.instant('coding-management.descriptions.missing-replay-info'));
@@ -625,12 +757,197 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           return;
         }
 
-        window.open(result.replayUrl, '_blank');
+        const replayWindow = window.open(this.buildReplayDecisionUrl(result.replayUrl, responseId, item), '_blank');
+        if (replayWindow) {
+          this.replayWindowByResponseId.set(responseId, replayWindow);
+        }
       },
       error: () => {
         this.showError(this.translateService.instant('double-coded-review.errors.replay-failed'));
       }
     });
+  }
+
+  private buildReplayDecisionUrl(
+    replayUrl: string,
+    responseId: number,
+    item?: DoubleCodedItem
+  ): string {
+    return appendReplayUrlParams(
+      normalizeReplayUrlToCurrentOrigin(replayUrl),
+      {
+        mode: 'coding-decision',
+        originResponseId: responseId,
+        workspaceId: this.appService.selectedWorkspaceId,
+        reviewCodeSelections: item ? this.serializeReviewCodeSelections(item) : undefined
+      }
+    );
+  }
+
+  private serializeReviewCodeSelections(item: DoubleCodedItem): string | undefined {
+    const selections = this.getReviewCodeSelections(item);
+    return selections.length > 0 ? JSON.stringify(selections) : undefined;
+  }
+
+  private getReviewCodeSelections(item: DoubleCodedItem): ReviewCodeSelection[] {
+    const coderNamesByCode = new Map<number, string[]>();
+
+    item.coderResults.forEach(result => {
+      if (result.code === null || result.code === undefined) {
+        return;
+      }
+
+      const coderNames = coderNamesByCode.get(result.code) || [];
+      const coderName = this.getCoderDisplayName(result);
+      if (!coderNames.includes(coderName)) {
+        coderNames.push(coderName);
+      }
+      coderNamesByCode.set(result.code, coderNames);
+    });
+
+    return Array.from(coderNamesByCode.entries())
+      .sort(([codeA], [codeB]) => codeA - codeB)
+      .map(([code, coderNames]) => ({ code, coderNames }));
+  }
+
+  private handleReplayCodeSelected(
+    data: ReplayCodeSelectedMessage,
+    source: MessageEventSource | null,
+    origin: string = window.location.origin
+  ): void {
+    if (!this.isReplayMessageSourceAllowed(data, source, origin)) {
+      return;
+    }
+
+    const item = this.findReplaySelectedItem(data);
+    const selectedCode = this.parseReplaySelectedCode(data.code);
+
+    if (!item || selectedCode === null) {
+      this.showError(this.translateService.instant('double-coded-review.errors.replay-code-not-in-decisions'));
+      return;
+    }
+
+    const selectedScore = this.parseReplaySelectedScore(
+      data.score,
+      Object.prototype.hasOwnProperty.call(data, 'score')
+    );
+    if (!selectedScore.isValid) {
+      this.showError(this.translateService.instant('double-coded-review.errors.replay-code-not-in-decisions'));
+      return;
+    }
+
+    const selectedResult = this.findReplaySelectedResult(item, selectedCode, selectedScore);
+
+    if (selectedResult) {
+      const selectedJobId = selectedResult.jobId.toString();
+      this.replayDecisionByResponseId.delete(item.responseId);
+      this.getOrCreateFormControl(this.getItemControlName(item)).setValue(selectedJobId);
+      this.onSelectionChange(item, selectedJobId);
+      this.showSuccess(this.translateService.instant('double-coded-review.success.replay-code-selected'));
+      return;
+    }
+
+    const replayDecision: ReplayDecisionResult = {
+      source: 'replay',
+      code: selectedCode,
+      score: selectedScore.value
+    };
+    this.replayDecisionByResponseId.set(item.responseId, replayDecision);
+    item.selectedCoderResult = undefined;
+    this.getOrCreateFormControl(this.getItemControlName(item))
+      .setValue(this.getReplayDecisionControlValue(item));
+    this.showSuccess(this.translateService.instant('double-coded-review.success.replay-code-selected'));
+  }
+
+  private isReplayMessageSourceAllowed(
+    data: ReplayCodeSelectedMessage,
+    source: MessageEventSource | null,
+    origin: string
+  ): boolean {
+    if (!data.responseId || !source || origin !== window.location.origin) {
+      return false;
+    }
+
+    return this.replayWindowByResponseId.get(data.responseId) === source;
+  }
+
+  private findReplaySelectedItem(data: ReplayCodeSelectedMessage): DoubleCodedItem | undefined {
+    const variableId = this.normalizeReplayMessageText(data.variableId).toLowerCase();
+    const candidates = data.responseId ?
+      this.allData.filter(item => item.responseId === data.responseId) :
+      this.allData;
+
+    return candidates.find(item => item.variableId.trim().toLowerCase() === variableId) ||
+      (data.responseId ? candidates[0] : undefined);
+  }
+
+  private parseReplaySelectedCode(code: unknown): number | null {
+    if (typeof code !== 'string' && typeof code !== 'number') {
+      return null;
+    }
+
+    const trimmedCode = String(code).trim();
+    if (trimmedCode === '') {
+      return null;
+    }
+
+    const selectedCode = Number(trimmedCode);
+    return Number.isFinite(selectedCode) ? selectedCode : null;
+  }
+
+  private parseReplaySelectedScore(score: unknown, hasScore: boolean): ParsedReplayScore {
+    if (!hasScore) {
+      return { isValid: true, hasScore: false, value: null };
+    }
+
+    if (score === null) {
+      return { isValid: true, hasScore: true, value: null };
+    }
+
+    if (typeof score !== 'string' && typeof score !== 'number') {
+      return { isValid: false };
+    }
+
+    if (typeof score === 'string' && score.trim() === '') {
+      return { isValid: false };
+    }
+
+    const selectedScore = Number(score);
+    return Number.isFinite(selectedScore) ?
+      { isValid: true, hasScore: true, value: selectedScore } :
+      { isValid: false };
+  }
+
+  private findReplaySelectedResult(
+    item: DoubleCodedItem,
+    selectedCode: number,
+    selectedScore: ValidReplayScore
+  ): CoderResult | undefined {
+    const matchingCodeResults = item.coderResults
+      .filter(result => result.code === selectedCode);
+
+    if (selectedScore.hasScore) {
+      return matchingCodeResults.find(result => result.score === selectedScore.value);
+    }
+
+    return matchingCodeResults[0];
+  }
+
+  private normalizeReplayMessageText(value: unknown): string {
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private getReplayDecisionControlValue(item: DoubleCodedItem): string {
+    return `${this.replayDecisionPrefix}${item.responseId}`;
+  }
+
+  private getReplayDecisionForControlValue(
+    item: DoubleCodedItem,
+    controlValue: string | null | undefined
+  ): ReplayDecisionResult | undefined {
+    return controlValue === this.getReplayDecisionControlValue(item) ?
+      this.replayDecisionByResponseId.get(item.responseId) :
+      undefined;
   }
 
   hasConflict(item: DoubleCodedItem): boolean {
@@ -787,7 +1104,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       next: response => {
         this.allData = response.data.map(item => ({
           ...item,
-          selectedCoderResult: item.coderResults.find(result => result.code !== null)
+          selectedCoderResult: this.getAppliedMatchingCoderResult(item) ||
+            item.coderResults.find(result => result.code !== null)
         }));
         this.updateDisplayedColumns(this.allData);
         this.dataSource.data = this.allData;
@@ -824,6 +1142,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   onSelectionChange(item: DoubleCodedItem, selectedJobId: string): void {
+    this.replayDecisionByResponseId.delete(item.responseId);
     const selectedResult = item.coderResults.find(cr => cr.jobId.toString() === selectedJobId);
     if (selectedResult && selectedResult.code !== null) {
       item.selectedCoderResult = selectedResult;
@@ -839,7 +1158,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }> = [];
+    const decisions: DoubleCodedResolutionDecision[] = [];
     const currentItems = this.getCurrentItems();
     let hasIncomplete = false;
 
@@ -894,7 +1213,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  private confirmIncompleteResolution(workspaceId: number, decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }>): void {
+  private confirmIncompleteResolution(workspaceId: number, decisions: DoubleCodedResolutionDecision[]): void {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       data: {
         title: this.translateService.instant('double-coded-review.warnings.incomplete-title'),
@@ -911,34 +1230,49 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     });
   }
 
-  private getDecisionForItem(item: DoubleCodedItem): { responseId: number; selectedJobId: number; resolutionComment?: string } | null {
+  private getDecisionForItem(item: DoubleCodedItem): DoubleCodedResolutionDecision | null {
     const controlName = this.getItemControlName(item);
-    const selectedJobId = this.selectionForm.get(controlName)?.value;
+    const selectedValue = this.selectionForm.get(controlName)?.value;
+    const replayDecision = this.getReplayDecisionForControlValue(item, selectedValue);
 
-    if (selectedJobId) {
-      const selectedResult = item.coderResults.find(cr => cr.jobId.toString() === selectedJobId);
+    if (replayDecision) {
+      return this.withResolutionComment(item, {
+        responseId: item.responseId,
+        code: replayDecision.code,
+        score: replayDecision.score
+      });
+    }
+
+    if (selectedValue) {
+      const selectedResult = item.coderResults.find(cr => cr.jobId.toString() === selectedValue);
       if (selectedResult && selectedResult.code !== null) {
-        const decision: { responseId: number; selectedJobId: number; resolutionComment?: string } = {
+        return this.withResolutionComment(item, {
           responseId: item.responseId,
           selectedJobId: selectedResult.jobId
-        };
-
-        if (this.hasConflict(item)) {
-          const commentControlName = this.getCommentControlName(item);
-          const comment = this.selectionForm.get(commentControlName)?.value;
-          if (comment && comment.trim()) {
-            decision.resolutionComment = comment.trim();
-          }
-        }
-        return decision;
+        });
       }
     }
     return null;
   }
 
+  private withResolutionComment(
+    item: DoubleCodedItem,
+    decision: DoubleCodedResolutionDecision
+  ): DoubleCodedResolutionDecision {
+    if (this.hasConflict(item)) {
+      const commentControlName = this.getCommentControlName(item);
+      const comment = this.selectionForm.get(commentControlName)?.value;
+      if (comment && comment.trim()) {
+        decision.resolutionComment = comment.trim();
+      }
+    }
+
+    return decision;
+  }
+
   private sendDecisions(
     workspaceId: number,
-    decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }>
+    decisions: DoubleCodedResolutionDecision[]
   ): void {
     this.isLoading = true;
     this.testPersonCodingService.applyDoubleCodedResolutions(workspaceId, { decisions }).subscribe({

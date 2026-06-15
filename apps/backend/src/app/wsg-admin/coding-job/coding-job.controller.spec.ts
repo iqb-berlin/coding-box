@@ -20,8 +20,13 @@ describe('WsgCodingJobController', () => {
     getBulkCodingProgress: jest.Mock;
     createCodingJob: jest.Mock;
     updateCodingJob: jest.Mock;
+    pauseCodingJob: jest.Mock;
+    resumeCodingJob: jest.Mock;
+    submitCodingJob: jest.Mock;
     saveCodingProgress: jest.Mock;
+    saveCodingIssueReviewProgress: jest.Mock;
     saveCodingNotes: jest.Mock;
+    saveCodingIssueReviewNotes: jest.Mock;
     assertUserCanAccessCodingJob: jest.Mock;
     assertUserCanCodeCodingJob: jest.Mock;
   };
@@ -52,8 +57,13 @@ describe('WsgCodingJobController', () => {
       getBulkCodingProgress: jest.fn().mockResolvedValue({}),
       createCodingJob: jest.fn().mockResolvedValue({ id: 124 }),
       updateCodingJob: jest.fn(),
+      pauseCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'paused' }),
+      resumeCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'active' }),
+      submitCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'completed' }),
       saveCodingProgress: jest.fn().mockResolvedValue({ id: 123 }),
+      saveCodingIssueReviewProgress: jest.fn().mockResolvedValue({ id: 123 }),
       saveCodingNotes: jest.fn().mockResolvedValue({ id: 123 }),
+      saveCodingIssueReviewNotes: jest.fn().mockResolvedValue({ id: 123 }),
       assertUserCanAccessCodingJob: jest.fn().mockResolvedValue(undefined),
       assertUserCanCodeCodingJob: jest.fn().mockResolvedValue(undefined)
     };
@@ -91,6 +101,20 @@ describe('WsgCodingJobController', () => {
     expect(Reflect.getMetadata('accessLevel', handler)).toBe(2);
   });
 
+  it.each([
+    'pauseCodingJob',
+    'resumeCodingJob',
+    'submitCodingJob'
+  ] as const)('uses coder access guards for %s', methodName => {
+    const handler = WsgCodingJobController.prototype[methodName];
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtAuthGuard,
+      WorkspaceGuard
+    ]);
+    expect(Reflect.getMetadata('accessLevel', handler)).toBeUndefined();
+  });
+
   it('passes onlyOpen=true to the coding job service when requested', async () => {
     await controller.getCodingJobUnits(47, 123, req, 'true');
 
@@ -109,7 +133,7 @@ describe('WsgCodingJobController', () => {
     expect(codingJobService.getCodingJobUnits).toHaveBeenCalledWith(123, false);
   });
 
-  it('does not change completed jobs to active when opening them for review', async () => {
+  it('changes completed jobs back to active when starting them again', async () => {
     codingJobService.getCodingJob.mockResolvedValue({
       codingJob: { id: 123, status: 'completed' }
     });
@@ -124,7 +148,66 @@ describe('WsgCodingJobController', () => {
     expect(
       codingJobService.assertUserCanAccessCodingJob
     ).not.toHaveBeenCalled();
-    expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, {
+      status: 'active'
+    });
+  });
+
+  it.each(['review', 'results_applied'])(
+    'does not change %s jobs to active when preparing replay data',
+    async status => {
+      codingJobService.getCodingJob.mockResolvedValue({
+        codingJob: { id: 123, status }
+      });
+
+      await controller.startCodingJob(47, 123, req);
+
+      expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+    }
+  );
+
+  it('allows assigned coders to submit completed coding jobs for review', async () => {
+    codingJobService.updateCodingJob.mockResolvedValue({
+      id: 123,
+      workspace_id: 47,
+      name: 'Job',
+      status: 'review'
+    });
+
+    await expect(
+      controller.submitCodingJobForReview(47, 123, req)
+    ).resolves.toMatchObject({
+      id: 123,
+      workspace_id: 47,
+      status: 'review'
+    });
+
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      5
+    );
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, {
+      status: 'review'
+    });
+  });
+
+  it.each([
+    ['pauseCodingJob', 'pauseCodingJob'],
+    ['resumeCodingJob', 'resumeCodingJob'],
+    ['submitCodingJob', 'submitCodingJob']
+  ] as const)('uses coding access for %s', async (controllerMethod, serviceMethod) => {
+    await controller[controllerMethod](47, 123, req);
+
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      5
+    );
+    expect(
+      codingJobService.assertUserCanAccessCodingJob
+    ).not.toHaveBeenCalled();
+    expect(codingJobService[serviceMethod]).toHaveBeenCalledWith(123, 47);
   });
 
   it('prepares read-only reviews with management access and without changing job state', async () => {
@@ -182,6 +265,30 @@ describe('WsgCodingJobController', () => {
     expect(codingJobService.saveCodingProgress).toHaveBeenCalled();
   });
 
+  it('uses manager access for saving coding issue review progress', async () => {
+    await controller.saveCodingProgress(
+      47,
+      123,
+      {
+        testPerson: 'p@c@b',
+        unitId: 'u',
+        variableId: 'v',
+        issueReview: true
+      } as never,
+      req
+    );
+
+    expect(codingJobService.assertUserCanCodeCodingJob).not.toHaveBeenCalled();
+    expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(5, 47);
+    expect(codingJobService.saveCodingIssueReviewProgress)
+      .toHaveBeenCalledWith(
+        123,
+        5,
+        expect.objectContaining({ issueReview: true })
+      );
+    expect(codingJobService.saveCodingProgress).not.toHaveBeenCalled();
+  });
+
   it('uses coding access for saving coding notes', async () => {
     await controller.saveCodingNotes(
       47,
@@ -204,6 +311,30 @@ describe('WsgCodingJobController', () => {
       codingJobService.assertUserCanAccessCodingJob
     ).not.toHaveBeenCalled();
     expect(codingJobService.saveCodingNotes).toHaveBeenCalled();
+  });
+
+  it('uses manager access for saving coding issue review notes', async () => {
+    await controller.saveCodingNotes(
+      47,
+      123,
+      {
+        testPerson: 'p@c@b',
+        unitId: 'u',
+        variableId: 'v',
+        notes: 'note',
+        issueReview: true
+      } as never,
+      req
+    );
+
+    expect(codingJobService.assertUserCanCodeCodingJob).not.toHaveBeenCalled();
+    expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(5, 47);
+    expect(codingJobService.saveCodingIssueReviewNotes).toHaveBeenCalledWith(
+      123,
+      5,
+      expect.objectContaining({ issueReview: true })
+    );
+    expect(codingJobService.saveCodingNotes).not.toHaveBeenCalled();
   });
 
   it('rejects jobDefinitionId on direct coding job creates', async () => {

@@ -165,8 +165,8 @@ export class WorkspaceFacadeService {
     return this.fileService.uploadTestResults(workspaceId, files, resultType, overwriteExisting, overwriteMode, scope, filters);
   }
 
-  getFilesList(workspaceId: number, page: number = 1, limit: number = 10000, fileType?: string, fileSize?: string, searchText?: string): Observable<PaginatedResponse<FilesInListDto> & { fileTypes: string[] }> {
-    return this.fileService.getFilesList(workspaceId, page, limit, fileType, fileSize, searchText);
+  getFilesList(workspaceId: number, page: number = 1, limit: number = 10000, fileType?: string, fileSize?: string, searchText?: string, regexSearch?: boolean): Observable<PaginatedResponse<FilesInListDto> & { fileTypes: string[] }> {
+    return this.fileService.getFilesList(workspaceId, page, limit, fileType, fileSize, searchText, regexSearch);
   }
 
   getUnitDef(workspaceId: number, unit: string, authToken?: string): Observable<FilesDto[]> {

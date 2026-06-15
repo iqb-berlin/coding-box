@@ -3,6 +3,12 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { CoderTraining } from '../models/coder-training.model';
+import {
+  ApplyTrainingDiscussionResultsRequestDto,
+  ApplyTrainingDiscussionResultsResultDto,
+  TrainingDiscussionApplyPreviewDto,
+  TrainingDiscussionApplySource
+} from '../../../../../../api-dto/coding/training-discussion-apply.dto';
 
 export interface CoderTrainingJob {
   coderId: number;
@@ -26,6 +32,7 @@ export interface TrainingCodingResult {
   personCode: string;
   personLogin: string;
   personGroup: string;
+  bookletName: string;
   testPerson: string;
   coders: Array<{
     trainingId: number;
@@ -46,12 +53,14 @@ export interface WithinTrainingCodingResult {
   personCode: string;
   personLogin: string;
   personGroup: string;
+  bookletName: string;
   testPerson: string;
   givenAnswer: string;
   replayCode: number | null;
   replayScore: number | null;
   discussionCode: number | null;
   discussionScore: number | null;
+  discussionNotes: string | null;
   discussionManagerUserId: number | null;
   discussionManagerName: string | null;
   discussionSource: 'manual' | 'auto_agreement' | null;
@@ -112,6 +121,8 @@ export class CodingTrainingBackendService {
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
     referenceMode?: 'same' | 'different',
+    showScore?: boolean,
+    allowComments?: boolean,
     suppressGeneralInstructions?: boolean
   ): Observable<CreateCoderTrainingJobsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-training-jobs`;
@@ -126,6 +137,8 @@ export class CodingTrainingBackendService {
       caseSelectionMode,
       referenceTrainingIds,
       referenceMode,
+      showScore,
+      allowComments,
       suppressGeneralInstructions
     }, { headers: this.authHeader });
   }
@@ -154,6 +167,8 @@ export class CodingTrainingBackendService {
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
     referenceMode?: 'same' | 'different',
+    showScore?: boolean,
+    allowComments?: boolean,
     suppressGeneralInstructions?: boolean
   ): Observable<{ success: boolean; message: string; jobsCreated?: number }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
@@ -168,6 +183,8 @@ export class CodingTrainingBackendService {
       caseSelectionMode,
       referenceTrainingIds,
       referenceMode,
+      showScore,
+      allowComments,
       suppressGeneralInstructions
     }, { headers: this.authHeader });
   }
@@ -215,11 +232,13 @@ export class CodingTrainingBackendService {
     trainingId: number,
     responseId: number,
     code: number | null,
-    score: number | null
+    score: number | null,
+    notes?: string | null
   ): Observable<{
       success: boolean;
       code: number | null;
       score: number | null;
+      notes: string | null;
       source: 'manual' | 'auto_agreement' | null;
       managerUserId: number | null;
       managerName: string | null;
@@ -229,12 +248,41 @@ export class CodingTrainingBackendService {
       success: boolean;
       code: number | null;
       score: number | null;
+      notes: string | null;
       source: 'manual' | 'auto_agreement' | null;
       managerUserId: number | null;
       managerName: string | null;
     }>(
       url,
-      { responseId, code, score },
+      {
+        responseId, code, score, notes
+      },
+      { headers: this.authHeader }
+    );
+  }
+
+  previewApplyDiscussionResults(
+    workspaceId: number,
+    trainingId: number,
+    source: TrainingDiscussionApplySource
+  ): Observable<TrainingDiscussionApplyPreviewDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/apply-discussion-results-preview`;
+    return this.http.post<TrainingDiscussionApplyPreviewDto>(
+      url,
+      { source },
+      { headers: this.authHeader }
+    );
+  }
+
+  applyDiscussionResults(
+    workspaceId: number,
+    trainingId: number,
+    request: ApplyTrainingDiscussionResultsRequestDto
+  ): Observable<ApplyTrainingDiscussionResultsResultDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/apply-discussion-results`;
+    return this.http.post<ApplyTrainingDiscussionResultsResultDto>(
+      url,
+      request,
       { headers: this.authHeader }
     );
   }

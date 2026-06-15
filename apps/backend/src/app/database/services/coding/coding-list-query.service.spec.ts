@@ -33,6 +33,7 @@ type CreateServiceOptions = {
   unitVariableMap?: Map<string, Set<string>>;
   trainingRequiredMap?: Map<string, Set<string>>;
   derivedVariablesBySourceMap?: Map<string, Set<string>>;
+  manualInstructionMap?: Map<string, Set<string>>;
   replayAnchorMap?: Map<string, string>;
 };
 
@@ -109,6 +110,9 @@ describe('CodingListQueryService', () => {
       ),
       getDerivedVariablesBySourceMap: jest.fn().mockResolvedValue(
         options.derivedVariablesBySourceMap ?? new Map()
+      ),
+      getManualInstructionVariableMap: jest.fn().mockResolvedValue(
+        options.manualInstructionMap ?? new Map()
       )
     } as unknown as WorkspaceFilesService;
     const workspaceExclusionService = {
@@ -345,6 +349,71 @@ describe('CodingListQueryService', () => {
     expect(result.items.map(item => item.variable_id)).toEqual(['INCOMPLETE_VAR']);
   });
 
+  it('excludes intended incomplete coding-list responses without manual instruction', async () => {
+    const unitVariableMap = new Map([[
+      'UNIT',
+      new Set(['MANUAL_VAR', 'AUTO_ONLY_VAR'])
+    ]]);
+    const manualInstructionMap = new Map([[
+      'UNIT',
+      new Set(['MANUAL_VAR'])
+    ]]);
+    const responses = [
+      {
+        id: 1,
+        variableid: 'MANUAL_VAR',
+        value: 'Antwort',
+        status_v1: statusStringToNumber('INTENDED_INCOMPLETE'),
+        unit: {
+          name: 'UNIT',
+          alias: 'Unit Alias',
+          booklet: {
+            person: {
+              login: 'login',
+              code: 'code',
+              group: 'group'
+            },
+            bookletinfo: {
+              name: 'BOOKLET'
+            }
+          }
+        }
+      },
+      {
+        id: 2,
+        variableid: 'AUTO_ONLY_VAR',
+        value: 'Antwort',
+        status_v1: statusStringToNumber('INTENDED_INCOMPLETE'),
+        unit: {
+          name: 'UNIT',
+          alias: 'Unit Alias',
+          booklet: {
+            person: {
+              login: 'login',
+              code: 'code',
+              group: 'group'
+            },
+            bookletinfo: {
+              name: 'BOOKLET'
+            }
+          }
+        }
+      }
+    ] as unknown as ResponseEntity[];
+    const service = createService(responses, createFileRepository({}), {
+      unitVariableMap,
+      manualInstructionMap
+    });
+
+    const result = await service.getCodingList(
+      1,
+      'token',
+      'https://iqb-kodierbox.de'
+    );
+
+    expect(result.items.map(item => item.variable_id)).toEqual(['MANUAL_VAR']);
+  });
+
   it('excludes intended source variables only when their derived variable remains in the same manual scope', async () => {
     const unitVariableMap = new Map([[
       'UNIT',
@@ -357,6 +426,10 @@ describe('CodingListQueryService', () => {
     const derivedVariablesBySourceMap = new Map([
       [getManualCodingScopeKey('UNIT', 'BASE_VAR'), new Set(['DERIVED_VAR'])]
     ]);
+    const manualInstructionMap = new Map([[
+      'UNIT',
+      new Set(['BASE_VAR', 'STANDALONE_VAR'])
+    ]]);
     const rawVariableRows = [
       {
         unitName: 'UNIT',
@@ -378,7 +451,8 @@ describe('CodingListQueryService', () => {
       rawVariableRows,
       unitVariableMap,
       trainingRequiredMap,
-      derivedVariablesBySourceMap
+      derivedVariablesBySourceMap,
+      manualInstructionMap
     });
 
     await expect(service.getCodingListVariables(1)).resolves.toEqual([

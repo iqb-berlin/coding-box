@@ -36,6 +36,7 @@ export interface ManualCodingExportDialogResult {
   doubleCodingMethod?: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent';
   includeComments?: boolean;
   includeModalValue?: boolean;
+  includeReplayUrl?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   jobDefinitionIds?: number[];
@@ -68,6 +69,7 @@ export class ManualCodingExportDialogComponent {
   outputCommentsInsteadOfCodes = false;
   includeComments = true;
   includeModalValue = true;
+  includeReplayUrl = false;
   anonymizeCoders = false;
   usePseudoCoders = false;
   selectedJobDefinitionIds: number[] = [];
@@ -104,6 +106,10 @@ export class ManualCodingExportDialogComponent {
     return true;
   }
 
+  get canIncludeReplayUrl(): boolean {
+    return this.exportMode === 'review' || this.reportExportType === 'detailed';
+  }
+
   confirm(): void {
     if (!this.canConfirm) {
       return;
@@ -120,6 +126,7 @@ export class ManualCodingExportDialogComponent {
         doubleCodingMethod: this.doubleCodingMethod,
         includeComments: this.includeComments,
         includeModalValue: this.includeModalValue,
+        includeReplayUrl: this.canIncludeReplayUrl && this.includeReplayUrl,
         anonymizeCoders: this.anonymizeCoders,
         usePseudoCoders: this.anonymizeCoders && this.usePseudoCoders,
         jobDefinitionIds,
@@ -132,6 +139,7 @@ export class ManualCodingExportDialogComponent {
     this.dialogRef.close({
       exportType: this.reportExportType,
       outputCommentsInsteadOfCodes: this.outputCommentsInsteadOfCodes,
+      includeReplayUrl: this.canIncludeReplayUrl && this.includeReplayUrl,
       anonymizeCoders: this.anonymizeCoders,
       usePseudoCoders: this.anonymizeCoders && this.usePseudoCoders,
       jobDefinitionIds,

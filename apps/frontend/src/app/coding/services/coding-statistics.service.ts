@@ -10,6 +10,10 @@ import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-err
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ResponseEntity } from '../../shared/models/response-entity.model';
 import { CodingFreshnessSummaryDto } from '../../../../../../api-dto/coding/coding-freshness.dto';
+import {
+  CodingResponseSortBy,
+  CodingResponseSortDirection
+} from '../../models/coding-interfaces';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -55,11 +59,27 @@ export class CodingStatisticsService {
       );
   }
 
-  getResponsesByStatus(workspace_id: number, status: string, version: 'v1' | 'v2' | 'v3' = 'v1', page: number = 1, limit: number = 100): Observable<PaginatedResponse<ResponseEntity>> {
-    const params = new HttpParams()
+  getResponsesByStatus(
+    workspace_id: number,
+    status: string,
+    version: 'v1' | 'v2' | 'v3' = 'v1',
+    page: number = 1,
+    limit: number = 100,
+    sortBy?: CodingResponseSortBy,
+    sortDirection?: CodingResponseSortDirection
+  ): Observable<PaginatedResponse<ResponseEntity>> {
+    let params = new HttpParams()
       .set('version', version)
       .set('page', page.toString())
       .set('limit', limit.toString());
+
+    if (sortBy) {
+      params = params.set('sortBy', sortBy);
+    }
+
+    if (sortDirection) {
+      params = params.set('sortDirection', sortDirection);
+    }
 
     return this.http
       .get<PaginatedResponse<ResponseEntity>>(
@@ -95,7 +115,8 @@ export class CodingStatisticsService {
     limit: number = 100,
     unitId?: string,
     variableId?: string,
-    derivation?: string
+    derivation?: string,
+    regexSearch?: boolean
   ): Observable<PaginatedResponse<VariableAnalysisItemDto>> {
     return this.appService.createOwnToken(workspace_id, 60).pipe(
       catchError(() => of('')),
@@ -116,6 +137,10 @@ export class CodingStatisticsService {
 
         if (derivation) {
           params = params.set('derivation', derivation);
+        }
+
+        if (regexSearch) {
+          params = params.set('regexSearch', 'true');
         }
 
         return this.http

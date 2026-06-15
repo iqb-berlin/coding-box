@@ -17,6 +17,7 @@ import {
 export interface JobDefinitionRefreshDialogData {
   definitionId: number;
   preview: JobDefinitionRefreshPreviewDto;
+  mode?: 'refresh' | 'update';
 }
 
 type RefreshStatTone = 'default' | 'positive' | 'negative' | 'warning';
@@ -50,6 +51,44 @@ export class JobDefinitionRefreshDialogComponent {
 
   get preview(): JobDefinitionRefreshPreviewDto {
     return this.data.preview;
+  }
+
+  get isDefinitionUpdate(): boolean {
+    return this.data.mode === 'update';
+  }
+
+  getApplyTitleKey(): string {
+    if (!this.preview.canApply) {
+      return 'coding-job-definitions.refresh-dialog.title.blocked';
+    }
+
+    return this.isDefinitionUpdate ?
+      'coding-job-definitions.refresh-dialog.title.update-apply' :
+      'coding-job-definitions.refresh-dialog.title.apply';
+  }
+
+  getIntroKey(): string {
+    if (!this.preview.canApply) {
+      return this.isDefinitionUpdate ?
+        'coding-job-definitions.refresh-dialog.intro.update-blocked' :
+        'coding-job-definitions.refresh-dialog.intro.blocked';
+    }
+
+    return this.isDefinitionUpdate ?
+      'coding-job-definitions.refresh-dialog.intro.update-apply' :
+      'coding-job-definitions.refresh-dialog.intro.apply';
+  }
+
+  getDefinitionRuleKey(): string {
+    return this.isDefinitionUpdate ?
+      'coding-job-definitions.refresh-dialog.rules.use-updated-definition' :
+      'coding-job-definitions.refresh-dialog.rules.use-current-definition';
+  }
+
+  getConfirmKey(): string {
+    return this.isDefinitionUpdate ?
+      'coding-job-definitions.refresh-dialog.confirm-update' :
+      'coding-job-definitions.refresh-dialog.confirm';
   }
 
   getBlockingReason(): string {

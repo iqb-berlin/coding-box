@@ -3,11 +3,12 @@ import {
   Inject,
   Injectable,
   Logger,
-  OnModuleInit
+  OnModuleInit,
+  Optional
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  FindOperator, In, Like, Repository
+  FindOperator, In, Like, QueryRunner, Repository
 } from 'typeorm';
 import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
@@ -48,6 +49,13 @@ import {
 import Persons from '../../entities/persons.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
+import { CodingFileCacheService } from '../coding/coding-file-cache.service';
+// eslint-disable-next-line import/no-cycle
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import {
+  CODING_PROCESS_CACHE_INVALIDATOR,
+  CodingProcessCacheInvalidator
+} from '../coding/coding-process-cache-invalidator.token';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
@@ -64,6 +72,10 @@ import {
   WorkspaceExclusionService
 } from './workspace-exclusion.service';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
+import {
+  assertValidRegexSearchPattern,
+  withRegexSearchStatementTimeout
+} from '../../../utils/regex-search.util';
 
 type WorkspaceUnitVisibility = {
   globalIgnoredUnits: Set<string>;
@@ -91,6 +103,33 @@ interface ParsedVariableElement {
   ValuePositionLabels?: unknown;
 }
 
+interface VocsCode {
+  id?: unknown;
+  label?: unknown;
+  manualInstruction?: unknown;
+  [key: string]: unknown;
+}
+
+interface VocsVariableCoding {
+  id?: unknown;
+  alias?: unknown;
+  label?: unknown;
+  page?: unknown;
+  codeModel?: unknown;
+  manualInstruction?: unknown;
+  codes?: VocsCode[];
+  [key: string]: unknown;
+}
+
+interface ParsedCodingScheme {
+  variableCodings?: VocsVariableCoding[];
+}
+
+interface CodingSchemeFreshnessImpact {
+  autoCodingChanged: boolean;
+  manualCodingChanged: boolean;
+}
+
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
@@ -98,10 +137,12 @@ export class WorkspaceFilesService implements OnModuleInit {
   private readonly detailedUnitCacheLogging =
     process.env.DEBUG_UNIT_CACHE === 'true';
 
+  private readonly unitVariableCacheVersion = 'v2';
+
   private readonly unitVariableCacheRefreshes = new Map<number, Promise<void>>();
 
   private getCacheKey(workspaceId: number, type: string): string {
-    return `workspace_files:${type}:${workspaceId}`;
+    return `workspace_files:${this.unitVariableCacheVersion}:${type}:${workspaceId}`;
   }
 
   private logUnitCacheDebug(message: string): void {
@@ -145,7 +186,14 @@ export class WorkspaceFilesService implements OnModuleInit {
     private cacheService: CacheService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
-    private readonly workspaceExclusionService?: WorkspaceExclusionService
+    private readonly workspaceExclusionService?: WorkspaceExclusionService,
+    @Optional()
+    private readonly codingFreshnessService?: CodingFreshnessService,
+    @Optional()
+    private readonly codingFileCacheService?: CodingFileCacheService,
+    @Optional()
+    @Inject(CODING_PROCESS_CACHE_INVALIDATOR)
+    private readonly codingProcessCacheInvalidator?: CodingProcessCacheInvalidator
   ) {}
 
   private normalizeFileUnitId(value: string | null | undefined): string {
@@ -226,6 +274,238 @@ export class WorkspaceFilesService implements OnModuleInit {
     return match ? match[1].toLowerCase() : null;
   }
 
+  private isCodingSchemeFileId(fileId: unknown): boolean {
+    return String(fileId || '').trim().toUpperCase().endsWith('.VOCS');
+  }
+
+  private normalizeCodingSchemeUnitName(fileId: unknown): string {
+    return String(fileId || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\.VOCS$/i, '');
+  }
+
+  private parseCodingSchemeData(data: unknown): ParsedCodingScheme | null {
+    if (data === null || data === undefined) {
+      return null;
+    }
+
+    try {
+      const parsed =
+        typeof data === 'string' || Buffer.isBuffer(data) ?
+          JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : data) :
+          data;
+
+      if (!parsed || typeof parsed !== 'object') {
+        return null;
+      }
+
+      return parsed as ParsedCodingScheme;
+    } catch {
+      return null;
+    }
+  }
+
+  private getCodingSchemeVariableMap(
+    data: unknown
+  ): Map<string, VocsVariableCoding> | null {
+    const parsed = this.parseCodingSchemeData(data);
+    if (!parsed || !Array.isArray(parsed.variableCodings)) {
+      return null;
+    }
+
+    const variables = new Map<string, VocsVariableCoding>();
+    parsed.variableCodings.forEach(variableCoding => {
+      const key = this.getCodingSchemeVariableKey(variableCoding);
+      if (key) {
+        variables.set(key, variableCoding);
+      }
+    });
+    return variables;
+  }
+
+  private getCodingSchemeVariableKey(variableCoding: VocsVariableCoding): string {
+    return String(variableCoding.id || variableCoding.alias || '').trim();
+  }
+
+  private getCodingSchemeRuleSignature(variableCoding: VocsVariableCoding): string {
+    return this.stableStringify(
+      this.omitKeysDeep(
+        variableCoding,
+        new Set(['manualInstruction', 'label', 'page'])
+      )
+    );
+  }
+
+  private getCodingSchemeManualSignature(variableCoding: VocsVariableCoding): string {
+    const codes = Array.isArray(variableCoding.codes) ?
+      variableCoding.codes.map(code => ({
+        id: code.id ?? null,
+        label: code.label ?? null,
+        manualInstruction: code.manualInstruction ?? null
+      })) :
+      [];
+
+    return this.stableStringify({
+      codeModel: variableCoding.codeModel ?? null,
+      label: variableCoding.label ?? null,
+      manualInstruction: variableCoding.manualInstruction ?? null,
+      page: variableCoding.page ?? null,
+      codes
+    });
+  }
+
+  private omitKeysDeep(value: unknown, omittedKeys: Set<string>): unknown {
+    if (Array.isArray(value)) {
+      return value.map(item => this.omitKeysDeep(item, omittedKeys));
+    }
+
+    if (!value || typeof value !== 'object') {
+      return value ?? null;
+    }
+
+    const result: Record<string, unknown> = {};
+    Object.keys(value as Record<string, unknown>)
+      .sort()
+      .forEach(key => {
+        if (!omittedKeys.has(key)) {
+          result[key] = this.omitKeysDeep(
+            (value as Record<string, unknown>)[key],
+            omittedKeys
+          );
+        }
+      });
+    return result;
+  }
+
+  private stableStringify(value: unknown): string {
+    return JSON.stringify(this.sortObjectKeysDeep(value));
+  }
+
+  private sortObjectKeysDeep(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      return value.map(item => this.sortObjectKeysDeep(item));
+    }
+
+    if (!value || typeof value !== 'object') {
+      return value ?? null;
+    }
+
+    const result: Record<string, unknown> = {};
+    Object.keys(value as Record<string, unknown>)
+      .sort()
+      .forEach(key => {
+        result[key] = this.sortObjectKeysDeep(
+          (value as Record<string, unknown>)[key]
+        );
+      });
+    return result;
+  }
+
+  private codingSchemeDataToText(data: unknown): string {
+    if (data === null || data === undefined) {
+      return '';
+    }
+    if (Buffer.isBuffer(data)) {
+      return data.toString('utf8');
+    }
+    if (typeof data === 'string') {
+      return data;
+    }
+    return this.stableStringify(data);
+  }
+
+  private getCodingSchemeFreshnessImpact(
+    previousData: unknown,
+    nextData: unknown
+  ): CodingSchemeFreshnessImpact {
+    const previousVariables = previousData === null || previousData === undefined ?
+      new Map<string, VocsVariableCoding>() :
+      this.getCodingSchemeVariableMap(previousData);
+    const nextVariables = this.getCodingSchemeVariableMap(nextData);
+
+    if (!previousVariables || !nextVariables) {
+      const changed =
+        this.codingSchemeDataToText(previousData) !== this.codingSchemeDataToText(nextData);
+      return {
+        autoCodingChanged: changed,
+        manualCodingChanged: changed
+      };
+    }
+
+    const allVariableKeys = new Set([
+      ...previousVariables.keys(),
+      ...nextVariables.keys()
+    ]);
+    let autoCodingChanged = false;
+    let manualCodingChanged = false;
+
+    allVariableKeys.forEach(variableKey => {
+      const previousVariable = previousVariables.get(variableKey);
+      const nextVariable = nextVariables.get(variableKey);
+
+      if (!previousVariable || !nextVariable) {
+        autoCodingChanged = true;
+        manualCodingChanged = true;
+        return;
+      }
+
+      if (
+        this.getCodingSchemeRuleSignature(previousVariable) !==
+        this.getCodingSchemeRuleSignature(nextVariable)
+      ) {
+        autoCodingChanged = true;
+        manualCodingChanged = true;
+        return;
+      }
+
+      if (
+        this.getCodingSchemeManualSignature(previousVariable) !==
+        this.getCodingSchemeManualSignature(nextVariable)
+      ) {
+        manualCodingChanged = true;
+      }
+    });
+
+    return { autoCodingChanged, manualCodingChanged };
+  }
+
+  private async markCodingSchemeFreshnessAfterFileChange(
+    workspaceId: number,
+    fileId: unknown,
+    previousData: unknown,
+    nextData: unknown
+  ): Promise<void> {
+    if (!this.codingFreshnessService || !this.isCodingSchemeFileId(fileId)) {
+      return;
+    }
+
+    const unitName = this.normalizeCodingSchemeUnitName(fileId);
+    if (!unitName) {
+      return;
+    }
+
+    const impact = this.getCodingSchemeFreshnessImpact(previousData, nextData);
+    if (!impact.autoCodingChanged && !impact.manualCodingChanged) {
+      return;
+    }
+
+    try {
+      await this.codingFreshnessService.markUnitsStaleAfterCodingSchemeChange(
+        workspaceId,
+        {
+          autoCodingSchemeRefs: impact.autoCodingChanged ? [unitName] : [],
+          manualCodingSchemeRefs: impact.manualCodingChanged ? [unitName] : []
+        }
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Could not update coding freshness after coding scheme change ${unitName}: ${detail}`
+      );
+    }
+  }
+
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
     this.logger.log(`Fetching all file types for workspace: ${workspaceId}`);
 
@@ -278,6 +558,7 @@ export class WorkspaceFilesService implements OnModuleInit {
       fileType?: string;
       fileSize?: string;
       searchText?: string;
+      regexSearch?: boolean;
     }
   ): Promise<[FilesDto[], number, string[]]> {
     this.logger.log(`Fetching test files for workspace: ${workspaceId}`);
@@ -286,92 +567,116 @@ export class WorkspaceFilesService implements OnModuleInit {
       limit = 20,
       fileType,
       fileSize,
-      searchText
+      searchText,
+      regexSearch
     } = options || {};
     const MAX_LIMIT = 10000;
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
-    let qb = this.fileUploadRepository
-      .createQueryBuilder('file')
-      .where('file.workspace_id = :workspaceId', { workspaceId });
+    const runFindFiles = async (
+      queryRunner?: QueryRunner
+    ): Promise<[FilesDto[], number, string[]]> => {
+      let qb = this.fileUploadRepository
+        .createQueryBuilder('file', queryRunner)
+        .where('file.workspace_id = :workspaceId', { workspaceId });
 
-    if (fileType) {
-      const resourceExtension = this.getResourceSubtypeExtension(fileType);
-      if (resourceExtension) {
-        qb = qb
-          .andWhere('file.file_type = :fileType', {
-            fileType: this.resourceTypeLabel
-          })
-          .andWhere('LOWER(file.filename) LIKE :extension', {
-            extension: `%${resourceExtension}`
-          });
-      } else {
-        qb = qb.andWhere('file.file_type = :fileType', { fileType });
+      if (fileType) {
+        const resourceExtension = this.getResourceSubtypeExtension(fileType);
+        if (resourceExtension) {
+          qb = qb
+            .andWhere('file.file_type = :fileType', {
+              fileType: this.resourceTypeLabel
+            })
+            .andWhere('LOWER(file.filename) LIKE :extension', {
+              extension: `%${resourceExtension}`
+            });
+        } else {
+          qb = qb.andWhere('file.file_type = :fileType', { fileType });
+        }
       }
-    }
 
-    if (fileSize) {
-      const KB = 1024;
-      const MB = 1024 * KB;
-      // eslint-disable-next-line default-case
-      switch (fileSize) {
-        case '0-10KB':
-          qb = qb.andWhere('file.file_size < :max', { max: 10 * KB });
-          break;
-        case '10KB-100KB':
-          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
-            min: 10 * KB,
-            max: 100 * KB
-          });
-          break;
-        case '100KB-1MB':
-          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
-            min: 100 * KB,
-            max: MB
-          });
-          break;
-        case '1MB-10MB':
-          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
-            min: MB,
-            max: 10 * MB
-          });
-          break;
-        case '10MB+':
-          qb = qb.andWhere('file.file_size >= :min', { min: 10 * MB });
-          break;
+      if (fileSize) {
+        const KB = 1024;
+        const MB = 1024 * KB;
+        // eslint-disable-next-line default-case
+        switch (fileSize) {
+          case '0-10KB':
+            qb = qb.andWhere('file.file_size < :max', { max: 10 * KB });
+            break;
+          case '10KB-100KB':
+            qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
+              min: 10 * KB,
+              max: 100 * KB
+            });
+            break;
+          case '100KB-1MB':
+            qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
+              min: 100 * KB,
+              max: MB
+            });
+            break;
+          case '1MB-10MB':
+            qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
+              min: MB,
+              max: 10 * MB
+            });
+            break;
+          case '10MB+':
+            qb = qb.andWhere('file.file_size >= :min', { min: 10 * MB });
+            break;
+        }
       }
-    }
 
-    if (searchText) {
-      const search = `%${searchText.toLowerCase()}%`;
-      qb = qb.andWhere(
-        "(LOWER(file.filename) LIKE :search OR LOWER(file.file_type) LIKE :search OR TO_CHAR(file.created_at, 'DD.MM.YYYY HH24:MI') ILIKE :search)",
-        { search }
+      if (searchText) {
+        if (regexSearch) {
+          const searchRegex = assertValidRegexSearchPattern(searchText, 'searchText');
+          if (searchRegex) {
+            qb = qb.andWhere(
+              "(file.filename ~ :searchRegex OR file.file_type ~ :searchRegex OR TO_CHAR(file.created_at, 'DD.MM.YYYY HH24:MI') ~ :searchRegex)",
+              { searchRegex }
+            );
+          }
+        } else {
+          const search = `%${searchText.toLowerCase()}%`;
+          qb = qb.andWhere(
+            "(LOWER(file.filename) LIKE :search OR LOWER(file.file_type) LIKE :search OR TO_CHAR(file.created_at, 'DD.MM.YYYY HH24:MI') ILIKE :search)",
+            { search }
+          );
+        }
+      }
+
+      qb = qb
+        .select([
+          'file.id',
+          'file.filename',
+          'file.file_id',
+          'file.file_size',
+          'file.file_type',
+          'file.created_at'
+        ])
+        .orderBy('file.created_at', 'DESC')
+        .skip((validPage - 1) * validLimit)
+        .take(validLimit);
+
+      const [files, total] = await qb.getManyAndCount();
+      this.logger.log(
+        `Found ${files.length} files (page ${validPage}, limit ${validLimit}, total ${total}).`
+      );
+
+      const fileTypes = await this.findAllFileTypes(workspaceId);
+
+      return [files, total, fileTypes];
+    };
+
+    if (regexSearch) {
+      return withRegexSearchStatementTimeout(
+        this.fileUploadRepository.manager.connection,
+        runFindFiles
       );
     }
 
-    qb = qb
-      .select([
-        'file.id',
-        'file.filename',
-        'file.file_id',
-        'file.file_size',
-        'file.file_type',
-        'file.created_at'
-      ])
-      .orderBy('file.created_at', 'DESC')
-      .skip((validPage - 1) * validLimit)
-      .take(validLimit);
-
-    const [files, total] = await qb.getManyAndCount();
-    this.logger.log(
-      `Found ${files.length} files (page ${validPage}, limit ${validLimit}, total ${total}).`
-    );
-
-    const fileTypes = await this.findAllFileTypes(workspaceId);
-
-    return [files, total, fileTypes];
+    return runFindFiles();
   }
 
   async deleteTestFiles(
@@ -1407,6 +1712,12 @@ ${bookletRefs}
         'file_id',
         'workspace_id'
       ]);
+      await this.markCodingSchemeFreshnessAfterFileChange(
+        workspaceId,
+        fileUpload.file_id,
+        existing?.data,
+        fileContent
+      );
       this.logger.log(
         `Successfully processed octet-stream file: ${file.originalname} as ${fileType}`
       );
@@ -1518,6 +1829,44 @@ ${bookletRefs}
     );
   }
 
+  private async collectCodingSchemeChangesForFreshness(
+    workspaceId: number,
+    entries: Record<string, unknown>[]
+  ): Promise<Array<{ fileId: string; previousData: unknown; nextData: unknown }>> {
+    if (!workspaceId || entries.length === 0) {
+      return [];
+    }
+
+    const codingSchemeEntries = entries
+      .map(entry => ({
+        fileId: String(entry.file_id || '').trim(),
+        data: entry.data
+      }))
+      .filter(entry => this.isCodingSchemeFileId(entry.fileId));
+    if (codingSchemeEntries.length === 0) {
+      return [];
+    }
+
+    const fileIds = Array.from(new Set(
+      codingSchemeEntries.map(entry => entry.fileId)
+    ));
+    const existingFiles = await this.fileUploadRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_id: In(fileIds)
+      }
+    });
+    const existingDataByFileId = new Map(
+      existingFiles.map(file => [String(file.file_id || ''), file.data])
+    );
+
+    return codingSchemeEntries.map(entry => ({
+      fileId: entry.fileId,
+      previousData: existingDataByFileId.get(entry.fileId),
+      nextData: entry.data
+    }));
+  }
+
   async testCenterImport(
     entries: Record<string, unknown>[]
   ): Promise<TestFilesUploadResultDto>;
@@ -1584,6 +1933,11 @@ ${bookletRefs}
         const id = String((e as { file_id?: unknown }).file_id ?? '');
         return !!id && conflictIds.has(id) && shouldOverwrite(id);
       });
+      const changedCodingSchemes =
+        await this.collectCodingSchemeChangesForFreshness(
+          workspaceId,
+          [...insertableEntries, ...overwriteEntries]
+        );
 
       const registry = this.fileUploadRepository.create(insertableEntries);
       if (registry.length > 0) {
@@ -1607,6 +1961,17 @@ ${bookletRefs}
           'file_id',
           'workspace_id'
         ]);
+      }
+      await Promise.all(changedCodingSchemes.map(change => (
+        this.markCodingSchemeFreshnessAfterFileChange(
+          workspaceId,
+          change.fileId,
+          change.previousData,
+          change.nextData
+        )
+      )));
+      if (registry.length > 0 || overwriteRegistry.length > 0) {
+        await this.invalidateWorkspaceFileCaches(workspaceId);
       }
       return {
         total: attemptedFiles.length,
@@ -2471,6 +2836,7 @@ ${bookletRefs}
       // Maps unitId → Map<alias, schemeId> for resolving XML aliases back to VOCS IDs
       const schemeAliasToIdMap = new Map<string, Map<string, string>>();
       const intendedIncompleteByUnit = new Map<string, Set<string>>();
+      const manualInstructionByUnit = new Map<string, Set<string>>();
       const trainingRequiredByUnit = new Map<string, Set<string>>();
       const derivedSourcesByUnit = new Map<
       string,
@@ -2486,7 +2852,7 @@ ${bookletRefs}
               sourceType?: string;
               deriveSources?: string[];
               processing?: string[];
-              codes?: Array<{ type?: string }>;
+              codes?: Array<{ type?: string; manualInstruction?: string | null }>;
             }[];
           };
           if (
@@ -2501,6 +2867,7 @@ ${bookletRefs}
             const intendedIncompleteSchemeIds = new Set<string>();
             // Collect scheme variable IDs that have CODER_TRAINING_REQUIRED processing property.
             const trainingRequiredSchemeIds = new Set<string>();
+            const manualInstructionSchemeIds = new Set<string>();
             const derivedSourceEntries: Array<{
               derivedId: string;
               derivedAlias?: string;
@@ -2522,6 +2889,12 @@ ${bookletRefs}
                 );
                 if (hasIntendedIncomplete) {
                   intendedIncompleteSchemeIds.add(vc.id);
+                }
+                const hasManualInstruction = vc.codes.some(
+                  code => !!code.manualInstruction?.trim()
+                );
+                if (hasManualInstruction) {
+                  manualInstructionSchemeIds.add(vc.id);
                 }
               }
               // Track variables with CODER_TRAINING_REQUIRED
@@ -2561,6 +2934,9 @@ ${bookletRefs}
               );
               trainingRequiredByUnit.set(unitId, trainingRequiredSchemeIds);
             }
+            if (manualInstructionSchemeIds.size > 0) {
+              manualInstructionByUnit.set(unitId, manualInstructionSchemeIds);
+            }
             if (derivedSourceEntries.length > 0) {
               derivedSourcesByUnit.set(unitId, derivedSourceEntries);
             }
@@ -2582,6 +2958,7 @@ ${bookletRefs}
       const derivedVariablesBySource = new Map<string, Set<string>>();
       // Maps unitId → alias-keyed set of variables with CODER_TRAINING_REQUIRED
       const trainingRequiredAliasByUnit = new Map<string, Set<string>>();
+      const manualInstructionAliasByUnit = new Map<string, Set<string>>();
 
       for (const unitFile of unitFiles) {
         try {
@@ -2605,10 +2982,13 @@ ${bookletRefs}
             // Scheme IDs that have CODER_TRAINING_REQUIRED processing property
             const schemeIdsWithTrainingRequired =
               trainingRequiredByUnit.get(unitName);
+            const schemeIdsWithManualInstructions =
+              manualInstructionByUnit.get(unitName);
             // Aliases that map to those scheme IDs — keyed by alias (= response variableid)
             const aliasesWithIntendedIncomplete = new Set<string>();
             // Aliases that map to scheme IDs with CODER_TRAINING_REQUIRED
             const aliasesWithTrainingRequired = new Set<string>();
+            const aliasesWithManualInstructions = new Set<string>();
             // Derived variable aliases for this unit
             const derivedAliases = new Set<string>();
             const xmlIdToAlias = new Map<string, string>();
@@ -2650,6 +3030,9 @@ ${bookletRefs}
                   // Check CODER_TRAINING_REQUIRED
                   if (schemeIdsWithTrainingRequired?.has(schemeKey)) {
                     aliasesWithTrainingRequired.add(variable.$.alias);
+                  }
+                  if (schemeIdsWithManualInstructions?.has(schemeKey)) {
+                    aliasesWithManualInstructions.add(variable.$.alias);
                   }
                 }
               }
@@ -2720,6 +3103,9 @@ ${bookletRefs}
                 if (schemeIdsWithTrainingRequired?.has(schemeKey)) {
                   aliasesWithTrainingRequired.add(alias);
                 }
+                if (schemeIdsWithManualInstructions?.has(schemeKey)) {
+                  aliasesWithManualInstructions.add(alias);
+                }
               }
             } else {
               this.logUnitCacheDebug(
@@ -2756,6 +3142,9 @@ ${bookletRefs}
                   // Also check CODER_TRAINING_REQUIRED for this scheme-only variable
                   if (schemeIdsWithTrainingRequired?.has(schemeId)) {
                     aliasesWithTrainingRequired.add(resolvedAlias);
+                  }
+                  if (schemeIdsWithManualInstructions?.has(schemeId)) {
+                    aliasesWithManualInstructions.add(resolvedAlias);
                   }
                 }
               }
@@ -2802,6 +3191,12 @@ ${bookletRefs}
                 aliasesWithTrainingRequired
               );
             }
+            if (aliasesWithManualInstructions.size > 0) {
+              manualInstructionAliasByUnit.set(
+                unitName,
+                aliasesWithManualInstructions
+              );
+            }
             if (derivedAliases.size > 0) {
               derivedVariablesByUnit.set(unitName, derivedAliases);
             }
@@ -2835,6 +3230,10 @@ ${bookletRefs}
         this.getCacheKey(workspaceId, 'derived_variables_by_source'),
         this.toRedisMap(derivedVariablesBySource)
       );
+      await this.cacheService.set(
+        this.getCacheKey(workspaceId, 'manual_instruction_variables'),
+        this.toRedisMap(manualInstructionAliasByUnit)
+      );
 
       this.logger.log(
         `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId} to Redis`
@@ -2843,6 +3242,7 @@ ${bookletRefs}
         `Unit variable cache summary for workspace ${workspaceId}: ` +
         `${intendedIncompleteAliasByUnit.size} units with intended-incomplete variables, ` +
         `${trainingRequiredAliasByUnit.size} units with training-required variables, ` +
+        `${manualInstructionAliasByUnit.size} units with manual instructions, ` +
         `${derivedVariablesByUnit.size} units with derived variables, ` +
         `${derivedVariablesBySource.size} source variables for derived variables`
       );
@@ -2925,6 +3325,26 @@ ${bookletRefs}
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'derived_variables_by_source');
+    const cached =
+      await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!cached) {
+      await this.refreshUnitVariableCache(workspaceId);
+      return this.fromRedisMap(
+        await this.cacheService.get<Record<string, string[]>>(cacheKey)
+      );
+    }
+    return this.fromRedisMap(cached);
+  }
+
+  /**
+   * Returns a map of unitName → Set of variable aliases where at least one
+   * code has a manual instruction. General variable-level instructions alone
+   * do not make a variable selectable in manual coding.
+   */
+  async getManualInstructionVariableMap(
+    workspaceId: number
+  ): Promise<Map<string, Set<string>>> {
+    const cacheKey = this.getCacheKey(workspaceId, 'manual_instruction_variables');
     const cached =
       await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
@@ -3512,11 +3932,16 @@ ${bookletRefs}
       this.cacheService.delete(
         this.getCacheKey(workspaceId, 'derived_variables_by_source')
       ),
+      this.cacheService.delete(
+        this.getCacheKey(workspaceId, 'manual_instruction_variables')
+      ),
       this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`)
     ]);
     await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
       workspaceId
     );
+    this.codingFileCacheService?.clearCaches();
+    this.codingProcessCacheInvalidator?.invalidateWorkspaceCaches(workspaceId);
     this.logger.log(
       `Invalidated workspace files caches for workspace ${workspaceId} in Redis`
     );

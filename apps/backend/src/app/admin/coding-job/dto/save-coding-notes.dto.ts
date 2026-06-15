@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsOptional,
   IsString
 } from 'class-validator';
@@ -34,4 +35,13 @@ export class SaveCodingNotesDto {
   @IsString()
   @IsOptional()
     notes?: string;
+
+  @ApiProperty({
+    description: 'Save this note as part of a coding issue review by the current user.',
+    example: false,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    issueReview?: boolean;
 }

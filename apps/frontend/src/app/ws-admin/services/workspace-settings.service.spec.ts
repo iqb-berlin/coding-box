@@ -176,6 +176,39 @@ describe('WorkspaceSettingsService', () => {
     });
   });
 
+  describe('getEnableRegexSearch', () => {
+    it('should return parsed boolean', () => {
+      service.getEnableRegexSearch(1).subscribe(val => {
+        expect(val).toBe(true);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/enable-regex-search`);
+      req.flush({ value: '{"enabled":true}' });
+    });
+
+    it('should return false on error', () => {
+      service.getEnableRegexSearch(1).subscribe(val => {
+        expect(val).toBe(false);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/enable-regex-search`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setEnableRegexSearch', () => {
+    it('should persist the setting', () => {
+      service.setEnableRegexSearch(1, true).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'enable-regex-search',
+        value: '{"enabled":true}',
+        description: 'Controls whether selected workspace search fields interpret input as regular expressions'
+      });
+      req.flush({});
+    });
+  });
+
   describe('getAggregationThreshold', () => {
     it('should return a persisted threshold', () => {
       service.getAggregationThreshold(1).subscribe(val => {
