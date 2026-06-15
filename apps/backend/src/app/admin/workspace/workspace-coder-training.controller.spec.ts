@@ -1,5 +1,9 @@
 import { WorkspaceCoderTrainingController } from './workspace-coder-training.controller';
-import { CoderTrainingService, CodingStatisticsService } from '../../database/services/coding';
+import {
+  CoderTrainingResultsApplyService,
+  CoderTrainingService,
+  CodingStatisticsService
+} from '../../database/services/coding';
 
 describe('WorkspaceCoderTrainingController', () => {
   let controller: WorkspaceCoderTrainingController;
@@ -12,6 +16,10 @@ describe('WorkspaceCoderTrainingController', () => {
     calculateCohensKappa: jest.Mock;
     calculateKappaVariableSummary: jest.Mock;
   };
+  let coderTrainingResultsApplyService: {
+    previewTrainingDiscussionResults: jest.Mock;
+    applyTrainingDiscussionResults: jest.Mock;
+  };
 
   beforeEach(() => {
     coderTrainingService = {
@@ -23,10 +31,15 @@ describe('WorkspaceCoderTrainingController', () => {
       calculateCohensKappa: jest.fn(),
       calculateKappaVariableSummary: jest.fn()
     };
+    coderTrainingResultsApplyService = {
+      previewTrainingDiscussionResults: jest.fn(),
+      applyTrainingDiscussionResults: jest.fn()
+    };
 
     controller = new WorkspaceCoderTrainingController(
       coderTrainingService as unknown as CoderTrainingService,
-      codingStatisticsService as unknown as CodingStatisticsService
+      codingStatisticsService as unknown as CodingStatisticsService,
+      coderTrainingResultsApplyService as unknown as CoderTrainingResultsApplyService
     );
   });
 
@@ -193,5 +206,72 @@ describe('WorkspaceCoderTrainingController', () => {
       'Replay note'
     );
     expect(result.notes).toBe('Replay note');
+  });
+
+  it('forwards discussion apply preview requests to the service', async () => {
+    coderTrainingResultsApplyService.previewTrainingDiscussionResults.mockResolvedValue({
+      trainingId: 5,
+      source: 'manual',
+      totalTrainingResponses: 1,
+      sourceResultsCount: 1,
+      applicableResultsCount: 1,
+      missingResultsCount: 0,
+      missingScoreCount: 0,
+      existingFinalResultsCount: 0,
+      productiveJobConflictCount: 0,
+      removableProductiveJobUnitCount: 0,
+      blockingProductiveJobUnitCount: 0,
+      approvedJobDefinitionConflictCount: 0,
+      staleTrainingJobCount: 0,
+      affectedJobIds: [],
+      affectedJobDefinitionIds: [],
+      canApply: true
+    });
+
+    const result = await controller.previewApplyDiscussionResults(12, 5, 'manual');
+
+    expect(coderTrainingResultsApplyService.previewTrainingDiscussionResults)
+      .toHaveBeenCalledWith(12, 5, 'manual');
+    expect(result.applicableResultsCount).toBe(1);
+  });
+
+  it('forwards discussion apply requests to the service', async () => {
+    coderTrainingResultsApplyService.applyTrainingDiscussionResults.mockResolvedValue({
+      success: true,
+      trainingId: 5,
+      source: 'auto_agreement',
+      totalTrainingResponses: 1,
+      sourceResultsCount: 1,
+      applicableResultsCount: 1,
+      missingResultsCount: 0,
+      missingScoreCount: 0,
+      existingFinalResultsCount: 0,
+      productiveJobConflictCount: 0,
+      removableProductiveJobUnitCount: 0,
+      blockingProductiveJobUnitCount: 0,
+      approvedJobDefinitionConflictCount: 0,
+      staleTrainingJobCount: 0,
+      affectedJobIds: [],
+      affectedJobDefinitionIds: [],
+      canApply: true,
+      updatedResponsesCount: 1,
+      skippedExistingResultsCount: 0,
+      overwrittenExistingResultsCount: 0,
+      skippedJobConflictCount: 0,
+      skippedMissingScoreCount: 0,
+      removedJobUnitCount: 0,
+      messageKey: 'coding.trainings.apply.success'
+    });
+
+    const body = {
+      source: 'auto_agreement' as const,
+      existingResultStrategy: 'skip' as const,
+      jobConflictStrategy: 'removeFromJobs' as const
+    };
+    const result = await controller.applyDiscussionResults(12, 5, body);
+
+    expect(coderTrainingResultsApplyService.applyTrainingDiscussionResults)
+      .toHaveBeenCalledWith(12, 5, body);
+    expect(result.updatedResponsesCount).toBe(1);
   });
 });

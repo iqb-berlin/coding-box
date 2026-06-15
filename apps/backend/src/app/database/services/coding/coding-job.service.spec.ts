@@ -77,6 +77,15 @@ const expectManualCodingCandidateStatusFilter = (
   expect(statuses).not.toContain(statusStringToNumber('DERIVE_ERROR'));
 };
 
+const expectCompletedV2Filter = (
+  qb: Record<string, jest.Mock>
+) => {
+  expect(qb.andWhere).toHaveBeenCalledWith(
+    '(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)',
+    { completedV2Status: statusStringToNumber('CODING_COMPLETE') }
+  );
+};
+
 describe('CodingJobService', () => {
   let service: CodingJobService;
   let codingJobRepository: ReturnType<typeof createRepo>;
@@ -1698,6 +1707,49 @@ describe('CodingJobService', () => {
     );
   });
 
+  it('locks workspace test-result mutations before selecting direct coding-job units', async () => {
+    const transactionManager = {
+      query: jest.fn().mockResolvedValue([]),
+      getRepository: (entity: unknown) => {
+        if (entity === CodingJob) return codingJobRepository;
+        if (entity === CodingJobCoder) return codingJobCoderRepository;
+        if (entity === CodingJobVariable) return codingJobVariableRepository;
+        if (entity === CodingJobVariableBundle) return codingJobVariableBundleRepository;
+        if (entity === CodingJobUnit) return codingJobUnitRepository;
+        if (entity === JobDefinition) return jobDefinitionRepository;
+        if (entity === VariableBundle) return variableBundleRepository;
+        if (entity === ResponseEntity) return responseRepository;
+        return createRepo();
+      }
+    };
+    connection.transaction.mockImplementationOnce(callback => (
+      callback(transactionManager)
+    ));
+    const qb = createQueryBuilder([]);
+    responseRepository.createQueryBuilder.mockReturnValue(qb);
+    codingJobRepository.save.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobVariableRepository.find.mockResolvedValue([
+      { unit_name: 'UNIT', variable_id: 'VAR' }
+    ]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+
+    await service.createCodingJob(3, {
+      name: 'Direct job',
+      variables: [{ unitName: 'UNIT', variableId: 'VAR' }]
+    } as never);
+
+    expect(transactionManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+      [expect.any(Number), 3]
+    );
+    expect(
+      transactionManager.query.mock.invocationCallOrder[0]
+    ).toBeLessThan(
+      responseRepository.createQueryBuilder.mock.invocationCallOrder[0]
+    );
+  });
+
   it('loads one coding job and expands bundle variables', async () => {
     codingJobRepository.findOne.mockResolvedValue({ id: 12, workspace_id: 3 });
     codingJobCoderRepository.find.mockResolvedValue([{ user_id: 4 }]);
@@ -2136,6 +2188,7 @@ describe('CodingJobService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith(
       '(response.code_v2 IS NULL OR response.code_v2 != -111)'
     );
+    expectCompletedV2Filter(qb);
   });
 
   it('does not include DERIVE_ERROR responses in coding-job variable selection', async () => {
@@ -2223,6 +2276,7 @@ describe('CodingJobService', () => {
     } as never);
 
     expectManualCodingCandidateStatusFilter(qb);
+    expectCompletedV2Filter(qb);
   });
 
   it('counts DERIVE_ERROR distribution cases only for variables with job-definition opt-in', () => {
@@ -3237,6 +3291,7 @@ describe('CodingJobService', () => {
     } as never);
 
     expect(codingJobUnitRepository.findOne).toHaveBeenCalledWith({
+      lock: { mode: 'pessimistic_write' },
       where: expect.objectContaining({
         person_login: 'login',
         person_code: 'code',
@@ -3272,6 +3327,15 @@ describe('CodingJobService', () => {
       notes: ' remember '
     });
 
+    expect(codingJobUnitRepository.findOne).toHaveBeenCalledWith({
+      lock: { mode: 'pessimistic_write' },
+      where: expect.objectContaining({
+        person_login: 'login',
+        person_code: 'code',
+        person_group: 'group',
+        booklet_name: 'booklet'
+      })
+    });
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         notes: 'remember',

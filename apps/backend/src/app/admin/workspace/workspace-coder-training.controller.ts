@@ -21,15 +21,27 @@ import { Request } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CoderTrainingService, CodingStatisticsService } from '../../database/services/coding';
+import {
+  CoderTrainingResultsApplyService,
+  CoderTrainingService,
+  CodingStatisticsService
+} from '../../database/services/coding';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../database/entities/job-definition.entity';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
+import {
+  ApplyTrainingDiscussionResultsRequestDto,
+  ApplyTrainingDiscussionResultsResultDto,
+  TrainingDiscussionApplyPreviewDto,
+  TrainingDiscussionApplySource
+} from '../../../../../../api-dto/coding/training-discussion-apply.dto';
 
 @ApiTags('Admin Workspace Coder Training')
 @Controller('admin/workspace')
 export class WorkspaceCoderTrainingController {
   constructor(
     private coderTrainingService: CoderTrainingService,
-    private codingStatisticsService: CodingStatisticsService
+    private codingStatisticsService: CodingStatisticsService,
+    private coderTrainingResultsApplyService: CoderTrainingResultsApplyService
   ) { }
 
   private getTrainingKappaVariableKey(unitName: string, variableId: string): string {
@@ -662,6 +674,84 @@ export class WorkspaceCoderTrainingController {
       managerName,
       body.code,
       body.notes
+    );
+  }
+
+  @Post(':workspace_id/coding/coder-trainings/:trainingId/apply-discussion-results-preview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'trainingId',
+    type: Number,
+    description: 'ID of the coder training'
+  })
+  @ApiBody({
+    description: 'Preview applying training discussion results to final v2 response results.',
+    schema: {
+      type: 'object',
+      properties: {
+        source: {
+          type: 'string',
+          enum: ['manual', 'auto_agreement']
+        }
+      },
+      required: ['source']
+    }
+  })
+  async previewApplyDiscussionResults(
+    @WorkspaceId() workspace_id: number,
+      @Param('trainingId') trainingId: number,
+      @Body('source') source: TrainingDiscussionApplySource
+  ): Promise<TrainingDiscussionApplyPreviewDto> {
+    return this.coderTrainingResultsApplyService.previewTrainingDiscussionResults(
+      workspace_id,
+      Number(trainingId),
+      source
+    );
+  }
+
+  @Post(':workspace_id/coding/coder-trainings/:trainingId/apply-discussion-results')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'trainingId',
+    type: Number,
+    description: 'ID of the coder training'
+  })
+  @ApiBody({
+    description: 'Apply training discussion results to final v2 response results.',
+    schema: {
+      type: 'object',
+      properties: {
+        source: {
+          type: 'string',
+          enum: ['manual', 'auto_agreement']
+        },
+        existingResultStrategy: {
+          type: 'string',
+          enum: ['skip', 'overwrite']
+        },
+        jobConflictStrategy: {
+          type: 'string',
+          enum: ['skip', 'removeFromJobs']
+        }
+      },
+      required: ['source']
+    }
+  })
+  async applyDiscussionResults(
+    @WorkspaceId() workspace_id: number,
+      @Param('trainingId') trainingId: number,
+      @Body() body: ApplyTrainingDiscussionResultsRequestDto
+  ): Promise<ApplyTrainingDiscussionResultsResultDto> {
+    return this.coderTrainingResultsApplyService.applyTrainingDiscussionResults(
+      workspace_id,
+      Number(trainingId),
+      body
     );
   }
 
