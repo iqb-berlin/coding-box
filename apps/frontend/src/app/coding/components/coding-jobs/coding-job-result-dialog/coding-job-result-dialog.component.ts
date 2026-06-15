@@ -93,6 +93,11 @@ interface ResolvedMissingPreview {
   label?: string;
 }
 
+interface MissingPreviewLookup {
+  byIssueOption: Map<number, ResolvedMissingPreview>;
+  byCode: Map<number, ResolvedMissingPreview>;
+}
+
 @Component({
   selector: 'coding-box-coding-job-result-dialog',
   templateUrl: './coding-job-result-dialog.component.html',
@@ -227,12 +232,12 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       next: ({
         units, progress, notes, missingProfile
       }) => {
-        const manualMissingLookup = this.getManualMissingLookup(missingProfile);
+        const missingPreviewLookup = this.getMissingPreviewLookup(missingProfile);
         this.dataSource.data = (units || []).map(unit => this.mapCodingResult(
           unit as CodingJobUnitResult,
           progress as Record<string, CodingProgressEntry>,
           notes as Record<string, string>,
-          manualMissingLookup
+          missingPreviewLookup
         ));
         this.isMissingProfileUnavailable = this.getUnresolvedMissingCount() > 0;
         this.applyFilters();
@@ -249,19 +254,19 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     unit: CodingJobUnitResult,
     progressResult: Record<string, CodingProgressEntry>,
     notesResult: Record<string, string>,
-    manualMissingLookup: Map<number, ResolvedMissingPreview>
+    missingPreviewLookup: MissingPreviewLookup
   ): CodingResult {
     const progressKey = this.getCodingProgressKey(unit);
     const progress = progressResult[progressKey];
     const notes = notesResult ? notesResult[progressKey] : undefined;
-    const mappedCode = this.getMappedResultCode(progress, manualMissingLookup);
-    const mappedScore = this.getMappedResultScore(progress, manualMissingLookup);
+    const mappedCode = this.getMappedResultCode(progress, missingPreviewLookup);
+    const mappedScore = this.getMappedResultScore(progress, missingPreviewLookup);
     const reviewIssueOption = this.getReviewIssueOption(progress);
     const testPerson = this.getTestPersonLabel(unit);
     const otherCoders = (unit.otherCoders || []).filter(Boolean);
     const progressCode = this.toNumericCode(progress?.id);
-    const missingPreview = progressCode === null ? undefined : manualMissingLookup.get(progressCode);
-    const unresolvedMissing = this.isManualMissingIssueOption(progressCode) && !missingPreview;
+    const missingPreview = this.getMissingPreviewForProgressCode(progressCode, missingPreviewLookup);
+    const unresolvedMissing = this.isMissingProgressCode(progressCode) && !missingPreview;
 
     return {
       unitName: unit.unitName,
@@ -318,18 +323,28 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return Object.assign(new MissingsProfilesDto(), profile);
   }
 
-  private getManualMissingLookup(profile: MissingsProfilesDto | null): Map<number, ResolvedMissingPreview> {
-    const lookup = new Map<number, ResolvedMissingPreview>();
+  private getMissingPreviewLookup(profile: MissingsProfilesDto | null): MissingPreviewLookup {
+    const lookup: MissingPreviewLookup = {
+      byIssueOption: new Map<number, ResolvedMissingPreview>(),
+      byCode: new Map<number, ResolvedMissingPreview>()
+    };
     if (!profile) {
       return lookup;
     }
 
     const missings = this.toMissingProfileDto(profile).parseMissings();
+    missings.forEach(missing => {
+      const resolved = this.toResolvedMissingPreview(missing);
+      if (resolved) {
+        lookup.byCode.set(resolved.code, resolved);
+      }
+    });
+
     this.manualMissingIdsByIssueOptionId.forEach((missingId, issueOptionId) => {
       const missing = missings.find(entry => entry.id === missingId);
       const resolved = this.toResolvedMissingPreview(missing);
       if (resolved) {
-        lookup.set(issueOptionId, resolved);
+        lookup.byIssueOption.set(issueOptionId, resolved);
       }
     });
 
@@ -740,13 +755,14 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   private getMappedResultCode(
     progress: CodingProgressEntry | undefined,
-    manualMissingLookup: Map<number, ResolvedMissingPreview>
+    missingPreviewLookup: MissingPreviewLookup
   ): number | null {
     const code = this.toNumericCode(progress?.id);
-    if (code !== null && manualMissingLookup.has(code)) {
-      return manualMissingLookup.get(code)?.code ?? null;
+    const missingPreview = this.getMissingPreviewForProgressCode(code, missingPreviewLookup);
+    if (missingPreview) {
+      return missingPreview.code;
     }
-    if (this.isManualMissingIssueOption(code)) {
+    if (this.isMissingProgressCode(code)) {
       return null;
     }
     return code;
@@ -754,16 +770,44 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   private getMappedResultScore(
     progress: CodingProgressEntry | undefined,
-    manualMissingLookup: Map<number, ResolvedMissingPreview>
+    missingPreviewLookup: MissingPreviewLookup
   ): number | undefined {
     const code = this.toNumericCode(progress?.id);
-    if (code !== null && manualMissingLookup.has(code)) {
-      return manualMissingLookup.get(code)?.score;
+    const missingPreview = this.getMissingPreviewForProgressCode(code, missingPreviewLookup);
+    if (missingPreview) {
+      return missingPreview.score;
     }
-    if (this.isManualMissingIssueOption(code)) {
+    if (this.isMissingProgressCode(code)) {
       return undefined;
     }
     return progress?.score;
+  }
+
+  private getMissingPreviewForProgressCode(
+    code: number | null,
+    missingPreviewLookup: MissingPreviewLookup
+  ): ResolvedMissingPreview | undefined {
+    if (code === null) {
+      return undefined;
+    }
+
+    if (this.isManualMissingIssueOption(code)) {
+      return missingPreviewLookup.byIssueOption.get(code);
+    }
+
+    if (this.isProfileMissingCode(code)) {
+      return missingPreviewLookup.byCode.get(code);
+    }
+
+    return undefined;
+  }
+
+  private isMissingProgressCode(code: number | null): boolean {
+    return this.isManualMissingIssueOption(code) || this.isProfileMissingCode(code);
+  }
+
+  private isProfileMissingCode(code: number | null): boolean {
+    return code !== null && code < 0 && code !== -1 && code !== -2;
   }
 
   private isManualMissingIssueOption(code: number | null): boolean {

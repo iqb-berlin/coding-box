@@ -285,6 +285,69 @@ describe('CodingJobResultDialogComponent', () => {
     expect(component.getCodedResultCount()).toBe(1);
   });
 
+  it('should resolve already stored profile missing codes from the coding job missing profile', () => {
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      status: 'completed',
+      missings_profile_id: 77
+    };
+    mockMissingsProfileService.getMissingsProfileDetails.mockReturnValue(of({
+      id: 77,
+      label: 'Custom',
+      missings: JSON.stringify([
+        {
+          id: 'mir',
+          label: 'Custom MIR',
+          description: '',
+          code: -123,
+          score: 7
+        },
+        {
+          id: 'mci',
+          label: 'Custom MCI',
+          description: '',
+          code: -124,
+          score: 8
+        },
+        {
+          id: 'mbi_mbo',
+          label: 'Custom omission',
+          description: '',
+          code: -99,
+          score: 4
+        }
+      ])
+    }));
+    mockCodingJobBackendService.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'UNIT_1',
+      unitAlias: 'UNIT_1',
+      variableId: 'VAR_1',
+      variableAnchor: 'VAR_1',
+      bookletName: 'BOOKLET_A',
+      personLogin: 'login',
+      personCode: 'code',
+      personGroup: 'group',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+    mockCodingJobBackendService.getCodingProgress.mockReturnValue(of({
+      'login@code@group@BOOKLET_A::BOOKLET_A::UNIT_1::VAR_1': {
+        id: -99
+      }
+    }));
+
+    component.loadCodingResults();
+
+    expect(component.dataSource.data[0]).toMatchObject({
+      code: -99,
+      score: 4,
+      codeLabel: 'Custom omission',
+      unresolvedMissing: false
+    });
+    expect(component.canApplyCodingResults()).toBe(true);
+  });
+
   it('should block applying results when a manual missing cannot be resolved from the profile', () => {
     component.data.codingJob = {
       ...component.data.codingJob,
@@ -331,6 +394,59 @@ describe('CodingJobResultDialogComponent', () => {
     expect(component.getCodeDisplay(result)).toBe('Missing nicht auflösbar');
     expect(component.canApplyCodingResults()).toBe(false);
     expect(component.getApplyButtonTooltip()).toContain('Missing-Kodierung');
+  });
+
+  it('should block applying results when an already stored profile missing code cannot be resolved', () => {
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      status: 'completed',
+      missings_profile_id: 77
+    };
+    mockMissingsProfileService.getMissingsProfileDetails.mockReturnValue(of({
+      id: 77,
+      label: 'Incomplete',
+      missings: JSON.stringify([
+        {
+          id: 'mir',
+          label: 'Custom MIR',
+          description: '',
+          code: -123,
+          score: 7
+        },
+        {
+          id: 'mci',
+          label: 'Custom MCI',
+          description: '',
+          code: -124,
+          score: 8
+        }
+      ])
+    }));
+    mockCodingJobBackendService.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'UNIT_1',
+      unitAlias: 'UNIT_1',
+      variableId: 'VAR_1',
+      variableAnchor: 'VAR_1',
+      bookletName: 'BOOKLET_A',
+      personLogin: 'login',
+      personCode: 'code',
+      personGroup: 'group',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+    mockCodingJobBackendService.getCodingProgress.mockReturnValue(of({
+      'login@code@group@BOOKLET_A::BOOKLET_A::UNIT_1::VAR_1': {
+        id: -99
+      }
+    }));
+
+    component.loadCodingResults();
+
+    const result = component.dataSource.data[0];
+    expect(result.unresolvedMissing).toBe(true);
+    expect(component.getCodeDisplay(result)).toBe('Missing nicht auflösbar');
+    expect(component.canApplyCodingResults()).toBe(false);
   });
 
   it.each([

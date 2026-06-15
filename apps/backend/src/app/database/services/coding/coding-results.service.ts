@@ -31,6 +31,12 @@ export interface ApplyCodingResultsResult {
   messageParams?: Record<string, unknown>;
 }
 
+interface ExistingV2State {
+  status: number | null;
+  code: number | null;
+  score: number | null;
+}
+
 @Injectable()
 export class CodingResultsService {
   private readonly logger = new Logger(CodingResultsService.name);
@@ -102,7 +108,7 @@ export class CodingResultsService {
       const codingJobUnits = await this.codingJobService.getCodingJobUnits(codingJobId);
       const codingProgress = await this.codingJobService.getCodingProgress(codingJobId);
       const directResponseIds = Array.from(new Set(codingJobUnits.map(unit => unit.responseId)));
-      const existingV2StatusByResponseId = await this.getExistingV2StatusByResponseId(directResponseIds);
+      const existingV2StateByResponseId = await this.getExistingV2StateByResponseId(directResponseIds);
       const resolvedIssueReviewResponseIds = new Set(
         await this.codingJobService.getResolvedCodingIssueReviewResponseIds(codingJobId)
       );
@@ -165,8 +171,8 @@ export class CodingResultsService {
           continue;
         }
 
-        const existingStatusV2 = existingV2StatusByResponseId.get(unit.responseId);
-        if (existingStatusV2 === completedStatus) {
+        const existingV2State = existingV2StateByResponseId.get(unit.responseId);
+        if (this.hasExistingV2Value(existingV2State)) {
           if (!overwriteExisting) {
             skippedAlreadyCodedCount += 1;
             continue;
@@ -192,6 +198,14 @@ export class CodingResultsService {
               workspaceId,
               codingJob.missings_profile_id,
               missingId
+            );
+            code = missing.code;
+            score = missing.score;
+          } else if (progress.id < 0) {
+            const missing = await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
+              workspaceId,
+              codingJob.missings_profile_id,
+              progress.id
             );
             code = missing.code;
             score = missing.score;
@@ -554,14 +568,27 @@ export class CodingResultsService {
     this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }
 
-  private async getExistingV2StatusByResponseId(responseIds: number[]): Promise<Map<number, number | null>> {
+  private hasExistingV2Value(state: ExistingV2State | undefined): boolean {
+    return state !== undefined &&
+      (
+        state.status !== null ||
+        state.code !== null ||
+        state.score !== null
+      );
+  }
+
+  private async getExistingV2StateByResponseId(responseIds: number[]): Promise<Map<number, ExistingV2State>> {
     if (responseIds.length === 0) {
       return new Map();
     }
 
     const rows = await this.responseRepository.manager.query(
       `
-        SELECT id, status_v2 as "statusV2"
+        SELECT
+          id,
+          status_v2 as "statusV2",
+          code_v2 as "codeV2",
+          score_v2 as "scoreV2"
         FROM response
         WHERE id = ANY($1::int[])
       `,
@@ -570,7 +597,11 @@ export class CodingResultsService {
 
     return new Map(rows.map(row => [
       Number(row.id),
-      row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2)
+      {
+        status: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
+        code: row.codeV2 === null || row.codeV2 === undefined ? null : Number(row.codeV2),
+        score: row.scoreV2 === null || row.scoreV2 === undefined ? null : Number(row.scoreV2)
+      }
     ]));
   }
 
