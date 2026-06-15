@@ -97,6 +97,7 @@ interface CodingSchemeCode {
   code?: string;
   label?: string;
   score?: number;
+  manualInstruction?: string | null;
 }
 
 interface CodingSchemeVariableCoding {
@@ -3742,6 +3743,11 @@ export class CodingJobService {
       workspaceId,
       selectedCode.id
     );
+    if (!this.hasManualInstruction(schemeCode)) {
+      throw new BadRequestException(
+        `Code is not available for manual coding: ${selectedCode.id}`
+      );
+    }
     selectedCode.score = schemeCode.score ?? null;
 
     if (
@@ -3755,6 +3761,10 @@ export class CodingJobService {
     }
 
     return selectedCode;
+  }
+
+  private hasManualInstruction(code: { manualInstruction?: string | null }): boolean {
+    return !!code.manualInstruction?.trim();
   }
 
   async getCodingSchemeScoreForUnitCode(
