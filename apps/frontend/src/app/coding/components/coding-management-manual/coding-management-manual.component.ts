@@ -203,6 +203,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     'completion'
   ];
 
+  private readonly manualCodingTabsWithoutCompletion: ManualCodingTab[] = [
+    'preparation',
+    'planning',
+    'training',
+    'execution'
+  ];
+
   // Granular loading states
   isLoadingVariableCoverage = false;
   isLoadingCaseCoverage = false;
@@ -496,7 +503,32 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   get activeManualTab(): ManualCodingTab {
-    return this.manualCodingTabs[this.selectedManualTabIndex] || 'preparation';
+    return this.visibleManualCodingTabs[this.selectedManualTabIndex] || 'preparation';
+  }
+
+  get visibleManualCodingTabs(): ManualCodingTab[] {
+    if (this.canShowManualCompletionTab()) {
+      return this.manualCodingTabs;
+    }
+
+    return this.manualCodingTabsWithoutCompletion;
+  }
+
+  getManualTabLabel(tab: ManualCodingTab): string {
+    switch (tab) {
+      case 'preparation':
+        return 'Vorbereitung';
+      case 'planning':
+        return 'Planung';
+      case 'training':
+        return 'Schulung';
+      case 'execution':
+        return 'Durchführung';
+      case 'completion':
+        return 'Abschluss';
+      default:
+        return '';
+    }
   }
 
   isManualTab(tab: ManualCodingTab): boolean {
@@ -513,7 +545,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   goToManualTab(tab: ManualCodingTab, sectionId?: string): void {
-    const tabIndex = this.manualCodingTabs.indexOf(tab);
+    const tabIndex = this.visibleManualCodingTabs.indexOf(tab);
     if (tabIndex < 0) {
       return;
     }
@@ -1844,7 +1876,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'execution-ready':
         return 'Bereit für die Durchführung';
       case 'completion-ready':
-        return 'Bereit für den Abschluss';
+        return this.canShowManualCompletionTab() ?
+          'Bereit für den Abschluss' :
+          'Kodierfälle abgeschlossen';
       case 'progress-unavailable':
         return 'Kodierfortschritt nicht verfügbar';
       case 'complete':
@@ -1896,7 +1930,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         !!this.appliedResultsOverview &&
         this.hasManualCodingProgressScope() &&
         !this.hasExecutionOpenWork()) {
-      return 'Alle Kodierfälle sind abgeschlossen. Übernehmen Sie nun die Kodierergebnisse in den Datenbestand.';
+      return this.canShowManualCompletionTab() ?
+        'Alle Kodierfälle sind abgeschlossen. Übernehmen Sie nun die Kodierergebnisse in den Datenbestand.' :
+        'Alle Kodierfälle sind abgeschlossen. Die Übernahme der Ergebnisse in den Datenbestand bleibt Studienmanager:innen vorbehalten.';
     }
 
     return 'Prüfen Sie die Antwortanalyse und erstellen Sie danach passende Kodierjob-Definitionen.';
@@ -1915,7 +1951,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'execution-ready':
         return 'Kodierjobs bearbeiten lassen';
       case 'completion-ready':
-        return 'Ergebnisse übernehmen';
+        return this.canShowManualCompletionTab() ?
+          'Ergebnisse übernehmen' :
+          'Kodierjobs prüfen';
       case 'complete':
         return 'Workflow abgeschlossen';
       case 'progress-unavailable':
@@ -1948,7 +1986,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'execution-ready':
         return 'Die Fälle sind verteilt. Kodierer können nun ihre zugewiesenen Kodierjobs bearbeiten.';
       case 'completion-ready':
-        return 'Alle Kodierfälle sind bearbeitet. Übernehmen Sie jetzt die abgeschlossenen Ergebnisse in den Datenbestand.';
+        return this.canShowManualCompletionTab() ?
+          'Alle Kodierfälle sind bearbeitet. Übernehmen Sie jetzt die abgeschlossenen Ergebnisse in den Datenbestand.' :
+          'Alle Kodierfälle sind bearbeitet. Sie können die abgeschlossenen Kodierjobs in der Durchführung einsehen.';
       case 'complete':
         return 'Alle manuellen Kodierungen wurden abgeschlossen und übernommen.';
       case 'progress-unavailable':
@@ -1967,9 +2007,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'execution-ready':
         return 'Zu den Kodierjobs';
       case 'completion-ready':
-        return 'Zum Abschluss';
+        return this.canShowManualCompletionTab() ? 'Zum Abschluss' : 'Zu den Kodierjobs';
       case 'complete':
-        return 'Abschluss ansehen';
+        return this.canShowManualCompletionTab() ? 'Abschluss ansehen' : 'Zu den Kodierjobs';
       case 'loading':
       case 'progress-unavailable':
         return 'Aktualisieren';
@@ -1988,7 +2028,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return 'manual-execution';
       case 'completion-ready':
       case 'complete':
-        return 'manual-completion';
+        return this.canShowManualCompletionTab() ? 'manual-completion' : 'manual-execution';
       default:
         return 'manual-planning';
     }
@@ -2000,7 +2040,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return 'execution';
       case 'completion-ready':
       case 'complete':
-        return 'completion';
+        return this.canShowManualCompletionTab() ? 'completion' : 'execution';
       default:
         return 'planning';
     }
@@ -2194,6 +2234,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     tab: ManualCodingTab,
     options: { reloadCodingJobs?: boolean } = {}
   ): void {
+    if (!this.isManualTabAvailable(tab)) {
+      return;
+    }
+
     const reloadCodingJobs = options.reloadCodingJobs ?? true;
     switch (tab) {
       case 'preparation':
@@ -2249,8 +2293,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const userId = this.appService.authData.userId;
 
     if (this.appService.authData.isAdmin || !workspaceId || userId <= 0) {
+      const activeTab = this.activeManualTab;
       this.canApplyManualCodingResults = this.appService.authData.isAdmin === true;
       this.canManageManualCodingJobs = this.appService.authData.isAdmin === true;
+      this.keepAvailableManualTabSelected(activeTab);
       return;
     }
 
@@ -2259,16 +2305,39 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: users => {
+          const activeTab = this.activeManualTab;
           const currentUser = users.find(user => user.id === userId);
           const accessLevel = currentUser?.accessLevel ?? 0;
           this.canManageManualCodingJobs = accessLevel >= 2;
           this.canApplyManualCodingResults = accessLevel >= 3;
+          this.keepAvailableManualTabSelected(activeTab);
         },
         error: () => {
+          const activeTab = this.activeManualTab;
           this.canManageManualCodingJobs = false;
           this.canApplyManualCodingResults = false;
+          this.keepAvailableManualTabSelected(activeTab);
         }
       });
+  }
+
+  private canShowManualCompletionTab(): boolean {
+    return this.canApplyManualCodingResults;
+  }
+
+  private isManualTabAvailable(tab: ManualCodingTab): boolean {
+    return this.visibleManualCodingTabs.includes(tab);
+  }
+
+  private keepAvailableManualTabSelected(previousActiveTab: ManualCodingTab): void {
+    if (this.isManualTabAvailable(previousActiveTab)) {
+      this.selectedManualTabIndex = this.visibleManualCodingTabs.indexOf(previousActiveTab);
+      return;
+    }
+
+    const executionTabIndex = this.visibleManualCodingTabs.indexOf('execution');
+    this.selectedManualTabIndex = executionTabIndex >= 0 ? executionTabIndex : 0;
+    this.loadManualTabData(this.activeManualTab);
   }
 
   private loadJobDefinitionsForExport(): void {

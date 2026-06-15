@@ -130,11 +130,10 @@
         [selectedIndex]="selectedManualTabIndex"
         (selectedIndexChange)="onManualTabChanged($event)"
       >
-        <mat-tab label="Vorbereitung"></mat-tab>
-        <mat-tab label="Planung"></mat-tab>
-        <mat-tab label="Schulung"></mat-tab>
-        <mat-tab label="Durchführung"></mat-tab>
-        <mat-tab label="Abschluss"></mat-tab>
+        <mat-tab
+          *ngFor="let tab of visibleManualCodingTabs"
+          [label]="getManualTabLabel(tab)"
+        ></mat-tab>
       </mat-tab-group>
 
       <div
