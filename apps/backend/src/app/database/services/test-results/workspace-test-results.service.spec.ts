@@ -865,9 +865,13 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
-    it('should reject invalid regex filters', async () => {
+    it('should convert PostgreSQL invalid regex errors into bad request errors', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockRejectedValue({
+        code: '2201B',
+        message: 'invalid regular expression: brackets [] not balanced'
+      });
 
       await expect(service.searchResponses(
         1,

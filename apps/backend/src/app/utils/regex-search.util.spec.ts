@@ -8,13 +8,12 @@ import {
 } from './regex-search.util';
 
 describe('regex-search.util', () => {
-  it('keeps JavaScript-valid patterns for query usage', () => {
+  it('keeps normalized patterns for PostgreSQL query usage', () => {
     expect(assertValidRegexSearchPattern('(?=A)A', 'variableId')).toBe('(?=A)A');
   });
 
-  it('returns a bad request exception for JavaScript-invalid patterns', () => {
-    expect(() => assertValidRegexSearchPattern('[', 'variableId'))
-      .toThrow(InvalidRegexSearchPatternException);
+  it('does not use JavaScript regex parsing for PostgreSQL patterns', () => {
+    expect(assertValidRegexSearchPattern('[', 'variableId')).toBe('[');
   });
 
   it('rejects patterns that exceed the configured length limit', () => {
