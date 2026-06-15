@@ -691,7 +691,8 @@ describe('CodingManagementManualComponent', () => {
     expect(component.canShowCompletedJobApplyActions()).toBe(true);
   });
 
-  it('should keep completed jobs visible as read-only without study-manager permission', () => {
+  it('should hide the completion tab without study-manager permission', () => {
+    component.canApplyManualCodingResults = false;
     component.selectedManualTabIndex = 4;
     setAppliedResults(5, 0, 5);
     component.completedJobsReadyForApply = [
@@ -711,23 +712,27 @@ describe('CodingManagementManualComponent', () => {
 
     fixture.detectChanges();
 
+    expect(component.visibleManualCodingTabs).not.toContain('completion');
+    expect(component.activeManualTab).toBe('preparation');
+
     const row = fixture.nativeElement.querySelector(
       '.completed-job-apply-row'
     ) as HTMLElement | null;
-    const applyButtons = Array.from(
-      fixture.nativeElement.querySelectorAll('.completed-job-apply-row button')
-    ) as HTMLButtonElement[];
-    const readonlyNote = fixture.nativeElement.querySelector(
-      '.completed-job-readonly-note'
-    ) as HTMLElement | null;
+    const pageText = fixture.nativeElement.textContent as string;
 
-    expect(row?.textContent).toContain('Job 1');
-    expect(row?.textContent).toContain('5/5 Ergebnisse kodiert');
-    expect(
-      applyButtons.some(button => button.textContent?.includes('Ergebnisse anwenden')
-      )
-    ).toBe(false);
-    expect(readonlyNote?.textContent).toContain('Nur lesbar');
+    expect(row).toBeNull();
+    expect(pageText).not.toContain('Abschluss');
+    expect(pageText).not.toContain('Job 1');
+  });
+
+  it('should keep the completion tab available with study-manager permission', () => {
+    component.canApplyManualCodingResults = true;
+
+    expect(component.visibleManualCodingTabs).toContain('completion');
+
+    component.goToManualTab('completion');
+
+    expect(component.activeManualTab).toBe('completion');
   });
 
   it('blocks transfer action without coding-manager permission', () => {
@@ -828,6 +833,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should describe completed coding with pending applied results as ready for completion', () => {
+    component.canApplyManualCodingResults = true;
     setCompletePlanningState();
     setCodingProgress(582, 582);
     setAppliedResults(581, 0, 581);
@@ -837,6 +843,28 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getPlanningStatusTitle()).toBe('Bereit für den Abschluss');
     expect(component.getPlanningStatusDescription()).toBe(
       'Alle Kodierfälle sind abgeschlossen. Übernehmen Sie nun die Kodierergebnisse in den Datenbestand.'
+    );
+    expect(component.getPlanningNextStepTitle()).toBe('Ergebnisse übernehmen');
+    expect(component.getPlanningNextStepDescription()).toBe(
+      'Alle Kodierfälle sind bearbeitet. Übernehmen Sie jetzt die abgeschlossenen Ergebnisse in den Datenbestand.'
+    );
+  });
+
+  it('should describe completed coding as read-only for coding managers', () => {
+    component.canApplyManualCodingResults = false;
+    setCompletePlanningState();
+    setCodingProgress(582, 582);
+    setAppliedResults(581, 0, 581);
+
+    expect(component.getPlanningStatusClass()).toBe('status-attention');
+    expect(component.getPlanningStatusIcon()).toBe('published_with_changes');
+    expect(component.getPlanningStatusTitle()).toBe('Kodierfälle abgeschlossen');
+    expect(component.getPlanningStatusDescription()).toBe(
+      'Alle Kodierfälle sind abgeschlossen. Die Übernahme der Ergebnisse in den Datenbestand bleibt Studienmanager:innen vorbehalten.'
+    );
+    expect(component.getPlanningNextStepTitle()).toBe('Kodierjobs prüfen');
+    expect(component.getPlanningNextStepDescription()).toBe(
+      'Alle Kodierfälle sind bearbeitet. Sie können die abgeschlossenen Kodierjobs in der Durchführung einsehen.'
     );
   });
 
@@ -1532,6 +1560,7 @@ describe('CodingManagementManualComponent', () => {
   it('should switch to the completion tab before scrolling to completion work', () => {
     jest.useFakeTimers();
     try {
+      component.canApplyManualCodingResults = true;
       setCompletePlanningState();
       setCodingProgress(582, 582);
       setAppliedResults(581, 0, 581);
@@ -1561,9 +1590,46 @@ describe('CodingManagementManualComponent', () => {
     }
   });
 
+  it('should keep coding managers away from the hidden completion tab', () => {
+    jest.useFakeTimers();
+    try {
+      component.canApplyManualCodingResults = false;
+      setCompletePlanningState();
+      setCodingProgress(582, 582);
+      setAppliedResults(581, 0, 581);
+      component.selectedManualTabIndex = 1;
+
+      const componentInternals = component as unknown as {
+        loadManualTabData(tab: 'execution'): void;
+      };
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      expect(component.visibleManualCodingTabs).not.toContain('completion');
+      expect(component.getPlanningNextStepTargetTab()).toBe('execution');
+      expect(component.getPlanningNextStepActionLabel()).toBe('Zu den Kodierjobs');
+
+      component.performPlanningNextStep();
+
+      expect(component.selectedManualTabIndex).toBe(3);
+      expect(loadManualTabDataSpy).toHaveBeenCalledWith('execution');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-execution');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('should switch from completion to execution when navigating to coding jobs', () => {
     jest.useFakeTimers();
     try {
+      component.canApplyManualCodingResults = true;
       component.selectedManualTabIndex = 4;
 
       const componentInternals = component as unknown as {
@@ -1682,6 +1748,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('shows aggregation savings in the completion overview as a positive count', () => {
+    component.canApplyManualCodingResults = true;
     component.selectedManualTabIndex = 4;
     setCompletePlanningState();
     setAppliedResults(543, 415, 128);
