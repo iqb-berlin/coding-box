@@ -197,40 +197,64 @@
       "
     >
       <div class="table-filters">
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('unitName')">
           <mat-label>Aufgabe</mat-label>
           <input
             matInput
             [(ngModel)]="tableFilters.unitName"
             (ngModelChange)="applyTableFilters()"
           />
+          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('unitName')">
+            {{ 'search-filter.invalid-regex' | translate }}
+          </mat-hint>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('variableId')">
           <mat-label>Variable</mat-label>
           <input
             matInput
             [(ngModel)]="tableFilters.variableId"
             (ngModelChange)="applyTableFilters()"
           />
+          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('variableId')">
+            {{ 'search-filter.invalid-regex' | translate }}
+          </mat-hint>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('personLogin')">
           <mat-label>Person Login</mat-label>
           <input
             matInput
             [(ngModel)]="tableFilters.personLogin"
             (ngModelChange)="applyTableFilters()"
           />
+          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('personLogin')">
+            {{ 'search-filter.invalid-regex' | translate }}
+          </mat-hint>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('personGroup')">
           <mat-label>Person Gruppe</mat-label>
           <input
             matInput
             [(ngModel)]="tableFilters.personGroup"
             (ngModelChange)="applyTableFilters()"
           />
+          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('personGroup')">
+            {{ 'search-filter.invalid-regex' | translate }}
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('bookletName')">
+          <mat-label>Testheft-Name</mat-label>
+          <input
+            matInput
+            [(ngModel)]="tableFilters.bookletName"
+            (ngModelChange)="applyTableFilters()"
+          />
+          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('bookletName')">
+            {{ 'search-filter.invalid-regex' | translate }}
+          </mat-hint>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
@@ -708,6 +732,7 @@
                 <div class="person-login">{{ comparison.personLogin || '-' }}</div>
                 <div class="person-code">{{ comparison.personCode || '-' }}</div>
                 <div class="person-group">{{ comparison.personGroup || '-' }}</div>
+                <div class="booklet-name">{{ comparison.bookletName || '-' }}</div>
               </div>
             </td>
           </ng-container>
