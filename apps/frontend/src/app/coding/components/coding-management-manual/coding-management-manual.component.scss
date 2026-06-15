@@ -641,6 +641,25 @@
       padding: 5px 8px;
     }
 
+    .manual-code-availability-toggle {
+      min-height: 28px;
+      height: auto;
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: #5f4217;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.2;
+
+      mat-icon {
+        color: currentColor;
+        margin-right: 2px;
+        font-size: 18px;
+        height: 18px;
+        width: 18px;
+      }
+    }
+
     &.status-attention {
       background-color: #fff8e1;
       border-color: rgba(255, 193, 7, 0.35);

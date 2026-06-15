@@ -346,6 +346,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   manualCodingScopeSummary: ManualCodingScopeSummary | null = null;
   manualCodeAvailabilityWarnings: ManualCodeAvailabilityWarningDto[] = [];
+  showAllManualCodeAvailabilityWarnings = false;
+  readonly manualCodeAvailabilityPreviewLimit = 5;
 
   statusDistribution: { [status: string]: number } = {};
   statusDistributionV2: { [status: string]: number } = {};
@@ -2106,8 +2108,41 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.manualCodeAvailabilityWarningCount > 0;
   }
 
+  get hiddenManualCodeAvailabilityWarningCount(): number {
+    return Math.max(
+      0,
+      this.manualCodeAvailabilityWarningCount -
+        this.manualCodeAvailabilityPreviewLimit
+    );
+  }
+
+  get hasHiddenManualCodeAvailabilityWarnings(): boolean {
+    return this.hiddenManualCodeAvailabilityWarningCount > 0;
+  }
+
   getManualCodeAvailabilityPreview(): ManualCodeAvailabilityWarningDto[] {
-    return this.manualCodeAvailabilityWarnings.slice(0, 5);
+    return this.manualCodeAvailabilityWarnings.slice(
+      0,
+      this.manualCodeAvailabilityPreviewLimit
+    );
+  }
+
+  getVisibleManualCodeAvailabilityWarnings(): ManualCodeAvailabilityWarningDto[] {
+    return this.showAllManualCodeAvailabilityWarnings ?
+      this.manualCodeAvailabilityWarnings :
+      this.getManualCodeAvailabilityPreview();
+  }
+
+  toggleManualCodeAvailabilityWarnings(): void {
+    this.showAllManualCodeAvailabilityWarnings =
+      !this.showAllManualCodeAvailabilityWarnings;
+  }
+
+  private setManualCodeAvailabilityWarnings(
+    warnings: ManualCodeAvailabilityWarningDto[]
+  ): void {
+    this.manualCodeAvailabilityWarnings = warnings;
+    this.showAllManualCodeAvailabilityWarnings = false;
   }
 
   get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -2683,7 +2718,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (!workspaceId) {
       this.codingIncompleteVariables = [];
       this.manualCodingScopeSummary = null;
-      this.manualCodeAvailabilityWarnings = [];
+      this.setManualCodeAvailabilityWarnings([]);
       this.isLoadingManualCodeAvailability = false;
       return;
     }
@@ -2733,10 +2768,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: result => {
-          this.manualCodeAvailabilityWarnings = result.warnings || [];
+          this.setManualCodeAvailabilityWarnings(result.warnings || []);
         },
         error: () => {
-          this.manualCodeAvailabilityWarnings = [];
+          this.setManualCodeAvailabilityWarnings([]);
         }
       });
   }

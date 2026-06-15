@@ -84,24 +84,34 @@
             class="manual-code-availability-list"
           >
             <span
-              *ngFor="let warning of getManualCodeAvailabilityPreview()"
+              *ngFor="let warning of getVisibleManualCodeAvailabilityWarnings()"
               class="manual-code-availability-chip"
             >
               {{ warning.unitName }} / {{ warning.variableId }}
             </span>
-            <span
-              *ngIf="
-                manualCodeAvailabilityWarningCount >
-                getManualCodeAvailabilityPreview().length
-              "
-              class="manual-code-availability-chip"
+            <button
+              *ngIf="hasHiddenManualCodeAvailabilityWarnings"
+              mat-button
+              type="button"
+              class="manual-code-availability-toggle"
+              [attr.aria-expanded]="showAllManualCodeAvailabilityWarnings"
+              (click)="toggleManualCodeAvailabilityWarnings()"
             >
-              +{{
-                manualCodeAvailabilityWarningCount -
-                  getManualCodeAvailabilityPreview().length
+              <mat-icon>{{
+                showAllManualCodeAvailabilityWarnings
+                  ? 'expand_less'
+                  : 'expand_more'
+              }}</mat-icon>
+              {{
+                showAllManualCodeAvailabilityWarnings
+                  ? ('coding-management-manual.buttons.show-fewer-manual-code-warnings'
+                    | translate)
+                  : ('coding-management-manual.buttons.show-more-manual-code-warnings'
+                    | translate: {
+                      count: hiddenManualCodeAvailabilityWarningCount
+                    })
               }}
-              weitere
-            </span>
+            </button>
           </div>
         </div>
       </div>
