@@ -227,7 +227,7 @@ describe('ReplayComponent', () => {
     expect(component.responses).toBeDefined();
   });
 
-  it('should apply suppress general instructions from query params', async () => {
+  it('should apply display options from query params', async () => {
     routeParams = {
       page: '0',
       testPerson: 'valid@test@person',
@@ -238,6 +238,8 @@ describe('ReplayComponent', () => {
       auth: 'valid-token',
       mode: 'coding',
       workspaceId: '47',
+      showScore: 'true',
+      allowComments: 'false',
       suppressGeneralInstructions: 'true'
     };
 
@@ -250,6 +252,8 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
+    expect(component.codingService.showScore).toBe(true);
+    expect(component.codingService.allowComments).toBe(false);
     expect(component.codingService.suppressGeneralInstructions).toBe(true);
   });
 
