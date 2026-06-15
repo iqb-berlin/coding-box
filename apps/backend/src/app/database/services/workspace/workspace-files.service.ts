@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  FindOperator, In, Like, Repository
+  FindOperator, In, Like, QueryRunner, Repository
 } from 'typeorm';
 import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
@@ -72,6 +72,10 @@ import {
   WorkspaceExclusionService
 } from './workspace-exclusion.service';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
+import {
+  assertValidRegexSearchPattern,
+  withRegexSearchStatementTimeout
+} from '../../../utils/regex-search.util';
 
 type WorkspaceUnitVisibility = {
   globalIgnoredUnits: Set<string>;
@@ -554,6 +558,7 @@ export class WorkspaceFilesService implements OnModuleInit {
       fileType?: string;
       fileSize?: string;
       searchText?: string;
+      regexSearch?: boolean;
     }
   ): Promise<[FilesDto[], number, string[]]> {
     this.logger.log(`Fetching test files for workspace: ${workspaceId}`);
@@ -562,92 +567,116 @@ export class WorkspaceFilesService implements OnModuleInit {
       limit = 20,
       fileType,
       fileSize,
-      searchText
+      searchText,
+      regexSearch
     } = options || {};
     const MAX_LIMIT = 10000;
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
-    let qb = this.fileUploadRepository
-      .createQueryBuilder('file')
-      .where('file.workspace_id = :workspaceId', { workspaceId });
+    const runFindFiles = async (
+      queryRunner?: QueryRunner
+    ): Promise<[FilesDto[], number, string[]]> => {
+      let qb = this.fileUploadRepository
+        .createQueryBuilder('file', queryRunner)
+        .where('file.workspace_id = :workspaceId', { workspaceId });
 
-    if (fileType) {
-      const resourceExtension = this.getResourceSubtypeExtension(fileType);
-      if (resourceExtension) {
-        qb = qb
-          .andWhere('file.file_type = :fileType', {
-            fileType: this.resourceTypeLabel
-          })
-          .andWhere('LOWER(file.filename) LIKE :extension', {
-            extension: `%${resourceExtension}`
-          });
-      } else {
-        qb = qb.andWhere('file.file_type = :fileType', { fileType });
+      if (fileType) {
+        const resourceExtension = this.getResourceSubtypeExtension(fileType);
+        if (resourceExtension) {
+          qb = qb
+            .andWhere('file.file_type = :fileType', {
+              fileType: this.resourceTypeLabel
+            })
+            .andWhere('LOWER(file.filename) LIKE :extension', {
+              extension: `%${resourceExtension}`
+            });
+        } else {
+          qb = qb.andWhere('file.file_type = :fileType', { fileType });
+        }
       }
-    }
 
-    if (fileSize) {
-      const KB = 1024;
-      const MB = 1024 * KB;
-      // eslint-disable-next-line default-case
-      switch (fileSize) {
-        case '0-10KB':
-          qb = qb.andWhere('file.file_size < :max', { max: 10 * KB });
-          break;
-        case '10KB-100KB':
-          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
-            min: 10 * KB,
-            max: 100 * KB
-          });
-          break;
-        case '100KB-1MB':
-          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
-            min: 100 * KB,
-            max: MB
-          });
-          break;
-        case '1MB-10MB':
-          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
-            min: MB,
-            max: 10 * MB
-          });
-          break;
-        case '10MB+':
-          qb = qb.andWhere('file.file_size >= :min', { min: 10 * MB });
-          break;
+      if (fileSize) {
+        const KB = 1024;
+        const MB = 1024 * KB;
+        // eslint-disable-next-line default-case
+        switch (fileSize) {
+          case '0-10KB':
+            qb = qb.andWhere('file.file_size < :max', { max: 10 * KB });
+            break;
+          case '10KB-100KB':
+            qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
+              min: 10 * KB,
+              max: 100 * KB
+            });
+            break;
+          case '100KB-1MB':
+            qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
+              min: 100 * KB,
+              max: MB
+            });
+            break;
+          case '1MB-10MB':
+            qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', {
+              min: MB,
+              max: 10 * MB
+            });
+            break;
+          case '10MB+':
+            qb = qb.andWhere('file.file_size >= :min', { min: 10 * MB });
+            break;
+        }
       }
-    }
 
-    if (searchText) {
-      const search = `%${searchText.toLowerCase()}%`;
-      qb = qb.andWhere(
-        "(LOWER(file.filename) LIKE :search OR LOWER(file.file_type) LIKE :search OR TO_CHAR(file.created_at, 'DD.MM.YYYY HH24:MI') ILIKE :search)",
-        { search }
+      if (searchText) {
+        if (regexSearch) {
+          const searchRegex = assertValidRegexSearchPattern(searchText, 'searchText');
+          if (searchRegex) {
+            qb = qb.andWhere(
+              "(file.filename ~ :searchRegex OR file.file_type ~ :searchRegex OR TO_CHAR(file.created_at, 'DD.MM.YYYY HH24:MI') ~ :searchRegex)",
+              { searchRegex }
+            );
+          }
+        } else {
+          const search = `%${searchText.toLowerCase()}%`;
+          qb = qb.andWhere(
+            "(LOWER(file.filename) LIKE :search OR LOWER(file.file_type) LIKE :search OR TO_CHAR(file.created_at, 'DD.MM.YYYY HH24:MI') ILIKE :search)",
+            { search }
+          );
+        }
+      }
+
+      qb = qb
+        .select([
+          'file.id',
+          'file.filename',
+          'file.file_id',
+          'file.file_size',
+          'file.file_type',
+          'file.created_at'
+        ])
+        .orderBy('file.created_at', 'DESC')
+        .skip((validPage - 1) * validLimit)
+        .take(validLimit);
+
+      const [files, total] = await qb.getManyAndCount();
+      this.logger.log(
+        `Found ${files.length} files (page ${validPage}, limit ${validLimit}, total ${total}).`
+      );
+
+      const fileTypes = await this.findAllFileTypes(workspaceId);
+
+      return [files, total, fileTypes];
+    };
+
+    if (regexSearch) {
+      return withRegexSearchStatementTimeout(
+        this.fileUploadRepository.manager.connection,
+        runFindFiles
       );
     }
 
-    qb = qb
-      .select([
-        'file.id',
-        'file.filename',
-        'file.file_id',
-        'file.file_size',
-        'file.file_type',
-        'file.created_at'
-      ])
-      .orderBy('file.created_at', 'DESC')
-      .skip((validPage - 1) * validLimit)
-      .take(validLimit);
-
-    const [files, total] = await qb.getManyAndCount();
-    this.logger.log(
-      `Found ${files.length} files (page ${validPage}, limit ${validLimit}, total ${total}).`
-    );
-
-    const fileTypes = await this.findAllFileTypes(workspaceId);
-
-    return [files, total, fileTypes];
+    return runFindFiles();
   }
 
   async deleteTestFiles(

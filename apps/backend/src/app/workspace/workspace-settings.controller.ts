@@ -66,6 +66,15 @@ export class WorkspaceSettingsController {
             'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
         };
       }
+      if (key === 'enable-regex-search') {
+        return {
+          id: 0,
+          key: settingKey,
+          value: JSON.stringify({ enabled: false }),
+          description:
+            'Controls whether selected workspace search fields interpret input as regular expressions'
+        };
+      }
       if (key === 'response-matching-mode') {
         return {
           id: 0,

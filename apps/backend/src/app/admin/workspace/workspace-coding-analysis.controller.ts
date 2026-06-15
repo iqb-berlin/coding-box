@@ -7,6 +7,7 @@ import {
   Res,
   UseGuards
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import {
   ApiOkResponse,
   ApiParam,
@@ -14,6 +15,7 @@ import {
   ApiBody,
   ApiTags
 } from '@nestjs/swagger';
+import { Repository } from 'typeorm';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -28,6 +30,8 @@ import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto
 import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
 import { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
 import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
+import { Setting } from '../../database/entities/setting.entity';
+import { getWorkspaceRegexSearchEnabled } from '../../utils/regex-search.util';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -37,7 +41,9 @@ export class WorkspaceCodingAnalysisController {
     private exportValidationResultsService: ExportValidationResultsService,
     private codingValidationService: CodingValidationService,
     private codingAnalysisService: CodingAnalysisService,
-    private missingsProfilesService: MissingsProfilesService
+    private missingsProfilesService: MissingsProfilesService,
+    @InjectRepository(Setting)
+    private readonly settingRepository: Repository<Setting>
   ) { }
 
   @Get(':workspace_id/coding/variable-analysis')
@@ -87,6 +93,12 @@ export class WorkspaceCodingAnalysisController {
     description: 'Filter by derivation type',
     type: String
   })
+  @ApiQuery({
+    name: 'regexSearch',
+    required: false,
+    description: 'Interpret variable ID filter as a case-sensitive regular expression',
+    type: Boolean
+  })
   async getVariableAnalysis(
     @WorkspaceId() workspace_id: number,
       @Query('authToken') authToken: string,
@@ -95,7 +107,8 @@ export class WorkspaceCodingAnalysisController {
                    @Query('limit') limit: number = 100,
                    @Query('unitId') unitId?: string,
                    @Query('variableId') variableId?: string,
-                   @Query('derivation') derivation?: string
+                   @Query('derivation') derivation?: string,
+                   @Query('regexSearch') regexSearch?: string
   ): Promise<{
         data: VariableAnalysisItemDto[];
         total: number;
@@ -104,6 +117,8 @@ export class WorkspaceCodingAnalysisController {
       }> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
+    const effectiveRegexSearch = regexSearch === 'true' &&
+      await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
 
     return this.variableAnalysisReplayService.getVariableAnalysis(
       workspace_id,
@@ -113,7 +128,8 @@ export class WorkspaceCodingAnalysisController {
       validLimit,
       unitId,
       variableId,
-      derivation
+      derivation,
+      effectiveRegexSearch
     );
   }
 
