@@ -31,7 +31,10 @@ describe('CodingResultsService', () => {
   let codingStatisticsService: jest.Mocked<CodingStatisticsService>;
   let codingValidationService: jest.Mocked<Pick<CodingValidationService, 'invalidateIncompleteVariablesCache'>>;
   let codingAnalysisService: jest.Mocked<Pick<CodingAnalysisService, 'invalidateCache'>>;
-  let missingsProfilesService: jest.Mocked<Pick<MissingsProfilesService, 'getMissingByIdForProfileOrDefault'>>;
+  let missingsProfilesService: jest.Mocked<Pick<
+  MissingsProfilesService,
+  'getMissingByIdForProfileOrDefault' | 'getMissingByCodeForProfileOrDefault'
+  >>;
   let codingFreshnessService: jest.Mocked<Pick<CodingFreshnessService, 'markManualCodingCurrent'>>;
 
   const createQueryBuilderMock = (rows: unknown[]) => ({
@@ -120,6 +123,14 @@ describe('CodingResultsService', () => {
         return {
           id: 'mir', label: 'missing invalid response', code: -98, score: 0
         };
+      }),
+      getMissingByCodeForProfileOrDefault: jest.fn(async (_workspaceId, _profileId, code) => {
+        if (code === -99) {
+          return {
+            id: 'mbi_mbo', label: 'mbi / mbo', code: -99, score: 4
+          };
+        }
+        throw new Error(`Missing code ${code} not found`);
       })
     };
 
@@ -263,6 +274,57 @@ describe('CodingResultsService', () => {
         status_v2: 5
       }
     );
+  });
+
+  it('resolves an already stored profile missing code from the coding job profile', async () => {
+    codingJobService.getCodingJobById.mockResolvedValueOnce({
+      id: 10,
+      status: 'completed',
+      missings_profile_id: 77
+    } as never);
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'person@code@booklet::booklet::UNIT::VAR': {
+        id: -99
+      }
+    });
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(missingsProfilesService.getMissingByCodeForProfileOrDefault).toHaveBeenCalledWith(
+      17,
+      77,
+      -99
+    );
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      99,
+      {
+        code_v2: -99,
+        score_v2: 4,
+        status_v2: 5
+      }
+    );
+  });
+
+  it('does not silently apply an already stored missing code when its profile score is absent', async () => {
+    codingJobService.getCodingJobById.mockResolvedValueOnce({
+      id: 10,
+      status: 'completed',
+      missings_profile_id: 77
+    } as never);
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'person@code@booklet::booklet::UNIT::VAR': {
+        id: -99
+      }
+    });
+    missingsProfilesService.getMissingByCodeForProfileOrDefault.mockRejectedValueOnce(
+      new Error("Missing 'mbi_mbo' must define a score")
+    );
+
+    await expect(service.applyCodingResults(17, 10)).rejects.toThrow('score');
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
   });
 
   it('does not silently apply a manual missing when its profile score is absent', async () => {
@@ -569,7 +631,12 @@ describe('CodingResultsService', () => {
 
   it('marks resolved double-coding results as applied when no response updates are needed', async () => {
     (responseRepository.manager.query as jest.Mock)
-      .mockResolvedValueOnce([{ id: 99, statusV2: 5 }])
+      .mockResolvedValueOnce([{
+        id: 99,
+        statusV2: 5,
+        codeV2: 0,
+        scoreV2: 0
+      }])
       .mockResolvedValueOnce([{ responseId: 99, statusV2: 5 }]);
 
     const result = await service.applyCodingResults(17, 10);
@@ -585,6 +652,53 @@ describe('CodingResultsService', () => {
     );
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
+  });
+
+  it('keeps existing v2 values by default even when status is not complete', async () => {
+    (responseRepository.manager.query as jest.Mock)
+      .mockResolvedValueOnce([{
+        id: 99,
+        statusV2: statusStringToNumber('CODING_INCOMPLETE'),
+        codeV2: null,
+        scoreV2: null
+      }]);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(result.updatedResponsesCount).toBe(0);
+    expect(result.skippedAlreadyCodedCount).toBe(1);
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(
+      10,
+      17,
+      queryRunner.manager
+    );
+  });
+
+  it('overwrites existing direct v2 values only when explicitly requested', async () => {
+    (responseRepository.manager.query as jest.Mock)
+      .mockResolvedValueOnce([{
+        id: 99,
+        statusV2: statusStringToNumber('CODING_INCOMPLETE'),
+        codeV2: null,
+        scoreV2: null
+      }]);
+
+    const result = await service.applyCodingResults(17, 10, { overwriteExisting: true });
+
+    expect(result.success).toBe(true);
+    expect(result.updatedResponsesCount).toBe(1);
+    expect(result.overwrittenExistingCount).toBe(1);
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      99,
+      {
+        code_v2: 0,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
   });
 
   it('does not propagate matching sibling responses when aggregation is disabled', async () => {
