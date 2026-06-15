@@ -124,7 +124,8 @@ describe('CodingJobService', () => {
     variableId = 'VAR',
     variableAlias,
     codeId = 7,
-    score = 2
+    score = 2,
+    manualInstruction = '<p>Manual instruction</p>'
   }: {
     unitFileId?: string;
     schemeRef?: string;
@@ -133,6 +134,7 @@ describe('CodingJobService', () => {
     variableAlias?: string;
     codeId?: number;
     score?: number | null;
+    manualInstruction?: string | null;
   } = {}) => {
     fileUploadRepository.find
       .mockResolvedValueOnce([
@@ -156,7 +158,8 @@ describe('CodingJobService', () => {
                     id: codeId,
                     code: String(codeId),
                     label: `Code ${codeId}`,
-                    score
+                    score,
+                    manualInstruction
                   }
                 ]
               }
@@ -3127,6 +3130,45 @@ describe('CodingJobService', () => {
 
     expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { manualInstruction: '', label: 'empty' },
+    { manualInstruction: '   ', label: 'whitespace-only' },
+    { manualInstruction: null, label: 'missing' }
+  ])(
+    'rejects positive selected codes with $label manual instructions',
+    async ({ manualInstruction }) => {
+      const job = { id: 1, workspace_id: 3 };
+      const unit = {
+        coding_job_id: 1,
+        unit_name: 'UNIT',
+        unit_alias: 'ALIAS',
+        variable_id: 'VAR',
+        person_login: 'login',
+        person_code: 'code',
+        booklet_name: 'booklet',
+        is_open: false,
+        code: null,
+        score: null,
+        coding_issue_option: null,
+        notes: null
+      };
+      codingJobRepository.findOne.mockResolvedValue(job);
+      codingJobUnitRepository.findOne.mockResolvedValue(unit);
+      mockCodingScheme({ codeId: 7, score: 2, manualInstruction });
+
+      await expect(
+        service.saveCodingProgress(1, {
+          testPerson: 'login@code@booklet',
+          unitId: 'UNIT',
+          variableId: 'VAR',
+          selectedCode: { id: 7 }
+        } as never)
+      ).rejects.toThrow('Code is not available for manual coding: 7');
+
+      expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+    }
+  );
 
   it('uses the coding scheme score instead of a client-provided score', async () => {
     const job = { id: 1, workspace_id: 3 };
