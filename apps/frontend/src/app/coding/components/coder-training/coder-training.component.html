@@ -137,13 +137,20 @@
 
       <div class="coder-grid">
         <div *ngFor="let coder of coders; trackBy: trackByCoderId" class="coder-item"
-          [class.selected]="isCoderSelected(coder)" (click)="toggleCoderSelection(coder)">
-          <mat-checkbox [checked]="isCoderSelected(coder)" (click)="$event.preventDefault()" color="primary">
-          </mat-checkbox>
-          <div class="coder-info">
-            <span class="coder-name">{{coder.name}}</span>
-            <span class="coder-login">{{coder.email}}</span>
+          [class.selected]="isCoderSelected(coder)" role="button" tabindex="0"
+          [attr.aria-pressed]="isCoderSelected(coder)"
+          (click)="toggleCoderSelection(coder)"
+          (keydown.enter)="toggleCoderSelection(coder)"
+          (keydown.space)="toggleCoderSelection(coder); $event.preventDefault()">
+          <div class="coder-avatar">
+            <mat-icon class="avatar-icon">person</mat-icon>
           </div>
+          <div class="coder-info">
+            <span class="coder-name">{{coder.displayName || coder.name}}</span>
+            <span *ngIf="coder.displayName && coder.displayName !== coder.name" class="coder-login">{{coder.name}}</span>
+            <span *ngIf="coder.email" class="coder-login">{{coder.email}}</span>
+          </div>
+          <mat-icon *ngIf="isCoderSelected(coder)" class="selected-icon">check_circle</mat-icon>
         </div>
       </div>
 
