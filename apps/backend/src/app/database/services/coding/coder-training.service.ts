@@ -1716,6 +1716,7 @@ export class CoderTrainingService {
       personCode: string;
       personLogin: string;
       personGroup: string;
+      bookletName: string;
       testPerson: string;
       coders: Array<{
         trainingId: number;
@@ -1759,6 +1760,7 @@ export class CoderTrainingService {
       personCode: string;
       personLogin: string;
       personGroup: string;
+      bookletName: string;
       testPerson: string;
     }>();
 
@@ -1779,6 +1781,7 @@ export class CoderTrainingService {
               personCode: unit.person_code,
               personLogin: unit.person_login,
               personGroup: personGroup,
+              bookletName: unit.booklet_name,
               testPerson
             });
           }
@@ -1793,6 +1796,7 @@ export class CoderTrainingService {
       personCode: string;
       personLogin: string;
       personGroup: string;
+      bookletName: string;
       testPerson: string;
       coders: Array<{
         trainingId: number;
@@ -1867,6 +1871,7 @@ export class CoderTrainingService {
         personCode: info.personCode,
         personLogin: info.personLogin,
         personGroup: info.personGroup,
+        bookletName: info.bookletName,
         testPerson: info.testPerson,
         coders: codersData
       });
@@ -1896,6 +1901,7 @@ export class CoderTrainingService {
       personCode: string;
       personLogin: string;
       personGroup: string;
+      bookletName: string;
       testPerson: string;
       givenAnswer: string;
       replayCode: number | null;
@@ -1933,6 +1939,7 @@ export class CoderTrainingService {
       personCode: string;
       personLogin: string;
       personGroup: string;
+      bookletName: string;
       testPerson: string;
       givenAnswer: string;
       replayCode: number | null;
@@ -1957,6 +1964,7 @@ export class CoderTrainingService {
             personCode: unit.person_code,
             personLogin: unit.person_login,
             personGroup: personGroup,
+            bookletName: unit.booklet_name,
             testPerson,
             givenAnswer,
             replayCode: unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null,
@@ -2075,6 +2083,7 @@ export class CoderTrainingService {
         personCode: unitVar.personCode,
         personLogin: unitVar.personLogin,
         personGroup: unitVar.personGroup,
+        bookletName: unitVar.bookletName,
         testPerson: unitVar.testPerson,
         givenAnswer: unitVar.givenAnswer,
         replayCode: unitVar.replayCode,
