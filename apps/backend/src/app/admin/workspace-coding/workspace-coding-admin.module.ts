@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { DatabaseModule } from '../../database/database.module';
 import { CodingModule } from '../../coding/coding.module';
 import { WorkspaceModule } from '../../workspace/workspace.module';
@@ -21,6 +22,7 @@ import { WorkspaceCodingJobDefinitionController } from '../workspace/workspace-c
 import { WorkspaceCodingResultsController } from '../workspace/workspace-coding-results.controller';
 import { WorkspaceTestCenterController } from '../workspace/workspace-test-center.controller';
 import { WorkspacePlayerController } from '../workspace/workspace-player.controller';
+import { Setting } from '../../database/entities/setting.entity';
 
 @Module({
   imports: [
@@ -30,7 +32,8 @@ import { WorkspacePlayerController } from '../workspace/workspace-player.control
     AuthModule,
     JobQueueModule,
     HttpModule,
-    CacheModule
+    CacheModule,
+    TypeOrmModule.forFeature([Setting])
   ],
   controllers: [
     WorkspaceCodingController,

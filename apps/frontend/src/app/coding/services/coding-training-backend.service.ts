@@ -32,6 +32,7 @@ export interface TrainingCodingResult {
   personCode: string;
   personLogin: string;
   personGroup: string;
+  bookletName: string;
   testPerson: string;
   coders: Array<{
     trainingId: number;
@@ -52,6 +53,7 @@ export interface WithinTrainingCodingResult {
   personCode: string;
   personLogin: string;
   personGroup: string;
+  bookletName: string;
   testPerson: string;
   givenAnswer: string;
   replayCode: number | null;

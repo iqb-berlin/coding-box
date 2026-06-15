@@ -155,7 +155,7 @@ export class ResponseService {
 
   searchResponses(
     workspaceId: number,
-    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; codingCode?: string; score?: string; version?: 'v1' | 'v2' | 'v3'; geogebra?: boolean; derivedOnly?: boolean; responseSource?: 'base' | 'derived' | 'all'; personLogin?: string; sortBy?: CodingResponseSortBy; sortDirection?: CodingResponseSortDirection },
+    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; codingCode?: string; score?: string; version?: 'v1' | 'v2' | 'v3'; geogebra?: boolean; derivedOnly?: boolean; responseSource?: 'base' | 'derived' | 'all'; personLogin?: string; regexSearch?: boolean; sortBy?: CodingResponseSortBy; sortDirection?: CodingResponseSortDirection },
     page?: number,
     limit?: number
   ): Observable<{
@@ -240,6 +240,10 @@ export class ResponseService {
 
     if (searchParams.personLogin) {
       params = params.set('personLogin', searchParams.personLogin);
+    }
+
+    if (searchParams.regexSearch) {
+      params = params.set('regexSearch', 'true');
     }
 
     if (searchParams.sortBy) {

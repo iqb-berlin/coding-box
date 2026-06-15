@@ -42,6 +42,7 @@ export interface FilterParams {
   geogebra: boolean;
   responseSource: ResponseSource;
   personLogin: string;
+  regexSearch?: boolean;
 }
 
 @Injectable({
@@ -257,6 +258,7 @@ export class CodingManagementService {
       geogebra: filterParams.geogebra,
       responseSource: filterParams.responseSource,
       personLogin: filterParams.personLogin,
+      regexSearch: filterParams.regexSearch,
       sortBy,
       sortDirection
     };

@@ -86,7 +86,8 @@ describe('CodingManagementComponent', () => {
     };
 
     mockWorkspaceSettingsService = {
-      getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(false))
+      getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(false)),
+      getEnableRegexSearch: jest.fn().mockReturnValue(of(false))
     };
 
     mockTestPersonCodingService = {
@@ -268,6 +269,10 @@ describe('CodingManagementComponent', () => {
 
     it('should check auto-fetch setting on init', () => {
       expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
+    });
+
+    it('should check regex search setting on init', () => {
+      expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledWith(1);
     });
 
     it('should load autocoding readiness for the first autocoder run', () => {
@@ -548,7 +553,7 @@ describe('CodingManagementComponent', () => {
         version: 'v1'
       }));
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        component.filterParams,
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
         1,
         100,
         undefined,
@@ -595,7 +600,7 @@ describe('CodingManagementComponent', () => {
 
       expect(component.filterParams.version).toBe('v2');
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        component.filterParams,
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
         1,
         100,
         undefined,
@@ -619,7 +624,7 @@ describe('CodingManagementComponent', () => {
 
       expect(component.filterParams.responseSource).toBe('base');
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        component.filterParams,
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
         1,
         100,
         undefined,
@@ -675,7 +680,7 @@ describe('CodingManagementComponent', () => {
       expect(component.currentStatusFilter).toBeNull();
       expect(component.pageIndex).toBe(0);
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        component.filterParams,
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
         1,
         100,
         undefined,
@@ -734,7 +739,7 @@ describe('CodingManagementComponent', () => {
       expect(component.sortDirection).toBe('desc');
       expect(component.pageIndex).toBe(0);
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        component.filterParams,
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
         1,
         100,
         'score',
@@ -809,7 +814,7 @@ describe('CodingManagementComponent', () => {
       component.onReviewClick();
 
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        component.filterParams,
+        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
         1,
         2,
         undefined,

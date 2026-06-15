@@ -198,6 +198,18 @@
         height: 40px;
         margin-top: 4px;
       }
+
+      mat-form-field.regex-filter-invalid {
+        ::ng-deep .mdc-notched-outline__leading,
+        ::ng-deep .mdc-notched-outline__notch,
+        ::ng-deep .mdc-notched-outline__trailing {
+          border-color: #f44336 !important;
+        }
+      }
+
+      .regex-filter-error {
+        color: #f44336;
+      }
     }
 
     .comparison-warning-list {
@@ -729,7 +741,8 @@
             }
 
             .person-code,
-            .person-group {
+            .person-group,
+            .booklet-name {
               font-size: 12px;
               color: #616161;
             }

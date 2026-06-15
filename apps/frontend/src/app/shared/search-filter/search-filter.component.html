@@ -1,5 +1,5 @@
 <div class="search-field-container">
-  <mat-form-field class="search-field">
+  <mat-form-field class="search-field" [class.regex-filter-invalid]="invalid()">
     <mat-label>{{ title() }}</mat-label>
     <input #filterInput
            matInput
@@ -13,6 +13,8 @@
             (click)="clearFilter()">
       <coding-box-wrapped-icon icon="close"></coding-box-wrapped-icon>
     </button>
+    @if (invalid()) {
+      <mat-hint class="regex-filter-error">{{ errorText() | translate }}</mat-hint>
+    }
   </mat-form-field>
 </div>
-
