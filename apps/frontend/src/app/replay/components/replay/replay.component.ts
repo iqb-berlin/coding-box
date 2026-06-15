@@ -488,6 +488,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.isBookletReplayMode = queryParams.mode === 'booklet-view' || queryParams.mode === 'booklet';
         this.originResponseId = queryParams.originResponseId ? Number(queryParams.originResponseId) : null;
         this.reviewCodeSelections = this.deserializeReviewCodeSelections(queryParams.reviewCodeSelections);
+        const showScore = this.getBooleanQueryParam(queryParams.showScore);
+        const allowComments = this.getBooleanQueryParam(queryParams.allowComments);
         const suppressGeneralInstructions = this.getBooleanQueryParam(queryParams.suppressGeneralInstructions);
         if (this.isCodingMode || this.isBookletReplayMode) {
           let deserializedUnits = null as UnitsReplay | null;
@@ -598,6 +600,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
         if (suppressGeneralInstructions !== null) {
           this.codingService.suppressGeneralInstructions = suppressGeneralInstructions;
+        }
+        if (showScore !== null) {
+          this.codingService.showScore = showScore;
+        }
+        if (allowComments !== null) {
+          this.codingService.allowComments = allowComments;
         }
 
         if (this.authToken) {

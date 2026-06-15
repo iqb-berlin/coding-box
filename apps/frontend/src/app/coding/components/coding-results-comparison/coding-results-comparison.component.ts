@@ -117,6 +117,12 @@ type NotesFilterMode = 'all' | 'none' | 'with-notes';
 type ComparisonStatus = 'match' | 'differ' | 'incomplete' | 'not_comparable';
 type ComparisonCoderResult = TrainingComparison['coders'][number] | WithinTrainingComparison['coders'][number];
 
+interface ReplayDisplayOptions {
+  showScore?: boolean;
+  allowComments?: boolean;
+  suppressGeneralInstructions?: boolean;
+}
+
 interface ComparisonFilters {
   unitName: string;
   variableId: string;
@@ -1226,7 +1232,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     });
   }
 
-  private getReplayDisplayOptions(): { suppressGeneralInstructions?: boolean } {
+  private getReplayDisplayOptions(): ReplayDisplayOptions {
     if (this.comparisonMode !== 'within-training') {
       return {};
     }
@@ -1237,6 +1243,8 @@ export class CodingResultsComparisonComponent implements OnInit {
     }
 
     return {
+      showScore: selectedTraining.show_score ?? false,
+      allowComments: selectedTraining.allow_comments ?? true,
       suppressGeneralInstructions: selectedTraining.suppress_general_instructions ?? false
     };
   }
@@ -1244,7 +1252,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   private buildReplayUrl(
     replayUrl: string,
     responseId: number,
-    displayOptions: { suppressGeneralInstructions?: boolean } = {}
+    displayOptions: ReplayDisplayOptions = {}
   ): string {
     const [baseUrl, fragment = ''] = replayUrl.split('#', 2);
     const appendParams = (value: string): string => {
@@ -1252,6 +1260,12 @@ export class CodingResultsComparisonComponent implements OnInit {
       const params = new URLSearchParams(query);
       params.set('mode', 'coding-decision');
       params.set('originResponseId', responseId.toString());
+      if (displayOptions.showScore !== undefined) {
+        params.set('showScore', String(displayOptions.showScore));
+      }
+      if (displayOptions.allowComments !== undefined) {
+        params.set('allowComments', String(displayOptions.allowComments));
+      }
       if (displayOptions.suppressGeneralInstructions !== undefined) {
         params.set('suppressGeneralInstructions', String(displayOptions.suppressGeneralInstructions));
       }
