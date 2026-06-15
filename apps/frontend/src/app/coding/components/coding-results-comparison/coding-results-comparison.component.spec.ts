@@ -284,6 +284,8 @@ describe('CodingResultsComparisonComponent', () => {
       created_at: new Date('2026-06-11T12:00:00Z'),
       updated_at: new Date('2026-06-11T12:00:00Z'),
       jobsCount: 2,
+      show_score: true,
+      allow_comments: false,
       suppress_general_instructions: true
     }];
 
@@ -296,7 +298,7 @@ describe('CodingResultsComparisonComponent', () => {
     } as never);
 
     expect(openSpy).toHaveBeenCalledWith(
-      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=77&suppressGeneralInstructions=true',
+      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=77&showScore=true&allowComments=false&suppressGeneralInstructions=true',
       '_blank'
     );
   });
