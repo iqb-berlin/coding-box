@@ -1,6 +1,8 @@
 import { highlightAspectSectionWithAnchor, scrollToElementByAlias } from './dom-utils';
 
 describe('replay dom-utils', () => {
+  const highlightOverlaySelector = '[data-coding-box-anchor-highlight-overlay="true"]';
+
   function createIframe(html: string): HTMLIFrameElement {
     const iframe = document.createElement('iframe');
     document.body.appendChild(iframe);
@@ -124,9 +126,8 @@ describe('replay dom-utils', () => {
 
     expect(highlighted).toEqual([section]);
     expect(sectionFrame.style.border).toBe('');
-    expect(cellA.style.outline).toBe('');
-    expect(cellB.style.outline).toBe('3px solid #4285f4');
-    expect(cellB.style.outlineOffset).toBe('-3px');
+    expect(cellA.querySelector(highlightOverlaySelector)).toBeNull();
+    expect(cellB.querySelector(highlightOverlaySelector)).not.toBeNull();
     expect(fieldB.style.border).toBe('');
   });
 
@@ -150,9 +151,8 @@ describe('replay dom-utils', () => {
 
     expect(highlighted).toEqual([section]);
     expect(sectionFrame.style.border).toBe('');
-    expect(fieldA.style.outline).toBe('3px solid #4285f4');
-    expect(fieldA.style.outlineOffset).toBe('-3px');
-    expect(fieldB.style.outline).toBe('');
+    expect(fieldA.querySelector(highlightOverlaySelector)).not.toBeNull();
+    expect(fieldB.querySelector(highlightOverlaySelector)).toBeNull();
   });
 
   it('highlights the real player table cell container for table text fields', () => {
@@ -194,9 +194,59 @@ describe('replay dom-utils', () => {
 
     expect(highlighted).toEqual([section]);
     expect(sectionFrame.style.border).toBe('');
-    expect(cellA.style.outline).toBe('');
-    expect(cellB.style.outline).toBe('3px solid #4285f4');
-    expect(fieldB.style.outline).toBe('');
+    expect(cellA.querySelector(highlightOverlaySelector)).toBeNull();
+    expect(cellB.querySelector(highlightOverlaySelector)).not.toBeNull();
+    expect(fieldB.querySelector(highlightOverlaySelector)).toBeNull();
+  });
+
+  it('clears a table cell overlay before highlighting another anchor', () => {
+    const iframe = createIframe(`
+      <aspect-section id="section">
+        <div id="section-frame">
+          <aspect-table id="table" role="grid">
+            <div id="cell-a" role="gridcell">
+              <span id="field-a" data-element-alias="01a"></span>
+            </div>
+            <div id="cell-b" role="gridcell" style="position: absolute;">
+              <span id="field-b" data-element-alias="01b"></span>
+            </div>
+          </aspect-table>
+        </div>
+      </aspect-section>
+    `);
+
+    const cellA = iframe.contentDocument?.querySelector('#cell-a') as HTMLElement;
+    const cellB = iframe.contentDocument?.querySelector('#cell-b') as HTMLElement;
+
+    highlightAspectSectionWithAnchor(iframe, '01a');
+    expect(cellA.style.position).toBe('relative');
+    expect(cellA.querySelector(highlightOverlaySelector)).not.toBeNull();
+
+    highlightAspectSectionWithAnchor(iframe, '01b');
+    expect(cellA.style.position).toBe('');
+    expect(cellA.querySelector(highlightOverlaySelector)).toBeNull();
+    expect(cellB.style.position).toBe('absolute');
+    expect(cellB.querySelector(highlightOverlaySelector)).not.toBeNull();
+  });
+
+  it('falls back to inset field highlighting when a table target cannot host an overlay', () => {
+    const iframe = createIframe(`
+      <aspect-section id="section">
+        <div id="section-frame">
+          <aspect-table id="table" role="grid">
+            <input id="field-a" data-element-alias="01a" style="grid-row: 2; grid-column: 2">
+          </aspect-table>
+        </div>
+      </aspect-section>
+    `);
+
+    const highlighted = highlightAspectSectionWithAnchor(iframe, '01a');
+    const section = iframe.contentDocument?.querySelector('#section') as HTMLElement;
+    const fieldA = iframe.contentDocument?.querySelector('#field-a') as HTMLElement;
+
+    expect(highlighted).toEqual([section]);
+    expect(fieldA.querySelector(highlightOverlaySelector)).toBeNull();
+    expect(fieldA.style.boxShadow).toBe('inset 0 0 0 2px #4285f4');
   });
 
   it('highlights a standalone text field instead of the whole section grid', () => {
