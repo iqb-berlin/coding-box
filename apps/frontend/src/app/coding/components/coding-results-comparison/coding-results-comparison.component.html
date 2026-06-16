@@ -196,96 +196,6 @@
             withinTrainingData.length > 0))
       "
     >
-      <div class="table-filters">
-        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('unitName')">
-          <mat-label>Aufgabe</mat-label>
-          <input
-            matInput
-            [(ngModel)]="tableFilters.unitName"
-            (ngModelChange)="applyTableFilters()"
-          />
-          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('unitName')">
-            {{ 'search-filter.invalid-regex' | translate }}
-          </mat-hint>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('variableId')">
-          <mat-label>Variable</mat-label>
-          <input
-            matInput
-            [(ngModel)]="tableFilters.variableId"
-            (ngModelChange)="applyTableFilters()"
-          />
-          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('variableId')">
-            {{ 'search-filter.invalid-regex' | translate }}
-          </mat-hint>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('personLogin')">
-          <mat-label>Person Login</mat-label>
-          <input
-            matInput
-            [(ngModel)]="tableFilters.personLogin"
-            (ngModelChange)="applyTableFilters()"
-          />
-          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('personLogin')">
-            {{ 'search-filter.invalid-regex' | translate }}
-          </mat-hint>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('personGroup')">
-          <mat-label>Person Gruppe</mat-label>
-          <input
-            matInput
-            [(ngModel)]="tableFilters.personGroup"
-            (ngModelChange)="applyTableFilters()"
-          />
-          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('personGroup')">
-            {{ 'search-filter.invalid-regex' | translate }}
-          </mat-hint>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('bookletName')">
-          <mat-label>Testheft-Name</mat-label>
-          <input
-            matInput
-            [(ngModel)]="tableFilters.bookletName"
-            (ngModelChange)="applyTableFilters()"
-          />
-          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('bookletName')">
-            {{ 'search-filter.invalid-regex' | translate }}
-          </mat-hint>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Übereinstimmung</mat-label>
-          <mat-select
-            [(ngModel)]="tableFilters.match"
-            (selectionChange)="applyTableFilters()"
-          >
-            <mat-option value="all">Alle</mat-option>
-            <mat-option value="match">Nur Übereinstimmung</mat-option>
-            <mat-option value="differ">Nur Abweichung</mat-option>
-          </mat-select>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Notizen</mat-label>
-          <mat-select
-            [(ngModel)]="tableFilters.notesMode"
-            (selectionChange)="applyTableFilters()"
-          >
-            <mat-option value="all">Alle</mat-option>
-            <mat-option value="none">Keine</mat-option>
-            <mat-option value="with-notes">Mit Notiz</mat-option>
-          </mat-select>
-        </mat-form-field>
-
-        <button mat-stroked-button type="button" (click)="resetTableFilters()">
-          Filter zurücksetzen
-        </button>
-      </div>
-
       <div class="comparison-warning-list" *ngIf="getComparisonWarnings().length > 0">
         <div
           class="comparison-warning"
@@ -664,6 +574,96 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <div class="table-filters">
+        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('unitName')">
+          <mat-label>Aufgabe</mat-label>
+          <input
+            matInput
+            [(ngModel)]="tableFilters.unitName"
+            (ngModelChange)="applyTableFilters()"
+          />
+          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('unitName')">
+            {{ 'search-filter.invalid-regex' | translate }}
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('variableId')">
+          <mat-label>Variable</mat-label>
+          <input
+            matInput
+            [(ngModel)]="tableFilters.variableId"
+            (ngModelChange)="applyTableFilters()"
+          />
+          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('variableId')">
+            {{ 'search-filter.invalid-regex' | translate }}
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('personLogin')">
+          <mat-label>Person Login</mat-label>
+          <input
+            matInput
+            [(ngModel)]="tableFilters.personLogin"
+            (ngModelChange)="applyTableFilters()"
+          />
+          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('personLogin')">
+            {{ 'search-filter.invalid-regex' | translate }}
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('personGroup')">
+          <mat-label>Person Gruppe</mat-label>
+          <input
+            matInput
+            [(ngModel)]="tableFilters.personGroup"
+            (ngModelChange)="applyTableFilters()"
+          />
+          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('personGroup')">
+            {{ 'search-filter.invalid-regex' | translate }}
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('bookletName')">
+          <mat-label>Testheft-Name</mat-label>
+          <input
+            matInput
+            [(ngModel)]="tableFilters.bookletName"
+            (ngModelChange)="applyTableFilters()"
+          />
+          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('bookletName')">
+            {{ 'search-filter.invalid-regex' | translate }}
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Übereinstimmung</mat-label>
+          <mat-select
+            [(ngModel)]="tableFilters.match"
+            (selectionChange)="applyTableFilters()"
+          >
+            <mat-option value="all">Alle</mat-option>
+            <mat-option value="match">Nur Übereinstimmung</mat-option>
+            <mat-option value="differ">Nur Abweichung</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Notizen</mat-label>
+          <mat-select
+            [(ngModel)]="tableFilters.notesMode"
+            (selectionChange)="applyTableFilters()"
+          >
+            <mat-option value="all">Alle</mat-option>
+            <mat-option value="none">Keine</mat-option>
+            <mat-option value="with-notes">Mit Notiz</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <button mat-stroked-button type="button" (click)="resetTableFilters()">
+          Filter zurücksetzen
+        </button>
       </div>
 
       <div class="comparison-empty-state" *ngIf="hasNoSelectedCodersState()">
