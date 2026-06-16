@@ -1706,6 +1706,7 @@ describe('ReplayComponent', () => {
     it('switches to an assigned coding job in another workspace', async () => {
       const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
       const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const flushSpy = jest.spyOn(component.codingService, 'flushPendingRowMutations').mockResolvedValue();
       const currentJob = createJob(77, 47, 'Current Job', 'active');
       const targetJob = createJob(88, 48, 'Target Job', 'active');
       const privateComponent = component as unknown as {
@@ -1743,7 +1744,8 @@ describe('ReplayComponent', () => {
 
       expect(appService.createOwnToken).toHaveBeenCalledWith(48, 1);
       expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(48, 88, 'workspace-token', false);
-      expect(saveAllSpy).toHaveBeenCalledWith(47, 77);
+      expect(flushSpy).toHaveBeenCalledTimes(1);
+      expect(saveAllSpy).not.toHaveBeenCalled();
       expect(component.workspaceId).toBe(48);
       expect(component.codingService.codingJobId).toBe(88);
       expect(privateComponent.unitsData?.id).toBe(88);
@@ -1754,6 +1756,7 @@ describe('ReplayComponent', () => {
     it('keeps switched completed coding jobs editable', async () => {
       const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
       const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const flushSpy = jest.spyOn(component.codingService, 'flushPendingRowMutations').mockResolvedValue();
       const handleCodeSelectedSpy = jest.spyOn(component.codingService, 'handleCodeSelected');
       const saveNotesSpy = jest.spyOn(component.codingService, 'saveNotes');
       const currentJob = createJob(77, 47, 'Current Job', 'active');
@@ -1794,7 +1797,8 @@ describe('ReplayComponent', () => {
 
       await privateComponent.onCodingJobSelectionChange('48:88');
 
-      expect(saveAllSpy).toHaveBeenCalledWith(47, 77);
+      expect(flushSpy).toHaveBeenCalledTimes(1);
+      expect(saveAllSpy).not.toHaveBeenCalled();
       expect(component.codingService.isCompletedJobReview).toBe(false);
       expect(component.isCodingReadOnly()).toBe(false);
       expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
@@ -1820,6 +1824,7 @@ describe('ReplayComponent', () => {
     it('rolls back to the previous coding job when the target replay payload fails', async () => {
       const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
       const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const flushSpy = jest.spyOn(component.codingService, 'flushPendingRowMutations').mockResolvedValue();
       const currentToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ3b3Jrc3BhY2UiOiI0NyJ9.sig';
       const targetToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ3b3Jrc3BhY2UiOiI0OCJ9.sig';
       const currentJob = createJob(77, 47, 'Current Job', 'active');
@@ -1883,7 +1888,8 @@ describe('ReplayComponent', () => {
 
       await privateComponent.onCodingJobSelectionChange('48:88');
 
-      expect(saveAllSpy).toHaveBeenCalledWith(47, 77);
+      expect(flushSpy).toHaveBeenCalledTimes(1);
+      expect(saveAllSpy).not.toHaveBeenCalled();
       expect(component.workspaceId).toBe(47);
       expect(component.codingService.codingJobId).toBe(77);
       expect(privateComponent.selectedCodingJobKey).toBe('47:77');
@@ -1959,6 +1965,7 @@ describe('ReplayComponent', () => {
     it('ignores stale replay payloads after switching coding jobs', async () => {
       const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
       const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const flushSpy = jest.spyOn(component.codingService, 'flushPendingRowMutations').mockResolvedValue();
       const currentToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ3b3Jrc3BhY2UiOiI0NyJ9.sig';
       const targetToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ3b3Jrc3BhY2UiOiI0OCJ9.sig';
       const stalePayload = new Subject<ReturnType<typeof createReplayPayload>>();
@@ -2021,7 +2028,8 @@ describe('ReplayComponent', () => {
       targetPayload.complete();
       await switchPromise;
 
-      expect(saveAllSpy).toHaveBeenCalledWith(47, 77);
+      expect(flushSpy).toHaveBeenCalledTimes(1);
+      expect(saveAllSpy).not.toHaveBeenCalled();
       expect(component.workspaceId).toBe(48);
       expect(component.unitDef).toBe('target unitDef');
       expect(component.player).toBe('target player');
@@ -2599,8 +2607,43 @@ describe('ReplayComponent', () => {
   });
 
   describe('Submit Coding Job', () => {
+    it('flushes pending row saves instead of saving all progress again before submit', async () => {
+      const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const flushSpy = jest.spyOn(component.codingService, 'flushPendingRowMutations').mockResolvedValue();
+      const submitSpy = jest.spyOn(component.codingService, 'submitCodingJob').mockResolvedValue();
+
+      component.workspaceId = 42;
+      component.codingService.codingJobId = 123;
+      component.codingService.hasSaveError = false;
+
+      await component.submitCodingJob();
+
+      expect(flushSpy).toHaveBeenCalledTimes(1);
+      expect(saveAllSpy).not.toHaveBeenCalled();
+      expect(submitSpy).toHaveBeenCalledWith(42, 123);
+      expect(flushSpy.mock.invocationCallOrder[0]).toBeLessThan(submitSpy.mock.invocationCallOrder[0]);
+    });
+
+    it('does not submit when flushing pending row saves fails', async () => {
+      const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const flushSpy = jest.spyOn(component.codingService, 'flushPendingRowMutations')
+        .mockRejectedValue(new Error('pending save failed'));
+      const submitSpy = jest.spyOn(component.codingService, 'submitCodingJob').mockResolvedValue();
+
+      component.workspaceId = 42;
+      component.codingService.codingJobId = 123;
+      component.codingService.hasSaveError = false;
+
+      await component.submitCodingJob();
+
+      expect(flushSpy).toHaveBeenCalledTimes(1);
+      expect(saveAllSpy).not.toHaveBeenCalled();
+      expect(submitSpy).not.toHaveBeenCalled();
+    });
+
     it('does not save all progress again while a save error is active', async () => {
       const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const flushSpy = jest.spyOn(component.codingService, 'flushPendingRowMutations').mockResolvedValue();
       const submitSpy = jest.spyOn(component.codingService, 'submitCodingJob').mockResolvedValue();
 
       component.workspaceId = 42;
@@ -2609,6 +2652,7 @@ describe('ReplayComponent', () => {
 
       await component.submitCodingJob();
 
+      expect(flushSpy).not.toHaveBeenCalled();
       expect(saveAllSpy).not.toHaveBeenCalled();
       expect(submitSpy).toHaveBeenCalledWith(42, 123);
     });
