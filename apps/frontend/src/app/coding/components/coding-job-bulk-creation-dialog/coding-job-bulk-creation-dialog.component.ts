@@ -36,7 +36,7 @@ export interface BulkCreationData {
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
-  maxCodingCases?: number;
+  maxCodingCases?: number | null;
   distributionSeed?: string;
   creationResults?: {
     doubleCodingInfo: Record<string, {
@@ -188,7 +188,7 @@ export class CodingJobBulkCreationDialogComponent {
         this.data.doubleCodingPercentage,
         this.data.selectedVariableBundles,
         this.data.caseOrderingMode,
-        this.data.maxCodingCases,
+        this.data.maxCodingCases ?? undefined,
         this.data.distributionSeed
       ));
 
