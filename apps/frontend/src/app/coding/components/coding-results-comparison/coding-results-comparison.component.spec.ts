@@ -396,6 +396,51 @@ describe('CodingResultsComparisonComponent', () => {
     expect(discussionHeader?.textContent).toContain('Manager: reichlej@gmx.de');
   });
 
+  it('should place table filters directly before the comparison table', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 1;
+    component.availableCoders = [
+      { jobId: 1, coderName: 'Coder1' },
+      { jobId: 2, coderName: 'Coder2' }
+    ];
+    component.codersFormControl.setValue([1, 2]);
+    component.withinTrainingData = [
+      {
+        responseId: 1,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        testperson: 'Test1',
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder1',
+            code: '1',
+            score: 1
+          },
+          {
+            jobId: 2,
+            coderName: 'Coder2',
+            code: '2',
+            score: 0
+          }
+        ]
+      }
+    ];
+    component.dataSource.data = component.withinTrainingData;
+    component.calculateStatistics();
+
+    fixture.detectChanges();
+
+    const comparisonTable: HTMLElement = fixture.nativeElement.querySelector('.comparison-table');
+    const childClasses = Array.from(comparisonTable.children)
+      .map(child => (child as HTMLElement).className);
+
+    expect(childClasses.findIndex(className => className.includes('kappa-section')))
+      .toBeLessThan(childClasses.findIndex(className => className.includes('table-filters')));
+    expect(childClasses.findIndex(className => className.includes('table-filters')))
+      .toBeLessThan(childClasses.findIndex(className => className.includes('table-container')));
+  });
+
   it('should apply combined table filters for task, variable, person, agreement and notes', () => {
     component.comparisonMode = 'between-trainings';
     component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
