@@ -103,13 +103,14 @@ export class CreateJobDefinitionDto {
   @ApiProperty({
     description: 'Maximum number of coding cases',
     example: 100,
-    required: false
+    required: false,
+    nullable: true
   })
   @IsNumber()
   @Min(1)
   @Type(() => Number)
   @IsOptional()
-    maxCodingCases?: number;
+    maxCodingCases?: number | null;
 
   @ApiProperty({
     description: 'Absolute number of cases per variable that should be double coded',
