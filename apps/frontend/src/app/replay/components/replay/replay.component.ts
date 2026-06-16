@@ -1356,7 +1356,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         await this.codingService.submitCodingJob(this.workspaceId, this.codingService.codingJobId);
         return;
       }
-      await this.codingService.saveAllCodingProgress(this.workspaceId, this.codingService.codingJobId);
+      try {
+        await this.codingService.flushPendingRowMutations();
+      } catch {
+        return;
+      }
+      if (this.codingService.hasSaveError) {
+        await this.codingService.submitCodingJob(this.workspaceId, this.codingService.codingJobId);
+        return;
+      }
       await this.codingService.submitCodingJob(this.workspaceId, this.codingService.codingJobId);
     }
   }
@@ -1971,7 +1979,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (this.codingService.hasSaveError) {
       throw new Error('SaveError');
     }
-    await this.codingService.saveAllCodingProgress(this.workspaceId, this.codingService.codingJobId);
   }
 
   private async activateCodingJob(
