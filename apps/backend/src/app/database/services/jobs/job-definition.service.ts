@@ -57,7 +57,7 @@ interface JobDefinitionForUsage {
   id?: number;
   assigned_variables?: JobDefinitionVariable[];
   assigned_variable_bundles?: JobDefinitionBundleForUsage[];
-  max_coding_cases?: number;
+  max_coding_cases?: number | null;
   case_ordering_mode?: CaseOrderingMode;
   distribution_seed?: string;
 }
@@ -81,7 +81,7 @@ interface JobDefinitionValidationState {
   assignedVariableBundles?: JobDefinitionVariableBundle[];
   assignedCoders?: number[];
   durationSeconds?: number;
-  maxCodingCases?: number;
+  maxCodingCases?: number | null;
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: CaseOrderingMode;
@@ -99,6 +99,13 @@ type ExistingJobBoundUpdateField =
   | 'doubleCodingPercentage'
   | 'caseOrderingMode';
 
+const DISTRIBUTION_RELEVANT_UPDATE_FIELDS = new Set<ExistingJobBoundUpdateField>([
+  'assignedVariables',
+  'assignedVariableBundles',
+  'maxCodingCases',
+  'caseOrderingMode'
+]);
+
 interface PreparedJobDefinitionUpdate {
   existingDefinition: JobDefinition;
   updatedDefinition: JobDefinition;
@@ -114,7 +121,7 @@ interface VariableConflictCheckRequest {
   jobDefinitionId?: number;
   assignedVariables: JobDefinitionVariable[];
   assignedVariableBundles: JobDefinitionVariableBundle[];
-  maxCodingCases?: number;
+  maxCodingCases?: number | null;
   caseOrderingMode?: CaseOrderingMode;
   distributionSeed?: string;
   excludeJobDefinitionId?: number;
@@ -125,7 +132,7 @@ type PlannedVariableUsageBatchRequest = {
   key: string | number;
   selectedVariables: JobDefinitionVariable[];
   selectedVariableBundles: JobDefinitionDistributionVariableBundle[];
-  maxCodingCases?: number;
+  maxCodingCases?: number | null;
   caseOrderingMode?: CaseOrderingMode;
   jobDefinitionId?: number;
   excludeJobDefinitionId?: number;
@@ -151,7 +158,7 @@ type DefinitionDistributionRequest = {
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: CaseOrderingMode;
-  maxCodingCases?: number;
+  maxCodingCases?: number | null;
   jobDefinitionId: number;
   distributionSeed: string;
   showScore: boolean;
@@ -1477,6 +1484,10 @@ export class JobDefinitionService {
     return countsByDefinitionId.get(jobDefinition.id) || 0;
   }
 
+  private hasDistributionRelevantChanges(fields: ExistingJobBoundUpdateField[]): boolean {
+    return fields.some(field => DISTRIBUTION_RELEVANT_UPDATE_FIELDS.has(field));
+  }
+
   private collectExistingJobBoundChanges(
     jobDefinition: JobDefinition,
     updateDto: UpdateJobDefinitionDto,
@@ -1543,7 +1554,8 @@ export class JobDefinitionService {
 
     if (
       updateDto.maxCodingCases !== undefined &&
-      updateDto.maxCodingCases !== jobDefinition.max_coding_cases
+      this.toOptionalNumber(updateDto.maxCodingCases) !==
+        this.toOptionalNumber(jobDefinition.max_coding_cases)
     ) {
       changedFields.push('maxCodingCases');
     }
@@ -1675,7 +1687,9 @@ export class JobDefinitionService {
       assignedVariableBundles: nextAssignedVariableBundles,
       assignedCoders: nextCoderAssignments.assignedCoders,
       durationSeconds: updateDto.durationSeconds ?? jobDefinition.duration_seconds,
-      maxCodingCases: updateDto.maxCodingCases ?? jobDefinition.max_coding_cases,
+      maxCodingCases: updateDto.maxCodingCases !== undefined ?
+        updateDto.maxCodingCases :
+        jobDefinition.max_coding_cases,
       doubleCodingAbsolute: updateDto.doubleCodingAbsolute ?? jobDefinition.double_coding_absolute,
       doubleCodingPercentage: updateDto.doubleCodingPercentage ??
         this.toOptionalNumber(jobDefinition.double_coding_percentage),
@@ -1709,12 +1723,15 @@ export class JobDefinitionService {
       );
     }
 
-    if (
-      updateDto.assignedVariables !== undefined ||
-      updateDto.assignedVariableBundles !== undefined ||
-      updateDto.maxCodingCases !== undefined ||
-      updateDto.caseOrderingMode !== undefined
-    ) {
+    const changedExistingJobBoundFields = this.collectExistingJobBoundChanges(
+      jobDefinition,
+      updateDto,
+      nextCoderAssignments,
+      currentMissingsProfileId,
+      nextMissingsProfileId
+    );
+
+    if (this.hasDistributionRelevantChanges(changedExistingJobBoundFields)) {
       const conflicts = await this.checkVariableConflicts(
         jobDefinition.workspace_id,
         {
@@ -1746,14 +1763,6 @@ export class JobDefinitionService {
         distribution_seed: distributionSeed
       } as JobDefinition);
     }
-
-    const changedExistingJobBoundFields = this.collectExistingJobBoundChanges(
-      jobDefinition,
-      updateDto,
-      nextCoderAssignments,
-      currentMissingsProfileId,
-      nextMissingsProfileId
-    );
 
     return {
       existingDefinition: jobDefinition,

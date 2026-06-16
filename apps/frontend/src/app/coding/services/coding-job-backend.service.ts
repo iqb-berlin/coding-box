@@ -85,7 +85,7 @@ interface JobDefinitionApiResponse {
   planned_variable_usage_by_status?: Record<string, DistributionVariableUsageByStatus>;
   plannedVariableUsageByStatus?: Record<string, DistributionVariableUsageByStatus>;
   duration_seconds?: number;
-  max_coding_cases?: number;
+  max_coding_cases?: number | null;
   double_coding_absolute?: number;
   double_coding_percentage?: number;
   case_ordering_mode?: 'continuous' | 'alternating';
@@ -120,7 +120,7 @@ export interface JobDefinitionDistributionSnapshot {
   }>;
   selectedCoders: { coderId: number; capacityPercent: number }[];
   settings: {
-    maxCodingCases?: number;
+    maxCodingCases?: number | null;
     doubleCodingAbsolute?: number;
     doubleCodingPercentage?: number;
     caseOrderingMode?: 'continuous' | 'alternating';
@@ -168,7 +168,7 @@ export interface JobDefinition {
   plannedVariableUsage?: Record<string, number>;
   plannedVariableUsageByStatus?: Record<string, DistributionVariableUsageByStatus>;
   durationSeconds?: number;
-  maxCodingCases?: number;
+  maxCodingCases?: number | null;
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';

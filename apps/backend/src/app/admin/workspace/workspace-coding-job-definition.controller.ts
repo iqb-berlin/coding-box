@@ -94,7 +94,7 @@ const DISTRIBUTION_SNAPSHOT_SCHEMA = {
       settings: {
         type: 'object',
         properties: {
-          maxCodingCases: { type: 'number' },
+          maxCodingCases: { type: 'number', nullable: true },
           doubleCodingAbsolute: { type: 'number' },
           doubleCodingPercentage: { type: 'number' },
           caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] }
@@ -215,7 +215,7 @@ export class WorkspaceCodingJobDefinitionController {
           missings_profile_id: { type: 'number', nullable: true },
           distribution_seed: { type: 'string' },
           duration_seconds: { type: 'number' },
-          max_coding_cases: { type: 'number' },
+          max_coding_cases: { type: 'number', nullable: true },
           double_coding_absolute: { type: 'number' },
           double_coding_percentage: { type: 'number' },
           show_score: { type: 'boolean' },
@@ -267,7 +267,7 @@ export class WorkspaceCodingJobDefinitionController {
           missings_profile_id: { type: 'number', nullable: true },
           distribution_seed: { type: 'string' },
           duration_seconds: { type: 'number' },
-          max_coding_cases: { type: 'number' },
+          max_coding_cases: { type: 'number', nullable: true },
           double_coding_absolute: { type: 'number' },
           double_coding_percentage: { type: 'number' },
           show_score: { type: 'boolean' },

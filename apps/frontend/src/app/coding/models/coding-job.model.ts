@@ -31,7 +31,7 @@ export interface CodingJob {
   training_id?: number;
   training?: CoderTraining;
   durationSeconds?: number;
-  maxCodingCases?: number;
+  maxCodingCases?: number | null;
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
