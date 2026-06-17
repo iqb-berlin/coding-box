@@ -1,7 +1,8 @@
 .code-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 4px 8px;
+  flex-wrap: wrap;
   padding: 6px 10px;
   margin-bottom: 3px;
   border-radius: 4px;
@@ -103,12 +104,14 @@
 .code-content {
   pointer-events: none;
   flex: 0 0 auto;
+  min-width: 0;
 }
 
 .code-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .code-id {
@@ -124,6 +127,7 @@
 .code-score {
   color: rgba(0, 0, 0, 0.6);
   font-style: italic;
+  white-space: nowrap;
 }
 
 .review-code-badge {
@@ -148,6 +152,7 @@
 }
 
 .code-instruction {
+  flex: 1 1 160px;
   margin-left: 0;
   margin-top: 0;
   color: rgba(0, 0, 0, 0.78);
@@ -156,6 +161,11 @@
 
 .code-row:not(.general-instruction-row) .code-instruction {
   pointer-events: none;
+}
+
+.code-row.with-score .code-instruction {
+  flex-basis: 100%;
+  margin-left: 28px;
 }
 
 .code-instruction img {
@@ -269,6 +279,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0;
 }
 
 .action-controls {
@@ -349,7 +360,17 @@
 }
 
 .nav-button {
-  margin: 0 2px;
+  --mdc-icon-button-state-layer-size: 32px;
+  width: 32px;
+  height: 32px;
+  padding: 4px;
+  margin: 0;
+}
+
+.nav-button mat-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
 }
 
 .unit-position {
@@ -357,7 +378,7 @@
   align-items: center;
   font-weight: 500;
   color: rgba(0, 0, 0, 0.87);
-  min-width: 60px;
+  min-width: 42px;
   justify-content: center;
 }
 
