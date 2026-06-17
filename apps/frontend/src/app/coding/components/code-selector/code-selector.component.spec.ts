@@ -82,6 +82,15 @@ describe('CodeSelectorComponent', () => {
             ruleSetOperatorAnd: false,
             ruleSets: [],
             manualInstruction: '   '
+          },
+          {
+            id: 4,
+            type: 'RESIDUAL',
+            label: 'Visually empty HTML code',
+            score: 0,
+            ruleSetOperatorAnd: false,
+            ruleSets: [],
+            manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>'
           }
         ]
       }
