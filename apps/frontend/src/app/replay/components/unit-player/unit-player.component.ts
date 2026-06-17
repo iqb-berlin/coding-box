@@ -17,6 +17,7 @@ import { FileService } from '../../../shared/services/file/file.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { PageData } from '../../models/page-data.model';
+import { normalizeMathTextReplayDataParts } from '../../utils/replay-data-parts-normalization';
 
 export type Progress = 'none' | 'some' | 'complete';
 
@@ -133,7 +134,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
 
   private handleResponsesChange(unitResponses: ResponseDto): void {
     if (unitResponses?.responses) {
-      this.dataParts = unitResponses.responses.reduce(
+      const dataParts = unitResponses.responses.reduce(
         (acc: { [key: string]: string }, response: { id: string; content: string }) => {
           if (typeof response.content === 'object' && response.content !== null) {
             acc[response.id] = JSON.stringify(response.content);
@@ -148,6 +149,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
           return acc;
         }, {}
       );
+      this.dataParts = normalizeMathTextReplayDataParts(dataParts, this.unitDef);
     }
   }
 
@@ -396,11 +398,14 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     if (this.playerApiVersion === 1) {
       postMessageData.type = 'vo.ToPlayer.DataTransfer';
     } else {
+      const dataParts = this.dataParts ?
+        normalizeMathTextReplayDataParts(this.dataParts, this.unitDef) :
+        this.dataParts;
       this.isLoaded.next(true);
       Object.assign(postMessageData, {
         type: 'vopStartCommand',
         unitState: {
-          dataParts: this.dataParts,
+          dataParts,
           presentationProgress: 'none',
           responseProgress: 'none'
         },
