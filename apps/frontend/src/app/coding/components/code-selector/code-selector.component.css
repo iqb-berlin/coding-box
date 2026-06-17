@@ -1,12 +1,15 @@
 .code-row {
   display: flex;
-  flex-direction: column;
-  padding: 8px 12px;
-  margin-bottom: 4px;
+  align-items: flex-start;
+  gap: 4px 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  margin-bottom: 3px;
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.2s ease, border-color 0.2s ease;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
+  line-height: 1.28;
 }
 
 .code-row:hover {
@@ -57,6 +60,7 @@
 }
 
 .code-row.legacy-code-row {
+  flex-direction: column;
   cursor: default;
   background-color: #fff8e1;
   border-color: #ffb300;
@@ -99,12 +103,23 @@
 
 .code-content {
   pointer-events: none;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .code-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.code-token {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 22px;
+  white-space: nowrap;
 }
 
 .code-id {
@@ -116,8 +131,11 @@
 }
 
 .code-score {
-  color: rgba(0, 0, 0, 0.6);
-  font-style: italic;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .review-code-badge {
@@ -142,9 +160,11 @@
 }
 
 .code-instruction {
-  margin-left: 24px;
-  margin-top: 4px;
+  flex: 1 1 160px;
+  margin-left: 0;
+  margin-top: 0;
   color: rgba(0, 0, 0, 0.78);
+  min-width: 0;
 }
 
 .code-row:not(.general-instruction-row) .code-instruction {
@@ -215,43 +235,31 @@
   resize: none;
 }
 
-/* Enhanced Progress Section */
-.progress-info {
-  text-align: center;
-  padding: 12px 8px;
-  margin-bottom: 12px;
-  background: rgba(0, 0, 0, 0.04);
-  border-radius: 8px;
-  font-size: 14px;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+/* Compact Progress Section */
+.progress-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
 }
 
-.progress-text {
+.progress-label {
   font-weight: 500;
   color: rgba(0, 0, 0, 0.87);
 }
 
-.progress-numbers {
+.progress-summary {
   font-weight: 600;
   color: #1976d2;
-  margin: 0 8px;
-}
-
-.progress-percentage {
-  color: rgba(0, 0, 0, 0.6);
-}
-
-.progress-open {
-  display: block;
-  margin-top: 4px;
-  color: #f57c00;
-  font-size: 13px;
+  white-space: nowrap;
 }
 
 .custom-progress-bar {
-  margin-bottom: 16px;
-  height: 10px;
-  border-radius: 5px;
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 3px;
   background: rgba(0, 0, 0, 0.1);
 }
 
@@ -264,8 +272,8 @@
 .progress-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
   padding: 4px 0;
 }
@@ -274,13 +282,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0;
 }
 
 .action-controls {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 :host {
@@ -324,14 +333,47 @@
 }
 
 .uncertain-codes-section {
-  margin-top: 16px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
-  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.support-section {
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  padding-top: 4px;
+}
+
+.support-section.collapsed {
+  padding-bottom: 2px;
+}
+
+.support-toggle {
+  width: 100%;
+  min-height: 32px;
+  justify-content: flex-start;
+  padding: 0 6px;
+  font-size: 13px;
+  line-height: 1.2;
+  color: rgba(0, 0, 0, 0.74);
+}
+
+.support-toggle mat-icon {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  margin-right: 4px;
 }
 
 .nav-button {
-  margin: 0 2px;
+  --mdc-icon-button-state-layer-size: 32px;
+  width: 32px;
+  height: 32px;
+  padding: 4px;
+  margin: 0;
+}
+
+.nav-button mat-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
 }
 
 .unit-position {
@@ -339,7 +381,7 @@
   align-items: center;
   font-weight: 500;
   color: rgba(0, 0, 0, 0.87);
-  min-width: 60px;
+  min-width: 42px;
   justify-content: center;
 }
 
@@ -491,4 +533,29 @@
 
 .variable-panel-bar-fill.complete {
   background: #388e3c;
+}
+
+@media (max-width: 1200px) {
+  :host {
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .selector-content {
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .codes-section,
+  .codes-section>div,
+  .scrollable-codes {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .code-instruction img {
+    max-width: 100%;
+    height: auto;
+  }
 }
