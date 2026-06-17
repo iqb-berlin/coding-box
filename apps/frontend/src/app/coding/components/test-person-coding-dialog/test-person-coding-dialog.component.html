@@ -4,7 +4,10 @@
   </div>
 
   <div class="dialog-content">
-    <coding-box-test-person-coding></coding-box-test-person-coding>
+    <coding-box-test-person-coding
+      [initialJobId]="data?.initialJobId || null"
+      [initialAutoCoderRun]="data?.initialAutoCoderRun || null">
+    </coding-box-test-person-coding>
   </div>
 
   <div class="dialog-footer">
