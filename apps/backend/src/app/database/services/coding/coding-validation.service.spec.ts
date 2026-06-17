@@ -1241,6 +1241,11 @@ describe('CodingValidationService', () => {
                   id: 2,
                   label: 'Whitespace',
                   manualInstruction: '   '
+                },
+                {
+                  id: 3,
+                  label: 'Visually empty HTML',
+                  manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>'
                 }
               ]
             }
@@ -1261,7 +1266,7 @@ describe('CodingValidationService', () => {
             casesInJobs: 0,
             availableCases: 5,
             uniqueCasesAfterAggregation: 5,
-            regularCodeCount: 2,
+            regularCodeCount: 3,
             selectableRegularCodeCount: 0,
             onlySpecialOptionsAvailable: true
           })

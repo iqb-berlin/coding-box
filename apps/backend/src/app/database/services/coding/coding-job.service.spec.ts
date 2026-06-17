@@ -3134,6 +3134,10 @@ describe('CodingJobService', () => {
   it.each([
     { manualInstruction: '', label: 'empty' },
     { manualInstruction: '   ', label: 'whitespace-only' },
+    {
+      manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>',
+      label: 'visually empty HTML'
+    },
     { manualInstruction: null, label: 'missing' }
   ])(
     'rejects positive selected codes with $label manual instructions',
