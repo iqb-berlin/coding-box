@@ -38,7 +38,9 @@ function decodeCodePoint(codePoint: number, fallback: string): string {
   return String.fromCodePoint(codePoint);
 }
 
-export function getVisibleManualInstructionText(manualInstruction?: string | null): string {
+export function getVisibleManualInstructionText(
+  manualInstruction?: string | null
+): string {
   if (!manualInstruction) return '';
 
   return decodeHtmlEntities(manualInstruction.replace(/<[^>]*>/g, ' '))
@@ -48,6 +50,8 @@ export function getVisibleManualInstructionText(manualInstruction?: string | nul
     .trim();
 }
 
-export function hasManualInstruction(code: { manualInstruction?: string | null }): boolean {
+export function hasVisibleManualInstruction(
+  code: { manualInstruction?: string | null }
+): boolean {
   return getVisibleManualInstructionText(code.manualInstruction).length > 0;
 }

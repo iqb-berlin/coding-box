@@ -1350,6 +1350,15 @@ describe('ReplayComponent', () => {
               ruleSetOperatorAnd: false,
               ruleSets: [],
               manualInstruction: '<p>Manual instruction</p>'
+            },
+            {
+              id: 4,
+              type: 'RESIDUAL',
+              label: 'Visually empty HTML code',
+              score: 0,
+              ruleSetOperatorAnd: false,
+              ruleSets: [],
+              manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>'
             }
           ]
         }
@@ -1501,6 +1510,38 @@ describe('ReplayComponent', () => {
       component.codingService.codingScheme = digitShortcutCodingScheme;
       const onCodeSelectedSpy = jest.spyOn(component, 'onCodeSelected').mockResolvedValue();
       const event = new KeyboardEvent('keydown', { key: '1', code: 'Digit1' });
+      const preventDefaultSpy = jest.spyOn(event, 'preventDefault');
+
+      component.onKeyDown(event);
+
+      expect(preventDefaultSpy).toHaveBeenCalled();
+      expect(onCodeSelectedSpy).not.toHaveBeenCalled();
+    });
+
+    it('should ignore digit shortcuts for regular codes with visually empty HTML manual instructions', () => {
+      component.isCodingMode = true;
+      const unitsData = {
+        id: 123,
+        name: 'job',
+        currentUnitIndex: 0,
+        units: [
+          {
+            id: 1,
+            name: 'UNIT1',
+            alias: 'UNIT1',
+            bookletId: 0,
+            testPerson: 'tp1@code1@grp@booklet',
+            variableId: 'V1',
+            variableAnchor: 'V1'
+          }
+        ]
+      };
+      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
+      replayComponent.unitsData = unitsData;
+      component.codingService.currentVariableId = 'V1';
+      component.codingService.codingScheme = digitShortcutCodingScheme;
+      const onCodeSelectedSpy = jest.spyOn(component, 'onCodeSelected').mockResolvedValue();
+      const event = new KeyboardEvent('keydown', { key: '4', code: 'Digit4' });
       const preventDefaultSpy = jest.spyOn(event, 'preventDefault');
 
       component.onKeyDown(event);

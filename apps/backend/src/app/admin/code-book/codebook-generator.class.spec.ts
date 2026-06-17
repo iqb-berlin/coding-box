@@ -124,7 +124,8 @@ describe('CodebookGenerator', () => {
       [
         manualCode,
         { ...manualCode, id: 2, manualInstruction: '' },
-        { ...manualCode, id: 3, manualInstruction: '   ' }
+        { ...manualCode, id: 3, manualInstruction: '   ' },
+        { ...manualCode, id: 4, manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>' }
       ],
       { ...contentSetting, hasOnlyManualCoding: true, hasClosedVars: false }
     ) as { id: string; description: string }[];
@@ -151,11 +152,11 @@ describe('CodebookGenerator', () => {
     expect(codeInfos.map(codeInfo => codeInfo.id)).toEqual(['1', '2', '3']);
   });
 
-  it('treats whitespace-only manual instructions as missing for variable filtering', () => {
+  it('treats visually empty HTML manual instructions as missing for variable filtering', () => {
     const generator = CodebookGenerator as unknown as Record<string, (...args: unknown[]) => unknown>;
     const whitespaceManualVariable = {
       ...variableCoding,
-      codes: [{ ...manualCode, manualInstruction: '   ' }]
+      codes: [{ ...manualCode, manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>' }]
     };
 
     expect(generator.isManual(whitespaceManualVariable)).toBe(false);
