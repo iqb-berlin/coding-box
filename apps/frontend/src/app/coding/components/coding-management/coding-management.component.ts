@@ -1232,13 +1232,17 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     });
   }
 
-  openManualCoding(): void {
+  openManualCoding(focusManualFreshness = false): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
     }
 
-    this.router.navigate([`/workspace-admin/${workspaceId}/coding/manual`]);
+    const navigationExtras = focusManualFreshness ?
+      { queryParams: { focus: 'manual-freshness' } } :
+      undefined;
+
+    this.router.navigate([`/workspace-admin/${workspaceId}/coding/manual`], navigationExtras);
   }
 
   openTestFiles(): void {

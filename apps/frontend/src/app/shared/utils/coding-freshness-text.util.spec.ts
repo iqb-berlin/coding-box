@@ -140,7 +140,7 @@ describe('coding freshness text utils', () => {
         unitCount: 1,
         affectedResponseCount: 2
       }
-    ])).toBe('Manuelle Kodierung prüfen');
+    ])).toBe('Manuelle Kodierung aktualisieren');
   });
 
   it('separates auto-coding warnings from manual review warnings', () => {
@@ -212,8 +212,8 @@ describe('coding freshness text utils', () => {
         affectedResponseCount: 10
       }
     ])).toBe(
-      'Öffnen Sie die manuelle Prüfung und wenden Sie abgeschlossene Job-Ergebnisse erneut an ' +
-      'oder kodieren Sie offene Fälle neu.'
+      'Öffnen Sie die manuelle Kodierung. Bearbeiten Sie offene Fälle im Abschnitt Durchführung ' +
+      'oder übernehmen Sie abgeschlossene Ergebnisse im Abschnitt Abschluss.'
     );
   });
 
@@ -233,7 +233,7 @@ describe('coding freshness text utils', () => {
       }
     ])).toBe(
       'Aktualisieren Sie zuerst die offenen Auto-Coding-Schritte. ' +
-      'Prüfen Sie danach die manuelle Kodierung.'
+      'Danach wird die manuelle Kodierung neu bewertet.'
     );
   });
 });

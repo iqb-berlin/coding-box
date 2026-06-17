@@ -246,7 +246,7 @@ describe('CodingManagementComponent', () => {
           'second-autocoding-waits-help': 'Der Start von Auto-Coding 2 bleibt bis dahin gesperrt. {{taskResultHelp}}',
           'second-autocoding-waits-chip': '{{version}}: {{count}} wartet',
           'second-autocoding-waits-snackbar': 'Schließen Sie zuerst die manuelle Kodierung ab und übernehmen Sie die Ergebnisse.',
-          'open-manual-review': 'Manuelle Prüfung öffnen'
+          'open-manual-review': 'Manuelle Kodierung öffnen'
         }
       }
     });
@@ -379,12 +379,15 @@ describe('CodingManagementComponent', () => {
       fixture.detectChanges();
       const actionPanel = fixture.nativeElement.querySelector('.coding-freshness-actions') as HTMLElement | null;
       const manualActionButton = Array.from(actionPanel?.querySelectorAll('button') || [])
-        .find(button => button.textContent?.includes('Manuelle Prüfung öffnen')) as HTMLButtonElement | undefined;
+        .find(button => button.textContent?.includes('Manuelle Kodierung öffnen')) as HTMLButtonElement | undefined;
       expect(manualActionButton).toBeTruthy();
 
       manualActionButton?.click();
 
-      expect(mockRouter.navigate).toHaveBeenCalledWith(['/workspace-admin/1/coding/manual']);
+      expect(mockRouter.navigate).toHaveBeenCalledWith(
+        ['/workspace-admin/1/coding/manual'],
+        { queryParams: { focus: 'manual-freshness' } }
+      );
     });
 
     it('should keep earlier coding freshness warnings visible while second auto-coding waits', () => {
@@ -1086,9 +1089,19 @@ describe('CodingManagementComponent', () => {
     it('should navigate to manual coding route', () => {
       component.openManualCoding();
 
-      expect(mockRouter.navigate).toHaveBeenCalledWith([
-        '/workspace-admin/1/coding/manual'
-      ]);
+      expect(mockRouter.navigate).toHaveBeenCalledWith(
+        ['/workspace-admin/1/coding/manual'],
+        undefined
+      );
+    });
+
+    it('should navigate to focused manual coding route for freshness work', () => {
+      component.openManualCoding(true);
+
+      expect(mockRouter.navigate).toHaveBeenCalledWith(
+        ['/workspace-admin/1/coding/manual'],
+        { queryParams: { focus: 'manual-freshness' } }
+      );
     });
 
     it('should navigate to test files route', () => {

@@ -1328,7 +1328,7 @@
       "update-running": "Aktualisierung läuft: {{progress}}%",
       "retry": "Erneut prüfen",
       "check-test-files": "Testdateien prüfen",
-      "open-manual-review": "Manuelle Prüfung öffnen"
+      "open-manual-review": "Manuelle Kodierung öffnen"
     },
     "labels": {
       "geogebra-file": "GeoGebra-Datei"
