@@ -19,7 +19,7 @@ import {
   MatAnchor,
   MatButton
 } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
 import { Router } from '@angular/router';
@@ -34,7 +34,11 @@ import {
 } from '../export-dialog/export-dialog.component';
 import { Success } from '../../models/success.model';
 import { ResponseEntity } from '../../../shared/models/response-entity.model';
-import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
+import {
+  TestPersonCodingDialogComponent,
+  TestPersonCodingDialogData,
+  TestPersonCodingDialogResult
+} from '../test-person-coding-dialog/test-person-coding-dialog.component';
 import {
   AppliedResultsOverview,
   TestPersonCodingService
@@ -280,7 +284,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
     this.testPersonCodingService.autoCodingCompleted$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
+      .subscribe(event => {
+        if (event?.jobId && event.jobId === this.activeFreshnessJobId) {
+          this.stopFreshnessJobPolling();
+        }
         this.fetchCodingStatistics();
         this.loadCodingFreshness();
         this.loadManualAppliedResultsOverview();
@@ -462,7 +469,30 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
         this.activeFreshnessJobId = result.jobId;
         this.activeFreshnessJobProgress = 0;
-        this.startFreshnessJobPolling(result.jobId);
+        const dialogRef = this.openTestPersonCodingDialog({
+          initialJobId: result.jobId,
+          initialAutoCoderRun: version === 'v3' ? 2 : 1
+        });
+        dialogRef.afterClosed()
+          .pipe(takeUntil(this.destroy$))
+          .subscribe(dialogResult => {
+            if (this.activeFreshnessJobId !== result.jobId) {
+              return;
+            }
+
+            const dialogStatus = dialogResult?.jobId === result.jobId ?
+              dialogResult.jobStatus :
+              null;
+            if (this.isTerminalJobStatus(dialogStatus)) {
+              this.stopFreshnessJobPolling();
+              this.loadCodingFreshness();
+              this.loadManualAppliedResultsOverview();
+              this.loadAutocodingReadiness(true);
+              return;
+            }
+
+            this.startFreshnessJobPolling(result.jobId);
+          });
         this.snackBar.open(
           `Auto-Coding für ${result.unitCount} betroffene Einträge gestartet.`,
           'Schließen',
@@ -953,7 +983,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           if (['completed', 'failed', 'cancelled', 'paused'].includes(status.status)) {
             this.stopFreshnessJobPolling();
             if (status.status === 'completed') {
-              this.testPersonCodingService.notifyAutoCodingCompleted();
+              this.testPersonCodingService.notifyAutoCodingCompleted(jobId);
               this.snackBar.open(
                 'Betroffene Ergebnisse wurden kodiert.',
                 'Schließen',
@@ -1156,15 +1186,31 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   // Dialog Methods
   onAutoCode(): void {
+    this.openTestPersonCodingDialog();
+  }
+
+  private openTestPersonCodingDialog(
+    data?: TestPersonCodingDialogData
+  ): MatDialogRef<TestPersonCodingDialogComponent, TestPersonCodingDialogResult | undefined> {
     const dialogRef = this.dialog.open(TestPersonCodingDialogComponent, {
       height: '90vh',
       maxWidth: '100vw',
-      maxHeight: '100vh'
+      maxHeight: '100vh',
+      disableClose: true,
+      data
     });
 
-    dialogRef.afterClosed().subscribe(() => {
-      this.fetchCodingStatistics();
-    });
+    dialogRef.afterClosed()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.fetchCodingStatistics();
+      });
+
+    return dialogRef;
+  }
+
+  private isTerminalJobStatus(status?: string | null): boolean {
+    return ['completed', 'failed', 'cancelled', 'paused'].includes(status || '');
   }
 
   fetchCodingList(): void {

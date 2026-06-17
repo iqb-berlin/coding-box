@@ -21,6 +21,7 @@ import { TestPersonCodingService } from '../../services/test-person-coding.servi
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 import { Success } from '../../models/success.model';
+import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
 
 describe('CodingManagementComponent', () => {
   let component: CodingManagementComponent;
@@ -33,6 +34,7 @@ describe('CodingManagementComponent', () => {
   let mockTestPersonCodingService: jest.Mocked<Partial<TestPersonCodingService>>;
   let mockRouter: jest.Mocked<Partial<Router>>;
   let mockSnackBar: jest.Mocked<Partial<MatSnackBar>>;
+  let autoCodingCompletedSubject: Subject<{ jobId?: string }>;
 
   const fakeActivatedRoute = {
     snapshot: { data: {} }
@@ -89,9 +91,10 @@ describe('CodingManagementComponent', () => {
       getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(false)),
       getEnableRegexSearch: jest.fn().mockReturnValue(of(false))
     };
+    autoCodingCompletedSubject = new Subject<{ jobId?: string }>();
 
     mockTestPersonCodingService = {
-      autoCodingCompleted$: of(),
+      autoCodingCompleted$: autoCodingCompletedSubject.asObservable(),
       testResultsChanged$: of(),
       getCodingFreshness: jest.fn().mockReturnValue(of({
         workspaceId: 1,
@@ -520,6 +523,159 @@ describe('CodingManagementComponent', () => {
         'Schließen',
         { duration: 6000 }
       );
+    });
+
+    it('should open the test person coding dialog with the started freshness job', () => {
+      jest.useFakeTimers();
+      try {
+        (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
+          totalResponses: 42,
+          statusCounts: {},
+          jobId: 'freshness-job-1',
+          message: 'Processing in background',
+          unitCount: 7,
+          personCount: 3,
+          groupNames: ['TG1']
+        }));
+
+        component.startFreshnessCoding('v1');
+
+        expect(mockDialog.open).toHaveBeenCalledWith(
+          TestPersonCodingDialogComponent,
+          expect.objectContaining({
+            height: '90vh',
+            maxWidth: '100vw',
+            maxHeight: '100vh',
+            data: {
+              initialJobId: 'freshness-job-1',
+              initialAutoCoderRun: 1
+            }
+          })
+        );
+      } finally {
+        component.ngOnDestroy();
+        jest.useRealTimers();
+      }
+    });
+
+    it('should resume parent freshness polling only after the job dialog closes', () => {
+      jest.useFakeTimers();
+      const afterClosed$ = new Subject<void>();
+      const dialogRef = {
+        afterClosed: jest.fn().mockReturnValue(afterClosed$),
+        close: jest.fn()
+      };
+
+      try {
+        (mockDialog.open as jest.Mock).mockReturnValueOnce(dialogRef);
+        (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
+          totalResponses: 42,
+          statusCounts: {},
+          jobId: 'freshness-job-1',
+          message: 'Processing in background',
+          unitCount: 7,
+          personCount: 3,
+          groupNames: ['TG1']
+        }));
+
+        component.startFreshnessCoding('v1');
+
+        expect(jest.getTimerCount()).toBe(0);
+
+        afterClosed$.next();
+        afterClosed$.complete();
+
+        expect(jest.getTimerCount()).toBe(1);
+      } finally {
+        component.ngOnDestroy();
+        jest.useRealTimers();
+      }
+    });
+
+    it('should not resume parent freshness polling when the dialog reports a terminal status for the started job', () => {
+      jest.useFakeTimers();
+      const afterClosed$ = new Subject<{ initialJobId: string; jobId: string; jobStatus: 'failed' }>();
+      const dialogRef = {
+        afterClosed: jest.fn().mockReturnValue(afterClosed$),
+        close: jest.fn()
+      };
+
+      try {
+        (mockDialog.open as jest.Mock).mockReturnValueOnce(dialogRef);
+        (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
+          totalResponses: 42,
+          statusCounts: {},
+          jobId: 'freshness-job-1',
+          message: 'Processing in background',
+          unitCount: 7,
+          personCount: 3,
+          groupNames: ['TG1']
+        }));
+
+        component.startFreshnessCoding('v1');
+        afterClosed$.next({
+          initialJobId: 'freshness-job-1',
+          jobId: 'freshness-job-1',
+          jobStatus: 'failed'
+        });
+        afterClosed$.complete();
+
+        expect(jest.getTimerCount()).toBe(0);
+        expect(component.activeFreshnessJobId).toBeNull();
+      } finally {
+        component.ngOnDestroy();
+        jest.useRealTimers();
+      }
+    });
+
+    it('should resume parent freshness polling when the dialog reports a status for another job', () => {
+      jest.useFakeTimers();
+      const afterClosed$ = new Subject<{ initialJobId: string; jobId: string; jobStatus: 'failed' }>();
+      const dialogRef = {
+        afterClosed: jest.fn().mockReturnValue(afterClosed$),
+        close: jest.fn()
+      };
+
+      try {
+        (mockDialog.open as jest.Mock).mockReturnValueOnce(dialogRef);
+        (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
+          totalResponses: 42,
+          statusCounts: {},
+          jobId: 'freshness-job-1',
+          message: 'Processing in background',
+          unitCount: 7,
+          personCount: 3,
+          groupNames: ['TG1']
+        }));
+
+        component.startFreshnessCoding('v1');
+        afterClosed$.next({
+          initialJobId: 'freshness-job-1',
+          jobId: 'other-job',
+          jobStatus: 'failed'
+        });
+        afterClosed$.complete();
+
+        expect(jest.getTimerCount()).toBe(1);
+      } finally {
+        component.ngOnDestroy();
+        jest.useRealTimers();
+      }
+    });
+
+    it('should keep active freshness tracking when a different auto-coding job completes', () => {
+      component.activeFreshnessJobId = 'freshness-job-1';
+      component.activeFreshnessJobProgress = 42;
+
+      autoCodingCompletedSubject.next({ jobId: 'other-job' });
+
+      expect(component.activeFreshnessJobId).toBe('freshness-job-1');
+      expect(component.activeFreshnessJobProgress).toBe(42);
+
+      autoCodingCompletedSubject.next({ jobId: 'freshness-job-1' });
+
+      expect(component.activeFreshnessJobId).toBeNull();
+      expect(component.activeFreshnessJobProgress).toBeNull();
     });
   });
 
