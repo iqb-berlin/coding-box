@@ -108,7 +108,11 @@ import {
   isCodingFreshnessOpenWarning
 } from '../../../shared/utils/coding-freshness-text.util';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
-import { ExportJobConfig, ExportJobService } from '../../../shared/services/file/export-job.service';
+import {
+  ExportJobConfig,
+  ExportJobService,
+  isReplayAuthTokenError
+} from '../../../shared/services/file/export-job.service';
 import { CoderService } from '../../services/coder.service';
 import {
   ManualCodingExportDialogComponent,
@@ -1205,7 +1209,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         next: () => {
           this.showSuccess('Exportjob wurde gestartet.');
         },
-        error: () => {
+        error: error => {
+          if (isReplayAuthTokenError(error)) {
+            this.showError(
+              this.translateService.instant('coding-management-manual.errors.replay-auth-token-failed')
+            );
+            return;
+          }
           this.showError('Exportjob konnte nicht gestartet werden.');
         }
       });
