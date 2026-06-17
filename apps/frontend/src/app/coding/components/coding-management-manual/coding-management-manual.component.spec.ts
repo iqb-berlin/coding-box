@@ -11,7 +11,10 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 import { ResponseMatchingFlag } from '../../../ws-admin/services/workspace-settings.service';
 import { CoderService } from '../../services/coder.service';
-import { ExportJobService } from '../../../shared/services/file/export-job.service';
+import {
+  createReplayAuthTokenError,
+  ExportJobService
+} from '../../../shared/services/file/export-job.service';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 import { ManualCodingExportDialogComponent } from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
 import type {
@@ -125,6 +128,10 @@ describe('CodingManagementManualComponent', () => {
         },
         'completed-jobs': {
           'readonly-note': 'Nur lesbar'
+        },
+        errors: {
+          'replay-auth-token-failed':
+            'Replay-Links konnten nicht vorbereitet werden, weil kein Auth-Token erstellt werden konnte. Exportjob wurde nicht gestartet.'
         },
         buttons: {
           'show-more-manual-code-warnings': '+{{count}} weitere anzeigen',
@@ -1475,6 +1482,49 @@ describe('CodingManagementManualComponent', () => {
         excludeAutoCoded: true,
         jobDefinitionIds: [11]
       })
+    );
+  });
+
+  it('should show a specific error when replay export auth token creation fails', () => {
+    const exportJobService = TestBed.inject(ExportJobService) as unknown as {
+      startJob: jest.Mock;
+    };
+    const snackBar = TestBed.inject(MatSnackBar) as unknown as {
+      open: jest.Mock;
+    };
+    const componentInternals = component as unknown as {
+      startManualCodingExport: (
+        context: 'training' | 'execution',
+        result: {
+          exportType: 'detailed';
+          includeReplayUrl: true;
+          jobDefinitionIds: number[];
+        }
+      ) => void;
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    exportJobService.startJob.mockReturnValue(
+      throwError(() => createReplayAuthTokenError())
+    );
+
+    componentInternals.startManualCodingExport('execution', {
+      exportType: 'detailed',
+      includeReplayUrl: true,
+      jobDefinitionIds: [11]
+    });
+
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'Replay-Links konnten nicht vorbereitet werden, weil kein Auth-Token erstellt werden konnte. Exportjob wurde nicht gestartet.',
+      'Schließen',
+      {
+        duration: 5000,
+        panelClass: ['error-snackbar']
+      }
     );
   });
 
