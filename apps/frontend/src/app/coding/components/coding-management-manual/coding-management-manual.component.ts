@@ -23,7 +23,7 @@ import {
   switchMap
 } from 'rxjs';
 import * as ExcelJS from 'exceljs';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { PageEvent, MatPaginatorModule } from '@angular/material/paginator';
 import { MatTabsModule } from '@angular/material/tabs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
@@ -189,6 +189,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private exportJobService = inject(ExportJobService);
   private translateService = inject(TranslateService);
   private dialog = inject(MatDialog);
+  private route = inject(ActivatedRoute);
   private router = inject(Router);
   private document = inject(DOCUMENT);
   private destroy$ = new Subject<void>();
@@ -219,6 +220,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isLoadingCaseCoverage = false;
   isLoadingCodingProgress = false;
   isLoadingManualCodeAvailability = false;
+  isLoadingCodingIncompleteVariables = false;
+  isLoadingAppliedResultsOverview = false;
   isLoadingKappaSummary = false;
 
   // Response matching mode configuration
@@ -388,10 +391,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private jobDefinitionsForExportWorkspaceId?: number;
   private hasLoadedJobDefinitionsForExport = false;
   private isLoadingJobDefinitionsForExport = false;
+  private readonly manualFreshnessFocusParam = 'manual-freshness';
+  private pendingManualFreshnessFocus = false;
+  private manualFreshnessPlanningRequested = false;
 
   expectedCombinations: ExpectedCombinationDto[] = [];
 
   ngOnInit(): void {
+    this.pendingManualFreshnessFocus =
+      this.route.snapshot.queryParamMap.get('focus') === this.manualFreshnessFocusParam;
+
     this.validationStateService.validationProgress$
       .pipe(takeUntil(this.destroy$))
       .subscribe((progress: ValidationProgress | null) => {
@@ -1398,6 +1407,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.isLoadingVariableCoverage ||
       this.isLoadingCaseCoverage ||
       this.isLoadingManualCodeAvailability ||
+      this.isLoadingCodingIncompleteVariables ||
+      this.isLoadingAppliedResultsOverview ||
       this.isLoadingMatchingMode;
   }
 
@@ -2256,6 +2267,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .pipe(
         finalize(() => {
           this.isLoadingMatchingMode = false;
+          this.focusManualFreshnessTargetIfReady();
         }),
         takeUntil(this.destroy$)
       )
@@ -2342,6 +2354,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.canApplyManualCodingResults = this.appService.authData.isAdmin === true;
       this.canManageManualCodingJobs = this.appService.authData.isAdmin === true;
       this.keepAvailableManualTabSelected(activeTab);
+      this.requestManualFreshnessFocusIfNeeded();
       return;
     }
 
@@ -2356,12 +2369,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.canManageManualCodingJobs = accessLevel >= 2;
           this.canApplyManualCodingResults = accessLevel >= 3;
           this.keepAvailableManualTabSelected(activeTab);
+          this.requestManualFreshnessFocusIfNeeded();
         },
         error: () => {
           const activeTab = this.activeManualTab;
           this.canManageManualCodingJobs = false;
           this.canApplyManualCodingResults = false;
           this.keepAvailableManualTabSelected(activeTab);
+          this.requestManualFreshnessFocusIfNeeded();
         }
       });
   }
@@ -2383,6 +2398,30 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const executionTabIndex = this.visibleManualCodingTabs.indexOf('execution');
     this.selectedManualTabIndex = executionTabIndex >= 0 ? executionTabIndex : 0;
     this.loadManualTabData(this.activeManualTab);
+  }
+
+  private requestManualFreshnessFocusIfNeeded(): void {
+    if (!this.pendingManualFreshnessFocus || this.manualFreshnessPlanningRequested) {
+      return;
+    }
+
+    this.manualFreshnessPlanningRequested = true;
+    this.goToManualTab('planning');
+    this.focusManualFreshnessTargetIfReady();
+  }
+
+  private focusManualFreshnessTargetIfReady(): void {
+    if (!this.pendingManualFreshnessFocus ||
+        !this.manualFreshnessPlanningRequested ||
+        this.isAnyPlanningDataLoading()) {
+      return;
+    }
+
+    this.pendingManualFreshnessFocus = false;
+    this.goToManualTab(
+      this.getPlanningNextStepTargetTab(),
+      this.getPlanningNextStepTargetSection()
+    );
   }
 
   private loadJobDefinitionsForExport(): void {
@@ -2586,6 +2625,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$),
         finalize(() => {
           this.isLoadingCodingProgress = false;
+          this.focusManualFreshnessTargetIfReady();
         })
       )
       .subscribe({
@@ -2611,6 +2651,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$),
         finalize(() => {
           this.isLoadingVariableCoverage = false;
+          this.focusManualFreshnessTargetIfReady();
         })
       )
       .subscribe({
@@ -2667,6 +2708,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$),
         finalize(() => {
           this.isLoadingCaseCoverage = false;
+          this.focusManualFreshnessTargetIfReady();
         })
       )
       .subscribe({
@@ -2729,13 +2771,21 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.codingIncompleteVariables = [];
       this.manualCodingScopeSummary = null;
       this.setManualCodeAvailabilityWarnings([]);
+      this.isLoadingCodingIncompleteVariables = false;
       this.isLoadingManualCodeAvailability = false;
       return;
     }
 
+    this.isLoadingCodingIncompleteVariables = true;
     this.codingJobBackendService
       .getCodingIncompleteVariables(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingCodingIncompleteVariables = false;
+          this.focusManualFreshnessTargetIfReady();
+        })
+      )
       .subscribe({
         next: (
           variables: {
@@ -2774,6 +2824,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$),
         finalize(() => {
           this.isLoadingManualCodeAvailability = false;
+          this.focusManualFreshnessTargetIfReady();
         })
       )
       .subscribe({
@@ -2852,12 +2903,20 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private loadAppliedResultsOverview(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      this.isLoadingAppliedResultsOverview = false;
       return;
     }
 
+    this.isLoadingAppliedResultsOverview = true;
     this.testPersonCodingService
       .getAppliedResultsOverview(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingAppliedResultsOverview = false;
+          this.focusManualFreshnessTargetIfReady();
+        })
+      )
       .subscribe({
         next: overview => {
           if (!overview) {
@@ -3457,6 +3516,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.responseAnalysis = analysis;
           this.responseAnalysisError = null;
           this.isLoadingResponseAnalysis = false;
+          this.focusManualFreshnessTargetIfReady();
 
           if (analysis.isCalculating) {
             // Poll every 5 seconds if calculating
@@ -3469,6 +3529,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: error => {
           this.isLoadingResponseAnalysis = false;
+          this.focusManualFreshnessTargetIfReady();
           this.responseAnalysis = null;
           this.responseAnalysisError = `Fehler beim Laden der Antwortanalyse: ${error.message || error}`;
           this.snackBar.open(

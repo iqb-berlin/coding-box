@@ -115,6 +115,12 @@ export class CodingVersionService {
             unitFilters,
             variableFilters
           );
+        await this.clearManualCodingFreshnessAfterSourceReset(
+          workspaceId,
+          version,
+          unitFilters,
+          variableFilters
+        );
         await this.markExistingAutoCodingFreshnessPendingAfterReset(
           workspaceId,
           version,
@@ -209,9 +215,15 @@ export class CodingVersionService {
       }
 
       // Invalidate caches for all affected coding views
+      await this.clearManualCodingFreshnessAfterSourceReset(
+        workspaceId,
+        version,
+        unitFilters,
+        variableFilters
+      );
       await this.codingFreshnessService?.markVersionsPendingAfterReset(
         workspaceId,
-        this.toResetUnitIdsByVersion(resetUnitIdsByVersion)
+        this.toFreshnessResetUnitIdsByVersion(resetUnitIdsByVersion, version)
       );
       await this.markExistingAutoCodingFreshnessPendingAfterReset(
         workspaceId,
@@ -500,6 +512,24 @@ export class CodingVersionService {
     );
   }
 
+  private async clearManualCodingFreshnessAfterSourceReset(
+    workspaceId: number,
+    version: ResetCodingVersion,
+    unitFilters?: string[],
+    variableFilters?: string[]
+  ): Promise<void> {
+    if (version !== 'v1' || !this.codingFreshnessService) {
+      return;
+    }
+
+    await this.codingFreshnessService.clearVersionsAfterReset(
+      workspaceId,
+      ['v2'],
+      unitFilters,
+      variableFilters
+    );
+  }
+
   private async markAppliedCodingJobsResultsClearedBeforeGeneratedResponseDelete(
     workspaceId: number,
     responseIds: number[]
@@ -524,5 +554,17 @@ export class CodingVersionService {
         .map(([version, unitIds]) => [version, Array.from(unitIds)])
         .filter(([, unitIds]) => (unitIds as number[]).length > 0)
     ) as Partial<Record<CodingFreshnessVersion, number[]>>;
+  }
+
+  private toFreshnessResetUnitIdsByVersion(
+    resetUnitIdsByVersion: ResetUnitIdsByVersion,
+    version: ResetCodingVersion
+  ): Partial<Record<CodingFreshnessVersion, number[]>> {
+    const resetUnitIds = this.toResetUnitIdsByVersion(resetUnitIdsByVersion);
+    if (version === 'v1') {
+      delete resetUnitIds.v2;
+    }
+
+    return resetUnitIds;
   }
 }

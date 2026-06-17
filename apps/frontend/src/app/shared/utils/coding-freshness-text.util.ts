@@ -37,7 +37,7 @@ export function getCodingFreshnessStateLabel(state: CodingFreshnessState): strin
     CURRENT: 'aktuell',
     PENDING: 'zu kodieren',
     STALE: 'zu aktualisieren',
-    MANUAL_REVIEW_REQUIRED: 'zu prüfen'
+    MANUAL_REVIEW_REQUIRED: 'zu aktualisieren'
   };
   return labels[state];
 }
@@ -142,7 +142,7 @@ export function getCodingFreshnessAttentionTitle(
   }
 
   if (autoCodingWarnings.length === 0 && manualReviewWarnings.length > 0) {
-    return 'Manuelle Kodierung prüfen';
+    return 'Manuelle Kodierung aktualisieren';
   }
 
   return 'Kodierstand prüfen';
@@ -156,10 +156,10 @@ export function getCodingFreshnessManualReviewGuidanceText(
   }
 
   if (getCodingFreshnessAutoCodingWarnings(items).length > 0) {
-    return 'Aktualisieren Sie zuerst die offenen Auto-Coding-Schritte. Prüfen Sie danach die manuelle Kodierung.';
+    return 'Aktualisieren Sie zuerst die offenen Auto-Coding-Schritte. Danach wird die manuelle Kodierung neu bewertet.';
   }
 
-  return 'Öffnen Sie die manuelle Prüfung und wenden Sie abgeschlossene Job-Ergebnisse erneut an oder kodieren Sie offene Fälle neu.';
+  return 'Öffnen Sie die manuelle Kodierung. Bearbeiten Sie offene Fälle im Abschnitt Durchführung oder übernehmen Sie abgeschlossene Ergebnisse im Abschnitt Abschluss.';
 }
 
 export function getCodingFreshnessSummaryText(items: CodingFreshnessSummaryItemDto[]): string {
@@ -255,8 +255,8 @@ function getManualReviewSummaryText(
     getCodingFreshnessAffectedResponseCount(items)
   );
 
-  return `Die manuelle Kodierung muss für ${taskResults} geprüft werden. ` +
-    `Das betrifft ${responses}.`;
+  return `Für ${taskResults} ist die manuelle Kodierung nicht aktuell. ` +
+    `Betroffen sind ${responses}.`;
 }
 
 function getSingleCodingFreshnessActionText(
@@ -270,7 +270,7 @@ function getSingleCodingFreshnessActionText(
   }
 
   if (item.version === 'v2' || item.state === 'MANUAL_REVIEW_REQUIRED') {
-    return `Die manuelle Kodierung muss für ${taskResults} geprüft werden`;
+    return `Für ${taskResults} ist die manuelle Kodierung nicht aktuell`;
   }
 
   return `Die Kodierung muss für ${taskResults} aktualisiert werden`;
@@ -351,7 +351,7 @@ function getChipActionText(item: CodingFreshnessSummaryItemDto): string {
   }
 
   if (item.version === 'v2' || item.state === 'MANUAL_REVIEW_REQUIRED') {
-    return 'prüfen';
+    return 'aktualisieren';
   }
 
   return getCodingFreshnessStateLabel(item.state);

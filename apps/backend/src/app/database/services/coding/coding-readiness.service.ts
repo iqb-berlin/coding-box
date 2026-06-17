@@ -36,6 +36,7 @@ export type AutocodingReadinessOptions = {
 type ReadinessCacheSignature = {
   sourceRevision: number;
   fileRevision: string;
+  cacheRevision: number;
   scopedUnitHash: string;
 };
 
@@ -90,6 +91,7 @@ export class CodingReadinessService {
   private readonly cacheTtlMs = 60_000;
   private readonly readinessCache = new Map<string, ReadinessCacheEntry>();
   private readonly readinessInFlight = new Map<string, Promise<AutocodingReadinessDto>>();
+  private readonly cacheRevisionByWorkspace = new Map<number, number>();
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -116,7 +118,12 @@ export class CodingReadinessService {
         this.emptyReadiness(workspaceId, autoCoderRun, 'NO_RESULTS'),
         startedAt,
         false,
-        { sourceRevision: 0, fileRevision: '0:', scopedUnitHash: '' }
+        {
+          sourceRevision: 0,
+          fileRevision: '0:',
+          cacheRevision: this.getWorkspaceCacheRevision(workspaceId),
+          scopedUnitHash: ''
+        }
       );
     }
 
@@ -164,6 +171,24 @@ export class CodingReadinessService {
     }
 
     throw new BadRequestException(this.buildBlockedMessage(readiness));
+  }
+
+  invalidateWorkspaceReadinessCache(workspaceId: number): void {
+    const workspaceKeyPrefix = `${workspaceId}|`;
+    for (const key of Array.from(this.readinessCache.keys())) {
+      if (key.startsWith(workspaceKeyPrefix)) {
+        this.readinessCache.delete(key);
+      }
+    }
+    for (const key of Array.from(this.readinessInFlight.keys())) {
+      if (key.startsWith(workspaceKeyPrefix)) {
+        this.readinessInFlight.delete(key);
+      }
+    }
+    this.cacheRevisionByWorkspace.set(
+      workspaceId,
+      this.getWorkspaceCacheRevision(workspaceId) + 1
+    );
   }
 
   async filterResponsesValidVariables(
@@ -832,8 +857,13 @@ export class CodingReadinessService {
     return {
       sourceRevision,
       fileRevision,
+      cacheRevision: this.getWorkspaceCacheRevision(workspaceId),
       scopedUnitHash: this.hashScope(unitIds, options)
     };
+  }
+
+  private getWorkspaceCacheRevision(workspaceId: number): number {
+    return this.cacheRevisionByWorkspace.get(workspaceId) || 0;
   }
 
   private hashScope(
@@ -897,6 +927,7 @@ export class CodingReadinessService {
       autoCoderRun,
       signature.sourceRevision,
       signature.fileRevision,
+      signature.cacheRevision,
       signature.scopedUnitHash
     ].join('|');
   }

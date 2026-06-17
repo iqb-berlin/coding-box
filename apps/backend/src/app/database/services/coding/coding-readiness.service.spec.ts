@@ -211,6 +211,32 @@ describe('CodingReadinessService', () => {
     );
   });
 
+  it('invalidates cached and in-flight readiness entries for a workspace', () => {
+    const service = createService({
+      units: [],
+      rawResponsesTotal: 0,
+      candidateRows: [],
+      unitFiles: [],
+      unitVariableMap: new Map()
+    });
+    const internals = service as unknown as {
+      readinessCache: Map<string, unknown>;
+      readinessInFlight: Map<string, unknown>;
+      cacheRevisionByWorkspace: Map<number, number>;
+    };
+    internals.readinessCache.set('1|1|1|files|0|scope', {});
+    internals.readinessCache.set('2|1|1|files|0|scope', {});
+    internals.readinessInFlight.set('1|1|1|files|0|scope', Promise.resolve({}));
+    internals.cacheRevisionByWorkspace.set(1, 4);
+
+    service.invalidateWorkspaceReadinessCache(1);
+
+    expect(internals.readinessCache.has('1|1|1|files|0|scope')).toBe(false);
+    expect(internals.readinessCache.has('2|1|1|files|0|scope')).toBe(true);
+    expect(internals.readinessInFlight.has('1|1|1|files|0|scope')).toBe(false);
+    expect(internals.cacheRevisionByWorkspace.get(1)).toBe(5);
+  });
+
   it('keeps missing files as diagnostics without blocking partially codeable data', async () => {
     const service = createService({
       units: [
