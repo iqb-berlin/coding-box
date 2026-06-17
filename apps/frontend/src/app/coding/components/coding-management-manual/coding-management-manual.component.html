@@ -1,4 +1,15 @@
 <div class="fx-column-start-stretch fx-gap-10 coding-container">
+  <mat-tab-group
+    class="manual-coding-tabs"
+    [selectedIndex]="selectedManualTabIndex"
+    (selectedIndexChange)="onManualTabChanged($event)"
+  >
+    <mat-tab
+      *ngFor="let tab of visibleManualCodingTabs"
+      [label]="getManualTabLabel(tab)"
+    ></mat-tab>
+  </mat-tab-group>
+
   <div
     *ngIf="
       validationProgress &&
@@ -134,17 +145,6 @@
           </div>
         </div>
       </div>
-
-      <mat-tab-group
-        class="manual-coding-tabs"
-        [selectedIndex]="selectedManualTabIndex"
-        (selectedIndexChange)="onManualTabChanged($event)"
-      >
-        <mat-tab
-          *ngFor="let tab of visibleManualCodingTabs"
-          [label]="getManualTabLabel(tab)"
-        ></mat-tab>
-      </mat-tab-group>
 
       <div
         *ngIf="isManualTab('planning')"
