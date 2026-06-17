@@ -429,7 +429,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   pageSize: number = 50;
   pageIndex: number = 0;
   selectedUnit: Unit | undefined;
-  testPerson!: P;
+  testPerson: P | null = null;
   selectedBooklet!: Booklet | string;
   isLoading: boolean = true;
   isUploadingResults: boolean = false;
