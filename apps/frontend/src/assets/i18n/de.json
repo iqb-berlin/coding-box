@@ -1776,7 +1776,8 @@
       "server-error": "Server-Fehler beim Generieren der Excel-Datei. Bitte versuchen Sie es später erneut.",
       "network-error": "Netzwerk-Fehler. Bitte überprüfen Sie Ihre Internetverbindung.",
       "no-comparison-data": "Keine Vergleichsdaten zum Herunterladen verfügbar.",
-      "excel-create-error": "Fehler beim Erstellen der Excel-Datei"
+      "excel-create-error": "Fehler beim Erstellen der Excel-Datei",
+      "replay-auth-token-failed": "Replay-Links konnten nicht vorbereitet werden, weil kein Auth-Token erstellt werden konnte. Exportjob wurde nicht gestartet."
     },
     "success": {
       "validation-completed": "Validierung abgeschlossen. {{missing}} von {{total}} Kombinationen fehlen.",

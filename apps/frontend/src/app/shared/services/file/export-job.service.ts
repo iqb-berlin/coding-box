@@ -4,7 +4,10 @@ import {
   Observable,
   Subject,
   Subscription,
-  interval
+  catchError,
+  interval,
+  of,
+  throwError
 } from 'rxjs';
 import {
   map,
@@ -13,6 +16,7 @@ import {
   tap
 } from 'rxjs/operators';
 import { CodingExportEstimate, CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
+import { AppService } from '../../../core/services/app.service';
 
 export interface ExportJob {
   jobId: string;
@@ -63,6 +67,27 @@ export interface ExportJobConfig {
   coderTrainingIds?: number[];
   coderIds?: number[];
   authToken?: string;
+  serverUrl?: string;
+}
+
+export const REPLAY_AUTH_TOKEN_ERROR_CODE = 'replay-auth-token-failed';
+
+export type ReplayAuthTokenError = Error & {
+  code: typeof REPLAY_AUTH_TOKEN_ERROR_CODE;
+  originalError?: unknown;
+};
+
+export function createReplayAuthTokenError(originalError?: unknown): ReplayAuthTokenError {
+  const error = new Error('Replay auth token could not be created.') as ReplayAuthTokenError;
+  error.name = 'ReplayAuthTokenError';
+  error.code = REPLAY_AUTH_TOKEN_ERROR_CODE;
+  error.originalError = originalError;
+  return error;
+}
+
+export function isReplayAuthTokenError(error: unknown): error is ReplayAuthTokenError {
+  return error instanceof Error &&
+    (error as Partial<ReplayAuthTokenError>).code === REPLAY_AUTH_TOKEN_ERROR_CODE;
 }
 
 @Injectable({
@@ -75,7 +100,10 @@ export class ExportJobService implements OnDestroy {
 
   readonly jobs$ = this.jobsSubject.asObservable();
 
-  constructor(private codingJobBackendService: CodingJobBackendService) { }
+  constructor(
+    private codingJobBackendService: CodingJobBackendService,
+    private appService: AppService
+  ) { }
 
   get activeJobs(): ExportJob[] {
     return this.jobsSubject.value.filter(
@@ -96,7 +124,8 @@ export class ExportJobService implements OnDestroy {
   }
 
   startJob(workspaceId: number, config: ExportJobConfig): Observable<ExportJob> {
-    return this.codingJobBackendService.startExportJob(workspaceId, config).pipe(
+    return this.withReplayAuthToken(workspaceId, config).pipe(
+      switchMap(preparedConfig => this.codingJobBackendService.startExportJob(workspaceId, preparedConfig)),
       map((response: { jobId: string }) => ({
         jobId: response.jobId,
         workspaceId,
@@ -114,6 +143,24 @@ export class ExportJobService implements OnDestroy {
 
   estimateJob(workspaceId: number, config: ExportJobConfig): Observable<CodingExportEstimate> {
     return this.codingJobBackendService.estimateExportJob(workspaceId, config);
+  }
+
+  private withReplayAuthToken(
+    workspaceId: number,
+    config: ExportJobConfig
+  ): Observable<ExportJobConfig> {
+    if (!config.includeReplayUrl || config.authToken) {
+      return of(config);
+    }
+
+    return this.appService.createOwnToken(workspaceId, 60).pipe(
+      map(authToken => ({
+        ...config,
+        authToken,
+        serverUrl: config.serverUrl || window.location.origin
+      })),
+      catchError(error => throwError(() => createReplayAuthTokenError(error)))
+    );
   }
 
   private addJob(job: ExportJob): void {
