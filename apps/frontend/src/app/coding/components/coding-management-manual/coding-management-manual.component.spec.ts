@@ -1789,6 +1789,63 @@ describe('CodingManagementManualComponent', () => {
     }
   });
 
+  it('should wait for incomplete variables before focusing completed manual freshness work', () => {
+    jest.useFakeTimers();
+    try {
+      component.canApplyManualCodingResults = true;
+      setCompletePlanningState();
+      setCodingProgress(10, 10);
+      component.appliedResultsOverview = null;
+      component.isLoadingCodingIncompleteVariables = true;
+      component.isLoadingAppliedResultsOverview = false;
+      component.selectedManualTabIndex = 0;
+
+      const componentInternals = component as unknown as {
+        pendingManualFreshnessFocus: boolean;
+        manualFreshnessPlanningRequested: boolean;
+        requestManualFreshnessFocusIfNeeded(): void;
+        focusManualFreshnessTargetIfReady(): void;
+        loadManualTabData(tab: 'planning' | 'completion'): void;
+      };
+      componentInternals.pendingManualFreshnessFocus = true;
+      componentInternals.manualFreshnessPlanningRequested = false;
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      componentInternals.requestManualFreshnessFocusIfNeeded();
+
+      expect(component.selectedManualTabIndex).toBe(1);
+      expect(loadManualTabDataSpy).toHaveBeenCalledTimes(1);
+      expect(loadManualTabDataSpy).toHaveBeenCalledWith('planning');
+      expect(scrollToSectionSpy).not.toHaveBeenCalled();
+
+      component.isLoadingCodingIncompleteVariables = false;
+      component.isLoadingAppliedResultsOverview = true;
+      componentInternals.focusManualFreshnessTargetIfReady();
+
+      expect(component.selectedManualTabIndex).toBe(1);
+      expect(loadManualTabDataSpy).toHaveBeenCalledTimes(1);
+      expect(scrollToSectionSpy).not.toHaveBeenCalled();
+
+      setAppliedResults(10, 0, 10);
+      component.isLoadingAppliedResultsOverview = false;
+      componentInternals.focusManualFreshnessTargetIfReady();
+
+      expect(component.selectedManualTabIndex).toBe(4);
+      expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(2, 'completion');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-completion');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('should keep coding managers away from the hidden completion tab', () => {
     jest.useFakeTimers();
     try {

@@ -220,6 +220,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isLoadingCaseCoverage = false;
   isLoadingCodingProgress = false;
   isLoadingManualCodeAvailability = false;
+  isLoadingCodingIncompleteVariables = false;
   isLoadingAppliedResultsOverview = false;
   isLoadingKappaSummary = false;
 
@@ -1406,6 +1407,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.isLoadingVariableCoverage ||
       this.isLoadingCaseCoverage ||
       this.isLoadingManualCodeAvailability ||
+      this.isLoadingCodingIncompleteVariables ||
       this.isLoadingAppliedResultsOverview ||
       this.isLoadingMatchingMode;
   }
@@ -2769,13 +2771,21 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.codingIncompleteVariables = [];
       this.manualCodingScopeSummary = null;
       this.setManualCodeAvailabilityWarnings([]);
+      this.isLoadingCodingIncompleteVariables = false;
       this.isLoadingManualCodeAvailability = false;
       return;
     }
 
+    this.isLoadingCodingIncompleteVariables = true;
     this.codingJobBackendService
       .getCodingIncompleteVariables(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingCodingIncompleteVariables = false;
+          this.focusManualFreshnessTargetIfReady();
+        })
+      )
       .subscribe({
         next: (
           variables: {
