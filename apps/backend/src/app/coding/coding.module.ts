@@ -47,6 +47,7 @@ import {
   CodingItemMatrixExportService
 } from '../database/services/coding';
 import { CODING_PROCESS_CACHE_INVALIDATOR } from '../database/services/coding/coding-process-cache-invalidator.token';
+import { CODING_READINESS_CACHE_INVALIDATOR } from '../database/services/coding/coding-readiness-cache-invalidator.token';
 import { JobDefinitionService } from '../database/services/jobs';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
@@ -113,6 +114,10 @@ import { UserModule } from '../user/user.module';
     {
       provide: CODING_PROCESS_CACHE_INVALIDATOR,
       useExisting: CodingProcessService
+    },
+    {
+      provide: CODING_READINESS_CACHE_INVALIDATOR,
+      useExisting: CodingReadinessService
     }
   ],
   exports: [
@@ -138,7 +143,8 @@ import { UserModule } from '../user/user.module';
     CodingFreshnessService,
     CodingReadinessService,
     CodingItemMatrixExportService,
-    CODING_PROCESS_CACHE_INVALIDATOR
+    CODING_PROCESS_CACHE_INVALIDATOR,
+    CODING_READINESS_CACHE_INVALIDATOR
   ]
 })
 export class CodingModule { }

@@ -56,6 +56,10 @@ import {
   CODING_PROCESS_CACHE_INVALIDATOR,
   CodingProcessCacheInvalidator
 } from '../coding/coding-process-cache-invalidator.token';
+import {
+  CODING_READINESS_CACHE_INVALIDATOR,
+  CodingReadinessCacheInvalidator
+} from '../coding/coding-readiness-cache-invalidator.token';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
@@ -194,7 +198,10 @@ export class WorkspaceFilesService implements OnModuleInit {
     private readonly codingFileCacheService?: CodingFileCacheService,
     @Optional()
     @Inject(CODING_PROCESS_CACHE_INVALIDATOR)
-    private readonly codingProcessCacheInvalidator?: CodingProcessCacheInvalidator
+    private readonly codingProcessCacheInvalidator?: CodingProcessCacheInvalidator,
+    @Optional()
+    @Inject(CODING_READINESS_CACHE_INVALIDATOR)
+    private readonly codingReadinessCacheInvalidator?: CodingReadinessCacheInvalidator
   ) {}
 
   private normalizeFileUnitId(value: string | null | undefined): string {
@@ -3942,6 +3949,7 @@ ${bookletRefs}
     );
     this.codingFileCacheService?.clearCaches();
     this.codingProcessCacheInvalidator?.invalidateWorkspaceCaches(workspaceId);
+    this.codingReadinessCacheInvalidator?.invalidateWorkspaceReadinessCache(workspaceId);
     this.logger.log(
       `Invalidated workspace files caches for workspace ${workspaceId} in Redis`
     );

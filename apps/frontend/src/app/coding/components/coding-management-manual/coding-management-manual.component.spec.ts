@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -55,7 +55,7 @@ describe('CodingManagementManualComponent', () => {
   let fixture: ComponentFixture<CodingManagementManualComponent>;
 
   const fakeActivatedRoute = {
-    snapshot: { data: {} }
+    snapshot: { data: {}, queryParamMap: convertToParamMap({}) }
   } as ActivatedRoute;
 
   beforeEach(async () => {
@@ -1657,6 +1657,186 @@ describe('CodingManagementManualComponent', () => {
       expect(component.getPlanningNextStepTargetTab()).toBe('completion');
       expect(component.selectedManualTabIndex).toBe(4);
       expect(loadManualTabDataSpy).toHaveBeenCalledWith('completion');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-completion');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should focus manual freshness work on execution when open coding cases remain', () => {
+    jest.useFakeTimers();
+    try {
+      setCompletePlanningState();
+      setCodingProgress(10, 4);
+      setAppliedResults(10, 0, 10);
+      component.selectedManualTabIndex = 0;
+
+      const componentInternals = component as unknown as {
+        pendingManualFreshnessFocus: boolean;
+        manualFreshnessPlanningRequested: boolean;
+        requestManualFreshnessFocusIfNeeded(): void;
+        loadManualTabData(tab: 'planning' | 'execution'): void;
+      };
+      componentInternals.pendingManualFreshnessFocus = true;
+      componentInternals.manualFreshnessPlanningRequested = false;
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      componentInternals.requestManualFreshnessFocusIfNeeded();
+
+      expect(component.selectedManualTabIndex).toBe(3);
+      expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(1, 'planning');
+      expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(2, 'execution');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-execution');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should focus manual freshness work on completion when all cases are coded', () => {
+    jest.useFakeTimers();
+    try {
+      component.canApplyManualCodingResults = true;
+      setCompletePlanningState();
+      setCodingProgress(10, 10);
+      setAppliedResults(10, 0, 10);
+      component.selectedManualTabIndex = 0;
+
+      const componentInternals = component as unknown as {
+        pendingManualFreshnessFocus: boolean;
+        manualFreshnessPlanningRequested: boolean;
+        requestManualFreshnessFocusIfNeeded(): void;
+        loadManualTabData(tab: 'planning' | 'completion'): void;
+      };
+      componentInternals.pendingManualFreshnessFocus = true;
+      componentInternals.manualFreshnessPlanningRequested = false;
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      componentInternals.requestManualFreshnessFocusIfNeeded();
+
+      expect(component.selectedManualTabIndex).toBe(4);
+      expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(1, 'planning');
+      expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(2, 'completion');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-completion');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should wait for applied results before focusing completed manual freshness work', () => {
+    jest.useFakeTimers();
+    try {
+      component.canApplyManualCodingResults = true;
+      setCompletePlanningState();
+      setCodingProgress(10, 10);
+      component.appliedResultsOverview = null;
+      component.isLoadingAppliedResultsOverview = true;
+      component.selectedManualTabIndex = 0;
+
+      const componentInternals = component as unknown as {
+        pendingManualFreshnessFocus: boolean;
+        manualFreshnessPlanningRequested: boolean;
+        requestManualFreshnessFocusIfNeeded(): void;
+        focusManualFreshnessTargetIfReady(): void;
+        loadManualTabData(tab: 'planning' | 'completion'): void;
+      };
+      componentInternals.pendingManualFreshnessFocus = true;
+      componentInternals.manualFreshnessPlanningRequested = false;
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      componentInternals.requestManualFreshnessFocusIfNeeded();
+
+      expect(component.selectedManualTabIndex).toBe(1);
+      expect(loadManualTabDataSpy).toHaveBeenCalledTimes(1);
+      expect(loadManualTabDataSpy).toHaveBeenCalledWith('planning');
+      expect(scrollToSectionSpy).not.toHaveBeenCalled();
+
+      setAppliedResults(10, 0, 10);
+      component.isLoadingAppliedResultsOverview = false;
+      componentInternals.focusManualFreshnessTargetIfReady();
+
+      expect(component.selectedManualTabIndex).toBe(4);
+      expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(2, 'completion');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-completion');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should wait for incomplete variables before focusing completed manual freshness work', () => {
+    jest.useFakeTimers();
+    try {
+      component.canApplyManualCodingResults = true;
+      setCompletePlanningState();
+      setCodingProgress(10, 10);
+      component.appliedResultsOverview = null;
+      component.isLoadingCodingIncompleteVariables = true;
+      component.isLoadingAppliedResultsOverview = false;
+      component.selectedManualTabIndex = 0;
+
+      const componentInternals = component as unknown as {
+        pendingManualFreshnessFocus: boolean;
+        manualFreshnessPlanningRequested: boolean;
+        requestManualFreshnessFocusIfNeeded(): void;
+        focusManualFreshnessTargetIfReady(): void;
+        loadManualTabData(tab: 'planning' | 'completion'): void;
+      };
+      componentInternals.pendingManualFreshnessFocus = true;
+      componentInternals.manualFreshnessPlanningRequested = false;
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      componentInternals.requestManualFreshnessFocusIfNeeded();
+
+      expect(component.selectedManualTabIndex).toBe(1);
+      expect(loadManualTabDataSpy).toHaveBeenCalledTimes(1);
+      expect(loadManualTabDataSpy).toHaveBeenCalledWith('planning');
+      expect(scrollToSectionSpy).not.toHaveBeenCalled();
+
+      component.isLoadingCodingIncompleteVariables = false;
+      component.isLoadingAppliedResultsOverview = true;
+      componentInternals.focusManualFreshnessTargetIfReady();
+
+      expect(component.selectedManualTabIndex).toBe(1);
+      expect(loadManualTabDataSpy).toHaveBeenCalledTimes(1);
+      expect(scrollToSectionSpy).not.toHaveBeenCalled();
+
+      setAppliedResults(10, 0, 10);
+      component.isLoadingAppliedResultsOverview = false;
+      componentInternals.focusManualFreshnessTargetIfReady();
+
+      expect(component.selectedManualTabIndex).toBe(4);
+      expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(2, 'completion');
 
       jest.runOnlyPendingTimers();
 
