@@ -298,12 +298,12 @@ export class CodingReadinessService {
 
     const personIds = this.uniquePositiveIds((options.personIds || []).map(id => Number(id)));
     if (personIds.length > 0) {
-      query.andWhere('person.id IN (:...personIds)', { personIds });
+      query.andWhere('person.id = ANY(:personIds)', { personIds });
     }
 
     const unitIds = this.uniquePositiveIds(options.unitIds || []);
     if (unitIds.length > 0) {
-      query.andWhere('unit.id IN (:...unitIds)', { unitIds });
+      query.andWhere('unit.id = ANY(:unitIds)', { unitIds });
     }
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
@@ -379,12 +379,12 @@ export class CodingReadinessService {
 
     const personIds = this.uniquePositiveIds((options.personIds || []).map(id => Number(id)));
     if (personIds.length > 0) {
-      query.andWhere('person.id IN (:...personIds)', { personIds });
+      query.andWhere('person.id = ANY(:personIds)', { personIds });
     }
 
     const unitIds = this.uniquePositiveIds(options.unitIds || []);
     if (unitIds.length > 0) {
-      query.andWhere('unit.id IN (:...unitIds)', { unitIds });
+      query.andWhere('unit.id = ANY(:unitIds)', { unitIds });
     }
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
