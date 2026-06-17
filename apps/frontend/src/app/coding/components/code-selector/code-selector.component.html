@@ -104,9 +104,11 @@
         <div class="code-content">
           <span class="code-info">
             <span class="legacy-code-prefix">{{ 'code-selector.legacy-code-label' | translate }}</span>
-            <span class="code-id">{{ legacySelectedCode.id }}</span>
-            <span class="code-score" *ngIf="showScore && legacySelectedCode.score !== undefined">
-              ({{ legacySelectedCode.score }})
+            <span class="code-token">
+              <span class="code-id">{{ legacySelectedCode.id }}</span>
+              <span class="code-score" *ngIf="showScore && legacySelectedCode.score !== undefined">
+                ({{ legacySelectedCode.score }})
+              </span>
             </span>
           </span>
         </div>
@@ -124,8 +126,10 @@
 
         <div class="code-content">
           <span class="code-info">
-            <span class="code-id">{{ item.id }}</span>
-            <span class="code-score" *ngIf="showScore && item.score !== undefined">({{ item.score }})</span>
+            <span class="code-token">
+              <span class="code-id">{{ item.id }}</span>
+              <span class="code-score" *ngIf="showScore && item.score !== undefined">({{ item.score }})</span>
+            </span>
             <span class="review-code-badge" *ngIf="getReviewCodeSelectionCount(item.id) as reviewCoderCount">
               <mat-icon>group</mat-icon>
               <span>{{ reviewCoderCount }}</span>

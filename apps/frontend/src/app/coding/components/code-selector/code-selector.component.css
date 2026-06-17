@@ -114,10 +114,16 @@
   min-width: 0;
 }
 
+.code-token {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 22px;
+  white-space: nowrap;
+}
+
 .code-id {
   font-weight: 600;
-  min-width: 22px;
-  display: inline-block;
 }
 
 .code-type {
@@ -127,6 +133,8 @@
 .code-score {
   color: #64748b;
   font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
 }
 
@@ -161,11 +169,6 @@
 
 .code-row:not(.general-instruction-row) .code-instruction {
   pointer-events: none;
-}
-
-.code-row.with-score .code-instruction {
-  flex-basis: 100%;
-  margin-left: 28px;
 }
 
 .code-instruction img {
