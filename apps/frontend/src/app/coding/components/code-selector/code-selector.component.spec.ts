@@ -611,6 +611,99 @@ describe('CodeSelectorComponent', () => {
     expect(fixture.nativeElement.querySelector('.pause-button')).toBeNull();
   });
 
+  it('emits when the compact home button is clicked', () => {
+    const openCodingJobsSpy = jest.spyOn(component.openCodingJobs, 'emit');
+    component.showProgress = true;
+
+    fixture.detectChanges();
+    const homeButton = fixture.nativeElement.querySelector('.home-button') as HTMLButtonElement;
+    expect(homeButton.getAttribute('aria-label')).toBeTruthy();
+    homeButton.click();
+
+    expect(openCodingJobsSpy).toHaveBeenCalled();
+  });
+
+  it('keeps general codes and notes expanded by default and lets users collapse them', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.allowComments = true;
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    fixture.detectChanges();
+
+    expect(component.isSupportSectionExpanded).toBe(true);
+    expect(fixture.nativeElement.querySelectorAll('.uncertain-codes-section .code-row')).toHaveLength(4);
+    expect(fixture.nativeElement.querySelector('.notes-field')).toBeTruthy();
+
+    (fixture.nativeElement.querySelector('.support-toggle') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(component.isSupportSectionExpanded).toBe(false);
+    expect(fixture.nativeElement.querySelector('.uncertain-codes-section')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.notes-field')).toBeNull();
+  });
+
+  it('expands the support section before focusing missing new-code notes', () => {
+    jest.useFakeTimers();
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.isSupportSectionExpanded = false;
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    component.selectedCodingIssueOption = -2;
+    fixture.detectChanges();
+
+    expect(component.canLeaveCurrentUnit()).toBe(false);
+    fixture.detectChanges();
+    const notesTextarea = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+    const focusSpy = jest.spyOn(notesTextarea, 'focus').mockImplementation(() => { });
+    jest.runAllTimers();
+
+    expect(component.isSupportSectionExpanded).toBe(true);
+    expect(notesTextarea).toBeTruthy();
+    expect(focusSpy).toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+
+  it('opens collapsed general codes and scrolls to a selected support code', () => {
+    jest.useFakeTimers();
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.allowComments = true;
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    component.isSupportSectionExpanded = false;
+    fixture.detectChanges();
+
+    const scrollSpy = jest.fn();
+    const originalQuerySelector = fixture.nativeElement.querySelector.bind(fixture.nativeElement);
+    const querySelectorSpy = jest.spyOn(fixture.nativeElement, 'querySelector');
+    querySelectorSpy.mockImplementation((...args: unknown[]) => {
+      const selector = args[0] as string;
+      if (selector === '[data-code-id="-2"]') {
+        return { scrollIntoView: scrollSpy } as unknown as Element;
+      }
+      return originalQuerySelector(selector);
+    });
+
+    component.scrollToCode(-2);
+    jest.runAllTimers();
+
+    expect(component.isSupportSectionExpanded).toBe(true);
+    expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+    querySelectorSpy.mockRestore();
+    jest.useRealTimers();
+  });
+
   it('disables and ignores pause while read-only', () => {
     const pauseSpy = jest.spyOn(component.pauseCodingJob, 'emit');
     component.showProgress = true;
