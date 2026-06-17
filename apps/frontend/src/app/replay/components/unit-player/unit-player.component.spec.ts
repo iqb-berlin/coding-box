@@ -82,6 +82,39 @@ describe('UnitPlayerComponent', () => {
     expect(emitSpy).toHaveBeenCalledTimes(2);
   });
 
+  it('should normalize math text array values in replay data parts', () => {
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, JSON.stringify({
+        BaseVariables: {
+          Variable: [
+            {
+              id: '02b',
+              type: 'json',
+              format: 'math-text-mix'
+            },
+            {
+              id: 'other',
+              type: 'json'
+            }
+          ]
+        }
+      }), true),
+      unitResponses: new SimpleChange(undefined, {
+        responses: [{
+          id: 'chunk1',
+          content: JSON.stringify([
+            { id: '02b', value: [], status: 2 },
+            { id: 'other', value: ['kept'], status: 2 }
+          ])
+        }]
+      }, true)
+    });
+
+    const [mathTextResponse, otherResponse] = JSON.parse(component.dataParts.chunk1);
+    expect(mathTextResponse.value).toBe('[]');
+    expect(otherResponse.value).toEqual(['kept']);
+  });
+
   it('should not emit a page error when requested page 0 is valid and current', () => {
     const emitSpy = jest.spyOn(component.invalidPage, 'emit');
 
