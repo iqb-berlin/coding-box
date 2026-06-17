@@ -187,6 +187,9 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
   const mockCodingFreshnessService = {
     markUnitsStaleAfterCodingSchemeChange: jest.fn().mockResolvedValue(undefined)
   };
+  const mockCodingReadinessCacheInvalidator = {
+    invalidateWorkspaceReadinessCache: jest.fn()
+  };
 
   function makeService(): WorkspaceFilesService {
     return new WorkspaceFilesService(
@@ -203,7 +206,10 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       { delete: jest.fn() } as unknown as CtorParams[10],
       { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
       undefined,
-      mockCodingFreshnessService as unknown as CtorParams[13]
+      mockCodingFreshnessService as unknown as CtorParams[13],
+      undefined,
+      undefined,
+      mockCodingReadinessCacheInvalidator as unknown as CtorParams[16]
     );
   }
 
@@ -363,6 +369,15 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     ]);
 
     expect(invalidateSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('invalidates auto-coding readiness cache when workspace file caches are invalidated', async () => {
+    const service = makeService();
+
+    await service.invalidateWorkspaceFileCaches(1);
+
+    expect(mockCodingReadinessCacheInvalidator.invalidateWorkspaceReadinessCache)
+      .toHaveBeenCalledWith(1);
   });
 });
 
