@@ -113,6 +113,7 @@
       </div>
       <div class="code-row" [class.selected]="item.id === selectedCode"
         [class.has-review-code-selection]="hasReviewCodeSelection(item.id)"
+        [class.with-score]="showScore && item.score !== undefined"
         [class.read-only]="isReadOnly || isRegularSelectionDisabled" *ngFor="let item of regularCodes;"
         [attr.data-code-id]="item.id"
         [style.cursor]="(isReadOnly || isRegularSelectionDisabled) ? 'not-allowed' : 'pointer'"
