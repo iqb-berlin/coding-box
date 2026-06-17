@@ -42,6 +42,7 @@ import {
   createManualCodingVariableReferences,
   DERIVE_ERROR_STATUS
 } from '../../utils/manual-coding-candidate.util';
+import { hasVisibleManualInstruction } from '../../../utils/manual-instruction.util';
 import {
   applyNonCodingIssueReviewJobFilter,
   getNonCodingIssueReviewJobSqlCondition
@@ -924,7 +925,7 @@ export class CodingValidationService {
   private hasManualInstruction(
     code: { manualInstruction?: string | null }
   ): boolean {
-    return !!code.manualInstruction?.trim();
+    return hasVisibleManualInstruction(code);
   }
 
   private getManualCodeAvailabilityKey(

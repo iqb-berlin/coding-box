@@ -81,6 +81,7 @@ import {
   isCodingIssueReviewJobType
 } from './coding-job-type.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { hasVisibleManualInstruction } from '../../../utils/manual-instruction.util';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -3764,7 +3765,7 @@ export class CodingJobService {
   }
 
   private hasManualInstruction(code: { manualInstruction?: string | null }): boolean {
-    return !!code.manualInstruction?.trim();
+    return hasVisibleManualInstruction(code);
   }
 
   async getCodingSchemeScoreForUnitCode(

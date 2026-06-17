@@ -76,6 +76,7 @@ import {
   assertValidRegexSearchPattern,
   withRegexSearchStatementTimeout
 } from '../../../utils/regex-search.util';
+import { hasVisibleManualInstruction } from '../../../utils/manual-instruction.util';
 
 type WorkspaceUnitVisibility = {
   globalIgnoredUnits: Set<string>;
@@ -2891,7 +2892,7 @@ ${bookletRefs}
                   intendedIncompleteSchemeIds.add(vc.id);
                 }
                 const hasManualInstruction = vc.codes.some(
-                  code => !!code.manualInstruction?.trim()
+                  code => hasVisibleManualInstruction(code)
                 );
                 if (hasManualInstruction) {
                   manualInstructionSchemeIds.add(vc.id);
@@ -3505,8 +3506,7 @@ ${bookletRefs}
 
                 // Check if any code has manual instruction (similar to isManual() in codebook-generator)
                 const hasManualInstruction = vc.codes.some(
-                  code => code.manualInstruction &&
-                    code.manualInstruction.trim() !== ''
+                  code => hasVisibleManualInstruction(code)
                 );
                 if (hasManualInstruction) {
                   variableManualInstructions.set(vc.id, true);
