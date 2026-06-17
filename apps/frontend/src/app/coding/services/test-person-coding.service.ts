@@ -154,6 +154,10 @@ export interface JobInfo extends JobStatus {
   jobId: string;
 }
 
+export interface AutoCodingCompletedEvent {
+  jobId?: string;
+}
+
 export interface WorkspaceGroupCodingStats {
   groupName: string;
   testPersonCount: number;
@@ -221,7 +225,7 @@ export interface AppliedResultsOverview {
 export class TestPersonCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
-  private autoCodingCompletedSubject = new Subject<void>();
+  private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<void>();
   autoCodingCompleted$ = this.autoCodingCompletedSubject.asObservable();
   testResultsChanged$ = this.testResultsChangedSubject.asObservable();
@@ -234,8 +238,8 @@ export class TestPersonCodingService {
     return typeof jobId === 'string' && jobId.trim().length > 0;
   }
 
-  notifyAutoCodingCompleted(): void {
-    this.autoCodingCompletedSubject.next();
+  notifyAutoCodingCompleted(jobId?: string): void {
+    this.autoCodingCompletedSubject.next({ jobId });
   }
 
   notifyTestResultsChanged(): void {
