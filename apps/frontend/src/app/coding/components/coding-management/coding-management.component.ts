@@ -41,7 +41,8 @@ import {
 } from '../test-person-coding-dialog/test-person-coding-dialog.component';
 import {
   AppliedResultsOverview,
-  TestPersonCodingService
+  TestPersonCodingService,
+  TestResultsChangedEvent
 } from '../../services/test-person-coding.service';
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
@@ -202,11 +203,18 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
+    let pendingStatisticsVersion: StatisticsVersion | null = null;
+
     if (workspaceId) {
+      pendingStatisticsVersion = this.testPersonCodingService.consumePendingStatisticsVersion(workspaceId);
+      if (pendingStatisticsVersion) {
+        this.selectStatisticsVersion(pendingStatisticsVersion);
+      }
+
       this.workspaceSettingsService
         .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(autoFetch => {
-          if (autoFetch) {
+          if (autoFetch || pendingStatisticsVersion) {
             this.fetchCodingStatistics();
           }
         });
@@ -297,12 +305,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
     this.testPersonCodingService.testResultsChanged$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.fetchCodingStatistics();
-        this.loadCodingFreshness();
-        this.loadManualAppliedResultsOverview();
-        this.loadAutocodingReadiness();
-        this.refreshTableData();
+      .subscribe(event => {
+        this.refreshAfterTestResultsChanged(event);
       });
 
     // Check for active reset job (persists across navigation)
@@ -320,6 +324,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   // Statistics Card Event Handlers
   onVersionChange(version: 'v1' | 'v2' | 'v3'): void {
+    this.selectStatisticsVersion(version);
+
+    if (this.statisticsLoaded) {
+      this.fetchCodingStatistics();
+    }
+  }
+
+  private selectStatisticsVersion(version: 'v1' | 'v2' | 'v3'): void {
     this.selectedStatisticsVersion = version;
     this.filterParams = {
       ...this.filterParams,
@@ -330,10 +342,25 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.totalRecords = 0;
     this.referenceStatistics = null;
     this.referenceVersion = null;
+  }
 
-    if (this.statisticsLoaded) {
-      this.fetchCodingStatistics();
+  private refreshAfterTestResultsChanged(event: TestResultsChangedEvent = {}): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (event.workspaceId && event.workspaceId !== workspaceId) {
+      return;
     }
+
+    if (event.statisticsVersion) {
+      this.selectStatisticsVersion(event.statisticsVersion);
+      if (workspaceId) {
+        this.testPersonCodingService.consumePendingStatisticsVersion(workspaceId);
+      }
+    }
+    this.fetchCodingStatistics();
+    this.loadCodingFreshness();
+    this.loadManualAppliedResultsOverview();
+    this.loadAutocodingReadiness();
+    this.refreshTableData();
   }
 
   fetchCodingStatistics(): void {

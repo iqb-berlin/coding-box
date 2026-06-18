@@ -17,7 +17,10 @@ import { CodingManagementService } from '../../services/coding-management.servic
 import { CodingManagementUiService } from './services/coding-management-ui.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
-import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import {
+  TestPersonCodingService,
+  TestResultsChangedEvent
+} from '../../services/test-person-coding.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 import { Success } from '../../models/success.model';
@@ -35,6 +38,7 @@ describe('CodingManagementComponent', () => {
   let mockRouter: jest.Mocked<Partial<Router>>;
   let mockSnackBar: jest.Mocked<Partial<MatSnackBar>>;
   let autoCodingCompletedSubject: Subject<{ jobId?: string }>;
+  let testResultsChangedSubject: Subject<TestResultsChangedEvent>;
 
   const fakeActivatedRoute = {
     snapshot: { data: {} }
@@ -92,10 +96,12 @@ describe('CodingManagementComponent', () => {
       getEnableRegexSearch: jest.fn().mockReturnValue(of(false))
     };
     autoCodingCompletedSubject = new Subject<{ jobId?: string }>();
+    testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
 
     mockTestPersonCodingService = {
       autoCodingCompleted$: autoCodingCompletedSubject.asObservable(),
-      testResultsChanged$: of(),
+      testResultsChanged$: testResultsChangedSubject.asObservable(),
+      consumePendingStatisticsVersion: jest.fn().mockReturnValue(null),
       getCodingFreshness: jest.fn().mockReturnValue(of({
         workspaceId: 1,
         currentRevision: 0,
@@ -697,6 +703,43 @@ describe('CodingManagementComponent', () => {
       component.fetchCodingStatistics();
 
       expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v1');
+    });
+
+    it('should switch to changed statistics version when test results change', () => {
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+
+      testResultsChangedSubject.next({ workspaceId: 1, statisticsVersion: 'v2' });
+
+      expect(component.selectedStatisticsVersion).toBe('v2');
+      expect(component.filterParams.version).toBe('v2');
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
+    });
+
+    it('should ignore changed test results from a different workspace', () => {
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+
+      testResultsChangedSubject.next({ workspaceId: 2, statisticsVersion: 'v2' });
+
+      expect(component.selectedStatisticsVersion).toBe('v1');
+      expect(component.filterParams.version).toBe('v1');
+      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+    });
+
+    it('should consume a pending statistics version when opened after results changed', () => {
+      fixture.destroy();
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.consumePendingStatisticsVersion as jest.Mock).mockClear();
+      (mockTestPersonCodingService.consumePendingStatisticsVersion as jest.Mock)
+        .mockReturnValueOnce('v2');
+
+      fixture = TestBed.createComponent(CodingManagementComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+
+      expect(component.selectedStatisticsVersion).toBe('v2');
+      expect(component.filterParams.version).toBe('v2');
+      expect(mockTestPersonCodingService.consumePendingStatisticsVersion).toHaveBeenCalledWith(1);
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
     });
 
     it('should handle status click from statistics card through the normal table filter', () => {
