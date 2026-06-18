@@ -9,10 +9,17 @@ import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { WorkspaceUserInListDto } from '../../../../../../../api-dto/user/workspace-user-in-list-dto';
 import { UserInListDto } from '../../../../../../../api-dto/user/user-in-list-dto';
+import {
+  assertStudyManagersRemain,
+  DEFAULT_WORKSPACE_USER_ACCESS,
+  lockUserRows,
+  lockWorkspaceUserRows
+} from '../workspace/workspace-user-access.util';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -111,16 +118,32 @@ export class UsersService {
       });
     });
 
-    if (userIdsToDelete.length > 0) {
-      await this.workspaceUserRepository.delete({
-        workspaceId: normalizedWorkspaceId,
-        userId: In(userIdsToDelete)
-      });
-    }
+    await this.workspaceUserRepository.manager.transaction(async manager => {
+      const workspaceUsersRepository = manager.getRepository(WorkspaceUser);
+      await lockUserRows(manager, Array.from(seenUserIds));
+      const lockedWorkspaceUsers = await lockWorkspaceUserRows(manager, [normalizedWorkspaceId]);
 
-    if (usersToUpsert.length > 0) {
-      await this.workspaceUserRepository.upsert(usersToUpsert, ['workspaceId', 'userId']);
-    }
+      assertStudyManagersRemain(
+        [normalizedWorkspaceId],
+        lockedWorkspaceUsers,
+        usersToUpsert,
+        userIdsToDelete.map(userId => ({
+          workspaceId: normalizedWorkspaceId,
+          userId
+        }))
+      );
+
+      if (userIdsToDelete.length > 0) {
+        await workspaceUsersRepository.delete({
+          workspaceId: normalizedWorkspaceId,
+          userId: In(userIdsToDelete)
+        });
+      }
+
+      if (usersToUpsert.length > 0) {
+        await workspaceUsersRepository.upsert(usersToUpsert, ['workspaceId', 'userId']);
+      }
+    });
 
     return true;
   }
@@ -248,24 +271,71 @@ export class UsersService {
 
   async assignUserWorkspaces(userId: number, workspaceIds: number[]): Promise<boolean> {
     this.logger.log(`Setting workspaces for user with ID: ${userId}`);
-    const entries = workspaceIds.map(workspaceId => ({
-      userId,
-      workspaceId,
-      accessLevel: 3,
-      canCode: false
-    }));
     try {
-      const hasRights = await this.workspaceUserRepository.findOne({ where: { userId } });
-      if (hasRights) {
-        this.logger.log(`Existing workspaces found for user ${userId}, deleting...`);
-        await this.workspaceUserRepository.delete({ userId });
-      }
-      const savedEntries = await this.workspaceUserRepository.save(entries);
+      const savedEntries = await this.workspaceUserRepository.manager.transaction(async manager => {
+        const workspaceUsersRepository = manager.getRepository(WorkspaceUser);
+        await lockUserRows(manager, [userId]);
+        const existingEntries = await workspaceUsersRepository.find({ where: { userId } });
+        const affectedWorkspaceIds = Array.from(new Set([
+          ...workspaceIds,
+          ...existingEntries.map(entry => entry.workspaceId)
+        ]));
+        const lockedWorkspaceUsers = await lockWorkspaceUserRows(manager, affectedWorkspaceIds);
+        const existingByWorkspaceId = new Map(
+          lockedWorkspaceUsers
+            .filter(entry => entry.userId === userId)
+            .map(entry => [entry.workspaceId, entry])
+        );
+        const workspaceIdSet = new Set(workspaceIds);
+        const entries = workspaceIds.map(workspaceId => {
+          const existingEntry = existingByWorkspaceId.get(workspaceId);
+          if (existingEntry && existingEntry.accessLevel > 0) {
+            return {
+              userId,
+              workspaceId,
+              accessLevel: existingEntry.accessLevel,
+              canCode: existingEntry.canCode ?? (existingEntry.accessLevel === 1)
+            };
+          }
+
+          return {
+            userId,
+            workspaceId,
+            ...DEFAULT_WORKSPACE_USER_ACCESS
+          };
+        });
+        const entriesToDelete = lockedWorkspaceUsers
+          .filter(entry => entry.userId === userId && !workspaceIdSet.has(entry.workspaceId));
+
+        assertStudyManagersRemain(
+          affectedWorkspaceIds,
+          lockedWorkspaceUsers,
+          entries,
+          entriesToDelete
+        );
+
+        if (entriesToDelete.length > 0) {
+          this.logger.log(`Existing workspaces found for user ${userId}, deleting...`);
+          await workspaceUsersRepository.delete({
+            userId,
+            workspaceId: In(entriesToDelete.map(entry => entry.workspaceId))
+          });
+        }
+
+        if (entries.length === 0) {
+          return [];
+        }
+
+        return workspaceUsersRepository.save(entries);
+      });
 
       this.logger.log(`Workspaces successfully set for user with ID: ${userId}`);
       // Return true if at least one entry was saved
       return savedEntries.length > 0;
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       this.logger.error(
         `Error setting workspaces for user with ID: ${userId}. Details: ${error.message}`,
         error.stack
@@ -321,7 +391,7 @@ export class UsersService {
 
   async remove(id: number | number[]): Promise<void> {
     this.logger.log(`Deleting user with id: ${id}`);
-    await this.usersRepository.delete(id);
+    await this.deleteUsersWithStudyManagerInvariant(Array.isArray(id) ? id : [id]);
   }
 
   async removeIds(ids: number[], currentUserId: number): Promise<void> {
@@ -338,7 +408,44 @@ export class UsersService {
       throw new ForbiddenException('All users cannot be deleted at once.');
     }
 
-    await this.usersRepository.delete(ids);
+    await this.deleteUsersWithStudyManagerInvariant(ids);
+  }
+
+  private async deleteUsersWithStudyManagerInvariant(userIds: number[]): Promise<void> {
+    const uniqueUserIds = Array.from(new Set(userIds));
+    if (uniqueUserIds.length === 0) {
+      return;
+    }
+
+    await this.usersRepository.manager.transaction(async manager => {
+      const usersRepository = manager.getRepository(User);
+      const workspaceUsersRepository = manager.getRepository(WorkspaceUser);
+      await lockUserRows(manager, uniqueUserIds);
+      const membershipsToDelete = await workspaceUsersRepository.find({
+        where: { userId: In(uniqueUserIds) }
+      });
+      const affectedWorkspaceIds = Array.from(new Set(
+        membershipsToDelete.map(entry => entry.workspaceId)
+      ));
+      const lockedWorkspaceUsers = await lockWorkspaceUserRows(manager, affectedWorkspaceIds);
+      const userIdSet = new Set(uniqueUserIds);
+      const lockedMembershipsToDelete = lockedWorkspaceUsers
+        .filter(entry => userIdSet.has(entry.userId));
+      const affectedManagerWorkspaceIds = Array.from(new Set(
+        lockedMembershipsToDelete
+          .filter(entry => entry.accessLevel === 3)
+          .map(entry => entry.workspaceId)
+      ));
+
+      assertStudyManagersRemain(
+        affectedManagerWorkspaceIds,
+        lockedWorkspaceUsers,
+        [],
+        lockedMembershipsToDelete
+      );
+
+      await usersRepository.delete(uniqueUserIds);
+    });
   }
 
   async createKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
