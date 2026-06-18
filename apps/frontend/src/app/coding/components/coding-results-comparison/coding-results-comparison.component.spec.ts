@@ -1387,7 +1387,10 @@ describe('CodingResultsComparisonComponent', () => {
         jobConflictStrategy: 'removeFromJobs'
       }
     );
-    expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalledWith({ statisticsVersion: 'v2' });
+    expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalledWith({
+      workspaceId: 1,
+      statisticsVersion: 'v2'
+    });
     expect(component.loadComparison).toHaveBeenCalled();
   });
 

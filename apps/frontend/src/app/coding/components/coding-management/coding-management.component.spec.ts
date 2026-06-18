@@ -708,16 +708,27 @@ describe('CodingManagementComponent', () => {
     it('should switch to changed statistics version when test results change', () => {
       (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
 
-      testResultsChangedSubject.next({ statisticsVersion: 'v2' });
+      testResultsChangedSubject.next({ workspaceId: 1, statisticsVersion: 'v2' });
 
       expect(component.selectedStatisticsVersion).toBe('v2');
       expect(component.filterParams.version).toBe('v2');
       expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
     });
 
+    it('should ignore changed test results from a different workspace', () => {
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+
+      testResultsChangedSubject.next({ workspaceId: 2, statisticsVersion: 'v2' });
+
+      expect(component.selectedStatisticsVersion).toBe('v1');
+      expect(component.filterParams.version).toBe('v1');
+      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+    });
+
     it('should consume a pending statistics version when opened after results changed', () => {
       fixture.destroy();
       (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.consumePendingStatisticsVersion as jest.Mock).mockClear();
       (mockTestPersonCodingService.consumePendingStatisticsVersion as jest.Mock)
         .mockReturnValueOnce('v2');
 
@@ -727,6 +738,7 @@ describe('CodingManagementComponent', () => {
 
       expect(component.selectedStatisticsVersion).toBe('v2');
       expect(component.filterParams.version).toBe('v2');
+      expect(mockTestPersonCodingService.consumePendingStatisticsVersion).toHaveBeenCalledWith(1);
       expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
     });
 

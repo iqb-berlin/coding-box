@@ -203,12 +203,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    const pendingStatisticsVersion = this.testPersonCodingService.consumePendingStatisticsVersion();
-    if (pendingStatisticsVersion) {
-      this.selectStatisticsVersion(pendingStatisticsVersion);
-    }
+    let pendingStatisticsVersion: StatisticsVersion | null = null;
 
     if (workspaceId) {
+      pendingStatisticsVersion = this.testPersonCodingService.consumePendingStatisticsVersion(workspaceId);
+      if (pendingStatisticsVersion) {
+        this.selectStatisticsVersion(pendingStatisticsVersion);
+      }
+
       this.workspaceSettingsService
         .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(autoFetch => {
@@ -343,9 +345,16 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   private refreshAfterTestResultsChanged(event: TestResultsChangedEvent = {}): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (event.workspaceId && event.workspaceId !== workspaceId) {
+      return;
+    }
+
     if (event.statisticsVersion) {
       this.selectStatisticsVersion(event.statisticsVersion);
-      this.testPersonCodingService.consumePendingStatisticsVersion();
+      if (workspaceId) {
+        this.testPersonCodingService.consumePendingStatisticsVersion(workspaceId);
+      }
     }
     this.fetchCodingStatistics();
     this.loadCodingFreshness();

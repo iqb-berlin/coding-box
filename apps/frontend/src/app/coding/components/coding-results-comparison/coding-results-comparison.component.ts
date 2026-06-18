@@ -1162,7 +1162,10 @@ export class CodingResultsComparisonComponent implements OnInit {
           { duration: 5000 }
         );
         if (result.updatedResponsesCount > 0 || result.removedJobUnitCount > 0) {
-          this.testPersonCodingService.notifyTestResultsChanged({ statisticsVersion: 'v2' });
+          this.testPersonCodingService.notifyTestResultsChanged({
+            workspaceId: this.data.workspaceId,
+            statisticsVersion: 'v2'
+          });
         }
         this.loadComparison();
       },
