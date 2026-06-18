@@ -41,6 +41,7 @@ describe('CoderTrainingService', () => {
     getMissingsProfileDetails: jest.Mock;
     ensureDefaultMissingsProfile: jest.Mock;
     getNegativeMissingCodesForProfileOrDefault: jest.Mock;
+    getMissingByIdForProfileOrDefault: jest.Mock;
     getMissingByCodeForProfileOrDefault: jest.Mock;
     resolveMissingsProfileId: jest.Mock;
   };
@@ -86,6 +87,19 @@ describe('CoderTrainingService', () => {
         ]
       }),
       getNegativeMissingCodesForProfileOrDefault: jest.fn().mockResolvedValue(new Set([-97, -98, -99])),
+      getMissingByIdForProfileOrDefault: jest.fn(async (_workspaceId, _profileId, missingId: string) => {
+        if (missingId === 'mir') {
+          return {
+            id: 'mir', label: 'missing invalid response', code: -98, score: 0
+          };
+        }
+        if (missingId === 'mci') {
+          return {
+            id: 'mci', label: 'missing coding impossible', code: -97, score: 0
+          };
+        }
+        throw new BadRequestException(`Missing '${missingId}' not found`);
+      }),
       getMissingByCodeForProfileOrDefault: jest.fn(async (_workspaceId, _profileId, code: number) => {
         if ([-97, -98, -99].includes(code)) {
           return {
@@ -2065,6 +2079,59 @@ describe('CoderTrainingService', () => {
         score: 0
       }));
       expect(result.score).toBe(0);
+      expect(result.source).toBe('manual');
+    });
+
+    it('should resolve MIR discussion issue option to the default profile missing code', async () => {
+      const { training } = createTrainingWithUnit();
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+      mockDiscussionSave();
+
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', -3);
+
+      expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(1, 1, 'mir');
+      expect(missingsProfilesService.getMissingByCodeForProfileOrDefault).toHaveBeenCalledWith(1, 1, -98);
+      expect(coderTrainingDiscussionResultRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        code: -98,
+        score: 0
+      }));
+      expect(result.code).toBe(-98);
+      expect(result.score).toBe(0);
+      expect(result.source).toBe('manual');
+    });
+
+    it('should resolve MCI discussion issue option to the response job missing profile code', async () => {
+      const { training } = createTrainingWithUnit();
+      training.codingJobs[0].missings_profile_id = 77;
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+      missingsProfilesService.getMissingByIdForProfileOrDefault.mockResolvedValueOnce({
+        id: 'mci',
+        label: 'Custom technical problem',
+        code: -41,
+        score: 3
+      });
+      missingsProfilesService.getMissingByCodeForProfileOrDefault.mockResolvedValueOnce({
+        id: 'mci',
+        label: 'Custom technical problem',
+        code: -41,
+        score: 3
+      });
+      mockDiscussionSave();
+
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', -4);
+
+      expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(1, 77, 'mci');
+      expect(missingsProfilesService.getMissingByCodeForProfileOrDefault).toHaveBeenCalledWith(1, 77, -41);
+      expect(coderTrainingDiscussionResultRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        code: -41,
+        score: 3
+      }));
+      expect(result.code).toBe(-41);
+      expect(result.score).toBe(3);
       expect(result.source).toBe('manual');
     });
 

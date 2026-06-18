@@ -885,13 +885,37 @@ export class CoderTrainingService {
     code: number,
     exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
   ): Promise<number> {
-    const jobUnits = this.findTrainingJobUnitsForResponse(training, responseId, exclusions);
-    if (jobUnits.length === 0) {
+    const profileId = await this.resolveMissingProfileIdForResponse(
+      workspaceId,
+      training,
+      responseId,
+      exclusions
+    );
+
+    try {
       return (await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
         workspaceId,
-        null,
+        profileId,
         code
       )).score;
+    } catch (error) {
+      if (error instanceof BadRequestException && error.message.includes('not found')) {
+        throw new BadRequestException(`Unsupported missing code: ${code}`);
+      }
+
+      throw error;
+    }
+  }
+
+  private async resolveMissingProfileIdForResponse(
+    workspaceId: number,
+    training: CoderTraining,
+    responseId: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<number | null> {
+    const jobUnits = this.findTrainingJobUnitsForResponse(training, responseId, exclusions);
+    if (jobUnits.length === 0) {
+      return null;
     }
 
     const resolvedProfileIds = await Promise.all(jobUnits.map(({ job }) => (
@@ -902,19 +926,38 @@ export class CoderTrainingService {
       throw new BadRequestException(`Conflicting missing profiles for response ${responseId} in training ${training.id}`);
     }
 
-    try {
-      return (await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
-        workspaceId,
-        resolvedProfileIds[0],
-        code
-      )).score;
-    } catch (error) {
-      if (error instanceof BadRequestException && error.message.includes('not found')) {
-        throw new BadRequestException(`Unsupported missing code: ${code}`);
-      }
+    return resolvedProfileIds[0];
+  }
 
-      throw error;
+  private async resolveManualDiscussionCode(
+    workspaceId: number,
+    training: CoderTraining,
+    responseId: number,
+    code: number,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<number> {
+    const missingIdByIssueOption = new Map<number, IqbStandardMissingId>([
+      [-3, 'mir'],
+      [-4, 'mci']
+    ]);
+    const missingId = missingIdByIssueOption.get(code);
+    if (!missingId) {
+      return code;
     }
+
+    const profileId = await this.resolveMissingProfileIdForResponse(
+      workspaceId,
+      training,
+      responseId,
+      exclusions
+    );
+    const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+      workspaceId,
+      profileId,
+      missingId
+    );
+
+    return missing.code;
   }
 
   private async deriveDiscussionScore(
@@ -1025,11 +1068,19 @@ export class CoderTrainingService {
       throw new BadRequestException('Discussion code must be an integer');
     }
 
-    const derivedScore = await this.deriveDiscussionScore(
+    const resolvedCode = await this.resolveManualDiscussionCode(
       workspaceId,
       training,
       responseId,
       code,
+      exclusions
+    );
+
+    const derivedScore = await this.deriveDiscussionScore(
+      workspaceId,
+      training,
+      responseId,
+      resolvedCode,
       representativeUnit,
       exclusions
     );
@@ -1040,7 +1091,7 @@ export class CoderTrainingService {
       response_id: responseId
     });
 
-    discussionResult.code = code;
+    discussionResult.code = resolvedCode;
     discussionResult.score = derivedScore;
     discussionResult.notes = notes?.trim() || null;
     discussionResult.manager_user_id = managerUserId;
