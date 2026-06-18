@@ -1,4 +1,7 @@
+import { BadRequestException } from '@nestjs/common';
 import { AdminWorkspaceNotFoundException } from '../../../exceptions/admin-workspace-not-found.exception';
+import Workspace from '../../entities/workspace.entity';
+import WorkspaceUser from '../../entities/workspace_user.entity';
 import { WorkspaceCoreService } from './workspace-core.service';
 
 const createRepo = () => ({
@@ -21,6 +24,7 @@ describe('WorkspaceCoreService', () => {
     release: jest.Mock;
     manager: { delete: jest.Mock };
   };
+  let managerSave: jest.Mock;
   let service: WorkspaceCoreService;
 
   beforeEach(() => {
@@ -35,9 +39,18 @@ describe('WorkspaceCoreService', () => {
       release: jest.fn(),
       manager: { delete: jest.fn().mockResolvedValue({ affected: 1 }) }
     };
+    managerSave = jest.fn((entity: unknown, value: object) => {
+      if (entity === Workspace) {
+        return Promise.resolve({ id: 9, ...value });
+      }
+      return Promise.resolve(value);
+    });
     service = new WorkspaceCoreService(
       repo as never,
-      { createQueryRunner: () => queryRunner } as never,
+      {
+        createQueryRunner: () => queryRunner,
+        transaction: (callback: (manager: { save: jest.Mock }) => Promise<unknown>) => callback({ save: managerSave })
+      } as never,
       cacheService as never,
       workspaceTestResultsService as never
     );
@@ -65,13 +78,24 @@ describe('WorkspaceCoreService', () => {
   it('creates, patches and removes workspaces', async () => {
     repo.findOne.mockResolvedValueOnce({ id: 1, name: 'Old', settings: {} });
 
-    await expect(service.create({ name: 'New' } as never)).resolves.toBe(9);
+    await expect(service.create({ name: 'New' } as never, 5)).resolves.toBe(9);
+    expect(managerSave).toHaveBeenCalledWith(WorkspaceUser, {
+      workspaceId: 9,
+      userId: 5,
+      accessLevel: 3,
+      canCode: false
+    });
     await expect(service.patch({ id: 1, name: 'Patched', settings: { a: true } } as never)).resolves.toBeUndefined();
     expect(cacheService.delete).toHaveBeenCalled();
     await expect(service.remove([])).resolves.toBeUndefined();
     await expect(service.remove([1])).resolves.toBeUndefined();
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
+  });
+
+  it('rejects workspace creation without a valid creator user id', async () => {
+    await expect(service.create({ name: 'New' } as never, 0)).rejects.toBeInstanceOf(BadRequestException);
+    expect(managerSave).not.toHaveBeenCalled();
   });
 
   it('rolls back failed removals', async () => {

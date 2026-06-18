@@ -1,9 +1,10 @@
 import {
-  forwardRef, Inject, Injectable, Logger
+  BadRequestException, forwardRef, Inject, Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
 import Workspace from '../../entities/workspace.entity';
+import WorkspaceUser from '../../entities/workspace_user.entity';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
@@ -75,11 +76,25 @@ export class WorkspaceCoreService {
     throw new AdminWorkspaceNotFoundException(id, 'GET');
   }
 
-  async create(workspace: CreateWorkspaceDto): Promise<number> {
+  async create(workspace: CreateWorkspaceDto, creatorUserId: number): Promise<number> {
     this.logger.log(`Creating workspace with name: ${workspace.name}`);
+    const normalizedCreatorUserId = Number(creatorUserId);
+    if (!Number.isInteger(normalizedCreatorUserId) || normalizedCreatorUserId < 1) {
+      throw new BadRequestException('Creator user ID must be a positive integer.');
+    }
+
     const newWorkspace = this.workspaceRepository.create({ ...workspace });
     try {
-      const savedWorkspace = await this.workspaceRepository.save(newWorkspace);
+      const savedWorkspace = await this.connection.transaction(async manager => {
+        const createdWorkspace = await manager.save(Workspace, newWorkspace);
+        await manager.save(WorkspaceUser, {
+          workspaceId: createdWorkspace.id,
+          userId: normalizedCreatorUserId,
+          accessLevel: 3,
+          canCode: false
+        });
+        return createdWorkspace;
+      });
       this.logger.log(`Workspace created successfully with ID: ${savedWorkspace.id}`);
       return savedWorkspace.id;
     } catch (error) {
