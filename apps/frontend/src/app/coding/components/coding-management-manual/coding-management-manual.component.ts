@@ -3070,6 +3070,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private refreshAfterApplyingCodingResults(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (workspaceId) {
+      this.testPersonCodingService.notifyTestResultsChanged({
+        workspaceId,
+        statisticsVersion: 'v2'
+      });
+    }
     this.refreshAllStatistics();
     this.loadResponseAnalysis();
     this.loadCodingFreshness();
