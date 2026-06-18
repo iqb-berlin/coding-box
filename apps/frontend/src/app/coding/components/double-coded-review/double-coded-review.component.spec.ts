@@ -237,7 +237,8 @@ describe('DoubleCodedReviewComponent', () => {
               failedCount: 0,
               skippedCount: 0,
               message: 'ok'
-            }))
+            })),
+            notifyTestResultsChanged: jest.fn()
           }
         },
         {
@@ -381,6 +382,7 @@ describe('DoubleCodedReviewComponent', () => {
   it('stores and applies a replay code selection that has no coder result', async () => {
     const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
       applyDoubleCodedResolutions: jest.Mock;
+      notifyTestResultsChanged: jest.Mock;
     };
     const replaySource = {} as MessageEventSource;
     const harness = component as unknown as ReplaySelectionHarness;
@@ -411,6 +413,10 @@ describe('DoubleCodedReviewComponent', () => {
 
     expect(testPersonCodingService.applyDoubleCodedResolutions).toHaveBeenCalledWith(1, {
       decisions: [{ responseId: 501, code: 3, score: 2 }]
+    });
+    expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalledWith({
+      workspaceId: 1,
+      statisticsVersion: 'v2'
     });
   });
 

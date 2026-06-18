@@ -1282,6 +1282,12 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         }).subscribe(message => {
           this.showSuccess(message);
         });
+        if (response.appliedCount > 0) {
+          this.testPersonCodingService.notifyTestResultsChanged({
+            workspaceId,
+            statisticsVersion: 'v2'
+          });
+        }
         this.resultsApplied = true;
         this.loadData();
       },
