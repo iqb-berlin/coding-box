@@ -13,6 +13,33 @@ export interface ReviewCodeSelection {
   coderNames: string[];
 }
 
+export type BundleVariableStatus =
+  | 'manual-open'
+  | 'manual-coded'
+  | 'auto-coded'
+  | 'not-coded'
+  | 'not-available';
+
+export interface BundleVariableContext {
+  responseId: number | null;
+  unitName: string;
+  variableId: string;
+  variableAnchor: string;
+  variablePage: string;
+  status: BundleVariableStatus;
+  code: number | null;
+  score: number | null;
+  source: 'manual' | 'auto' | 'none';
+}
+
+export interface BundleContext {
+  bundleId: number;
+  bundleName: string;
+  caseKey: string;
+  caseOrderingMode: 'continuous' | 'alternating';
+  variables: BundleVariableContext[];
+}
+
 export interface UnitsReplayUnit {
   id: number;
   name: string;
@@ -24,6 +51,8 @@ export interface UnitsReplayUnit {
   variableId?: string;
   variableAnchor?: string;
   variablePage?: string;
+  variableBundleId?: number | null;
+  bundleContext?: BundleContext | null;
   reviewCodeSelections?: ReviewCodeSelection[];
 }
 

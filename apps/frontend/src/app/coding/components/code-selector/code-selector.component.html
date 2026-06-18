@@ -11,8 +11,29 @@
     </mat-progress-bar>
   </div>
 
-  @if (availableVariables.length > 1) {
+  @if (availableVariables.length > 1 || shouldShowBundleVariableChips) {
   <div class="variable-selector-section">
+    @if (shouldShowBundleVariableChips) {
+    <div class="bundle-variable-chips" role="tablist">
+      @for (chip of bundleVariableChips; track chip.key) {
+      <button
+        type="button"
+        class="bundle-variable-chip"
+        [class.active]="chip.active"
+        [class.auto-coded]="chip.status === 'auto-coded'"
+        [disabled]="chip.disabled"
+        [matTooltip]="chip.tooltip"
+        (click)="selectBundleVariable(chip.key, chip.disabled)">
+        <span class="bundle-variable-name">{{ chip.variableId }}</span>
+        @if (chip.status === 'auto-coded') {
+        <mat-icon class="bundle-variable-status-icon">bolt</mat-icon>
+        } @else {
+        <span class="bundle-variable-count">{{ chip.progress.coded }}/{{ chip.progress.total }}</span>
+        }
+      </button>
+      }
+    </div>
+    } @else {
     <div class="variable-dropdown-wrapper">
       <button class="variable-trigger-btn" (click)="toggleVariablePanel()" [disabled]="isNavigationDisabled" type="button">
         <span class="variable-trigger-label">
@@ -47,6 +68,7 @@
       </div>
       }
     </div>
+    }
   </div>
   }
 

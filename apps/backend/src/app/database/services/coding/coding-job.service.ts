@@ -24,7 +24,8 @@ import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding
 import { SaveCodingNotesDto } from '../../../admin/coding-job/dto/save-coding-notes.dto';
 import {
   sortUnitsContinuous,
-  sortUnitsAlternating
+  sortUnitsAlternating,
+  getLatestCode
 } from '../../../utils/coding-utils';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -230,14 +231,21 @@ type DistributionPlanItem = {
   itemCaseOrderingMode: 'continuous' | 'alternating';
   uniqueCases: number;
   totalResponses: number;
-  availableResponses: SlimResponse[];
+  availableCases: DistributionPlanCaseGroup[];
   caseStatusesByResponseId: Map<number, DistributionVariableUsageCaseStatus>;
-  selectedResponses: SlimResponse[];
+  selectedCases: DistributionPlanCaseGroup[];
+};
+
+type DistributionPlanCaseGroup = {
+  caseKey: string;
+  responses: SlimResponse[];
+  representativeResponse: SlimResponse;
 };
 
 type DistributionPlanCase = {
   item: DistributionPlanItem;
   response: SlimResponse;
+  allocationCaseKey: string;
   isDoubleCoded: boolean;
   assignedCoderIds: number[];
 };
@@ -280,6 +288,33 @@ type DistributionCreatedJob = {
   jobId: number;
   jobName: string;
   caseCount: number;
+};
+
+type CodingJobBundleVariableStatus =
+  | 'manual-open'
+  | 'manual-coded'
+  | 'auto-coded'
+  | 'not-coded'
+  | 'not-available';
+
+type CodingJobBundleVariableContext = {
+  responseId: number | null;
+  unitName: string;
+  variableId: string;
+  variableAnchor: string;
+  variablePage: string;
+  status: CodingJobBundleVariableStatus;
+  code: number | null;
+  score: number | null;
+  source: 'manual' | 'auto' | 'none';
+};
+
+type CodingJobBundleContext = {
+  bundleId: number;
+  bundleName: string;
+  caseKey: string;
+  caseOrderingMode: 'continuous' | 'alternating';
+  variables: CodingJobBundleVariableContext[];
 };
 
 type DistributedCodingJobsResult = {
@@ -4252,6 +4287,7 @@ export class CodingJobService {
       personGroup: string;
       notes: string | null;
       variableBundleId: number | null;
+      bundleContext: CodingJobBundleContext | null;
       isDoubleCoded: boolean;
       otherCoders: string[];
     }[]
@@ -4284,21 +4320,26 @@ export class CodingJobService {
       bundleModes.set(b.variable_bundle_id, b.case_ordering_mode || globalMode);
     }
 
+    const codingJobUnitSelect: (keyof CodingJobUnit)[] = [
+      'response_id',
+      'unit_name',
+      'unit_alias',
+      'variable_id',
+      'variable_anchor',
+      'booklet_name',
+      'person_login',
+      'person_code',
+      'person_group',
+      'notes',
+      'variable_bundle_id',
+      'code',
+      'score',
+      'is_open'
+    ];
+
     const codingJobUnits = await this.codingJobUnitRepository.find({
       where: whereClause,
-      select: [
-        'response_id',
-        'unit_name',
-        'unit_alias',
-        'variable_id',
-        'variable_anchor',
-        'booklet_name',
-        'person_login',
-        'person_code',
-        'person_group',
-        'notes',
-        'variable_bundle_id'
-      ]
+      select: codingJobUnitSelect
     });
     const exclusions =
       await this.workspaceExclusionService.resolveExclusionsForQueries(
@@ -4311,6 +4352,18 @@ export class CodingJobService {
         unit.unit_name
       )
     );
+    const visibleCodingJobUnitsForContext = onlyOpen ?
+      (await this.codingJobUnitRepository.find({
+        where: { coding_job_id: codingJobId },
+        select: codingJobUnitSelect
+      })).filter(
+        unit => !isExcludedByResolvedExclusions(
+          exclusions,
+          unit.booklet_name,
+          unit.unit_name
+        )
+      ) :
+      visibleCodingJobUnits;
 
     // Detect double coding and other coders in the same logical coding scope.
     const responseIds = visibleCodingJobUnits.map(unit => unit.response_id);
@@ -4384,13 +4437,24 @@ export class CodingJobService {
     }
 
     const variablePageMaps = await this.getVariablePageMapsForUnits(
-      visibleCodingJobUnits,
+      visibleCodingJobUnitsForContext,
       codingJob.workspace_id
     );
     const variableAnchorMaps = await this.getVariableAnchorMapsForUnits(
-      visibleCodingJobUnits,
+      visibleCodingJobUnitsForContext,
       codingJob.workspace_id
     );
+    const bundleContextByResponseId =
+      await this.getCodingJobBundleContextsForUnits(
+        sortedUnits,
+        bundles,
+        bundleModes,
+        globalMode,
+        variablePageMaps,
+        variableAnchorMaps,
+        codingJob.workspace_id,
+        visibleCodingJobUnitsForContext
+      );
 
     return sortedUnits.map(unit => {
       const otherCoders = Array.from(
@@ -4414,10 +4478,252 @@ export class CodingJobService {
         personGroup: unit.person_group,
         notes: unit.notes,
         variableBundleId: unit.variable_bundle_id,
+        bundleContext: bundleContextByResponseId.get(unit.response_id) || null,
         isDoubleCoded: otherCoders.length > 0,
         otherCoders: otherCoders
       };
     });
+  }
+
+  private getCodingJobBundleUnitCaseKey(
+    unit: Pick<
+    CodingJobUnit,
+    | 'person_login'
+    | 'person_code'
+    | 'person_group'
+    | 'booklet_name'
+    >
+  ): string {
+    return [
+      unit.person_login,
+      unit.person_code,
+      unit.person_group,
+      unit.booklet_name
+    ].join('\u0000');
+  }
+
+  private getCodingJobBundleResponseCaseKey(
+    response: ResponseEntity
+  ): string {
+    return [
+      response.unit?.booklet?.person?.login || '',
+      response.unit?.booklet?.person?.code || '',
+      response.unit?.booklet?.person?.group || '',
+      response.unit?.booklet?.bookletinfo?.name || ''
+    ].join('\u0000');
+  }
+
+  private getCodingJobBundleVariableStatus(
+    response: ResponseEntity | undefined,
+    manualUnit: CodingJobUnit | undefined
+  ): {
+      status: CodingJobBundleVariableStatus;
+      code: number | null;
+      score: number | null;
+      source: 'manual' | 'auto' | 'none';
+    } {
+    if (manualUnit) {
+      const hasManualCode =
+        manualUnit.code !== null &&
+        manualUnit.code !== undefined;
+      return {
+        status: hasManualCode || manualUnit.is_open === false ?
+          'manual-coded' :
+          'manual-open',
+        code: manualUnit.code ?? null,
+        score: manualUnit.score ?? null,
+        source: 'manual'
+      };
+    }
+
+    if (!response) {
+      return {
+        status: 'not-available',
+        code: null,
+        score: null,
+        source: 'none'
+      };
+    }
+
+    const latestCode = getLatestCode(response);
+    if (
+      response.is_autocoder_generated === true ||
+      latestCode.code !== null ||
+      response.status_v1 !== null
+    ) {
+      return {
+        status: latestCode.code !== null || response.is_autocoder_generated === true ?
+          'auto-coded' :
+          'not-coded',
+        code: latestCode.code ?? null,
+        score: latestCode.score ?? null,
+        source: latestCode.code !== null || response.is_autocoder_generated === true ?
+          'auto' :
+          'none'
+      };
+    }
+
+    return {
+      status: 'not-coded',
+      code: null,
+      score: null,
+      source: 'none'
+    };
+  }
+
+  private async getCodingJobBundleContextsForUnits(
+    units: CodingJobUnit[],
+    codingJobBundles: CodingJobVariableBundle[],
+    bundleModes: Map<number, string>,
+    globalMode: string,
+    variablePageMaps: Map<string, Map<string, string>>,
+    variableAnchorMaps: Map<string, Map<string, string>>,
+    workspaceId: number,
+    contextUnits: CodingJobUnit[] = units
+  ): Promise<Map<number, CodingJobBundleContext>> {
+    const bundledUnits = units.filter(
+      unit => unit.variable_bundle_id !== null
+    );
+    if (bundledUnits.length === 0) {
+      return new Map();
+    }
+
+    const bundleIds = Array.from(
+      new Set(
+        bundledUnits
+          .map(unit => unit.variable_bundle_id)
+          .filter((bundleId): bundleId is number => bundleId !== null)
+      )
+    );
+    const variableBundles = await this.variableBundleRepository.find({
+      where: {
+        id: In(bundleIds),
+        workspace_id: workspaceId
+      }
+    });
+    const variableBundleById = new Map(
+      variableBundles.map(bundle => [bundle.id, bundle])
+    );
+    const caseKeys = new Set(
+      bundledUnits.map(unit => this.getCodingJobBundleUnitCaseKey(unit))
+    );
+    const contextBundledUnits = contextUnits.filter(
+      unit => unit.variable_bundle_id !== null &&
+        caseKeys.has(this.getCodingJobBundleUnitCaseKey(unit))
+    );
+    const variableIds = Array.from(
+      new Set(
+        variableBundles.flatMap(bundle => (
+          bundle.variables || []
+        ).map(variable => variable.variableId))
+      )
+    );
+    const unitNames = Array.from(
+      new Set(
+        variableBundles.flatMap(bundle => (
+          bundle.variables || []
+        ).map(variable => variable.unitName))
+      )
+    );
+
+    if (variableIds.length === 0 || unitNames.length === 0) {
+      return new Map();
+    }
+
+    const personLogins = Array.from(new Set(bundledUnits.map(unit => unit.person_login)));
+    const personCodes = Array.from(new Set(bundledUnits.map(unit => unit.person_code)));
+    const personGroups = Array.from(new Set(bundledUnits.map(unit => unit.person_group)));
+    const bookletNames = Array.from(new Set(bundledUnits.map(unit => unit.booklet_name)));
+    const responses = await this.responseRepository
+      .createQueryBuilder('response')
+      .leftJoinAndSelect('response.unit', 'unit')
+      .leftJoinAndSelect('unit.booklet', 'booklet')
+      .leftJoinAndSelect('booklet.person', 'person')
+      .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('response.variableid IN (:...variableIds)', { variableIds })
+      .andWhere('unit.name IN (:...unitNames)', { unitNames })
+      .andWhere('person.login IN (:...personLogins)', { personLogins })
+      .andWhere('person.code IN (:...personCodes)', { personCodes })
+      .andWhere('person.group IN (:...personGroups)', { personGroups })
+      .andWhere("COALESCE(bookletinfo.name, '') IN (:...bookletNames)", {
+        bookletNames
+      })
+      .getMany();
+
+    const responseByCaseAndVariable = new Map<string, ResponseEntity>();
+    responses.forEach(response => {
+      const caseKey = this.getCodingJobBundleResponseCaseKey(response);
+      if (!caseKeys.has(caseKey)) {
+        return;
+      }
+
+      responseByCaseAndVariable.set(
+        `${caseKey}\u0000${response.unit?.name || ''}::${response.variableid}`,
+        response
+      );
+    });
+
+    const manualUnitByResponseId = new Map(
+      contextBundledUnits.map(unit => [unit.response_id, unit])
+    );
+    const bundleContextByResponseId = new Map<number, CodingJobBundleContext>();
+    const configuredBundleIds = new Set(
+      codingJobBundles.map(bundle => bundle.variable_bundle_id)
+    );
+
+    bundledUnits.forEach(unit => {
+      const bundleId = unit.variable_bundle_id;
+      if (bundleId === null || !configuredBundleIds.has(bundleId)) {
+        return;
+      }
+
+      const variableBundle = variableBundleById.get(bundleId);
+      if (!variableBundle) {
+        return;
+      }
+
+      const caseKey = this.getCodingJobBundleUnitCaseKey(unit);
+      const contextVariables = (variableBundle.variables || [])
+        .map(variable => {
+          const response = responseByCaseAndVariable.get(
+            `${caseKey}\u0000${variable.unitName}::${variable.variableId}`
+          );
+          const manualUnit = response ?
+            manualUnitByResponseId.get(response.id) :
+            undefined;
+          const status = this.getCodingJobBundleVariableStatus(
+            response,
+            manualUnit
+          );
+
+          return {
+            responseId: response?.id ?? null,
+            unitName: variable.unitName,
+            variableId: variable.variableId,
+            variableAnchor:
+              variableAnchorMaps.get(variable.unitName)?.get(variable.variableId) ||
+              variable.variableId,
+            variablePage:
+              variablePageMaps.get(variable.unitName)?.get(variable.variableId) ||
+              '0',
+            ...status
+          };
+        });
+
+      bundleContextByResponseId.set(unit.response_id, {
+        bundleId,
+        bundleName: variableBundle.name,
+        caseKey,
+        caseOrderingMode:
+          (bundleModes.get(bundleId) || globalMode) === 'alternating' ?
+            'alternating' :
+            'continuous',
+        variables: contextVariables
+      });
+    });
+
+    return bundleContextByResponseId;
   }
 
   private async getVariablePageMapsForUnits(
@@ -5709,25 +6015,73 @@ export class CodingJobService {
     ].join('::');
   }
 
-  private sortResponsesForDistribution(
-    responses: SlimResponse[],
+  private getResponseAllocationCaseKey(
+    response: SlimResponse,
+    itemType: 'bundle' | 'variable'
+  ): string {
+    if (itemType === 'bundle') {
+      return [
+        'bundle-case',
+        response.personLogin,
+        response.personCode,
+        response.personGroup,
+        response.bookletName
+      ].join('\u0000');
+    }
+
+    return `response:${response.id}`;
+  }
+
+  private getCaseGroupStratumKey(
+    caseGroup: DistributionPlanCaseGroup,
+    mode: 'continuous' | 'alternating',
+    itemType: 'bundle' | 'variable'
+  ): string {
+    if (itemType === 'variable') {
+      return this.getResponseStratumKey(
+        caseGroup.representativeResponse,
+        mode
+      );
+    }
+
+    const response = caseGroup.representativeResponse;
+    if (mode === 'alternating') {
+      return [
+        response.personGroup,
+        response.bookletName
+      ].join('::');
+    }
+
+    return [
+      response.bookletName,
+      response.personGroup
+    ].join('::');
+  }
+
+  private sortCaseGroupsForDistribution(
+    caseGroups: DistributionPlanCaseGroup[],
     mode: 'continuous' | 'alternating',
     seed: string,
-    itemKey: string
-  ): SlimResponse[] {
-    const groups = new Map<string, SlimResponse[]>();
+    itemKey: string,
+    itemType: 'bundle' | 'variable'
+  ): DistributionPlanCaseGroup[] {
+    const groups = new Map<string, DistributionPlanCaseGroup[]>();
 
-    for (const response of responses) {
-      const key = this.getResponseStratumKey(response, mode);
+    for (const caseGroup of caseGroups) {
+      const key = this.getCaseGroupStratumKey(caseGroup, mode, itemType);
       const group = groups.get(key) || [];
-      group.push(response);
+      group.push(caseGroup);
       groups.set(key, group);
     }
 
     const groupEntries = Array.from(groups.entries())
       .map(([key, group]) => ({
         key,
-        group: group.sort((a, b) => this.compareResponsesByMode(mode, a, b))
+        group: group.sort((a, b) => this.compareResponsesByMode(
+          mode,
+          a.representativeResponse,
+          b.representativeResponse
+        ))
       }))
       .sort((a, b) => {
         const hashA = this.stableHash(`${seed}:${itemKey}:stratum:${a.key}`);
@@ -5735,21 +6089,83 @@ export class CodingJobService {
         return hashA - hashB || a.key.localeCompare(b.key);
       });
 
-    const result: SlimResponse[] = [];
+    const result: DistributionPlanCaseGroup[] = [];
     let remaining = true;
 
     while (remaining) {
       remaining = false;
       for (const entry of groupEntries) {
-        const response = entry.group.shift();
-        if (response) {
-          result.push(response);
+        const caseGroup = entry.group.shift();
+        if (caseGroup) {
+          result.push(caseGroup);
           remaining = true;
         }
       }
     }
 
     return result;
+  }
+
+  private buildDistributionCaseGroups(
+    itemType: 'bundle' | 'variable',
+    allItemResponses: SlimResponse[],
+    filteredResponses: SlimResponse[],
+    assignedResponseIds: Set<number>,
+    mode: 'continuous' | 'alternating',
+    seed: string,
+    itemKey: string
+  ): DistributionPlanCaseGroup[] {
+    const assignedBundleCaseKeys =
+      itemType === 'bundle' ?
+        new Set(
+          allItemResponses
+            .filter(response => assignedResponseIds.has(response.id))
+            .map(response => this.getResponseAllocationCaseKey(response, itemType))
+        ) :
+        new Set<string>();
+    const casesByKey = new Map<string, SlimResponse[]>();
+
+    filteredResponses.forEach(response => {
+      const caseKey = this.getResponseAllocationCaseKey(response, itemType);
+      if (assignedBundleCaseKeys.has(caseKey)) {
+        return;
+      }
+
+      const responses = casesByKey.get(caseKey) || [];
+      responses.push(response);
+      casesByKey.set(caseKey, responses);
+    });
+
+    const caseGroups = Array.from(casesByKey.entries()).map(
+      ([caseKey, responses]) => {
+        const sortedResponses = [...responses].sort((a, b) => this.compareResponsesByMode(mode, a, b));
+        return {
+          caseKey,
+          responses: sortedResponses,
+          representativeResponse: sortedResponses[0]
+        };
+      }
+    );
+
+    return this.sortCaseGroupsForDistribution(
+      caseGroups,
+      mode,
+      seed,
+      itemKey,
+      itemType
+    );
+  }
+
+  private countDistributionCasesInResponses(
+    item: DistributionPlanItem,
+    responses: SlimResponse[]
+  ): number {
+    return new Set(
+      responses.map(response => this.getResponseAllocationCaseKey(
+        response,
+        item.type
+      ))
+    ).size;
   }
 
   private normalizeDistributionCoders(
@@ -5952,9 +6368,9 @@ export class CodingJobService {
   private selectCasesWithGlobalCap(
     planItems: DistributionPlanItem[],
     maxCodingCases?: number
-  ): { item: DistributionPlanItem; response: SlimResponse }[] {
+  ): { item: DistributionPlanItem; caseGroup: DistributionPlanCaseGroup }[] {
     const totalAvailable = planItems.reduce(
-      (sum, item) => sum + item.availableResponses.length,
+      (sum, item) => sum + item.availableCases.length,
       0
     );
     const targetCases =
@@ -5963,11 +6379,13 @@ export class CodingJobService {
         totalAvailable;
     const queues = planItems.map(item => ({
       item,
-      responses: [...item.availableResponses]
+      cases: [...item.availableCases]
     }));
-    const selected: { item: DistributionPlanItem; response: SlimResponse }[] =
-      [];
-    const selectedResponseIds = new Set<number>();
+    const selected: {
+      item: DistributionPlanItem;
+      caseGroup: DistributionPlanCaseGroup;
+    }[] = [];
+    const selectedCaseKeys = new Set<string>();
 
     while (selected.length < targetCases) {
       let progressed = false;
@@ -5977,15 +6395,22 @@ export class CodingJobService {
           break;
         }
 
-        while (queue.responses.length > 0) {
-          const response = queue.responses.shift();
-          if (!response || selectedResponseIds.has(response.id)) {
+        while (queue.cases.length > 0) {
+          const caseGroup = queue.cases.shift();
+          const selectedCaseKey = caseGroup ?
+            `${queue.item.itemKey}\u0000${caseGroup.caseKey}` :
+            null;
+          if (
+            !caseGroup ||
+            !selectedCaseKey ||
+            selectedCaseKeys.has(selectedCaseKey)
+          ) {
             continue;
           }
 
-          selected.push({ item: queue.item, response });
-          queue.item.selectedResponses.push(response);
-          selectedResponseIds.add(response.id);
+          selected.push({ item: queue.item, caseGroup });
+          queue.item.selectedCases.push(caseGroup);
+          selectedCaseKeys.add(selectedCaseKey);
           progressed = true;
           break;
         }
@@ -6042,24 +6467,18 @@ export class CodingJobService {
     return `${response.unitName}::${response.variableid}`;
   }
 
-  private getCoderLoadRatio(
-    coder: NormalizedDistributionCoder,
-    load: { tasks: number; doubleTasks: number }
-  ): number {
-    return load.tasks / coder.weight;
-  }
-
   private chooseSingleCoder(
     coders: NormalizedDistributionCoder[],
     coderLoads: Map<number, { tasks: number; doubleTasks: number }>,
     seed: string,
-    response: SlimResponse
+    response: SlimResponse,
+    taskCount = 1
   ): NormalizedDistributionCoder {
     return [...coders].sort((a, b) => {
       const loadA = coderLoads.get(a.id) || { tasks: 0, doubleTasks: 0 };
       const loadB = coderLoads.get(b.id) || { tasks: 0, doubleTasks: 0 };
-      const ratioA = this.getCoderLoadRatio(a, loadA);
-      const ratioB = this.getCoderLoadRatio(b, loadB);
+      const ratioA = (loadA.tasks + taskCount) / a.weight;
+      const ratioB = (loadB.tasks + taskCount) / b.weight;
       const tieA = this.stableHash(`${seed}:single:${response.id}:${a.id}`);
       const tieB = this.stableHash(`${seed}:single:${response.id}:${b.id}`);
 
@@ -6101,17 +6520,18 @@ export class CodingJobService {
     coderLoads: Map<number, { tasks: number; doubleTasks: number }>,
     pairCounts: Map<string, number>,
     seed: string,
-    response: SlimResponse
+    response: SlimResponse,
+    taskCount = 1
   ): NormalizedDistributionCoder[] {
     return [...coderCombinations].sort((a, b) => {
       const score = (combination: NormalizedDistributionCoder[]) => {
         const projectedRatios = combination.map(coder => {
           const load = coderLoads.get(coder.id) || { tasks: 0, doubleTasks: 0 };
-          return (load.tasks + 1) / coder.weight;
+          return (load.tasks + taskCount) / coder.weight;
         });
         const projectedDoubleRatios = combination.map(coder => {
           const load = coderLoads.get(coder.id) || { tasks: 0, doubleTasks: 0 };
-          return (load.doubleTasks + 1) / coder.weight;
+          return (load.doubleTasks + taskCount) / coder.weight;
         });
         const pairKey = combination
           .map(coder => coder.id)
@@ -6280,7 +6700,6 @@ export class CodingJobService {
       );
       const {
         filteredResponses,
-        uniqueCases,
         totalResponses,
         caseStatusesByResponseId
       } = this.getDistributableResponses(
@@ -6290,8 +6709,11 @@ export class CodingJobService {
         aggregationThreshold,
         response => isDerivedVariable(response.unitName, response.variableid)
       );
-      const availableResponses = this.sortResponsesForDistribution(
+      const availableCases = this.buildDistributionCaseGroups(
+        itemObj.type,
+        allItemResponses,
         filteredResponses,
+        assignedResponseIds,
         itemCaseOrderingMode,
         distributionSeed,
         itemKey
@@ -6303,16 +6725,16 @@ export class CodingJobService {
         itemLabel,
         itemVariables,
         itemCaseOrderingMode,
-        uniqueCases,
+        uniqueCases: availableCases.length,
         totalResponses,
-        availableResponses,
+        availableCases,
         caseStatusesByResponseId,
-        selectedResponses: []
+        selectedCases: []
       };
 
       planItems.push(planItem);
       aggregationInfo[itemKey] = {
-        uniqueCases,
+        uniqueCases: availableCases.length,
         totalResponses
       };
       distribution[itemKey] = {};
@@ -6332,23 +6754,22 @@ export class CodingJobService {
       request.maxCodingCases
     );
     this.getDoubleCodingSettings(request);
-    const selectedCaseCountsByVariableKey = new Map<string, number>();
+    const selectedCaseCountsByItemKey = new Map<string, number>();
     selectedCases.forEach(selectedCase => {
-      const variableKey = this.getResponseVariableKey(selectedCase.response);
-      selectedCaseCountsByVariableKey.set(
-        variableKey,
-        (selectedCaseCountsByVariableKey.get(variableKey) || 0) + 1
+      selectedCaseCountsByItemKey.set(
+        selectedCase.item.itemKey,
+        (selectedCaseCountsByItemKey.get(selectedCase.item.itemKey) || 0) + 1
       );
     });
-    const doubleCodingCountsByVariableKey = new Map<string, number>();
-    selectedCaseCountsByVariableKey.forEach((caseCount, variableKey) => {
-      doubleCodingCountsByVariableKey.set(
-        variableKey,
+    const doubleCodingCountsByItemKey = new Map<string, number>();
+    selectedCaseCountsByItemKey.forEach((caseCount, itemKey) => {
+      doubleCodingCountsByItemKey.set(
+        itemKey,
         this.getDoubleCodingCount(request, caseCount)
       );
     });
     const totalDoubleCodingCount = Array.from(
-      doubleCodingCountsByVariableKey.values()
+      doubleCodingCountsByItemKey.values()
     ).reduce((sum, count) => sum + count, 0);
 
     if (
@@ -6371,36 +6792,38 @@ export class CodingJobService {
       totalDoubleCodingCount > 0 ?
         this.getCoderCombinations(coders, codersPerDoubleCodedCase) :
         [];
-    const assignedDoubleCodingCountsByVariableKey = new Map<string, number>();
+    const assignedDoubleCodingCountsByItemKey = new Map<string, number>();
 
     selectedCases.forEach(selectedCase => {
-      const variableKey = this.getResponseVariableKey(selectedCase.response);
+      const taskCount = selectedCase.caseGroup.responses.length;
       const assignedDoubleCodingCount =
-        assignedDoubleCodingCountsByVariableKey.get(variableKey) || 0;
+        assignedDoubleCodingCountsByItemKey.get(selectedCase.item.itemKey) || 0;
       const isDoubleCoded =
         assignedDoubleCodingCount <
-        (doubleCodingCountsByVariableKey.get(variableKey) || 0);
+        (doubleCodingCountsByItemKey.get(selectedCase.item.itemKey) || 0);
       const assignedCoders = isDoubleCoded ?
         this.chooseDoubleCodingCoders(
           doubleCodingCoderCombinations,
           coderLoads,
           pairCounts,
           distributionSeed,
-          selectedCase.response
+          selectedCase.caseGroup.representativeResponse,
+          taskCount
         ) :
         [
           this.chooseSingleCoder(
             coders,
             coderLoads,
             distributionSeed,
-            selectedCase.response
+            selectedCase.caseGroup.representativeResponse,
+            taskCount
           )
         ];
       const assignedCoderIds = assignedCoders.map(coder => coder.id);
 
       if (isDoubleCoded) {
-        assignedDoubleCodingCountsByVariableKey.set(
-          variableKey,
+        assignedDoubleCodingCountsByItemKey.set(
+          selectedCase.item.itemKey,
           assignedDoubleCodingCount + 1
         );
         const pairKey = [...assignedCoderIds].sort((a, b) => a - b).join('-');
@@ -6409,9 +6832,9 @@ export class CodingJobService {
 
       assignedCoders.forEach(coder => {
         const load = coderLoads.get(coder.id) || { tasks: 0, doubleTasks: 0 };
-        load.tasks += 1;
+        load.tasks += taskCount;
         if (isDoubleCoded) {
-          load.doubleTasks += 1;
+          load.doubleTasks += taskCount;
         }
         coderLoads.set(coder.id, load);
 
@@ -6434,16 +6857,19 @@ export class CodingJobService {
           jobsByItemAndCoder.get(selectedCase.item.itemKey) ||
           new Map<number, SlimResponse[]>();
         const coderResponses = itemJobs.get(coder.id) || [];
-        coderResponses.push(selectedCase.response);
+        coderResponses.push(...selectedCase.caseGroup.responses);
         itemJobs.set(coder.id, coderResponses);
         jobsByItemAndCoder.set(selectedCase.item.itemKey, itemJobs);
       });
 
-      plannedCases.push({
-        item: selectedCase.item,
-        response: selectedCase.response,
-        isDoubleCoded,
-        assignedCoderIds
+      selectedCase.caseGroup.responses.forEach(response => {
+        plannedCases.push({
+          item: selectedCase.item,
+          response,
+          allocationCaseKey: selectedCase.caseGroup.caseKey,
+          isDoubleCoded,
+          assignedCoderIds
+        });
       });
     });
 
@@ -6451,15 +6877,22 @@ export class CodingJobService {
       const itemCases = plannedCases.filter(
         plannedCase => plannedCase.item.itemKey === planItem.itemKey
       );
-      const doubleCases = itemCases.filter(
-        plannedCase => plannedCase.isDoubleCoded
-      ).length;
-      const singleCases = itemCases.length - doubleCases;
-      const codingTasksTotal = Object.values(
-        distributionByCoderId[planItem.itemKey]
-      ).reduce((sum, value) => sum + value, 0);
+      const distinctCaseKeys = new Set(
+        itemCases.map(plannedCase => plannedCase.allocationCaseKey)
+      );
+      const doubleCaseKeys = new Set(
+        itemCases
+          .filter(plannedCase => plannedCase.isDoubleCoded)
+          .map(plannedCase => plannedCase.allocationCaseKey)
+      );
+      const codingTasksTotal = itemCases.reduce(
+        (sum, plannedCase) => sum + plannedCase.assignedCoderIds.length,
+        0
+      );
+      const doubleCases = doubleCaseKeys.size;
+      const singleCases = distinctCaseKeys.size - doubleCases;
 
-      doubleCodingInfo[planItem.itemKey].distinctCases = itemCases.length;
+      doubleCodingInfo[planItem.itemKey].distinctCases = distinctCaseKeys.size;
       doubleCodingInfo[planItem.itemKey].codingTasksTotal = codingTasksTotal;
       doubleCodingInfo[planItem.itemKey].totalCases = codingTasksTotal;
       doubleCodingInfo[planItem.itemKey].doubleCodedCases = doubleCases;
@@ -6691,7 +7124,6 @@ export class CodingJobService {
       );
       const {
         filteredResponses,
-        uniqueCases,
         totalResponses,
         caseStatusesByResponseId
       } = this.getDistributableResponses(
@@ -6701,8 +7133,11 @@ export class CodingJobService {
         context.aggregationThreshold,
         response => isDerivedVariable(response.unitName, response.variableid)
       );
-      const availableResponses = this.sortResponsesForDistribution(
+      const availableCases = this.buildDistributionCaseGroups(
+        itemObj.type,
+        allItemResponses,
         filteredResponses,
+        assignedResponseIds,
         itemCaseOrderingMode,
         distributionSeed,
         itemKey
@@ -6715,11 +7150,11 @@ export class CodingJobService {
         itemLabel,
         itemVariables,
         itemCaseOrderingMode,
-        uniqueCases,
+        uniqueCases: availableCases.length,
         totalResponses,
-        availableResponses,
+        availableCases,
         caseStatusesByResponseId,
-        selectedResponses: []
+        selectedCases: []
       });
     }
 
@@ -6729,13 +7164,15 @@ export class CodingJobService {
     );
     const usageByVariable = new Map<string, DistributionVariableUsageByStatus>();
 
-    selectedCases.forEach(({ item, response }) => {
-      this.addResponseToVariableUsageByStatus(
-        usageByVariable,
-        response,
-        item.caseStatusesByResponseId.get(response.id) ||
-          this.getResponseUsageStatus(response)
-      );
+    selectedCases.forEach(({ item, caseGroup }) => {
+      caseGroup.responses.forEach(response => {
+        this.addResponseToVariableUsageByStatus(
+          usageByVariable,
+          response,
+          item.caseStatusesByResponseId.get(response.id) ||
+            this.getResponseUsageStatus(response)
+        );
+      });
     });
 
     return usageByVariable;
@@ -6968,7 +7405,10 @@ export class CodingJobService {
             },
         jobId: codingJob.id,
         jobName,
-        caseCount: job.unitSubset.length
+        caseCount: this.countDistributionCasesInResponses(
+          job.item,
+          job.unitSubset
+        )
       });
     }
 
