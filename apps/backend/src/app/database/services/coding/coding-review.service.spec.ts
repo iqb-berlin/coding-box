@@ -195,6 +195,7 @@ describe('CodingReviewService', () => {
       jobDefinitionRepository as never,
       variableBundleRepository as never,
       {} as never,
+      {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
@@ -357,6 +358,7 @@ describe('CodingReviewService', () => {
       codingJobUnitRepository as never,
       jobDefinitionRepository as never,
       variableBundleRepository as never,
+      {} as never,
       {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
@@ -1332,12 +1334,19 @@ describe('CodingReviewService', () => {
         ))
       }
     };
+    const codingStatisticsService = {
+      invalidateCache: jest.fn().mockResolvedValue(undefined)
+    };
+    const codingAnalysisService = {
+      invalidateCache: jest.fn().mockResolvedValue(undefined)
+    };
     const localService = new CodingReviewService(
       responseRepository as never,
       codingJobUnitRepository as never,
       jobDefinitionRepository as never,
       variableBundleRepository as never,
-      {} as never,
+      codingStatisticsService as never,
+      codingAnalysisService as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
@@ -1388,6 +1397,8 @@ describe('CodingReviewService', () => {
       failedCount: 0,
       skippedCount: 0
     });
+    expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+    expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(workspaceId);
   });
 
   it('skips explicit replay decisions with codes unsupported by the coding scheme', async () => {
@@ -1414,6 +1425,7 @@ describe('CodingReviewService', () => {
       codingJobUnitRepository as never,
       jobDefinitionRepository as never,
       variableBundleRepository as never,
+      {} as never,
       {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
@@ -1461,6 +1473,7 @@ describe('CodingReviewService', () => {
       codingJobUnitRepository as never,
       jobDefinitionRepository as never,
       variableBundleRepository as never,
+      {} as never,
       {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
@@ -1537,6 +1550,7 @@ describe('CodingReviewService', () => {
       jobDefinitionRepository as never,
       variableBundleRepository as never,
       codingStatisticsService as never,
+      {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
