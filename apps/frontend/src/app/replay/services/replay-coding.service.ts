@@ -517,6 +517,15 @@ export class ReplayCodingService {
     return this.notes.get(compositeKey) || '';
   }
 
+  updateLocalNotes(testPerson: string, unitId: string, variableId: string, notes: string): void {
+    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+    if (notes.trim()) {
+      this.notes.set(compositeKey, notes);
+    } else {
+      this.notes.delete(compositeKey);
+    }
+  }
+
   async saveNotes(
     workspaceId: number,
     testPerson: string,
@@ -529,21 +538,21 @@ export class ReplayCodingService {
     const authToken = this.authToken;
     const authTokenArg: [string] | [] = authToken ? [authToken] : [];
     const contextSnapshot = this.captureCodingContext();
-    if (!jobId || !workspaceId) return;
     if (this.isReviewMode) return;
 
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     const selectionRevisionAtStart = this.latestSelectionRevisionByKey.get(compositeKey) ?? 0;
     const saveFailureKey = this.getSaveFailureKey('notes', compositeKey);
     const trimmedNotes = notes.trim();
+    if (!jobId || !workspaceId) {
+      this.updateLocalNotes(testPerson, unitId, variableId, notes);
+      return;
+    }
+
     await this.enqueueRowMutation(compositeKey, async () => {
       try {
         if (this.isCurrentCodingContext(contextSnapshot)) {
-          if (trimmedNotes) {
-            this.notes.set(compositeKey, notes);
-          } else {
-            this.notes.delete(compositeKey);
-          }
+          this.updateLocalNotes(testPerson, unitId, variableId, notes);
         }
 
         await firstValueFrom(
