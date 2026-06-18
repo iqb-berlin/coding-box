@@ -161,6 +161,7 @@ export interface AutoCodingCompletedEvent {
 export type CodingStatisticsVersion = 'v1' | 'v2' | 'v3';
 
 export interface TestResultsChangedEvent {
+  workspaceId?: number;
   statisticsVersion?: CodingStatisticsVersion;
 }
 
@@ -233,7 +234,7 @@ export class TestPersonCodingService {
   private http = inject(HttpClient);
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
-  private pendingStatisticsVersion: CodingStatisticsVersion | null = null;
+  private pendingStatisticsVersions = new Map<number, CodingStatisticsVersion>();
   autoCodingCompleted$ = this.autoCodingCompletedSubject.asObservable();
   testResultsChanged$ = this.testResultsChangedSubject.asObservable();
 
@@ -250,15 +251,15 @@ export class TestPersonCodingService {
   }
 
   notifyTestResultsChanged(event: TestResultsChangedEvent = {}): void {
-    if (event.statisticsVersion) {
-      this.pendingStatisticsVersion = event.statisticsVersion;
+    if (event.workspaceId && event.statisticsVersion) {
+      this.pendingStatisticsVersions.set(event.workspaceId, event.statisticsVersion);
     }
     this.testResultsChangedSubject.next(event);
   }
 
-  consumePendingStatisticsVersion(): CodingStatisticsVersion | null {
-    const version = this.pendingStatisticsVersion;
-    this.pendingStatisticsVersion = null;
+  consumePendingStatisticsVersion(workspaceId: number): CodingStatisticsVersion | null {
+    const version = this.pendingStatisticsVersions.get(workspaceId) ?? null;
+    this.pendingStatisticsVersions.delete(workspaceId);
     return version;
   }
 
