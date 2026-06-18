@@ -21,6 +21,24 @@ import {
   Variable,
   VariableBundle
 } from '../models/coding-job.model';
+import type { BundleContext } from '../../replay/services/units-replay.service';
+
+export interface CodingJobUnitDto {
+  responseId: number;
+  unitName: string;
+  unitAlias: string | null;
+  variableId: string;
+  variableAnchor: string;
+  variablePage: string;
+  bookletName: string;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  variableBundleId: number | null;
+  bundleContext: BundleContext | null;
+  isDoubleCoded: boolean;
+  otherCoders: string[];
+}
 
 export interface CodingExportConfig {
   exportType:
@@ -806,43 +824,16 @@ export class CodingJobBackendService {
     codingJobId: number,
     authToken?: string,
     onlyOpen: boolean = false
-  ): Observable<
-    Array<{
-      responseId: number;
-      unitName: string;
-      unitAlias: string | null;
-      variableId: string;
-      variableAnchor: string;
-      variablePage: string;
-      bookletName: string;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-      isDoubleCoded: boolean;
-      otherCoders: string[];
-    }>
-    > {
+  ): Observable<CodingJobUnitDto[]> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/units`;
     let params = new HttpParams();
     if (onlyOpen) {
       params = params.set('onlyOpen', 'true');
     }
-    return this.http.get<
-    Array<{
-      responseId: number;
-      unitName: string;
-      unitAlias: string | null;
-      variableId: string;
-      variableAnchor: string;
-      variablePage: string;
-      bookletName: string;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-      isDoubleCoded: boolean;
-      otherCoders: string[];
-    }>
-    >(url, { headers: this.getAuthHeader(authToken), params });
+    return this.http.get<CodingJobUnitDto[]>(
+      url,
+      { headers: this.getAuthHeader(authToken), params }
+    );
   }
 
   applyCodingResults(

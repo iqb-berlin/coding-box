@@ -602,6 +602,85 @@ describe('ReplayComponent', () => {
     jest.useRealTimers();
   });
 
+  it('should only mark auto-coded bundle variables from the current unit', () => {
+    const iframe = document.createElement('iframe');
+    const highlightedSection = document.createElement('aspect-section') as HTMLElement;
+    jest.spyOn(domUtils, 'highlightAspectSectionWithAnchor')
+      .mockReturnValue([highlightedSection]);
+    jest.spyOn(domUtils, 'scrollToElementByAlias').mockReturnValue(true);
+    const bundleMarkerSpy = jest.spyOn(domUtils, 'highlightBundleVariableMarkers')
+      .mockReturnValue([]);
+    component.anchor = 'VAR1';
+    component.page = '0';
+    component.unitPlayerComponent = {
+      hostingIframe: {
+        nativeElement: iframe
+      }
+    } as unknown as typeof component.unitPlayerComponent;
+    (component as unknown as {
+      unitsData: {
+        currentUnitIndex: number;
+        units: unknown[];
+      };
+    }).unitsData = {
+      currentUnitIndex: 0,
+      units: [{
+        id: 1,
+        name: 'UNIT_1',
+        alias: null,
+        bookletId: 0,
+        variableId: 'VAR1',
+        bundleContext: {
+          bundleId: 9,
+          bundleName: 'Bundle',
+          caseKey: 'case-1',
+          caseOrderingMode: 'alternating',
+          variables: [
+            {
+              responseId: 1,
+              unitName: 'UNIT_1',
+              variableId: 'VAR1',
+              variableAnchor: 'VAR1',
+              variablePage: '0',
+              status: 'manual-open',
+              code: null,
+              score: null,
+              source: 'manual'
+            },
+            {
+              responseId: 2,
+              unitName: 'UNIT_1',
+              variableId: 'VAR_AUTO',
+              variableAnchor: 'VAR_AUTO',
+              variablePage: '0',
+              status: 'auto-coded',
+              code: 1,
+              score: 1,
+              source: 'auto'
+            },
+            {
+              responseId: 3,
+              unitName: 'UNIT_2',
+              variableId: 'VAR_OTHER',
+              variableAnchor: 'VAR_OTHER',
+              variablePage: '0',
+              status: 'auto-coded',
+              code: 1,
+              score: 1,
+              source: 'auto'
+            }
+          ]
+        }
+      }]
+    };
+
+    component.onResponseVisible();
+
+    expect(bundleMarkerSpy).toHaveBeenCalledWith(iframe, [
+      expect.objectContaining({ anchor: 'VAR_AUTO' })
+    ]);
+  });
+
   it('should cancel stale anchor highlight retries when unit data resets', () => {
     jest.useFakeTimers();
     const iframe = document.createElement('iframe');
