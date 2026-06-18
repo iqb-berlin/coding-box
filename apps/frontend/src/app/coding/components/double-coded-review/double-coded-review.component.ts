@@ -77,6 +77,7 @@ interface ReplayDecisionResult {
   source: 'replay';
   code: number;
   score: number | null;
+  notes?: string;
 }
 
 type DecisionResult = CoderResult | ReplayDecisionResult;
@@ -87,6 +88,7 @@ interface ReplayCodeSelectedMessage extends PostMessage {
   variableId: unknown;
   code: unknown;
   score?: unknown;
+  notes?: unknown;
   responseId?: number;
 }
 
@@ -836,6 +838,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const hasReplayNotes = Object.prototype.hasOwnProperty.call(data, 'notes');
+    const replayNotes = this.normalizeReplayMessageText(data.notes);
     const selectedResult = this.findReplaySelectedResult(item, selectedCode, selectedScore);
 
     if (selectedResult) {
@@ -843,6 +847,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       this.replayDecisionByResponseId.delete(item.responseId);
       this.getOrCreateFormControl(this.getItemControlName(item)).setValue(selectedJobId);
       this.onSelectionChange(item, selectedJobId);
+      this.applyReplayNotesToComment(item, replayNotes, hasReplayNotes);
       this.showSuccess(this.translateService.instant('double-coded-review.success.replay-code-selected'));
       return;
     }
@@ -850,13 +855,23 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     const replayDecision: ReplayDecisionResult = {
       source: 'replay',
       code: selectedCode,
-      score: selectedScore.value
+      score: selectedScore.value,
+      ...(replayNotes ? { notes: replayNotes } : {})
     };
     this.replayDecisionByResponseId.set(item.responseId, replayDecision);
     item.selectedCoderResult = undefined;
     this.getOrCreateFormControl(this.getItemControlName(item))
       .setValue(this.getReplayDecisionControlValue(item));
+    this.applyReplayNotesToComment(item, replayNotes, hasReplayNotes);
     this.showSuccess(this.translateService.instant('double-coded-review.success.replay-code-selected'));
+  }
+
+  private applyReplayNotesToComment(item: DoubleCodedItem, notes: string, hasReplayNotes: boolean): void {
+    if (!hasReplayNotes) {
+      return;
+    }
+
+    this.getOrCreateFormControl(this.getCommentControlName(item)).setValue(notes);
   }
 
   private isReplayMessageSourceAllowed(
@@ -1259,12 +1274,10 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     item: DoubleCodedItem,
     decision: DoubleCodedResolutionDecision
   ): DoubleCodedResolutionDecision {
-    if (this.hasConflict(item)) {
-      const commentControlName = this.getCommentControlName(item);
-      const comment = this.selectionForm.get(commentControlName)?.value;
-      if (comment && comment.trim()) {
-        decision.resolutionComment = comment.trim();
-      }
+    const commentControlName = this.getCommentControlName(item);
+    const comment = this.selectionForm.get(commentControlName)?.value;
+    if (comment && comment.trim()) {
+      decision.resolutionComment = comment.trim();
     }
 
     return decision;
