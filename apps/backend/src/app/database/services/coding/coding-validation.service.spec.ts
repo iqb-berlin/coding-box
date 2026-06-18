@@ -1054,6 +1054,152 @@ describe('CodingValidationService', () => {
       ]);
     });
 
+    it('should exclude DERIVE_ERROR-only source variables covered by derived variables with manual instructions', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const deriveErrorQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'source-var', responseCount: '2' },
+        { unitName: 'unit1', variableId: 'derived-var', responseCount: '2' }
+      ]);
+      const assignedResponsesQb = createQueryBuilderMock([]);
+      const deriveErrorStatus = statusStringToNumber('DERIVE_ERROR');
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(assignedResponsesQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['source-var', 'derived-var'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['derived-var'])]])
+      );
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(
+        new Map([
+          [getManualCodingScopeKey('unit1', 'source-var'), new Set(['derived-var'])]
+        ])
+      );
+      mockWorkspaceFilesService.getManualInstructionVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['derived-var'])]])
+      );
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue(
+        createSlimResponses(
+          'unit1',
+          'derived-var',
+          2,
+          { statusV1: deriveErrorStatus }
+        ) as never
+      );
+
+      const result = await service.getCodingIncompleteVariables(
+        1,
+        undefined,
+        undefined,
+        true
+      );
+
+      expect(result.map(variable => variable.variableId)).toEqual(['derived-var']);
+      expect(mockCodingJobService.getSlimResponsesForVariables).toHaveBeenCalledWith(
+        1,
+        [{ unitName: 'unit1', variableId: 'derived-var', includeDeriveError: true }]
+      );
+    });
+
+    it('should suppress DERIVE_ERROR counts for covered source variables that remain regular candidates', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'source-var', responseCount: '1' },
+        { unitName: 'unit1', variableId: 'derived-var', responseCount: '1' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const deriveErrorQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'source-var', responseCount: '2' },
+        { unitName: 'unit1', variableId: 'derived-var', responseCount: '2' }
+      ]);
+      const assignedResponsesQb = createQueryBuilderMock([]);
+      const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+      const deriveErrorStatus = statusStringToNumber('DERIVE_ERROR');
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(assignedResponsesQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['source-var', 'derived-var'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['derived-var'])]])
+      );
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(
+        new Map([
+          [getManualCodingScopeKey('unit1', 'source-var'), new Set(['derived-var'])]
+        ])
+      );
+      mockWorkspaceFilesService.getManualInstructionVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['derived-var'])]])
+      );
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([
+        ...createSlimResponses(
+          'unit1',
+          'source-var',
+          1,
+          { statusV1: codingIncompleteStatus }
+        ),
+        ...createSlimResponses(
+          'unit1',
+          'derived-var',
+          1,
+          { statusV1: codingIncompleteStatus }
+        ),
+        ...createSlimResponses(
+          'unit1',
+          'derived-var',
+          2,
+          { statusV1: deriveErrorStatus }
+        ).map((response, index) => ({ ...response, id: index + 10 }))
+      ] as never);
+
+      const result = await service.getCodingIncompleteVariables(
+        1,
+        undefined,
+        undefined,
+        true
+      );
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          variableId: 'source-var',
+          deriveErrorResponseCount: 0
+        }),
+        expect.objectContaining({
+          variableId: 'derived-var',
+          deriveErrorResponseCount: 2
+        })
+      ]);
+      expect(mockCodingJobService.getSlimResponsesForVariables).toHaveBeenCalledWith(
+        1,
+        [
+          { unitName: 'unit1', variableId: 'source-var' },
+          { unitName: 'unit1', variableId: 'derived-var', includeDeriveError: true }
+        ]
+      );
+    });
+
     it('should apply training deduplication when DERIVE_ERROR case counts are requested without aggregation', async () => {
       const codingIncompleteQb = createQueryBuilderMock([
         { unitName: 'unit1', variableId: 'var1', responseCount: '3' }
