@@ -1156,7 +1156,36 @@ export class WsgCodingJobController {
           variablePage: { type: 'string' },
           bookletName: { type: 'string' },
           personLogin: { type: 'string' },
-          personCode: { type: 'string' }
+          personCode: { type: 'string' },
+          personGroup: { type: 'string' },
+          variableBundleId: { type: 'number', nullable: true },
+          bundleContext: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              bundleId: { type: 'number' },
+              bundleName: { type: 'string' },
+              caseKey: { type: 'string' },
+              caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] },
+              variables: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    responseId: { type: 'number', nullable: true },
+                    unitName: { type: 'string' },
+                    variableId: { type: 'string' },
+                    variableAnchor: { type: 'string' },
+                    variablePage: { type: 'string' },
+                    status: { type: 'string' },
+                    code: { type: 'number', nullable: true },
+                    score: { type: 'number', nullable: true },
+                    source: { type: 'string' }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -1187,6 +1216,8 @@ export class WsgCodingJobController {
         personLogin: string;
         personCode: string;
         personGroup: string;
+        variableBundleId: number | null;
+        bundleContext: unknown | null;
         isDoubleCoded: boolean;
         otherCoders: string[];
       }>

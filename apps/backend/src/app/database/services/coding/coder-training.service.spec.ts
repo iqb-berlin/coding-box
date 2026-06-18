@@ -425,7 +425,8 @@ describe('CoderTrainingService', () => {
         {
           caseSelectionMode: 'oldest_first',
           referenceTrainingIds: undefined,
-          referenceMode: undefined
+          referenceMode: undefined,
+          assignedVariableBundles
         }
       );
 
@@ -1346,18 +1347,22 @@ describe('CoderTrainingService', () => {
       overrides: Partial<{
         value: string | null;
         unitid: number;
+        variableid: string;
+        unitAlias: string;
+        unitName: string;
+        bookletName: string;
         personLogin: string;
         personCode: string;
         personGroup: string;
       }> = {}
     ) => ({
       id: responseId,
-      variableid: 'var1',
+      variableid: overrides.variableid ?? 'var1',
       value: overrides.value ?? `value-${responseId}`,
       unitid: overrides.unitid ?? responseId + 100,
       unit: {
-        alias: 'Alias Unit',
-        name: 'Real Unit',
+        alias: overrides.unitAlias ?? 'Alias Unit',
+        name: overrides.unitName ?? 'Real Unit',
         booklet: {
           person: {
             login: overrides.personLogin ?? `person-${responseId}`,
@@ -1365,7 +1370,7 @@ describe('CoderTrainingService', () => {
             group: overrides.personGroup ?? 'Group'
           },
           bookletinfo: {
-            name: 'Booklet'
+            name: overrides.bookletName ?? 'Booklet'
           }
         }
       }
@@ -1564,6 +1569,95 @@ describe('CoderTrainingService', () => {
         1,
         3
       ]);
+    });
+
+    it('samples bundle variables by shared case', async () => {
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+      mockRepository.find.mockResolvedValue([{
+        id: 5,
+        name: 'Bundle',
+        workspace_id: 1,
+        variables: [
+          { unitName: 'Real Unit A', variableId: 'var1' },
+          { unitName: 'Real Unit B', variableId: 'var2' }
+        ]
+      }]);
+      const queryBuilders = [
+        {
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([
+            makeResponseEntity(1, {
+              unitName: 'Real Unit A',
+              variableid: 'var1',
+              personLogin: 'person-1',
+              personCode: '1'
+            }),
+            makeResponseEntity(3, {
+              unitName: 'Real Unit A',
+              variableid: 'var1',
+              personLogin: 'person-2',
+              personCode: '2'
+            })
+          ])
+        },
+        {
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([
+            makeResponseEntity(2, {
+              unitName: 'Real Unit B',
+              variableid: 'var2',
+              personLogin: 'person-1',
+              personCode: '1'
+            }),
+            makeResponseEntity(4, {
+              unitName: 'Real Unit B',
+              variableid: 'var2',
+              personLogin: 'person-2',
+              personCode: '2'
+            })
+          ])
+        }
+      ];
+      const responseRepository = {
+        createQueryBuilder: jest.fn()
+          .mockReturnValueOnce(queryBuilders[0])
+          .mockReturnValueOnce(queryBuilders[1])
+      };
+      const chunkRepository = {
+        createQueryBuilder: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([])
+        })
+      };
+
+      (service as unknown as { responseRepository: typeof responseRepository }).responseRepository = responseRepository;
+      (service as unknown as { chunkRepository: typeof chunkRepository }).chunkRepository = chunkRepository;
+
+      const result = await service.generateCoderTrainingPackages(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [
+          { unitId: 'Real Unit A', variableId: 'var1', sampleCount: 1 },
+          { unitId: 'Real Unit B', variableId: 'var2', sampleCount: 1 }
+        ],
+        {
+          caseSelectionMode: 'oldest_first',
+          assignedVariableBundles: [{
+            id: 5,
+            name: 'Bundle',
+            sampleCount: 1
+          }]
+        }
+      );
+
+      expect(result[0].responses.map(response => response.responseId)).toEqual([1, 2]);
+      expect(new Set(result[0].responses.map(response => response.personLogin))).toEqual(new Set(['person-1']));
     });
 
     it('should keep the same referenced cases when the training uses a unit alias', async () => {

@@ -1051,6 +1051,11 @@
     "general-codes-and-notes": "Allgemeine Codes und Notiz",
     "my-coding-jobs": "Meine Kodierjobs",
     "progress-tooltip": "Kodierfortschritt {{completed}}/{{total}} ({{percentage}}%). Offen: {{open}}",
+    "bundle-auto-coded-label": "auto",
+    "bundle-auto-coded-tooltip": "Diese Bündelvariable wurde automatisch kodiert.",
+    "bundle-manual-coded-tooltip": "Diese Bündelvariable ist manuell kodiert.",
+    "bundle-open-tooltip": "Diese Bündelvariable ist offen.",
+    "bundle-not-available-tooltip": "Diese Bündelvariable ist für diesen Fall nicht verfügbar.",
     "code-assignment-uncertain-requires-code": "Code-Vergabe unsicher kann erst nach einem regulären Code ausgewählt werden.",
     "new-code-comment-required": "Bitte begründen Sie „Neuer Code nötig“ im Kommentar zu diesem Kodierfall.",
     "coding-issue-options": {
