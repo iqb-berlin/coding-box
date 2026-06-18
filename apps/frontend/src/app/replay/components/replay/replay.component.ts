@@ -29,7 +29,11 @@ import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { ErrorMessages } from '../../models/error-messages.model';
 import { validateToken, isTestperson } from '../../utils/token-utils';
-import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
+import {
+  scrollToElementByAlias,
+  highlightAspectSectionWithAnchor,
+  highlightBundleVariableMarkers
+} from '../../utils/dom-utils';
 import { ReviewCodeSelection, UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.service';
 import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
@@ -435,7 +439,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                         `${item.personLogin}@${item.personCode}@${item.bookletName}`,
                       variableId: item.variableId,
                       variableAnchor: item.variableAnchor,
-                      variablePage: item.variablePage
+                      variablePage: item.variablePage,
+                      variableBundleId: item.variableBundleId,
+                      bundleContext: item.bundleContext
                     })),
                     currentUnitIndex: 0
                   };
@@ -1050,6 +1056,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
     const iframe = this.unitPlayerComponent?.hostingIframe?.nativeElement as HTMLIFrameElement | undefined;
     const highlightedElements = iframe ? highlightAspectSectionWithAnchor(iframe, this.anchor) : [];
+    if (iframe) {
+      this.highlightCurrentBundleMarkers(iframe);
+    }
 
     if (highlightedElements.length > 0 && iframe) {
       scrollToElementByAlias(iframe, this.anchor);
@@ -1075,6 +1084,35 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       clearTimeout(this.anchorHighlightTimeout);
       this.anchorHighlightTimeout = null;
     }
+  }
+
+  private getCurrentBundleMarkers(): Array<{ anchor: string; label: string; tooltip: string }> {
+    const currentUnit = this.unitsData?.units[this.unitsData.currentUnitIndex];
+    const bundleContext = currentUnit?.bundleContext;
+    if (!bundleContext || !this.page) {
+      return [];
+    }
+
+    const label = this.translateService.instant('code-selector.bundle-auto-coded-label');
+    const tooltip = this.translateService.instant('code-selector.bundle-auto-coded-tooltip');
+
+    return bundleContext.variables
+      .filter(variable => (
+        variable.status === 'auto-coded' &&
+        variable.unitName === currentUnit.name &&
+        variable.variableAnchor &&
+        variable.variableAnchor !== this.anchor &&
+        variable.variablePage === this.page
+      ))
+      .map(variable => ({
+        anchor: variable.variableAnchor,
+        label,
+        tooltip
+      }));
+  }
+
+  private highlightCurrentBundleMarkers(iframe: HTMLIFrameElement): void {
+    highlightBundleVariableMarkers(iframe, this.getCurrentBundleMarkers());
   }
 
   async onCodeSelected(event: { variableId: string; code: any }): Promise<void> {

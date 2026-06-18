@@ -97,6 +97,14 @@ type TrainingVariableConfig = {
   includeDeriveError?: boolean;
 };
 
+type TrainingBundleConfig = {
+  id: number;
+  name: string;
+  sampleCount: number;
+  caseOrderingMode?: 'continuous' | 'alternating';
+  variables: TrainingVariableConfig[];
+};
+
 type DiscussionSource = 'manual' | 'auto_agreement' | null;
 
 type SaveDiscussionResultResponse = {
@@ -595,6 +603,66 @@ export class CoderTrainingService {
       sampleCount: variable.sampleCount || 10,
       includeDeriveError: variable.includeDeriveError === true ? true : undefined
     }));
+  }
+
+  private makeTrainingConfigKey(unitName: string, variableId: string): string {
+    return `${unitName}:${variableId}`;
+  }
+
+  private async buildTrainingBundleConfigs(
+    workspaceId: number,
+    assignedVariableBundles: JobDefinitionVariableBundle[] = [],
+    variableConfigs: TrainingVariableConfig[] = []
+  ): Promise<TrainingBundleConfig[]> {
+    const bundleIds = this.getValidatedBundleIds(assignedVariableBundles);
+    const fetchedBundleById = await this.getWorkspaceVariableBundlesById(workspaceId, bundleIds);
+    const variableConfigByKey = new Map(
+      variableConfigs.map(config => [
+        this.makeTrainingVariableKey(config.unitId, config.variableId),
+        config
+      ])
+    );
+
+    return assignedVariableBundles.map(bundle => {
+      const fetchedBundle = fetchedBundleById.get(bundle.id);
+      const configuredVariablesByKey = new Map(
+        (bundle.variables || []).map(variable => [
+          this.makeTrainingVariableKey(variable.unitName, variable.variableId),
+          variable
+        ])
+      );
+      const variables = (fetchedBundle?.variables || []).map(variable => {
+        const variableKey = this.makeTrainingVariableKey(
+          variable.unitName,
+          variable.variableId
+        );
+        const configuredVariable = configuredVariablesByKey.get(variableKey);
+        const selectedConfig = variableConfigByKey.get(variableKey);
+
+        return {
+          unitId: variable.unitName,
+          variableId: variable.variableId,
+          sampleCount:
+            selectedConfig?.sampleCount ||
+            configuredVariable?.sampleCount ||
+            bundle.sampleCount ||
+            10,
+          includeDeriveError:
+            selectedConfig?.includeDeriveError === true ||
+            configuredVariable?.includeDeriveError === true ?
+              true :
+              undefined
+        };
+      });
+
+      return {
+        id: bundle.id,
+        name: fetchedBundle?.name || bundle.name || '',
+        sampleCount: bundle.sampleCount || 10,
+        caseOrderingMode: bundle.caseOrderingMode,
+        variables
+      };
+    });
   }
 
   private mapTrainingBundles(
@@ -1199,6 +1267,96 @@ export class CoderTrainingService {
     }
   }
 
+  private getTrainingBundleCaseKey(response: CoderTrainingResponse): string {
+    return [
+      response.personLogin,
+      response.personCode,
+      response.personGroup,
+      response.bookletName
+    ].join('\u0000');
+  }
+
+  private sampleBundleResponses(
+    bundle: TrainingBundleConfig,
+    responsesByConfig: Map<string, CoderTrainingResponse[]>,
+    caseSelectionMode: CaseSelectionMode
+  ): Map<string, CoderTrainingResponse[]> {
+    const responsesByCase = new Map<string, CoderTrainingResponse[]>();
+
+    bundle.variables.forEach(variable => {
+      const configKey = this.makeTrainingConfigKey(
+        variable.unitId,
+        variable.variableId
+      );
+      const responses = responsesByConfig.get(configKey) || [];
+      responses.forEach(response => {
+        const caseKey = this.getTrainingBundleCaseKey(response);
+        const caseResponses = responsesByCase.get(caseKey) || [];
+        caseResponses.push(response);
+        responsesByCase.set(caseKey, caseResponses);
+      });
+    });
+
+    const representatives = Array.from(responsesByCase.entries()).map(
+      ([caseKey, responses]) => {
+        const sortedResponses = [...responses].sort((a, b) => a.responseId - b.responseId);
+        const chunkTsValues = sortedResponses
+          .map(response => response.chunkTs)
+          .filter((chunkTs): chunkTs is number => chunkTs !== undefined);
+        return {
+          caseKey,
+          response: {
+            ...sortedResponses[0],
+            responseId: Math.min(
+              ...sortedResponses.map(response => response.responseId)
+            ),
+            chunkTs:
+              chunkTsValues.length > 0 ?
+                Math.min(...chunkTsValues) :
+                sortedResponses[0].chunkTs
+          }
+        };
+      }
+    );
+    const caseKeyByRepresentativeResponseId = new Map(
+      representatives.map(entry => [entry.response.responseId, entry.caseKey])
+    );
+    const sampledRepresentatives = this.sampleResponses(
+      representatives.map(entry => entry.response),
+      bundle.sampleCount,
+      caseSelectionMode
+    );
+    const sampledCaseKeys = new Set(
+      sampledRepresentatives
+        .map(response => caseKeyByRepresentativeResponseId.get(response.responseId))
+        .filter((caseKey): caseKey is string => !!caseKey)
+    );
+    const sampledResponsesByConfig = new Map<string, CoderTrainingResponse[]>();
+
+    bundle.variables.forEach(variable => {
+      sampledResponsesByConfig.set(
+        this.makeTrainingConfigKey(variable.unitId, variable.variableId),
+        []
+      );
+    });
+
+    sampledCaseKeys.forEach(caseKey => {
+      const caseResponses = responsesByCase.get(caseKey) || [];
+      caseResponses.forEach(response => {
+        const configKey = this.makeTrainingConfigKey(
+          response.unitName,
+          response.variableId
+        );
+        const responses = sampledResponsesByConfig.get(configKey);
+        if (responses) {
+          responses.push(response);
+        }
+      });
+    });
+
+    return sampledResponsesByConfig;
+  }
+
   private sortTrainingResponses(
     responses: CoderTrainingResponse[],
     caseOrderingMode: 'continuous' | 'alternating' = 'continuous'
@@ -1235,6 +1393,7 @@ export class CoderTrainingService {
       caseSelectionMode?: CaseSelectionMode;
       referenceTrainingIds?: number[];
       referenceMode?: ReferenceMode;
+      assignedVariableBundles?: JobDefinitionVariableBundle[];
     }
   ): Promise<TrainingPackage[]> {
     const caseSelectionMode = options?.caseSelectionMode ?? 'oldest_first';
@@ -1261,14 +1420,27 @@ export class CoderTrainingService {
       derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
     });
 
+    const bundleConfigs = await this.buildTrainingBundleConfigs(
+      workspaceId,
+      options?.assignedVariableBundles || [],
+      variableConfigs
+    );
+    const bundleVariableKeys = new Set(
+      bundleConfigs.flatMap(bundle => bundle.variables.map(variable => this.makeTrainingConfigKey(
+        variable.unitId,
+        variable.variableId
+      )))
+    );
+
     // Pre-sample responses for each variable configuration to ensure consistency across all coders
     const sampledResponsesByConfig: Map<string, CoderTrainingResponse[]> = new Map();
+    const responsesForSamplingByConfig: Map<string, CoderTrainingResponse[]> = new Map();
 
     for (const config of variableConfigs) {
       const variableId = config.variableId;
       const unitId = config.unitId;
       const sampleCount = config.sampleCount;
-      const configKey = `${unitId}:${variableId}`;
+      const configKey = this.makeTrainingConfigKey(unitId, variableId);
       const includeDeriveError = config.includeDeriveError === true;
 
       this.logger.log(`Querying incomplete responses for unit ${unitId}, variable ${variableId}`);
@@ -1409,11 +1581,29 @@ export class CoderTrainingService {
         referenceResponseIdsByConfig,
         configKey
       );
+      responsesForSamplingByConfig.set(configKey, responsesForSampling);
 
-      const sampledResponses = this.sampleResponses(responsesForSampling, sampleCount, caseSelectionMode);
-      sampledResponsesByConfig.set(configKey, sampledResponses);
+      if (!bundleVariableKeys.has(configKey)) {
+        const sampledResponses = this.sampleResponses(responsesForSampling, sampleCount, caseSelectionMode);
+        sampledResponsesByConfig.set(configKey, sampledResponses);
 
-      this.logger.log(`Sampled ${sampledResponses.length} consistent responses for unit ${unitId}, variable ${variableId}`);
+        this.logger.log(`Sampled ${sampledResponses.length} consistent responses for unit ${unitId}, variable ${variableId}`);
+      }
+    }
+
+    for (const bundle of bundleConfigs) {
+      const sampledResponsesByBundleVariable = this.sampleBundleResponses(
+        bundle,
+        responsesForSamplingByConfig,
+        caseSelectionMode
+      );
+      sampledResponsesByBundleVariable.forEach((responses, configKey) => {
+        sampledResponsesByConfig.set(configKey, responses);
+      });
+
+      this.logger.log(
+        `Sampled ${bundle.sampleCount} bundled cases for training bundle ${bundle.name || bundle.id}`
+      );
     }
 
     // Create training packages for each coder using the pre-sampled responses
@@ -1427,7 +1617,10 @@ export class CoderTrainingService {
       this.logger.log(`Assigning consistent training samples to coder ${coderName} (ID: ${coderId})`);
 
       for (const config of variableConfigs) {
-        const configKey = `${config.unitId}:${config.variableId}`;
+        const configKey = this.makeTrainingConfigKey(
+          config.unitId,
+          config.variableId
+        );
         const sampledResponses = sampledResponsesByConfig.get(configKey)!;
         coderResponses.push(...sampledResponses);
       }
@@ -1528,11 +1721,26 @@ export class CoderTrainingService {
 
       this.logger.log(`Created coder training ${trainingId} with label '${trainingLabel}' and configuration`);
 
-      const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, trainingVariableConfigs, {
+      const trainingPackageOptions: {
+        caseSelectionMode: CaseSelectionMode;
+        referenceTrainingIds?: number[];
+        referenceMode?: ReferenceMode;
+        assignedVariableBundles?: JobDefinitionVariableBundle[];
+      } = {
         caseSelectionMode: caseSelectionMode ?? 'oldest_first',
         referenceTrainingIds,
         referenceMode
-      });
+      };
+      if (assignedVariableBundles?.length) {
+        trainingPackageOptions.assignedVariableBundles = assignedVariableBundles;
+      }
+
+      const trainingPackages = await this.generateCoderTrainingPackages(
+        workspaceId,
+        selectedCoders,
+        trainingVariableConfigs,
+        trainingPackageOptions
+      );
 
       // Build mapping from variable to bundle id and bundle sorting mode
       const variableToBundleMap = new Map<string, number>();
@@ -2373,11 +2581,26 @@ export class CoderTrainingService {
         }
 
         // Generate and create new jobs
-        const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, effectiveTrainingVariableConfigs, {
+        const trainingPackageOptions: {
+          caseSelectionMode: CaseSelectionMode;
+          referenceTrainingIds?: number[];
+          referenceMode?: ReferenceMode;
+          assignedVariableBundles?: JobDefinitionVariableBundle[];
+        } = {
           caseSelectionMode: newCaseSelectionMode,
           referenceTrainingIds: effectiveReferenceTrainingIds,
           referenceMode: newReferenceMode ?? undefined
-        });
+        };
+        if (effectiveAssignedVariableBundles.length > 0) {
+          trainingPackageOptions.assignedVariableBundles = effectiveAssignedVariableBundles;
+        }
+
+        const trainingPackages = await this.generateCoderTrainingPackages(
+          workspaceId,
+          selectedCoders,
+          effectiveTrainingVariableConfigs,
+          trainingPackageOptions
+        );
 
         // Build mapping from variable to bundle id and bundle sorting mode
         const variableToBundleMap = new Map<string, number>();
