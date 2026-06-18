@@ -32,6 +32,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { normalizeTestperson } from '../../../replay/utils/token-utils';
 import { PostMessage, PostMessageService } from '../../../core/services/post-message.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
+import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
@@ -256,6 +257,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private postMessageService = inject(PostMessageService);
   private dialog = inject(MatDialog);
+  private testPersonCodingService = inject(TestPersonCodingService);
   private ngUnsubscribe = new Subject<void>();
 
   isLoading = false;
@@ -1159,6 +1161,9 @@ export class CodingResultsComparisonComponent implements OnInit {
           this.translate.instant('common.close'),
           { duration: 5000 }
         );
+        if (result.updatedResponsesCount > 0 || result.removedJobUnitCount > 0) {
+          this.testPersonCodingService.notifyTestResultsChanged({ statisticsVersion: 'v2' });
+        }
         this.loadComparison();
       },
       error: error => {

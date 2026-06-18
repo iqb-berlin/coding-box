@@ -158,6 +158,12 @@ export interface AutoCodingCompletedEvent {
   jobId?: string;
 }
 
+export type CodingStatisticsVersion = 'v1' | 'v2' | 'v3';
+
+export interface TestResultsChangedEvent {
+  statisticsVersion?: CodingStatisticsVersion;
+}
+
 export interface WorkspaceGroupCodingStats {
   groupName: string;
   testPersonCount: number;
@@ -226,7 +232,8 @@ export class TestPersonCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
-  private testResultsChangedSubject = new Subject<void>();
+  private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
+  private pendingStatisticsVersion: CodingStatisticsVersion | null = null;
   autoCodingCompleted$ = this.autoCodingCompletedSubject.asObservable();
   testResultsChanged$ = this.testResultsChangedSubject.asObservable();
 
@@ -242,8 +249,17 @@ export class TestPersonCodingService {
     this.autoCodingCompletedSubject.next({ jobId });
   }
 
-  notifyTestResultsChanged(): void {
-    this.testResultsChangedSubject.next();
+  notifyTestResultsChanged(event: TestResultsChangedEvent = {}): void {
+    if (event.statisticsVersion) {
+      this.pendingStatisticsVersion = event.statisticsVersion;
+    }
+    this.testResultsChangedSubject.next(event);
+  }
+
+  consumePendingStatisticsVersion(): CodingStatisticsVersion | null {
+    const version = this.pendingStatisticsVersion;
+    this.pendingStatisticsVersion = null;
+    return version;
   }
 
   codeTestPersons(workspaceId: number, testPersonIds: string, autoCoderRun: number = 1): Observable<CodingStatisticsWithJob> {
