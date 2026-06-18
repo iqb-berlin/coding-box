@@ -17,6 +17,7 @@ import { CodingStatisticsService } from '../../services/coding-statistics.servic
 import { AppService } from '../../../core/services/app.service';
 import { CoderTraining } from '../../models/coder-training.model';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { TestPersonCodingService } from '../../services/test-person-coding.service';
 
 describe('CodingResultsComparisonComponent', () => {
   let component: CodingResultsComparisonComponent;
@@ -46,6 +47,9 @@ describe('CodingResultsComparisonComponent', () => {
   };
   let workspaceSettingsService: {
     getEnableRegexSearch: jest.Mock;
+  };
+  let testPersonCodingService: {
+    notifyTestResultsChanged: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -82,6 +86,9 @@ describe('CodingResultsComparisonComponent', () => {
     };
     workspaceSettingsService = {
       getEnableRegexSearch: jest.fn().mockReturnValue(of(false))
+    };
+    testPersonCodingService = {
+      notifyTestResultsChanged: jest.fn()
     };
 
     await TestBed.configureTestingModule({
@@ -127,6 +134,10 @@ describe('CodingResultsComparisonComponent', () => {
         {
           provide: WorkspaceSettingsService,
           useValue: workspaceSettingsService
+        },
+        {
+          provide: TestPersonCodingService,
+          useValue: testPersonCodingService
         }
       ]
     }).compileComponents();
@@ -1376,6 +1387,10 @@ describe('CodingResultsComparisonComponent', () => {
         jobConflictStrategy: 'removeFromJobs'
       }
     );
+    expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalledWith({
+      workspaceId: 1,
+      statisticsVersion: 'v2'
+    });
     expect(component.loadComparison).toHaveBeenCalled();
   });
 
