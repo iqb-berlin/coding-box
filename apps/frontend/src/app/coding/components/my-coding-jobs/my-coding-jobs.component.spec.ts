@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
@@ -33,6 +34,7 @@ describe('MyCodingJobsComponent', () => {
         {
           provide: AppService,
           useValue: {
+            selectedWorkspaceId: 0,
             authData$: of({
               userId: 7,
               workspaces: []
@@ -76,6 +78,16 @@ describe('MyCodingJobsComponent', () => {
           provide: MatSnackBar,
           useValue: {
             open: jest.fn().mockReturnValue({ dismiss: jest.fn() })
+          }
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              queryParamMap: convertToParamMap({}),
+              paramMap: convertToParamMap({})
+            },
+            parent: null
           }
         }
       ]
@@ -219,6 +231,181 @@ describe('MyCodingJobsComponent', () => {
     );
     expect(codingJobBackendService.getCodingJobs.mock.calls[1][3])
       .not.toHaveProperty('excludeStatus');
+  });
+
+  it('uses the workspace-admin route workspace as the initial filter without hiding other workspaces', () => {
+    TestBed.resetTestingModule();
+    const codingJobBackendService = {
+      getCodingJobs: jest.fn().mockReturnValue(
+        of({
+          data: [],
+          total: 0,
+          page: 1,
+          limit: 100
+        })
+      ),
+      startCodingJob: jest.fn(),
+      prepareCodingJobReview: jest.fn(),
+      submitCodingJobForReview: jest.fn()
+    };
+
+    TestBed.configureTestingModule({
+      imports: [MyCodingJobsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideNoopAnimations(),
+        {
+          provide: AppService,
+          useValue: {
+            selectedWorkspaceId: 0,
+            authData$: of({
+              userId: 7,
+              workspaces: [
+                { id: 1, name: 'Workspace 1' },
+                { id: 2, name: 'Workspace 2' }
+              ]
+            }),
+            loggedUser: { sub: 'user-7' },
+            createOwnToken: jest.fn().mockReturnValue(of('token'))
+          }
+        },
+        {
+          provide: CodingJobBackendService,
+          useValue: codingJobBackendService
+        },
+        {
+          provide: MatSnackBar,
+          useValue: {
+            open: jest.fn().mockReturnValue({ dismiss: jest.fn() })
+          }
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              queryParamMap: convertToParamMap({}),
+              paramMap: convertToParamMap({})
+            },
+            parent: {
+              snapshot: {
+                paramMap: convertToParamMap({ ws: '2' })
+              },
+              parent: null
+            }
+          }
+        }
+      ]
+    });
+    const routeFixture = TestBed.createComponent(MyCodingJobsComponent);
+    const routeComponent = routeFixture.componentInstance;
+
+    routeFixture.detectChanges();
+
+    expect(routeComponent.currentWorkspaces.map(workspace => workspace.id))
+      .toEqual([1, 2]);
+    expect(routeComponent.selectedWorkspaceIds).toEqual([2]);
+    expect(codingJobBackendService.getCodingJobs).toHaveBeenCalledTimes(1);
+    expect(codingJobBackendService.getCodingJobs).toHaveBeenCalledWith(
+      2,
+      1,
+      50,
+      expect.objectContaining({
+        assignedTo: 'me'
+      })
+    );
+  });
+
+  it('does not use stale selectedWorkspaceId as an initial filter on the top-level coding route', () => {
+    TestBed.resetTestingModule();
+    const codingJobBackendService = {
+      getCodingJobs: jest.fn().mockReturnValue(
+        of({
+          data: [],
+          total: 0,
+          page: 1,
+          limit: 100
+        })
+      ),
+      startCodingJob: jest.fn(),
+      prepareCodingJobReview: jest.fn(),
+      submitCodingJobForReview: jest.fn()
+    };
+
+    TestBed.configureTestingModule({
+      imports: [MyCodingJobsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideNoopAnimations(),
+        {
+          provide: AppService,
+          useValue: {
+            selectedWorkspaceId: 2,
+            authData$: of({
+              userId: 7,
+              workspaces: [
+                { id: 1, name: 'Workspace 1' },
+                { id: 2, name: 'Workspace 2' }
+              ]
+            }),
+            loggedUser: { sub: 'user-7' },
+            createOwnToken: jest.fn().mockReturnValue(of('token'))
+          }
+        },
+        {
+          provide: CodingJobBackendService,
+          useValue: codingJobBackendService
+        },
+        {
+          provide: MatSnackBar,
+          useValue: {
+            open: jest.fn().mockReturnValue({ dismiss: jest.fn() })
+          }
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              queryParamMap: convertToParamMap({}),
+              paramMap: convertToParamMap({})
+            },
+            parent: null
+          }
+        }
+      ]
+    });
+    const topLevelFixture = TestBed.createComponent(MyCodingJobsComponent);
+    const topLevelComponent = topLevelFixture.componentInstance;
+
+    topLevelFixture.detectChanges();
+
+    expect(topLevelComponent.selectedWorkspaceIds).toEqual([1, 2]);
+    expect(codingJobBackendService.getCodingJobs).toHaveBeenCalledTimes(2);
+    expect(codingJobBackendService.getCodingJobs).toHaveBeenCalledWith(
+      1,
+      undefined,
+      undefined,
+      expect.objectContaining({
+        assignedTo: 'me'
+      })
+    );
+    expect(codingJobBackendService.getCodingJobs).toHaveBeenCalledWith(
+      2,
+      undefined,
+      undefined,
+      expect.objectContaining({
+        assignedTo: 'me'
+      })
+    );
+  });
+
+  it('keeps the select-all action out of the closed workspace selection text', () => {
+    component.currentWorkspaces = [
+      { id: 1, name: 'Workspace 1' },
+      { id: 2, name: 'Workspace 2' }
+    ];
+    component.selectedWorkspaceIds = [1, 2, -1];
+
+    expect(component.getWorkspaceFilterTriggerText()).toBe(
+      'coding.my-coding-jobs.all-workspaces-selected'
+    );
   });
 
   it('uses the table paginator when multiple workspaces are selected', () => {
