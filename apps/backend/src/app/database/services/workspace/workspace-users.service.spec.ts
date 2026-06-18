@@ -1,12 +1,38 @@
+import User from '../../entities/user.entity';
+import Workspace from '../../entities/workspace.entity';
+import WorkspaceUser from '../../entities/workspace_user.entity';
 import { WorkspaceUsersService } from './workspace-users.service';
 
-const createRepo = () => ({
-  find: jest.fn(),
-  findOne: jest.fn(),
-  findAndCount: jest.fn(),
-  save: jest.fn(),
-  delete: jest.fn()
+const createLockedRowsQuery = (rows: unknown[] = []) => ({
+  setLock: jest.fn().mockReturnThis(),
+  where: jest.fn().mockReturnThis(),
+  getMany: jest.fn().mockResolvedValue(rows)
 });
+
+const createRepo = () => {
+  const repo = {
+    createQueryBuilder: jest.fn(() => createLockedRowsQuery()),
+    find: jest.fn(),
+    findOne: jest.fn(),
+    findAndCount: jest.fn(),
+    save: jest.fn(),
+    delete: jest.fn(),
+    manager: {
+      transaction: jest.fn()
+    }
+  };
+  repo.manager.transaction.mockImplementation(callback => callback({
+    getRepository: jest.fn(() => repo)
+  }));
+  return repo;
+};
+
+const mockLockedWorkspaceUsers = (
+  workspaceUsersRepository: ReturnType<typeof createRepo>,
+  rows: unknown[]
+) => {
+  workspaceUsersRepository.createQueryBuilder.mockReturnValueOnce(createLockedRowsQuery(rows));
+};
 
 describe('WorkspaceUsersService', () => {
   let workspaceUsersRepository: ReturnType<typeof createRepo>;
@@ -18,6 +44,21 @@ describe('WorkspaceUsersService', () => {
     workspaceUsersRepository = createRepo();
     usersRepository = createRepo();
     workspacesRepository = createRepo();
+    const transactionManager = {
+      getRepository: jest.fn(entity => {
+        if (entity === WorkspaceUser) {
+          return workspaceUsersRepository;
+        }
+        if (entity === User) {
+          return usersRepository;
+        }
+        if (entity === Workspace) {
+          return workspacesRepository;
+        }
+        return workspaceUsersRepository;
+      })
+    };
+    workspaceUsersRepository.manager.transaction.mockImplementation(callback => callback(transactionManager));
     service = new WorkspaceUsersService(
       workspaceUsersRepository as never,
       usersRepository as never,
@@ -145,15 +186,56 @@ describe('WorkspaceUsersService', () => {
     }));
   });
 
-  it('creates workspace memberships without enabling coding by default', async () => {
-    workspaceUsersRepository.save.mockResolvedValue([{ userId: 11 }]);
+  it('preserves existing workspace memberships and defaults new users to coding access', async () => {
+    mockLockedWorkspaceUsers(workspaceUsersRepository, [
+      {
+        userId: 10,
+        workspaceId: 3,
+        accessLevel: 3,
+        canCode: false
+      },
+      {
+        userId: 12,
+        workspaceId: 3,
+        accessLevel: 1,
+        canCode: true
+      }
+    ]);
+    workspaceUsersRepository.save.mockResolvedValue([{ userId: 10 }, { userId: 11 }]);
 
-    await expect(service.setWorkspaceUsers(3, [11])).resolves.toBe(true);
-    expect(workspaceUsersRepository.save).toHaveBeenCalledWith([{
-      userId: 11,
+    await expect(service.setWorkspaceUsers(3, [10, 11])).resolves.toBe(true);
+    expect(workspaceUsersRepository.delete).toHaveBeenCalledWith({
       workspaceId: 3,
-      accessLevel: 3,
-      canCode: false
-    }]);
+      userId: expect.any(Object)
+    });
+    expect(workspaceUsersRepository.save).toHaveBeenCalledWith([
+      {
+        userId: 10,
+        workspaceId: 3,
+        accessLevel: 3,
+        canCode: false
+      },
+      {
+        userId: 11,
+        workspaceId: 3,
+        accessLevel: 1,
+        canCode: true
+      }
+    ]);
+  });
+
+  it('rejects workspace memberships without a remaining study manager', async () => {
+    mockLockedWorkspaceUsers(workspaceUsersRepository, [
+      {
+        userId: 10,
+        workspaceId: 3,
+        accessLevel: 3,
+        canCode: false
+      }
+    ]);
+
+    await expect(service.setWorkspaceUsers(3, [11])).rejects.toThrow('At least one study manager');
+    expect(workspaceUsersRepository.delete).not.toHaveBeenCalled();
+    expect(workspaceUsersRepository.save).not.toHaveBeenCalled();
   });
 });
