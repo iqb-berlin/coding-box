@@ -1,16 +1,40 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import WorkspaceUser from '../../entities/workspace_user.entity';
 import { UsersService } from './users.service';
 
-const createRepo = () => ({
-  find: jest.fn(),
-  findOne: jest.fn(),
-  create: jest.fn(value => ({ id: 77, ...value })),
-  save: jest.fn(value => Promise.resolve({ id: 77, ...value })),
-  upsert: jest.fn(),
-  update: jest.fn(),
-  delete: jest.fn(),
-  count: jest.fn()
+const createLockedRowsQuery = (rows: unknown[] = []) => ({
+  setLock: jest.fn().mockReturnThis(),
+  where: jest.fn().mockReturnThis(),
+  getMany: jest.fn().mockResolvedValue(rows)
 });
+
+const createRepo = () => {
+  const repo = {
+    createQueryBuilder: jest.fn(() => createLockedRowsQuery()),
+    find: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn(),
+    create: jest.fn(value => ({ id: 77, ...value })),
+    save: jest.fn(value => Promise.resolve(Array.isArray(value) ? value : { id: 77, ...value })),
+    upsert: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    count: jest.fn(),
+    manager: {
+      transaction: jest.fn()
+    }
+  };
+  repo.manager.transaction.mockImplementation(callback => callback({
+    getRepository: jest.fn(() => repo)
+  }));
+  return repo;
+};
+
+const mockLockedWorkspaceUsers = (
+  workspaceUserRepository: ReturnType<typeof createRepo>,
+  rows: unknown[]
+) => {
+  workspaceUserRepository.createQueryBuilder.mockReturnValueOnce(createLockedRowsQuery(rows));
+};
 
 describe('UsersService', () => {
   let usersRepository: ReturnType<typeof createRepo>;
@@ -20,6 +44,11 @@ describe('UsersService', () => {
   beforeEach(() => {
     usersRepository = createRepo();
     workspaceUserRepository = createRepo();
+    const transactionManager = {
+      getRepository: jest.fn(entity => (entity === WorkspaceUser ? workspaceUserRepository : usersRepository))
+    };
+    usersRepository.manager.transaction.mockImplementation(callback => callback(transactionManager));
+    workspaceUserRepository.manager.transaction.mockImplementation(callback => callback(transactionManager));
     service = new UsersService(usersRepository as never, workspaceUserRepository as never);
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'warn').mockImplementation(jest.fn());
@@ -83,6 +112,7 @@ describe('UsersService', () => {
   });
 
   it('updates access and checks workspace access', async () => {
+    mockLockedWorkspaceUsers(workspaceUserRepository, [{ workspaceId: 2, userId: 9, accessLevel: 3 }]);
     workspaceUserRepository.findOne
       .mockResolvedValueOnce({ userId: 1, workspaceId: 2 })
       .mockResolvedValueOnce(null);
@@ -167,6 +197,7 @@ describe('UsersService', () => {
   });
 
   it('recreates workspace access after it was removed', async () => {
+    mockLockedWorkspaceUsers(workspaceUserRepository, [{ workspaceId: 2, userId: 8, accessLevel: 3 }]);
     await expect(service.updateUsersAccess(2, [
       {
         id: 3, username: 'c', accessLevel: 0, canCode: false
@@ -180,6 +211,7 @@ describe('UsersService', () => {
 
     workspaceUserRepository.delete.mockClear();
     workspaceUserRepository.upsert.mockClear();
+    mockLockedWorkspaceUsers(workspaceUserRepository, []);
 
     await expect(service.updateUsersAccess(2, [
       {
@@ -196,6 +228,19 @@ describe('UsersService', () => {
         canCode: true
       }
     ], ['workspaceId', 'userId']);
+  });
+
+  it('rejects workspace access updates without a remaining study manager', async () => {
+    mockLockedWorkspaceUsers(workspaceUserRepository, [{ workspaceId: 2, userId: 1, accessLevel: 3 }]);
+
+    await expect(service.updateUsersAccess(2, [
+      {
+        id: 1, username: 'study-manager', accessLevel: 1, canCode: true
+      }
+    ] as never)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(workspaceUserRepository.delete).not.toHaveBeenCalled();
+    expect(workspaceUserRepository.upsert).not.toHaveBeenCalled();
   });
 
   it('rejects invalid workspace access payloads before writing', async () => {
@@ -272,20 +317,27 @@ describe('UsersService', () => {
     await expect(service.updateUser(1, { id: 1, username: 'new', isAdmin: true } as never)).resolves.toEqual({ id: 1, username: 'new', isAdmin: true });
     await expect(service.create({ username: 'created' } as never)).resolves.toBe(77);
     await expect(service.remove(1)).resolves.toBeUndefined();
-    expect(usersRepository.delete).toHaveBeenCalledWith(1);
+    expect(usersRepository.delete).toHaveBeenCalledWith([1]);
   });
 
   it('assigns workspaces and validates deletion constraints', async () => {
-    workspaceUserRepository.findOne.mockResolvedValueOnce({ userId: 1 });
+    workspaceUserRepository.find.mockResolvedValueOnce([]);
+    mockLockedWorkspaceUsers(workspaceUserRepository, [{ workspaceId: 2, userId: 9, accessLevel: 3 }]);
     workspaceUserRepository.save.mockResolvedValueOnce([{
       userId: 1,
       workspaceId: 2,
-      accessLevel: 3,
-      canCode: false
+      accessLevel: 1,
+      canCode: true
     }]);
 
     await expect(service.assignUserWorkspaces(1, [2])).resolves.toBe(true);
-    expect(workspaceUserRepository.delete).toHaveBeenCalledWith({ userId: 1 });
+    expect(workspaceUserRepository.save).toHaveBeenCalledWith([{
+      userId: 1,
+      workspaceId: 2,
+      accessLevel: 1,
+      canCode: true
+    }]);
+    expect(workspaceUserRepository.delete).not.toHaveBeenCalled();
 
     await expect(service.removeIds([], 1)).rejects.toBeInstanceOf(BadRequestException);
     await expect(service.removeIds([1], 1)).rejects.toBeInstanceOf(ForbiddenException);
@@ -293,6 +345,159 @@ describe('UsersService', () => {
     await expect(service.removeIds([2, 3], 1)).rejects.toBeInstanceOf(ForbiddenException);
     usersRepository.count.mockResolvedValueOnce(5);
     await expect(service.removeIds([2], 1)).resolves.toBeUndefined();
+  });
+
+  it('rejects user deletions that remove the final workspace study manager', async () => {
+    usersRepository.count.mockResolvedValueOnce(5);
+    workspaceUserRepository.find.mockResolvedValueOnce([{
+      workspaceId: 2,
+      userId: 7,
+      accessLevel: 3,
+      canCode: false
+    }]);
+    mockLockedWorkspaceUsers(workspaceUserRepository, [{
+      workspaceId: 2,
+      userId: 7,
+      accessLevel: 3,
+      canCode: false
+    }]);
+
+    await expect(service.removeIds([7], 1)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(usersRepository.delete).not.toHaveBeenCalled();
+  });
+
+  it('allows user deletions when another workspace study manager remains', async () => {
+    usersRepository.count.mockResolvedValueOnce(5);
+    workspaceUserRepository.find.mockResolvedValueOnce([{
+      workspaceId: 2,
+      userId: 7,
+      accessLevel: 3,
+      canCode: false
+    }]);
+    mockLockedWorkspaceUsers(workspaceUserRepository, [
+      {
+        workspaceId: 2,
+        userId: 7,
+        accessLevel: 3,
+        canCode: false
+      },
+      {
+        workspaceId: 2,
+        userId: 8,
+        accessLevel: 3,
+        canCode: false
+      }
+    ]);
+
+    await expect(service.removeIds([7], 1)).resolves.toBeUndefined();
+
+    expect(usersRepository.delete).toHaveBeenCalledWith([7]);
+  });
+
+  it('preserves existing workspace access when assigning workspaces to a user', async () => {
+    workspaceUserRepository.find.mockResolvedValueOnce([
+      {
+        userId: 1,
+        workspaceId: 2,
+        accessLevel: 3,
+        canCode: false
+      },
+      {
+        userId: 1,
+        workspaceId: 4,
+        accessLevel: 1,
+        canCode: true
+      }
+    ]);
+    mockLockedWorkspaceUsers(workspaceUserRepository, [
+      {
+        userId: 1,
+        workspaceId: 2,
+        accessLevel: 3,
+        canCode: false
+      },
+      {
+        userId: 1,
+        workspaceId: 4,
+        accessLevel: 1,
+        canCode: true
+      },
+      {
+        userId: 9,
+        workspaceId: 3,
+        accessLevel: 3,
+        canCode: false
+      },
+      {
+        userId: 8,
+        workspaceId: 4,
+        accessLevel: 3,
+        canCode: false
+      }
+    ]);
+    workspaceUserRepository.save.mockResolvedValueOnce([
+      {
+        userId: 1,
+        workspaceId: 2,
+        accessLevel: 3,
+        canCode: false
+      },
+      {
+        userId: 1,
+        workspaceId: 3,
+        accessLevel: 1,
+        canCode: true
+      }
+    ]);
+
+    await expect(service.assignUserWorkspaces(1, [2, 3])).resolves.toBe(true);
+
+    expect(workspaceUserRepository.delete).toHaveBeenCalledWith({
+      userId: 1,
+      workspaceId: expect.any(Object)
+    });
+    expect(workspaceUserRepository.save).toHaveBeenCalledWith([
+      {
+        userId: 1,
+        workspaceId: 2,
+        accessLevel: 3,
+        canCode: false
+      },
+      {
+        userId: 1,
+        workspaceId: 3,
+        accessLevel: 1,
+        canCode: true
+      }
+    ]);
+  });
+
+  it('rejects workspace assignment changes that remove the final study manager', async () => {
+    workspaceUserRepository.find.mockResolvedValueOnce([{
+      userId: 1,
+      workspaceId: 2,
+      accessLevel: 3,
+      canCode: false
+    }]);
+    mockLockedWorkspaceUsers(workspaceUserRepository, [
+      {
+        userId: 1,
+        workspaceId: 2,
+        accessLevel: 3,
+        canCode: false
+      },
+      {
+        userId: 9,
+        workspaceId: 3,
+        accessLevel: 3,
+        canCode: false
+      }
+    ]);
+
+    await expect(service.assignUserWorkspaces(1, [3])).rejects.toBeInstanceOf(BadRequestException);
+    expect(workspaceUserRepository.delete).not.toHaveBeenCalled();
+    expect(workspaceUserRepository.save).not.toHaveBeenCalled();
   });
 
   it('creates existing and new local users', async () => {

@@ -9,6 +9,7 @@ import { AccessRightsMatrixService } from './access-rights-matrix.service';
 
 describe('WorkspaceController', () => {
   let controller: WorkspaceController;
+  let workspaceCoreService: jest.Mocked<WorkspaceCoreService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -42,9 +43,21 @@ describe('WorkspaceController', () => {
     }).compile();
 
     controller = module.get<WorkspaceController>(WorkspaceController);
+    workspaceCoreService = module.get<jest.Mocked<WorkspaceCoreService>>(WorkspaceCoreService);
   });
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('passes the authenticated user id when creating a workspace', async () => {
+    workspaceCoreService.create.mockResolvedValueOnce(12);
+
+    await expect(controller.create(
+      { name: 'New workspace' } as never,
+      { user: { id: '5' } } as never
+    )).resolves.toBe(12);
+
+    expect(workspaceCoreService.create).toHaveBeenCalledWith({ name: 'New workspace' }, 5);
   });
 });

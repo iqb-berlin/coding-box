@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards
 } from '@nestjs/common';
 import {
@@ -32,6 +33,12 @@ import { WorkspaceGuard } from './workspace.guard';
 import { AdminGuard } from '../admin.guard';
 import { AccessRightsMatrixService } from './access-rights-matrix.service';
 import { AccessRightsMatrixDto } from '../../../../../../api-dto/workspaces/access-rights-matrix-dto';
+
+interface RequestWithUser {
+  user: {
+    id: string | number;
+  };
+}
 
 @ApiTags('Admin Workspace')
 @Controller('admin/workspace')
@@ -190,7 +197,7 @@ export class WorkspaceController {
   })
   @ApiBadRequestResponse({ description: 'Invalid workspace data' })
   @ApiTags('admin workspaces')
-  async create(@Body() createWorkspaceDto: CreateWorkspaceDto) {
-    return this.workspaceCoreService.create(createWorkspaceDto);
+  async create(@Body() createWorkspaceDto: CreateWorkspaceDto, @Req() request: RequestWithUser) {
+    return this.workspaceCoreService.create(createWorkspaceDto, Number(request.user.id));
   }
 }

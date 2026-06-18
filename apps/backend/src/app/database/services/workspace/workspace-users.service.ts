@@ -6,6 +6,12 @@ import User from '../../entities/user.entity';
 import Workspace from '../../entities/workspace.entity';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
+import {
+  assertStudyManagersRemain,
+  DEFAULT_WORKSPACE_USER_ACCESS,
+  lockUserRows,
+  lockWorkspaceUserRows
+} from './workspace-user-access.util';
 
 @Injectable()
 export class WorkspaceUsersService {
@@ -52,17 +58,49 @@ export class WorkspaceUsersService {
 
   async setWorkspaceUsers(workspaceId: number, userIds: number[]): Promise<boolean> {
     this.logger.log(`Setting users for workspace with id: ${workspaceId}`);
-    const entries = userIds.map(user => ({
-      userId: user,
-      workspaceId: workspaceId,
-      accessLevel: 3,
-      canCode: false
-    }));
-    const hasRights = this.workspaceUsersRepository.find({ where: { workspaceId: workspaceId } });
-    if (hasRights) {
-      await this.workspaceUsersRepository.delete({ workspaceId: workspaceId });
-    }
-    const saved = await this.workspaceUsersRepository.save(entries);
+    const saved = await this.workspaceUsersRepository.manager.transaction(async manager => {
+      const workspaceUsersRepository = manager.getRepository(WorkspaceUser);
+      await lockUserRows(manager, userIds);
+      const existingEntries = await lockWorkspaceUserRows(manager, [workspaceId]);
+      const existingByUserId = new Map(
+        existingEntries.map(entry => [entry.userId, entry])
+      );
+      const userIdSet = new Set(userIds);
+      const entries = userIds.map(userId => {
+        const existingEntry = existingByUserId.get(userId);
+        if (existingEntry && existingEntry.accessLevel > 0) {
+          return {
+            userId,
+            workspaceId: workspaceId,
+            accessLevel: existingEntry.accessLevel,
+            canCode: existingEntry.canCode ?? (existingEntry.accessLevel === 1)
+          };
+        }
+
+        return {
+          userId,
+          workspaceId: workspaceId,
+          ...DEFAULT_WORKSPACE_USER_ACCESS
+        };
+      });
+      const entriesToDelete = existingEntries.filter(entry => !userIdSet.has(entry.userId));
+
+      assertStudyManagersRemain(
+        [workspaceId],
+        existingEntries,
+        entries,
+        entriesToDelete
+      );
+
+      if (entriesToDelete.length > 0) {
+        await workspaceUsersRepository.delete({
+          workspaceId: workspaceId,
+          userId: In(entriesToDelete.map(entry => entry.userId))
+        });
+      }
+
+      return workspaceUsersRepository.save(entries);
+    });
     return !!saved;
   }
 
