@@ -1206,7 +1206,15 @@ describe('CodingManagementManualComponent', () => {
       refreshAllStatistics(): void;
       loadResponseAnalysis(): void;
       reloadCodingJobsList(): void;
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        notifyTestResultsChanged: jest.Mock;
+      };
     };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    const notifyTestResultsChangedSpy = jest
+      .spyOn(componentInternals.testPersonCodingService, 'notifyTestResultsChanged')
+      .mockImplementation();
     const loadCodingFreshnessSpy = jest
       .spyOn(componentInternals, 'loadCodingFreshness')
       .mockImplementation();
@@ -1222,6 +1230,10 @@ describe('CodingManagementManualComponent', () => {
 
     componentInternals.refreshAfterApplyingCodingResults();
 
+    expect(notifyTestResultsChangedSpy).toHaveBeenCalledWith({
+      workspaceId: 5,
+      statisticsVersion: 'v2'
+    });
     expect(refreshAllStatisticsSpy).toHaveBeenCalled();
     expect(loadResponseAnalysisSpy).toHaveBeenCalled();
     expect(loadCodingFreshnessSpy).toHaveBeenCalled();

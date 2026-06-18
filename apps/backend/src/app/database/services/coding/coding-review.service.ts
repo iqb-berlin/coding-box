@@ -19,6 +19,7 @@ import {
   isCodingIssueReviewJobType
 } from './coding-job-type.util';
 import { CodingJobService } from './coding-job.service';
+import { CodingAnalysisService } from './coding-analysis.service';
 
 type JobDefinitionBundleScope = {
   bundleIds: number[];
@@ -101,6 +102,7 @@ export class CodingReviewService {
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
     private codingStatisticsService: CodingStatisticsService,
+    private codingAnalysisService: CodingAnalysisService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private codingJobService: CodingJobService,
     @Optional()
@@ -1189,6 +1191,13 @@ export class CodingReviewService {
           }
         }
       });
+
+      if (appliedCount > 0 && typeof this.codingStatisticsService.invalidateCache === 'function') {
+        await this.codingStatisticsService.invalidateCache(workspaceId);
+      }
+      if (appliedCount > 0 && typeof this.codingAnalysisService.invalidateCache === 'function') {
+        await this.codingAnalysisService.invalidateCache(workspaceId);
+      }
 
       const message = `Applied ${appliedCount} resolutions successfully. ${failedCount > 0 ? `${failedCount} failed.` : ''
       } ${skippedCount > 0 ? `${skippedCount} skipped.` : ''}`;
