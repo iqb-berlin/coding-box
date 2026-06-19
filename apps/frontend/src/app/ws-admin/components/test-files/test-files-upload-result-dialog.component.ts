@@ -12,6 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatTabsModule } from '@angular/material/tabs';
 import { ScrollingModule } from '@angular/cdk/scrolling';
+import { Router } from '@angular/router';
 import {
   TestFilesUploadConflictDto,
   TestFilesUploadFailedDto,
@@ -20,6 +21,7 @@ import {
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 
 export type TestFilesUploadResultDialogData = {
+  workspaceId?: number;
   attempted: number;
   uploadedCount?: number;
   failedCount?: number;
@@ -53,7 +55,8 @@ export class TestFilesUploadResultDialogComponent {
 
   constructor(
     private dialogRef: MatDialogRef<TestFilesUploadResultDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: TestFilesUploadResultDialogData
+    @Inject(MAT_DIALOG_DATA) public data: TestFilesUploadResultDialogData,
+    private router: Router
   ) {}
 
   get attempted(): number {
@@ -103,6 +106,14 @@ export class TestFilesUploadResultDialogComponent {
         .map(s => String(s).toUpperCase());
       return parts.some(p => p.includes(q));
     });
+  }
+
+  get hasCodingFreshnessWarning(): boolean {
+    return this.issues.some(issue => issue.category === 'coding_freshness');
+  }
+
+  get canCheckCodingStatus(): boolean {
+    return !!this.data.workspaceId && this.hasCodingFreshnessWarning;
   }
 
   private matchesQuery(
@@ -156,5 +167,17 @@ export class TestFilesUploadResultDialogComponent {
 
   close(): void {
     this.dialogRef.close();
+  }
+
+  checkCodingStatus(): void {
+    if (!this.data.workspaceId) {
+      return;
+    }
+
+    this.dialogRef.close();
+    this.router.navigate(
+      [`/workspace-admin/${this.data.workspaceId}/coding/management`],
+      { queryParams: { refreshCodingFreshness: '1' } }
+    );
   }
 }

@@ -27,6 +27,7 @@ import {
   TestFilesUploadResultDto,
   TestFilesUploadUploadedDto
 } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
+import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { FileValidationResultDto } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import {
@@ -483,19 +484,19 @@ export class WorkspaceFilesService implements OnModuleInit {
     fileId: unknown,
     previousData: unknown,
     nextData: unknown
-  ): Promise<void> {
+  ): Promise<TestResultsUploadIssueDto | undefined> {
     if (!this.codingFreshnessService || !this.isCodingSchemeFileId(fileId)) {
-      return;
+      return undefined;
     }
 
     const unitName = this.normalizeCodingSchemeUnitName(fileId);
     if (!unitName) {
-      return;
+      return undefined;
     }
 
     const impact = this.getCodingSchemeFreshnessImpact(previousData, nextData);
     if (!impact.autoCodingChanged && !impact.manualCodingChanged) {
-      return;
+      return undefined;
     }
 
     try {
@@ -506,11 +507,18 @@ export class WorkspaceFilesService implements OnModuleInit {
           manualCodingSchemeRefs: impact.manualCodingChanged ? [unitName] : []
         }
       );
+      return undefined;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       this.logger.warn(
         `Could not update coding freshness after coding scheme change ${unitName}: ${detail}`
       );
+      return {
+        level: 'warning',
+        category: 'coding_freshness',
+        message: 'Datei wurde gespeichert, aber der Kodierstand konnte nicht zuverlässig aktualisiert werden. Bitte prüfen Sie den Kodierstand erneut.',
+        fileName: String(fileId || unitName)
+      };
     }
   }
 
@@ -1033,6 +1041,7 @@ ${bookletRefs}
       const conflicts: TestFilesUploadConflictDto[] = [];
       const failedFiles: TestFilesUploadFailedDto[] = [];
       const uploadedFiles: TestFilesUploadUploadedDto[] = [];
+      const issues: TestResultsUploadIssueDto[] = [];
       let uploaded = 0;
 
       const isConflict = (
@@ -1055,6 +1064,13 @@ ${bookletRefs}
           return;
         }
 
+        if (value && typeof value === 'object') {
+          const resultIssues = (value as { issues?: unknown }).issues;
+          if (Array.isArray(resultIssues)) {
+            issues.push(...(resultIssues as TestResultsUploadIssueDto[]));
+          }
+        }
+
         if (isFailedResult(value)) {
           failedFiles.push({
             filename: value.filename,
@@ -1074,7 +1090,11 @@ ${bookletRefs}
 
         if (this.isUploaded(value)) {
           uploaded += 1;
-          uploadedFiles.push(value);
+          uploadedFiles.push({
+            fileId: value.fileId,
+            filename: value.filename,
+            fileType: value.fileType
+          });
           return;
         }
 
@@ -1121,7 +1141,8 @@ ${bookletRefs}
         failed: failedFiles.length,
         conflicts: conflicts.length > 0 ? conflicts : undefined,
         failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
-        uploadedFiles: uploadedFiles.length > 0 ? uploadedFiles : undefined
+        uploadedFiles: uploadedFiles.length > 0 ? uploadedFiles : undefined,
+        issues: issues.length > 0 ? issues : undefined
       };
     };
 
@@ -1720,7 +1741,7 @@ ${bookletRefs}
         'file_id',
         'workspace_id'
       ]);
-      await this.markCodingSchemeFreshnessAfterFileChange(
+      const freshnessIssue = await this.markCodingSchemeFreshnessAfterFileChange(
         workspaceId,
         fileUpload.file_id,
         existing?.data,
@@ -1732,7 +1753,8 @@ ${bookletRefs}
       return {
         fileId: fileUpload.file_id,
         filename: file.originalname,
-        fileType
+        fileType,
+        issues: freshnessIssue ? [freshnessIssue] : undefined
       };
     } catch (error) {
       this.logger.error(
@@ -1970,14 +1992,14 @@ ${bookletRefs}
           'workspace_id'
         ]);
       }
-      await Promise.all(changedCodingSchemes.map(change => (
+      const freshnessIssues = (await Promise.all(changedCodingSchemes.map(change => (
         this.markCodingSchemeFreshnessAfterFileChange(
           workspaceId,
           change.fileId,
           change.previousData,
           change.nextData
         )
-      )));
+      )))).filter((issue): issue is TestResultsUploadIssueDto => !!issue);
       if (registry.length > 0 || overwriteRegistry.length > 0) {
         await this.invalidateWorkspaceFileCaches(workspaceId);
       }
@@ -1987,7 +2009,8 @@ ${bookletRefs}
         failed: 0,
         uploadedFiles: [...insertableFiles, ...overwriteFiles],
         conflicts: remainingConflicts.length ? remainingConflicts : undefined,
-        failedFiles: undefined
+        failedFiles: undefined,
+        issues: freshnessIssues.length ? freshnessIssues : undefined
       };
     } catch (error) {
       this.logger.error('Error during test center import', error);
