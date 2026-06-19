@@ -184,8 +184,15 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     findOne: jest.fn(),
     upsert: jest.fn().mockResolvedValue(undefined)
   };
+  const mockCodingStatisticsService = {
+    invalidateCache: jest.fn().mockResolvedValue(undefined),
+    invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
+  };
   const mockCodingFreshnessService = {
     markUnitsStaleAfterCodingSchemeChange: jest.fn().mockResolvedValue(undefined)
+  };
+  const mockCodingReadinessCacheInvalidator = {
+    invalidateWorkspaceReadinessCache: jest.fn()
   };
 
   function makeService(): WorkspaceFilesService {
@@ -194,7 +201,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       {} as unknown as CtorParams[1],
       {} as unknown as CtorParams[2],
       {} as unknown as CtorParams[3],
-      {} as unknown as CtorParams[4],
+      mockCodingStatisticsService as unknown as CtorParams[4],
       {} as unknown as CtorParams[5],
       {} as unknown as CtorParams[6],
       {} as unknown as CtorParams[7],
@@ -203,7 +210,10 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       { delete: jest.fn() } as unknown as CtorParams[10],
       { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
       undefined,
-      mockCodingFreshnessService as unknown as CtorParams[13]
+      mockCodingFreshnessService as unknown as CtorParams[13],
+      undefined,
+      undefined,
+      mockCodingReadinessCacheInvalidator as unknown as CtorParams[16]
     );
   }
 
@@ -323,6 +333,37 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       .not.toHaveBeenCalled();
   });
 
+  it('keeps upload successful and returns a freshness warning when stale marking fails', async () => {
+    const service = makeService();
+    const oldData = createCodingScheme({ processing: [] });
+    const newData = createCodingScheme({ processing: ['IGNORE_CASE'] });
+    mockFileUploadRepository.findOne.mockResolvedValue({
+      file_id: 'UNIT_A.VOCS',
+      data: oldData
+    });
+    mockCodingFreshnessService.markUnitsStaleAfterCodingSchemeChange
+      .mockRejectedValueOnce(new Error('freshness failed'));
+
+    const result = await service.uploadTestFiles(
+      1,
+      [createVocsFile(newData)],
+      true
+    );
+
+    expect(result.uploaded).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(result.issues).toEqual([
+      expect.objectContaining({
+        level: 'warning',
+        category: 'coding_freshness',
+        fileName: 'UNIT_A.VOCS',
+        message: expect.stringContaining('Datei wurde gespeichert')
+      })
+    ]);
+    expect(result.uploadedFiles?.[0]).not.toHaveProperty('issues');
+    expect(mockFileUploadRepository.upsert).toHaveBeenCalled();
+  });
+
   it('invalidates workspace file caches after Testcenter import writes files', async () => {
     const service = makeService();
     const conflictQueryBuilder = {
@@ -363,6 +404,15 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     ]);
 
     expect(invalidateSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('invalidates auto-coding readiness cache when workspace file caches are invalidated', async () => {
+    const service = makeService();
+
+    await service.invalidateWorkspaceFileCaches(1);
+
+    expect(mockCodingReadinessCacheInvalidator.invalidateWorkspaceReadinessCache)
+      .toHaveBeenCalledWith(1);
   });
 });
 

@@ -41,6 +41,7 @@ describe('CoderTrainingService', () => {
     getMissingsProfileDetails: jest.Mock;
     ensureDefaultMissingsProfile: jest.Mock;
     getNegativeMissingCodesForProfileOrDefault: jest.Mock;
+    getMissingByIdForProfileOrDefault: jest.Mock;
     getMissingByCodeForProfileOrDefault: jest.Mock;
     resolveMissingsProfileId: jest.Mock;
   };
@@ -86,6 +87,19 @@ describe('CoderTrainingService', () => {
         ]
       }),
       getNegativeMissingCodesForProfileOrDefault: jest.fn().mockResolvedValue(new Set([-97, -98, -99])),
+      getMissingByIdForProfileOrDefault: jest.fn(async (_workspaceId, _profileId, missingId: string) => {
+        if (missingId === 'mir') {
+          return {
+            id: 'mir', label: 'missing invalid response', code: -98, score: 0
+          };
+        }
+        if (missingId === 'mci') {
+          return {
+            id: 'mci', label: 'missing coding impossible', code: -97, score: 0
+          };
+        }
+        throw new BadRequestException(`Missing '${missingId}' not found`);
+      }),
       getMissingByCodeForProfileOrDefault: jest.fn(async (_workspaceId, _profileId, code: number) => {
         if ([-97, -98, -99].includes(code)) {
           return {
@@ -411,7 +425,8 @@ describe('CoderTrainingService', () => {
         {
           caseSelectionMode: 'oldest_first',
           referenceTrainingIds: undefined,
-          referenceMode: undefined
+          referenceMode: undefined,
+          assignedVariableBundles
         }
       );
 
@@ -1332,18 +1347,22 @@ describe('CoderTrainingService', () => {
       overrides: Partial<{
         value: string | null;
         unitid: number;
+        variableid: string;
+        unitAlias: string;
+        unitName: string;
+        bookletName: string;
         personLogin: string;
         personCode: string;
         personGroup: string;
       }> = {}
     ) => ({
       id: responseId,
-      variableid: 'var1',
+      variableid: overrides.variableid ?? 'var1',
       value: overrides.value ?? `value-${responseId}`,
       unitid: overrides.unitid ?? responseId + 100,
       unit: {
-        alias: 'Alias Unit',
-        name: 'Real Unit',
+        alias: overrides.unitAlias ?? 'Alias Unit',
+        name: overrides.unitName ?? 'Real Unit',
         booklet: {
           person: {
             login: overrides.personLogin ?? `person-${responseId}`,
@@ -1351,7 +1370,7 @@ describe('CoderTrainingService', () => {
             group: overrides.personGroup ?? 'Group'
           },
           bookletinfo: {
-            name: 'Booklet'
+            name: overrides.bookletName ?? 'Booklet'
           }
         }
       }
@@ -1550,6 +1569,95 @@ describe('CoderTrainingService', () => {
         1,
         3
       ]);
+    });
+
+    it('samples bundle variables by shared case', async () => {
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+      mockRepository.find.mockResolvedValue([{
+        id: 5,
+        name: 'Bundle',
+        workspace_id: 1,
+        variables: [
+          { unitName: 'Real Unit A', variableId: 'var1' },
+          { unitName: 'Real Unit B', variableId: 'var2' }
+        ]
+      }]);
+      const queryBuilders = [
+        {
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([
+            makeResponseEntity(1, {
+              unitName: 'Real Unit A',
+              variableid: 'var1',
+              personLogin: 'person-1',
+              personCode: '1'
+            }),
+            makeResponseEntity(3, {
+              unitName: 'Real Unit A',
+              variableid: 'var1',
+              personLogin: 'person-2',
+              personCode: '2'
+            })
+          ])
+        },
+        {
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([
+            makeResponseEntity(2, {
+              unitName: 'Real Unit B',
+              variableid: 'var2',
+              personLogin: 'person-1',
+              personCode: '1'
+            }),
+            makeResponseEntity(4, {
+              unitName: 'Real Unit B',
+              variableid: 'var2',
+              personLogin: 'person-2',
+              personCode: '2'
+            })
+          ])
+        }
+      ];
+      const responseRepository = {
+        createQueryBuilder: jest.fn()
+          .mockReturnValueOnce(queryBuilders[0])
+          .mockReturnValueOnce(queryBuilders[1])
+      };
+      const chunkRepository = {
+        createQueryBuilder: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([])
+        })
+      };
+
+      (service as unknown as { responseRepository: typeof responseRepository }).responseRepository = responseRepository;
+      (service as unknown as { chunkRepository: typeof chunkRepository }).chunkRepository = chunkRepository;
+
+      const result = await service.generateCoderTrainingPackages(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [
+          { unitId: 'Real Unit A', variableId: 'var1', sampleCount: 1 },
+          { unitId: 'Real Unit B', variableId: 'var2', sampleCount: 1 }
+        ],
+        {
+          caseSelectionMode: 'oldest_first',
+          assignedVariableBundles: [{
+            id: 5,
+            name: 'Bundle',
+            sampleCount: 1
+          }]
+        }
+      );
+
+      expect(result[0].responses.map(response => response.responseId)).toEqual([1, 2]);
+      expect(new Set(result[0].responses.map(response => response.personLogin))).toEqual(new Set(['person-1']));
     });
 
     it('should keep the same referenced cases when the training uses a unit alias', async () => {
@@ -1888,7 +1996,7 @@ describe('CoderTrainingService', () => {
       code: number | null,
       score: number | null,
       codingIssueOption: number | null,
-      missingCodes: { mirCode: number; mciCode: number; negativeCodes: Set<number>; scoresByCode: Map<number, number> }
+      missingCodes: { mirCode: number; mciCode: number; negativeCodes: Set<number>; scoresByCode: Map<number, number | null> }
     ) => { code: string | null; score: number | null };
 
     const getMapDisplayCodeAndScore = (svc: CoderTrainingService): MapDisplayCodeAndScoreFn => {
@@ -1898,7 +2006,7 @@ describe('CoderTrainingService', () => {
 
     type GetMissingScoresByCodeFromMissingsFn = (
       missings: Array<{ id?: string; code: number; score?: unknown }>
-    ) => Map<number, number>;
+    ) => Map<number, number | null>;
 
     const getMissingScoresByCodeFromMissings = (svc: CoderTrainingService): GetMissingScoresByCodeFromMissingsFn => {
       const serviceWithPrivateMethod = svc as unknown as {
@@ -1957,7 +2065,6 @@ describe('CoderTrainingService', () => {
     });
 
     it.each([
-      ['null', null],
       ['empty string', ''],
       ['blank string', '  '],
       ['boolean false', false],
@@ -1970,6 +2077,25 @@ describe('CoderTrainingService', () => {
           score
         }
       ])).toThrow('score');
+    });
+
+    it('should keep explicit NA missing scores during display normalization', () => {
+      const scoresByCode = getMissingScoresByCodeFromMissings(service)([
+        {
+          id: 'mci',
+          code: -97,
+          score: null
+        }
+      ]);
+      const mapDisplay = getMapDisplayCodeAndScore(service);
+
+      expect(scoresByCode.get(-97)).toBeNull();
+      expect(mapDisplay(-97, null, null, {
+        mirCode: -98,
+        mciCode: -97,
+        negativeCodes: new Set([-97, -98]),
+        scoresByCode
+      })).toEqual({ code: '-97', score: null });
     });
 
     it('should reject automatic missing agreement when response jobs use different missing profiles', async () => {
@@ -2065,6 +2191,59 @@ describe('CoderTrainingService', () => {
         score: 0
       }));
       expect(result.score).toBe(0);
+      expect(result.source).toBe('manual');
+    });
+
+    it('should resolve MIR discussion issue option to the default profile missing code', async () => {
+      const { training } = createTrainingWithUnit();
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+      mockDiscussionSave();
+
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', -3);
+
+      expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(1, 1, 'mir');
+      expect(missingsProfilesService.getMissingByCodeForProfileOrDefault).toHaveBeenCalledWith(1, 1, -98);
+      expect(coderTrainingDiscussionResultRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        code: -98,
+        score: 0
+      }));
+      expect(result.code).toBe(-98);
+      expect(result.score).toBe(0);
+      expect(result.source).toBe('manual');
+    });
+
+    it('should resolve MCI discussion issue option to the response job missing profile code', async () => {
+      const { training } = createTrainingWithUnit();
+      training.codingJobs[0].missings_profile_id = 77;
+      (coderTrainingRepository.findOne as jest.Mock)
+        .mockResolvedValueOnce(training)
+        .mockResolvedValueOnce(null);
+      missingsProfilesService.getMissingByIdForProfileOrDefault.mockResolvedValueOnce({
+        id: 'mci',
+        label: 'Custom technical problem',
+        code: -41,
+        score: 3
+      });
+      missingsProfilesService.getMissingByCodeForProfileOrDefault.mockResolvedValueOnce({
+        id: 'mci',
+        label: 'Custom technical problem',
+        code: -41,
+        score: 3
+      });
+      mockDiscussionSave();
+
+      const result = await service.saveDiscussionResult(1, 5, 101, 99, 'Manager', -4);
+
+      expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(1, 77, 'mci');
+      expect(missingsProfilesService.getMissingByCodeForProfileOrDefault).toHaveBeenCalledWith(1, 77, -41);
+      expect(coderTrainingDiscussionResultRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        code: -41,
+        score: 3
+      }));
+      expect(result.code).toBe(-41);
+      expect(result.score).toBe(3);
       expect(result.source).toBe('manual');
     });
 

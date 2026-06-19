@@ -82,6 +82,15 @@ describe('CodeSelectorComponent', () => {
             ruleSetOperatorAnd: false,
             ruleSets: [],
             manualInstruction: '   '
+          },
+          {
+            id: 4,
+            type: 'RESIDUAL',
+            label: 'Visually empty HTML code',
+            score: 0,
+            ruleSetOperatorAnd: false,
+            ruleSets: [],
+            manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>'
           }
         ]
       }
@@ -602,6 +611,99 @@ describe('CodeSelectorComponent', () => {
     expect(fixture.nativeElement.querySelector('.pause-button')).toBeNull();
   });
 
+  it('emits when the compact home button is clicked', () => {
+    const openCodingJobsSpy = jest.spyOn(component.openCodingJobs, 'emit');
+    component.showProgress = true;
+
+    fixture.detectChanges();
+    const homeButton = fixture.nativeElement.querySelector('.home-button') as HTMLButtonElement;
+    expect(homeButton.getAttribute('aria-label')).toBeTruthy();
+    homeButton.click();
+
+    expect(openCodingJobsSpy).toHaveBeenCalled();
+  });
+
+  it('keeps general codes and notes expanded by default and lets users collapse them', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.allowComments = true;
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    fixture.detectChanges();
+
+    expect(component.isSupportSectionExpanded).toBe(true);
+    expect(fixture.nativeElement.querySelectorAll('.uncertain-codes-section .code-row')).toHaveLength(4);
+    expect(fixture.nativeElement.querySelector('.notes-field')).toBeTruthy();
+
+    (fixture.nativeElement.querySelector('.support-toggle') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(component.isSupportSectionExpanded).toBe(false);
+    expect(fixture.nativeElement.querySelector('.uncertain-codes-section')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.notes-field')).toBeNull();
+  });
+
+  it('expands the support section before focusing missing new-code notes', () => {
+    jest.useFakeTimers();
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.isSupportSectionExpanded = false;
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    component.selectedCodingIssueOption = -2;
+    fixture.detectChanges();
+
+    expect(component.canLeaveCurrentUnit()).toBe(false);
+    fixture.detectChanges();
+    const notesTextarea = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+    const focusSpy = jest.spyOn(notesTextarea, 'focus').mockImplementation(() => { });
+    jest.runAllTimers();
+
+    expect(component.isSupportSectionExpanded).toBe(true);
+    expect(notesTextarea).toBeTruthy();
+    expect(focusSpy).toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+
+  it('opens collapsed general codes and scrolls to a selected support code', () => {
+    jest.useFakeTimers();
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.allowComments = true;
+
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false)
+    });
+    component.isSupportSectionExpanded = false;
+    fixture.detectChanges();
+
+    const scrollSpy = jest.fn();
+    const originalQuerySelector = fixture.nativeElement.querySelector.bind(fixture.nativeElement);
+    const querySelectorSpy = jest.spyOn(fixture.nativeElement, 'querySelector');
+    querySelectorSpy.mockImplementation((...args: unknown[]) => {
+      const selector = args[0] as string;
+      if (selector === '[data-code-id="-2"]') {
+        return { scrollIntoView: scrollSpy } as unknown as Element;
+      }
+      return originalQuerySelector(selector);
+    });
+
+    component.scrollToCode(-2);
+    jest.runAllTimers();
+
+    expect(component.isSupportSectionExpanded).toBe(true);
+    expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+    querySelectorSpy.mockRestore();
+    jest.useRealTimers();
+  });
+
   it('disables and ignores pause while read-only', () => {
     const pauseSpy = jest.spyOn(component.pauseCodingJob, 'emit');
     component.showProgress = true;
@@ -661,5 +763,65 @@ describe('CodeSelectorComponent', () => {
     expect(component.isVariablePanelOpen).toBe(false);
     expect(unitChangedSpy).not.toHaveBeenCalled();
     expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('renders small alternating bundle variables as chips including auto-coded variables', () => {
+    component.showProgress = true;
+    component.codingService = {
+      isUnitCoded: jest.fn().mockReturnValue(false)
+    } as never;
+    component.unitsData = {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_1',
+          alias: 'UNIT_1',
+          bookletId: 0,
+          variableId: 'VAR1',
+          bundleContext: {
+            bundleId: 9,
+            bundleName: 'Bundle',
+            caseKey: 'case-1',
+            caseOrderingMode: 'alternating',
+            variables: [
+              {
+                responseId: 1,
+                unitName: 'UNIT_1',
+                variableId: 'VAR1',
+                variableAnchor: 'VAR1',
+                variablePage: '0',
+                status: 'manual-open',
+                code: null,
+                score: null,
+                source: 'manual'
+              },
+              {
+                responseId: 2,
+                unitName: 'UNIT_1',
+                variableId: 'VAR2',
+                variableAnchor: 'VAR2',
+                variablePage: '0',
+                status: 'auto-coded',
+                code: 1,
+                score: 1,
+                source: 'auto'
+              }
+            ]
+          }
+        }
+      ]
+    };
+
+    fixture.detectChanges();
+
+    const chips = fixture.nativeElement.querySelectorAll('.bundle-variable-chip') as NodeListOf<HTMLButtonElement>;
+    expect(chips).toHaveLength(2);
+    expect(chips[0].classList.contains('active')).toBe(true);
+    expect(chips[1].classList.contains('auto-coded')).toBe(true);
+    expect(chips[1].disabled).toBe(true);
+    expect(fixture.nativeElement.querySelector('.variable-trigger-btn')).toBeNull();
   });
 });

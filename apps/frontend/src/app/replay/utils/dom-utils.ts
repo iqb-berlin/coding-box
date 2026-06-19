@@ -7,6 +7,12 @@ const HIGHLIGHT_FIELD_SHADOW = 'inset 0 0 0 2px #4285f4';
 const HIGHLIGHT_ATTR = 'data-coding-box-anchor-highlight';
 const HIGHLIGHT_OVERLAY_ATTR = 'data-coding-box-anchor-highlight-overlay';
 const HIGHLIGHT_PREVIOUS_POSITION_ATTR = 'data-coding-box-anchor-highlight-previous-position';
+const BUNDLE_MARKER_ATTR = 'data-coding-box-bundle-marker';
+const BUNDLE_MARKER_OVERLAY_ATTR = 'data-coding-box-bundle-marker-overlay';
+const BUNDLE_MARKER_PREVIOUS_POSITION_ATTR = 'data-coding-box-bundle-marker-previous-position';
+const BUNDLE_MARKER_PREVIOUS_OUTLINE_ATTR = 'data-coding-box-bundle-marker-previous-outline';
+const BUNDLE_MARKER_PREVIOUS_OUTLINE_OFFSET_ATTR = 'data-coding-box-bundle-marker-previous-outline-offset';
+const BUNDLE_MARKER_PREVIOUS_TITLE_ATTR = 'data-coding-box-bundle-marker-previous-title';
 const NATIVE_FIELD_SELECTOR = [
   'input:not([type="hidden"])',
   'textarea',
@@ -96,6 +102,110 @@ function canHighlightWithOverlay(element: HTMLElement): boolean {
 function highlightField(element: HTMLElement): void {
   element.style.boxShadow = HIGHLIGHT_FIELD_SHADOW;
   element.setAttribute(HIGHLIGHT_ATTR, 'true');
+}
+
+function clearBundleMarker(element: HTMLElement): void {
+  if (element.getAttribute(BUNDLE_MARKER_OVERLAY_ATTR) === 'true') {
+    element.remove();
+    return;
+  }
+
+  element.querySelectorAll(`[${BUNDLE_MARKER_OVERLAY_ATTR}="true"]`).forEach(el => {
+    el.remove();
+  });
+
+  if (element.hasAttribute(BUNDLE_MARKER_PREVIOUS_POSITION_ATTR)) {
+    element.style.position = element.getAttribute(BUNDLE_MARKER_PREVIOUS_POSITION_ATTR) || '';
+    element.removeAttribute(BUNDLE_MARKER_PREVIOUS_POSITION_ATTR);
+  }
+
+  if (element.hasAttribute(BUNDLE_MARKER_PREVIOUS_OUTLINE_ATTR)) {
+    element.style.outline = element.getAttribute(BUNDLE_MARKER_PREVIOUS_OUTLINE_ATTR) || '';
+    element.removeAttribute(BUNDLE_MARKER_PREVIOUS_OUTLINE_ATTR);
+  }
+
+  if (element.hasAttribute(BUNDLE_MARKER_PREVIOUS_OUTLINE_OFFSET_ATTR)) {
+    element.style.outlineOffset = element.getAttribute(BUNDLE_MARKER_PREVIOUS_OUTLINE_OFFSET_ATTR) || '';
+    element.removeAttribute(BUNDLE_MARKER_PREVIOUS_OUTLINE_OFFSET_ATTR);
+  }
+
+  if (element.hasAttribute(BUNDLE_MARKER_PREVIOUS_TITLE_ATTR)) {
+    const previousTitle = element.getAttribute(BUNDLE_MARKER_PREVIOUS_TITLE_ATTR);
+    if (previousTitle) {
+      element.setAttribute('title', previousTitle);
+    } else {
+      element.removeAttribute('title');
+    }
+    element.removeAttribute(BUNDLE_MARKER_PREVIOUS_TITLE_ATTR);
+  }
+
+  element.removeAttribute(BUNDLE_MARKER_ATTR);
+}
+
+function clearBundleMarkers(document: Document): void {
+  document.querySelectorAll(`[${BUNDLE_MARKER_ATTR}="true"]`).forEach(el => {
+    clearBundleMarker(el as HTMLElement);
+  });
+}
+
+function markWithBundleOverlay(
+  element: HTMLElement,
+  label: string,
+  tooltip: string
+): void {
+  const view = element.ownerDocument.defaultView;
+  const computedPosition = view?.getComputedStyle(element).position;
+
+  if (!computedPosition || computedPosition === 'static') {
+    element.setAttribute(BUNDLE_MARKER_PREVIOUS_POSITION_ATTR, element.style.position);
+    element.style.position = 'relative';
+  }
+
+  const overlay = element.ownerDocument.createElement('div');
+  overlay.setAttribute(BUNDLE_MARKER_ATTR, 'true');
+  overlay.setAttribute(BUNDLE_MARKER_OVERLAY_ATTR, 'true');
+  overlay.setAttribute('title', tooltip);
+  overlay.style.position = 'absolute';
+  overlay.style.inset = '0';
+  overlay.style.boxSizing = 'border-box';
+  overlay.style.border = '2px dashed #757575';
+  overlay.style.backgroundImage = 'repeating-linear-gradient(135deg, rgba(117, 117, 117, 0.10) 0, rgba(117, 117, 117, 0.10) 4px, transparent 4px, transparent 10px)';
+  overlay.style.pointerEvents = 'none';
+  overlay.style.zIndex = '2147483646';
+
+  const badge = element.ownerDocument.createElement('span');
+  badge.textContent = label;
+  badge.style.position = 'absolute';
+  badge.style.top = '2px';
+  badge.style.right = '2px';
+  badge.style.maxWidth = 'calc(100% - 4px)';
+  badge.style.overflow = 'hidden';
+  badge.style.textOverflow = 'ellipsis';
+  badge.style.whiteSpace = 'nowrap';
+  badge.style.boxSizing = 'border-box';
+  badge.style.padding = '1px 4px';
+  badge.style.borderRadius = '3px';
+  badge.style.background = 'rgba(255, 255, 255, 0.92)';
+  badge.style.color = '#616161';
+  badge.style.font = '11px/1.3 Arial, sans-serif';
+  badge.style.border = '1px solid rgba(117, 117, 117, 0.45)';
+  overlay.appendChild(badge);
+
+  element.appendChild(overlay);
+  element.setAttribute(BUNDLE_MARKER_ATTR, 'true');
+}
+
+function markWithBundleFieldOutline(
+  element: HTMLElement,
+  tooltip: string
+): void {
+  element.setAttribute(BUNDLE_MARKER_PREVIOUS_OUTLINE_ATTR, element.style.outline);
+  element.setAttribute(BUNDLE_MARKER_PREVIOUS_OUTLINE_OFFSET_ATTR, element.style.outlineOffset);
+  element.setAttribute(BUNDLE_MARKER_PREVIOUS_TITLE_ATTR, element.getAttribute('title') || '');
+  element.style.outline = '2px dashed #757575';
+  element.style.outlineOffset = '2px';
+  element.setAttribute('title', tooltip);
+  element.setAttribute(BUNDLE_MARKER_ATTR, 'true');
 }
 
 function getParentSection(element: HTMLElement): HTMLElement | null {
@@ -311,6 +421,51 @@ export function highlightAspectSectionWithAnchor(iframe: HTMLIFrameElement, anch
         result.push(element as HTMLElement);
       });
     }
+  } catch (error) {
+    // Silently handle errors
+  }
+
+  return result;
+}
+
+export function highlightBundleVariableMarkers(
+  iframe: HTMLIFrameElement,
+  markers: Array<{ anchor: string; label: string; tooltip: string }>
+): HTMLElement[] {
+  const result: HTMLElement[] = [];
+
+  try {
+    if (!iframe.contentDocument) {
+      return result;
+    }
+
+    clearBundleMarkers(iframe.contentDocument);
+    const elementsByAlias = findElementsByDataAlias(iframe);
+
+    markers.forEach(marker => {
+      const anchorElement = elementsByAlias[marker.anchor];
+      if (!anchorElement) {
+        return;
+      }
+
+      const target =
+        getTableHighlightTarget(anchorElement) ||
+        getFieldHighlightTarget(anchorElement) ||
+        anchorElement;
+      const markerTarget = canHighlightWithOverlay(target) ?
+        target :
+        anchorElement;
+
+      if (canHighlightWithOverlay(markerTarget)) {
+        markWithBundleOverlay(markerTarget, marker.label, marker.tooltip);
+      } else {
+        markWithBundleFieldOutline(target, marker.tooltip);
+      }
+      const parentSection = getParentSection(anchorElement);
+      if (parentSection) {
+        result.push(parentSection);
+      }
+    });
   } catch (error) {
     // Silently handle errors
   }

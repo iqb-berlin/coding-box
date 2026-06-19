@@ -42,6 +42,7 @@ import {
   createManualCodingVariableReferences,
   DERIVE_ERROR_STATUS
 } from '../../utils/manual-coding-candidate.util';
+import { hasVisibleManualInstruction } from '../../../utils/manual-instruction.util';
 import {
   applyNonCodingIssueReviewJobFilter,
   getNonCodingIssueReviewJobSqlCondition
@@ -761,7 +762,9 @@ export class CodingValidationService {
     const variableReferences = variables.map(v => ({
       unitName: v.unitName,
       variableId: v.variableId,
-      ...(includeDeriveErrorInCaseInfo ? { includeDeriveError: true } : {})
+      ...(includeDeriveErrorInCaseInfo && v.deriveErrorResponseCount > 0 ?
+        { includeDeriveError: true } :
+        {})
     }));
     const [slimResponses, assignedResponseIdsByVariable] = await Promise.all([
       this.codingJobService.getSlimResponsesForVariables(
@@ -841,11 +844,13 @@ export class CodingValidationService {
         return { uniqueCases, casesInJobs };
       };
 
-      const regularVarResponses = includeDeriveErrorInCaseInfo ?
+      const includeDeriveErrorForVariable = includeDeriveErrorInCaseInfo &&
+        variable.deriveErrorResponseCount > 0;
+      const regularVarResponses = includeDeriveErrorForVariable ?
         varResponsesWithRequestedStatuses.filter(response => response.statusV1 !== DERIVE_ERROR_STATUS) :
         varResponsesWithRequestedStatuses;
       const regularCaseInfo = countAggregatedCases(regularVarResponses);
-      const deriveErrorCaseInfo = includeDeriveErrorInCaseInfo ?
+      const deriveErrorCaseInfo = includeDeriveErrorForVariable ?
         countAggregatedCases(varResponsesWithRequestedStatuses) :
         null;
 
@@ -924,7 +929,7 @@ export class CodingValidationService {
   private hasManualInstruction(
     code: { manualInstruction?: string | null }
   ): boolean {
-    return !!code.manualInstruction?.trim();
+    return hasVisibleManualInstruction(code);
   }
 
   private getManualCodeAvailabilityKey(
@@ -1152,6 +1157,32 @@ export class CodingValidationService {
       coveredSourceKeys,
       derivedVariablesBySourceMap
     );
+    const deriveErrorCoveredSourceKeys = includeDeriveErrorOnly ?
+      getCoveredSourceKeysForManualDerivedVariables(
+        Array.from(manualInstructionSets.entries()).flatMap(([manualUnitName, variables]) => (
+          Array.from(variables)
+            .map(variableId => ({ unitName: manualUnitName, variableId }))
+            .filter(row => filterFn({
+              unitName: row.unitName,
+              variableId: row.variableId,
+              responseCount: '0'
+            }))
+        )),
+        derivedVariablesBySourceMap
+      ) :
+      new Set<string>();
+    const getScopedDeriveErrorResponseCount = (
+      responseUnitName: string,
+      variableId: string
+    ): number => (
+      includeDeriveErrorOnly &&
+      isCoveredSourceVariable(
+        { unitName: responseUnitName, variableId },
+        deriveErrorCoveredSourceKeys
+      ) ?
+        0 :
+        deriveErrorCountsByKey.get(`${responseUnitName}::${variableId}`) || 0
+    );
 
     // Merge results, summing response counts for variables that appear in both
     const mergedMap = new Map<string, {
@@ -1167,7 +1198,8 @@ export class CodingValidationService {
       const key = `${row.unitName}::${row.variableId}`;
       const existing = mergedMap.get(key);
       const count = parseInt(row.responseCount, 10);
-      const deriveErrorResponseCount = deriveErrorCountsByKey.get(key) || 0;
+      const deriveErrorResponseCount =
+        getScopedDeriveErrorResponseCount(row.unitName, row.variableId);
       const isDerived = derivedVariableSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
       const coderTrainingRequired = trainingRequiredSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
 
@@ -1192,6 +1224,14 @@ export class CodingValidationService {
         }
 
         const [deriveUnitName, variableId] = key.split('::');
+        if (
+          isCoveredSourceVariable(
+            { unitName: deriveUnitName, variableId },
+            deriveErrorCoveredSourceKeys
+          )
+        ) {
+          return;
+        }
         if (!filterFn({
           unitName: deriveUnitName,
           variableId,

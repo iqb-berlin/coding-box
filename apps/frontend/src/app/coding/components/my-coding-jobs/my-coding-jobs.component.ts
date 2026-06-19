@@ -33,7 +33,8 @@ import {
   MatFormField,
   MatLabel,
   MatOption,
-  MatSelect
+  MatSelect,
+  MatSelectTrigger
 } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -44,6 +45,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIconButton } from '@angular/material/button';
 import { DatePipe, NgClass, NgFor } from '@angular/common';
+import { ActivatedRoute } from '@angular/router';
 import {
   debounceTime, distinctUntilChanged, forkJoin, Subject, Subscription
 } from 'rxjs';
@@ -89,6 +91,7 @@ import {
     MatLabel,
     MatInputModule,
     MatSelect,
+    MatSelectTrigger,
     MatOption,
     MatDialogModule
   ],
@@ -102,6 +105,7 @@ implements OnInit, OnDestroy, OnChanges {
   private dialog = inject(MatDialog);
   private cdr = inject(ChangeDetectorRef);
   private translateService = inject(TranslateService);
+  private route = inject(ActivatedRoute);
 
   displayedColumns: string[] = [
     'actions',
@@ -141,6 +145,7 @@ implements OnInit, OnDestroy, OnChanges {
   private jobNameFilterSubscription?: Subscription;
   private workspaceToggleInProgress = false;
   private workspaceSelectionInitialized = false;
+  private initialWorkspaceFilterId: number | null = null;
   private paginator?: MatPaginator;
   private readonly jobNameFilterChanges = new Subject<string>();
   private readonly windowFocusReloadThrottleMs = 10000;
@@ -170,6 +175,8 @@ implements OnInit, OnDestroy, OnChanges {
   };
 
   ngOnInit(): void {
+    this.initialWorkspaceFilterId = this.getInitialWorkspaceFilterIdFromRoute();
+
     this.jobNameFilterSubscription = this.jobNameFilterChanges
       .pipe(debounceTime(300), distinctUntilChanged())
       .subscribe(() => this.reloadFirstPage());
@@ -205,7 +212,7 @@ implements OnInit, OnDestroy, OnChanges {
 
     if (targetWorkspaces.length > 0) {
       if (this.shouldResetWorkspaceFilter()) {
-        this.selectedWorkspaceIds = this.currentWorkspaces.map(ws => ws.id);
+        this.selectedWorkspaceIds = this.getDefaultSelectedWorkspaceIds();
         this.workspaceSelectionInitialized = true;
       }
       const selectedWorkspaces = this.getSelectedWorkspaces();
@@ -317,6 +324,45 @@ implements OnInit, OnDestroy, OnChanges {
     return normalized || undefined;
   }
 
+  private getDefaultSelectedWorkspaceIds(): number[] {
+    const requestedWorkspaceId = this.workspaceId || this.initialWorkspaceFilterId;
+    if (
+      requestedWorkspaceId &&
+      this.currentWorkspaces.some(workspace => workspace.id === requestedWorkspaceId)
+    ) {
+      return [requestedWorkspaceId];
+    }
+
+    return this.currentWorkspaces.map(workspace => workspace.id);
+  }
+
+  private getInitialWorkspaceFilterIdFromRoute(): number | null {
+    const queryWorkspaceId = this.toValidWorkspaceId(
+      this.route.snapshot.queryParamMap.get('workspaceId')
+    );
+    if (queryWorkspaceId) {
+      return queryWorkspaceId;
+    }
+
+    let currentRoute: ActivatedRoute | null = this.route;
+    while (currentRoute) {
+      const routeWorkspaceId = this.toValidWorkspaceId(
+        currentRoute.snapshot.paramMap.get('ws')
+      );
+      if (routeWorkspaceId) {
+        return routeWorkspaceId;
+      }
+      currentRoute = currentRoute.parent;
+    }
+
+    return null;
+  }
+
+  private toValidWorkspaceId(value: number | string | null | undefined): number | null {
+    const workspaceId = Number(value);
+    return Number.isInteger(workspaceId) && workspaceId > 0 ? workspaceId : null;
+  }
+
   private shouldResetWorkspaceFilter(): boolean {
     const currentWorkspaceIds = this.currentWorkspaces.map(
       workspace => workspace.id
@@ -344,15 +390,9 @@ implements OnInit, OnDestroy, OnChanges {
     if (this.workspaceToggleInProgress) {
       return;
     }
-    if (this.isAllWorkspacesSelected()) {
-      if (!this.selectedWorkspaceIds.includes(-1)) {
-        this.selectedWorkspaceIds = [...this.selectedWorkspaceIds, -1];
-      }
-    } else {
-      this.selectedWorkspaceIds = this.selectedWorkspaceIds.filter(
-        id => id !== -1
-      );
-    }
+    this.selectedWorkspaceIds = this.selectedWorkspaceIds.filter(
+      id => id !== -1
+    );
     this.reloadFirstPage();
   }
 
@@ -367,15 +407,39 @@ implements OnInit, OnDestroy, OnChanges {
     if (this.isAllWorkspacesSelected()) {
       this.selectedWorkspaceIds = [];
     } else {
-      this.selectedWorkspaceIds = [
-        ...this.currentWorkspaces.map(ws => ws.id),
-        -1
-      ];
+      this.selectedWorkspaceIds = this.currentWorkspaces.map(ws => ws.id);
     }
     this.reloadFirstPage();
     queueMicrotask(() => {
       this.workspaceToggleInProgress = false;
     });
+  }
+
+  getWorkspaceFilterTriggerText(): string {
+    const selectedWorkspaces = this.getSelectedWorkspaces();
+    if (selectedWorkspaces.length === 0) {
+      return '';
+    }
+
+    if (selectedWorkspaces.length === this.currentWorkspaces.length) {
+      return this.translateService.instant(
+        'coding.my-coding-jobs.all-workspaces-selected'
+      );
+    }
+
+    const [firstWorkspace] = selectedWorkspaces;
+    const additionalWorkspacesCount = selectedWorkspaces.length - 1;
+    if (additionalWorkspacesCount === 0) {
+      return firstWorkspace.name || '';
+    }
+
+    return this.translateService.instant(
+      'coding.my-coding-jobs.workspaces-selected-summary',
+      {
+        first: firstWorkspace.name || '',
+        count: additionalWorkspacesCount
+      }
+    );
   }
 
   onPageChange(event: PageEvent): void {

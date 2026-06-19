@@ -1,16 +1,39 @@
 <div class="selector-content">
   @if (showProgress) {
-  <div class="progress-info">
-    <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
-    <span class="progress-numbers">{{ completedCount }}/{{ totalUnits }}</span>
-    <span class="progress-percentage">({{ progressPercentage }}%)</span>
-    @if (openCount > 0) {
-    <span class="progress-open">{{ 'replay.open-count' | translate }}: {{ openCount }}</span>
-    }
+  <div class="progress-compact">
+    <span class="progress-label">{{ 'replay.coding-progress' | translate }}</span>
+    <span class="progress-summary" [matTooltip]="progressTooltip">{{ progressSummary }}</span>
+    <mat-progress-bar
+      mode="determinate"
+      [value]="progressPercentage"
+      class="custom-progress-bar"
+      [matTooltip]="progressTooltip">
+    </mat-progress-bar>
   </div>
-  <mat-progress-bar mode="determinate" [value]="progressPercentage" class="custom-progress-bar"></mat-progress-bar>
-  @if (availableVariables.length > 1) {
+
+  @if (availableVariables.length > 1 || shouldShowBundleVariableChips) {
   <div class="variable-selector-section">
+    @if (shouldShowBundleVariableChips) {
+    <div class="bundle-variable-chips" role="tablist">
+      @for (chip of bundleVariableChips; track chip.key) {
+      <button
+        type="button"
+        class="bundle-variable-chip"
+        [class.active]="chip.active"
+        [class.auto-coded]="chip.status === 'auto-coded'"
+        [disabled]="chip.disabled"
+        [matTooltip]="chip.tooltip"
+        (click)="selectBundleVariable(chip.key, chip.disabled)">
+        <span class="bundle-variable-name">{{ chip.variableId }}</span>
+        @if (chip.status === 'auto-coded') {
+        <mat-icon class="bundle-variable-status-icon">bolt</mat-icon>
+        } @else {
+        <span class="bundle-variable-count">{{ chip.progress.coded }}/{{ chip.progress.total }}</span>
+        }
+      </button>
+      }
+    </div>
+    } @else {
     <div class="variable-dropdown-wrapper">
       <button class="variable-trigger-btn" (click)="toggleVariablePanel()" [disabled]="isNavigationDisabled" type="button">
         <span class="variable-trigger-label">
@@ -45,6 +68,7 @@
       </div>
       }
     </div>
+    }
   </div>
   }
 
@@ -70,6 +94,11 @@
     }
 
     <div class="action-controls">
+      <button mat-icon-button (click)="onCodingJobsClick()" class="home-button"
+        [attr.aria-label]="'code-selector.my-coding-jobs' | translate"
+        matTooltip="{{ 'code-selector.my-coding-jobs' | translate }}">
+        <mat-icon>home</mat-icon>
+      </button>
       <button mat-icon-button (click)="onNavigateClick()" [disabled]="isNavigationDisabled" class="navigate-button"
         matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
         <mat-icon>directions</mat-icon>
@@ -97,16 +126,21 @@
         <div class="code-content">
           <span class="code-info">
             <span class="legacy-code-prefix">{{ 'code-selector.legacy-code-label' | translate }}</span>
-            <span class="code-id">{{ legacySelectedCode.id }}</span>
-            <span class="code-score" *ngIf="showScore && legacySelectedCode.score !== undefined">{{
-              'code-selector.score-label' | translate }} {{ legacySelectedCode.score }}</span>
+            <span class="code-token">
+              <span class="code-id">{{ legacySelectedCode.id }}</span>
+              <span class="code-score" *ngIf="showScore && legacySelectedCode.score !== undefined">
+                ({{ legacySelectedCode.score }})
+              </span>
+            </span>
           </span>
         </div>
         <div class="legacy-code-note">{{ legacyCodeNoteTranslationKey | translate }}</div>
       </div>
       <div class="code-row" [class.selected]="item.id === selectedCode"
         [class.has-review-code-selection]="hasReviewCodeSelection(item.id)"
+        [class.with-score]="showScore && item.score !== undefined"
         [class.read-only]="isReadOnly || isRegularSelectionDisabled" *ngFor="let item of regularCodes;"
+        [attr.data-code-id]="item.id"
         [style.cursor]="(isReadOnly || isRegularSelectionDisabled) ? 'not-allowed' : 'pointer'"
         [matTooltip]="getReviewCodeSelectionTooltip(item.id)"
         [matTooltipDisabled]="!hasReviewCodeSelection(item.id)"
@@ -114,9 +148,10 @@
 
         <div class="code-content">
           <span class="code-info">
-            <span class="code-id">{{ item.id }}</span>
-            <span class="code-score" *ngIf="showScore && item.score !== undefined">{{ 'code-selector.score-label' |
-              translate }} {{ item.score }}</span>
+            <span class="code-token">
+              <span class="code-id">{{ item.id }}</span>
+              <span class="code-score" *ngIf="showScore && item.score !== undefined">({{ item.score }})</span>
+            </span>
             <span class="review-code-badge" *ngIf="getReviewCodeSelectionCount(item.id) as reviewCoderCount">
               <mat-icon>group</mat-icon>
               <span>{{ reviewCoderCount }}</span>
@@ -133,10 +168,23 @@
     </div>
   </div>
 
-  <div class="uncertain-codes-section fixed-section">
+  <div class="support-section fixed-section" [class.collapsed]="!isSupportSectionExpanded">
+    <button
+      mat-button
+      type="button"
+      class="support-toggle"
+      (click)="toggleSupportSection()"
+      [attr.aria-expanded]="isSupportSectionExpanded">
+      <mat-icon>{{ isSupportSectionExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down' }}</mat-icon>
+      <span>{{ supportSectionTitle }}</span>
+    </button>
+
+    @if (isSupportSectionExpanded) {
+  <div class="uncertain-codes-section">
     <div class="code-row" [class.selected]="item.id === selectedCodingIssueOption"
       [class.has-review-code-selection]="hasReviewCodeSelection(item.id)"
       [class.read-only]="isCodingIssueOptionDisabled(item)" *ngFor="let item of codingIssueOptionCodes;"
+      [attr.data-code-id]="item.id"
       [style.cursor]="isCodingIssueOptionDisabled(item) ? 'not-allowed' : 'pointer'"
       [attr.aria-disabled]="isCodingIssueOptionDisabled(item)"
       [matTooltip]="getCodingIssueOptionRowTooltip(item)"
@@ -153,18 +201,20 @@
     </div>
   </div>
 
-  <div class="deselect-container fixed-section">
+  <div class="deselect-container">
     <button mat-button class="deselect-button" [disabled]="isReadOnly" (click)="deselectAll()">Auswahl entfernen</button>
   </div>
 
   @if (allowComments) {
-  <mat-form-field appearance="outline" class="notes-field fixed-section">
+  <mat-form-field appearance="outline" class="notes-field">
     <textarea #notesTextarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()"
       [disabled]="isReadOnly" [attr.aria-invalid]="newCodeCommentValidationError ? 'true' : null"
       placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
   </mat-form-field>
-  <div *ngIf="newCodeCommentValidationError" class="notes-validation-error fixed-section" role="alert">
+  <div *ngIf="newCodeCommentValidationError" class="notes-validation-error" role="alert">
     {{ 'code-selector.new-code-comment-required' | translate }}
   </div>
   }
+  }
+  </div>
 </div>

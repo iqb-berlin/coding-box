@@ -74,7 +74,7 @@ export interface JobDefinitionDistributionSnapshot {
   selectedVariableBundles: JobDefinitionVariableBundle[];
   selectedCoders: JobDefinitionDistributionSnapshotCoder[];
   settings: {
-    maxCodingCases?: number;
+    maxCodingCases?: number | null;
     doubleCodingAbsolute?: number;
     doubleCodingPercentage?: number;
     caseOrderingMode?: CaseOrderingMode;
@@ -146,7 +146,7 @@ export class JobDefinition {
     duration_seconds?: number;
 
   @Column({ type: 'int', nullable: true })
-    max_coding_cases?: number;
+    max_coding_cases?: number | null;
 
   @Column({ type: 'int', nullable: true })
     double_coding_absolute?: number;

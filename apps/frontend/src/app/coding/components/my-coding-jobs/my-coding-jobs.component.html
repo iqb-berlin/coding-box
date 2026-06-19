@@ -15,8 +15,15 @@
       <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'admin.workspaces' | translate }}</mat-label>
         <mat-select multiple [(value)]="selectedWorkspaceIds" (selectionChange)="onWorkspaceFilterChange()">
+          <mat-select-trigger>
+            {{ getWorkspaceFilterTriggerText() }}
+          </mat-select-trigger>
           <mat-option [value]="-1" (click)="toggleAllWorkspaces()">
-            {{ isAllWorkspacesSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
+            {{
+              isAllWorkspacesSelected() ?
+                ('coding.my-coding-jobs.deselect-all-workspaces' | translate) :
+                ('coding.my-coding-jobs.select-all-workspaces' | translate)
+            }}
           </mat-option>
           <mat-option *ngFor="let ws of currentWorkspaces" [value]="ws.id">
             {{ws.name}}

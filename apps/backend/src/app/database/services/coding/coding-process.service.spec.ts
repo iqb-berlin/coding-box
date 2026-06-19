@@ -42,7 +42,8 @@ describe('CodingProcessService', () => {
   let mockResponses: ResponseEntity[];
 
   const mockJobQueueService = {
-    getTestPersonCodingJob: jest.fn()
+    getTestPersonCodingJob: jest.fn(),
+    addTestPersonCodingJob: jest.fn().mockResolvedValue({ id: 'job-123' })
   };
 
   const mockResponseManagementService = {
@@ -85,7 +86,7 @@ describe('CodingProcessService', () => {
 
   // Helper functions
   const createMockPerson = (id: number, workspaceId: number = 1) => ({
-    id: id.toString(),
+    id,
     workspace_id: workspaceId,
     group: 'test_group',
     login: `test_person_${id}`,
@@ -94,7 +95,7 @@ describe('CodingProcessService', () => {
     uploaded_at: new Date()
   });
 
-  const createMockBooklet = (id: number, personId: string) => ({
+  const createMockBooklet = (id: number, personId: number) => ({
     id,
     personid: personId
   });
@@ -250,6 +251,43 @@ describe('CodingProcessService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('codeUnitIds', () => {
+    it('uses array parameters for large unit-scoped autocoding jobs', async () => {
+      mockQueryBuilder.getRawMany.mockResolvedValue([
+        { unitId: '1', personId: '1', groupName: 'Group A' },
+        { unitId: '2', personId: '2', groupName: 'Group B' }
+      ]);
+
+      await service.codeUnitIds(1, [1, 2], 1, {
+        source: 'coding-freshness',
+        freshnessVersion: 'v1',
+        freshnessStates: ['PENDING', 'STALE'],
+        freshnessSourceRevision: 42
+      });
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'unit.id = ANY(:unitIds)',
+        { unitIds: [1, 2] }
+      );
+      expect(mockCodingReadinessService.assertAutoCodingCanProcess)
+        .toHaveBeenCalledWith(1, {
+          unitIds: [1, 2],
+          autoCoderRun: 1
+        });
+      expect(mockJobQueueService.addTestPersonCodingJob).toHaveBeenCalledWith({
+        workspaceId: 1,
+        personIds: ['1', '2'],
+        unitIds: [1, 2],
+        groupNames: 'Group A,Group B',
+        autoCoderRun: 1,
+        source: 'coding-freshness',
+        freshnessVersion: 'v1',
+        freshnessStates: ['PENDING', 'STALE'],
+        freshnessSourceRevision: 42
+      });
+    });
+  });
+
   describe('processTestPersonsBatch', () => {
     const workspaceId = 1;
     const personIds = ['1', '2'];
@@ -266,8 +304,8 @@ describe('CodingProcessService', () => {
         where: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
         getMany: jest.fn().mockResolvedValue([
-          createMockBooklet(1, '1'),
-          createMockBooklet(2, '2')
+          createMockBooklet(1, 1),
+          createMockBooklet(2, 2)
         ])
       };
       bookletRepository.createQueryBuilder = jest.fn().mockReturnValue(mockBookletQueryBuilder);
@@ -356,6 +394,36 @@ describe('CodingProcessService', () => {
 
       expect(result.totalResponses).toBe(0);
       expect(result.statusCounts).toEqual({});
+    });
+
+    it('uses array parameters for batch booklets and scoped units', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+
+      await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        autoCoderRun,
+        undefined,
+        jobId,
+        [1, 2]
+      );
+
+      const bookletQueryBuilder =
+        (bookletRepository.createQueryBuilder as jest.Mock).mock.results[0].value;
+      expect(bookletQueryBuilder.where).toHaveBeenCalledWith(
+        'booklet.personid = ANY(:personIds)',
+        { personIds: [1, 2] }
+      );
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+        'unit.bookletid = ANY(:bookletIds)',
+        { bookletIds: [1, 2] }
+      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'unit.id = ANY(:unitIds)',
+        { unitIds: [1, 2] }
+      );
     });
 
     it('should handle no units found', async () => {

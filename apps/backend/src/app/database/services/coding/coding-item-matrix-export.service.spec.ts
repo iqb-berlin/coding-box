@@ -63,7 +63,7 @@ describe('CodingItemMatrixExportService', () => {
         id: 'mir',
         label: 'missing invalid response',
         code: -98,
-        score: 0
+        score: null
       })
     };
     const service = createService(missingsProfilesService);
@@ -91,8 +91,10 @@ describe('CodingItemMatrixExportService', () => {
       ]));
 
     const output = await collectStream(service.exportItemMatrixAsCsvStream(7, 'code', 'v2'));
+    const scoreOutput = await collectStream(service.exportItemMatrixAsCsvStream(7, 'score', 'v2'));
 
     expect(output).toContain('login-1;code-1;group-1;BOOKLET-1;-98');
+    expect(scoreOutput).toContain('login-1;code-1;group-1;BOOKLET-1;NA');
     expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
       .toHaveBeenCalledWith(7, null, 'mir');
   });
@@ -123,14 +125,14 @@ describe('CodingItemMatrixExportService', () => {
     });
     (service as never as { getResponseValuesForRows: jest.Mock }).getResponseValuesForRows =
       jest.fn().mockResolvedValue(new Map([
-        [12, new Map([['UNIT1\u001FVAR1', { code: -96, score: 0 }]])]
+        [12, new Map([['UNIT1\u001FVAR1', { code: -96, score: null }]])]
       ]));
 
     const codeOutput = await collectStream(service.exportItemMatrixAsCsvStream(7, 'code', 'v2'));
     const scoreOutput = await collectStream(service.exportItemMatrixAsCsvStream(7, 'score', 'v2'));
 
     expect(codeOutput).toContain('login-1;code-1;group-1;BOOKLET-1;-96');
-    expect(scoreOutput).toContain('login-1;code-1;group-1;BOOKLET-1;0');
+    expect(scoreOutput).toContain('login-1;code-1;group-1;BOOKLET-1;NA');
     expect(missingsProfilesService.getMissingByIdForProfileOrDefault).not.toHaveBeenCalled();
     expect(missingsProfilesService.getMissingByCodeForProfileOrDefault).not.toHaveBeenCalled();
   });

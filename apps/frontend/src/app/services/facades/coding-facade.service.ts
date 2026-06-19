@@ -4,7 +4,12 @@ import {
   CodingJob,
   VariableBundle
 } from '../../coding/models/coding-job.model';
-import { CodingJobBackendService, CodingExportConfig, JobDefinition } from '../../coding/services/coding-job-backend.service';
+import {
+  CodingJobBackendService,
+  CodingExportConfig,
+  CodingJobUnitDto,
+  JobDefinition
+} from '../../coding/services/coding-job-backend.service';
 import {
   ReplayBackendService,
   ReplayClientTimings,
@@ -303,7 +308,7 @@ export class CodingFacadeService {
     return this.codingJobBackendService.getCodingNotes(workspaceId, codingJobId);
   }
 
-  getCodingJobUnits(workspaceId: number, codingJobId: number): Observable<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; variablePage: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>> {
+  getCodingJobUnits(workspaceId: number, codingJobId: number): Observable<CodingJobUnitDto[]> {
     return this.codingJobBackendService.getCodingJobUnits(workspaceId, codingJobId);
   }
 

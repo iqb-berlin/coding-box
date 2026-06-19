@@ -12,6 +12,7 @@ import {
   UnitPropertiesForCodebook
 } from './codebook.interfaces';
 import { CodebookDocxGenerator } from './codebook-docx-generator.class';
+import { hasVisibleManualInstruction } from '../../utils/manual-instruction.util';
 
 /**
  * Class for generating codebooks
@@ -143,7 +144,7 @@ export class CodebookGenerator {
   }
 
   private static hasManualInstruction(codeData: CodeData): boolean {
-    return !!codeData.manualInstruction?.trim();
+    return hasVisibleManualInstruction(codeData);
   }
 
   private static shouldHideCodeInManualCodebook(
@@ -160,7 +161,7 @@ export class CodebookGenerator {
       if (this.shouldHideCodeInManualCodebook(code, contentSetting)) {
         return codeInfos;
       }
-      if (code.id) {
+      if (code.id !== undefined && code.id !== null) {
         try {
           const codeInfo = this.getCodeInfoFromCodeAsText(code, contentSetting);
           codeInfos.push(codeInfo);

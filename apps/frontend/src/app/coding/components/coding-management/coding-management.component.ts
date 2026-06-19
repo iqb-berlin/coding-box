@@ -19,10 +19,10 @@ import {
   MatAnchor,
   MatButton
 } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AppService } from '../../../core/services/app.service';
@@ -34,10 +34,15 @@ import {
 } from '../export-dialog/export-dialog.component';
 import { Success } from '../../models/success.model';
 import { ResponseEntity } from '../../../shared/models/response-entity.model';
-import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
+import {
+  TestPersonCodingDialogComponent,
+  TestPersonCodingDialogData,
+  TestPersonCodingDialogResult
+} from '../test-person-coding-dialog/test-person-coding-dialog.component';
 import {
   AppliedResultsOverview,
-  TestPersonCodingService
+  TestPersonCodingService,
+  TestResultsChangedEvent
 } from '../../services/test-person-coding.service';
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
@@ -119,6 +124,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private uiService = inject(CodingManagementUiService);
   private translateService = inject(TranslateService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
   private readonly reviewBatchSize = 500;
   private readonly maxReviewResponses = 5000;
 
@@ -198,11 +204,18 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
+    let pendingStatisticsVersion: StatisticsVersion | null = null;
+
     if (workspaceId) {
+      pendingStatisticsVersion = this.testPersonCodingService.consumePendingStatisticsVersion(workspaceId);
+      if (pendingStatisticsVersion) {
+        this.selectStatisticsVersion(pendingStatisticsVersion);
+      }
+
       this.workspaceSettingsService
         .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(autoFetch => {
-          if (autoFetch) {
+          if (autoFetch || pendingStatisticsVersion) {
             this.fetchCodingStatistics();
           }
         });
@@ -280,7 +293,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
     this.testPersonCodingService.autoCodingCompleted$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
+      .subscribe(event => {
+        if (event?.jobId && event.jobId === this.activeFreshnessJobId) {
+          this.stopFreshnessJobPolling();
+        }
         this.fetchCodingStatistics();
         this.loadCodingFreshness();
         this.loadManualAppliedResultsOverview();
@@ -290,12 +306,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
     this.testPersonCodingService.testResultsChanged$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.fetchCodingStatistics();
-        this.loadCodingFreshness();
-        this.loadManualAppliedResultsOverview();
-        this.loadAutocodingReadiness();
-        this.refreshTableData();
+      .subscribe(event => {
+        this.refreshAfterTestResultsChanged(event);
       });
 
     // Check for active reset job (persists across navigation)
@@ -303,6 +315,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.loadCodingFreshness();
     this.loadManualAppliedResultsOverview();
     this.loadAutocodingReadiness();
+    this.route.queryParamMap
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(params => {
+        const refreshRequested = params.get('refreshCodingFreshness');
+        if (refreshRequested === '1' || refreshRequested === 'true') {
+          this.refreshCodingStatusOverview();
+        }
+      });
   }
 
   ngOnDestroy(): void {
@@ -313,6 +333,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   // Statistics Card Event Handlers
   onVersionChange(version: 'v1' | 'v2' | 'v3'): void {
+    this.selectStatisticsVersion(version);
+
+    if (this.statisticsLoaded) {
+      this.fetchCodingStatistics();
+    }
+  }
+
+  private selectStatisticsVersion(version: 'v1' | 'v2' | 'v3'): void {
     this.selectedStatisticsVersion = version;
     this.filterParams = {
       ...this.filterParams,
@@ -323,10 +351,25 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.totalRecords = 0;
     this.referenceStatistics = null;
     this.referenceVersion = null;
+  }
 
-    if (this.statisticsLoaded) {
-      this.fetchCodingStatistics();
+  private refreshAfterTestResultsChanged(event: TestResultsChangedEvent = {}): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (event.workspaceId && event.workspaceId !== workspaceId) {
+      return;
     }
+
+    if (event.statisticsVersion) {
+      this.selectStatisticsVersion(event.statisticsVersion);
+      if (workspaceId) {
+        this.testPersonCodingService.consumePendingStatisticsVersion(workspaceId);
+      }
+    }
+    this.fetchCodingStatistics();
+    this.loadCodingFreshness();
+    this.loadManualAppliedResultsOverview();
+    this.loadAutocodingReadiness();
+    this.refreshTableData();
   }
 
   fetchCodingStatistics(): void {
@@ -423,6 +466,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.loadAutocodingReadiness(true);
   }
 
+  private refreshCodingStatusOverview(): void {
+    this.fetchCodingStatistics();
+    this.loadCodingFreshness();
+    this.loadManualAppliedResultsOverview();
+    this.loadAutocodingReadiness(true);
+    this.refreshTableData();
+  }
+
   startFreshnessCoding(version: 'v1' | 'v3'): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId || this.isStartingFreshnessCoding) {
@@ -462,7 +513,30 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
         this.activeFreshnessJobId = result.jobId;
         this.activeFreshnessJobProgress = 0;
-        this.startFreshnessJobPolling(result.jobId);
+        const dialogRef = this.openTestPersonCodingDialog({
+          initialJobId: result.jobId,
+          initialAutoCoderRun: version === 'v3' ? 2 : 1
+        });
+        dialogRef.afterClosed()
+          .pipe(takeUntil(this.destroy$))
+          .subscribe(dialogResult => {
+            if (this.activeFreshnessJobId !== result.jobId) {
+              return;
+            }
+
+            const dialogStatus = dialogResult?.jobId === result.jobId ?
+              dialogResult.jobStatus :
+              null;
+            if (this.isTerminalJobStatus(dialogStatus)) {
+              this.stopFreshnessJobPolling();
+              this.loadCodingFreshness();
+              this.loadManualAppliedResultsOverview();
+              this.loadAutocodingReadiness(true);
+              return;
+            }
+
+            this.startFreshnessJobPolling(result.jobId);
+          });
         this.snackBar.open(
           `Auto-Coding für ${result.unitCount} betroffene Einträge gestartet.`,
           'Schließen',
@@ -953,7 +1027,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           if (['completed', 'failed', 'cancelled', 'paused'].includes(status.status)) {
             this.stopFreshnessJobPolling();
             if (status.status === 'completed') {
-              this.testPersonCodingService.notifyAutoCodingCompleted();
+              this.testPersonCodingService.notifyAutoCodingCompleted(jobId);
               this.snackBar.open(
                 'Betroffene Ergebnisse wurden kodiert.',
                 'Schließen',
@@ -1156,15 +1230,31 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   // Dialog Methods
   onAutoCode(): void {
+    this.openTestPersonCodingDialog();
+  }
+
+  private openTestPersonCodingDialog(
+    data?: TestPersonCodingDialogData
+  ): MatDialogRef<TestPersonCodingDialogComponent, TestPersonCodingDialogResult | undefined> {
     const dialogRef = this.dialog.open(TestPersonCodingDialogComponent, {
       height: '90vh',
       maxWidth: '100vw',
-      maxHeight: '100vh'
+      maxHeight: '100vh',
+      disableClose: true,
+      data
     });
 
-    dialogRef.afterClosed().subscribe(() => {
-      this.fetchCodingStatistics();
-    });
+    dialogRef.afterClosed()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.fetchCodingStatistics();
+      });
+
+    return dialogRef;
+  }
+
+  private isTerminalJobStatus(status?: string | null): boolean {
+    return ['completed', 'failed', 'cancelled', 'paused'].includes(status || '');
   }
 
   fetchCodingList(): void {
@@ -1186,13 +1276,17 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     });
   }
 
-  openManualCoding(): void {
+  openManualCoding(focusManualFreshness = false): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
     }
 
-    this.router.navigate([`/workspace-admin/${workspaceId}/coding/manual`]);
+    const navigationExtras = focusManualFreshness ?
+      { queryParams: { focus: 'manual-freshness' } } :
+      undefined;
+
+    this.router.navigate([`/workspace-admin/${workspaceId}/coding/manual`], navigationExtras);
   }
 
   openTestFiles(): void {

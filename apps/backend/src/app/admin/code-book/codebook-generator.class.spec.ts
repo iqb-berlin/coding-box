@@ -112,9 +112,46 @@ describe('CodebookGenerator', () => {
         { ...manualCode, id: 3, ruleSet: undefined }
       ],
       { ...contentSetting, codeLabelToUpper: true }
-    ) as unknown[];
+    ) as { id: string }[];
     expect(Array.isArray(codeInfos)).toBe(true);
     expect(codeInfos.length).toBeGreaterThan(0);
+    expect(codeInfos.map(codeInfo => codeInfo.id)).toContain('0');
+  });
+
+  it('includes code 0 in generated codebook output', async () => {
+    const codebookBuffer = await CodebookGenerator.generateCodebook(
+      [
+        {
+          id: 1,
+          key: 'UNIT.VOCS',
+          name: 'Unit',
+          scheme: JSON.stringify({
+            version: '3.0',
+            variableCodings: [
+              {
+                ...variableCoding,
+                codes: [
+                  {
+                    ...manualCode, id: 0, label: 'Code 0', score: 0, type: 'NO_CREDIT'
+                  },
+                  {
+                    ...manualCode, id: 1, label: 'Code 1', score: 1, type: 'FULL_CREDIT'
+                  }
+                ]
+              }
+            ]
+          })
+        }
+      ],
+      contentSetting as never,
+      []
+    );
+
+    const codebook = JSON.parse(codebookBuffer.toString('utf-8')) as Array<{
+      variables: Array<{ codes: Array<{ id: string }> }>;
+    }>;
+
+    expect(codebook[0].variables[0].codes.map(code => code.id)).toEqual(['0', '1']);
   });
 
   it('filters codes without manual instructions in manual codebooks without closed variables', () => {
@@ -124,7 +161,8 @@ describe('CodebookGenerator', () => {
       [
         manualCode,
         { ...manualCode, id: 2, manualInstruction: '' },
-        { ...manualCode, id: 3, manualInstruction: '   ' }
+        { ...manualCode, id: 3, manualInstruction: '   ' },
+        { ...manualCode, id: 4, manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>' }
       ],
       { ...contentSetting, hasOnlyManualCoding: true, hasClosedVars: false }
     ) as { id: string; description: string }[];
@@ -151,11 +189,11 @@ describe('CodebookGenerator', () => {
     expect(codeInfos.map(codeInfo => codeInfo.id)).toEqual(['1', '2', '3']);
   });
 
-  it('treats whitespace-only manual instructions as missing for variable filtering', () => {
+  it('treats visually empty HTML manual instructions as missing for variable filtering', () => {
     const generator = CodebookGenerator as unknown as Record<string, (...args: unknown[]) => unknown>;
     const whitespaceManualVariable = {
       ...variableCoding,
-      codes: [{ ...manualCode, manualInstruction: '   ' }]
+      codes: [{ ...manualCode, manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>' }]
     };
 
     expect(generator.isManual(whitespaceManualVariable)).toBe(false);
