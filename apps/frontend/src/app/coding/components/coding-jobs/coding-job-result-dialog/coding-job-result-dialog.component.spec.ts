@@ -519,8 +519,74 @@ describe('CodingJobResultDialogComponent', () => {
     } as never)).toBe(false);
   });
 
+  it('should only enable coding issue actions after the job was submitted for review', () => {
+    const codingIssueResult = {
+      codingIssueOption: -1,
+      codingIssueOptionLabel: 'Unsichere Kodierung'
+    } as never;
+    const newCodeResult = {
+      codingIssueOption: -2,
+      codingIssueOptionLabel: 'Neuer Code nötig'
+    } as never;
+
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      status: 'active'
+    };
+
+    expect(component.canReviewCodingResult(codingIssueResult)).toBe(false);
+    expect(component.canEditCodingScheme(newCodeResult)).toBe(false);
+    expect(component.getReviewCodingResultTooltip(codingIssueResult))
+      .toContain('Zur Überprüfung');
+
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      status: 'review'
+    };
+
+    expect(component.canReviewCodingResult(codingIssueResult)).toBe(true);
+    expect(component.canEditCodingScheme(newCodeResult)).toBe(true);
+  });
+
+  it('should not open coding issue review before the job was submitted for review', () => {
+    const windowOpenSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    const snackBar = TestBed.inject(MatSnackBar) as unknown as MatSnackBarMock;
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      status: 'active'
+    };
+
+    component.reviewCodingResult({
+      unitName: 'UNIT_1',
+      unitAlias: 'Unit Alias',
+      variableId: 'VAR_1',
+      variableAnchor: 'VAR_1',
+      variablePage: '2',
+      bookletName: 'BOOKLET_A',
+      personLogin: 'login',
+      personCode: 'code',
+      personGroup: 'group',
+      testPerson: 'login@code@group@BOOKLET_A',
+      codingIssueOption: -1,
+      codingIssueOptionLabel: 'Unsichere Kodierung'
+    } as never);
+
+    expect(windowOpenSpy).not.toHaveBeenCalled();
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'Kodierungshinweise können erst im Status "Zur Überprüfung" geprüft werden',
+      'Schließen',
+      { duration: 3000 }
+    );
+
+    windowOpenSpy.mockRestore();
+  });
+
   it('should open replay with a valid hash route URL', () => {
     const windowOpenSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      status: 'review'
+    };
 
     component.reviewCodingResult({
       unitName: 'UNIT_1',
