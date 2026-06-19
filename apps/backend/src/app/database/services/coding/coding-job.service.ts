@@ -924,6 +924,16 @@ export class CodingJobService {
     }
   }
 
+  private assertCodingIssueReviewSourceJobStatus(
+    sourceCodingJob: Pick<CodingJob, 'status'>
+  ): void {
+    if (sourceCodingJob.status !== 'review') {
+      throw new BadRequestException(
+        'Coding issue review can only be saved for coding jobs submitted for review'
+      );
+    }
+  }
+
   private async getCodingIssueReviewJobsForSource(
     sourceCodingJob: Pick<CodingJob, 'id' | 'workspace_id'>
   ): Promise<CodingJob[]> {
@@ -3641,6 +3651,7 @@ export class CodingJobService {
         'Cannot save progress for a coding job whose results have already been applied'
       );
     }
+    this.assertCodingIssueReviewSourceJobStatus(sourceCodingJob);
 
     const sourceUnit = await this.getCodingJobUnitForEntry(
       sourceCodingJob,
@@ -4094,6 +4105,7 @@ export class CodingJobService {
         'Cannot save notes for a coding job whose results have already been applied'
       );
     }
+    this.assertCodingIssueReviewSourceJobStatus(sourceCodingJob);
 
     const sourceUnit = await this.getCodingJobUnitForEntry(
       sourceCodingJob,
