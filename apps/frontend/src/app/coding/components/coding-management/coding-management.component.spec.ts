@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import {
+  ActivatedRoute, convertToParamMap, ParamMap, Router
+} from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
@@ -39,10 +41,8 @@ describe('CodingManagementComponent', () => {
   let mockSnackBar: jest.Mocked<Partial<MatSnackBar>>;
   let autoCodingCompletedSubject: Subject<{ jobId?: string }>;
   let testResultsChangedSubject: Subject<TestResultsChangedEvent>;
-
-  const fakeActivatedRoute = {
-    snapshot: { data: {} }
-  } as ActivatedRoute;
+  let queryParamMapSubject: BehaviorSubject<ParamMap>;
+  let fakeActivatedRoute: ActivatedRoute;
 
   beforeEach(async () => {
     // Mock window.open
@@ -97,6 +97,14 @@ describe('CodingManagementComponent', () => {
     };
     autoCodingCompletedSubject = new Subject<{ jobId?: string }>();
     testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
+    queryParamMapSubject = new BehaviorSubject<ParamMap>(convertToParamMap({}));
+    fakeActivatedRoute = {
+      snapshot: {
+        data: {},
+        queryParamMap: queryParamMapSubject.value
+      },
+      queryParamMap: queryParamMapSubject.asObservable()
+    } as unknown as ActivatedRoute;
 
     mockTestPersonCodingService = {
       autoCodingCompleted$: autoCodingCompletedSubject.asObservable(),
@@ -287,6 +295,22 @@ describe('CodingManagementComponent', () => {
     it('should load autocoding readiness for the first autocoder run', () => {
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
+    });
+
+    it('should refresh coding status overview when requested by query param', () => {
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+      queryParamMapSubject.next(convertToParamMap({
+        refreshCodingFreshness: '1'
+      }));
+
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, true);
     });
   });
 

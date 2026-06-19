@@ -664,6 +664,8 @@
     "schemer": {
       "save-success": "Antwortschema erfolgreich gespeichert",
       "save-error": "Fehler beim Speichern des Antwortschemas",
+      "save-freshness-warning": "Datei wurde gespeichert, aber der Kodierstand konnte nicht zuverlässig aktualisiert werden. Bitte prüfen Sie den Kodierstand erneut.",
+      "check-coding-status": "Kodierstand prüfen",
       "load-error": "Fehler beim Laden der Antwortschema-Informationen. Der Editor arbeitet ohne Variablen-Validierung.",
       "decode-error": "Fehler beim Dekodieren der Schemer-HTML",
       "download-error": "Fehler beim Herunterladen der Schemer-HTML",

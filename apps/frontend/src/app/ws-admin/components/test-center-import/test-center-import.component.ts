@@ -664,6 +664,11 @@ export class TestCenterImportComponent {
                 c => !(overwriteFileIds || []).includes(c.fileId)
               );
 
+              const mergedIssues = [
+                ...(firstResult?.issues || []),
+                ...(secondResult?.issues || [])
+              ];
+
               const mergedResult: TestFilesUploadResultDto = {
                 total: Number(
                   firstResult?.total ??
@@ -673,7 +678,8 @@ export class TestCenterImportComponent {
                 failed: mergedFailedFiles.length,
                 uploadedFiles: mergedUploadedFiles,
                 failedFiles: mergedFailedFiles,
-                conflicts: remainingConflicts
+                conflicts: remainingConflicts,
+                issues: mergedIssues.length > 0 ? mergedIssues : undefined
               };
 
               const mergedData = {

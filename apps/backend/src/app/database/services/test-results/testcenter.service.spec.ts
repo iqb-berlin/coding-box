@@ -19,6 +19,7 @@ describe('TestCenterService', () => {
   let service: TestcenterService;
   let httpService: { put: jest.Mock; axiosRef: { get: jest.Mock } };
   let personService: DeepMocked<PersonService>;
+  let workspaceFilesService: DeepMocked<WorkspaceFilesService>;
   let cacheService: DeepMocked<CacheService>;
   let workspaceTestResultsService: DeepMocked<WorkspaceTestResultsService>;
   let codingFreshnessService: DeepMocked<CodingFreshnessService>;
@@ -95,6 +96,7 @@ describe('TestCenterService', () => {
     service = module.get<TestcenterService>(TestcenterService);
     httpService = module.get(HttpService);
     personService = module.get(PersonService);
+    workspaceFilesService = module.get(WorkspaceFilesService);
     cacheService = module.get(CacheService);
     workspaceTestResultsService = module.get(WorkspaceTestResultsService);
     codingFreshnessService = module.get(CodingFreshnessService);
@@ -320,6 +322,77 @@ describe('TestCenterService', () => {
           '',
           mockAuthToken
         )).rejects.toThrow('Unexpected Testcenter response');
+      });
+    });
+
+    describe('importWorkspaceFiles', () => {
+      it('should forward test file upload issues from Testcenter imports', async () => {
+        const codingFreshnessIssue = {
+          level: 'warning' as const,
+          category: 'coding_freshness' as const,
+          message: 'Kodierstand konnte nicht aktualisiert werden.'
+        };
+        const testcenterFile = {
+          name: 'definition.voud',
+          size: 123,
+          modificationTime: Date.now(),
+          type: 'Resource',
+          id: 'file-1',
+          report: [],
+          info: {
+            label: 'Definition',
+            description: ''
+          },
+          data: ''
+        };
+        httpService.axiosRef.get
+          .mockResolvedValueOnce({
+            data: {
+              Booklet: [],
+              Resource: [testcenterFile],
+              Unit: [],
+              Testtakers: []
+            }
+          } as AxiosResponse)
+          .mockResolvedValueOnce({ data: testcenterFile } as AxiosResponse);
+        workspaceFilesService.testCenterImport.mockResolvedValue({
+          total: 1,
+          uploaded: 1,
+          failed: 0,
+          uploadedFiles: [{
+            fileId: 'file-1',
+            filename: 'definition.voud',
+            fileType: 'Resource'
+          }],
+          failedFiles: [],
+          conflicts: [],
+          issues: [codingFreshnessIssue]
+        });
+
+        const result = await service.importWorkspaceFiles(
+          '123',
+          'ws-456',
+          'demo',
+          '',
+          'test-token',
+          {
+            responses: 'false',
+            logs: 'false',
+            definitions: 'true',
+            units: 'false',
+            player: 'false',
+            codings: 'false',
+            testTakers: 'false',
+            booklets: 'false',
+            metadata: 'false'
+          },
+          'group1'
+        );
+
+        expect(result.testFilesUploadResult?.issues).toEqual([
+          codingFreshnessIssue
+        ]);
+        expect(result.issues).toEqual([codingFreshnessIssue]);
       });
     });
   });

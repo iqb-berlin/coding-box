@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { TestResultsUploadIssueDto } from './test-results-upload-result.dto';
 
 export type TestFilesUploadConflictDto = {
   fileId: string;
@@ -35,4 +36,7 @@ export class TestFilesUploadResultDto {
 
   @ApiProperty({ type: [Object], required: false })
     uploadedFiles?: TestFilesUploadUploadedDto[];
+
+  @ApiProperty({ type: [Object], required: false })
+    issues?: TestResultsUploadIssueDto[];
 }
