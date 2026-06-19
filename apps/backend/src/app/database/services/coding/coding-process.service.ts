@@ -204,7 +204,7 @@ export class CodingProcessService {
       .addSelect('person.group', 'groupName')
       .where('person.workspace_id = :workspaceId', { workspaceId: workspace_id })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('unit.id IN (:...unitIds)', { unitIds: ids })
+      .andWhere('unit.id = ANY(:unitIds)', { unitIds: ids })
       .getRawMany<{ unitId: number | string; personId: number | string; groupName: string | null }>();
 
     const includedUnitIds = this.uniquePositiveIds(rows.map(row => Number(row.unitId)));
@@ -664,7 +664,7 @@ export class CodingProcessService {
 
   private async fetchBooklets(personIds: number[]): Promise<Booklet[]> {
     return this.bookletRepository.createQueryBuilder('booklet')
-      .where('booklet.personid IN (:...personIds)', { personIds })
+      .where('booklet.personid = ANY(:personIds)', { personIds })
       .select(['booklet.id', 'booklet.personid'])
       .getMany();
   }
@@ -678,12 +678,12 @@ export class CodingProcessService {
     const query = this.unitRepository.createQueryBuilder('unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
+      .where('unit.bookletid = ANY(:bookletIds)', { bookletIds })
       .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias']);
 
     const ids = this.uniquePositiveIds(unitIds || []);
     if (ids.length > 0) {
-      query.andWhere('unit.id IN (:...unitIds)', { unitIds: ids });
+      query.andWhere('unit.id = ANY(:unitIds)', { unitIds: ids });
     }
 
     applyResolvedExclusionsToQuery(query, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });

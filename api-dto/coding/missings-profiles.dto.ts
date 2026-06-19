@@ -3,7 +3,7 @@ export interface MissingDto {
   label: string;
   description: string;
   code: number;
-  score: number;
+  score: number | null;
 }
 
 export class MissingsProfilesDto {

@@ -553,10 +553,12 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     const attempted = result.total;
     if (conflicts.length === 0) {
       this.openUploadResultDialog({
+        workspaceId: this.appService.selectedWorkspaceId,
         attempted,
         uploadedFiles,
         failedFiles,
-        remainingConflicts: []
+        remainingConflicts: [],
+        issues: result.issues
       });
       this.onUploadSuccess();
       return;
@@ -605,13 +607,19 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               const remainingConflicts = conflicts.filter(
                 c => !(resultChoice.overwriteFileIds || []).includes(c.fileId)
               );
+              const finalIssues = [
+                ...(result.issues || []),
+                ...(overwriteResult.issues || [])
+              ];
 
               this.openUploadResultDialog({
+                workspaceId: this.appService.selectedWorkspaceId,
                 attempted,
                 overwriteSelectedCount,
                 uploadedFiles: finalUploadedFiles,
                 failedFiles: finalFailedFiles,
-                remainingConflicts
+                remainingConflicts,
+                issues: finalIssues.length ? finalIssues : undefined
               });
               this.onUploadSuccess();
             },
@@ -625,10 +633,12 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           });
       } else {
         this.openUploadResultDialog({
+          workspaceId: this.appService.selectedWorkspaceId,
           attempted,
           uploadedFiles,
           failedFiles,
-          remainingConflicts: conflicts
+          remainingConflicts: conflicts,
+          issues: result.issues
         });
         this.onUploadSuccess();
       }
@@ -710,10 +720,12 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     const attempted = result.total;
     if (conflicts.length === 0) {
       this.openUploadResultDialog({
+        workspaceId,
         attempted,
         uploadedFiles,
         failedFiles,
-        remainingConflicts: []
+        remainingConflicts: [],
+        issues: result.issues
       });
       this.onUploadSuccess();
       return;
@@ -763,13 +775,19 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               const remainingConflicts = conflicts.filter(
                 c => !(resultChoice.overwriteFileIds || []).includes(c.fileId)
               );
+              const finalIssues = [
+                ...(result.issues || []),
+                ...(overwriteResult.issues || [])
+              ];
 
               this.openUploadResultDialog({
+                workspaceId,
                 attempted,
                 overwriteSelectedCount,
                 uploadedFiles: finalUploadedFiles,
                 failedFiles: finalFailedFiles,
-                remainingConflicts
+                remainingConflicts,
+                issues: finalIssues.length ? finalIssues : undefined
               });
               this.onUploadSuccess();
             },
@@ -784,10 +802,12 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       } else {
         // Skip overwriting, keep already uploaded (non-conflicting) files.
         this.openUploadResultDialog({
+          workspaceId,
           attempted,
           uploadedFiles,
           failedFiles,
-          remainingConflicts: conflicts
+          remainingConflicts: conflicts,
+          issues: result.issues
         });
         this.onUploadSuccess();
       }
@@ -873,6 +893,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         const remainingConflicts = detailed?.conflicts || [];
 
         this.openUploadResultDialog({
+          workspaceId: this.appService.selectedWorkspaceId,
           attempted,
           uploadedCount: Number(detailed?.uploaded ?? uploadedFiles.length),
           failedCount: Number(detailed?.failed ?? failedFiles.length),
@@ -884,7 +905,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           uploadedFiles,
           failedFiles,
           remainingConflicts,
-          issues: r.issues
+          issues: detailed?.issues || r.issues
         } as TestFilesUploadResultDialogData);
 
         this.onUploadSuccess();

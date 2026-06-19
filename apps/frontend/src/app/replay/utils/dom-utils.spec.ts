@@ -1,7 +1,13 @@
-import { highlightAspectSectionWithAnchor, scrollToElementByAlias } from './dom-utils';
+import {
+  highlightAspectSectionWithAnchor,
+  highlightBundleVariableMarkers,
+  scrollToElementByAlias
+} from './dom-utils';
 
 describe('replay dom-utils', () => {
   const highlightOverlaySelector = '[data-coding-box-anchor-highlight-overlay="true"]';
+  const bundleMarkerSelector = '[data-coding-box-bundle-marker-overlay="true"]';
+  const bundleMarkerHostSelector = '[data-coding-box-bundle-marker="true"]';
 
   function createIframe(html: string): HTMLIFrameElement {
     const iframe = document.createElement('iframe');
@@ -227,6 +233,65 @@ describe('replay dom-utils', () => {
     expect(cellA.querySelector(highlightOverlaySelector)).toBeNull();
     expect(cellB.style.position).toBe('absolute');
     expect(cellB.querySelector(highlightOverlaySelector)).not.toBeNull();
+  });
+
+  it('adds and clears bundle variable markers without removing the active highlight', () => {
+    const iframe = createIframe(`
+      <aspect-section id="section">
+        <div id="section-frame">
+          <span id="field-a" data-element-alias="01a"></span>
+          <span id="field-b" data-element-alias="01b"></span>
+        </div>
+      </aspect-section>
+    `);
+
+    highlightAspectSectionWithAnchor(iframe, '01a');
+    const markedSections = highlightBundleVariableMarkers(iframe, [{
+      anchor: '01b',
+      label: 'auto',
+      tooltip: 'Automatisch kodiert'
+    }]);
+    const sectionFrame = iframe.contentDocument?.querySelector('#section-frame') as HTMLElement;
+
+    expect(markedSections).toHaveLength(1);
+    expect(sectionFrame.style.border).toBe('3px solid #4285f4');
+    expect(sectionFrame.querySelector(bundleMarkerSelector)).not.toBeNull();
+
+    highlightBundleVariableMarkers(iframe, []);
+    expect(sectionFrame.style.border).toBe('3px solid #4285f4');
+    expect(sectionFrame.querySelector(bundleMarkerSelector)).toBeNull();
+  });
+
+  it('marks and clears auto-coded bundle variables on directly aliased native fields', () => {
+    const iframe = createIframe(`
+      <aspect-section id="section">
+        <div id="section-frame">
+          <input id="field-a" data-element-alias="01a" title="Vorheriger Titel">
+        </div>
+      </aspect-section>
+    `);
+
+    const markedSections = highlightBundleVariableMarkers(iframe, [{
+      anchor: '01a',
+      label: 'auto',
+      tooltip: 'Automatisch kodiert'
+    }]);
+    const section = iframe.contentDocument?.querySelector('#section') as HTMLElement;
+    const fieldA = iframe.contentDocument?.querySelector('#field-a') as HTMLElement;
+
+    expect(markedSections).toEqual([section]);
+    expect(fieldA.matches(bundleMarkerHostSelector)).toBe(true);
+    expect(fieldA.querySelector(bundleMarkerSelector)).toBeNull();
+    expect(fieldA.style.outline).toBe('2px dashed #757575');
+    expect(fieldA.style.outlineOffset).toBe('2px');
+    expect(fieldA.getAttribute('title')).toBe('Automatisch kodiert');
+
+    highlightBundleVariableMarkers(iframe, []);
+
+    expect(fieldA.matches(bundleMarkerHostSelector)).toBe(false);
+    expect(fieldA.style.outline).toBe('');
+    expect(fieldA.style.outlineOffset).toBe('');
+    expect(fieldA.getAttribute('title')).toBe('Vorheriger Titel');
   });
 
   it('falls back to inset field highlighting when a table target cannot host an overlay', () => {

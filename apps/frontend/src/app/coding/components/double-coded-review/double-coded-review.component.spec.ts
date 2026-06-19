@@ -24,6 +24,7 @@ describe('DoubleCodedReviewComponent', () => {
     variableId: unknown;
     code: unknown;
     score?: unknown;
+    notes?: unknown;
     responseId: number;
   };
 
@@ -237,7 +238,8 @@ describe('DoubleCodedReviewComponent', () => {
               failedCount: 0,
               skippedCount: 0,
               message: 'ok'
-            }))
+            })),
+            notifyTestResultsChanged: jest.fn()
           }
         },
         {
@@ -365,11 +367,13 @@ describe('DoubleCodedReviewComponent', () => {
       variableId: 'VAR_1',
       code: '2',
       score: 1,
+      notes: 'Replay note',
       responseId: 501
     }, replaySource);
 
     const item = component.dataSource.data.find(row => row.responseId === 501);
     expect(component.selectionForm.get('item_501')?.value).toBe('1002');
+    expect(component.selectionForm.get('comment_501')?.value).toBe('Replay note');
     expect(item?.selectedCoderResult?.jobId).toBe(1002);
     expect(snackBar.open).toHaveBeenCalledWith(
       'double-coded-review.success.replay-code-selected',
@@ -378,9 +382,67 @@ describe('DoubleCodedReviewComponent', () => {
     );
   });
 
+  it('clears a transferred replay note when the replay sends empty notes', async () => {
+    const replaySource = {} as MessageEventSource;
+    const harness = component as unknown as ReplaySelectionHarness;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    harness.replayWindowByResponseId.set(501, replaySource);
+    harness.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'person-1@P001@Booklet 1',
+      unitId: 'Unit A',
+      variableId: 'VAR_1',
+      code: '2',
+      score: 1,
+      notes: 'Replay note',
+      responseId: 501
+    }, replaySource);
+
+    expect(component.selectionForm.get('comment_501')?.value).toBe('Replay note');
+
+    harness.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'person-1@P001@Booklet 1',
+      unitId: 'Unit A',
+      variableId: 'VAR_1',
+      code: '2',
+      score: 1,
+      notes: '   ',
+      responseId: 501
+    }, replaySource);
+
+    expect(component.selectionForm.get('comment_501')?.value).toBe('');
+  });
+
+  it('keeps existing comments when replay selections do not include notes', async () => {
+    const replaySource = {} as MessageEventSource;
+    const harness = component as unknown as ReplaySelectionHarness;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const item = component.dataSource.data.find(row => row.responseId === 501)!;
+    component.getCommentControl(item).setValue('Manual review comment');
+    harness.replayWindowByResponseId.set(501, replaySource);
+
+    harness.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'person-1@P001@Booklet 1',
+      unitId: 'Unit A',
+      variableId: 'VAR_1',
+      code: '2',
+      score: 1,
+      responseId: 501
+    }, replaySource);
+
+    expect(component.selectionForm.get('comment_501')?.value).toBe('Manual review comment');
+  });
+
   it('stores and applies a replay code selection that has no coder result', async () => {
     const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
       applyDoubleCodedResolutions: jest.Mock;
+      notifyTestResultsChanged: jest.Mock;
     };
     const replaySource = {} as MessageEventSource;
     const harness = component as unknown as ReplaySelectionHarness;
@@ -395,6 +457,7 @@ describe('DoubleCodedReviewComponent', () => {
       variableId: 'VAR_1',
       code: '3',
       score: 2,
+      notes: 'Replay note',
       responseId: 501
     }, replaySource);
 
@@ -410,7 +473,16 @@ describe('DoubleCodedReviewComponent', () => {
     component.applySingleDecision(item!);
 
     expect(testPersonCodingService.applyDoubleCodedResolutions).toHaveBeenCalledWith(1, {
-      decisions: [{ responseId: 501, code: 3, score: 2 }]
+      decisions: [{
+        responseId: 501,
+        code: 3,
+        score: 2,
+        resolutionComment: 'Replay note'
+      }]
+    });
+    expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalledWith({
+      workspaceId: 1,
+      statisticsVersion: 'v2'
     });
   });
 

@@ -44,6 +44,7 @@ describe('CodingVersionService', () => {
   const mockCodingFreshnessService = {
     markVersionsPendingAfterReset: jest.fn().mockResolvedValue(undefined),
     markExistingAutoCodingVersionsPendingAfterResetScope: jest.fn().mockResolvedValue(undefined),
+    clearVersionsAfterReset: jest.fn().mockResolvedValue(undefined),
     markAppliedCodingJobsResultsClearedForUnitIds: jest.fn().mockResolvedValue(undefined),
     markAppliedCodingJobsResultsClearedForResponseIds: jest.fn().mockResolvedValue(undefined),
     reconcileAppliedManualCodingJobs: jest.fn().mockResolvedValue(0)
@@ -102,6 +103,7 @@ describe('CodingVersionService', () => {
     mockCodingValidationService.invalidateIncompleteVariablesCache.mockClear();
     mockCodingFreshnessService.markVersionsPendingAfterReset.mockClear();
     mockCodingFreshnessService.markExistingAutoCodingVersionsPendingAfterResetScope.mockClear();
+    mockCodingFreshnessService.clearVersionsAfterReset.mockClear();
     mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForUnitIds.mockClear();
     mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds.mockClear();
     mockCodingFreshnessService.reconcileAppliedManualCodingJobs.mockClear();
@@ -340,6 +342,12 @@ describe('CodingVersionService', () => {
 
       expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
         .toHaveBeenCalledWith(1, [1], 'RESET', 'stale_source');
+      expect(mockCodingFreshnessService.clearVersionsAfterReset)
+        .toHaveBeenCalledWith(1, ['v2'], undefined, undefined);
+      expect(mockCodingFreshnessService.markVersionsPendingAfterReset)
+        .toHaveBeenCalledWith(1, {
+          v1: [10]
+        });
       expect(mockCodingFreshnessService.reconcileAppliedManualCodingJobs)
         .toHaveBeenCalledWith(1, 'RESET', 'stale_source', {
           unitNames: undefined,
@@ -523,6 +531,8 @@ describe('CodingVersionService', () => {
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v2');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
       expect(mockCodingFreshnessService.markVersionsPendingAfterReset).not.toHaveBeenCalled();
+      expect(mockCodingFreshnessService.clearVersionsAfterReset)
+        .toHaveBeenCalledWith(1, ['v2'], undefined, undefined);
       expect(mockCodingFreshnessService.markExistingAutoCodingVersionsPendingAfterResetScope)
         .toHaveBeenCalledWith(1, ['v1', 'v3'], undefined, undefined);
     });
@@ -537,6 +547,8 @@ describe('CodingVersionService', () => {
 
       await service.resetCodingVersion(workspaceId, version, unitFilters, variableFilters);
 
+      expect(mockCodingFreshnessService.clearVersionsAfterReset)
+        .toHaveBeenCalledWith(1, ['v2'], unitFilters, variableFilters);
       expect(mockResponseRepository.update).not.toHaveBeenCalled();
       expect(mockCodingFreshnessService.markExistingAutoCodingVersionsPendingAfterResetScope)
         .toHaveBeenCalledWith(1, ['v1', 'v3'], unitFilters, variableFilters);

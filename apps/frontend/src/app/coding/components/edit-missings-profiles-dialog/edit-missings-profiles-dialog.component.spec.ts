@@ -16,7 +16,7 @@ describe('EditMissingsProfilesDialogComponent', () => {
       label: 'missing coding impossible',
       description: '',
       code: -97,
-      score: 0
+      score: null
     }
   ];
 
@@ -105,16 +105,16 @@ describe('EditMissingsProfilesDialogComponent', () => {
     expect(component.isProfileValid([
       ...createValidMissings(),
       {
-        ...createValidMissings()[0], id: 'extra', code: -96, score: null
+        ...createValidMissings()[0], id: 'extra', code: -96, score: false
       } as never
     ])).toBe(false);
 
     expect(component.isProfileValid([
       ...createValidMissings(),
       {
-        ...createValidMissings()[0], id: 'extra', code: -96, score: false
+        ...createValidMissings()[0], id: 'extra', code: -96, score: null
       } as never
-    ])).toBe(false);
+    ])).toBe(true);
   });
 
   it('rejects malformed missing ids and labels without throwing', () => {
@@ -172,6 +172,17 @@ describe('EditMissingsProfilesDialogComponent', () => {
       code: -99,
       score: 0
     }));
+  });
+
+  it('normalizes explicit NA scores for storage and display', () => {
+    const component = createComponent();
+    const missings = createValidMissings();
+
+    expect(component.normalizeMissingsForStorage(missings)[1]).toEqual(expect.objectContaining({
+      code: -97,
+      score: null
+    }));
+    expect(component.getScoreDisplay(null)).toBe('NA');
   });
 
   it('treats a null update response as a failed save', () => {

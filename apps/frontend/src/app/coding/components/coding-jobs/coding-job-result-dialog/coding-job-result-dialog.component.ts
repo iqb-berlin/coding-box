@@ -54,7 +54,7 @@ interface CodingResult {
   testPersonSearch: string;
   code?: string | number | null;
   codeLabel?: string;
-  score?: number;
+  score?: number | null;
   codingIssueOption?: number;
   codingIssueOptionLabel?: string;
   givenCode?: string | number;
@@ -68,7 +68,7 @@ interface CodingResult {
 interface CodingProgressEntry {
   id?: string | number;
   label?: string;
-  score?: number;
+  score?: number | null;
   codingIssueOption?: number;
 }
 
@@ -89,7 +89,7 @@ interface CodingJobUnitResult {
 
 interface ResolvedMissingPreview {
   code: number;
-  score: number;
+  score: number | null;
   label?: string;
 }
 
@@ -357,18 +357,26 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     }
 
     const code = Number(missing.code);
-    if (!Number.isInteger(code) || !this.hasExplicitFiniteScore(missing.score)) {
+    if (!Number.isInteger(code) || !this.hasExplicitScoreProperty(missing) || !this.hasExplicitValidScore(missing.score)) {
       return null;
     }
 
     return {
       code,
-      score: Number(missing.score),
+      score: this.normalizeScore(missing.score),
       label: missing.label
     };
   }
 
-  private hasExplicitFiniteScore(score: unknown): boolean {
+  private hasExplicitScoreProperty(missing: MissingDto): boolean {
+    return Object.prototype.hasOwnProperty.call(missing, 'score');
+  }
+
+  private hasExplicitValidScore(score: unknown): boolean {
+    if (score === null) {
+      return true;
+    }
+
     if (typeof score === 'number') {
       return Number.isFinite(score);
     }
@@ -379,6 +387,14 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     }
 
     return false;
+  }
+
+  private normalizeScore(score: unknown): number | null {
+    if (score === null) {
+      return null;
+    }
+
+    return Number(score);
   }
 
   private getCodingProgressKey(unit: CodingJobUnitResult): string {
@@ -724,6 +740,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     if (result.score !== undefined && result.score !== null) {
       return result.score.toString();
     }
+    if (result.score === null) {
+      return 'NA';
+    }
     if (this.hasCode(result)) {
       return '';
     }
@@ -771,7 +790,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   private getMappedResultScore(
     progress: CodingProgressEntry | undefined,
     missingPreviewLookup: MissingPreviewLookup
-  ): number | undefined {
+  ): number | null | undefined {
     const code = this.toNumericCode(progress?.id);
     const missingPreview = this.getMissingPreviewForProgressCode(code, missingPreviewLookup);
     if (missingPreview) {
@@ -832,6 +851,34 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return result.codingIssueOption === -1 || result.codingIssueOption === -2;
   }
 
+  isCodingIssueReviewEnabled(): boolean {
+    return this.data.codingJob.status === 'review';
+  }
+
+  canReviewCodingResult(result: CodingResult): boolean {
+    return this.isCodingIssueReviewEnabled() && this.isCodingIssueOption(result);
+  }
+
+  canEditCodingScheme(result: CodingResult): boolean {
+    return this.isCodingIssueReviewEnabled() && this.isNewCodeNeeded(result);
+  }
+
+  getReviewCodingResultTooltip(result: CodingResult): string {
+    if (!this.isCodingIssueReviewEnabled() && this.isCodingIssueOption(result)) {
+      return 'Kodierungshinweise können erst im Status "Zur Überprüfung" geprüft werden';
+    }
+
+    return 'Kodierungs-Hinweis überprüfen';
+  }
+
+  getEditCodingSchemeTooltip(result: CodingResult): string {
+    if (!this.isCodingIssueReviewEnabled() && this.isNewCodeNeeded(result)) {
+      return 'Kodierungsschema kann erst im Status "Zur Überprüfung" bearbeitet werden';
+    }
+
+    return 'Kodierungsschema bearbeiten';
+  }
+
   isNewCodeNeeded(result: CodingResult): boolean {
     return result.codingIssueOption === -2;
   }
@@ -864,6 +911,15 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   reviewCodingResult(result: CodingResult): void {
     if (!result || !this.isCodingIssueOption(result)) {
       this.snackBar.open('Nur Kodierungs-Hinweis-Fälle können überprüft werden', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    if (!this.isCodingIssueReviewEnabled()) {
+      this.snackBar.open(
+        'Kodierungshinweise können erst im Status "Zur Überprüfung" geprüft werden',
+        'Schließen',
+        { duration: 3000 }
+      );
       return;
     }
 
@@ -909,6 +965,15 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   editCodingScheme(result: CodingResult): void {
     if (!result || !this.isNewCodeNeeded(result)) {
       this.snackBar.open('Nur "Neuer Code erforderlich" Fälle können bearbeitet werden', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    if (!this.isCodingIssueReviewEnabled()) {
+      this.snackBar.open(
+        'Kodierungsschema kann erst im Status "Zur Überprüfung" bearbeitet werden',
+        'Schließen',
+        { duration: 3000 }
+      );
       return;
     }
 

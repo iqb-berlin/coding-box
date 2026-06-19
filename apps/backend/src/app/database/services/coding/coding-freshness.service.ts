@@ -811,7 +811,8 @@ export class CodingFreshnessService {
   async clearVersionsAfterReset(
     workspaceId: number,
     versions: CodingFreshnessVersion[],
-    unitNames?: string[]
+    unitNames?: string[],
+    variableIds?: string[]
   ): Promise<void> {
     if (versions.length === 0) {
       return;
@@ -824,16 +825,30 @@ export class CodingFreshnessService {
       .where('workspace_id = :workspaceId', { workspaceId })
       .andWhere('version IN (:...versions)', { versions });
 
-    if (unitNames && unitNames.length > 0) {
-      const unitIds = await this.connection
+    const scopedUnitNames = this.uniqueStrings(unitNames || []);
+    const scopedVariableIds = this.uniqueStrings(variableIds || []);
+    if (scopedUnitNames.length > 0 || scopedVariableIds.length > 0) {
+      const unitQuery = this.connection
         .createQueryBuilder()
-        .select('unit.id', 'id')
+        .select('DISTINCT unit.id', 'id')
         .from('unit', 'unit')
         .innerJoin('booklet', 'booklet', 'booklet.id = unit.bookletid')
         .innerJoin('persons', 'person', 'person.id = booklet.personid')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('unit.name IN (:...unitNames)', { unitNames })
-        .getRawMany<{ id: number | string }>();
+        .where('person.workspace_id = :workspaceId', { workspaceId });
+
+      if (scopedUnitNames.length > 0) {
+        unitQuery.andWhere('unit.name IN (:...unitNames)', { unitNames: scopedUnitNames });
+      }
+
+      if (scopedVariableIds.length > 0) {
+        unitQuery
+          .innerJoin('response', 'response', 'response.unitid = unit.id')
+          .andWhere('response.variableid IN (:...variableIds)', {
+            variableIds: scopedVariableIds
+          });
+      }
+
+      const unitIds = await unitQuery.getRawMany<{ id: number | string }>();
       const ids = this.uniquePositiveIds(unitIds.map(row => Number(row.id)));
       if (ids.length === 0) {
         return;

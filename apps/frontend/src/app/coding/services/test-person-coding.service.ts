@@ -154,6 +154,17 @@ export interface JobInfo extends JobStatus {
   jobId: string;
 }
 
+export interface AutoCodingCompletedEvent {
+  jobId?: string;
+}
+
+export type CodingStatisticsVersion = 'v1' | 'v2' | 'v3';
+
+export interface TestResultsChangedEvent {
+  workspaceId?: number;
+  statisticsVersion?: CodingStatisticsVersion;
+}
+
 export interface WorkspaceGroupCodingStats {
   groupName: string;
   testPersonCount: number;
@@ -221,8 +232,9 @@ export interface AppliedResultsOverview {
 export class TestPersonCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
-  private autoCodingCompletedSubject = new Subject<void>();
-  private testResultsChangedSubject = new Subject<void>();
+  private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
+  private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
+  private pendingStatisticsVersions = new Map<number, CodingStatisticsVersion>();
   autoCodingCompleted$ = this.autoCodingCompletedSubject.asObservable();
   testResultsChanged$ = this.testResultsChangedSubject.asObservable();
 
@@ -234,12 +246,21 @@ export class TestPersonCodingService {
     return typeof jobId === 'string' && jobId.trim().length > 0;
   }
 
-  notifyAutoCodingCompleted(): void {
-    this.autoCodingCompletedSubject.next();
+  notifyAutoCodingCompleted(jobId?: string): void {
+    this.autoCodingCompletedSubject.next({ jobId });
   }
 
-  notifyTestResultsChanged(): void {
-    this.testResultsChangedSubject.next();
+  notifyTestResultsChanged(event: TestResultsChangedEvent = {}): void {
+    if (event.workspaceId && event.statisticsVersion) {
+      this.pendingStatisticsVersions.set(event.workspaceId, event.statisticsVersion);
+    }
+    this.testResultsChangedSubject.next(event);
+  }
+
+  consumePendingStatisticsVersion(workspaceId: number): CodingStatisticsVersion | null {
+    const version = this.pendingStatisticsVersions.get(workspaceId) ?? null;
+    this.pendingStatisticsVersions.delete(workspaceId);
+    return version;
   }
 
   codeTestPersons(workspaceId: number, testPersonIds: string, autoCoderRun: number = 1): Observable<CodingStatisticsWithJob> {

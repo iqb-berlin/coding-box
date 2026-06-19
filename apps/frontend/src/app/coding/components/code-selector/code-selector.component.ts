@@ -13,7 +13,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { DomSanitizer } from '@angular/platform-browser';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ReviewCodeSelection, UnitsReplay, UnitsReplayUnit } from '../../../replay/services/units-replay.service';
 import { ReplayCodingService } from '../../../replay/services/replay-coding.service';
 import {
@@ -64,6 +64,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Output() notesChanged = new EventEmitter<string>();
   @Output() openNavigateDialog = new EventEmitter<void>();
   @Output() openCommentDialog = new EventEmitter<void>();
+  @Output() openCodingJobs = new EventEmitter<void>();
   @Output() pauseCodingJob = new EventEmitter<void>();
   @Output() unitChanged = new EventEmitter<UnitsReplayUnit>();
   @ViewChild('variablePanel') variablePanel?: ElementRef<HTMLElement>;
@@ -75,6 +76,7 @@ export class CodeSelectorComponent implements OnChanges {
   newCodeCommentValidationError = false;
   variableManualInstruction: string | null = null;
   legacySelectedCode: SelectableItem | null = null;
+  isSupportSectionExpanded = true;
   private allRegularCodeItems: SelectableItem[] = [];
   private hasResolvedCodingScheme = false;
   private readonly codeAssignmentUncertainOptionId = -1;
@@ -84,11 +86,17 @@ export class CodeSelectorComponent implements OnChanges {
     this.newCodeNeededOptionId
   ]);
 
-  constructor(private sanitizer: DomSanitizer, private translateService: TranslateService, private elementRef: ElementRef) { }
+  private readonly safeHtmlCache = new Map<string, SafeHtml>();
+
+  constructor(
+    private sanitizer: DomSanitizer,
+    private translateService: TranslateService,
+    private elementRef: ElementRef<HTMLElement>
+  ) { }
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
-    if (this.isVariablePanelOpen && !this.elementRef.nativeElement.contains(event.target)) {
+    if (this.isVariablePanelOpen && !this.elementRef.nativeElement.contains(event.target as Node | null)) {
       this.isVariablePanelOpen = false;
     }
   }
@@ -224,8 +232,15 @@ export class CodeSelectorComponent implements OnChanges {
     }
   }
 
-  getSafeHtml(instructions: string): string {
-    return this.sanitizer.sanitize(SecurityContext.HTML, instructions) || '';
+  getSafeHtml(instructions: string): SafeHtml {
+    const html = instructions || '';
+    const cached = this.safeHtmlCache.get(html);
+    if (cached) return cached;
+
+    const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, html) || '';
+    const trustedHtml = this.sanitizer.bypassSecurityTrustHtml(sanitized);
+    this.safeHtmlCache.set(html, trustedHtml);
+    return trustedHtml;
   }
 
   private createMissingLegacyCode(codeId: number): SelectableItem {
@@ -391,6 +406,10 @@ export class CodeSelectorComponent implements OnChanges {
     this.openCommentDialog.emit();
   }
 
+  onCodingJobsClick(): void {
+    this.openCodingJobs.emit();
+  }
+
   onPauseClick(): void {
     if (this.isReadOnly) return;
     this.pauseCodingJob.emit();
@@ -410,6 +429,7 @@ export class CodeSelectorComponent implements OnChanges {
 
     if (showValidationMessage) {
       this.newCodeCommentValidationError = true;
+      this.isSupportSectionExpanded = true;
       setTimeout(() => this.notesTextarea?.nativeElement.focus(), 0);
     }
     return false;
@@ -516,6 +536,7 @@ export class CodeSelectorComponent implements OnChanges {
       if (option && this.isCodingIssueOptionAvailable(option) && !this.isCodingIssueOptionDisabled(option)) {
         event.preventDefault(); // Prevent default browser action (e.g. quick find with '/')
         this.onSelect(targetId);
+        this.scrollToCode(targetId);
       }
     }
   }
@@ -528,6 +549,46 @@ export class CodeSelectorComponent implements OnChanges {
       case -2: return '+';
       default: return '';
     }
+  }
+
+  get progressSummary(): string {
+    return `${this.completedCount}/${this.totalUnits} (${this.progressPercentage}%)`;
+  }
+
+  get progressTooltip(): string {
+    return this.translateService.instant('code-selector.progress-tooltip', {
+      completed: this.completedCount,
+      total: this.totalUnits,
+      percentage: this.progressPercentage,
+      open: this.openCount
+    });
+  }
+
+  get supportSectionTitle(): string {
+    if (!this.allowComments) {
+      return this.translateService.instant('code-selector.general-codes');
+    }
+
+    return this.translateService.instant('code-selector.general-codes-and-notes');
+  }
+
+  toggleSupportSection(): void {
+    this.isSupportSectionExpanded = !this.isSupportSectionExpanded;
+  }
+
+  scrollToCode(codeId: number): void {
+    if (this.isSupportCode(codeId)) {
+      this.isSupportSectionExpanded = true;
+    }
+
+    setTimeout(() => {
+      const target = this.elementRef.nativeElement.querySelector<HTMLElement>(`[data-code-id="${codeId}"]`);
+      target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, 0);
+  }
+
+  private isSupportCode(codeId: number): boolean {
+    return this.codingIssueOptionCodes.some(item => item.id === codeId);
   }
 
   get totalNavigationUnits(): number {
@@ -600,6 +661,73 @@ export class CodeSelectorComponent implements OnChanges {
     return result;
   }
 
+  get shouldShowBundleVariableChips(): boolean {
+    const context = this.currentBundleContext;
+    return !!context &&
+      context.caseOrderingMode === 'alternating' &&
+      context.variables.length > 1 &&
+      context.variables.length < 5;
+  }
+
+  get bundleVariableChips(): Array<{
+    key: string;
+    variableId: string;
+    unitName: string;
+    status: string;
+    active: boolean;
+    disabled: boolean;
+    tooltip: string;
+    progress: { coded: number; total: number; percentage: number };
+  }> {
+    const context = this.currentBundleContext;
+    if (!context) return [];
+
+    return context.variables.map(variable => {
+      const matchingUnit = this.unitsData?.units.find(unit => (
+        unit.variableId === variable.variableId &&
+        unit.name === variable.unitName
+      ));
+      const unitName = matchingUnit?.alias || matchingUnit?.name || variable.unitName;
+      const key = `${unitName}::${variable.variableId}`;
+      const hasManualUnit = this.availableVariables.some(available => available.key === key);
+      const progress = this.getProgressForKey(key);
+      const disabled =
+        this.isNavigationDisabled ||
+        !hasManualUnit ||
+        variable.status === 'auto-coded' ||
+        variable.status === 'not-available';
+
+      return {
+        key,
+        variableId: variable.variableId,
+        unitName,
+        status: variable.status,
+        active: key === this.activeVariableKey,
+        disabled,
+        tooltip: this.getBundleVariableTooltip(variable.status),
+        progress
+      };
+    });
+  }
+
+  private get currentBundleContext() {
+    const currentUnit = this.unitsData?.units[this.unitsData.currentUnitIndex];
+    return currentUnit?.bundleContext || null;
+  }
+
+  getBundleVariableTooltip(status: string): string {
+    if (status === 'auto-coded') {
+      return this.translateService.instant('code-selector.bundle-auto-coded-tooltip');
+    }
+    if (status === 'manual-coded') {
+      return this.translateService.instant('code-selector.bundle-manual-coded-tooltip');
+    }
+    if (status === 'not-available') {
+      return this.translateService.instant('code-selector.bundle-not-available-tooltip');
+    }
+    return this.translateService.instant('code-selector.bundle-open-tooltip');
+  }
+
   /** Composite key (unitName::variableId) for the unit currently being displayed. */
   get activeVariableKey(): string {
     if (!this.unitsData?.units) return '';
@@ -644,5 +772,10 @@ export class CodeSelectorComponent implements OnChanges {
     );
     const target = firstUncoded ?? variableUnits[0];
     this.unitChanged.emit(target.unit);
+  }
+
+  selectBundleVariable(key: string, disabled: boolean): void {
+    if (disabled) return;
+    this.jumpToVariable(key);
   }
 }

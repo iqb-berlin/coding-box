@@ -6,7 +6,7 @@
 }
 
 .coding-container {
-  padding: clamp(8px, 2vw, 24px);
+  padding: 0 clamp(8px, 2vw, 24px) clamp(8px, 2vw, 24px);
   width: 100%;
   max-width: 100%;
   height: auto;
@@ -14,7 +14,7 @@
   box-sizing: border-box;
   animation: fadeIn 0.3s ease-in-out;
   min-width: 0;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .table-responsive {
@@ -27,7 +27,23 @@
 
 .manual-coding-tabs {
   display: block;
-  margin: 8px 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: 0 0 16px;
+  background-color: white;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+:host ::ng-deep .manual-coding-tabs {
+  .mat-mdc-tab-header {
+    background-color: white;
+  }
+
+  .mat-mdc-tab-body-wrapper {
+    display: none;
+  }
 }
 
 .manual-tab-actions {
@@ -206,9 +222,7 @@
       }
     }
 
-    .variable-coverage-section,
-    .case-coverage-section,
-    .applied-results-section {
+    :is(.variable-coverage-section, .case-coverage-section, .applied-results-section) {
       margin-bottom: 20px;
 
       .statistics-card {

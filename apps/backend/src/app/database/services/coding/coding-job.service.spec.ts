@@ -2462,7 +2462,8 @@ describe('CodingJobService', () => {
       response_matching_flags: null,
       aggregation_settings_version: 1,
       freshness_status: 'current',
-      freshness_reason: null
+      freshness_reason: null,
+      status: 'review'
     };
     const sourceUnit = {
       coding_job_id: 1,
@@ -2550,7 +2551,8 @@ describe('CodingJobService', () => {
       response_matching_flags: null,
       aggregation_settings_version: 1,
       freshness_status: 'current',
-      freshness_reason: null
+      freshness_reason: null,
+      status: 'review'
     };
     const sourceUnit = {
       coding_job_id: 1,
@@ -2609,8 +2611,52 @@ describe('CodingJobService', () => {
     );
   });
 
+  it.each(['active', 'completed', 'open', 'paused'])(
+    'rejects coding issue review progress for %s source jobs',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValueOnce({
+        id: 1,
+        workspace_id: 3,
+        status
+      });
+
+      await expect(service.saveCodingIssueReviewProgress(1, 42, {
+        testPerson: 'login@code@booklet',
+        unitId: 'UNIT',
+        variableId: 'VAR',
+        selectedCode: { id: 7 }
+      } as never)).rejects.toThrow(
+        'Coding issue review can only be saved for coding jobs submitted for review'
+      );
+      expect(codingJobUnitRepository.findOne).not.toHaveBeenCalled();
+      expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['active', 'completed', 'open', 'paused'])(
+    'rejects coding issue review notes for %s source jobs',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValueOnce({
+        id: 1,
+        workspace_id: 3,
+        status
+      });
+
+      await expect(service.saveCodingIssueReviewNotes(1, 42, {
+        testPerson: 'login@code@booklet',
+        unitId: 'UNIT',
+        variableId: 'VAR',
+        notes: 'note'
+      })).rejects.toThrow(
+        'Coding issue review can only be saved for coding jobs submitted for review'
+      );
+      expect(codingJobUnitRepository.findOne).not.toHaveBeenCalled();
+      expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+    }
+  );
+
   it('rejects coding issue review progress for units that do not require review', async () => {
-    const sourceJob = { id: 1, workspace_id: 3, status: 'completed' };
+    const sourceJob = { id: 1, workspace_id: 3, status: 'review' };
     const sourceUnit = {
       coding_job_id: 1,
       workspace_id: 3,
@@ -2642,7 +2688,7 @@ describe('CodingJobService', () => {
   });
 
   it('rejects coding issue review notes for units that do not require review', async () => {
-    const sourceJob = { id: 1, workspace_id: 3, status: 'completed' };
+    const sourceJob = { id: 1, workspace_id: 3, status: 'review' };
     const sourceUnit = {
       coding_job_id: 1,
       workspace_id: 3,
@@ -2674,7 +2720,7 @@ describe('CodingJobService', () => {
   });
 
   it('does not create a blank coding issue review unit for notes-only saves', async () => {
-    const sourceJob = { id: 1, workspace_id: 3, status: 'completed' };
+    const sourceJob = { id: 1, workspace_id: 3, status: 'review' };
     const sourceUnit = {
       coding_job_id: 1,
       workspace_id: 3,
@@ -2724,7 +2770,7 @@ describe('CodingJobService', () => {
       aggregation_settings_version: 1,
       freshness_status: 'current',
       freshness_reason: null,
-      status: 'completed'
+      status: 'review'
     };
     const sourceUnit = {
       coding_job_id: 1,
@@ -3134,6 +3180,10 @@ describe('CodingJobService', () => {
   it.each([
     { manualInstruction: '', label: 'empty' },
     { manualInstruction: '   ', label: 'whitespace-only' },
+    {
+      manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>',
+      label: 'visually empty HTML'
+    },
     { manualInstruction: null, label: 'missing' }
   ])(
     'rejects positive selected codes with $label manual instructions',
@@ -4483,5 +4533,152 @@ describe('CodingJobService', () => {
       variableId: 'VAR_WITH_OVERRIDE',
       variablePage: '1'
     });
+  });
+
+  it('uses all visible bundle units for bundle context when only open units are returned', async () => {
+    const openUnit = {
+      response_id: 99,
+      unit_name: 'UNIT_A',
+      unit_alias: 'Unit A',
+      variable_id: 'VAR_A',
+      variable_anchor: 'VAR_A',
+      booklet_name: 'BOOKLET',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: 'group',
+      notes: null,
+      variable_bundle_id: 9,
+      code: null,
+      score: null,
+      is_open: true
+    };
+    const closedBundleUnit = {
+      response_id: 100,
+      unit_name: 'UNIT_B',
+      unit_alias: 'Unit B',
+      variable_id: 'VAR_B',
+      variable_anchor: 'VAR_B',
+      booklet_name: 'BOOKLET',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: 'group',
+      notes: null,
+      variable_bundle_id: 9,
+      code: 7,
+      score: 2,
+      is_open: false
+    };
+    const responseQueryBuilder: Record<string, jest.Mock> = {};
+    [
+      'leftJoinAndSelect',
+      'where',
+      'andWhere'
+    ].forEach(method => {
+      responseQueryBuilder[method] = jest.fn().mockReturnValue(responseQueryBuilder);
+    });
+    responseQueryBuilder.getMany = jest.fn().mockResolvedValue([
+      {
+        id: 99,
+        variableid: 'VAR_A',
+        is_autocoder_generated: false,
+        status_v1: null,
+        code_v1: null,
+        score_v1: null,
+        code_v2: null,
+        score_v2: null,
+        code_v3: null,
+        score_v3: null,
+        unit: {
+          name: 'UNIT_A',
+          booklet: {
+            bookletinfo: { name: 'BOOKLET' },
+            person: { login: 'login', code: 'code', group: 'group' }
+          }
+        }
+      },
+      {
+        id: 100,
+        variableid: 'VAR_B',
+        is_autocoder_generated: false,
+        status_v1: null,
+        code_v1: null,
+        score_v1: null,
+        code_v2: null,
+        score_v2: null,
+        code_v3: null,
+        score_v3: null,
+        unit: {
+          name: 'UNIT_B',
+          booklet: {
+            bookletinfo: { name: 'BOOKLET' },
+            person: { login: 'login', code: 'code', group: 'group' }
+          }
+        }
+      }
+    ]);
+
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 10,
+      workspace_id: 3,
+      job_definition_id: 5,
+      training_id: null,
+      case_ordering_mode: 'continuous',
+      codingJobCoders: []
+    });
+    codingJobVariableBundleRepository.find.mockResolvedValue([
+      {
+        variable_bundle_id: 9,
+        case_ordering_mode: 'alternating'
+      }
+    ]);
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 9,
+        workspace_id: 3,
+        name: 'Bundle',
+        variables: [
+          { unitName: 'UNIT_A', variableId: 'VAR_A' },
+          { unitName: 'UNIT_B', variableId: 'VAR_B' }
+        ]
+      }
+    ]);
+    codingJobUnitRepository.find
+      .mockResolvedValueOnce([openUnit])
+      .mockResolvedValueOnce([openUnit, closedBundleUnit])
+      .mockResolvedValueOnce([]);
+    responseRepository.createQueryBuilder.mockReturnValue(responseQueryBuilder);
+    codingFileCacheService.getVariablePageMap.mockImplementation(async (unitName: string) => new Map([
+      [unitName === 'UNIT_A' ? 'VAR_A' : 'VAR_B', unitName === 'UNIT_A' ? '0' : '1']
+    ]));
+
+    const result = await service.getCodingJobUnits(10, true);
+
+    expect(result).toHaveLength(1);
+    expect(codingJobUnitRepository.find).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { coding_job_id: 10 }
+      })
+    );
+    expect(result[0].bundleContext?.caseKey).toBe('login\u0000code\u0000group\u0000BOOKLET');
+    expect(result[0].bundleContext?.variables).toEqual([
+      expect.objectContaining({
+        responseId: 99,
+        unitName: 'UNIT_A',
+        variableId: 'VAR_A',
+        status: 'manual-open',
+        source: 'manual'
+      }),
+      expect.objectContaining({
+        responseId: 100,
+        unitName: 'UNIT_B',
+        variableId: 'VAR_B',
+        status: 'manual-coded',
+        code: 7,
+        score: 2,
+        source: 'manual',
+        variablePage: '1'
+      })
+    ]);
   });
 });

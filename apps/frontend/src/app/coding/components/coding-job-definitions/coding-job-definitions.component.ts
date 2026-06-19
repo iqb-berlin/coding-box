@@ -59,7 +59,7 @@ interface JobDefinition {
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
   durationSeconds?: number;
-  maxCodingCases?: number;
+  maxCodingCases?: number | null;
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';

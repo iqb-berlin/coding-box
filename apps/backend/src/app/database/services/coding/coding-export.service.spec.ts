@@ -815,7 +815,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         id: 'mir',
         label: 'MIR',
         code: -97,
-        score: 0
+        score: null
       })
     };
 
@@ -849,7 +849,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
 
     expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(7, 77, 'mir');
     expect(worksheet.getRow(2).getCell(codeColumn).value).toBe('-97');
-    expect(worksheet.getRow(2).getCell(scoreColumn).value).toBe(0);
+    expect(worksheet.getRow(2).getCell(scoreColumn).value).toBe('NA');
   });
 
   it('does not fall back to response scores for discussion manager rows without stored score', async () => {

@@ -1,4 +1,9 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  Component,
+  Input,
+  OnInit,
+  inject
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -76,6 +81,9 @@ export class TestPersonCodingComponent implements OnInit {
   private translateService = inject(TranslateService);
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
   private dialog = inject(MatDialog);
+  @Input() initialJobId: string | null = null;
+  @Input() initialAutoCoderRun: 1 | 2 | null = null;
+
   Math = Math;
   get workspaceId(): number {
     return this.appService.selectedWorkspaceId;
@@ -107,6 +115,8 @@ export class TestPersonCodingComponent implements OnInit {
   activeJobId: string | null = null;
   jobStatus: JobStatus | null = null;
   jobStatusInterval: number | null = null;
+  lastObservedJobId: string | null = null;
+  private observedJobStatuses = new Map<string, JobStatus['status']>();
 
   allJobs: JobInfo[] = [];
   jobsLoading = false;
@@ -120,6 +130,15 @@ export class TestPersonCodingComponent implements OnInit {
   private lastNotifiedCompletedJobId: string | null = null;
 
   ngOnInit(): void {
+    if (this.initialAutoCoderRun) {
+      this.autoCoderRun = this.initialAutoCoderRun;
+    }
+
+    if (this.initialJobId) {
+      this.activeJobId = this.initialJobId;
+      this.startJobStatusPolling(this.initialJobId);
+    }
+
     this.loadAllJobs();
     this.startJobsRefreshInterval();
     this.loadWorkspaceGroups();
@@ -157,6 +176,7 @@ export class TestPersonCodingComponent implements OnInit {
               job => job.jobId === this.activeJobId
             );
             if (activeJob) {
+              this.rememberJobStatus(activeJob.jobId, activeJob);
               this.jobStatus = activeJob;
               if (
                 ['completed', 'failed', 'cancelled', 'paused'].includes(
@@ -295,71 +315,89 @@ export class TestPersonCodingComponent implements OnInit {
       clearInterval(this.jobStatusInterval);
     }
 
+    this.activeJobId = jobId;
+    this.jobStatus = null;
     this.jobStatusInterval = window.setInterval(() => {
-      this.testPersonCodingService
-        .getJobStatus(this.workspaceId, jobId)
-        .subscribe(status => {
-          if ('error' in status) {
+      this.loadJobStatus(jobId);
+    }, 2000);
+    this.loadJobStatus(jobId);
+  }
+
+  private loadJobStatus(jobId: string): void {
+    this.testPersonCodingService
+      .getJobStatus(this.workspaceId, jobId)
+      .subscribe(status => {
+        if (!('status' in status)) {
+          this.snackBar.open(
+            this.translateService.instant('test-person-coding.job-error', {
+              error: status.error
+            }),
+            this.translateService.instant('close'),
+            { duration: 5000 }
+          );
+          this.stopJobStatusPolling();
+          return;
+        }
+
+        this.jobStatus = status;
+        this.rememberJobStatus(jobId, status);
+
+        if (
+          ['completed', 'failed', 'cancelled', 'paused'].includes(
+            status.status
+          )
+        ) {
+          this.stopJobStatusPolling();
+
+          if (status.status === 'completed') {
             this.snackBar.open(
-              this.translateService.instant('test-person-coding.job-error', {
-                error: status.error
-              }),
+              this.translateService.instant(
+                'test-person-coding.job-completed'
+              ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+            this.handleAutoCodingCompleted(jobId);
+          } else if (status.status === 'failed') {
+            this.snackBar.open(
+              this.translateService.instant(
+                'test-person-coding.job-completed-with-error',
+                {
+                  error:
+                    status.error ||
+                    this.translateService.instant('error.unknown')
+                }
+              ),
               this.translateService.instant('close'),
               { duration: 5000 }
             );
-            this.stopJobStatusPolling();
-            return;
+          } else if (status.status === 'cancelled') {
+            this.snackBar.open(
+              this.translateService.instant(
+                'test-person-coding.job-cancelled'
+              ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          } else if (status.status === 'paused') {
+            this.snackBar.open(
+              this.translateService.instant('test-person-coding.job-paused'),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
           }
+        }
+      });
+  }
 
-          this.jobStatus = status;
+  getLastObservedJobStatus(jobId?: string | null): JobStatus['status'] | null {
+    if (jobId) {
+      return this.observedJobStatuses.get(jobId) ?? null;
+    }
 
-          if (
-            ['completed', 'failed', 'cancelled', 'paused'].includes(
-              status.status
-            )
-          ) {
-            this.stopJobStatusPolling();
-
-            if (status.status === 'completed') {
-              this.snackBar.open(
-                this.translateService.instant(
-                  'test-person-coding.job-completed'
-                ),
-                this.translateService.instant('close'),
-                { duration: 3000 }
-              );
-              this.handleAutoCodingCompleted(jobId);
-            } else if (status.status === 'failed') {
-              this.snackBar.open(
-                this.translateService.instant(
-                  'test-person-coding.job-completed-with-error',
-                  {
-                    error:
-                      status.error ||
-                      this.translateService.instant('error.unknown')
-                  }
-                ),
-                this.translateService.instant('close'),
-                { duration: 5000 }
-              );
-            } else if (status.status === 'cancelled') {
-              this.snackBar.open(
-                this.translateService.instant(
-                  'test-person-coding.job-cancelled'
-                ),
-                this.translateService.instant('close'),
-                { duration: 3000 }
-              );
-            } else if (status.status === 'paused') {
-              this.snackBar.open(
-                this.translateService.instant('test-person-coding.job-paused'),
-                this.translateService.instant('close'),
-                { duration: 3000 }
-              );
-            }
-          }
-        });
-    }, 2000);
+    return this.lastObservedJobId ?
+      this.observedJobStatuses.get(this.lastObservedJobId) ?? null :
+      null;
   }
 
   stopJobStatusPolling(): void {
@@ -369,6 +407,11 @@ export class TestPersonCodingComponent implements OnInit {
     }
     this.activeJobId = null;
     this.jobStatus = null;
+  }
+
+  private rememberJobStatus(jobId: string, status: JobStatus): void {
+    this.lastObservedJobId = jobId;
+    this.observedJobStatuses.set(jobId, status.status);
   }
 
   private handleAutoCodingCompleted(jobId?: string): void {
@@ -381,7 +424,7 @@ export class TestPersonCodingComponent implements OnInit {
 
     this.loadStatistics();
     this.loadWorkspaceGroups();
-    this.testPersonCodingService.notifyAutoCodingCompleted();
+    this.testPersonCodingService.notifyAutoCodingCompleted(jobId);
   }
 
   cancelJob(jobId?: string): void {

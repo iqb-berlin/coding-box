@@ -31,6 +31,12 @@ type ReadinessFixture = {
   unitVariableMap: Map<string, Set<string>>;
 };
 
+type ReadinessQueryMocks = {
+  unitQuery: QueryBuilderMock;
+  countQuery: QueryBuilderMock;
+  candidateQuery: QueryBuilderMock;
+};
+
 const createQueryBuilderMock = (): QueryBuilderMock => {
   const queryBuilder = {
     leftJoin: jest.fn(),
@@ -94,7 +100,10 @@ const createResponse = (
   value
 } as ResponseEntity);
 
-const createService = (fixture: ReadinessFixture): CodingReadinessService => {
+const createService = (
+  fixture: ReadinessFixture,
+  queryMocks?: Partial<ReadinessQueryMocks>
+): CodingReadinessService => {
   const unitQuery = createQueryBuilderMock();
   unitQuery.getMany.mockResolvedValue(fixture.units);
 
@@ -108,6 +117,12 @@ const createService = (fixture: ReadinessFixture): CodingReadinessService => {
   fileRevisionQuery.getRawOne.mockResolvedValue({
     file_count: fixture.unitFiles.length + (fixture.codingSchemeFiles || []).length,
     max_created_at: '2026-05-20T08:00:00.000Z'
+  });
+
+  Object.assign(queryMocks || {}, {
+    unitQuery,
+    countQuery,
+    candidateQuery
   });
 
   const responseRepository = {
@@ -146,6 +161,82 @@ const createService = (fixture: ReadinessFixture): CodingReadinessService => {
 };
 
 describe('CodingReadinessService', () => {
+  it('uses array parameters for large scoped unit filters', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
+    const service = createService({
+      units: [
+        createUnit(1, 'UNIT_OK'),
+        createUnit(2, 'UNIT_OTHER')
+      ],
+      rawResponsesTotal: 2,
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 1 },
+        { unitid: 2, variableid: 'var2', response_count: 1 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>'),
+        createFile('UNIT_OTHER', '<Unit><codingSchemeRef>SCHEME_OTHER</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1')),
+        createFile('SCHEME_OTHER', createCodingScheme('var2'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])],
+        ['UNIT_OTHER', new Set(['var2'])]
+      ])
+    }, queryMocks);
+
+    await service.getReadiness(1, {
+      forceRefresh: true,
+      unitIds: [1, 2],
+      personIds: ['11', '12']
+    });
+
+    expect(queryMocks.unitQuery?.andWhere).toHaveBeenCalledWith(
+      'person.id = ANY(:personIds)',
+      { personIds: [11, 12] }
+    );
+    expect(queryMocks.unitQuery?.andWhere).toHaveBeenCalledWith(
+      'unit.id = ANY(:unitIds)',
+      { unitIds: [1, 2] }
+    );
+    expect(queryMocks.countQuery?.andWhere).toHaveBeenCalledWith(
+      'unit.id = ANY(:unitIds)',
+      { unitIds: [1, 2] }
+    );
+    expect(queryMocks.candidateQuery?.andWhere).toHaveBeenCalledWith(
+      'unit.id = ANY(:unitIds)',
+      { unitIds: [1, 2] }
+    );
+  });
+
+  it('invalidates cached and in-flight readiness entries for a workspace', () => {
+    const service = createService({
+      units: [],
+      rawResponsesTotal: 0,
+      candidateRows: [],
+      unitFiles: [],
+      unitVariableMap: new Map()
+    });
+    const internals = service as unknown as {
+      readinessCache: Map<string, unknown>;
+      readinessInFlight: Map<string, unknown>;
+      cacheRevisionByWorkspace: Map<number, number>;
+    };
+    internals.readinessCache.set('1|1|1|files|0|scope', {});
+    internals.readinessCache.set('2|1|1|files|0|scope', {});
+    internals.readinessInFlight.set('1|1|1|files|0|scope', Promise.resolve({}));
+    internals.cacheRevisionByWorkspace.set(1, 4);
+
+    service.invalidateWorkspaceReadinessCache(1);
+
+    expect(internals.readinessCache.has('1|1|1|files|0|scope')).toBe(false);
+    expect(internals.readinessCache.has('2|1|1|files|0|scope')).toBe(true);
+    expect(internals.readinessInFlight.has('1|1|1|files|0|scope')).toBe(false);
+    expect(internals.cacheRevisionByWorkspace.get(1)).toBe(5);
+  });
+
   it('keeps missing files as diagnostics without blocking partially codeable data', async () => {
     const service = createService({
       units: [

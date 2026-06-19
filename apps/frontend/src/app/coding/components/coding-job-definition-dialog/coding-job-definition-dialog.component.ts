@@ -78,7 +78,7 @@ export interface JobDefinition {
   plannedVariableUsage?: Record<string, number>;
   plannedVariableUsageByStatus?: Record<string, DistributionVariableUsageByStatus>;
   durationSeconds?: number;
-  maxCodingCases?: number;
+  maxCodingCases?: number | null;
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
