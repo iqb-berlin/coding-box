@@ -212,6 +212,62 @@ describe('CoderTrainingResultsApplyService', () => {
     expect(preview.affectedJobDefinitionIds).toEqual([900]);
   });
 
+  it('treats explicit NA scores as applicable discussion results', async () => {
+    coderTrainingService.getWithinTrainingCodingComparison.mockResolvedValueOnce([
+      {
+        responseId: 102,
+        unitName: 'Unit',
+        variableId: 'Var',
+        discussionCode: -97,
+        discussionScore: null,
+        discussionSource: 'manual'
+      },
+      {
+        responseId: 103,
+        unitName: 'Unit',
+        variableId: 'Var',
+        discussionCode: 8,
+        discussionScore: null,
+        discussionSource: 'manual'
+      },
+      {
+        responseId: 104,
+        unitName: 'Unit',
+        variableId: 'Var',
+        discussionCode: 9,
+        discussionScore: null,
+        discussionSource: 'manual'
+      }
+    ] as never);
+    mockRawQueries(responseRepository.manager as unknown as { query: jest.Mock });
+
+    const preview = await service.previewTrainingDiscussionResults(1, 5, 'manual');
+
+    expect(preview.sourceResultsCount).toBe(3);
+    expect(preview.applicableResultsCount).toBe(1);
+    expect(preview.missingScoreCount).toBe(2);
+  });
+
+  it('does not treat null scores as complete for non-missing codes', async () => {
+    coderTrainingService.getWithinTrainingCodingComparison.mockResolvedValueOnce([
+      {
+        responseId: 102,
+        unitName: 'Unit',
+        variableId: 'Var',
+        discussionCode: 8,
+        discussionScore: null,
+        discussionSource: 'manual'
+      }
+    ] as never);
+    mockRawQueries(responseRepository.manager as unknown as { query: jest.Mock });
+
+    const preview = await service.previewTrainingDiscussionResults(1, 5, 'manual');
+
+    expect(preview.sourceResultsCount).toBe(1);
+    expect(preview.applicableResultsCount).toBe(0);
+    expect(preview.missingScoreCount).toBe(1);
+  });
+
   it('treats open productive job units as coding work in the conflict query', async () => {
     mockRawQueries(responseRepository.manager as unknown as { query: jest.Mock });
 
@@ -278,6 +334,44 @@ describe('CoderTrainingResultsApplyService', () => {
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
     expect(result.updatedResponsesCount).toBe(1);
     expect(result.removedJobUnitCount).toBe(1);
+  });
+
+  it('applies explicit NA scores to final v2 results', async () => {
+    coderTrainingService.getWithinTrainingCodingComparison.mockResolvedValueOnce([
+      {
+        responseId: 102,
+        unitName: 'Unit',
+        variableId: 'Var',
+        discussionCode: -97,
+        discussionScore: null,
+        discussionSource: 'manual'
+      }
+    ] as never);
+    queryBuilder.getRawMany.mockResolvedValueOnce([]);
+    mockRawQueries(queryRunner.manager);
+
+    const result = await service.applyTrainingDiscussionResults(1, 5, {
+      source: 'manual',
+      existingResultStrategy: 'overwrite',
+      jobConflictStrategy: 'removeFromJobs'
+    });
+
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      102,
+      {
+        code_v2: -97,
+        score_v2: null,
+        status_v2: 5
+      }
+    );
+    expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
+      1,
+      [102],
+      { manager: queryRunner.manager }
+    );
+    expect(result.updatedResponsesCount).toBe(1);
+    expect(result.skippedMissingScoreCount).toBe(0);
   });
 
   it('does not remove untouched units from immutable productive jobs', async () => {
