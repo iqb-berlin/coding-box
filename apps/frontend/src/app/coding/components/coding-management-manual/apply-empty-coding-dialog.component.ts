@@ -8,7 +8,7 @@ import { TranslateModule } from '@ngx-translate/core';
 export interface ApplyEmptyCodingDialogData {
   count: number;
   code: number;
-  score: number;
+  score: number | null;
 }
 
 @Component({
@@ -34,7 +34,7 @@ export interface ApplyEmptyCodingDialogData {
         <ul>
           <li>{{ 'coding-management-manual.response-analysis.apply-empty-coding-dialog.status' | translate }}: <strong>CODING_COMPLETE</strong></li>
           <li>{{ 'coding-management-manual.response-analysis.apply-empty-coding-dialog.code' | translate }}: <strong>{{ data.code }}</strong></li>
-          <li>{{ 'coding-management-manual.response-analysis.apply-empty-coding-dialog.score' | translate }}: <strong>{{ data.score }}</strong></li>
+          <li>{{ 'coding-management-manual.response-analysis.apply-empty-coding-dialog.score' | translate }}: <strong>{{ getScoreDisplay(data.score) }}</strong></li>
         </ul>
       </div>
     </mat-dialog-content>
@@ -81,5 +81,9 @@ export class ApplyEmptyCodingDialogComponent {
 
   onConfirm(): void {
     this.dialogRef.close(true);
+  }
+
+  getScoreDisplay(score: number | null): string | number {
+    return score === null ? 'NA' : score;
   }
 }

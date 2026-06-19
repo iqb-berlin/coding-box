@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import {
   MAT_DIALOG_DATA,
   MatDialogModule,
@@ -31,6 +32,7 @@ import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/co
     ReactiveFormsModule,
     MatButtonModule,
     MatCardModule,
+    MatCheckboxModule,
     MatDialogModule,
     MatFormFieldModule,
     MatIconModule,
@@ -139,8 +141,10 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
         return;
       }
 
+      const normalizedMissings = this.normalizeMissingsForStorage(missings);
+
       if (this.editMode) {
-        this.selectedProfile.setMissings(missings);
+        this.selectedProfile.setMissings(normalizedMissings);
       }
 
       this.saving = true;
@@ -283,7 +287,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
         missing.id.trim() !== '' && missing.label !== undefined && missing.label !== null &&
         missing.label.trim() !== '' && missing.description !== undefined && missing.description !== null &&
         this.hasExplicitFiniteNumber(missing.code) &&
-        this.hasExplicitFiniteNumber(missing.score));
+        this.hasExplicitValidScore(missing.score));
     } catch (error) {
       // Error occurred while parsing missings
       return [];
@@ -301,6 +305,22 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     }
 
     return false;
+  }
+
+  private hasExplicitValidScore(score: unknown): boolean {
+    if (score === null) {
+      return true;
+    }
+
+    return this.hasExplicitFiniteNumber(score);
+  }
+
+  private normalizeScore(score: unknown): number | null {
+    if (score === null) {
+      return null;
+    }
+
+    return Number(score);
   }
 
   private isValidMissingCode(code: unknown): boolean {
@@ -336,7 +356,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
         label: 'missing coding impossible',
         description: '',
         code: -97,
-        score: 0
+        score: null
       }
     ];
   }
@@ -358,7 +378,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
         !this.isNonBlankString(missing.label) ||
         missing.description === undefined || missing.description === null ||
         !this.isValidMissingCode(missing.code) ||
-        !this.hasExplicitFiniteNumber(missing.score)) {
+        !this.hasExplicitValidScore(missing.score)) {
         return false;
       }
 
@@ -372,5 +392,37 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     }
 
     return this.requiredMissingIds.every(requiredId => ids.has(requiredId));
+  }
+
+  normalizeMissingsForStorage(missings: MissingDto[]): MissingDto[] {
+    return missings.map(missing => ({
+      id: missing.id.trim(),
+      label: missing.label.trim(),
+      description: String(missing.description),
+      code: Number(missing.code),
+      score: this.normalizeScore(missing.score)
+    }));
+  }
+
+  isMissingScoreNa(missing: MissingDto): boolean {
+    return missing.score === null;
+  }
+
+  setMissingScoreNa(missing: MissingDto, isNa: boolean): void {
+    missing.score = isNa ? null : 0;
+  }
+
+  setMissingScore(missing: MissingDto, value: unknown): void {
+    if (value === null || value === undefined || value === '') {
+      (missing as { score: unknown }).score = '';
+      return;
+    }
+
+    const score = Number(value);
+    (missing as { score: unknown }).score = Number.isFinite(score) ? score : value;
+  }
+
+  getScoreDisplay(score: number | null): string | number {
+    return score === null ? 'NA' : score;
   }
 }

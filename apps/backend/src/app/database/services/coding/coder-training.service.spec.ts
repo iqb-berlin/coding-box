@@ -1996,7 +1996,7 @@ describe('CoderTrainingService', () => {
       code: number | null,
       score: number | null,
       codingIssueOption: number | null,
-      missingCodes: { mirCode: number; mciCode: number; negativeCodes: Set<number>; scoresByCode: Map<number, number> }
+      missingCodes: { mirCode: number; mciCode: number; negativeCodes: Set<number>; scoresByCode: Map<number, number | null> }
     ) => { code: string | null; score: number | null };
 
     const getMapDisplayCodeAndScore = (svc: CoderTrainingService): MapDisplayCodeAndScoreFn => {
@@ -2006,7 +2006,7 @@ describe('CoderTrainingService', () => {
 
     type GetMissingScoresByCodeFromMissingsFn = (
       missings: Array<{ id?: string; code: number; score?: unknown }>
-    ) => Map<number, number>;
+    ) => Map<number, number | null>;
 
     const getMissingScoresByCodeFromMissings = (svc: CoderTrainingService): GetMissingScoresByCodeFromMissingsFn => {
       const serviceWithPrivateMethod = svc as unknown as {
@@ -2065,7 +2065,6 @@ describe('CoderTrainingService', () => {
     });
 
     it.each([
-      ['null', null],
       ['empty string', ''],
       ['blank string', '  '],
       ['boolean false', false],
@@ -2078,6 +2077,25 @@ describe('CoderTrainingService', () => {
           score
         }
       ])).toThrow('score');
+    });
+
+    it('should keep explicit NA missing scores during display normalization', () => {
+      const scoresByCode = getMissingScoresByCodeFromMissings(service)([
+        {
+          id: 'mci',
+          code: -97,
+          score: null
+        }
+      ]);
+      const mapDisplay = getMapDisplayCodeAndScore(service);
+
+      expect(scoresByCode.get(-97)).toBeNull();
+      expect(mapDisplay(-97, null, null, {
+        mirCode: -98,
+        mciCode: -97,
+        negativeCodes: new Set([-97, -98]),
+        scoresByCode
+      })).toEqual({ code: '-97', score: null });
     });
 
     it('should reject automatic missing agreement when response jobs use different missing profiles', async () => {
