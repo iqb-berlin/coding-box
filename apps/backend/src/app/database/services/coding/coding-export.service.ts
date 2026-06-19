@@ -192,6 +192,14 @@ export class CodingExportService {
     };
   }
 
+  private formatScoreForExport(code: number | null | undefined, score: number | null | undefined): number | string {
+    if (score !== null && score !== undefined) {
+      return score;
+    }
+
+    return code !== null && code !== undefined && code < 0 ? 'NA' : '';
+  }
+
   private async getExclusionChecker(workspaceId: number): Promise<(bookletName: string, unitName: string) => boolean> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     return (bookletName: string, unitName: string) => !unitName || isExcludedByResolvedExclusions(exclusions, bookletName, unitName);
@@ -1590,7 +1598,9 @@ export class CodingExportService {
             row[`${displayName} Code`] = outputCommentsInsteadOfCodes ?
               (data?.comment ?? '') :
               this.formatCodeWithIssueSuffix(data?.code ?? null, data?.codingIssueOption ?? null);
-            row[`${displayName} Score`] = outputCommentsInsteadOfCodes ? '' : (data?.score ?? '');
+            row[`${displayName} Score`] = outputCommentsInsteadOfCodes ?
+              '' :
+              this.formatScoreForExport(data?.code ?? null, data?.score ?? null);
             if (includeComments) row[`${displayName} Note`] = data?.comment ?? '';
             if (data?.code !== null && data?.code !== undefined) codes.push(data.code);
             if (data?.comment) comments.push(`${displayName}: ${data.comment}`);

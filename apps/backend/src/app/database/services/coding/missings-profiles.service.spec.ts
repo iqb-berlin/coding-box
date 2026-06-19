@@ -52,23 +52,25 @@ describe('MissingsProfilesService', () => {
 
     await expect(service.getMissingsProfiles(1)).resolves.toEqual([{ id: 1, label: 'IQB-Standard' }]);
     await expect(service.getMissingsProfiles(1)).resolves.toEqual([{ id: 2, label: 'IQB-Standard' }]);
-    expect(repo.save).toHaveBeenCalledTimes(1);
+    expect(repo.save).toHaveBeenCalledTimes(2);
   });
 
-  it('creates IQB standard defaults with score 0 for all standard missings', async () => {
+  it('creates canonical IQB standard defaults with explicit NA scores', async () => {
     repo.findOne.mockResolvedValueOnce(null);
     repo.save.mockImplementationOnce(async value => ({ ...value, id: 2 }));
 
     const profile = await service.ensureDefaultMissingsProfile(1);
 
     expect(profile.parseMissings()).toEqual([
-      expect.objectContaining({ id: 'mci', code: -97, score: 0 }),
       expect.objectContaining({ id: 'mir', code: -98, score: 0 }),
-      expect.objectContaining({ id: 'mbi_mbo', code: -99, score: 0 })
+      expect.objectContaining({ id: 'mbi_mbo', code: -99, score: 0 }),
+      expect.objectContaining({ id: 'mnr', code: -96, score: null }),
+      expect.objectContaining({ id: 'mci', code: -97, score: null }),
+      expect.objectContaining({ id: 'mbd', code: -94, score: null })
     ]);
   });
 
-  it('adds score 0 to legacy IQB standard profiles', async () => {
+  it('synchronizes legacy IQB standard profiles to the canonical missings', async () => {
     repo.findOne.mockResolvedValueOnce({
       id: 7,
       label: 'IQB-Standard',
@@ -90,12 +92,18 @@ describe('MissingsProfilesService', () => {
 
     expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
       label: 'IQB-Standard',
-      missings: expect.stringContaining('"score":0')
+      missings: expect.stringContaining('"id":"mbd"')
     }));
-    expect(profile.parseMissings().map(missing => missing.score)).toEqual([0, 0, 0]);
+    expect(profile.parseMissings()).toEqual([
+      expect.objectContaining({ id: 'mir', code: -98, score: 0 }),
+      expect.objectContaining({ id: 'mbi_mbo', code: -99, score: 0 }),
+      expect.objectContaining({ id: 'mnr', code: -96, score: null }),
+      expect.objectContaining({ id: 'mci', code: -97, score: null }),
+      expect.objectContaining({ id: 'mbd', code: -94, score: null })
+    ]);
   });
 
-  it('adds score 0 to legacy IQB standard profiles resolved by explicit profile id', async () => {
+  it('synchronizes legacy IQB standard profiles resolved by explicit profile id', async () => {
     const legacyProfile = {
       id: 7,
       label: 'IQB-Standard',
@@ -114,20 +122,20 @@ describe('MissingsProfilesService', () => {
     repo.findOne.mockResolvedValue(legacyProfile);
     repo.save.mockImplementation(async value => value);
 
-    await expect(service.getMissingByIdForProfileOrDefault(1, 7, 'mir')).resolves.toEqual({
-      id: 'mir',
-      label: 'MIR',
-      code: -98,
-      score: 0
+    await expect(service.getMissingByIdForProfileOrDefault(1, 7, 'mci')).resolves.toEqual({
+      id: 'mci',
+      label: 'missing coding impossible',
+      code: -97,
+      score: null
     });
     expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
       id: 7,
       label: 'IQB-Standard',
-      missings: expect.stringContaining('"score":0')
+      missings: expect.stringContaining('"score":null')
     }));
   });
 
-  it('adds score 0 to legacy IQB standard profiles resolved by label', async () => {
+  it('synchronizes legacy IQB standard profiles resolved by label', async () => {
     repo.findOne.mockResolvedValueOnce({
       id: 7,
       label: 'IQB-Standard',
@@ -144,11 +152,13 @@ describe('MissingsProfilesService', () => {
     expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
       id: 7,
       label: 'IQB-Standard',
-      missings: expect.stringContaining('"score":0')
+      missings: expect.stringContaining('"id":"mnr"')
     }));
-    expect(profile?.parseMissings()).toEqual([
-      expect.objectContaining({ id: 'mir', code: -98, score: 0 })
-    ]);
+    expect(profile?.parseMissings()).toHaveLength(5);
+    expect(profile?.parseMissings()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'mir', code: -98, score: 0 }),
+      expect.objectContaining({ id: 'mci', code: -97, score: null })
+    ]));
   });
 
   it('loads profiles by label and id', async () => {
@@ -220,7 +230,6 @@ describe('MissingsProfilesService', () => {
 
   it.each([
     ['absent', undefined],
-    ['null', null],
     ['empty string', ''],
     ['blank string', '  '],
     ['boolean false', false],
@@ -240,6 +249,27 @@ describe('MissingsProfilesService', () => {
 
     await expect(service.createMissingsProfile(1, profile)).rejects.toThrow('score');
     expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it('accepts explicit null as a fachlicher NA score', async () => {
+    const profile = new MissingsProfilesDto();
+    profile.label = 'Profile';
+    profile.setMissings([
+      {
+        id: 'mir', label: 'MIR', description: 'Invalid response', code: -98, score: 0
+      },
+      {
+        id: 'mci', label: 'MCI', description: 'Coding impossible', code: -97, score: null
+      }
+    ]);
+    repo.findOne.mockResolvedValueOnce(null);
+
+    await expect(service.createMissingsProfile(1, profile)).resolves.toMatchObject({
+      label: 'Profile'
+    });
+    expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({
+      missings: expect.stringContaining('"score":null')
+    }));
   });
 
   it('rejects malformed missings JSON', async () => {
@@ -302,13 +332,19 @@ describe('MissingsProfilesService', () => {
     profile.label = 'IQB-Standard';
     profile.setMissings([
       {
-        id: 'mci', label: 'missing coding impossible', description: '', code: -97, score: 0
+        id: 'mci', label: 'missing coding impossible', description: '', code: -97, score: null
       },
       {
         id: 'mir', label: 'missing invalid response', description: '', code: -98, score: 0
       },
       {
         id: 'mbi_mbo', label: 'mbi / mbo', description: '', code: -99, score: 0
+      },
+      {
+        id: 'mnr', label: 'missing not reached', description: '', code: -96, score: null
+      },
+      {
+        id: 'mbd', label: 'missing by design', description: '', code: -94, score: null
       }
     ]);
     repo.findOne.mockResolvedValue({
@@ -318,8 +354,8 @@ describe('MissingsProfilesService', () => {
     });
 
     await expect(service.resolveMissingsProfileId(1, undefined)).resolves.toBe(7);
-    await expect(service.getDefaultNegativeMissingCodes(1)).resolves.toEqual(new Set([-97, -98, -99]));
-    await expect(service.getNegativeMissingCodesForProfileOrDefault(1, 0)).resolves.toEqual(new Set([-97, -98, -99]));
+    await expect(service.getDefaultNegativeMissingCodes(1)).resolves.toEqual(new Set([-94, -96, -97, -98, -99]));
+    await expect(service.getNegativeMissingCodesForProfileOrDefault(1, 0)).resolves.toEqual(new Set([-94, -96, -97, -98, -99]));
   });
 
   it('resolves missing code and score by missing id', async () => {
@@ -347,7 +383,6 @@ describe('MissingsProfilesService', () => {
 
   it.each([
     ['absent', undefined],
-    ['null', null],
     ['empty string', ''],
     ['blank string', '  '],
     ['boolean false', false],
@@ -370,6 +405,27 @@ describe('MissingsProfilesService', () => {
       .mockResolvedValueOnce({ id: profile.id, label: profile.label, missings: profile.missings });
 
     await expect(service.getMissingByIdForProfileOrDefault(1, 8, 'mir')).rejects.toThrow('score');
+  });
+
+  it('resolves profile missing values with explicit null scores', async () => {
+    const profile = new MissingsProfilesDto();
+    profile.id = 8;
+    profile.label = 'NA profile';
+    profile.missings = JSON.stringify([
+      {
+        id: 'mci', label: 'missing coding impossible', description: '', code: -97, score: null
+      }
+    ]);
+    repo.findOne
+      .mockResolvedValueOnce({ id: profile.id, label: profile.label, missings: profile.missings })
+      .mockResolvedValueOnce({ id: profile.id, label: profile.label, missings: profile.missings });
+
+    await expect(service.getMissingByIdForProfileOrDefault(1, 8, 'mci')).resolves.toEqual({
+      id: 'mci',
+      label: 'missing coding impossible',
+      code: -97,
+      score: null
+    });
   });
 
   it('rejects unknown explicit profile ids', async () => {
