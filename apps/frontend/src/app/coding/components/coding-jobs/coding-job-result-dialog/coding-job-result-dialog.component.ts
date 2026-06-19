@@ -832,6 +832,34 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return result.codingIssueOption === -1 || result.codingIssueOption === -2;
   }
 
+  isCodingIssueReviewEnabled(): boolean {
+    return this.data.codingJob.status === 'review';
+  }
+
+  canReviewCodingResult(result: CodingResult): boolean {
+    return this.isCodingIssueReviewEnabled() && this.isCodingIssueOption(result);
+  }
+
+  canEditCodingScheme(result: CodingResult): boolean {
+    return this.isCodingIssueReviewEnabled() && this.isNewCodeNeeded(result);
+  }
+
+  getReviewCodingResultTooltip(result: CodingResult): string {
+    if (!this.isCodingIssueReviewEnabled() && this.isCodingIssueOption(result)) {
+      return 'Kodierungshinweise können erst im Status "Zur Überprüfung" geprüft werden';
+    }
+
+    return 'Kodierungs-Hinweis überprüfen';
+  }
+
+  getEditCodingSchemeTooltip(result: CodingResult): string {
+    if (!this.isCodingIssueReviewEnabled() && this.isNewCodeNeeded(result)) {
+      return 'Kodierungsschema kann erst im Status "Zur Überprüfung" bearbeitet werden';
+    }
+
+    return 'Kodierungsschema bearbeiten';
+  }
+
   isNewCodeNeeded(result: CodingResult): boolean {
     return result.codingIssueOption === -2;
   }
@@ -864,6 +892,15 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   reviewCodingResult(result: CodingResult): void {
     if (!result || !this.isCodingIssueOption(result)) {
       this.snackBar.open('Nur Kodierungs-Hinweis-Fälle können überprüft werden', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    if (!this.isCodingIssueReviewEnabled()) {
+      this.snackBar.open(
+        'Kodierungshinweise können erst im Status "Zur Überprüfung" geprüft werden',
+        'Schließen',
+        { duration: 3000 }
+      );
       return;
     }
 
@@ -909,6 +946,15 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   editCodingScheme(result: CodingResult): void {
     if (!result || !this.isNewCodeNeeded(result)) {
       this.snackBar.open('Nur "Neuer Code erforderlich" Fälle können bearbeitet werden', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    if (!this.isCodingIssueReviewEnabled()) {
+      this.snackBar.open(
+        'Kodierungsschema kann erst im Status "Zur Überprüfung" bearbeitet werden',
+        'Schließen',
+        { duration: 3000 }
+      );
       return;
     }
 
