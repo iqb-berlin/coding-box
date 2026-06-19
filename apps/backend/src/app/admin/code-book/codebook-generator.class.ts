@@ -161,7 +161,7 @@ export class CodebookGenerator {
       if (this.shouldHideCodeInManualCodebook(code, contentSetting)) {
         return codeInfos;
       }
-      if (code.id) {
+      if (code.id !== undefined && code.id !== null) {
         try {
           const codeInfo = this.getCodeInfoFromCodeAsText(code, contentSetting);
           codeInfos.push(codeInfo);
