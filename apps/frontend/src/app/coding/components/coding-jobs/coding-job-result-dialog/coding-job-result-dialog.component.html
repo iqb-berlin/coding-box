@@ -160,15 +160,20 @@
       <ng-container matColumnDef="actions">
         <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
         <mat-cell *matCellDef="let result">
-          <button *ngIf="isCodingIssueOption(result)" mat-icon-button color="primary"
-            (click)="reviewCodingResult(result)" matTooltip="Kodierungs-Hinweis überprüfen"
-            aria-label="Kodierungs-Hinweis überprüfen">
-            <mat-icon>replay</mat-icon>
-          </button>
-          <button *ngIf="isNewCodeNeeded(result)" mat-icon-button color="primary" (click)="editCodingScheme(result)"
-            matTooltip="Kodierungsschema bearbeiten" aria-label="Kodierungsschema bearbeiten">
-            <mat-icon>edit</mat-icon>
-          </button>
+          <span *ngIf="isCodingIssueOption(result)" class="action-button-wrapper"
+            [matTooltip]="getReviewCodingResultTooltip(result)">
+            <button mat-icon-button color="primary" [disabled]="!canReviewCodingResult(result)"
+              (click)="reviewCodingResult(result)" [attr.aria-label]="getReviewCodingResultTooltip(result)">
+              <mat-icon>replay</mat-icon>
+            </button>
+          </span>
+          <span *ngIf="isNewCodeNeeded(result)" class="action-button-wrapper"
+            [matTooltip]="getEditCodingSchemeTooltip(result)">
+            <button mat-icon-button color="primary" [disabled]="!canEditCodingScheme(result)"
+              (click)="editCodingScheme(result)" [attr.aria-label]="getEditCodingSchemeTooltip(result)">
+              <mat-icon>edit</mat-icon>
+            </button>
+          </span>
         </mat-cell>
       </ng-container>
 

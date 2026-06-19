@@ -2462,7 +2462,8 @@ describe('CodingJobService', () => {
       response_matching_flags: null,
       aggregation_settings_version: 1,
       freshness_status: 'current',
-      freshness_reason: null
+      freshness_reason: null,
+      status: 'review'
     };
     const sourceUnit = {
       coding_job_id: 1,
@@ -2550,7 +2551,8 @@ describe('CodingJobService', () => {
       response_matching_flags: null,
       aggregation_settings_version: 1,
       freshness_status: 'current',
-      freshness_reason: null
+      freshness_reason: null,
+      status: 'review'
     };
     const sourceUnit = {
       coding_job_id: 1,
@@ -2609,8 +2611,52 @@ describe('CodingJobService', () => {
     );
   });
 
+  it.each(['active', 'completed', 'open', 'paused'])(
+    'rejects coding issue review progress for %s source jobs',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValueOnce({
+        id: 1,
+        workspace_id: 3,
+        status
+      });
+
+      await expect(service.saveCodingIssueReviewProgress(1, 42, {
+        testPerson: 'login@code@booklet',
+        unitId: 'UNIT',
+        variableId: 'VAR',
+        selectedCode: { id: 7 }
+      } as never)).rejects.toThrow(
+        'Coding issue review can only be saved for coding jobs submitted for review'
+      );
+      expect(codingJobUnitRepository.findOne).not.toHaveBeenCalled();
+      expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['active', 'completed', 'open', 'paused'])(
+    'rejects coding issue review notes for %s source jobs',
+    async status => {
+      codingJobRepository.findOne.mockResolvedValueOnce({
+        id: 1,
+        workspace_id: 3,
+        status
+      });
+
+      await expect(service.saveCodingIssueReviewNotes(1, 42, {
+        testPerson: 'login@code@booklet',
+        unitId: 'UNIT',
+        variableId: 'VAR',
+        notes: 'note'
+      })).rejects.toThrow(
+        'Coding issue review can only be saved for coding jobs submitted for review'
+      );
+      expect(codingJobUnitRepository.findOne).not.toHaveBeenCalled();
+      expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+    }
+  );
+
   it('rejects coding issue review progress for units that do not require review', async () => {
-    const sourceJob = { id: 1, workspace_id: 3, status: 'completed' };
+    const sourceJob = { id: 1, workspace_id: 3, status: 'review' };
     const sourceUnit = {
       coding_job_id: 1,
       workspace_id: 3,
@@ -2642,7 +2688,7 @@ describe('CodingJobService', () => {
   });
 
   it('rejects coding issue review notes for units that do not require review', async () => {
-    const sourceJob = { id: 1, workspace_id: 3, status: 'completed' };
+    const sourceJob = { id: 1, workspace_id: 3, status: 'review' };
     const sourceUnit = {
       coding_job_id: 1,
       workspace_id: 3,
@@ -2674,7 +2720,7 @@ describe('CodingJobService', () => {
   });
 
   it('does not create a blank coding issue review unit for notes-only saves', async () => {
-    const sourceJob = { id: 1, workspace_id: 3, status: 'completed' };
+    const sourceJob = { id: 1, workspace_id: 3, status: 'review' };
     const sourceUnit = {
       coding_job_id: 1,
       workspace_id: 3,
@@ -2724,7 +2770,7 @@ describe('CodingJobService', () => {
       aggregation_settings_version: 1,
       freshness_status: 'current',
       freshness_reason: null,
-      status: 'completed'
+      status: 'review'
     };
     const sourceUnit = {
       coding_job_id: 1,
