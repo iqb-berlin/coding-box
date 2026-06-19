@@ -92,7 +92,7 @@ import {
 import type {
   ManualCodeAvailabilityWarningDto
 } from '../../../../../../../api-dto/coding/manual-code-availability.dto';
-import { MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
+import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 import {
   CODING_FRESHNESS_TASK_RESULT_HELP,
   formatCodingFreshnessResponseCount,
@@ -378,7 +378,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isApplyingCodingResults = false;
 
   private applyingCodingResultJobIds = new Set<number>();
-  emptyResponseMissing: { code: number; score: number } | null = null;
+  emptyResponseMissing: { code: number; score: number | null } | null = null;
 
   showCoderTraining = false;
   editTraining: CoderTraining | null = null;
@@ -2536,14 +2536,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
           const missing = this.toMissingProfileDto(profile)?.parseMissings()
             .find(entry => entry.id === 'mir');
-          if (!missing || !Number.isInteger(Number(missing.code)) || !this.hasExplicitFiniteScore(missing.score)) {
+          if (!missing || !Number.isInteger(Number(missing.code)) || !this.hasExplicitScoreProperty(missing) || !this.hasExplicitValidScore(missing.score)) {
             this.emptyResponseMissing = null;
             return;
           }
 
           this.emptyResponseMissing = {
             code: Number(missing.code),
-            score: Number(missing.score)
+            score: this.normalizeScore(missing.score)
           };
         },
         error: () => {
@@ -2556,7 +2556,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return profile ? Object.assign(new MissingsProfilesDto(), profile) : null;
   }
 
-  private hasExplicitFiniteScore(score: unknown): boolean {
+  private hasExplicitScoreProperty(missing: MissingDto): boolean {
+    return Object.prototype.hasOwnProperty.call(missing, 'score');
+  }
+
+  private hasExplicitValidScore(score: unknown): boolean {
+    if (score === null) {
+      return true;
+    }
+
     if (typeof score === 'number') {
       return Number.isFinite(score);
     }
@@ -2569,6 +2577,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return false;
   }
 
+  private normalizeScore(score: unknown): number | null {
+    if (score === null) {
+      return null;
+    }
+
+    return Number(score);
+  }
+
   getApplyEmptyResponseCodingTooltip(): string {
     if (!this.emptyResponseMissing) {
       return this.translateService.instant(
@@ -2578,8 +2594,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     return this.translateService.instant(
       'coding-management-manual.response-analysis.apply-empty-coding-tooltip',
-      this.emptyResponseMissing
+      {
+        ...this.emptyResponseMissing,
+        score: this.getScoreDisplay(this.emptyResponseMissing.score)
+      }
     );
+  }
+
+  getScoreDisplay(score: number | null): string | number {
+    return score === null ? 'NA' : score;
   }
 
   private loadCodingFreshness(): void {

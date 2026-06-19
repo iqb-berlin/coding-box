@@ -450,7 +450,6 @@ describe('CodingJobResultDialogComponent', () => {
   });
 
   it.each([
-    ['null', null],
     ['empty string', ''],
     ['blank string', '   ']
   ])('should block applying results when a manual missing score is %s', (_label, score) => {
@@ -505,6 +504,63 @@ describe('CodingJobResultDialogComponent', () => {
     expect(result.unresolvedMissing).toBe(true);
     expect(result.score).toBeUndefined();
     expect(component.canApplyCodingResults()).toBe(false);
+  });
+
+  it('should resolve manually selected missing codes with an explicit NA score', () => {
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      status: 'completed',
+      missings_profile_id: 77
+    };
+    mockMissingsProfileService.getMissingsProfileDetails.mockReturnValue(of({
+      id: 77,
+      label: 'NA profile',
+      missings: JSON.stringify([
+        {
+          id: 'mir',
+          label: 'Custom MIR',
+          description: '',
+          code: -123,
+          score: null
+        },
+        {
+          id: 'mci',
+          label: 'Custom MCI',
+          description: '',
+          code: -124,
+          score: 8
+        }
+      ])
+    }));
+    mockCodingJobBackendService.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'UNIT_1',
+      unitAlias: 'UNIT_1',
+      variableId: 'VAR_1',
+      variableAnchor: 'VAR_1',
+      bookletName: 'BOOKLET_A',
+      personLogin: 'login',
+      personCode: 'code',
+      personGroup: 'group',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+    mockCodingJobBackendService.getCodingProgress.mockReturnValue(of({
+      'login@code@group@BOOKLET_A::BOOKLET_A::UNIT_1::VAR_1': {
+        id: -3,
+        label: 'MIR'
+      }
+    }));
+
+    component.loadCodingResults();
+
+    expect(component.dataSource.data[0]).toMatchObject({
+      code: -123,
+      score: null,
+      unresolvedMissing: false
+    });
+    expect(component.getScoreDisplay(component.dataSource.data[0])).toBe('NA');
+    expect(component.canApplyCodingResults()).toBe(true);
   });
 
   it('should identify new-code cases by stable issue option id', () => {

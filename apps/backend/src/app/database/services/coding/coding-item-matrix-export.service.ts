@@ -442,7 +442,13 @@ export class CodingItemMatrixExportService {
   ): Promise<string | number> {
     const missing = await this.resolveMissingValue(workspaceId, value.code);
     if (requestedValue === 'score') {
-      return value.score ?? missing?.score ?? '';
+      if (value.score !== null && value.score !== undefined) {
+        return value.score;
+      }
+      if (missing) {
+        return missing.score === null ? 'NA' : missing.score;
+      }
+      return value.code !== null && value.code < 0 ? 'NA' : '';
     }
 
     return missing?.code ?? mapCodeForExport(value.code) ?? '';

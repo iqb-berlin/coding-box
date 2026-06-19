@@ -100,9 +100,23 @@
               {{ 'workspace.missing-score' | translate }}
             </th>
             <td mat-cell *matCellDef="let missing; let i = index">
-              <mat-form-field appearance="fill">
-                <input matInput type="number" [(ngModel)]="missing.score" />
-              </mat-form-field>
+              <div class="score-editor">
+                <mat-form-field appearance="fill">
+                  <input
+                    matInput
+                    type="number"
+                    [ngModel]="missing.score"
+                    (ngModelChange)="setMissingScore(missing, $event)"
+                    [disabled]="isMissingScoreNa(missing)"
+                  />
+                </mat-form-field>
+                <mat-checkbox
+                  [checked]="isMissingScoreNa(missing)"
+                  (change)="setMissingScoreNa(missing, $event.checked)"
+                >
+                  NA
+                </mat-checkbox>
+              </div>
             </td>
           </ng-container>
 
@@ -177,7 +191,7 @@
             <th mat-header-cell *matHeaderCellDef>
               {{ 'workspace.missing-score' | translate }}
             </th>
-            <td mat-cell *matCellDef="let missing">{{ missing.score }}</td>
+            <td mat-cell *matCellDef="let missing">{{ getScoreDisplay(missing.score) }}</td>
           </ng-container>
 
           <!-- Actions Column (empty in view mode) -->

@@ -40,4 +40,5 @@
   <include file="coding-box.changelog-1.15.0.sql"/>
   <include file="coding-box.changelog-1.16.0.sql"/>
   <include file="coding-box.changelog-1.16.1.sql"/>
+  <include file="coding-box.changelog-1.16.2.sql"/>
 </databaseChangeLog>
