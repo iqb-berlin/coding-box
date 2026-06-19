@@ -698,6 +698,18 @@ describe('ReplayCodingService', () => {
       expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
     });
 
+    it('keeps decision replay notes locally when there is no coding job', async () => {
+      await service.saveNotes(1, 'login@code@group@booklet', 'UNIT', 'VAR', 'note');
+
+      expect(service.getNotes('login@code@group@booklet', 'UNIT', 'VAR')).toBe('note');
+      expect(codingJobBackendServiceMock.saveCodingNotes).not.toHaveBeenCalled();
+
+      await service.saveNotes(1, 'login@code@group@booklet', 'UNIT', 'VAR', '   ');
+
+      expect(service.getNotes('login@code@group@booklet', 'UNIT', 'VAR')).toBe('');
+      expect(codingJobBackendServiceMock.saveCodingNotes).not.toHaveBeenCalled();
+    });
+
     it('marks note saves as issue reviews in coding issue review mode', async () => {
       codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
       service.codingJobId = 100;
