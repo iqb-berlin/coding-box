@@ -307,8 +307,8 @@ export class CoderTrainingResultsApplyService {
     const applicableCandidates = candidates.filter(candidate => (
       candidate.code !== null &&
       candidate.code !== undefined &&
-      candidate.score !== null &&
-      candidate.score !== undefined
+      candidate.score !== undefined &&
+      (candidate.score !== null || candidate.code < 0)
     ));
     const applicableResponseIds = applicableCandidates.map(candidate => (
       candidate.responseId
