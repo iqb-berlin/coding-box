@@ -10,21 +10,25 @@ export interface ResolvedMissingValue {
   id: string;
   label: string;
   code: number;
-  score: number;
+  score: number | null;
 }
 
-export type IqbStandardMissingId = 'mci' | 'mir' | 'mbi_mbo';
+export type IqbStandardMissingId = 'mir' | 'mbi_mbo' | 'mnr' | 'mci' | 'mbd';
 
 export const IQB_STANDARD_MISSING_CODES: Record<IqbStandardMissingId, number> = {
-  mci: -97,
   mir: -98,
-  mbi_mbo: -99
+  mbi_mbo: -99,
+  mnr: -96,
+  mci: -97,
+  mbd: -94
 };
 
-export const IQB_STANDARD_MISSING_SCORES: Record<IqbStandardMissingId, number> = {
-  mci: 0,
+export const IQB_STANDARD_MISSING_SCORES: Record<IqbStandardMissingId, number | null> = {
   mir: 0,
-  mbi_mbo: 0
+  mbi_mbo: 0,
+  mnr: null,
+  mci: null,
+  mbd: null
 };
 
 @Injectable()
@@ -32,9 +36,6 @@ export class MissingsProfilesService {
   private readonly logger = new Logger(MissingsProfilesService.name);
 
   private readonly defaultProfileLabel = 'IQB-Standard';
-  private readonly iqbStandardMissingScores = new Map<string, number>(
-    Object.entries(IQB_STANDARD_MISSING_SCORES)
-  );
 
   constructor(
     @InjectRepository(MissingsProfile)
@@ -93,7 +94,7 @@ export class MissingsProfilesService {
       return profile;
     }
 
-    const enriched = this.addIqbStandardScores(profile);
+    const enriched = this.synchronizeIqbStandardProfile(profile);
     if (!enriched.changed) {
       return enriched.profile;
     }
@@ -128,7 +129,15 @@ export class MissingsProfilesService {
     return Object.assign(new MissingsProfilesDto(), profile);
   }
 
-  private hasExplicitFiniteScore(score: unknown): boolean {
+  private hasExplicitScoreProperty(missing: MissingDto): boolean {
+    return Object.prototype.hasOwnProperty.call(missing, 'score');
+  }
+
+  private hasExplicitValidScore(score: unknown): boolean {
+    if (score === null) {
+      return true;
+    }
+
     if (typeof score === 'number') {
       return Number.isFinite(score);
     }
@@ -139,6 +148,14 @@ export class MissingsProfilesService {
     }
 
     return false;
+  }
+
+  private normalizeScore(score: unknown): number | null {
+    if (score === null) {
+      return null;
+    }
+
+    return Number(score);
   }
 
   private parseMissingsForStorage(profile: MissingsProfilesDto): MissingDto[] {
@@ -176,7 +193,7 @@ export class MissingsProfilesService {
 
     const normalizedMissings = missings.map((missing, index) => {
       const code = Number(missing.code);
-      const score = Number(missing.score);
+      const score = this.normalizeScore(missing.score);
 
       if (!missing.id || typeof missing.id !== 'string' || missing.id.trim() === '') {
         throw new BadRequestException(`Missing entry ${index + 1} must define an id`);
@@ -198,7 +215,7 @@ export class MissingsProfilesService {
         throw new BadRequestException(`Missing entry '${missing.id}' must define a negative code`);
       }
 
-      if (!this.hasExplicitFiniteScore(missing.score)) {
+      if (!this.hasExplicitScoreProperty(missing) || !this.hasExplicitValidScore(missing.score)) {
         throw new BadRequestException(`Missing entry '${missing.id}' must define a score`);
       }
 
@@ -246,25 +263,30 @@ export class MissingsProfilesService {
     return profile;
   }
 
-  private addIqbStandardScores(profile: MissingsProfilesDto): { profile: MissingsProfilesDto; changed: boolean } {
-    const missings = profile.parseMissings();
-    let changed = false;
+  private areMissingsEqual(left: MissingDto[], right: MissingDto[]): boolean {
+    if (left.length !== right.length) {
+      return false;
+    }
 
-    const enrichedMissings = missings.map(missing => {
-      const score = this.iqbStandardMissingScores.get(missing.id);
-      if (score === undefined || this.hasExplicitFiniteScore(missing.score)) {
-        return missing;
-      }
-
-      changed = true;
-      return {
-        ...missing,
-        score
-      };
+    return left.every((leftMissing, index) => {
+      const rightMissing = right[index];
+      return leftMissing.id === rightMissing.id &&
+        leftMissing.label === rightMissing.label &&
+        leftMissing.description === rightMissing.description &&
+        Number(leftMissing.code) === rightMissing.code &&
+        this.hasExplicitScoreProperty(leftMissing) &&
+        this.hasExplicitValidScore(leftMissing.score) &&
+        this.normalizeScore(leftMissing.score) === rightMissing.score;
     });
+  }
+
+  private synchronizeIqbStandardProfile(profile: MissingsProfilesDto): { profile: MissingsProfilesDto; changed: boolean } {
+    const canonicalMissings = this.createIqbStandardMissings();
+    const currentMissings = profile.parseMissings();
+    const changed = !this.areMissingsEqual(currentMissings, canonicalMissings);
 
     if (changed) {
-      profile.setMissings(enrichedMissings as MissingDto[]);
+      profile.setMissings(canonicalMissings);
     }
 
     return { profile, changed };
@@ -272,13 +294,13 @@ export class MissingsProfilesService {
 
   private assertMissingHasScore(missing: MissingDto): ResolvedMissingValue {
     const code = Number(missing.code);
-    const score = Number(missing.score);
+    const score = this.normalizeScore(missing.score);
 
     if (!Number.isInteger(code)) {
       throw new BadRequestException(`Missing '${missing.id}' must define an integer code`);
     }
 
-    if (!this.hasExplicitFiniteScore(missing.score)) {
+    if (!this.hasExplicitScoreProperty(missing) || !this.hasExplicitValidScore(missing.score)) {
       throw new BadRequestException(`Missing '${missing.id}' must define a score`);
     }
 
@@ -290,33 +312,50 @@ export class MissingsProfilesService {
     };
   }
 
-  private createDefaultMissingsProfile(): MissingsProfilesDto {
-    const iqbStandardProfile = new MissingsProfilesDto();
-    iqbStandardProfile.label = this.defaultProfileLabel;
-    iqbStandardProfile.setMissings([
-      {
-        id: 'mci',
-        label: 'missing coding impossible',
-        description: '(1) Item müsste/könnte bearbeitet worden sein, aber (2) Antwort ist aufgrund technischer Probleme (z.B. Scanfehler) nicht auswertbar.',
-        code: IQB_STANDARD_MISSING_CODES.mci,
-        score: IQB_STANDARD_MISSING_SCORES.mci
-      },
+  private createIqbStandardMissings(): MissingDto[] {
+    return [
       {
         id: 'mir',
         label: 'missing invalid response',
-        description: '(1) Item wurde bearbeitet, aber (2a) leere Antwort oder (2b) ungültige (Spaß-)Antwort. Das Item wurde zwar bearbeitet, aber es wurde seitens der Testperson kein ernsthafter Lösungsversuch unternommen. Beispiel: Antworten wie "kein Plan", "egal", oder eine gemalte Sonne.',
+        description: '(1) Item wurde bearbeitet und (2a) leere Antwort oder (2b) sonstwie ungültige (Spaß-)Antwort.',
         code: IQB_STANDARD_MISSING_CODES.mir,
         score: IQB_STANDARD_MISSING_SCORES.mir
       },
       {
         id: 'mbi_mbo',
-        label: 'mbi / mbo',
-        description: 'Item wurde nicht bearbeitet aber gesehen oder Item wurde nicht gesehen, aber es gibt nachfolgend gesehene oder bearbeitete Items.',
+        label: 'missing by omission',
+        description: 'Item wurde nicht bearbeitet aber gesehen oder es wurde nicht gesehen, aber es gibt nachfolgend gesehene oder bearbeitete Items.',
         code: IQB_STANDARD_MISSING_CODES.mbi_mbo,
         score: IQB_STANDARD_MISSING_SCORES.mbi_mbo
+      },
+      {
+        id: 'mnr',
+        label: 'missing not reached',
+        description: '(1) Item wurde nicht gesehen und (2) es folgen nur nicht gesehene Items.',
+        code: IQB_STANDARD_MISSING_CODES.mnr,
+        score: IQB_STANDARD_MISSING_SCORES.mnr
+      },
+      {
+        id: 'mci',
+        label: 'missing coding impossible',
+        description: '(1) Item müsste/könnte bearbeitet worden sein und (2) Antwort ist aufgrund technischer Probleme nicht auswertbar.',
+        code: IQB_STANDARD_MISSING_CODES.mci,
+        score: IQB_STANDARD_MISSING_SCORES.mci
+      },
+      {
+        id: 'mbd',
+        label: 'missing by design',
+        description: 'Antwort liegt nicht vor, weil das Item der Testperson planmäßig nicht präsentiert wurde.',
+        code: IQB_STANDARD_MISSING_CODES.mbd,
+        score: IQB_STANDARD_MISSING_SCORES.mbd
       }
-    ]);
+    ];
+  }
 
+  private createDefaultMissingsProfile(): MissingsProfilesDto {
+    const iqbStandardProfile = new MissingsProfilesDto();
+    iqbStandardProfile.label = this.defaultProfileLabel;
+    iqbStandardProfile.setMissings(this.createIqbStandardMissings());
     return iqbStandardProfile;
   }
 
@@ -333,7 +372,7 @@ export class MissingsProfilesService {
       });
 
       if (existingProfile) {
-        const enriched = this.addIqbStandardScores(this.toDto(existingProfile));
+        const enriched = this.synchronizeIqbStandardProfile(this.toDto(existingProfile));
         if (enriched.changed) {
           existingProfile.missings = enriched.profile.missings as string;
           const savedProfile = await this.missingsProfileRepository.save(existingProfile);

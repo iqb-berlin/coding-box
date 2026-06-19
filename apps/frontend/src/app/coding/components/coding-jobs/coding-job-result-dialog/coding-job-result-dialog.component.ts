@@ -54,7 +54,7 @@ interface CodingResult {
   testPersonSearch: string;
   code?: string | number | null;
   codeLabel?: string;
-  score?: number;
+  score?: number | null;
   codingIssueOption?: number;
   codingIssueOptionLabel?: string;
   givenCode?: string | number;
@@ -68,7 +68,7 @@ interface CodingResult {
 interface CodingProgressEntry {
   id?: string | number;
   label?: string;
-  score?: number;
+  score?: number | null;
   codingIssueOption?: number;
 }
 
@@ -89,7 +89,7 @@ interface CodingJobUnitResult {
 
 interface ResolvedMissingPreview {
   code: number;
-  score: number;
+  score: number | null;
   label?: string;
 }
 
@@ -357,18 +357,26 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     }
 
     const code = Number(missing.code);
-    if (!Number.isInteger(code) || !this.hasExplicitFiniteScore(missing.score)) {
+    if (!Number.isInteger(code) || !this.hasExplicitScoreProperty(missing) || !this.hasExplicitValidScore(missing.score)) {
       return null;
     }
 
     return {
       code,
-      score: Number(missing.score),
+      score: this.normalizeScore(missing.score),
       label: missing.label
     };
   }
 
-  private hasExplicitFiniteScore(score: unknown): boolean {
+  private hasExplicitScoreProperty(missing: MissingDto): boolean {
+    return Object.prototype.hasOwnProperty.call(missing, 'score');
+  }
+
+  private hasExplicitValidScore(score: unknown): boolean {
+    if (score === null) {
+      return true;
+    }
+
     if (typeof score === 'number') {
       return Number.isFinite(score);
     }
@@ -379,6 +387,14 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     }
 
     return false;
+  }
+
+  private normalizeScore(score: unknown): number | null {
+    if (score === null) {
+      return null;
+    }
+
+    return Number(score);
   }
 
   private getCodingProgressKey(unit: CodingJobUnitResult): string {
@@ -724,6 +740,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     if (result.score !== undefined && result.score !== null) {
       return result.score.toString();
     }
+    if (result.score === null) {
+      return 'NA';
+    }
     if (this.hasCode(result)) {
       return '';
     }
@@ -771,7 +790,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   private getMappedResultScore(
     progress: CodingProgressEntry | undefined,
     missingPreviewLookup: MissingPreviewLookup
-  ): number | undefined {
+  ): number | null | undefined {
     const code = this.toNumericCode(progress?.id);
     const missingPreview = this.getMissingPreviewForProgressCode(code, missingPreviewLookup);
     if (missingPreview) {

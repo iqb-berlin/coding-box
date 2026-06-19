@@ -990,7 +990,7 @@
     "no-failures": "Keine Fehler vorhanden",
     "error-loading-missings-profiles": "Fehler beim Laden der Missings-Profile",
     "error-loading-missings-profile-details": "Fehler beim Laden der Details zum Missings-Profil",
-    "missing-validation-error": "Alle Missing-Einträge müssen gültige Angaben inklusive Code und Score haben",
+    "missing-validation-error": "Alle Missing-Einträge müssen gültige Angaben inklusive Code und Score oder NA haben",
     "profile-updated-successfully": "Profil erfolgreich aktualisiert",
     "error-updating-missings-profile": "Fehler beim Aktualisieren des Missings-Profils",
     "profile-created-successfully": "Profil erfolgreich erstellt",

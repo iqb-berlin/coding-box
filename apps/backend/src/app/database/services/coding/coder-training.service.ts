@@ -139,7 +139,7 @@ type TrainingResponseJobUnit = {
 type MissingCodePair = { mirCode: number; mciCode: number };
 type MissingCodeDisplayContext = MissingCodePair & {
   negativeCodes: Set<number>;
-  scoresByCode: Map<number, number>;
+  scoresByCode: Map<number, number | null>;
 };
 
 const DEFAULT_MISSING_CODE_CONTEXT: MissingCodeDisplayContext = {
@@ -147,7 +147,7 @@ const DEFAULT_MISSING_CODE_CONTEXT: MissingCodeDisplayContext = {
   mciCode: IQB_STANDARD_MISSING_CODES.mci,
   negativeCodes: new Set(Object.values(IQB_STANDARD_MISSING_CODES)),
   scoresByCode: new Map(
-    (Object.entries(IQB_STANDARD_MISSING_SCORES) as Array<[IqbStandardMissingId, number]>)
+    (Object.entries(IQB_STANDARD_MISSING_SCORES) as Array<[IqbStandardMissingId, number | null]>)
       .map(([missingId, score]) => [IQB_STANDARD_MISSING_CODES[missingId], score])
   )
 };
@@ -269,9 +269,9 @@ export class CoderTrainingService {
 
   private getMissingScoresByCodeFromMissings(
     missings: Array<{ id?: string; code: number; score?: unknown }>,
-    fallbackScoresByCode?: Map<number, number>
-  ): Map<number, number> {
-    const scoresByCode = new Map<number, number>(fallbackScoresByCode);
+    fallbackScoresByCode?: Map<number, number | null>
+  ): Map<number, number | null> {
+    const scoresByCode = new Map<number, number | null>(fallbackScoresByCode);
 
     missings.forEach(missing => {
       const code = Number(missing.code);
@@ -279,17 +279,25 @@ export class CoderTrainingService {
         return;
       }
 
-      if (!this.hasExplicitFiniteScore(missing.score)) {
+      if (!this.hasExplicitScoreProperty(missing) || !this.hasExplicitValidScore(missing.score)) {
         throw new BadRequestException(`Missing profile must define a score for code ${code}`);
       }
 
-      scoresByCode.set(code, Number(missing.score));
+      scoresByCode.set(code, this.normalizeScore(missing.score));
     });
 
     return scoresByCode;
   }
 
-  private hasExplicitFiniteScore(score: unknown): boolean {
+  private hasExplicitScoreProperty(missing: { score?: unknown }): boolean {
+    return Object.prototype.hasOwnProperty.call(missing, 'score');
+  }
+
+  private hasExplicitValidScore(score: unknown): boolean {
+    if (score === null) {
+      return true;
+    }
+
     if (typeof score === 'number') {
       return Number.isFinite(score);
     }
@@ -302,10 +310,18 @@ export class CoderTrainingService {
     return false;
   }
 
+  private normalizeScore(score: unknown): number | null {
+    if (score === null) {
+      return null;
+    }
+
+    return Number(score);
+  }
+
   private getMissingScoreFromContext(
     missingCodes: MissingCodeDisplayContext,
     code: number
-  ): number {
+  ): number | null {
     const score = missingCodes.scoresByCode.get(code);
     if (score === undefined) {
       throw new BadRequestException(`Missing profile must define a score for code ${code}`);
