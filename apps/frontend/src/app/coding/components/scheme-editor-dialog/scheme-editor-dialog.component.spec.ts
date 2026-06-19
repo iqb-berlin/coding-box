@@ -5,9 +5,10 @@ import {
   MAT_DIALOG_DATA, MatDialog, MatDialogRef
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import {
   Component, EventEmitter, Input, Output
 } from '@angular/core';
@@ -40,6 +41,8 @@ describe('SchemeEditorDialogComponent', () => {
   let mockSnackBar: Partial<MatSnackBar>;
   let mockDialog: Partial<MatDialog>;
   let mockTranslateService: Partial<TranslateService>;
+  let mockRouter: Partial<Router>;
+  let snackBarAction$: Subject<void>;
 
   const mockData: SchemeEditorDialogData = {
     workspaceId: 1,
@@ -61,12 +64,18 @@ describe('SchemeEditorDialogComponent', () => {
       close: jest.fn()
     };
 
+    snackBarAction$ = new Subject<void>();
     mockSnackBar = {
-      open: jest.fn()
+      open: jest.fn().mockReturnValue({
+        onAction: () => snackBarAction$.asObservable()
+      })
     };
 
     mockDialog = {
       open: jest.fn()
+    };
+    mockRouter = {
+      navigate: jest.fn()
     };
     mockTranslateService = {
       instant: jest.fn().mockImplementation((key: string) => key),
@@ -89,7 +98,8 @@ describe('SchemeEditorDialogComponent', () => {
         { provide: MAT_DIALOG_DATA, useValue: mockData },
         { provide: MatSnackBar, useValue: mockSnackBar },
         { provide: TranslateService, useValue: mockTranslateService },
-        { provide: MatDialog, useValue: mockDialog }
+        { provide: MatDialog, useValue: mockDialog },
+        { provide: Router, useValue: mockRouter }
       ]
     })
       .overrideComponent(SchemeEditorDialogComponent, {
@@ -158,6 +168,41 @@ describe('SchemeEditorDialogComponent', () => {
     );
     expect(mockSnackBar.open).toHaveBeenCalledWith('coding.schemer.save-success', 'Success', expect.any(Object));
     expect(mockDialogRef.close).toHaveBeenCalledWith(true);
+  }));
+
+  it('should show a freshness warning with navigation action after saving', fakeAsync(() => {
+    component.hasChanges = true;
+    component.unitScheme = { scheme: '{"updated": true}', schemeType: 'type1' };
+
+    (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({
+      data: [{ id: 'r1', filename: 'test-scheme.json', file_type: 'Resource' }]
+    }));
+    (mockFileService.uploadTestFiles as jest.Mock).mockReturnValueOnce(of({
+      failed: 0,
+      conflicts: [],
+      issues: [{
+        level: 'warning',
+        category: 'coding_freshness',
+        message: 'Datei wurde gespeichert'
+      }]
+    }));
+
+    component.save();
+    tick();
+
+    expect(mockSnackBar.open).toHaveBeenCalledWith(
+      'coding.schemer.save-freshness-warning',
+      'coding.schemer.check-coding-status',
+      { duration: 10000 }
+    );
+
+    snackBarAction$.next();
+    tick();
+
+    expect(mockRouter.navigate).toHaveBeenCalledWith(
+      ['/workspace-admin/1/coding/management'],
+      { queryParams: { refreshCodingFreshness: '1' } }
+    );
   }));
 
   it('should handle save error', fakeAsync(() => {

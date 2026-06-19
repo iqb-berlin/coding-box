@@ -22,7 +22,7 @@ import {
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AppService } from '../../../core/services/app.service';
@@ -124,6 +124,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private uiService = inject(CodingManagementUiService);
   private translateService = inject(TranslateService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
   private readonly reviewBatchSize = 500;
   private readonly maxReviewResponses = 5000;
 
@@ -314,6 +315,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.loadCodingFreshness();
     this.loadManualAppliedResultsOverview();
     this.loadAutocodingReadiness();
+    this.route.queryParamMap
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(params => {
+        const refreshRequested = params.get('refreshCodingFreshness');
+        if (refreshRequested === '1' || refreshRequested === 'true') {
+          this.refreshCodingStatusOverview();
+        }
+      });
   }
 
   ngOnDestroy(): void {
@@ -455,6 +464,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   refreshAutocodingReadiness(): void {
     this.loadAutocodingReadiness(true);
+  }
+
+  private refreshCodingStatusOverview(): void {
+    this.fetchCodingStatistics();
+    this.loadCodingFreshness();
+    this.loadManualAppliedResultsOverview();
+    this.loadAutocodingReadiness(true);
+    this.refreshTableData();
   }
 
   startFreshnessCoding(version: 'v1' | 'v3'): void {

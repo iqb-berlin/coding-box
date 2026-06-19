@@ -815,6 +815,7 @@ export class TestcenterService {
       const uploadedFiles: TestFilesUploadUploadedDto[] = [];
       const failedFiles: TestFilesUploadFailedDto[] = [];
       const conflicts: NonNullable<TestFilesUploadResultDto['conflicts']> = [];
+      const issues: TestResultsUploadIssueDto[] = [];
 
       for (const { optionKey, file } of filesWithOption) {
         await this.setCurrentFileProgress(
@@ -868,6 +869,9 @@ export class TestcenterService {
           if ((perFileResult.conflicts || []).length > 0) {
             conflicts.push(...(perFileResult.conflicts || []));
           }
+          if ((perFileResult.issues || []).length > 0) {
+            issues.push(...(perFileResult.issues || []));
+          }
 
           await this.applyFileResultProgress(
             workspace_id,
@@ -896,7 +900,8 @@ export class TestcenterService {
         failed: failedFiles.length,
         uploadedFiles,
         failedFiles,
-        conflicts
+        conflicts,
+        issues: issues.length > 0 ? issues : undefined
       };
 
       if (importRunId) {
@@ -1096,6 +1101,7 @@ export class TestcenterService {
         result.filesTestTakers = filesResult.filesTestTakers;
         result.filesMetadata = filesResult.filesMetadata;
         result.testFilesUploadResult = filesResult.uploadResult;
+        appendIssues(filesResult.uploadResult.issues);
       }
 
       if (responses === 'true') {

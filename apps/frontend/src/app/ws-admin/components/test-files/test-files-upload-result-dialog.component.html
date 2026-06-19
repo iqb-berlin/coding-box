@@ -110,5 +110,8 @@
 </div>
 
 <div mat-dialog-actions align="end">
+  @if (canCheckCodingStatus) {
+    <button mat-button color="primary" type="button" (click)="checkCodingStatus()">Kodierstand prüfen</button>
+  }
   <button mat-button type="button" (click)="close()">Schließen</button>
 </div>

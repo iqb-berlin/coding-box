@@ -320,7 +320,12 @@ describe('TestCenterImportComponent', () => {
         failed: 0,
         uploadedFiles: [],
         failedFiles: [],
-        conflicts: [{ fileId: 'file1', filename: 'file1.xml', fileType: 'unit' }]
+        conflicts: [{ fileId: 'file1', filename: 'file1.xml', fileType: 'unit' }],
+        issues: [{
+          level: 'warning',
+          category: 'coding_freshness',
+          message: 'Initial warning'
+        }]
       }
     };
     importService.importWorkspaceFiles.mockReturnValueOnce(of(mockInitialResult));
@@ -348,7 +353,12 @@ describe('TestCenterImportComponent', () => {
         failed: 0,
         uploadedFiles: [{ fileId: 'file1', filename: 'file1.xml', fileType: 'unit' }],
         failedFiles: [],
-        conflicts: []
+        conflicts: [],
+        issues: [{
+          level: 'warning',
+          category: 'coding_freshness',
+          message: 'Overwrite warning'
+        }]
       }
     };
     importService.importWorkspaceFiles.mockReturnValueOnce(of(mockFinalResult));
@@ -364,6 +374,20 @@ describe('TestCenterImportComponent', () => {
       importType: 'testFiles',
       overwriteSelectedCount: 1
     }));
+    const closePayload =
+      mockDialogRef.close.mock.calls[mockDialogRef.close.mock.calls.length - 1][0];
+    expect(closePayload.result.testFilesUploadResult.issues).toEqual([
+      {
+        level: 'warning',
+        category: 'coding_freshness',
+        message: 'Initial warning'
+      },
+      {
+        level: 'warning',
+        category: 'coding_freshness',
+        message: 'Overwrite warning'
+      }
+    ]);
   });
 
   it('should render correctly when using individual URL (reproduction of crash)', async () => {

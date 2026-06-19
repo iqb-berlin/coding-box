@@ -32,6 +32,7 @@ export type TestResultsUploadIssueCategory =
   'timestamp' |
   'missing_booklet_log' |
   'no_logs_saved' |
+  'coding_freshness' |
   'other';
 
 export type TestResultsUploadIssueDto = {
