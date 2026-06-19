@@ -7,10 +7,12 @@ import {
 import { MatButton } from '@angular/material/button';
 import { MatDivider } from '@angular/material/divider';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { Router } from '@angular/router';
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
 import { UnitScheme } from '../schemer/unit-scheme.interface';
 import { FileService } from '../../../shared/services/file/file.service';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
+import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 
 import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
 
@@ -124,7 +126,8 @@ export class SchemeEditorDialogComponent implements OnInit {
     private snackBar: MatSnackBar,
     private fileService: FileService,
     private translate: TranslateService,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private router: Router
   ) { }
 
   ngOnInit(): void {
@@ -284,11 +287,15 @@ export class SchemeEditorDialogComponent implements OnInit {
         const conflicts = result.conflicts || [];
         const ok = result.failed === 0 && conflicts.length === 0;
         if (ok) {
-          this.snackBar.open(
-            this.translate.instant('coding.schemer.save-success'),
-            'Success',
-            { duration: 3000 }
-          );
+          if (this.hasCodingFreshnessWarning(result.issues)) {
+            this.showCodingFreshnessWarning();
+          } else {
+            this.snackBar.open(
+              this.translate.instant('coding.schemer.save-success'),
+              'Success',
+              { duration: 3000 }
+            );
+          }
           this.dialogRef.close(true);
         } else {
           this.snackBar.open(
@@ -298,5 +305,26 @@ export class SchemeEditorDialogComponent implements OnInit {
           );
         }
       });
+  }
+
+  private hasCodingFreshnessWarning(
+    issues: TestResultsUploadIssueDto[] | undefined
+  ): boolean {
+    return (issues || []).some(issue => issue.category === 'coding_freshness');
+  }
+
+  private showCodingFreshnessWarning(): void {
+    const snackBarRef = this.snackBar.open(
+      this.translate.instant('coding.schemer.save-freshness-warning'),
+      this.translate.instant('coding.schemer.check-coding-status'),
+      { duration: 10000 }
+    ) as ReturnType<MatSnackBar['open']> | undefined;
+
+    snackBarRef?.onAction().subscribe(() => {
+      this.router.navigate(
+        [`/workspace-admin/${this.data.workspaceId}/coding/management`],
+        { queryParams: { refreshCodingFreshness: '1' } }
+      );
+    });
   }
 }
