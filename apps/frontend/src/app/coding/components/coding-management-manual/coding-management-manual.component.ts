@@ -119,6 +119,7 @@ import {
   ManualCodingExportDialogResult
 } from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
+import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 
 interface SavedCodeProgress {
   id?: number;
@@ -128,15 +129,32 @@ interface SavedCodeProgress {
 
 type PlanningStatusState =
   'loading' |
+  'preparation-required' |
   'warning' |
   'planning-incomplete' |
   'planning-ready' |
+  'training-ready' |
   'execution-ready' |
+  'double-coding-review-ready' |
+  'stale-source-review' |
   'completion-ready' |
   'progress-unavailable' |
   'complete';
 
 type ManualCodingTab = 'preparation' | 'planning' | 'training' | 'execution' | 'completion';
+
+interface ManualFreshnessJobSummary {
+  activeTrainingJobs: number;
+  openProductiveJobs: number;
+  completedProductiveJobs: number;
+  staleSourceJobs: number;
+}
+
+interface ManualFreshnessTarget {
+  tab: ManualCodingTab;
+  sectionId: string;
+  action: 'navigate' | 'double-coding-review';
+}
 
 @Component({
   selector: 'coding-box-coding-management-manual',
@@ -371,9 +389,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   completedJobsReadyForApply: CodingJob[] = [];
   completedJobsBlockedForReview: CodingJob[] = [];
   codingFreshnessSummary: CodingFreshnessSummaryDto | null = null;
+  private manualFreshnessJobSummary: ManualFreshnessJobSummary | null = null;
+  private openDoubleCodingConflictCount = 0;
 
   isLoadingCompletedJobsReadyForApply = false;
   isLoadingCodingFreshness = false;
+  isLoadingManualFreshnessJobSummary = false;
+  isLoadingDoubleCodingConflictSummary = false;
 
   isApplyingCodingResults = false;
 
@@ -1120,12 +1142,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   openExecutionDoubleCodedReview(): void {
-    if (this.codingJobsComponent) {
-      this.codingJobsComponent.openDoubleCodedReviewDialog();
-      return;
-    }
-
-    this.showError('Die Kodierjobs werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+    this.openDoubleCodedReviewDialog();
   }
 
   openTrainingExport(): void {
@@ -1348,6 +1365,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadStatusDistribution();
     this.loadStatusDistributionV2();
     this.loadCompletedJobsReadyForApply();
+    this.loadManualFreshnessDecisionData();
   }
 
   reloadCodingJobsList(): void {
@@ -1409,6 +1427,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.isLoadingManualCodeAvailability ||
       this.isLoadingCodingIncompleteVariables ||
       this.isLoadingAppliedResultsOverview ||
+      this.isLoadingManualFreshnessJobSummary ||
+      this.isLoadingDoubleCodingConflictSummary ||
       this.isLoadingMatchingMode;
   }
 
@@ -1575,6 +1595,54 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   hasExecutionOpenWork(): boolean {
     return this.getOpenCodingCases() > 0;
+  }
+
+  private hasPreparationRefreshTarget(): boolean {
+    return this.hasPreparationWarnings() ||
+      this.isResponseAnalysisOutdated();
+  }
+
+  private hasActiveTrainingCodingJobs(): boolean {
+    return (this.manualFreshnessJobSummary?.activeTrainingJobs ?? 0) > 0;
+  }
+
+  private hasOpenProductiveManualJobs(): boolean {
+    return (this.manualFreshnessJobSummary?.openProductiveJobs ?? 0) > 0;
+  }
+
+  private hasCompletedProductiveManualJobs(): boolean {
+    return (this.manualFreshnessJobSummary?.completedProductiveJobs ?? 0) > 0;
+  }
+
+  private hasStaleSourceManualJobs(): boolean {
+    return (this.manualFreshnessJobSummary?.staleSourceJobs ?? 0) > 0;
+  }
+
+  private hasOpenDoubleCodingReviewConflicts(): boolean {
+    return this.openDoubleCodingConflictCount > 0;
+  }
+
+  private hasManualFreshnessJobSummary(): boolean {
+    return this.manualFreshnessJobSummary !== null;
+  }
+
+  private hasExecutionOpenWorkForFreshness(): boolean {
+    if (this.hasManualFreshnessJobSummary()) {
+      return this.hasOpenProductiveManualJobs();
+    }
+
+    return this.hasExecutionOpenWork();
+  }
+
+  private hasCompletionReadyWorkForFreshness(): boolean {
+    if (this.hasManualFreshnessJobSummary()) {
+      return this.hasCompletedProductiveManualJobs();
+    }
+
+    return this.hasManualCodingProgressScope() &&
+      !!this.codingProgressOverview &&
+      !!this.appliedResultsOverview &&
+      !this.hasExecutionOpenWork();
   }
 
   isCompletionComplete(): boolean {
@@ -1809,6 +1877,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         }
         return 'status-warning';
       case 'planning-incomplete':
+      case 'preparation-required':
+      case 'double-coding-review-ready':
+      case 'stale-source-review':
       case 'completion-ready':
       case 'progress-unavailable':
         return 'status-attention';
@@ -1816,6 +1887,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return 'status-complete';
       case 'loading':
       case 'planning-ready':
+      case 'training-ready':
       case 'execution-ready':
       default:
         return 'status-ready';
@@ -1825,6 +1897,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private getPlanningStatusState(): PlanningStatusState {
     if (this.isAnyPlanningDataLoading()) {
       return 'loading';
+    }
+
+    if (this.hasPreparationRefreshTarget()) {
+      return 'preparation-required';
     }
 
     if (this.hasManualCodeAvailabilityWarnings) {
@@ -1840,21 +1916,32 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return 'planning-incomplete';
     }
 
+    if (this.isPlanningReady() && this.hasActiveTrainingCodingJobs()) {
+      return 'training-ready';
+    }
+
+    if (this.isPlanningReady() &&
+        !!this.codingProgressOverview &&
+        this.hasExecutionOpenWorkForFreshness()) {
+      return 'execution-ready';
+    }
+
+    if (this.isPlanningReady() && this.hasOpenDoubleCodingReviewConflicts()) {
+      return 'double-coding-review-ready';
+    }
+
+    if (this.isPlanningReady() && this.hasStaleSourceManualJobs()) {
+      return 'stale-source-review';
+    }
+
     if (this.isCompletionComplete()) {
       return 'complete';
     }
 
     if (this.isPlanningReady() &&
         !!this.codingProgressOverview &&
-        this.hasExecutionOpenWork()) {
-      return 'execution-ready';
-    }
-
-    if (this.isPlanningReady() &&
-        !!this.codingProgressOverview &&
         !!this.appliedResultsOverview &&
-        this.hasManualCodingProgressScope() &&
-        !this.hasExecutionOpenWork()) {
+        this.hasCompletionReadyWorkForFreshness()) {
       return 'completion-ready';
     }
 
@@ -1871,10 +1958,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return 'sync';
       case 'warning':
         return 'warning';
+      case 'preparation-required':
+        return 'tune';
       case 'planning-incomplete':
         return 'assignment_late';
+      case 'training-ready':
+        return 'school';
       case 'execution-ready':
         return 'play_circle';
+      case 'double-coding-review-ready':
+        return 'compare';
+      case 'stale-source-review':
+        return 'sync_problem';
       case 'completion-ready':
         return 'published_with_changes';
       case 'progress-unavailable':
@@ -1894,10 +1989,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return this.hasVariableCoverageConflicts() ?
           'Konflikte prüfen' :
           'Reguläre Codes für manuelle Kodierung prüfen';
+      case 'preparation-required':
+        return 'Vorbereitung aktualisieren';
       case 'planning-incomplete':
         return 'Planung noch unvollständig';
+      case 'training-ready':
+        return 'Schulungskodierjobs aktiv';
       case 'execution-ready':
         return 'Bereit für die Durchführung';
+      case 'double-coding-review-ready':
+        return 'Doppelkodierungsreview offen';
+      case 'stale-source-review':
+        return 'Veraltete Kodierjobs prüfen';
       case 'completion-ready':
         return this.canShowManualCompletionTab() ?
           'Bereit für den Abschluss' :
@@ -1922,6 +2025,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return 'Die Planung ist vollständig, der aktuelle Kodierfortschritt konnte aber nicht ermittelt werden. Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs.';
     }
 
+    if (planningStatusState === 'preparation-required') {
+      if (this.isResponseAnalysisOutdated()) {
+        return 'Die Antwortanalyse oder Aggregationsgrundlage ist nicht mehr aktuell. Aktualisieren Sie zuerst die Vorbereitung.';
+      }
+      return 'In der Vorbereitung gibt es offene Punkte, die vor der weiteren manuellen Kodierung geklärt werden sollten.';
+    }
+
     if (this.hasVariableCoverageConflicts()) {
       return `${this.variableCoverageOverview?.conflictedVariables || 0} Variablenkonflikte müssen vor der verlässlichen Jobplanung geklärt werden.`;
     }
@@ -1943,16 +2053,28 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     if (this.isPlanningReady() &&
+        this.hasActiveTrainingCodingJobs()) {
+      return `${this.manualFreshnessJobSummary?.activeTrainingJobs || 0} aktive Schulungskodierjob(s) sollten vor der produktiven Durchführung geprüft werden.`;
+    }
+
+    if (this.isPlanningReady() &&
         !!this.codingProgressOverview &&
-        this.hasExecutionOpenWork()) {
+        this.hasExecutionOpenWorkForFreshness()) {
       return 'Die Planung ist vollständig. Bearbeiten Sie nun die offenen Kodierfälle im Abschnitt Durchführung.';
+    }
+
+    if (this.isPlanningReady() && this.hasOpenDoubleCodingReviewConflicts()) {
+      return `${this.openDoubleCodingConflictCount} offene Doppelkodierungs-Konflikt(e) müssen im Review aufgelöst werden.`;
+    }
+
+    if (this.isPlanningReady() && this.hasStaleSourceManualJobs()) {
+      return `${this.manualFreshnessJobSummary?.staleSourceJobs || 0} Kodierjob(s) enthalten veraltete Quellfälle. Prüfen Sie diese Jobs in der Durchführung, bevor Ergebnisse angewendet oder weitergeführt werden.`;
     }
 
     if (this.isPlanningReady() &&
         !!this.codingProgressOverview &&
         !!this.appliedResultsOverview &&
-        this.hasManualCodingProgressScope() &&
-        !this.hasExecutionOpenWork()) {
+        this.hasCompletionReadyWorkForFreshness()) {
       return this.canShowManualCompletionTab() ?
         'Alle Kodierfälle sind abgeschlossen. Übernehmen Sie nun die Kodierergebnisse in den Datenbestand.' :
         'Alle Kodierfälle sind abgeschlossen. Die Übernahme der Ergebnisse in den Datenbestand bleibt Studienmanager:innen vorbehalten.';
@@ -1969,10 +2091,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return this.hasVariableCoverageConflicts() ?
           'Konflikte zuerst klären' :
           'Reguläre Codes ergänzen';
+      case 'preparation-required':
+        return 'Vorbereitung aktualisieren';
       case 'planning-incomplete':
         return 'Kodierfälle in Jobs verteilen';
+      case 'training-ready':
+        return 'Schulung prüfen';
       case 'execution-ready':
         return 'Kodierjobs bearbeiten lassen';
+      case 'double-coding-review-ready':
+        return 'Doppelkodierungen auflösen';
+      case 'stale-source-review':
+        return 'Veraltete Jobs prüfen';
       case 'completion-ready':
         return this.canShowManualCompletionTab() ?
           'Ergebnisse übernehmen' :
@@ -1998,6 +2128,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           return 'Prüfen Sie Variablen, die von mehreren Definitionen mit überlappenden Fällen verwendet werden.';
         }
         return 'Ergänzen Sie bei mindestens einem regulären Code eine manuelle Instruktion oder nehmen Sie die betroffenen Variablen aus der manuellen Auswahl.';
+      case 'preparation-required':
+        return this.isResponseAnalysisOutdated() ?
+          'Aktualisieren Sie Antwortanalyse und Aggregationsgrundlage, bevor die manuelle Zielnavigation fortgesetzt wird.' :
+          'Klären Sie offene Vorbereitungsbefunde wie leere Antworten oder Duplikate ohne aktive Aggregation.';
       case 'planning-incomplete':
         if ((this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
           const unavailableHint = unavailableCases > 0 ?
@@ -2006,8 +2140,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           return `${this.caseCoverageOverview?.effectiveUnassignedCases || 0} Fälle sind noch nicht in Kodierjobs. Für neue Jobdefinitionen sind aktuell ${availableCases} Fälle verfügbar.${unavailableHint} Danach Definition freigeben und Jobs erstellen.`;
         }
         return 'Ordnen Sie die fehlenden Variablen einer Jobdefinition zu. Danach Definition freigeben und Jobs erstellen.';
+      case 'training-ready':
+        return 'Es gibt aktive Schulungskodierjobs. Prüfen Sie den Schulungsstand, bevor produktive Kodierjobs im Fokus stehen.';
       case 'execution-ready':
         return 'Die Fälle sind verteilt. Kodierer können nun ihre zugewiesenen Kodierjobs bearbeiten.';
+      case 'double-coding-review-ready':
+        return 'Es gibt abgeschlossene produktive Kodierjobs mit offenen Doppelkodierungs-Konflikten. Öffnen Sie den Review und lösen Sie die Abweichungen auf.';
+      case 'stale-source-review':
+        return 'Veraltete Quellfälle werden nicht angewendet. Prüfen Sie die betroffenen Jobs in der Durchführung und aktualisieren Sie sie fachlich passend.';
       case 'completion-ready':
         return this.canShowManualCompletionTab() ?
           'Alle Kodierfälle sind bearbeitet. Übernehmen Sie jetzt die abgeschlossenen Ergebnisse in den Datenbestand.' :
@@ -2027,8 +2167,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return this.hasVariableCoverageConflicts() ?
           'Zu den Jobdefinitionen' :
           'Betroffene Variablen ansehen';
+      case 'preparation-required':
+        return 'Zur Vorbereitung';
+      case 'training-ready':
+        return 'Zur Schulung';
       case 'execution-ready':
         return 'Zu den Kodierjobs';
+      case 'double-coding-review-ready':
+        return 'Doppelkodierungsreview öffnen';
+      case 'stale-source-review':
+        return 'Veraltete Jobs prüfen';
       case 'completion-ready':
         return this.canShowManualCompletionTab() ? 'Zum Abschluss' : 'Zu den Kodierjobs';
       case 'complete':
@@ -2042,30 +2190,68 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   getPlanningNextStepTargetSection(): string {
-    switch (this.getPlanningStatusState()) {
-      case 'warning':
-        return this.hasVariableCoverageConflicts() ?
-          'manual-planning' :
-          'manual-variable-coverage';
-      case 'execution-ready':
-        return 'manual-execution';
-      case 'completion-ready':
-      case 'complete':
-        return this.canShowManualCompletionTab() ? 'manual-completion' : 'manual-execution';
-      default:
-        return 'manual-planning';
-    }
+    return this.getPlanningNextStepTarget().sectionId;
   }
 
   getPlanningNextStepTargetTab(): ManualCodingTab {
+    return this.getPlanningNextStepTarget().tab;
+  }
+
+  private getPlanningNextStepTarget(): ManualFreshnessTarget {
     switch (this.getPlanningStatusState()) {
+      case 'preparation-required':
+        return {
+          tab: 'preparation',
+          sectionId: 'manual-preparation',
+          action: 'navigate'
+        };
+      case 'warning':
+        return {
+          tab: 'planning',
+          sectionId: this.hasVariableCoverageConflicts() ?
+            'manual-planning' :
+            'manual-variable-coverage',
+          action: 'navigate'
+        };
+      case 'training-ready':
+        return {
+          tab: 'training',
+          sectionId: 'manual-support',
+          action: 'navigate'
+        };
       case 'execution-ready':
-        return 'execution';
+        return {
+          tab: 'execution',
+          sectionId: 'manual-execution',
+          action: 'navigate'
+        };
+      case 'double-coding-review-ready':
+        return {
+          tab: 'execution',
+          sectionId: 'manual-execution',
+          action: 'double-coding-review'
+        };
+      case 'stale-source-review':
+        // stale_source jobs are intentionally routed to Durchführung: users inspect
+        // the outdated source jobs there before any refresh or apply action.
+        return {
+          tab: 'execution',
+          sectionId: 'manual-execution',
+          action: 'navigate'
+        };
       case 'completion-ready':
       case 'complete':
-        return this.canShowManualCompletionTab() ? 'completion' : 'execution';
+        return {
+          tab: this.canShowManualCompletionTab() ? 'completion' : 'execution',
+          sectionId: this.canShowManualCompletionTab() ? 'manual-completion' : 'manual-execution',
+          action: 'navigate'
+        };
       default:
-        return 'planning';
+        return {
+          tab: 'planning',
+          sectionId: 'manual-planning',
+          action: 'navigate'
+        };
     }
   }
 
@@ -2076,18 +2262,23 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.goToManualTab(
-      this.getPlanningNextStepTargetTab(),
-      this.getPlanningNextStepTargetSection()
-    );
+    this.followManualFreshnessTarget();
   }
 
   getPlanningNextStepIcon(): string {
     switch (this.getPlanningStatusState()) {
       case 'warning':
         return 'warning';
+      case 'preparation-required':
+        return 'tune';
+      case 'training-ready':
+        return 'school';
       case 'execution-ready':
         return 'play_circle';
+      case 'double-coding-review-ready':
+        return 'compare';
+      case 'stale-source-review':
+        return 'sync_problem';
       case 'completion-ready':
       case 'complete':
         return 'published_with_changes';
@@ -2260,7 +2451,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     this.loadDefaultEmptyResponseMissing(workspaceId);
     this.isLoadingMatchingMode = true;
-    this.isLoadingResponseAnalysis = true;
 
     this.testPersonCodingService
       .getAggregationSettings(workspaceId)
@@ -2305,6 +2495,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.loadCaseCoverageOverview();
         this.loadCodingProgressOverview();
         this.loadCodingIncompleteVariables();
+        this.loadManualFreshnessDecisionData();
         this.loadCodingFreshness();
         this.loadResponseAnalysisForPlanningIfNeeded();
         return;
@@ -2418,10 +2609,33 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.pendingManualFreshnessFocus = false;
-    this.goToManualTab(
-      this.getPlanningNextStepTargetTab(),
-      this.getPlanningNextStepTargetSection()
-    );
+    this.followManualFreshnessTarget();
+  }
+
+  private followManualFreshnessTarget(): void {
+    const target = this.getPlanningNextStepTarget();
+    this.goToManualTab(target.tab, target.sectionId);
+
+    if (target.action === 'double-coding-review') {
+      setTimeout(() => this.openDoubleCodedReviewDialog(), 0);
+    }
+  }
+
+  private openDoubleCodedReviewDialog(): void {
+    const dialogRef = this.dialog.open(DoubleCodedReviewComponent, {
+      width: '98vw',
+      maxWidth: '100vw',
+      height: '95vh',
+      maxHeight: '100vh',
+      data: {}
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.resultsApplied) {
+        this.refreshAllStatistics();
+        this.reloadCodingJobsList();
+      }
+    });
   }
 
   private loadJobDefinitionsForExport(): void {
@@ -2659,6 +2873,160 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.codingProgressOverview = null;
         }
       });
+  }
+
+  private loadManualFreshnessDecisionData(): void {
+    this.loadManualFreshnessJobSummary();
+  }
+
+  private loadManualFreshnessJobSummary(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.manualFreshnessJobSummary = null;
+      this.openDoubleCodingConflictCount = 0;
+      this.isLoadingManualFreshnessJobSummary = false;
+      this.isLoadingDoubleCodingConflictSummary = false;
+      return;
+    }
+
+    this.isLoadingManualFreshnessJobSummary = true;
+    this.codingJobBackendService
+      .getCodingJobs(workspaceId)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingManualFreshnessJobSummary = false;
+          if (this.shouldLoadOpenDoubleCodingConflictSummary()) {
+            this.loadOpenDoubleCodingConflictSummary();
+            return;
+          }
+
+          this.openDoubleCodingConflictCount = 0;
+          this.isLoadingDoubleCodingConflictSummary = false;
+          this.focusManualFreshnessTargetIfReady();
+        })
+      )
+      .subscribe({
+        next: response => {
+          this.manualFreshnessJobSummary =
+            this.buildManualFreshnessJobSummary(response.data || []);
+        },
+        error: () => {
+          this.manualFreshnessJobSummary = null;
+        }
+      });
+  }
+
+  private shouldLoadOpenDoubleCodingConflictSummary(): boolean {
+    if (!this.manualFreshnessJobSummary) {
+      return false;
+    }
+
+    return !this.hasActiveTrainingCodingJobs() &&
+      !this.hasOpenProductiveManualJobs();
+  }
+
+  private loadOpenDoubleCodingConflictSummary(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.openDoubleCodingConflictCount = 0;
+      this.isLoadingDoubleCodingConflictSummary = false;
+      return;
+    }
+
+    this.isLoadingDoubleCodingConflictSummary = true;
+    this.testPersonCodingService
+      .getDoubleCodedVariablesForReview(
+        workspaceId,
+        1,
+        1,
+        true,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        'unresolved',
+        'differ'
+      )
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingDoubleCodingConflictSummary = false;
+          this.focusManualFreshnessTargetIfReady();
+        })
+      )
+      .subscribe({
+        next: response => {
+          this.openDoubleCodingConflictCount = response.total || 0;
+        },
+        error: () => {
+          this.openDoubleCodingConflictCount = 0;
+        }
+      });
+  }
+
+  private buildManualFreshnessJobSummary(jobs: CodingJob[]): ManualFreshnessJobSummary {
+    return jobs.reduce<ManualFreshnessJobSummary>(
+      (summary, job) => {
+        if (job.freshnessStatus === 'stale_source') {
+          summary.staleSourceJobs += 1;
+        }
+
+        if (this.isTrainingCodingJob(job)) {
+          if (this.isActiveCodingJob(job)) {
+            summary.activeTrainingJobs += 1;
+          }
+          return summary;
+        }
+
+        if (this.isActiveCodingJob(job)) {
+          summary.openProductiveJobs += 1;
+          return summary;
+        }
+
+        if (this.isCompletedManualCodingJob(job) &&
+            job.freshnessStatus !== 'stale_source') {
+          summary.completedProductiveJobs += 1;
+        }
+
+        return summary;
+      },
+      {
+        activeTrainingJobs: 0,
+        openProductiveJobs: 0,
+        completedProductiveJobs: 0,
+        staleSourceJobs: 0
+      }
+    );
+  }
+
+  private isTrainingCodingJob(job: CodingJob): boolean {
+    return !!job.training?.id || !!job.training_id;
+  }
+
+  private isActiveCodingJob(job: CodingJob): boolean {
+    if (['completed', 'review', 'results_applied'].includes(job.status)) {
+      return false;
+    }
+
+    return job.status === 'open' ||
+      (job.openUnits ?? 0) > 0 ||
+      (job.totalUnits ?? 0) > 0;
+  }
+
+  private isCompletedManualCodingJob(job: CodingJob): boolean {
+    if (job.status === 'results_applied') {
+      return false;
+    }
+
+    if (['completed', 'review'].includes(job.status)) {
+      return true;
+    }
+
+    const totalUnits = job.totalUnits ?? 0;
+    return totalUnits > 0 &&
+      (job.openUnits ?? 0) === 0 &&
+      (job.codedUnits ?? 0) >= totalUnits;
   }
 
   private loadVariableCoverageOverview(): void {
@@ -3521,6 +3889,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   loadResponseAnalysis(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      this.isLoadingResponseAnalysis = false;
       return;
     }
 

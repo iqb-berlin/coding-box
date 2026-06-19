@@ -20,6 +20,7 @@ import { ManualCodingExportDialogComponent } from '../manual-coding-export-dialo
 import type {
   ManualCodeAvailabilityWarningDto
 } from '../../../../../../../api-dto/coding/manual-code-availability.dto';
+import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 
 type VariableCoverageOverview = NonNullable<
 CodingManagementManualComponent['variableCoverageOverview']
@@ -1858,6 +1859,317 @@ describe('CodingManagementManualComponent', () => {
     }
   });
 
+  it('should route manual freshness targets by the detailed priority order', () => {
+    component.canApplyManualCodingResults = true;
+    setCompletePlanningState();
+    setCodingProgress(10, 10);
+    setAppliedResults(10, 0, 10);
+    setManualFreshnessJobSummary({
+      activeTrainingJobs: 1,
+      openProductiveJobs: 1,
+      completedProductiveJobs: 1,
+      staleSourceJobs: 1
+    }, 3);
+    component.responseAnalysis = {
+      emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+      duplicateValues: {
+        total: 1,
+        totalResponses: 2,
+        groups: [],
+        isAggregationApplied: false
+      },
+      aggregationSummary: {
+        duplicateGroups: 1,
+        duplicateResponses: 2,
+        collapsedCases: 0,
+        rawCases: 10,
+        effectiveCases: 10,
+        threshold: 2,
+        aggregationActive: false
+      },
+      matchingFlags: ['NO_AGGREGATION'],
+      analysisTimestamp: new Date().toISOString()
+    };
+
+    expect(component.getPlanningNextStepTargetTab()).toBe('preparation');
+    expect(component.getPlanningNextStepTargetSection()).toBe('manual-preparation');
+
+    component.responseAnalysis = null;
+    component.caseCoverageOverview = {
+      ...component.caseCoverageOverview!,
+      effectiveUnassignedCases: 2
+    };
+
+    expect(component.getPlanningNextStepTargetTab()).toBe('planning');
+    expect(component.getPlanningNextStepTargetSection()).toBe('manual-planning');
+
+    component.caseCoverageOverview = {
+      ...component.caseCoverageOverview!,
+      effectiveUnassignedCases: 0
+    };
+
+    expect(component.getPlanningNextStepTargetTab()).toBe('training');
+    expect(component.getPlanningNextStepTargetSection()).toBe('manual-support');
+
+    setManualFreshnessJobSummary({
+      activeTrainingJobs: 0,
+      openProductiveJobs: 1,
+      completedProductiveJobs: 1,
+      staleSourceJobs: 1
+    }, 3);
+
+    expect(component.getPlanningNextStepTargetTab()).toBe('execution');
+    expect(component.getPlanningNextStepActionLabel()).toBe('Zu den Kodierjobs');
+
+    setManualFreshnessJobSummary({
+      activeTrainingJobs: 0,
+      openProductiveJobs: 0,
+      completedProductiveJobs: 1,
+      staleSourceJobs: 1
+    }, 3);
+
+    expect(component.getPlanningNextStepTargetTab()).toBe('execution');
+    expect(component.getPlanningNextStepActionLabel()).toBe(
+      'Doppelkodierungsreview öffnen'
+    );
+
+    setManualFreshnessJobSummary({
+      activeTrainingJobs: 0,
+      openProductiveJobs: 0,
+      completedProductiveJobs: 1,
+      staleSourceJobs: 1
+    }, 0);
+
+    expect(component.getPlanningNextStepTargetTab()).toBe('execution');
+    expect(component.getPlanningNextStepActionLabel()).toBe(
+      'Veraltete Jobs prüfen'
+    );
+
+    setManualFreshnessJobSummary({
+      activeTrainingJobs: 0,
+      openProductiveJobs: 0,
+      completedProductiveJobs: 1,
+      staleSourceJobs: 0
+    }, 0);
+
+    expect(component.getPlanningNextStepTargetTab()).toBe('completion');
+    expect(component.getPlanningNextStepTargetSection()).toBe('manual-completion');
+  });
+
+  it('should open the double-coding review dialog for the freshness target', () => {
+    jest.useFakeTimers();
+    try {
+      component.canApplyManualCodingResults = true;
+      setCompletePlanningState();
+      setCodingProgress(10, 10);
+      setAppliedResults(10, 0, 10);
+      setManualFreshnessJobSummary({
+        activeTrainingJobs: 0,
+        openProductiveJobs: 0,
+        completedProductiveJobs: 1,
+        staleSourceJobs: 0
+      }, 2);
+      component.selectedManualTabIndex = component.manualCodingTabs.indexOf('planning');
+
+      const dialog = {
+        open: jest.fn().mockReturnValue({ afterClosed: () => of(undefined) })
+      };
+      (component as unknown as { dialog: typeof dialog }).dialog = dialog;
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      component.performPlanningNextStep();
+
+      expect(component.selectedManualTabIndex).toBe(3);
+      expect(scrollToSectionSpy).not.toHaveBeenCalled();
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-execution');
+      expect(dialog.open).toHaveBeenCalledWith(
+        DoubleCodedReviewComponent,
+        expect.objectContaining({
+          width: '98vw',
+          height: '95vh'
+        })
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should wait for manual freshness job data before focusing the detailed target', () => {
+    jest.useFakeTimers();
+    try {
+      setCompletePlanningState();
+      setCodingProgress(10, 10);
+      setAppliedResults(10, 0, 10);
+      component.selectedManualTabIndex = 0;
+      component.isLoadingManualFreshnessJobSummary = true;
+
+      const componentInternals = component as unknown as {
+        pendingManualFreshnessFocus: boolean;
+        manualFreshnessPlanningRequested: boolean;
+        requestManualFreshnessFocusIfNeeded(): void;
+        focusManualFreshnessTargetIfReady(): void;
+        loadManualTabData(tab: 'planning' | 'training'): void;
+      };
+      componentInternals.pendingManualFreshnessFocus = true;
+      componentInternals.manualFreshnessPlanningRequested = false;
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      componentInternals.requestManualFreshnessFocusIfNeeded();
+
+      expect(component.selectedManualTabIndex).toBe(1);
+      expect(loadManualTabDataSpy).toHaveBeenCalledTimes(1);
+      expect(scrollToSectionSpy).not.toHaveBeenCalled();
+
+      setManualFreshnessJobSummary({
+        activeTrainingJobs: 1,
+        openProductiveJobs: 0,
+        completedProductiveJobs: 0,
+        staleSourceJobs: 0
+      }, 0);
+      component.isLoadingManualFreshnessJobSummary = false;
+      componentInternals.focusManualFreshnessTargetIfReady();
+
+      expect(component.selectedManualTabIndex).toBe(2);
+      expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(2, 'training');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-support');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should skip double-coding summary while productive manual jobs are open', () => {
+    const getDoubleCodedVariablesForReview = jest.fn().mockReturnValue(of({
+      data: [],
+      total: 5
+    }));
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      codingJobBackendService: {
+        getCodingJobs: jest.Mock;
+      };
+      testPersonCodingService: {
+        getDoubleCodedVariablesForReview: jest.Mock;
+      };
+      openDoubleCodingConflictCount: number;
+      loadManualFreshnessDecisionData(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.codingJobBackendService = {
+      getCodingJobs: jest.fn().mockReturnValue(of({
+        data: [{
+          id: 1,
+          workspace_id: 5,
+          name: 'Offener produktiver Job',
+          status: 'open',
+          created_at: new Date(),
+          updated_at: new Date(),
+          assignedCoders: [],
+          totalUnits: 10,
+          openUnits: 2,
+          codedUnits: 8
+        }]
+      }))
+    };
+    componentInternals.testPersonCodingService = {
+      getDoubleCodedVariablesForReview
+    };
+    component.isLoadingDoubleCodingConflictSummary = true;
+    componentInternals.openDoubleCodingConflictCount = 4;
+
+    componentInternals.loadManualFreshnessDecisionData();
+
+    expect(getDoubleCodedVariablesForReview).not.toHaveBeenCalled();
+    expect(component.isLoadingManualFreshnessJobSummary).toBe(false);
+    expect(component.isLoadingDoubleCodingConflictSummary).toBe(false);
+    expect(componentInternals.openDoubleCodingConflictCount).toBe(0);
+  });
+
+  it('should not keep response analysis loading during initial settings load', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        getAggregationSettings: jest.Mock;
+      };
+      loadInitialManualCodingState(): void;
+      loadManualTabData(tab: 'preparation' | 'planning' | 'training' | 'execution' | 'completion'): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.testPersonCodingService = {
+      getAggregationSettings: jest.fn().mockReturnValue(of({
+        flags: [ResponseMatchingFlag.NO_AGGREGATION],
+        threshold: 2
+      }))
+    };
+    jest.spyOn(componentInternals, 'loadManualTabData').mockImplementation();
+
+    component.isLoadingResponseAnalysis = false;
+    componentInternals.loadInitialManualCodingState();
+
+    expect(component.isLoadingMatchingMode).toBe(false);
+    expect(component.isLoadingResponseAnalysis).toBe(false);
+  });
+
+  it('should count pending jobs with assigned units as active manual freshness jobs', () => {
+    const buildManualFreshnessJobSummary = (
+      component as unknown as {
+        buildManualFreshnessJobSummary(jobs: Array<{
+          status: string;
+          totalUnits?: number;
+          openUnits?: number;
+          codedUnits?: number;
+          training_id?: number;
+        }>): {
+          activeTrainingJobs: number;
+          openProductiveJobs: number;
+          completedProductiveJobs: number;
+          staleSourceJobs: number;
+        };
+      }
+    ).buildManualFreshnessJobSummary.bind(component);
+
+    const summary = buildManualFreshnessJobSummary([
+      {
+        status: 'pending',
+        totalUnits: 3,
+        openUnits: 0,
+        codedUnits: 0,
+        training_id: 1
+      },
+      {
+        status: 'pending',
+        totalUnits: 4,
+        openUnits: 0,
+        codedUnits: 0
+      },
+      {
+        status: 'results_applied',
+        totalUnits: 5,
+        openUnits: 0,
+        codedUnits: 5
+      }
+    ]);
+
+    expect(summary).toEqual({
+      activeTrainingJobs: 1,
+      openProductiveJobs: 1,
+      completedProductiveJobs: 0,
+      staleSourceJobs: 0
+    });
+  });
+
   it('should keep coding managers away from the hidden completion tab', () => {
     jest.useFakeTimers();
     try {
@@ -2109,6 +2421,35 @@ describe('CodingManagementManualComponent', () => {
       aggregationThreshold: null,
       aggregatedDuplicateCases: 0
     } satisfies CaseCoverageOverview;
+  }
+
+  function setManualFreshnessJobSummary(
+    summary: {
+      activeTrainingJobs?: number;
+      openProductiveJobs?: number;
+      completedProductiveJobs?: number;
+      staleSourceJobs?: number;
+    },
+    openDoubleCodingConflictCount = 0
+  ): void {
+    const componentInternals = component as unknown as {
+      manualFreshnessJobSummary: {
+        activeTrainingJobs: number;
+        openProductiveJobs: number;
+        completedProductiveJobs: number;
+        staleSourceJobs: number;
+      };
+      openDoubleCodingConflictCount: number;
+    };
+
+    componentInternals.manualFreshnessJobSummary = {
+      activeTrainingJobs: summary.activeTrainingJobs ?? 0,
+      openProductiveJobs: summary.openProductiveJobs ?? 0,
+      completedProductiveJobs: summary.completedProductiveJobs ?? 0,
+      staleSourceJobs: summary.staleSourceJobs ?? 0
+    };
+    componentInternals.openDoubleCodingConflictCount =
+      openDoubleCodingConflictCount;
   }
 
   function setEmptyPlanningSnapshots(): void {
