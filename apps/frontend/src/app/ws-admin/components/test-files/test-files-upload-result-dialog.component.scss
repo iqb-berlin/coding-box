@@ -32,6 +32,10 @@
   overflow-x: hidden;
 }
 
+.failed-viewport {
+  overflow-y: auto;
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -101,4 +105,39 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.details {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.details li {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.suggestions {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid rgba(25, 118, 210, 0.7);
+  background: rgba(25, 118, 210, 0.08);
+  font-size: 12px;
+}
+
+.suggestions-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.suggestions ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.suggestions li {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }

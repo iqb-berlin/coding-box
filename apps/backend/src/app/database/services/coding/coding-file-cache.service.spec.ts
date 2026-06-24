@@ -100,6 +100,24 @@ describe('CodingFileCacheService', () => {
     expect(pageMap.get('VAR_ALIAS')).toBe('1');
   });
 
+  it('prefers VOCS aliases over colliding variable ids for replay pages', async () => {
+    const repository = createRepository({
+      'UNIT.VOCS': createFile('UNIT.VOCS', {
+        variableCodings: [
+          { id: '08', alias: '09', page: '10' },
+          { id: '09', alias: '10', page: '11' }
+        ]
+      })
+    });
+    const service = new CodingFileCacheService(repository);
+
+    const pageMap = await service.loadVoudData('UNIT', 1);
+
+    expect(pageMap.get('08')).toBe('9');
+    expect(pageMap.get('09')).toBe('9');
+    expect(pageMap.get('10')).toBe('10');
+  });
+
   it('parses VOCS page overrides from already structured file data', async () => {
     const repository = createRepository({
       'UNIT.VOCS': {

@@ -634,7 +634,15 @@
     "upload-test-files": "Testdateien hochladen",
     "upload-test-files-tooltip": "Hochladen von Testinhalten (xml, html, Voud, vomd, vocs, zip, etc.)",
     "upload-packages-tooltip": "Ressourcenpakete verwalten (.itcr.zip, z.B. GeoGebra Math Apps Bundle)",
-    "resource-package-hint": "Bitte laden Sie nur Ressourcenpakete mit der Endung .itcr.zip hoch. Für GeoGebra-Aufgaben wird das GeoGebra Math Apps Bundle als Geogebra.itcr.zip empfohlen; alternativ kann es hier automatisch installiert werden. ZIP-Dateien aus dem IQB-Studio laden Sie bitte über 'Testdateien hochladen' hoch. Beachten Sie die Lizenzbedingungen des jeweiligen Ressourcenpakets."
+    "resource-package-hint": "Bitte laden Sie nur Ressourcenpakete mit der Endung .itcr.zip hoch. Für GeoGebra-Aufgaben wird das GeoGebra Math Apps Bundle als Geogebra.itcr.zip empfohlen; alternativ kann es hier automatisch installiert werden. ZIP-Dateien aus dem IQB-Studio laden Sie bitte über 'Testdateien hochladen' hoch. Beachten Sie die Lizenzbedingungen des jeweiligen Ressourcenpakets.",
+    "failure-suggestions": {
+      "title": "Hinweise",
+      "duplicate-key": "Der Wert{{value}} kommt mehrfach vor. Prüfen Sie die gemeldete Zeile und entfernen Sie doppelte Variable-/Element-IDs oder Aliase.",
+      "unsupported-root": "Die XML-Datei muss als Wurzelelement Unit, Booklet oder TestTakers haben.",
+      "invalid-xml": "Prüfen Sie, ob die Datei gültiges XML enthält, und exportieren Sie sie bei Bedarf erneut.",
+      "unsupported-file-type": "Laden Sie einen unterstützten Dateityp hoch, zum Beispiel XML, HTML, ZIP oder passende Ressourcen.",
+      "schema-validation": "Korrigieren Sie die genannten Schemafehler in der Datei und starten Sie den Upload danach erneut."
+    }
   },
   "test_group": {
     "test_group": "Testgruppe",

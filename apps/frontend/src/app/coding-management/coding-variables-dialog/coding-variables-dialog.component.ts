@@ -238,14 +238,15 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
             hasClosedCoding?: boolean;
             coderTrainingRequired?: boolean;
           }) => {
+            const publicVariableId = variable.alias || variable.id;
             const savedReplayAnchor = replayAnchorByVariable.get(
-              this.getVariableKey(unit.unitName, variable.id)
+              this.getVariableKey(unit.unitName, publicVariableId)
             ) || '';
             flattenedData.push({
               unitName: unit.unitName,
               unitId: unit.unitId,
-              variableId: variable.id,
-              variableAlias: variable.alias || variable.id,
+              variableId: publicVariableId,
+              variableAlias: publicVariableId,
               variableType: variable.type,
               hasCodingScheme: variable.hasCodingScheme,
               codingSchemeRef: variable.codingSchemeRef,
