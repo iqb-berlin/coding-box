@@ -3,7 +3,7 @@ import {
   Body,
   Controller,
   DefaultValuePipe,
-  Get, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards
+  Get, InternalServerErrorException, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -170,13 +170,8 @@ export class WorkspaceUsersController {
         limit
       };
     } catch (error) {
-      this.logger.error(`Error retrieving users for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
+      this.logger.error(`Error retrieving users for workspace ${workspaceId}`, error);
+      throw new InternalServerErrorException('Could not retrieve workspace users');
     }
   }
 

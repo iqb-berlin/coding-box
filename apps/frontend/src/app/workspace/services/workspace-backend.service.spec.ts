@@ -113,6 +113,36 @@ describe('WorkspaceBackendService', () => {
         limit: 1
       });
     });
+
+    it('should fail when loading all workspace users cannot fetch a later page', () => {
+      const errorHandler = jest.fn();
+      const nextHandler = jest.fn();
+
+      service.getAllWorkspaceUsers(1).subscribe({
+        next: nextHandler,
+        error: errorHandler
+      });
+
+      const firstRequest = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/1/users?page=1&limit=500`
+      );
+      firstRequest.flush({
+        data: [{
+          workspaceId: 1, userId: 1, accessLevel: 3, canCode: false
+        }],
+        total: 2,
+        page: 1,
+        limit: 1
+      });
+
+      const secondRequest = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/1/users?page=2&limit=500`
+      );
+      secondRequest.flush('server error', { status: 500, statusText: 'Server Error' });
+
+      expect(nextHandler).not.toHaveBeenCalled();
+      expect(errorHandler).toHaveBeenCalled();
+    });
   });
 
   describe('addWorkspace', () => {
