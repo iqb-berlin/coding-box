@@ -72,6 +72,20 @@ export class WorkspaceFileParsingService {
         result.variables = variables;
       }
 
+      const codingSchemeRefs = xmlDocument('CodingSchemeRef, codingSchemeRef')
+        .map((_, element) => xmlDocument(element).text().trim())
+        .get()
+        .filter(Boolean);
+      if (codingSchemeRefs.length > 0) {
+        const normalizedRefs = codingSchemeRefs.map(ref => ref
+          .toUpperCase()
+          .replace(/\.VOCS$/i, '')
+          .replace(/\.XML$/i, ''));
+        result.codingSchemeRef = codingSchemeRefs[0].toUpperCase();
+        result.codingSchemeRefNormalized = normalizedRefs[0];
+        result.codingSchemeRefs = Array.from(new Set(normalizedRefs));
+      }
+
       const definitions = xmlDocument('Definition');
       if (definitions.length) {
         const definitionsArray: Array<Record<string, string>> = [];
