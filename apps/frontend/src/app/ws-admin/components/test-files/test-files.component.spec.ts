@@ -15,6 +15,7 @@ import { AppService } from '../../../core/services/app.service';
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 import { TestFilesUploadConflictsDialogComponent } from './test-files-upload-conflicts-dialog.component';
+import { TestFilesUploadResultDialogComponent } from './test-files-upload-result-dialog.component';
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
@@ -226,6 +227,54 @@ describe('TestFilesComponent', () => {
 
       tick(1000); // Wait for setTimeout in onUploadSuccess
       expect(fileService.getFilesList).toHaveBeenCalled();
+    }));
+
+    it('should show failed upload details in the upload result dialog only', fakeAsync(() => {
+      const uploadResult: TestFilesUploadResultDto = {
+        total: 1,
+        uploaded: 0,
+        failed: 2,
+        uploadedFiles: [],
+        failedFiles: [
+          {
+            filename: 'bad.xml',
+            reason: 'XSD validation failed: bad.xml',
+            details: ['line 12: Duplicate key']
+          },
+          {
+            filename: 'bad.xml',
+            reason: 'XSD validation failed: bad.xml',
+            details: ['line 12: Duplicate key']
+          }
+        ],
+        conflicts: []
+      };
+
+      fileService.uploadTestFiles.mockReturnValue(of(uploadResult));
+
+      const event = {
+        target: {
+          files: mockFiles
+        }
+      } as unknown as Event;
+
+      component.onFileSelected(event.target);
+      tick();
+
+      expect(snackBar.open).toHaveBeenCalledWith(
+        'Upload abgeschlossen: 0 erfolgreich, 1 fehlgeschlagen',
+        'OK',
+        { duration: 5000 }
+      );
+      expect(dialog.open).toHaveBeenCalledTimes(1);
+      expect(dialog.open).toHaveBeenCalledWith(
+        TestFilesUploadResultDialogComponent,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            failedFiles: uploadResult.failedFiles
+          })
+        })
+      );
     }));
 
     it('should handle upload conflicts by opening conflicts dialog', fakeAsync(() => {

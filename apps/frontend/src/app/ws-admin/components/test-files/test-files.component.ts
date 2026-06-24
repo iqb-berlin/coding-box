@@ -72,8 +72,8 @@ import {
   TestFilesUploadConflictsDialogComponent,
   TestFilesUploadConflictsDialogResult
 } from './test-files-upload-conflicts-dialog.component';
-import { TestFilesUploadFailedDialogComponent } from './test-files-upload-failed-dialog.component';
 import {
+  deduplicateTestFilesUploadFailedFiles,
   TestFilesUploadResultDialogComponent,
   TestFilesUploadResultDialogData
 } from './test-files-upload-result-dialog.component';
@@ -690,21 +690,15 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     const conflicts = result.conflicts || [];
     const conflictInfo =
       conflicts.length > 0 ? `, Konflikte: ${conflicts.length}` : '';
+    const failedCount =
+      result.failedFiles && result.failedFiles.length > 0 ?
+        deduplicateTestFilesUploadFailedFiles(result.failedFiles).length :
+        result.failed;
     this.snackBar.open(
-      `Upload abgeschlossen: ${result.uploaded} erfolgreich, ${result.failed} fehlgeschlagen${conflictInfo}`,
+      `Upload abgeschlossen: ${result.uploaded} erfolgreich, ${failedCount} fehlgeschlagen${conflictInfo}`,
       'OK',
       { duration: 5000 }
     );
-
-    if (result.failedFiles && result.failedFiles.length > 0) {
-      this.dialog.open(TestFilesUploadFailedDialogComponent, {
-        width: '800px',
-        maxWidth: '95vw',
-        data: {
-          failedFiles: result.failedFiles
-        }
-      });
-    }
   }
 
   private handleUploadResult(
