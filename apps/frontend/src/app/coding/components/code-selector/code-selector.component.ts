@@ -62,6 +62,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() notesChanged = new EventEmitter<string>();
+  @Output() notesCommitted = new EventEmitter<string>();
   @Output() openNavigateDialog = new EventEmitter<void>();
   @Output() openCommentDialog = new EventEmitter<void>();
   @Output() openCodingJobs = new EventEmitter<void>();
@@ -419,6 +420,11 @@ export class CodeSelectorComponent implements OnChanges {
     if (this.isReadOnly) return;
     this.updateNewCodeCommentValidationState();
     this.notesChanged.emit(this.coderNotes);
+  }
+
+  onNotesCommitted(): void {
+    if (this.isReadOnly) return;
+    this.notesCommitted.emit(this.coderNotes);
   }
 
   canLeaveCurrentUnit(showValidationMessage = true): boolean {

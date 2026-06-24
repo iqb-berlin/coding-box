@@ -52,7 +52,8 @@
         [clearCodingIssueOnRegularSelection]="isCodingIssueReviewMode"
         [reviewCodeSelections]="reviewCodeSelections"
         (codeSelected)="onCodeSelected($event)"
-        (notesChanged)="onNotesChanged($event)" (openNavigateDialog)="openNavigateDialog()"
+        (notesChanged)="onNotesChanged($event)" (notesCommitted)="onNotesCommitted($event)"
+        (openNavigateDialog)="openNavigateDialog()"
         (openCodingJobs)="openCodingJobs()"
         (openCommentDialog)="openCommentDialog()" (pauseCodingJob)="pauseCodingJob()"
         (unitChanged)="handleUnitChanged($event)">
