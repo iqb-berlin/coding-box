@@ -266,6 +266,16 @@ describe('CodingJobBackendService', () => {
       ]);
     });
 
+    it('should request planned usage when asked', () => {
+      service.getJobDefinitions(1, { includePlannedUsage: true }).subscribe();
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/1/coding/job-definitions?includePlannedUsage=true`
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush([]);
+    });
+
     it('should create coding jobs through the dedicated job definition endpoint', () => {
       service.createCodingJobFromDefinition(1, 42).subscribe(response => {
         expect(response.success).toBe(true);

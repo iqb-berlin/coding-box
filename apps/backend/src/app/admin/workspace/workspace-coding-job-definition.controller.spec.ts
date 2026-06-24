@@ -1,6 +1,32 @@
 import { WorkspaceCodingJobDefinitionController } from './workspace-coding-job-definition.controller';
 
 describe('WorkspaceCodingJobDefinitionController', () => {
+  it('lists job definitions without planned usage by default', async () => {
+    const jobDefinitionService = {
+      getJobDefinitions: jest.fn().mockResolvedValue([])
+    };
+    const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
+
+    await expect(controller.getJobDefinitions(5)).resolves.toEqual([]);
+
+    expect(jobDefinitionService.getJobDefinitions).toHaveBeenCalledWith(5, {
+      includePlannedUsage: false
+    });
+  });
+
+  it('lists job definitions with planned usage when requested', async () => {
+    const jobDefinitionService = {
+      getJobDefinitions: jest.fn().mockResolvedValue([])
+    };
+    const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
+
+    await expect(controller.getJobDefinitions(5, 'true')).resolves.toEqual([]);
+
+    expect(jobDefinitionService.getJobDefinitions).toHaveBeenCalledWith(5, {
+      includePlannedUsage: true
+    });
+  });
+
   it('reads job definitions through the workspace-scoped service path', async () => {
     const jobDefinitionService = {
       getJobDefinition: jest.fn().mockResolvedValue({

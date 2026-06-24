@@ -244,6 +244,13 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
   const mockCodingReadinessCacheInvalidator = {
     invalidateWorkspaceReadinessCache: jest.fn()
   };
+  const mockWorkspaceFileParsingService = {
+    extractUnitInfo: jest.fn().mockResolvedValue({
+      codingSchemeRef: 'UNIT_A.VOCS',
+      codingSchemeRefNormalized: 'UNIT_A',
+      codingSchemeRefs: ['UNIT_A']
+    })
+  };
 
   function makeService(): WorkspaceFilesService {
     return new WorkspaceFilesService(
@@ -254,7 +261,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       mockCodingStatisticsService as unknown as CtorParams[4],
       {} as unknown as CtorParams[5],
       {} as unknown as CtorParams[6],
-      {} as unknown as CtorParams[7],
+      mockWorkspaceFileParsingService as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
@@ -269,6 +276,11 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockWorkspaceFileParsingService.extractUnitInfo.mockResolvedValue({
+      codingSchemeRef: 'UNIT_A.VOCS',
+      codingSchemeRefNormalized: 'UNIT_A',
+      codingSchemeRefs: ['UNIT_A']
+    });
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
@@ -414,6 +426,67 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     expect(mockFileUploadRepository.upsert).toHaveBeenCalled();
   });
 
+  it('keeps incomplete variable cache fresh after a pure coding scheme upload', async () => {
+    const service = makeService();
+    const oldData = createCodingScheme({ processing: [] });
+    const newData = createCodingScheme({ processing: ['IGNORE_CASE'] });
+    mockFileUploadRepository.findOne.mockResolvedValue({
+      file_id: 'UNIT_A.VOCS',
+      data: oldData
+    });
+
+    await service.uploadTestFiles(1, [createVocsFile(newData)], true);
+
+    expect(mockCodingStatisticsService.invalidateCache).not.toHaveBeenCalled();
+    expect(mockCodingStatisticsService.invalidateIncompleteVariablesCache)
+      .toHaveBeenCalledWith(1);
+    expect(mockCodingReadinessCacheInvalidator.invalidateWorkspaceReadinessCache)
+      .toHaveBeenCalledWith(1);
+  });
+
+  it('extracts coding scheme refs for unit XML files uploaded as octet-stream', async () => {
+    const service = makeService();
+    const unitXml = `
+      <Unit>
+        <Metadata><Id>UNIT_A</Id></Metadata>
+        <CodingSchemeRef>UNIT_A.VOCS</CodingSchemeRef>
+      </Unit>
+    `;
+    mockFileUploadRepository.findOne.mockResolvedValue(null);
+
+    await (
+      service as unknown as {
+        handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
+      }
+    ).handleOctetStreamFile(
+      1,
+      {
+        fieldname: 'files',
+        originalname: 'unit_a.xml',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        buffer: Buffer.from(unitXml),
+        size: Buffer.byteLength(unitXml)
+      },
+      true
+    );
+
+    expect(mockWorkspaceFileParsingService.extractUnitInfo).toHaveBeenCalled();
+    expect(mockFileUploadRepository.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        file_type: 'Unit',
+        structured_data: {
+          extractedInfo: expect.objectContaining({
+            rootElement: 'Unit',
+            detectedVia: 'octet-stream-handler',
+            codingSchemeRefNormalized: 'UNIT_A'
+          })
+        }
+      }),
+      ['file_id', 'workspace_id']
+    );
+  });
+
   it('invalidates workspace file caches after Testcenter import writes files', async () => {
     const service = makeService();
     const conflictQueryBuilder = {
@@ -454,6 +527,49 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     ]);
 
     expect(invalidateSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('extracts coding scheme refs for Unit files imported from Testcenter', async () => {
+    const service = makeService();
+    const conflictQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([])
+    };
+    const insertQueryBuilder = {
+      insert: jest.fn().mockReturnThis(),
+      into: jest.fn().mockReturnThis(),
+      values: jest.fn().mockReturnThis(),
+      orIgnore: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue(undefined)
+    };
+    mockFileUploadRepository.createQueryBuilder
+      .mockReturnValueOnce(conflictQueryBuilder)
+      .mockReturnValueOnce(insertQueryBuilder);
+
+    await service.testCenterImport([
+      {
+        workspace_id: 1,
+        file_id: 'UnitA',
+        filename: 'UnitA.xml',
+        file_type: 'Unit',
+        file_size: 12,
+        data: '<Unit><CodingSchemeRef>UnitA.vocs</CodingSchemeRef></Unit>'
+      }
+    ]);
+
+    expect(mockWorkspaceFileParsingService.extractUnitInfo).toHaveBeenCalled();
+    expect(insertQueryBuilder.values).toHaveBeenCalledWith([
+      expect.objectContaining({
+        file_id: 'UnitA',
+        structured_data: {
+          extractedInfo: expect.objectContaining({
+            codingSchemeRefNormalized: 'UNIT_A'
+          })
+        }
+      })
+    ]);
   });
 
   it('invalidates auto-coding readiness cache when workspace file caches are invalidated', async () => {

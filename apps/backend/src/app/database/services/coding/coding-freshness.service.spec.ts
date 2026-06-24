@@ -342,6 +342,31 @@ describe('CodingFreshnessService', () => {
     );
   });
 
+  it('normalizes mixed-case and xml-suffixed unit file ids when resolving separate coding scheme refs', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([]);
+
+    await (
+      service as unknown as {
+        getUnitIdsByCodingSchemeRefs: (
+          workspaceId: number,
+          codingSchemeRefs: string[]
+        ) => Promise<number[]>;
+      }
+    ).getUnitIdsByCodingSchemeRefs(1, ['separate_scheme']);
+
+    const [sql, params] = (connection.query as jest.Mock).mock.calls[0];
+    expect(sql).toContain(
+      "REGEXP_REPLACE(UPPER(unit_file.file_id), '\\.XML$', '', 'i') IN"
+    );
+    expect(sql).toContain(
+      "REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i')"
+    );
+    expect(sql).toContain(
+      "REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i')"
+    );
+    expect(params).toEqual([1, ['SEPARATE_SCHEME']]);
+  });
+
   it('marks coding scheme instruction-only changes for manual review only', async () => {
     mockCodingSchemeChangeQueries([10], 12);
     const responseCountsQb = queryBuilder({

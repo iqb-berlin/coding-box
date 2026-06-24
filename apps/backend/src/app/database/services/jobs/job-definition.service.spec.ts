@@ -1516,7 +1516,34 @@ describe('JobDefinitionService', () => {
     ]);
   });
 
-  it('attaches planned variable usage for listed definitions without created jobs', async () => {
+  it('does not calculate planned variable usage for listed definitions by default', async () => {
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 4,
+        workspace_id: 7,
+        status: 'draft',
+        assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        assigned_variable_bundles: [],
+        max_coding_cases: 2,
+        case_ordering_mode: 'continuous',
+        distribution_seed: 'seed-4'
+      }
+    ]);
+
+    const result = await service.getJobDefinitions(7);
+
+    expect(result[0]).toMatchObject({
+      id: 4,
+      plannedVariableUsage: {},
+      planned_variable_usage: {},
+      plannedVariableUsageByStatus: {},
+      planned_variable_usage_by_status: {}
+    });
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch)
+      .not.toHaveBeenCalled();
+  });
+
+  it('attaches planned variable usage for listed definitions without created jobs when requested', async () => {
     jobDefinitionRepository.find.mockResolvedValue([
       {
         id: 4,
@@ -1535,7 +1562,7 @@ describe('JobDefinitionService', () => {
       [4, new Map([['Unit 1::Var 1', { regular: 2, deriveError: 0, total: 2 }]])]
     ]));
 
-    const result = await service.getJobDefinitions(7);
+    const result = await service.getJobDefinitions(7, { includePlannedUsage: true });
 
     expect(result[0]).toMatchObject({
       id: 4,
@@ -1592,7 +1619,7 @@ describe('JobDefinitionService', () => {
       ])]
     ]));
 
-    await service.getJobDefinitions(7);
+    await service.getJobDefinitions(7, { includePlannedUsage: true });
 
     expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
       expect.objectContaining({
@@ -1640,7 +1667,7 @@ describe('JobDefinitionService', () => {
       [5, new Map([['Unit 2::Var 2', { regular: 3, deriveError: 0, total: 3 }]])]
     ]));
 
-    const result = await service.getJobDefinitions(7);
+    const result = await service.getJobDefinitions(7, { includePlannedUsage: true });
 
     expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledTimes(1);
     expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [

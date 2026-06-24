@@ -1261,14 +1261,26 @@ export class CodingFreshnessService {
             unit.id AS id,
             REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') AS unit_name,
             REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') AS unit_alias,
-            REGEXP_REPLACE(
-              UPPER(COALESCE(
-                (REGEXP_MATCH(unit_file.data, '<\\s*codingschemeref[^>]*>\\s*([^<]+)', 'i'))[1],
+            COALESCE(
+              NULLIF(
+                UPPER(unit_file.structured_data #>> '{extractedInfo,codingSchemeRefNormalized}'),
                 ''
-              )),
-              '\\.VOCS$',
-              '',
-              'i'
+              ),
+              REGEXP_REPLACE(
+                REGEXP_REPLACE(
+                  UPPER(COALESCE(
+                    NULLIF(unit_file.structured_data #>> '{extractedInfo,codingSchemeRef}', ''),
+                    (REGEXP_MATCH(unit_file.data, '<\\s*codingschemeref[^>]*>\\s*([^<]+)', 'i'))[1],
+                    ''
+                  )),
+                  '\\.VOCS$',
+                  '',
+                  'i'
+                ),
+                '\\.XML$',
+                '',
+                'i'
+              )
             ) AS scheme_ref
           FROM "unit" unit
           INNER JOIN booklet booklet ON booklet.id = unit.bookletid

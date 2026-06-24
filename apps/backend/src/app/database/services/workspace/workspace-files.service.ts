@@ -136,6 +136,12 @@ interface CodingSchemeFreshnessImpact {
   manualCodingChanged: boolean;
 }
 
+type UploadedFileForCacheInvalidation = {
+  fileId?: string;
+  filename?: string;
+  fileType?: string;
+};
+
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
@@ -285,6 +291,92 @@ export class WorkspaceFilesService implements OnModuleInit {
 
   private isCodingSchemeFileId(fileId: unknown): boolean {
     return String(fileId || '').trim().toUpperCase().endsWith('.VOCS');
+  }
+
+  private isUploadedCodingSchemeFile(
+    file: UploadedFileForCacheInvalidation
+  ): boolean {
+    return [file.fileId, file.filename]
+      .some(value => this.isCodingSchemeFileId(value));
+  }
+
+  private shouldInvalidateCodingStatisticsAfterUpload(
+    result: TestFilesUploadResultDto
+  ): boolean {
+    const uploadedFiles = result.uploadedFiles || [];
+    if (uploadedFiles.length === 0) {
+      return false;
+    }
+    return !uploadedFiles.every(file => this.isUploadedCodingSchemeFile(file));
+  }
+
+  private hasUploadedFiles(result: TestFilesUploadResultDto): boolean {
+    return (result.uploadedFiles || []).length > 0;
+  }
+
+  private mergeExtractedFileInfo(
+    existingStructuredData: unknown,
+    extractedInfo: Record<string, unknown>
+  ): StructuredFileData {
+    const existing =
+      existingStructuredData &&
+      typeof existingStructuredData === 'object' &&
+      !Array.isArray(existingStructuredData) ?
+        existingStructuredData as StructuredFileData :
+        {};
+
+    return {
+      ...existing,
+      extractedInfo: {
+        ...(existing.extractedInfo || {}),
+        ...extractedInfo
+      }
+    };
+  }
+
+  private async enrichTestCenterUnitEntry(
+    entry: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    if (String(entry.file_type || '').toLowerCase() !== 'unit') {
+      return entry;
+    }
+    if (entry.data === null || entry.data === undefined) {
+      return entry;
+    }
+
+    try {
+      const xmlContent = Buffer.isBuffer(entry.data) ?
+        entry.data.toString('utf8') :
+        String(entry.data);
+      const xmlDocument = cheerio.load(xmlContent, { xmlMode: true });
+      const extractedInfo =
+        await this.workspaceFileParsingService.extractUnitInfo(xmlDocument);
+
+      if (Object.keys(extractedInfo).length === 0) {
+        return entry;
+      }
+
+      return {
+        ...entry,
+        structured_data: this.mergeExtractedFileInfo(
+          entry.structured_data,
+          extractedInfo
+        )
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Could not extract Unit metadata from Testcenter import file ${
+          String(entry.file_id || entry.filename || '')
+        }: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      return entry;
+    }
+  }
+
+  private async enrichTestCenterImportEntries(
+    entries: Record<string, unknown>[]
+  ): Promise<Record<string, unknown>[]> {
+    return Promise.all(entries.map(entry => this.enrichTestCenterUnitEntry(entry)));
   }
 
   private normalizeCodingSchemeUnitName(fileId: unknown): string {
@@ -1162,10 +1254,14 @@ ${bookletRefs}
       // Invalidate memory caches inside this service
       await this.invalidateWorkspaceFileCaches(workspace_id);
 
-      await this.codingStatisticsService.invalidateCache(workspace_id);
-      await this.codingStatisticsService.invalidateIncompleteVariablesCache(
-        workspace_id
-      );
+      if (this.shouldInvalidateCodingStatisticsAfterUpload(result)) {
+        await this.codingStatisticsService.invalidateCache(workspace_id);
+      }
+      if (this.hasUploadedFiles(result)) {
+        await this.codingStatisticsService.invalidateIncompleteVariablesCache(
+          workspace_id
+        );
+      }
       return result;
     } catch (error) {
       this.logger.error(
@@ -1674,7 +1770,7 @@ ${bookletRefs}
       const fileExtension = path.extname(file.originalname).toLowerCase();
       let fileType = 'Resource';
       let fileContent: string | Buffer;
-      let extractedInfo = {};
+      let extractedInfo: Record<string, unknown> = {};
 
       const textFileExtensions = [
         '.xml',
@@ -1716,7 +1812,8 @@ ${bookletRefs}
             fileType = 'Unit';
             extractedInfo = {
               rootElement: 'Unit',
-              detectedVia: 'octet-stream-handler'
+              detectedVia: 'octet-stream-handler',
+              ...await this.workspaceFileParsingService.extractUnitInfo($)
             };
           } else if ($('SysCheck').length > 0) {
             fileType = 'SysCheck';
@@ -1957,7 +2054,9 @@ ${bookletRefs}
     overwriteFileIds?: string[]
   ): Promise<TestFilesUploadResultDto> {
     try {
-      const normalized = Array.isArray(entries) ? entries : [];
+      const normalized = await this.enrichTestCenterImportEntries(
+        Array.isArray(entries) ? entries : []
+      );
       const workspaceId = Number(
         (normalized[0] as { workspace_id?: unknown } | undefined)?.workspace_id
       );

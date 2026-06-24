@@ -949,10 +949,16 @@ export class CodingJobBackendService {
     );
   }
 
-  getJobDefinitions(workspaceId: number): Observable<JobDefinition[]> {
+  getJobDefinitions(
+    workspaceId: number,
+    options: { includePlannedUsage?: boolean } = {}
+  ): Observable<JobDefinition[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions`;
+    const params = options.includePlannedUsage ?
+      new HttpParams().set('includePlannedUsage', 'true') :
+      undefined;
     return this.http
-      .get<JobDefinitionApiResponse[]>(url, { headers: this.authHeader })
+      .get<JobDefinitionApiResponse[]>(url, { headers: this.authHeader, params })
       .pipe(
         map((definitions: JobDefinitionApiResponse[]) => definitions.map(def => ({
           id: def.id,
