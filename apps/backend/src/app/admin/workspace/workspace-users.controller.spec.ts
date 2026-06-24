@@ -1,5 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, INestApplication, InternalServerErrorException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { Test, TestingModule } from '@nestjs/testing';
 import { WorkspaceUsersController } from './workspace-users.controller';
 import { WorkspaceUsersService } from '../../database/services/workspace/workspace-users.service';
 import { AuthService } from '../../auth/service/auth.service';
@@ -7,21 +8,56 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard } from './access-level.guard';
 
+type WorkspaceUsersServiceMock = jest.Mocked<Pick<WorkspaceUsersService, 'findUsers' | 'setWorkspaceUsers'>>;
+
 describe('WorkspaceUsersController', () => {
   let controller: WorkspaceUsersController;
+  let workspaceUsersService: WorkspaceUsersServiceMock;
   let authService: jest.Mocked<Pick<AuthService, 'createToken' | 'createTokenForUserId'>>;
 
   beforeEach(() => {
+    workspaceUsersService = {
+      findUsers: jest.fn(),
+      setWorkspaceUsers: jest.fn()
+    };
     authService = {
       createToken: jest.fn(),
       createTokenForUserId: jest.fn()
     };
 
     controller = new WorkspaceUsersController(
-      {} as WorkspaceUsersService,
+      workspaceUsersService as unknown as WorkspaceUsersService,
       authService as unknown as AuthService
     );
   });
+
+  async function createTestApp(): Promise<INestApplication> {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [WorkspaceUsersController],
+      providers: [
+        {
+          provide: WorkspaceUsersService,
+          useValue: workspaceUsersService
+        },
+        {
+          provide: AuthService,
+          useValue: authService
+        }
+      ]
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(WorkspaceGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(AccessLevelGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
+
+    const app = module.createNestApplication();
+    await app.init();
+    await app.listen(0);
+    return app;
+  }
 
   describe('createOwnToken', () => {
     it('requires workspace access without workspace admin access level metadata', () => {
@@ -88,5 +124,59 @@ describe('WorkspaceUsersController', () => {
         expect(authService.createToken).not.toHaveBeenCalled();
       }
     );
+  });
+
+  describe('findUsers', () => {
+    it('throws when workspace users cannot be retrieved', async () => {
+      workspaceUsersService.findUsers.mockRejectedValue(new Error('database unavailable'));
+
+      await expect(controller.findUsers(3, 1, 500)).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('returns an HTTP error when workspace users cannot be retrieved', async () => {
+      workspaceUsersService.findUsers.mockRejectedValue(new Error('database unavailable'));
+      let app: INestApplication | undefined;
+
+      try {
+        app = await createTestApp();
+
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/users?page=1&limit=500`);
+
+        expect(response.status).toBe(500);
+      } finally {
+        await app?.close();
+      }
+    });
+  });
+
+  describe('setWorkspaceUsers', () => {
+    it('delegates workspace user assignment', async () => {
+      workspaceUsersService.setWorkspaceUsers.mockResolvedValue(true);
+
+      await expect(controller.setWorkspaceUsers([7, 8], 3)).resolves.toBe(true);
+
+      expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8]);
+    });
+
+    it('parses the workspace id from the route before delegating', async () => {
+      workspaceUsersService.setWorkspaceUsers.mockResolvedValue(true);
+      let app: INestApplication | undefined;
+
+      try {
+        app = await createTestApp();
+
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/users`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([7, 8])
+        });
+
+        expect(response.status).toBe(201);
+        await expect(response.json()).resolves.toBe(true);
+        expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8]);
+      } finally {
+        await app?.close();
+      }
+    });
   });
 });

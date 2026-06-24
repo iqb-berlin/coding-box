@@ -2,7 +2,8 @@ import {
   BadRequestException,
   Body,
   Controller,
-  Get, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards
+  DefaultValuePipe,
+  Get, InternalServerErrorException, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -157,8 +158,8 @@ export class WorkspaceUsersController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findUsers(
     @Param('workspace_id') workspaceId: number,
-                           @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 20
+                           @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+                           @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<{ data: WorkspaceUser[]; total: number; page: number; limit: number }> {
     try {
       const [users, total] = await this.workspaceUsersService.findUsers(workspaceId, { page, limit });
@@ -169,21 +170,16 @@ export class WorkspaceUsersController {
         limit
       };
     } catch (error) {
-      this.logger.error(`Error retrieving users for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
+      this.logger.error(`Error retrieving users for workspace ${workspaceId}`, error);
+      throw new InternalServerErrorException('Could not retrieve workspace users');
     }
   }
 
-  @Post(':workspaceId/users')
+  @Post(':workspace_id/users')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiOperation({ summary: 'Set workspace users', description: 'Assigns users to a workspace' })
-  @ApiParam({ name: 'workspaceId', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiBody({
     schema: {
       type: 'array',
@@ -200,7 +196,7 @@ export class WorkspaceUsersController {
   @ApiBadRequestResponse({ description: 'Invalid user IDs or workspace ID' })
   @ApiTags('admin users')
   async setWorkspaceUsers(@Body() userIds: number[],
-    @Param('workspaceId') workspaceId: number) {
+    @Param('workspace_id', ParseIntPipe) workspaceId: number) {
     return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
   }
 
