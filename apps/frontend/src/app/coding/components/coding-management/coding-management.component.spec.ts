@@ -260,6 +260,7 @@ describe('CodingManagementComponent', () => {
           'second-autocoding-waits-help': 'Der Start von Auto-Coding 2 bleibt bis dahin gesperrt. {{taskResultHelp}}',
           'second-autocoding-waits-chip': '{{version}}: {{count}} wartet',
           'second-autocoding-waits-snackbar': 'Schließen Sie zuerst die manuelle Kodierung ab und übernehmen Sie die Ergebnisse.',
+          'starting-freshness-coding': 'Auto-Coding wird gestartet...',
           'open-manual-review': 'Manuelle Kodierung öffnen'
         }
       }
@@ -556,6 +557,31 @@ describe('CodingManagementComponent', () => {
         'Schließen',
         { duration: 6000 }
       );
+    });
+
+    it('should show a start indicator while the freshness coding request is pending', () => {
+      const startRequest$ = new Subject<never>();
+      (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(startRequest$);
+      component.codingFreshnessSummary = {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v1',
+            state: 'PENDING',
+            unitCount: 7,
+            affectedResponseCount: 42
+          }
+        ]
+      };
+
+      component.startFreshnessCoding('v1');
+      fixture.detectChanges();
+
+      const status = fixture.nativeElement.querySelector('.coding-freshness-job') as HTMLElement | null;
+      expect(status?.textContent).toContain('Auto-Coding wird gestartet...');
+      expect(status?.querySelector('mat-spinner')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('.coding-freshness-actions')).toBeNull();
     });
 
     it('should open the test person coding dialog with the started freshness job', () => {
