@@ -1,5 +1,5 @@
 import {
-  Body,
+  Body, ParseIntPipe,
   Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
@@ -32,7 +32,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid workspace ID' })
   @ApiNotFoundResponse({ description: 'Workspace not found' })
   @ApiTags('users access')
-  async getUsersWithWorkspaceAccess(@Param('workspaceId') workspaceId: number): Promise<WorkspaceUserInListDto[] | UserFullDto[]> {
+  async getUsersWithWorkspaceAccess(@Param('workspaceId', ParseIntPipe) workspaceId: number): Promise<WorkspaceUserInListDto[] | UserFullDto[]> {
     return this.usersService.getUsersWithWorkspaceAccess(workspaceId);
   }
 
@@ -49,7 +49,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid workspace ID or user data' })
   @ApiNotFoundResponse({ description: 'Workspace or users not found' })
   @ApiTags('users access')
-  async updateUsersAccess(@Param('workspaceId') workspaceId: number, @Body() users: UserInListDto[]): Promise<boolean> {
+  async updateUsersAccess(@Param('workspaceId', ParseIntPipe) workspaceId: number, @Body() users: UserInListDto[]): Promise<boolean> {
     return this.usersService.updateUsersAccess(workspaceId, users);
   }
 
@@ -77,7 +77,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user ID or data' })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiTags('admin users')
-  async updateUser(@Param('userId') userId: number, @Body() userData: UserFullDto): Promise<UserFullDto> {
+  async updateUser(@Param('userId', ParseIntPipe) userId: number, @Body() userData: UserFullDto): Promise<UserFullDto> {
     return this.usersService.updateUser(userId, userData);
   }
 
@@ -99,7 +99,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user ID' })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiTags('admin users')
-  async getUserWorkspaces(@Param('userId') userId: number): Promise<number[]> {
+  async getUserWorkspaces(@Param('userId', ParseIntPipe) userId: number): Promise<number[]> {
     return this.usersService.getUserWorkspaces(userId);
   }
 
@@ -178,7 +178,7 @@ export class UsersController {
   @ApiNotFoundResponse({ description: 'User or workspaces not found' })
   @ApiTags('admin users')
   async assignUserWorkspaces(@Body() workspaceIds: number[],
-    @Param('userId') userId: number) {
+    @Param('userId', ParseIntPipe) userId: number) {
     return this.usersService.assignUserWorkspaces(userId, workspaceIds);
   }
 
