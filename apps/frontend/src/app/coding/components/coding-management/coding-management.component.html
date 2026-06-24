@@ -110,7 +110,14 @@
       </div>
     </div>
 
-    @if (activeFreshnessJobId) {
+    @if (isStartingFreshnessCoding) {
+    <div class="coding-freshness-job">
+      <mat-spinner diameter="18"></mat-spinner>
+      <span>
+        {{ 'coding-management.readiness.starting-freshness-coding' | translate }}
+      </span>
+    </div>
+    } @else if (activeFreshnessJobId) {
     <div class="coding-freshness-job">
       <mat-spinner diameter="18"></mat-spinner>
       <span>
