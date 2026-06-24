@@ -29,14 +29,28 @@ export class UserAccessRightsDialogComponent {
 
   private workspaceBackendService = inject(WorkspaceBackendService);
 
-  selectedUserIds!: number[];
+  selectedUserIds: number[] = [];
+  isLoadingWorkspaceUsers = false;
+  workspaceUsersLoadingFailed = false;
   result: number[] = [];
+
   constructor() {
     if (this.data.selectedWorkspace?.length > 0) {
+      this.isLoadingWorkspaceUsers = true;
       this.workspaceBackendService.getAllWorkspaceUsers(this.data.selectedWorkspace[0])
-        .subscribe(users => {
-          if (Array.isArray(users)) {
-            this.selectedUserIds = users.map(user => user.userId);
+        .subscribe({
+          next: users => {
+            if (Array.isArray(users)) {
+              this.selectedUserIds = users.map(user => user.userId);
+              this.result = [...this.selectedUserIds];
+            }
+            this.isLoadingWorkspaceUsers = false;
+          },
+          error: () => {
+            this.selectedUserIds = [];
+            this.result = [];
+            this.workspaceUsersLoadingFailed = true;
+            this.isLoadingWorkspaceUsers = false;
           }
         });
     }

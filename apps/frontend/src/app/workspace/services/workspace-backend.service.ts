@@ -49,17 +49,7 @@ export class WorkspaceBackendService {
     workspaceId: number,
     options?: { page?: number; limit?: number }
   ): Observable<PaginatedWorkspaceUserDto> {
-    let params = new HttpParams();
-    if (options?.page) {
-      params = params.set('page', options.page);
-    }
-    if (options?.limit) {
-      params = params.set('limit', options.limit);
-    }
-
-    return this.http
-      .get<PaginatedWorkspaceUserDto>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
-      { params })
+    return this.requestWorkspaceUsers(workspaceId, options)
       .pipe(
         catchError(() => of({
           data: [],
@@ -70,15 +60,32 @@ export class WorkspaceBackendService {
       );
   }
 
+  private requestWorkspaceUsers(
+    workspaceId: number,
+    options?: { page?: number; limit?: number }
+  ): Observable<PaginatedWorkspaceUserDto> {
+    let params = new HttpParams();
+    if (options?.page) {
+      params = params.set('page', options.page);
+    }
+    if (options?.limit) {
+      params = params.set('limit', options.limit);
+    }
+
+    return this.http
+      .get<PaginatedWorkspaceUserDto>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
+      { params });
+  }
+
   getAllWorkspaceUsers(workspaceId: number): Observable<WorkspaceUserDto[]> {
-    return this.getWorkspaceUsers(workspaceId, { page: 1, limit: this.workspaceUsersPageLimit }).pipe(
+    return this.requestWorkspaceUsers(workspaceId, { page: 1, limit: this.workspaceUsersPageLimit }).pipe(
       expand(response => {
         const currentPage = Number(response.page);
         const currentLimit = Number(response.limit);
         const total = Number(response.total);
 
         return currentPage * currentLimit < total ?
-          this.getWorkspaceUsers(workspaceId, { page: currentPage + 1, limit: this.workspaceUsersPageLimit }) :
+          this.requestWorkspaceUsers(workspaceId, { page: currentPage + 1, limit: this.workspaceUsersPageLimit }) :
           EMPTY;
       }),
       reduce((users, response) => users.concat(response.data), [] as WorkspaceUserDto[])
