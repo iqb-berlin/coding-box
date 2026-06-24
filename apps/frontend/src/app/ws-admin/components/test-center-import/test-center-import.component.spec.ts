@@ -189,7 +189,10 @@ describe('TestCenterImportComponent', () => {
       'fake-token',
       expect.objectContaining({ responses: true }),
       ['group1'],
-      true
+      true,
+      undefined,
+      undefined,
+      'skip'
     );
 
     expect(mockDialogRef.close).toHaveBeenCalledWith({
@@ -199,6 +202,97 @@ describe('TestCenterImportComponent', () => {
       importedLogs: false,
       uploadResult: mockImportResult
     });
+  });
+
+  it('should pass the selected response overwrite mode for testResults import', async () => {
+    component.authenticated = true;
+    component.authToken = 'fake-token';
+    component.importFilesForm.patchValue({
+      workspace: 'tc-ws-1',
+      responses: true,
+      responseOverwriteMode: 'merge'
+    });
+    component.loginForm.patchValue({ testCenter: 1 });
+
+    const mockGroup: TestGroupsInfoDto = {
+      groupName: 'group1',
+      groupLabel: 'Group 1',
+      bookletsStarted: 10,
+      numUnitsTotal: 100,
+      numUnitsMin: 1,
+      numUnitsMax: 10,
+      numUnitsAvg: 5,
+      lastChange: Date.now(),
+      existsInDatabase: true,
+      hasBookletLogs: false
+    };
+    component.selectedRows = [mockGroup];
+
+    const mockImportResult: Result = {
+      success: true,
+      testFiles: 0,
+      responses: 10,
+      logs: 0,
+      booklets: 0,
+      units: 0,
+      persons: 0,
+      importedGroups: ['group1']
+    };
+    importService.importWorkspaceFiles.mockReturnValue(of(mockImportResult));
+
+    component.getTestData();
+    await fixture.whenStable();
+
+    expect(importService.importWorkspaceFiles).toHaveBeenCalledWith(
+      1,
+      'tc-ws-1',
+      '1',
+      '',
+      'fake-token',
+      expect.objectContaining({ responses: true }),
+      ['group1'],
+      true,
+      undefined,
+      undefined,
+      'merge'
+    );
+  });
+
+  it('should not start import when log overwrite confirmation is cancelled', async () => {
+    component.authenticated = true;
+    component.authToken = 'fake-token';
+    component.importFilesForm.patchValue({
+      workspace: 'tc-ws-1',
+      responses: true,
+      logs: true
+    });
+    component.loginForm.patchValue({ testCenter: 1 });
+    component.showTestGroups = true;
+    component.selectedRows = [{
+      groupName: 'group1',
+      groupLabel: 'Group 1',
+      bookletsStarted: 10,
+      numUnitsTotal: 100,
+      numUnitsMin: 1,
+      numUnitsMax: 10,
+      numUnitsAvg: 5,
+      lastChange: Date.now(),
+      existsInDatabase: true,
+      hasBookletLogs: true
+    }];
+
+    const dialog = TestBed.inject(MatDialog);
+    const mockConfirmDialogRef = {
+      afterClosed: jest.fn().mockReturnValue(of(false))
+    } as Partial<MatDialogRef<never>>;
+    jest.spyOn(dialog, 'open').mockReturnValue(mockConfirmDialogRef as MatDialogRef<never>);
+
+    component.getTestData();
+    await fixture.whenStable();
+
+    expect(importService.importWorkspaceFiles).not.toHaveBeenCalled();
+    expect(component.isUploadingTestResults).toBe(false);
+    expect(component.showTestGroups).toBe(true);
   });
 
   it('should handle authentication error', () => {

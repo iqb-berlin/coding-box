@@ -486,6 +486,79 @@ describe('TestCenterService', () => {
         currentRevision: 1,
         items: []
       });
+      expect(personService.processPersonBooklets).toHaveBeenCalledWith(
+        expect.any(Array),
+        123,
+        'skip',
+        'person',
+        expect.any(Array)
+      );
+    });
+
+    it('should pass the selected response overwrite mode to person processing', async () => {
+      const mockResponses: Response[] = [
+        {
+          groupname: 'group1',
+          loginname: 'user1',
+          code: 'code1',
+          bookletname: 'booklet1',
+          unitname: 'unit1',
+          originalUnitId: 'unit-1-id',
+          responses: '[]',
+          laststate: '{}'
+        }
+      ];
+      const mockPersons: Person[] = [
+        {
+          workspace_id: 123,
+          group: 'group1',
+          login: 'user1',
+          code: 'code1',
+          booklets: []
+        }
+      ];
+
+      httpService.axiosRef.get.mockResolvedValue({
+        data: mockResponses
+      } as AxiosResponse);
+      personService.createPersonList.mockResolvedValue(mockPersons);
+      personService.assignBookletsToPerson.mockResolvedValue(mockPersons[0]);
+      personService.assignUnitsToBookletAndPerson.mockResolvedValue(
+        mockPersons[0]
+      );
+      personService.processPersonBooklets.mockResolvedValue({
+        addedUnitIds: [10],
+        changedUnitIds: [],
+        addedResponseCount: 1,
+        changedResponseCount: 0
+      });
+      personService.getImportStatistics.mockResolvedValue({
+        persons: 1,
+        booklets: 1,
+        units: 1
+      });
+
+      await service.importWorkspaceFiles(
+        '123',
+        'ws-456',
+        'demo',
+        '',
+        'token',
+        mockImportOptions,
+        'group1',
+        true,
+        undefined,
+        undefined,
+        'merge'
+      );
+
+      expect(personService.processPersonBooklets).toHaveBeenCalledWith(
+        expect.any(Array),
+        123,
+        'merge',
+        'person',
+        expect.any(Array)
+      );
     });
 
     it('should keep Testcenter response imports successful when coding cache invalidation fails', async () => {

@@ -16,7 +16,10 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
-import { ImportOptionsDto as ImportOptions } from '../../../../../../api-dto/files/import-options.dto';
+import {
+  ImportOptionsDto as ImportOptions,
+  TestResultsOverwriteMode
+} from '../../../../../../api-dto/files/import-options.dto';
 import { ImportWorkspaceFilesProgressDto } from '../../../../../../api-dto/files/import-workspace-progress.dto';
 import { TestGroupsLoadProgressDto } from '../../../../../../api-dto/files/test-groups-load-progress.dto';
 
@@ -133,6 +136,12 @@ export class WorkspaceTestCenterController {
     required: false,
     description: 'Optional run id to provide upload progress during import'
   })
+  @ApiQuery({
+    name: 'responseOverwriteMode',
+    required: false,
+    description:
+      'Overwrite mode for imported responses: skip (default), merge, or replace'
+  })
   @ApiOkResponse({ description: 'Files imported successfully', type: Object })
   @ApiBadRequestResponse({ description: 'Failed to import files' })
   async importWorkspaceFiles(
@@ -153,7 +162,8 @@ export class WorkspaceTestCenterController {
       @Query('metadata') metadata: string,
       @Query('overwriteFileIds') overwriteFileIds: string,
       @Query('overwriteExistingLogs') overwriteExistingLogs: string,
-      @Query('importRunId') importRunId: string
+      @Query('importRunId') importRunId: string,
+      @Query('responseOverwriteMode') responseOverwriteMode: string
   ): Promise<Result> {
     const importOptions: ImportOptions = {
       definitions: definitions,
@@ -172,6 +182,8 @@ export class WorkspaceTestCenterController {
       .split(';')
       .map(s => s.trim())
       .filter(Boolean);
+    const normalizedResponseOverwriteMode =
+      this.normalizeResponseOverwriteMode(responseOverwriteMode);
 
     const result = await (
       this.testCenterService as unknown as {
@@ -185,7 +197,8 @@ export class WorkspaceTestCenterController {
           groups: string,
           overwriteExistingLogs: boolean,
           overwriteFileIds?: string[],
-          importRunId?: string
+          importRunId?: string,
+          responseOverwriteMode?: TestResultsOverwriteMode
         ) => Promise<Result>;
       }
     ).importWorkspaceFiles(
@@ -198,7 +211,8 @@ export class WorkspaceTestCenterController {
       testGroups,
       overwriteLogs,
       overwriteIds.length ? overwriteIds : undefined,
-      importRunId
+      importRunId,
+      normalizedResponseOverwriteMode
     );
 
     if (result?.success) {
@@ -209,6 +223,20 @@ export class WorkspaceTestCenterController {
     }
 
     return result;
+  }
+
+  private normalizeResponseOverwriteMode(
+    responseOverwriteMode?: string
+  ): TestResultsOverwriteMode {
+    const normalized = (responseOverwriteMode || '').toLowerCase();
+    if (
+      normalized === 'merge' ||
+      normalized === 'replace' ||
+      normalized === 'skip'
+    ) {
+      return normalized;
+    }
+    return 'skip';
   }
 
   @Get(':workspace_id/importWorkspaceFiles/progress')
