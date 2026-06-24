@@ -9,7 +9,11 @@ import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-group
 import { PersonService } from './person.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
-import { ImportOptionsDto as ImportOptions, ImportResultDto as Result } from '../../../../../../../api-dto/files/import-options.dto';
+import {
+  ImportOptionsDto as ImportOptions,
+  ImportResultDto as Result,
+  TestResultsOverwriteMode
+} from '../../../../../../../api-dto/files/import-options.dto';
 
 import {
   TestFilesUploadResultDto,
@@ -347,7 +351,8 @@ export class TestcenterService {
     server: string,
     url: string,
     authToken: string,
-    testGroups: string
+    testGroups: string,
+    responseOverwriteMode: TestResultsOverwriteMode = 'skip'
   ): Promise<Promise<{ issues: TestResultsUploadIssueDto[] }>[]> {
     this.logger.log('Import response data from TC');
     const headersRequest = this.createHeaders(authToken);
@@ -438,7 +443,7 @@ export class TestcenterService {
                 const batchSummary = await this.personService.processPersonBooklets(
                   personBatch,
                   Number(workspace_id),
-                  'skip',
+                  responseOverwriteMode,
                   'person',
                   issues
                 );
@@ -1000,7 +1005,8 @@ export class TestcenterService {
     testGroups: string,
     overwriteExistingLogs: boolean = true,
     overwriteFileIds?: string[],
-    importRunId?: string
+    importRunId?: string,
+    responseOverwriteMode: TestResultsOverwriteMode = 'skip'
   ): Promise<Result> {
     const { responses, logs } = importOptions;
     const result: Result = {
@@ -1030,7 +1036,8 @@ export class TestcenterService {
           server,
           url,
           authToken,
-          testGroups
+          testGroups,
+          responseOverwriteMode
         );
         result.responses = responsePromises.length;
         const responseResults = await Promise.all(responsePromises);
