@@ -8,7 +8,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard } from './access-level.guard';
 
-type WorkspaceUsersServiceMock = jest.Mocked<Pick<WorkspaceUsersService, 'findUsers' | 'setWorkspaceUsers'>>;
+type WorkspaceUsersServiceMock = jest.Mocked<Pick<WorkspaceUsersService, 'findUsers' | 'findCoders' | 'setWorkspaceUsers'>>;
 
 describe('WorkspaceUsersController', () => {
   let controller: WorkspaceUsersController;
@@ -18,6 +18,7 @@ describe('WorkspaceUsersController', () => {
   beforeEach(() => {
     workspaceUsersService = {
       findUsers: jest.fn(),
+      findCoders: jest.fn(),
       setWorkspaceUsers: jest.fn()
     };
     authService = {
@@ -133,6 +134,28 @@ describe('WorkspaceUsersController', () => {
       await expect(controller.findUsers(3, 1, 500)).rejects.toThrow(InternalServerErrorException);
     });
 
+    it('parses the workspace id from the route before retrieving users', async () => {
+      workspaceUsersService.findUsers.mockResolvedValue([[], 0]);
+      let app: INestApplication | undefined;
+
+      try {
+        app = await createTestApp();
+
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/users?page=1&limit=500`);
+
+        expect(response.status).toBe(200);
+        await expect(response.json()).resolves.toEqual({
+          data: [],
+          total: 0,
+          page: 1,
+          limit: 500
+        });
+        expect(workspaceUsersService.findUsers).toHaveBeenCalledWith(3, { page: 1, limit: 500 });
+      } finally {
+        await app?.close();
+      }
+    });
+
     it('returns an HTTP error when workspace users cannot be retrieved', async () => {
       workspaceUsersService.findUsers.mockRejectedValue(new Error('database unavailable'));
       let app: INestApplication | undefined;
@@ -143,6 +166,46 @@ describe('WorkspaceUsersController', () => {
         const response = await fetch(`${await app.getUrl()}/admin/workspace/3/users?page=1&limit=500`);
 
         expect(response.status).toBe(500);
+      } finally {
+        await app?.close();
+      }
+    });
+  });
+
+  describe('findCoders', () => {
+    it('parses the workspace id from the route before retrieving coders', async () => {
+      workspaceUsersService.findCoders.mockResolvedValue([[], 0]);
+      let app: INestApplication | undefined;
+
+      try {
+        app = await createTestApp();
+
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/coders`);
+
+        expect(response.status).toBe(200);
+        await expect(response.json()).resolves.toEqual({
+          data: [],
+          total: 0
+        });
+        expect(workspaceUsersService.findCoders).toHaveBeenCalledWith(3);
+      } finally {
+        await app?.close();
+      }
+    });
+  });
+
+  describe('findCodersByCodingJob', () => {
+    it('rejects a non-numeric coding job id', async () => {
+      workspaceUsersService.findCoders.mockResolvedValue([[], 0]);
+      let app: INestApplication | undefined;
+
+      try {
+        app = await createTestApp();
+
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/coding-jobs/not-a-number/coders`);
+
+        expect(response.status).toBe(400);
+        expect(workspaceUsersService.findCoders).not.toHaveBeenCalled();
       } finally {
         await app?.close();
       }

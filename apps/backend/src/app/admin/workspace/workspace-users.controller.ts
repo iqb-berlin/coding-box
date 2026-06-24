@@ -157,9 +157,9 @@ export class WorkspaceUsersController {
   })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findUsers(
-    @Param('workspace_id') workspaceId: number,
-                           @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-                           @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<{ data: WorkspaceUser[]; total: number; page: number; limit: number }> {
     try {
       const [users, total] = await this.workspaceUsersService.findUsers(workspaceId, { page, limit });
@@ -224,7 +224,7 @@ export class WorkspaceUsersController {
   })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findCoders(
-    @Param('workspace_id') workspaceId: number
+    @Param('workspace_id', ParseIntPipe) workspaceId: number
   ): Promise<{ data: WorkspaceUser[]; total: number }> {
     try {
       const [coders, total] = await this.workspaceUsersService.findCoders(workspaceId);
@@ -272,7 +272,7 @@ export class WorkspaceUsersController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findCodersByCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: number
+      @Param('job_id', ParseIntPipe) jobId: number
   ): Promise<{ data: WorkspaceUser[]; total: number }> {
     try {
       // In a real implementation, this would filter coders by the specific job ID
