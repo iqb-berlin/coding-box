@@ -207,7 +207,7 @@
 
   @if (allowComments) {
   <mat-form-field appearance="outline" class="notes-field">
-    <textarea #notesTextarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()"
+    <textarea #notesTextarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()" (blur)="onNotesCommitted()"
       [disabled]="isReadOnly" [attr.aria-invalid]="newCodeCommentValidationError ? 'true' : null"
       placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
   </mat-form-field>
