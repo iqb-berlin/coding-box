@@ -1348,6 +1348,7 @@
       "second-autocoding-waits-chip": "{{version}}: {{count}} wartet",
       "second-autocoding-waits-snackbar": "Schließen Sie zuerst die manuelle Kodierung ab und übernehmen Sie die Ergebnisse.",
       "current": "Für die aktuell berücksichtigten Testergebnisse gibt es keine offenen Aktualisierungshinweise.",
+      "starting-freshness-coding": "Auto-Coding wird gestartet...",
       "update-running": "Aktualisierung läuft: {{progress}}%",
       "retry": "Erneut prüfen",
       "check-test-files": "Testdateien prüfen",
