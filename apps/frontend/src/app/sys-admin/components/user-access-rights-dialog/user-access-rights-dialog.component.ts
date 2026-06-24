@@ -33,10 +33,10 @@ export class UserAccessRightsDialogComponent {
   result: number[] = [];
   constructor() {
     if (this.data.selectedWorkspace?.length > 0) {
-      this.workspaceBackendService.getWorkspaceUsers(this.data.selectedWorkspace[0])
+      this.workspaceBackendService.getAllWorkspaceUsers(this.data.selectedWorkspace[0])
         .subscribe(users => {
-          if (Array.isArray(users.data)) {
-            this.selectedUserIds = users.data.map(user => user.userId);
+          if (Array.isArray(users)) {
+            this.selectedUserIds = users.map(user => user.userId);
           }
         });
     }

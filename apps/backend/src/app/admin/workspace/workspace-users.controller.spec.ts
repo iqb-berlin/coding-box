@@ -7,18 +7,24 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard } from './access-level.guard';
 
+type WorkspaceUsersServiceMock = jest.Mocked<Pick<WorkspaceUsersService, 'setWorkspaceUsers'>>;
+
 describe('WorkspaceUsersController', () => {
   let controller: WorkspaceUsersController;
+  let workspaceUsersService: WorkspaceUsersServiceMock;
   let authService: jest.Mocked<Pick<AuthService, 'createToken' | 'createTokenForUserId'>>;
 
   beforeEach(() => {
+    workspaceUsersService = {
+      setWorkspaceUsers: jest.fn()
+    };
     authService = {
       createToken: jest.fn(),
       createTokenForUserId: jest.fn()
     };
 
     controller = new WorkspaceUsersController(
-      {} as WorkspaceUsersService,
+      workspaceUsersService as unknown as WorkspaceUsersService,
       authService as unknown as AuthService
     );
   });
@@ -88,5 +94,15 @@ describe('WorkspaceUsersController', () => {
         expect(authService.createToken).not.toHaveBeenCalled();
       }
     );
+  });
+
+  describe('setWorkspaceUsers', () => {
+    it('delegates workspace user assignment with the parsed workspace id', async () => {
+      workspaceUsersService.setWorkspaceUsers.mockResolvedValue(true);
+
+      await expect(controller.setWorkspaceUsers([7, 8], 3)).resolves.toBe(true);
+
+      expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8]);
+    });
   });
 });

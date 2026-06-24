@@ -2,9 +2,12 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   catchError,
+  EMPTY,
+  expand,
   map,
   Observable,
-  of
+  of,
+  reduce
 } from 'rxjs';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
@@ -21,6 +24,7 @@ export interface CoderDto extends WorkspaceUserDto {
   providedIn: 'root'
 })
 export class WorkspaceBackendService {
+  private readonly workspaceUsersPageLimit = 500;
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
@@ -41,10 +45,21 @@ export class WorkspaceBackendService {
       );
   }
 
-  getWorkspaceUsers(workspaceId: number): Observable<PaginatedWorkspaceUserDto> {
+  getWorkspaceUsers(
+    workspaceId: number,
+    options?: { page?: number; limit?: number }
+  ): Observable<PaginatedWorkspaceUserDto> {
+    let params = new HttpParams();
+    if (options?.page) {
+      params = params.set('page', options.page);
+    }
+    if (options?.limit) {
+      params = params.set('limit', options.limit);
+    }
+
     return this.http
       .get<PaginatedWorkspaceUserDto>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
-      {})
+      { params })
       .pipe(
         catchError(() => of({
           data: [],
@@ -53,6 +68,21 @@ export class WorkspaceBackendService {
           limit: 0
         }))
       );
+  }
+
+  getAllWorkspaceUsers(workspaceId: number): Observable<WorkspaceUserDto[]> {
+    return this.getWorkspaceUsers(workspaceId, { page: 1, limit: this.workspaceUsersPageLimit }).pipe(
+      expand(response => {
+        const currentPage = Number(response.page);
+        const currentLimit = Number(response.limit);
+        const total = Number(response.total);
+
+        return currentPage * currentLimit < total ?
+          this.getWorkspaceUsers(workspaceId, { page: currentPage + 1, limit: this.workspaceUsersPageLimit }) :
+          EMPTY;
+      }),
+      reduce((users, response) => users.concat(response.data), [] as WorkspaceUserDto[])
+    );
   }
 
   getWorkspaceCoders(workspaceId: number): Observable<{ data: CoderDto[], total: number }> {
