@@ -429,6 +429,82 @@ describe('ReplayComponent', () => {
     }, '*');
   });
 
+  it('should send committed replay notes back to the comparison opener on blur', () => {
+    const postMessage = jest.fn();
+    Object.defineProperty(window, 'opener', {
+      value: { postMessage },
+      configurable: true
+    });
+    component.originResponseId = 99;
+    component.testPerson = 'valid@test@person';
+    component.unitId = 'unit-123';
+    component.codingService.currentVariableId = 'VAR1';
+
+    component.onNotesCommitted('Late replay note');
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'replayNotesCommitted',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      variableId: 'VAR1',
+      notes: 'Late replay note',
+      responseId: 99
+    }, '*');
+  });
+
+  it('should debounce replay notes commits while typing', () => {
+    jest.useFakeTimers();
+    const postMessage = jest.fn();
+    Object.defineProperty(window, 'opener', {
+      value: { postMessage },
+      configurable: true
+    });
+    jest.spyOn(component.codingService, 'saveNotes').mockResolvedValue();
+    component.originResponseId = 99;
+    component.workspaceId = 5;
+    component.testPerson = 'valid@test@person';
+    component.unitId = 'unit-123';
+    component.codingService.currentVariableId = 'VAR1';
+
+    component.onNotesChanged('Late replay note');
+    jest.advanceTimersByTime(749);
+    expect(postMessage).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(1);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'replayNotesCommitted',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      variableId: 'VAR1',
+      notes: 'Late replay note',
+      responseId: 99
+    }, '*');
+    jest.useRealTimers();
+  });
+
+  it('should allow retrying the same committed replay notes after the duplicate window', () => {
+    jest.useFakeTimers();
+    const postMessage = jest.fn();
+    Object.defineProperty(window, 'opener', {
+      value: { postMessage },
+      configurable: true
+    });
+    component.originResponseId = 99;
+    component.testPerson = 'valid@test@person';
+    component.unitId = 'unit-123';
+    component.codingService.currentVariableId = 'VAR1';
+
+    component.onNotesCommitted('Retry note');
+    component.onNotesCommitted('Retry note');
+    expect(postMessage).toHaveBeenCalledTimes(1);
+
+    jest.advanceTimersByTime(1000);
+    component.onNotesCommitted('Retry note');
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    jest.useRealTimers();
+  });
+
   it('should handle rejected note saves in the component boundary', async () => {
     const saveNotesSpy = jest.spyOn(component.codingService, 'saveNotes')
       .mockRejectedValue(new Error('save failed'));
