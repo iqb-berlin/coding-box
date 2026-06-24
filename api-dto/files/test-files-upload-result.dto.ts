@@ -10,6 +10,7 @@ export type TestFilesUploadConflictDto = {
 export type TestFilesUploadFailedDto = {
   filename: string;
   reason?: string;
+  details?: string[];
 };
 
 export type TestFilesUploadUploadedDto = {

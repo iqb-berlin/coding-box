@@ -236,8 +236,15 @@ export class WorkspaceXmlSchemaValidationService {
       }
 
       const rawErrors = (xmlDoc.validationErrors || [])
-        .map(e => (e && typeof e.message === 'string' ? e.message.trim() : String(e))
-        )
+        .map(e => {
+          const message = e && typeof e.message === 'string' ?
+            e.message.trim() :
+            String(e);
+          const line =
+            e && typeof e.line === 'number' && e.line > 0 ? e.line : null;
+
+          return line ? `line ${line}: ${message}` : message;
+        })
         .filter(Boolean);
       const errors =
         rawErrors.length > 0 ? rawErrors : ['XML schema validation failed'];

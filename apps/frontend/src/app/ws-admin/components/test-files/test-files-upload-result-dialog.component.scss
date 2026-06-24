@@ -32,6 +32,10 @@
   overflow-x: hidden;
 }
 
+.failed-viewport {
+  overflow-y: auto;
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -101,4 +105,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.details {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.details li {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }

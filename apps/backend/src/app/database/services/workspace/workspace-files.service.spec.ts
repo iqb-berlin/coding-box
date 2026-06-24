@@ -25,14 +25,16 @@ describe('WorkspaceFilesService.handleFile', () => {
 
   type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
 
-  function makeService(): WorkspaceFilesService {
+  function makeService(overrides: Partial<{
+    workspaceXmlSchemaValidationService: CtorParams[5];
+  }> = {}): WorkspaceFilesService {
     return new WorkspaceFilesService(
       {} as unknown as CtorParams[0],
       {} as unknown as CtorParams[1],
       {} as unknown as CtorParams[2],
       {} as unknown as CtorParams[3],
       {} as unknown as CtorParams[4],
-      {} as unknown as CtorParams[5],
+      (overrides.workspaceXmlSchemaValidationService || {}) as CtorParams[5],
       {} as unknown as CtorParams[6],
       {} as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
@@ -111,6 +113,26 @@ describe('WorkspaceFilesService.handleFile', () => {
     expect(handleXmlSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('should treat octet-stream Unit XML as xml and call handleXmlFile', async () => {
+    const service = makeService();
+
+    const handleXmlSpy = jest
+      .spyOn(
+        service as unknown as {
+          handleXmlFile: (...args: unknown[]) => Promise<unknown>;
+        },
+        'handleXmlFile'
+      )
+      .mockResolvedValue(undefined);
+
+    const file = makeXmlFile('application/octet-stream');
+
+    const tasks = service.handleFile(1, file, true);
+    await Promise.all(tasks);
+
+    expect(handleXmlSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('should reject unsupported xml root tag (no false success)', async () => {
     const service = makeService();
 
@@ -126,6 +148,34 @@ describe('WorkspaceFilesService.handleFile', () => {
         }
       ).handleXmlFile(1, badFile, true)
     ).rejects.toBeInstanceOf(Error);
+  });
+
+  it('should return XSD validation details for failed XML uploads', async () => {
+    const service = makeService({
+      workspaceXmlSchemaValidationService: {
+        validateXmlViaXsdUrl: jest.fn().mockResolvedValue({
+          schemaValid: false,
+          errors: [
+            "line 299: Element 'Variable': Duplicate key-sequence ['08'] in key identity-constraint 'basicKey'."
+          ]
+        })
+      } as unknown as CtorParams[5]
+    });
+
+    const result = await (
+      service as unknown as {
+        handleXmlFile: (...args: unknown[]) => Promise<unknown>;
+      }
+    ).handleXmlFile(1, makeXmlFile('application/xml'), true);
+
+    expect(result).toEqual({
+      failed: true,
+      filename: 'unit.xml',
+      reason: 'XSD validation failed: unit.xml',
+      details: [
+        "line 299: Element 'Variable': Duplicate key-sequence ['08'] in key identity-constraint 'basicKey'."
+      ]
+    });
   });
 });
 
@@ -931,6 +981,8 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
             <ValuePositionLabel>Second option</ValuePositionLabel>
           </ValuePositionLabels>
         </Variable>
+        <Variable id="04" alias="02" type="string" />
+        <Variable id="07" alias="04" type="string" />
         <Variable alias="derived_alias" type="integer" />
       </BaseVariables>
       <DerivedVariables>
@@ -945,6 +997,20 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
       {
         id: 'B1',
         alias: 'base_alias',
+        sourceType: 'BASE',
+        type: 'string',
+        codes: []
+      },
+      {
+        id: '04',
+        alias: '02',
+        sourceType: 'BASE',
+        type: 'string',
+        codes: []
+      },
+      {
+        id: '07',
+        alias: '04',
         sourceType: 'BASE',
         type: 'string',
         codes: []
@@ -1096,6 +1162,25 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
       alias: 'derived_alias',
       type: 'integer',
       isDerived: true
+    });
+  });
+
+  it('should keep schema ids separate from aliases when ids collide with other aliases', async () => {
+    const service = makeService();
+
+    const [unit] = await service.getUnitVariableDetails(1);
+    const visibleVariable02 = unit.variables.find(variable => variable.alias === '02');
+    const visibleVariable04 = unit.variables.find(variable => variable.alias === '04');
+
+    expect(visibleVariable02).toMatchObject({
+      id: '04',
+      alias: '02',
+      sourceType: 'BASE'
+    });
+    expect(visibleVariable04).toMatchObject({
+      id: '07',
+      alias: '04',
+      sourceType: 'BASE'
     });
   });
 
