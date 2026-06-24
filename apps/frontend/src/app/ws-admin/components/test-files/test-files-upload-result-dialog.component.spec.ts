@@ -2,7 +2,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { Router } from '@angular/router';
-import { TestFilesUploadResultDialogComponent, TestFilesUploadResultDialogData } from './test-files-upload-result-dialog.component';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import {
+  getTestFilesUploadFailureSuggestions,
+  TestFilesUploadResultDialogComponent,
+  TestFilesUploadResultDialogData
+} from './test-files-upload-result-dialog.component';
 
 describe('TestFilesUploadResultDialogComponent', () => {
   let fixture: ComponentFixture<TestFilesUploadResultDialogComponent>;
@@ -39,13 +44,30 @@ describe('TestFilesUploadResultDialogComponent', () => {
     router = { navigate: jest.fn() };
 
     await TestBed.configureTestingModule({
-      imports: [TestFilesUploadResultDialogComponent, NoopAnimationsModule],
+      imports: [
+        TestFilesUploadResultDialogComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot()
+      ],
       providers: [
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: Router, useValue: router }
       ]
     }).compileComponents();
+
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', {
+      'file-upload': {
+        'failure-suggestions': {
+          title: 'Hinweise',
+          'duplicate-key': 'Der Wert{{value}} kommt mehrfach vor. Prüfen Sie die gemeldete Zeile und entfernen Sie doppelte Variable-/Element-IDs oder Aliase.',
+          'invalid-xml': 'Prüfen Sie, ob die Datei gültiges XML enthält, und exportieren Sie sie bei Bedarf erneut.',
+          'schema-validation': 'Korrigieren Sie die genannten Schemafehler in der Datei und starten Sie den Upload danach erneut.'
+        }
+      }
+    });
+    translate.use('de');
 
     fixture = TestBed.createComponent(TestFilesUploadResultDialogComponent);
     component = fixture.componentInstance;
@@ -68,6 +90,8 @@ describe('TestFilesUploadResultDialogComponent', () => {
     expect(component.filteredRemainingConflicts).toHaveLength(1);
     component.filterText = 'duplicate key';
     expect(component.filteredFailedFiles).toHaveLength(1);
+    component.filterText = 'mehrfach';
+    expect(component.filteredFailedFiles).toHaveLength(1);
     component.filterText = 'missing';
     expect(component.filteredIssues).toHaveLength(1);
     component.filterText = 'nomatch';
@@ -84,6 +108,30 @@ describe('TestFilesUploadResultDialogComponent', () => {
     expect(dialogRef.close).toHaveBeenCalled();
   });
 
+  it('suggests fixes for common upload failure details', () => {
+    expect(getTestFilesUploadFailureSuggestions(data.failedFiles[0])).toEqual([
+      {
+        key: 'file-upload.failure-suggestions.duplicate-key',
+        params: { value: '' }
+      },
+      { key: 'file-upload.failure-suggestions.invalid-xml' }
+    ]);
+
+    expect(getTestFilesUploadFailureSuggestions({
+      filename: 'bad.xml',
+      reason: 'XSD validation failed: bad.xml',
+      details: [
+        "line 299: Element 'Variable': Duplicate key-sequence ['08'] in key identity-constraint 'basicKey'."
+      ]
+    })).toEqual([
+      {
+        key: 'file-upload.failure-suggestions.duplicate-key',
+        params: { value: ' "08"' }
+      },
+      { key: 'file-upload.failure-suggestions.schema-validation' }
+    ]);
+  });
+
   it('navigates to coding management when checking coding status', () => {
     component.checkCodingStatus();
 
@@ -97,7 +145,11 @@ describe('TestFilesUploadResultDialogComponent', () => {
   it('falls back to defaults when optional data is absent', async () => {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
-      imports: [TestFilesUploadResultDialogComponent, NoopAnimationsModule],
+      imports: [
+        TestFilesUploadResultDialogComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot()
+      ],
       providers: [
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: Router, useValue: router },

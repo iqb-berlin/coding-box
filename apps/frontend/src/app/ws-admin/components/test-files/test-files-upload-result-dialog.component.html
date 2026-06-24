@@ -64,6 +64,18 @@
               }
             </ul>
             }
+            @if (getFailureSuggestions(f); as suggestions) {
+              @if (suggestions.length > 0) {
+              <div class="suggestions">
+                <div class="suggestions-title">{{ 'file-upload.failure-suggestions.title' | translate }}</div>
+                <ul>
+                  @for (suggestion of suggestions; track suggestion.key + (suggestion.params?.value || '')) {
+                  <li>{{ suggestion.key | translate: suggestion.params }}</li>
+                  }
+                </ul>
+              </div>
+              }
+            }
           </div>
         </div>
       </div>

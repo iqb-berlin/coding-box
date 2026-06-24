@@ -13,6 +13,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTabsModule } from '@angular/material/tabs';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { Router } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   TestFilesUploadConflictDto,
   TestFilesUploadFailedDto,
@@ -33,6 +34,84 @@ export function deduplicateTestFilesUploadFailedFiles(
     seen.add(key);
     return true;
   });
+}
+
+export type TestFilesUploadFailureSuggestion = {
+  key: string;
+  params?: Record<string, string>;
+};
+
+export function getTestFilesUploadFailureSuggestions(
+  failedFile: TestFilesUploadFailedDto
+): TestFilesUploadFailureSuggestion[] {
+  const text = [
+    failedFile.reason,
+    ...(failedFile.details || [])
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const normalizedText = text.toLowerCase();
+  const suggestions: TestFilesUploadFailureSuggestion[] = [];
+  const addSuggestion = (
+    suggestion: TestFilesUploadFailureSuggestion
+  ): void => {
+    if (!suggestions.some(item => (
+      item.key === suggestion.key &&
+      JSON.stringify(item.params || {}) === JSON.stringify(suggestion.params || {})
+    ))) {
+      suggestions.push(suggestion);
+    }
+  };
+
+  const duplicateKeyMatch = text.match(
+    /duplicate key-sequence\s+\[['"]?([^'"\]]+)['"]?\]/i
+  );
+
+  if (duplicateKeyMatch || normalizedText.includes('duplicate key')) {
+    const value = duplicateKeyMatch?.[1] ?
+      ` "${duplicateKeyMatch[1]}"` :
+      '';
+    addSuggestion({
+      key: 'file-upload.failure-suggestions.duplicate-key',
+      params: { value }
+    });
+  }
+
+  if (
+    normalizedText.includes('unsupported root tag') ||
+    normalizedText.includes('no root tag found')
+  ) {
+    addSuggestion({
+      key: 'file-upload.failure-suggestions.unsupported-root'
+    });
+  }
+
+  if (
+    normalizedText.includes('invalid xml') ||
+    normalizedText.includes('xml schema validation error') ||
+    normalizedText.includes('parse')
+  ) {
+    addSuggestion({
+      key: 'file-upload.failure-suggestions.invalid-xml'
+    });
+  }
+
+  if (normalizedText.includes('unsupported file type')) {
+    addSuggestion({
+      key: 'file-upload.failure-suggestions.unsupported-file-type'
+    });
+  }
+
+  if (
+    normalizedText.includes('xsd validation failed') ||
+    normalizedText.includes('schema validation failed')
+  ) {
+    addSuggestion({
+      key: 'file-upload.failure-suggestions.schema-validation'
+    });
+  }
+
+  return suggestions;
 }
 
 export type TestFilesUploadResultDialogData = {
@@ -60,7 +139,8 @@ export type TestFilesUploadResultDialogData = {
     MatInputModule,
     MatIconModule,
     MatTabsModule,
-    ScrollingModule
+    ScrollingModule,
+    TranslateModule
   ],
   templateUrl: './test-files-upload-result-dialog.component.html',
   styleUrls: ['./test-files-upload-result-dialog.component.scss']
@@ -71,7 +151,8 @@ export class TestFilesUploadResultDialogComponent {
   constructor(
     private dialogRef: MatDialogRef<TestFilesUploadResultDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: TestFilesUploadResultDialogData,
-    private router: Router
+    private router: Router,
+    private translate: TranslateService
   ) {}
 
   get attempted(): number {
@@ -155,7 +236,12 @@ export class TestFilesUploadResultDialogComponent {
     return this.failedFiles.filter(f => this.matchesQuery([
       f.filename,
       f.reason,
-      ...(f.details || [])
+      ...(f.details || []),
+      ...this.getFailureSuggestions(f)
+        .map(suggestion => this.translate.instant(
+          suggestion.key,
+          suggestion.params
+        ))
     ], q)
     );
   }
@@ -187,6 +273,12 @@ export class TestFilesUploadResultDialogComponent {
 
   trackByIssue(index: number, item: TestResultsUploadIssueDto): string {
     return `${item.level}@@${item.fileName || ''}@@${item.rowIndex || ''}@@${item.message}@@${index}`;
+  }
+
+  getFailureSuggestions(
+    file: TestFilesUploadFailedDto
+  ): TestFilesUploadFailureSuggestion[] {
+    return getTestFilesUploadFailureSuggestions(file);
   }
 
   close(): void {
