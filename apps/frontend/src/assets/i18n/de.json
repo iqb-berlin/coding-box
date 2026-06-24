@@ -69,6 +69,9 @@
       "by-variable-compact": "Nach Variable, kompakt",
       "detailed": "Detailliertes Kodierprotokoll",
       "coding-times": "Kodierzeiten-Bericht",
+      "manual-review-most-frequent": "Kodierer: häufigster Code",
+      "manual-review-new-column-per-coder": "pro Kodierer neue Spalte",
+      "manual-review-new-row-per-variable": "pro Variable neue Zeile",
       "results-by-version": "Finale Ergebnisdaten",
       "item-matrix": "Itemmatrix"
     }
