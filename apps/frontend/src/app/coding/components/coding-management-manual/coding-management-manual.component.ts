@@ -1209,6 +1209,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const exportConfig: ExportJobConfig = {
       exportType: result.exportType,
       userId: this.appService.userId,
+      ...this.getManualCodingExportDisplayMetadata(result),
       includeReplayUrl: result.includeReplayUrl ?? false,
       outputCommentsInsteadOfCodes: result.outputCommentsInsteadOfCodes,
       anonymizeCoders: result.anonymizeCoders,
@@ -1245,6 +1246,33 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.showError('Exportjob konnte nicht gestartet werden.');
         }
       });
+  }
+
+  private getManualCodingExportDisplayMetadata(
+    result: ManualCodingExportDialogResult
+  ): Pick<ExportJobConfig, 'displayLabelKey' | 'downloadFilePrefix'> {
+    if (result.exportType !== 'aggregated') {
+      return {};
+    }
+
+    switch (result.doubleCodingMethod || 'most-frequent') {
+      case 'new-column-per-coder':
+        return {
+          displayLabelKey: 'export-toast.types.manual-review-new-column-per-coder',
+          downloadFilePrefix: 'manual-review-new-column-per-coder'
+        };
+      case 'new-row-per-variable':
+        return {
+          displayLabelKey: 'export-toast.types.manual-review-new-row-per-variable',
+          downloadFilePrefix: 'manual-review-new-row-per-variable'
+        };
+      case 'most-frequent':
+      default:
+        return {
+          displayLabelKey: 'export-toast.types.manual-review-most-frequent',
+          downloadFilePrefix: 'manual-review-most-frequent'
+        };
+    }
   }
 
   private getCoderTrainingIds(): number[] {

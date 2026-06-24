@@ -60,6 +60,29 @@ describe('ExportJobService', () => {
       service.ngOnDestroy(); // cleanup
     }));
 
+    it('should keep display metadata on the local job', () => {
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+
+      service.startJob(1, {
+        exportType: 'aggregated',
+        userId: 1,
+        displayLabelKey: 'export-toast.types.manual-review-most-frequent',
+        downloadFilePrefix: 'manual-review-most-frequent'
+      }).subscribe();
+
+      expect(service.activeJobs[0]).toEqual(expect.objectContaining({
+        displayLabelKey: 'export-toast.types.manual-review-most-frequent',
+        downloadFilePrefix: 'manual-review-most-frequent'
+      }));
+      const requestConfig = codingJobBackendServiceMock.startExportJob.mock.calls[0][1];
+      expect(requestConfig).not.toEqual(expect.objectContaining({
+        displayLabelKey: expect.any(String)
+      }));
+      expect(requestConfig).not.toEqual(expect.objectContaining({
+        downloadFilePrefix: expect.any(String)
+      }));
+    });
+
     it('should surface start errors without adding a job', () => {
       codingJobBackendServiceMock.startExportJob.mockReturnValue(
         throwError(() => new Error('start failed'))
@@ -147,6 +170,41 @@ describe('ExportJobService', () => {
 
       expect(codingJobBackendServiceMock.startExportJob).not.toHaveBeenCalled();
       expect(service.activeJobs.length).toBe(0);
+    });
+  });
+
+  describe('downloadFile', () => {
+    it('should use the display file prefix when present', () => {
+      const blob = new Blob(['xlsx'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const anchor = document.createElement('a');
+      const clickSpy = jest.spyOn(anchor, 'click').mockImplementation();
+      const createElementSpy = jest.spyOn(document, 'createElement').mockReturnValue(anchor);
+
+      Object.defineProperty(window.URL, 'createObjectURL', {
+        value: jest.fn().mockReturnValue('blob:url'),
+        configurable: true
+      });
+      Object.defineProperty(window.URL, 'revokeObjectURL', {
+        value: jest.fn(),
+        configurable: true
+      });
+      codingJobBackendServiceMock.downloadExportFile.mockReturnValue(of(blob));
+      const date = new Date().toISOString().slice(0, 10);
+
+      service.downloadFile(
+        1,
+        'j1',
+        'aggregated',
+        'export.xlsx',
+        'manual-review-most-frequent'
+      );
+
+      expect(anchor.download).toBe(`export-manual-review-most-frequent-${date}.xlsx`);
+      expect(clickSpy).toHaveBeenCalled();
+
+      createElementSpy.mockRestore();
     });
   });
 });
