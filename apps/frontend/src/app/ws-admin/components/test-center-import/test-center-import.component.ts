@@ -59,6 +59,7 @@ import {
   ImportWorkspaceOptionKey
 } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
 import { TestGroupsLoadProgressDto } from '../../../../../../../api-dto/files/test-groups-load-progress.dto';
+import { TestResultsOverwriteMode } from '../../../../../../../api-dto/files/import-options.dto';
 
 export type WorkspaceAdmin = {
   label: string;
@@ -79,6 +80,7 @@ export interface ImportFormValues {
   workspace: string;
   testCenterIndividual: string;
   importOptions: ImportOptions;
+  responseOverwriteMode: TestResultsOverwriteMode;
 }
 
 @Component({
@@ -212,6 +214,7 @@ export class TestCenterImportComponent {
       player: this.fb.control(false),
       codings: this.fb.control(false),
       logs: this.fb.control(false),
+      responseOverwriteMode: this.fb.control('skip'),
       testTakers: this.fb.control(false),
       booklets: this.fb.control(false),
       metadata: this.fb.control(false)
@@ -436,28 +439,34 @@ export class TestCenterImportComponent {
     return this.selectedRows.some(group => group.hasBookletLogs);
   }
 
-  private async confirmOverwriteLogs(): Promise<boolean> {
+  private async confirmOverwriteLogs(): Promise<'overwrite' | 'skip' | 'cancel'> {
     const groupsWithLogs = this.selectedRows.filter(
       group => group.hasBookletLogs
     );
 
     if (groupsWithLogs.length === 0) {
-      return true;
+      return 'overwrite';
     }
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: <ConfirmDialogData>{
-        title: 'Logs überschreiben',
+        title: 'Vorhandene Logs gefunden',
         content:
           `${groupsWithLogs.length} ausgewählte Testgruppe(n) haben bereits Booklet-Logs in der Datenbank. ` +
-          'Möchten Sie die vorhandenen Logs überschreiben?',
+          'Möchten Sie die vorhandenen Logs überschreiben oder vorhandene Logs überspringen?',
         confirmButtonLabel: 'Überschreiben',
+        alternativeButtonLabel: 'Ohne Überschreiben fortfahren',
+        alternativeButtonValue: 'skip',
+        cancelButtonLabel: 'Abbrechen',
         showCancel: true
       }
     });
 
-    return firstValueFrom(dialogRef.afterClosed());
+    const result = await firstValueFrom(dialogRef.afterClosed());
+    if (result === true) return 'overwrite';
+    if (result === 'skip') return 'skip';
+    return 'cancel';
   }
 
   getTestData(): void {
@@ -476,7 +485,9 @@ export class TestCenterImportComponent {
         testTakers: this.importFilesForm.get('testTakers')?.value,
         booklets: this.importFilesForm.get('booklets')?.value,
         metadata: this.importFilesForm.get('metadata')?.value
-      }
+      },
+      responseOverwriteMode:
+        this.importFilesForm.get('responseOverwriteMode')?.value || 'skip'
     };
 
     this.uploadData = null;
@@ -501,8 +512,12 @@ export class TestCenterImportComponent {
       this.isUploadingTestResults = false;
       this.resetUploadProgress();
 
-      this.confirmOverwriteLogs().then(confirmed => {
-        if (confirmed) {
+      this.confirmOverwriteLogs().then(choice => {
+        if (choice === 'cancel') {
+          this.resetUploadProgress();
+          return;
+        }
+        if (choice === 'overwrite') {
           this.isUploadingTestFiles = true;
           this.isUploadingTestResults = this.data.importType === 'testResults';
           this.initializeUploadProgress(selectedGroupNames.length);
@@ -535,7 +550,8 @@ export class TestCenterImportComponent {
     formValues: ImportFormValues,
     selectedGroupNames: string[],
     overwriteExistingLogs: boolean,
-    overwriteFileIds?: string[]
+    overwriteFileIds?: string[],
+    responseOverwriteMode: TestResultsOverwriteMode = 'skip'
   ): void {
     const importedResponses = !!formValues.importOptions.responses;
     const importedLogs = !!formValues.importOptions.logs;
@@ -573,7 +589,8 @@ export class TestCenterImportComponent {
         selectedGroupNames,
         overwriteExistingLogs,
         overwriteFileIds,
-        this.importRunId
+        this.importRunId,
+        responseOverwriteMode
       )
       .subscribe({
         next: data => {
@@ -758,7 +775,10 @@ export class TestCenterImportComponent {
             this.authToken,
             formValues.importOptions,
             [groupName],
-            overwriteExistingLogs
+            overwriteExistingLogs,
+            undefined,
+            undefined,
+            formValues.responseOverwriteMode
           )
         );
 

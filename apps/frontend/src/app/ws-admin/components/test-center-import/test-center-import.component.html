@@ -145,6 +145,19 @@
                 Importiert Testergebnisse der Teilnehmenden
               </div>
             </div>
+            @if (importFilesForm.get('responses')?.value) {
+            <mat-form-field appearance="outline">
+              <mat-label>Umgang mit vorhandenen Antworten</mat-label>
+              <mat-select formControlName="responseOverwriteMode">
+                <mat-option value="skip">Vorhandene Units überspringen</mat-option>
+                <mat-option value="merge">Fehlende Antwortwerte ergänzen</mat-option>
+                <mat-option value="replace">Vorhandene Antwortwerte ersetzen</mat-option>
+              </mat-select>
+              <mat-hint>
+                Gilt für Antworten aus dem Testcenter; Logs werden separat behandelt.
+              </mat-hint>
+            </mat-form-field>
+            }
             <div class="checkbox-item">
               <mat-checkbox formControlName="logs">
                 <span class="checkbox-label">Logs</span>

@@ -38,6 +38,7 @@ import { UnitInfoDto } from '../../../../../../api-dto/unit-info/unit-info.dto';
 import { ResourcePackageDto } from '../../../../../../api-dto/resource-package/resource-package-dto';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 import { TestGroupsLoadProgressDto } from '../../../../../../api-dto/files/test-groups-load-progress.dto';
+import { TestResultsOverwriteMode } from '../../../../../../api-dto/files/import-options.dto';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 
 interface PaginatedResponse<T> {
@@ -235,7 +236,9 @@ export class WorkspaceFacadeService {
     importOptions: ImportOptions,
     testGroups: string[],
     overwriteExistingLogs: boolean = false,
-    overwriteFileIds?: string[]
+    overwriteFileIds?: string[],
+    importRunId?: string,
+    responseOverwriteMode: TestResultsOverwriteMode = 'skip'
   ): Observable<Result> {
     return this.importService.importWorkspaceFiles(
       workspaceId,
@@ -246,7 +249,9 @@ export class WorkspaceFacadeService {
       importOptions,
       testGroups,
       overwriteExistingLogs,
-      overwriteFileIds
+      overwriteFileIds,
+      importRunId,
+      responseOverwriteMode
     );
   }
 

@@ -3,7 +3,11 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { catchError, Observable, of } from 'rxjs';
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
-import { ImportOptionsDto as ImportOptions, ImportResultDto as Result } from '../../../../../../../api-dto/files/import-options.dto';
+import {
+  ImportOptionsDto as ImportOptions,
+  ImportResultDto as Result,
+  TestResultsOverwriteMode
+} from '../../../../../../../api-dto/files/import-options.dto';
 import { ImportWorkspaceFilesProgressDto } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
 import { TestGroupsLoadProgressDto } from '../../../../../../../api-dto/files/test-groups-load-progress.dto';
 
@@ -26,7 +30,8 @@ export class ImportService {
     testGroups: string[],
     overwriteExistingLogs: boolean = false,
     overwriteFileIds?: string[],
-    importRunId?: string
+    importRunId?: string,
+    responseOverwriteMode: TestResultsOverwriteMode = 'skip'
   ): Observable<Result> {
     const {
       units,
@@ -57,7 +62,8 @@ export class ImportService {
       .set('testGroups', String(testGroups.join(',')))
       .set('overwriteExistingLogs', String(overwriteExistingLogs))
       .set('overwriteFileIds', String((overwriteFileIds || []).join(';')))
-      .set('importRunId', String(importRunId || ''));
+      .set('importRunId', String(importRunId || ''))
+      .set('responseOverwriteMode', responseOverwriteMode);
 
     return this.http
       .get<Result>(

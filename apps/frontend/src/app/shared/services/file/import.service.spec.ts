@@ -62,7 +62,44 @@ describe('ImportService', () => {
       const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/importWorkspaceFiles` &&
         request.params.get('tc_workspace') === 'ws1' &&
         request.params.get('testGroups') === 'g1' &&
-        request.params.get('responses') === 'true'
+        request.params.get('responses') === 'true' &&
+        request.params.get('responseOverwriteMode') === 'skip'
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush({});
+    });
+
+    it('should send the selected response overwrite mode', () => {
+      const options: ImportOptions = {
+        responses: 'true',
+        definitions: 'false',
+        units: 'false',
+        player: 'false',
+        codings: 'false',
+        logs: 'false',
+        testTakers: 'false',
+        booklets: 'false',
+        metadata: 'false'
+      };
+
+      service.importWorkspaceFiles(
+        mockWorkspaceId,
+        'ws1',
+        'srv',
+        'url',
+        'tok',
+        options,
+        ['g1'],
+        false,
+        undefined,
+        undefined,
+        'merge'
+      ).subscribe(res => {
+        expect(res).toBeDefined();
+      });
+
+      const req = httpMock.expectOne(
+        request => request.params.get('responseOverwriteMode') === 'merge'
       );
       expect(req.request.method).toBe('GET');
       req.flush({});
