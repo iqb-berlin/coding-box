@@ -47,7 +47,7 @@ describe('CodingVariablesDialogComponent', () => {
   const fileBackendServiceMock = {
     getUnitVariables: jest.fn(() => of(unitVariables)),
     getReplayAnchorOverrides: jest.fn(() => of([
-      { unitName: 'Unit A', variableId: 'INTERNAL_2', replayAnchor: 'TEXT_ANCHOR' }
+      { unitName: 'Unit A', variableId: 'Alias_2', replayAnchor: 'TEXT_ANCHOR' }
     ])),
     saveReplayAnchorOverride: jest.fn(),
     deleteReplayAnchorOverride: jest.fn()
@@ -99,31 +99,27 @@ describe('CodingVariablesDialogComponent', () => {
     expect(component.hasCodesFilter).toBe(false);
     expect(component.dataSource.data).toHaveLength(3);
     expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual([
-      'INTERNAL_1',
-      'INTERNAL_2',
-      'INTERNAL_3'
+      'Alias_1',
+      'Alias_2',
+      'Alias_3'
     ]);
   });
 
-  it('should filter variables by id and alias', () => {
-    component.variableIdFilter = 'INTERNAL_2';
-    component.applyFilter();
-    expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['INTERNAL_2']);
-
+  it('should expose aliases as public variable ids', () => {
     component.variableIdFilter = 'Alias_1';
     component.applyFilter();
-    expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['INTERNAL_1']);
+    expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['Alias_1']);
   });
 
-  it('should render alias as primary text and id as secondary text', () => {
+  it('should render alias as primary text', () => {
     const variableCell = fixture.nativeElement.querySelector('td.mat-column-variableId') as HTMLElement;
 
     expect(variableCell.querySelector('.variable-alias')?.textContent?.trim()).toBe('Alias_1');
-    expect(variableCell.querySelector('.variable-id')?.textContent?.trim()).toBe('ID: INTERNAL_1');
+    expect(variableCell.querySelector('.variable-id')).toBeNull();
   });
 
   it('should attach saved replay anchors to variables', () => {
-    const variable = component.dataSource.data.find(item => item.variableId === 'INTERNAL_2');
+    const variable = component.dataSource.data.find(item => item.variableId === 'Alias_2');
 
     expect(variable?.replayAnchor).toBe('TEXT_ANCHOR');
     expect(variable?.savedReplayAnchor).toBe('TEXT_ANCHOR');
@@ -133,19 +129,19 @@ describe('CodingVariablesDialogComponent', () => {
     component.isDerivedFilter = true;
     component.applyFilter();
 
-    expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['INTERNAL_2']);
+    expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['Alias_2']);
   });
 
   it('should filter variables by training effort', () => {
     component.trainingRequiredFilter = 'required';
     component.applyFilter();
-    expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['INTERNAL_1']);
+    expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['Alias_1']);
 
     component.trainingRequiredFilter = 'not-required';
     component.applyFilter();
     expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual([
-      'INTERNAL_2',
-      'INTERNAL_3'
+      'Alias_2',
+      'Alias_3'
     ]);
   });
 
@@ -160,7 +156,7 @@ describe('CodingVariablesDialogComponent', () => {
   });
 
   it('should clear all filters', () => {
-    component.variableIdFilter = 'INTERNAL_1';
+    component.variableIdFilter = 'Alias_1';
     component.hasCodingSchemeFilter = true;
     component.hasCodesFilter = true;
     component.trainingRequiredFilter = 'required';

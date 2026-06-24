@@ -14,8 +14,20 @@ describe('TestFilesUploadResultDialogComponent', () => {
     workspaceId: 1,
     attempted: 4,
     overwriteSelectedCount: 1,
+    failedCount: 2,
     uploadedFiles: [{ filename: 'booklet.xml', fileId: 'f1', fileType: 'Booklet' } as never],
-    failedFiles: [{ filename: 'bad.xml', reason: 'Invalid XML' } as never],
+    failedFiles: [
+      {
+        filename: 'bad.xml',
+        reason: 'Invalid XML',
+        details: ['line 12: Duplicate key']
+      } as never,
+      {
+        filename: 'bad.xml',
+        reason: 'Invalid XML',
+        details: ['line 12: Duplicate key']
+      } as never
+    ],
     remainingConflicts: [{ filename: 'unit.xml', fileId: 'f2', fileType: 'Unit' } as never],
     issues: [{
       level: 'warning', category: 'coding_freshness', message: 'Missing value', fileName: 'responses.csv', rowIndex: 3
@@ -54,6 +66,8 @@ describe('TestFilesUploadResultDialogComponent', () => {
     expect(component.filteredUploadedFiles).toHaveLength(1);
     expect(component.filteredFailedFiles).toHaveLength(1);
     expect(component.filteredRemainingConflicts).toHaveLength(1);
+    component.filterText = 'duplicate key';
+    expect(component.filteredFailedFiles).toHaveLength(1);
     component.filterText = 'missing';
     expect(component.filteredIssues).toHaveLength(1);
     component.filterText = 'nomatch';

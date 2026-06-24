@@ -890,8 +890,7 @@ export class CodingValidationService {
 
       unitDetails.variables.forEach(variable => {
         const variableIds = [
-          variable.alias,
-          variable.id
+          variable.alias || variable.id
         ].filter(Boolean);
 
         unitKeys.forEach(unitKey => {

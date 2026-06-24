@@ -1336,9 +1336,11 @@ describe('CodingValidationService', () => {
   });
 
   describe('validateManualCodeAvailability', () => {
-    const mockManualScopeQueries = (): void => {
+    const mockManualScopeQueries = (
+      variableId = 'var1'
+    ): void => {
       const codingIncompleteQb = createQueryBuilderMock([
-        { unitName: 'unit1', variableId: 'var1', responseCount: '5' }
+        { unitName: 'unit1', variableId, responseCount: '5' }
       ]);
       const intendedIncompleteQb = createQueryBuilderMock([]);
       const deriveErrorQb = createQueryBuilderMock([]);
@@ -1354,14 +1356,14 @@ describe('CodingValidationService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockCacheService.set.mockResolvedValue(true);
       mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
-        new Map([['UNIT1', new Set(['var1'])]])
+        new Map([['UNIT1', new Set([variableId])]])
       );
       mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
       mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
       mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
       mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
       mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue(
-        createSlimResponses('unit1', 'var1', 5) as never
+        createSlimResponses('unit1', variableId, 5) as never
       );
     };
 
@@ -1438,6 +1440,52 @@ describe('CodingValidationService', () => {
                   label: 'Hidden',
                   manualInstruction: ''
                 },
+                {
+                  id: 2,
+                  label: 'Manual',
+                  manualInstruction: '<p>Manuell auswählbar</p>'
+                }
+              ]
+            }
+          ]
+        }
+      ]);
+
+      const result = await service.validateManualCodeAvailability(1);
+
+      expect(result).toEqual({
+        checkedVariables: 1,
+        warningCount: 0,
+        warnings: []
+      });
+    });
+
+    it('should match manual code availability by alias when ids collide with aliases', async () => {
+      mockManualScopeQueries('04');
+      mockWorkspaceFilesService.getUnitVariableDetails.mockResolvedValue([
+        {
+          unitName: 'unit1',
+          unitId: 'unit1',
+          variables: [
+            {
+              id: '04',
+              alias: '02',
+              type: 'string',
+              hasCodingScheme: true,
+              codes: [
+                {
+                  id: 1,
+                  label: 'Only special',
+                  manualInstruction: ''
+                }
+              ]
+            },
+            {
+              id: '07',
+              alias: '04',
+              type: 'string',
+              hasCodingScheme: true,
+              codes: [
                 {
                   id: 2,
                   label: 'Manual',

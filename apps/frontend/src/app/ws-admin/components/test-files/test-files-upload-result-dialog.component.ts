@@ -20,6 +20,21 @@ import {
 } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 
+export function deduplicateTestFilesUploadFailedFiles(
+  failedFiles: TestFilesUploadFailedDto[] | undefined | null
+): TestFilesUploadFailedDto[] {
+  const seen = new Set<string>();
+  return (failedFiles || []).filter(file => {
+    const details = (file.details || []).join('\n');
+    const key = `${file.filename}@@${file.reason || ''}@@${details}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
 export type TestFilesUploadResultDialogData = {
   workspaceId?: number;
   attempted: number;
@@ -72,7 +87,7 @@ export class TestFilesUploadResultDialogComponent {
   }
 
   get failedFiles(): TestFilesUploadFailedDto[] {
-    return this.data?.failedFiles || [];
+    return deduplicateTestFilesUploadFailedFiles(this.data?.failedFiles);
   }
 
   get remainingConflicts(): TestFilesUploadConflictDto[] {
@@ -84,7 +99,7 @@ export class TestFilesUploadResultDialogComponent {
   }
 
   get failedCount(): number {
-    return this.data?.failedCount ?? this.failedFiles.length;
+    return this.failedFiles.length || this.data?.failedCount || 0;
   }
 
   get remainingConflictsCount(): number {
@@ -137,7 +152,11 @@ export class TestFilesUploadResultDialogComponent {
 
   get filteredFailedFiles(): TestFilesUploadFailedDto[] {
     const q = this.filterText;
-    return this.failedFiles.filter(f => this.matchesQuery([f.filename, f.reason], q)
+    return this.failedFiles.filter(f => this.matchesQuery([
+      f.filename,
+      f.reason,
+      ...(f.details || [])
+    ], q)
     );
   }
 
@@ -154,7 +173,12 @@ export class TestFilesUploadResultDialogComponent {
   }
 
   trackByFailed(index: number, item: TestFilesUploadFailedDto): string {
-    return `${item.filename}@@${index}`;
+    return [
+      item.filename,
+      item.reason || '',
+      (item.details || []).join('|'),
+      String(index)
+    ].join('@@');
   }
 
   trackByConflict(index: number, item: TestFilesUploadConflictDto): string {

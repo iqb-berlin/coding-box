@@ -1052,7 +1052,12 @@ ${bookletRefs}
 
       const isFailedResult = (
         value: unknown
-      ): value is { failed: true; filename: string; reason: string } => !!value &&
+      ): value is {
+        failed: true;
+        filename: string;
+        reason: string;
+        details?: string[];
+      } => !!value &&
         typeof value === 'object' &&
         (value as { failed?: unknown }).failed === true &&
         typeof (value as { filename?: unknown }).filename === 'string' &&
@@ -1074,7 +1079,8 @@ ${bookletRefs}
         if (isFailedResult(value)) {
           failedFiles.push({
             filename: value.filename,
-            reason: value.reason
+            reason: value.reason,
+            details: Array.isArray(value.details) ? value.details : undefined
           });
           return;
         }
@@ -1243,11 +1249,31 @@ ${bookletRefs}
     overwriteAllowList?: Set<string>
   ): Array<Promise<unknown>> {
     const filePromises: Array<Promise<unknown>> = [];
+    const fileExtension = path.extname(file.originalname || '').toLowerCase();
 
     const normalizedMimetype = (file.mimetype || '')
       .toLowerCase()
       .split(';')[0]
       .trim();
+
+    const xmlMimeTypes = ['text/xml', 'application/xml', 'application/x-xml'];
+
+    if (
+      fileExtension === '.xml' &&
+      !xmlMimeTypes.includes(normalizedMimetype) &&
+      this.shouldUseXmlUploadHandler(file)
+    ) {
+      filePromises.push(
+        this.handleXmlFile(
+          workspaceId,
+          file,
+          overwriteExisting,
+          overwriteAllowList
+        ).catch(error => this.toFailedUploadResult(file.originalname, error)
+        )
+      );
+      return filePromises;
+    }
 
     switch (normalizedMimetype) {
       case 'text/xml':
@@ -1318,13 +1344,35 @@ ${bookletRefs}
 
   private toFailedUploadResult(
     filename: string,
-    reason: unknown
-  ): { failed: true; filename: string; reason: string } {
+    reason: unknown,
+    details?: string[]
+  ): {
+      failed: true;
+      filename: string;
+      reason: string;
+      details?: string[];
+    } {
     return {
       failed: true,
       filename,
-      reason: reason instanceof Error ? reason.message : String(reason)
+      reason: reason instanceof Error ? reason.message : String(reason),
+      details: details && details.length > 0 ? details : undefined
     };
+  }
+
+  private shouldUseXmlUploadHandler(file: FileIo): boolean {
+    try {
+      const xmlDocument = cheerio.load(file.buffer.toString('utf8'), {
+        xml: true
+      });
+      const firstChild = xmlDocument.root().children().first();
+      const rootTagName = (firstChild.prop('tagName') || '').toString();
+      const normalizedRootTagName = rootTagName.toUpperCase();
+
+      return ['UNIT', 'BOOKLET', 'TESTTAKERS'].includes(normalizedRootTagName);
+    } catch (_error) {
+      return true;
+    }
   }
 
   private async handleXmlFile(
@@ -1385,7 +1433,11 @@ ${bookletRefs}
             xmlValidation.errors.length
           }) ${JSON.stringify(errorsPreview)}`
         );
-        return this.toFailedUploadResult(file.originalname, failureMessage);
+        return this.toFailedUploadResult(
+          file.originalname,
+          failureMessage,
+          errorsPreview
+        );
       }
 
       const metadata = xmlDocument('Metadata');
@@ -3646,7 +3698,6 @@ ${bookletRefs}
                   const variableMetadata = this.extractVariableMetadata(
                     variable
                   );
-
                   variables.push({
                     id: variableId,
                     alias: variableAlias,
@@ -3721,7 +3772,6 @@ ${bookletRefs}
                   const variableMetadata = this.extractVariableMetadata(
                     variable
                   );
-
                   variables.push({
                     id: variableId,
                     alias: variableAlias,
