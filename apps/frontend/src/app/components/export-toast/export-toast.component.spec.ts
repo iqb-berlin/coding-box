@@ -20,6 +20,8 @@ describe('ExportToastComponent', () => {
       jobId: 'waiting',
       workspaceId: 1,
       exportType: 'aggregated',
+      displayLabelKey: 'export-toast.types.manual-review-most-frequent',
+      downloadFilePrefix: 'manual-review-most-frequent',
       status: 'waiting',
       result: { fileName: 'export.csv', fileSize: 100 }
     },
@@ -61,6 +63,7 @@ describe('ExportToastComponent', () => {
           'by-variable-compact': 'Nach Variable, kompakt',
           detailed: 'Detailliertes Kodierprotokoll',
           'coding-times': 'Kodierzeiten-Bericht',
+          'manual-review-most-frequent': 'Kodierer: häufigster Code',
           'results-by-version': 'Finale Ergebnisdaten',
           'item-matrix': 'Itemmatrix'
         },
@@ -92,6 +95,7 @@ describe('ExportToastComponent', () => {
     expect(component.getStatusIcon('unknown' as never)).toBe('help');
     expect(component.getStatusClass('failed')).toBe('status-failed');
     expect(component.getExportTypeLabel('aggregated')).toBe('Aggregierte Ansicht');
+    expect(component.getExportTypeLabel(jobs[0])).toBe('Kodierer: häufigster Code');
     expect(component.getExportTypeLabel('detailed')).toBe('Detailliertes Kodierprotokoll');
     expect(component.getExportTypeLabel('results-by-version')).toBe('Finale Ergebnisdaten');
     expect(component.getExportTypeLabel('item-matrix')).toBe('Itemmatrix');
@@ -106,7 +110,8 @@ describe('ExportToastComponent', () => {
     component.cancelJob(jobs[1]);
     component.clearCompleted();
 
-    expect(exportJobService.downloadFile).toHaveBeenCalledWith(1, 'waiting', 'aggregated', 'export.csv');
+    expect(exportJobService.downloadFile)
+      .toHaveBeenCalledWith(1, 'waiting', 'aggregated', 'export.csv', 'manual-review-most-frequent');
     expect(exportJobService.removeJob).toHaveBeenCalledWith('waiting');
     expect(exportJobService.cancelJob).toHaveBeenCalledWith(jobs[1]);
     expect(exportJobService.removeJob).toHaveBeenCalledWith('done');

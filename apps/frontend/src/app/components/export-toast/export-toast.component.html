@@ -18,7 +18,7 @@
             <mat-icon [class]="getStatusClass(job.status)" class="status-icon">
               {{ getStatusIcon(job.status) }}
             </mat-icon>
-            <span class="job-type">{{ getExportTypeLabel(job.exportType) }}</span>
+            <span class="job-type">{{ getExportTypeLabel(job) }}</span>
           </div>
 
           <div class="job-progress" *ngIf="job.status === 'waiting' || job.status === 'active'">

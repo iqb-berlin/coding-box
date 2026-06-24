@@ -1498,6 +1498,84 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
+  it('should label manual review exports by their double-coding method', () => {
+    const exportJobService = TestBed.inject(ExportJobService) as unknown as {
+      startJob: jest.Mock;
+    };
+    const componentInternals = component as unknown as {
+      startManualCodingExport: (
+        context: 'training' | 'execution',
+        result: {
+          exportType: 'aggregated';
+          doubleCodingMethod?: 'most-frequent' | 'new-column-per-coder' | 'new-row-per-variable';
+          jobDefinitionIds: number[];
+        }
+      ) => void;
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    exportJobService.startJob.mockClear();
+
+    [
+      {
+        method: 'most-frequent' as const,
+        displayLabelKey: 'export-toast.types.manual-review-most-frequent',
+        downloadFilePrefix: 'manual-review-most-frequent'
+      },
+      {
+        method: 'new-column-per-coder' as const,
+        displayLabelKey: 'export-toast.types.manual-review-new-column-per-coder',
+        downloadFilePrefix: 'manual-review-new-column-per-coder'
+      },
+      {
+        method: 'new-row-per-variable' as const,
+        displayLabelKey: 'export-toast.types.manual-review-new-row-per-variable',
+        downloadFilePrefix: 'manual-review-new-row-per-variable'
+      }
+    ].forEach(({ method }) => {
+      componentInternals.startManualCodingExport('execution', {
+        exportType: 'aggregated',
+        doubleCodingMethod: method,
+        jobDefinitionIds: [11]
+      });
+    });
+
+    expect(exportJobService.startJob).toHaveBeenNthCalledWith(
+      1,
+      5,
+      expect.objectContaining({
+        exportType: 'aggregated',
+        doubleCodingMethod: 'most-frequent',
+        displayLabelKey: 'export-toast.types.manual-review-most-frequent',
+        downloadFilePrefix: 'manual-review-most-frequent'
+      })
+    );
+    expect(exportJobService.startJob).toHaveBeenNthCalledWith(
+      2,
+      5,
+      expect.objectContaining({
+        exportType: 'aggregated',
+        doubleCodingMethod: 'new-column-per-coder',
+        displayLabelKey: 'export-toast.types.manual-review-new-column-per-coder',
+        downloadFilePrefix: 'manual-review-new-column-per-coder'
+      })
+    );
+    expect(exportJobService.startJob).toHaveBeenNthCalledWith(
+      3,
+      5,
+      expect.objectContaining({
+        exportType: 'aggregated',
+        doubleCodingMethod: 'new-row-per-variable',
+        displayLabelKey: 'export-toast.types.manual-review-new-row-per-variable',
+        downloadFilePrefix: 'manual-review-new-row-per-variable'
+      })
+    );
+  });
+
   it('should show a specific error when replay export auth token creation fails', () => {
     const exportJobService = TestBed.inject(ExportJobService) as unknown as {
       startJob: jest.Mock;
