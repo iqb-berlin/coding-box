@@ -99,8 +99,10 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     return `status-${status}`;
   }
 
-  getExportTypeLabel(exportType: string): string {
-    const translationKey = this.exportTypeLabelKeys[exportType];
+  getExportTypeLabel(jobOrExportType: ExportJob | string): string {
+    const exportType = typeof jobOrExportType === 'string' ? jobOrExportType : jobOrExportType.exportType;
+    const displayLabelKey = typeof jobOrExportType === 'string' ? undefined : jobOrExportType.displayLabelKey;
+    const translationKey = displayLabelKey || this.exportTypeLabelKeys[exportType];
     return translationKey ? this.translateService.instant(translationKey) : exportType;
   }
 
@@ -124,7 +126,13 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   downloadFile(job: ExportJob): void {
-    this.exportJobService.downloadFile(job.workspaceId, job.jobId, job.exportType, job.result?.fileName);
+    this.exportJobService.downloadFile(
+      job.workspaceId,
+      job.jobId,
+      job.exportType,
+      job.result?.fileName,
+      job.downloadFilePrefix
+    );
   }
 
   removeJob(job: ExportJob): void {

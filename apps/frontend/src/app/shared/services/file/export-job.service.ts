@@ -24,6 +24,8 @@ export interface ExportJob {
   status: 'waiting' | 'active' | 'completed' | 'failed' | 'cancelled';
   progress: number;
   exportType: string;
+  displayLabelKey?: string;
+  downloadFilePrefix?: string;
   result?: {
     fileName: string;
     fileSize: number;
@@ -68,6 +70,8 @@ export interface ExportJobConfig {
   coderIds?: number[];
   authToken?: string;
   serverUrl?: string;
+  displayLabelKey?: string;
+  downloadFilePrefix?: string;
 }
 
 export const REPLAY_AUTH_TOKEN_ERROR_CODE = 'replay-auth-token-failed';
@@ -125,13 +129,20 @@ export class ExportJobService implements OnDestroy {
 
   startJob(workspaceId: number, config: ExportJobConfig): Observable<ExportJob> {
     return this.withReplayAuthToken(workspaceId, config).pipe(
-      switchMap(preparedConfig => this.codingJobBackendService.startExportJob(workspaceId, preparedConfig)),
+      switchMap(preparedConfig => {
+        const requestConfig = { ...preparedConfig };
+        delete requestConfig.displayLabelKey;
+        delete requestConfig.downloadFilePrefix;
+        return this.codingJobBackendService.startExportJob(workspaceId, requestConfig);
+      }),
       map((response: { jobId: string }) => ({
         jobId: response.jobId,
         workspaceId,
         status: 'waiting' as const,
         progress: 0,
         exportType: config.exportType,
+        displayLabelKey: config.displayLabelKey,
+        downloadFilePrefix: config.downloadFilePrefix,
         createdAt: Date.now()
       })),
       tap(job => {
@@ -302,7 +313,13 @@ export class ExportJobService implements OnDestroy {
     });
   }
 
-  downloadFile(workspaceId: number, jobId: string, exportType: string, fileName?: string): void {
+  downloadFile(
+    workspaceId: number,
+    jobId: string,
+    exportType: string,
+    fileName?: string,
+    downloadFilePrefix?: string
+  ): void {
     this.codingJobBackendService.downloadExportFile(workspaceId, jobId).subscribe({
       next: (blob: Blob) => {
         const url = window.URL.createObjectURL(blob);
@@ -310,7 +327,7 @@ export class ExportJobService implements OnDestroy {
         a.href = url;
         const ext = this.getDownloadExtension(exportType, fileName);
         const date = new Date().toISOString().slice(0, 10);
-        a.download = `export-${exportType}-${date}.${ext}`;
+        a.download = `export-${downloadFilePrefix || exportType}-${date}.${ext}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
