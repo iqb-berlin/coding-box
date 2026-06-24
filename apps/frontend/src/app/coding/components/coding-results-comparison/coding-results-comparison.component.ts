@@ -62,6 +62,14 @@ interface ReplayCodeSelectedMessage extends PostMessage {
   responseId?: number;
 }
 
+interface ReplayNotesCommittedMessage extends PostMessage {
+  testPerson: string;
+  unitId: string;
+  variableId: string;
+  notes?: string | null;
+  responseId?: number;
+}
+
 export type CodingResultsComparisonMode = 'between-trainings' | 'within-training';
 
 export interface CodingResultsComparisonDialogData {
@@ -331,6 +339,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   discussionNotesByResponseId: Record<number, string> = {};
   discussionErrorByResponseId: Record<number, string> = {};
   isSavingDiscussionByResponseId: Record<number, boolean> = {};
+  private pendingDiscussionNotesByResponseId: Record<number, string> = {};
   readonly emptyModalValueDisplay: ModalValueDisplay = {
     valueText: '-',
     deviationText: '-',
@@ -382,6 +391,12 @@ export class CodingResultsComparisonComponent implements OnInit {
       .pipe(takeUntil(this.ngUnsubscribe))
       .subscribe(msg => {
         this.handleReplayCodeSelected(msg.message);
+      });
+
+    this.postMessageService.getMessages<ReplayNotesCommittedMessage>('replayNotesCommitted')
+      .pipe(takeUntil(this.ngUnsubscribe))
+      .subscribe(msg => {
+        this.handleReplayNotesCommitted(msg.message);
       });
   }
 
@@ -1031,9 +1046,17 @@ export class CodingResultsComparisonComponent implements OnInit {
       notes
     ).subscribe({
       next: result => {
+        const hasPendingNotes = Object.prototype.hasOwnProperty.call(
+          this.pendingDiscussionNotesByResponseId,
+          responseId
+        );
+        const pendingNotes = hasPendingNotes ?
+          this.pendingDiscussionNotesByResponseId[responseId] :
+          '';
+
         this.discussionCodeByResponseId[responseId] = result.code !== null ? result.code.toString() : '';
         this.discussionScoreByResponseId[responseId] = result.score;
-        this.discussionNotesByResponseId[responseId] = result.notes || '';
+        this.discussionNotesByResponseId[responseId] = hasPendingNotes ? pendingNotes : result.notes || '';
         withinComparison.discussionCode = result.code;
         withinComparison.discussionScore = result.score;
         withinComparison.discussionNotes = result.notes;
@@ -1045,9 +1068,19 @@ export class CodingResultsComparisonComponent implements OnInit {
           this.discussionManagerLabel = result.managerName;
         }
         this.isSavingDiscussionByResponseId[responseId] = false;
+
+        if (hasPendingNotes) {
+          delete this.pendingDiscussionNotesByResponseId[responseId];
+          const normalizedPendingNotes = pendingNotes.trim() || null;
+          const normalizedSavedNotes = (result.notes || '').trim() || null;
+          if (normalizedPendingNotes !== normalizedSavedNotes) {
+            this.onDiscussionCodeBlur(withinComparison, result.score);
+          }
+        }
       },
       error: error => {
         this.isSavingDiscussionByResponseId[responseId] = false;
+        delete this.pendingDiscussionNotesByResponseId[responseId];
         const message = this.getDiscussionSaveErrorMessage(error);
         this.discussionErrorByResponseId[responseId] = message;
         this.snackBar.open(message, this.translate.instant('common.close'), { duration: 4000 });
@@ -1235,6 +1268,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.discussionNotesByResponseId = {};
     this.discussionErrorByResponseId = {};
     this.isSavingDiscussionByResponseId = {};
+    this.pendingDiscussionNotesByResponseId = {};
 
     const persistedManager = data.find(item => !!item.discussionManagerName)?.discussionManagerName;
     if (persistedManager) {
@@ -1944,9 +1978,9 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.loadKappaStatistics();
   }
 
-  private handleReplayCodeSelected(data: ReplayCodeSelectedMessage): void {
-    if (this.comparisonMode !== 'within-training') return;
-
+  private findWithinTrainingReplayRow(
+    data: Pick<ReplayCodeSelectedMessage, 'testPerson' | 'unitId' | 'variableId' | 'responseId'>
+  ): WithinTrainingComparison | null {
     const targetVarId = (data.variableId || '').toLowerCase();
     const targetUnitId = (data.unitId || '').toLowerCase();
     const normalizedMsgTP = normalizeTestperson(data.testPerson || '').toLowerCase();
@@ -1966,11 +2000,27 @@ export class CodingResultsComparisonComponent implements OnInit {
       });
     }
 
+    return row || null;
+  }
+
+  private getDiscussionScoreOverride(responseId: number): number | null | undefined {
+    return Object.prototype.hasOwnProperty.call(this.discussionScoreByResponseId, responseId) ?
+      this.discussionScoreByResponseId[responseId] :
+      undefined;
+  }
+
+  private handleReplayCodeSelected(data: ReplayCodeSelectedMessage): void {
+    if (this.comparisonMode !== 'within-training') return;
+
+    const row = this.findWithinTrainingReplayRow(data);
+
     if (row) {
       this.discussionCodeByResponseId[row.responseId] = this.mapCodeForDisplay(data.code);
       this.discussionScoreByResponseId[row.responseId] =
         data.score !== undefined ? data.score : this.getDiscussionScoreFromKnownCodes(row, parseInt(data.code, 10));
-      this.discussionNotesByResponseId[row.responseId] = data.notes || '';
+      if (Object.prototype.hasOwnProperty.call(data, 'notes')) {
+        this.discussionNotesByResponseId[row.responseId] = data.notes || '';
+      }
       this.onDiscussionCodeBlur(row, data.score);
 
       this.snackBar.open(
@@ -1979,5 +2029,33 @@ export class CodingResultsComparisonComponent implements OnInit {
         { duration: 3000 }
       );
     }
+  }
+
+  private handleReplayNotesCommitted(data: ReplayNotesCommittedMessage): void {
+    if (this.comparisonMode !== 'within-training') return;
+
+    const row = this.findWithinTrainingReplayRow(data);
+    if (!row) {
+      return;
+    }
+
+    const responseId = row.responseId;
+    const notes = data.notes || '';
+    this.discussionNotesByResponseId[responseId] = notes;
+    this.discussionErrorByResponseId[responseId] = '';
+
+    const currentCode = (this.discussionCodeByResponseId[responseId] || '').trim() ||
+      (row.discussionCode !== null && row.discussionCode !== undefined ? row.discussionCode.toString() : '');
+    if (!currentCode) {
+      return;
+    }
+
+    this.discussionCodeByResponseId[responseId] = currentCode;
+    if (this.isSavingDiscussionByResponseId[responseId]) {
+      this.pendingDiscussionNotesByResponseId[responseId] = notes;
+      return;
+    }
+
+    this.onDiscussionCodeBlur(row, this.getDiscussionScoreOverride(responseId));
   }
 }
