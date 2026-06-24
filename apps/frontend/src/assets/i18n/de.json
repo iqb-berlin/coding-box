@@ -1073,6 +1073,7 @@
     "bundle-manual-coded-tooltip": "Diese Bündelvariable ist manuell kodiert.",
     "bundle-open-tooltip": "Diese Bündelvariable ist offen.",
     "bundle-not-available-tooltip": "Diese Bündelvariable ist für diesen Fall nicht verfügbar.",
+    "variable-bundle": "Bündel",
     "code-assignment-uncertain-requires-code": "Code-Vergabe unsicher kann erst nach einem regulären Code ausgewählt werden.",
     "new-code-comment-required": "Bitte begründen Sie „Neuer Code nötig“ im Kommentar zu diesem Kodierfall.",
     "coding-issue-options": {

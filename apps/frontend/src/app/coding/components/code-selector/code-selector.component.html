@@ -11,8 +11,49 @@
     </mat-progress-bar>
   </div>
 
-  @if (availableVariables.length > 1 || shouldShowBundleVariableChips) {
+  @if (shouldShowVariableSelectorSection) {
   <div class="variable-selector-section">
+    @if (navigationItems.length > 1) {
+    <div class="variable-dropdown-wrapper">
+      <button class="variable-trigger-btn" (click)="toggleVariablePanel()" [disabled]="isNavigationDisabled" type="button">
+        <span class="variable-trigger-label">
+          @let activeItem = activeNavigationItem;
+          @if (activeItem) {
+          @let prog = getProgressForNavigationItem(activeItem);
+          <span class="variable-trigger-name">{{ activeItem.label }}</span>
+          <span class="variable-trigger-progress">({{ prog.coded }}/{{ prog.total }})</span>
+          } @else {
+          Variable wählen
+          }
+        </span>
+        <mat-icon class="variable-trigger-icon">{{ isVariablePanelOpen ? 'expand_less' : 'expand_more' }}</mat-icon>
+      </button>
+
+      @if (isVariablePanelOpen) {
+      <div class="variable-panel" #variablePanel>
+        @for (item of navigationItems; track item.key) {
+        @let prog = getProgressForNavigationItem(item);
+        <div class="variable-panel-item" [class.active]="item.key === activeNavigationKey" (click)="selectNavigationItem(item.key)"
+          tabindex="-1">
+          <div class="variable-panel-header">
+            <span class="variable-panel-name">
+              {{ item.label }}
+              @if (item.type === 'bundle') {
+              <span class="variable-panel-kind">{{ 'code-selector.variable-bundle' | translate }}</span>
+              }
+            </span>
+            <span class="variable-panel-count">{{ prog.coded }}/{{ prog.total }}</span>
+          </div>
+          <div class="variable-panel-bar-track">
+            <div class="variable-panel-bar-fill" [style.width.%]="prog.percentage"
+              [class.complete]="prog.percentage === 100"></div>
+          </div>
+        </div>
+        }
+      </div>
+      }
+    </div>
+    }
     @if (shouldShowBundleVariableChips) {
     <div class="bundle-variable-chips" role="tablist">
       @for (chip of bundleVariableChips; track chip.key) {
@@ -33,36 +74,46 @@
       </button>
       }
     </div>
-    } @else {
-    <div class="variable-dropdown-wrapper">
-      <button class="variable-trigger-btn" (click)="toggleVariablePanel()" [disabled]="isNavigationDisabled" type="button">
+    }
+    @if (shouldShowBundleVariableDropdown) {
+    <div class="variable-dropdown-wrapper bundle-variable-dropdown-wrapper">
+      <button class="variable-trigger-btn" (click)="toggleBundleVariablePanel()" [disabled]="isNavigationDisabled" type="button">
         <span class="variable-trigger-label">
-          @if (activeVariableKey) {
-          @let prog = getProgressForKey(activeVariableKey);
-          <span class="variable-trigger-name">{{ activeVariableKey.split('::')[0] }} / {{
-            activeVariableKey.split('::')[1] }}</span>
-          <span class="variable-trigger-progress">({{ prog.coded }}/{{ prog.total }})</span>
+          @let activeBundleVariable = activeBundleVariableNavigationItem;
+          @if (activeBundleVariable) {
+          <span class="variable-trigger-name">{{ activeBundleVariable.label }}</span>
+          <span class="variable-trigger-progress">({{ activeBundleVariable.progress.coded }}/{{ activeBundleVariable.progress.total }})</span>
           } @else {
           Variable wählen
           }
         </span>
-        <mat-icon class="variable-trigger-icon">{{ isVariablePanelOpen ? 'expand_less' : 'expand_more' }}</mat-icon>
+        <mat-icon class="variable-trigger-icon">{{ isBundleVariablePanelOpen ? 'expand_less' : 'expand_more' }}</mat-icon>
       </button>
 
-      @if (isVariablePanelOpen) {
-      <div class="variable-panel" #variablePanel>
-        @for (v of availableVariables; track v.key) {
-        @let prog = getProgressForKey(v.key);
-        <div class="variable-panel-item" [class.active]="v.key === activeVariableKey" (click)="selectVariable(v.key)"
+      @if (isBundleVariablePanelOpen) {
+      <div class="variable-panel" #bundleVariablePanel>
+        @for (item of bundleVariableNavigationItems; track item.key) {
+        <div
+          class="variable-panel-item"
+          [class.active]="item.active"
+          [class.disabled]="item.disabled"
+          [matTooltip]="item.tooltip"
+          (click)="selectBundleVariable(item.key, item.disabled)"
           tabindex="-1">
           <div class="variable-panel-header">
-            <span class="variable-panel-name">{{ v.unitName }} / {{ v.variableId }}</span>
-            <span class="variable-panel-count">{{ prog.coded }}/{{ prog.total }}</span>
+            <span class="variable-panel-name">{{ item.label }}</span>
+            @if (item.status === 'auto-coded') {
+            <mat-icon class="bundle-variable-status-icon">bolt</mat-icon>
+            } @else {
+            <span class="variable-panel-count">{{ item.progress.coded }}/{{ item.progress.total }}</span>
+            }
           </div>
+          @if (item.status !== 'auto-coded') {
           <div class="variable-panel-bar-track">
-            <div class="variable-panel-bar-fill" [style.width.%]="prog.percentage"
-              [class.complete]="prog.percentage === 100"></div>
+            <div class="variable-panel-bar-fill" [style.width.%]="item.progress.percentage"
+              [class.complete]="item.progress.percentage === 100"></div>
           </div>
+          }
         </div>
         }
       </div>
