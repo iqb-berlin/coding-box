@@ -594,6 +594,76 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
 });
 
 describe('WorkspaceResponseValidationService.validateVariableTypes', () => {
+  const displayedStatus = 2;
+  const valueChangedStatus = 3;
+
+  const validateSingleVariableTypeResponse = async (
+    responseValue: string | null,
+    responseStatus: number,
+    variable: {
+      alias?: string;
+      type?: string;
+      multiple?: boolean;
+      nullable?: boolean;
+    } = {}
+  ) => {
+    const variableAlias = variable.alias || 'A1';
+    const variableType = variable.type || 'integer';
+    const multipleAttribute =
+      typeof variable.multiple === 'boolean' ?
+        ` multiple="${variable.multiple}"` :
+        '';
+    const nullableAttribute =
+      typeof variable.nullable === 'boolean' ?
+        ` nullable="${variable.nullable}"` :
+        '';
+    const unitXml = Buffer.from(
+      `<Unit><Metadata><Id>U1</Id></Metadata><BaseVariables><Variable alias="${variableAlias}" type="${variableType}"${multipleAttribute}${nullableAttribute}/></BaseVariables></Unit>`
+    );
+
+    const filesRepo = {
+      find: jest.fn().mockResolvedValue([{ data: unitXml }])
+    } as unknown as Repository<FileUpload>;
+    const personsRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, workspace_id: 1, consider: true }])
+    } as unknown as Repository<Persons>;
+    const unitRepo = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue({
+          innerJoin: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
+        })
+    } as unknown as Repository<Unit>;
+    const responseRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          {
+            id: 100,
+            unitid: 10,
+            variableid: variableAlias,
+            value: responseValue,
+            status: responseStatus,
+            unit: { id: 10, name: 'U1' }
+          }
+        ])
+    } as unknown as Repository<ResponseEntity>;
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepo,
+      unitRepo,
+      personsRepo,
+      {} as Repository<Booklet>,
+      filesRepo
+    );
+
+    return service.validateVariableTypes(1, 1, 10);
+  };
+
   it('accepts valid string value', async () => {
     const makeUnitXml = (
       unitId: string,
@@ -858,6 +928,48 @@ describe('WorkspaceResponseValidationService.validateVariableTypes', () => {
     const result = await service.validateVariableTypes(1, 1, 10);
     expect(result.total).toBe(1);
     expect(result.data[0].errorReason).toContain('nullable=false');
+  });
+
+  it('allows null value for DISPLAYED variable with nullable=false', async () => {
+    const result = await validateSingleVariableTypeResponse(
+      null,
+      displayedStatus,
+      { nullable: false }
+    );
+
+    expect(result.total).toBe(0);
+  });
+
+  it('allows empty value for DISPLAYED variable with nullable=false', async () => {
+    const result = await validateSingleVariableTypeResponse(
+      '',
+      displayedStatus,
+      { nullable: false }
+    );
+
+    expect(result.total).toBe(0);
+  });
+
+  it('flags null value for VALUE_CHANGED variable with nullable=false', async () => {
+    const result = await validateSingleVariableTypeResponse(
+      null,
+      valueChangedStatus,
+      { nullable: false }
+    );
+
+    expect(result.total).toBe(1);
+    expect(result.data[0].errorReason).toContain('nullable=false');
+  });
+
+  it('validates present DISPLAYED value against declared type', async () => {
+    const result = await validateSingleVariableTypeResponse(
+      'abc',
+      displayedStatus,
+      { nullable: false }
+    );
+
+    expect(result.total).toBe(1);
+    expect(result.data[0].errorReason).toContain('integer');
   });
 
   it('accepts [] for multiple=true variable', async () => {
