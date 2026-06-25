@@ -84,6 +84,85 @@
 
       <!-- Settings panel -->
       <div class="settings-panel mat-elevation-z1">
+        <!-- Quick filters section -->
+        <div class="settings-section">
+          <h3>{{'coding.codebook-quick-filters' | translate}}</h3>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>{{'coding.training-requirement-filter' | translate}}</mat-label>
+            <mat-select
+              [(ngModel)]="contentOptions.trainingRequirement"
+              (selectionChange)="onTrainingRequirementChange($event.value)">
+              <mat-option value="all">{{'coding.training-requirement-all' | translate}}</mat-option>
+              <mat-option value="required">{{'coding.training-requirement-required' | translate}}</mat-option>
+              <mat-option value="not-required">{{'coding.training-requirement-not-required' | translate}}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <div class="job-definition-filter">
+            <span class="job-definition-filter-label">{{'coding.job-definition-filter' | translate}}</span>
+            <div class="job-definition-selection-card">
+              <button
+                type="button"
+                class="job-definition-selection-main"
+                [disabled]="isLoadingJobDefinitions"
+                (click)="openJobDefinitionPicker()">
+                <mat-icon>rule_folder</mat-icon>
+                <span class="job-definition-picker-text">
+                  <span class="job-definition-picker-title">{{ selectedJobDefinitionLabel }}</span>
+                  @if (selectedJobDefinitionSummary) {
+                    <span class="job-definition-picker-summary">{{ selectedJobDefinitionSummary }}</span>
+                  } @else {
+                    <span class="job-definition-picker-summary">
+                      {{ 'coding.job-definition-picker-all-summary' | translate }}
+                    </span>
+                  }
+                </span>
+              </button>
+              <div class="job-definition-selection-actions">
+                <button
+                  mat-icon-button
+                  type="button"
+                  [disabled]="isLoadingJobDefinitions"
+                  [attr.aria-label]="'coding.job-definition-picker-title' | translate"
+                  [matTooltip]="'coding.job-definition-picker-title' | translate"
+                  (click)="openJobDefinitionPicker()">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                @if (selectedJobDefinitionId !== null) {
+                  <button
+                    mat-icon-button
+                    type="button"
+                    [attr.aria-label]="'coding.job-definition-picker-clear' | translate"
+                    [matTooltip]="'coding.job-definition-picker-clear' | translate"
+                    (click)="onJobDefinitionFilterChange(null)">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                }
+              </div>
+            </div>
+          </div>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>{{'coding.variable-bundle-filter' | translate}}</mat-label>
+            <mat-select
+              multiple
+              [(ngModel)]="selectedVariableBundleIds"
+              (selectionChange)="onVariableBundleFilterChange($event.value)"
+              [disabled]="isLoadingVariableBundles">
+              @for (variableBundle of availableVariableBundles; track variableBundle.id) {
+                <mat-option [value]="variableBundle.id">
+                  {{ variableBundle.name }}
+                </mat-option>
+              }
+              @if (!isLoadingVariableBundles && availableVariableBundles.length === 0) {
+                <mat-option disabled>{{'coding.variable-bundle-none' | translate}}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <mat-divider></mat-divider>
+
         <!-- Content options section -->
         <div class="settings-section">
           <h3>{{'coding.codebook-content' | translate}}</h3>
