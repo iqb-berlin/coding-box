@@ -56,6 +56,53 @@ describe('CodingJobBackendService', () => {
     expect(service).toBeTruthy();
   });
 
+  describe('getVariableBundles', () => {
+    it('loads all paginated variable bundles', done => {
+      service.getVariableBundles(1).subscribe(bundles => {
+        expect(bundles.map(bundle => bundle.id)).toEqual([1, 2]);
+        done();
+      });
+
+      const firstRequest = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/1/variable-bundle` &&
+        request.params.get('page') === '1' &&
+        request.params.get('limit') === '100'
+      ));
+      expect(firstRequest.request.method).toBe('GET');
+      firstRequest.flush({
+        data: [{
+          id: 1,
+          name: 'Bundle 1',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          variables: []
+        }],
+        total: 101,
+        page: 1,
+        limit: 100
+      });
+
+      const secondRequest = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/1/variable-bundle` &&
+        request.params.get('page') === '2' &&
+        request.params.get('limit') === '100'
+      ));
+      expect(secondRequest.request.method).toBe('GET');
+      secondRequest.flush({
+        data: [{
+          id: 2,
+          name: 'Bundle 2',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          variables: []
+        }],
+        total: 101,
+        page: 2,
+        limit: 100
+      });
+    });
+  });
+
   describe('getCodingJobs', () => {
     it('should fetch jobs and map properties', () => {
       const mockApiResponse = {

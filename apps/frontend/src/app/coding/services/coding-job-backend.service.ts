@@ -1,7 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
+import {
+  forkJoin, Observable, of
+} from 'rxjs';
+import {
+  map, switchMap, tap
+} from 'rxjs/operators';
 import { SERVER_URL } from '../../injection-tokens';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 import type {
@@ -303,9 +307,36 @@ export class CodingJobBackendService {
 
   getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/variable-bundle`;
-    return this.http
-      .get<PaginatedResponse<VariableBundle>>(url, { headers: this.authHeader })
-      .pipe(map(response => response.data));
+    const limit = 100;
+    const getPage = (page: number): Observable<PaginatedResponse<VariableBundle>> => (
+      this.http.get<PaginatedResponse<VariableBundle>>(url, {
+        headers: this.authHeader,
+        params: new HttpParams()
+          .set('page', page.toString())
+          .set('limit', limit.toString())
+      })
+    );
+
+    return getPage(1).pipe(
+      switchMap(firstPage => {
+        const pageCount = Math.ceil((firstPage.total || firstPage.data.length) / limit);
+        if (pageCount <= 1) {
+          return of(firstPage.data);
+        }
+
+        const remainingPages = Array.from(
+          { length: pageCount - 1 },
+          (_value, index) => getPage(index + 2)
+        );
+
+        return forkJoin(remainingPages).pipe(
+          map(pages => [
+            ...firstPage.data,
+            ...pages.flatMap(page => page.data)
+          ])
+        );
+      })
+    );
   }
 
   private mapApiCodingJob(job: unknown): CodingJob {

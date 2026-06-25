@@ -16,7 +16,10 @@ const contentOptions: CodeBookContentSetting = {
   hasClosedVars: true,
   codeLabelToUpper: true,
   showScore: true,
-  hideItemVarRelation: true
+  hideItemVarRelation: true,
+  trainingRequirement: 'all',
+  jobDefinitionId: null,
+  variableBundleIds: []
 };
 
 const codebookResult: CodebookJobResult = {
@@ -80,7 +83,10 @@ describe('WorkspaceCodingCodebookController', () => {
       missingsProfile: '3',
       contentOptions: {
         ...contentOptions,
-        exportFormat: 'DOCX' as never
+        exportFormat: 'DOCX' as never,
+        trainingRequirement: 'required',
+        jobDefinitionId: '5' as never,
+        variableBundleIds: ['7', 7, 8] as never
       },
       unitList: ['1', 2, 2]
     });
@@ -91,7 +97,10 @@ describe('WorkspaceCodingCodebookController', () => {
       contentOptions: {
         ...contentOptions,
         exportFormat: 'docx',
-        missingsProfile: '3'
+        missingsProfile: '3',
+        trainingRequirement: 'required',
+        jobDefinitionId: 5,
+        variableBundleIds: [7, 8]
       },
       unitIds: [1, 2]
     });
@@ -124,6 +133,28 @@ describe('WorkspaceCodingCodebookController', () => {
         missingsProfile: requestPatch.missingsProfile,
         contentOptions,
         unitList: requestPatch.unitList
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(jobQueueService.addCodebookGenerationJob).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { trainingRequirement: 'training' },
+    { jobDefinitionId: true },
+    { jobDefinitionId: 0 },
+    { jobDefinitionId: '1.2' },
+    { variableBundleIds: true },
+    { variableBundleIds: [0] },
+    { variableBundleIds: ['1.2'] }
+  ])('rejects invalid codebook quick filters %#', async contentOptionsPatch => {
+    await expect(
+      controller.startCodebookJob(12, {
+        missingsProfile: 0,
+        contentOptions: {
+          ...contentOptions,
+          ...contentOptionsPatch
+        } as Partial<CodeBookContentSetting>,
+        unitList: [1]
       })
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(jobQueueService.addCodebookGenerationJob).not.toHaveBeenCalled();
