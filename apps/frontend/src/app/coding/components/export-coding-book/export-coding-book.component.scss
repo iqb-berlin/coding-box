@@ -3,13 +3,18 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
 }
 
 // Dialog content styles
 .dialog-content {
+  height: 100%;
   min-height: 500px;
+  max-height: none;
   padding: 0;
   overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 // Layout for the export panels
@@ -18,10 +23,12 @@
   flex-direction: row;
   gap: 20px;
   height: 100%;
+  min-height: 0;
   padding: 16px;
 
   @media (max-width: 960px) {
     flex-direction: column;
+    overflow-y: auto;
   }
 }
 
@@ -38,19 +45,11 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  max-height: 600px;
+  min-height: 0;
   min-width: 300px;
 
   @media (max-width: 960px) {
     max-height: 400px;
-  }
-
-  @media (max-height: 768px) {
-    max-height: 450px;
-  }
-
-  @media (max-height: 600px) {
-    max-height: 350px;
   }
 }
 
@@ -107,11 +106,11 @@
 .units-table-container {
   overflow-y: auto; // Enable vertical scrolling
   flex: 1;
+  min-height: 0;
   border: 1px solid #e0e0e0;
   border-radius: 4px;
   display: flex;
   flex-direction: column;
-  max-height: 500px; // Fixed height to enable scrolling when content exceeds this height
 
   // Ensure smooth scrolling on touch devices
   -webkit-overflow-scrolling: touch;
@@ -181,6 +180,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   min-width: 300px;
   max-width: 500px;
   overflow-y: auto;
@@ -230,6 +230,105 @@
 // Full width form field
 .full-width {
   width: 100%;
+}
+
+.job-definition-filter {
+  margin-bottom: 16px;
+}
+
+.job-definition-filter-label {
+  display: block;
+  margin: 0 0 6px;
+  color: rgba(0, 0, 0, 0.66);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.job-definition-selection-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  min-height: 64px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+
+  &:focus-within {
+    border-color: #006064;
+    box-shadow: 0 0 0 1px rgba(0, 96, 100, 0.2);
+  }
+}
+
+.job-definition-selection-main {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 96, 100, 0.04);
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  mat-icon {
+    color: #006064;
+  }
+}
+
+.job-definition-selection-actions {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 4px;
+  border-left: 1px solid rgba(0, 0, 0, 0.08);
+  background: #fafafa;
+}
+
+.job-definition-picker-text,
+.job-definition-picker-title,
+.job-definition-picker-summary {
+  display: block;
+  min-width: 0;
+}
+
+.job-definition-picker-text {
+  overflow: hidden;
+}
+
+.job-definition-picker-title {
+  color: rgba(0, 0, 0, 0.87);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-definition-picker-summary {
+  color: rgba(0, 0, 0, 0.62);
+  font-size: 12px;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 // Export format radio group
