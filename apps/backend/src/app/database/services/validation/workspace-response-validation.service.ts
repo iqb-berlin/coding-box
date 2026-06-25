@@ -20,7 +20,10 @@ import {
   DuplicateResponseDto,
   DuplicateResponsesResultDto
 } from '../../../../../../../api-dto/files/duplicate-response.dto';
-import { statusNumberToString } from '../../utils/response-status-converter';
+import {
+  EXCLUDED_STATUSES,
+  statusNumberToString
+} from '../../utils/response-status-converter';
 
 interface UnitVariableDefinitions {
   aliases: Set<string>;
@@ -900,9 +903,10 @@ export class WorkspaceResponseValidationService {
       const isMultiple = variableInfo.multiple === true;
       const isNullable = variableInfo.nullable !== false;
       const isMissingValue = this.isMissingVariableValue(value, isMultiple);
+      const isProcessStatus = EXCLUDED_STATUSES.includes(response.status);
 
       if (isMissingValue) {
-        if (!isNullable) {
+        if (!isNullable && !isProcessStatus) {
           invalidVariables.push({
             fileName: `${unitName}`,
             variableId: variableId,
