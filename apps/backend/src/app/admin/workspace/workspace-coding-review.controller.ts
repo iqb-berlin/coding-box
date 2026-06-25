@@ -138,6 +138,11 @@ export class WorkspaceCodingReviewController {
                       nullable: true,
                       description: 'Code given by the coder'
                     },
+                    codingIssueOption: {
+                      type: 'number',
+                      nullable: true,
+                      description: 'General coding issue option selected by the coder'
+                    },
                     score: {
                       type: 'number',
                       nullable: true,
