@@ -98,6 +98,7 @@ describe('DoubleCodedReviewComponent', () => {
                       jobId: 1001,
                       jobName: 'Definition 99 / A',
                       code: 1,
+                      codingIssueOption: -3,
                       score: 0,
                       notes: null,
                       supervisorComment: null,
@@ -345,7 +346,7 @@ describe('DoubleCodedReviewComponent', () => {
     );
     const reviewCodeSelections = new URLSearchParams(openedUrl.split('?')[1]).get('reviewCodeSelections');
     expect(JSON.parse(reviewCodeSelections || '[]')).toEqual([
-      { code: 1, coderNames: ['Coder A'] },
+      { code: -3, coderNames: ['Coder A'] },
       { code: 2, coderNames: ['Coder B'] }
     ]);
     expect(openSpy).toHaveBeenCalledWith(openedUrl, '_blank');
