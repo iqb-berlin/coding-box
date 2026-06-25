@@ -84,12 +84,31 @@ export class CodebookGenerator {
     variableCoding: VariableCodingData,
     contentSetting: CodeBookContentSetting
   ): BookVariable | null {
+    if (!this.matchesTrainingRequirement(variableCoding, contentSetting)) {
+      return null;
+    }
+
     const codes: CodeInfo[] = this.getCodes(variableCoding.codes, contentSetting);
     const isDerived: boolean = (variableCoding.sourceType !== 'BASE' && variableCoding.sourceType !== 'BASE_NO_VALUE');
     if (!isDerived || contentSetting.hasDerivedVars) {
       return this.getManualOrClosedCodedBookVariable(contentSetting, codes, variableCoding);
     }
     return null;
+  }
+
+  private static matchesTrainingRequirement(
+    variableCoding: VariableCodingData,
+    contentSetting: CodeBookContentSetting
+  ): boolean {
+    const filter = contentSetting.trainingRequirement || 'all';
+    if (filter === 'all') {
+      return true;
+    }
+
+    const trainingRequired =
+      variableCoding.processing?.includes('CODER_TRAINING_REQUIRED') ?? false;
+
+    return filter === 'required' ? trainingRequired : !trainingRequired;
   }
 
   private static getManualOrClosedCodedBookVariable(

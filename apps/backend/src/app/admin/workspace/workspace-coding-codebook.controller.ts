@@ -23,12 +23,13 @@ import * as fs from 'fs';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodebookGenerationService } from '../../database/services/coding';
+import { CodebookGenerationService } from '../../database/services/coding/codebook-generation.service';
 import { JobQueueService, CodebookJobResult } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
 import {
   CodeBookContentSetting,
-  CodebookExportFormat
+  CodebookExportFormat,
+  CodebookTrainingRequirementFilter
 } from '../code-book/codebook.interfaces';
 
 type CodebookRequestBody = {
@@ -54,7 +55,15 @@ type CodebookJobStatusResponse =
   }
   | { error: string };
 
-type BooleanCodebookContentSetting = Exclude<keyof CodeBookContentSetting, 'exportFormat' | 'missingsProfile'>;
+type BooleanCodebookContentSetting =
+  | 'hasOnlyManualCoding'
+  | 'hasGeneralInstructions'
+  | 'hasDerivedVars'
+  | 'hasOnlyVarsWithCodes'
+  | 'hasClosedVars'
+  | 'codeLabelToUpper'
+  | 'showScore'
+  | 'hideItemVarRelation';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -94,7 +103,19 @@ export class WorkspaceCodingCodebookController {
             hasClosedVars: { type: 'boolean' },
             codeLabelToUpper: { type: 'boolean' },
             showScore: { type: 'boolean' },
-            hideItemVarRelation: { type: 'boolean' }
+            hideItemVarRelation: { type: 'boolean' },
+            trainingRequirement: {
+              type: 'string',
+              enum: ['all', 'required', 'not-required']
+            },
+            jobDefinitionId: {
+              type: 'number',
+              nullable: true
+            },
+            variableBundleIds: {
+              type: 'array',
+              items: { type: 'number' }
+            }
           }
         },
         unitList: {
@@ -169,7 +190,19 @@ export class WorkspaceCodingCodebookController {
             hasClosedVars: { type: 'boolean' },
             codeLabelToUpper: { type: 'boolean' },
             showScore: { type: 'boolean' },
-            hideItemVarRelation: { type: 'boolean' }
+            hideItemVarRelation: { type: 'boolean' },
+            trainingRequirement: {
+              type: 'string',
+              enum: ['all', 'required', 'not-required']
+            },
+            jobDefinitionId: {
+              type: 'number',
+              nullable: true
+            },
+            variableBundleIds: {
+              type: 'array',
+              items: { type: 'number' }
+            }
           }
         },
         unitList: {
@@ -438,8 +471,39 @@ export class WorkspaceCodingCodebookController {
       hasClosedVars: contentOptions.hasClosedVars,
       codeLabelToUpper: contentOptions.codeLabelToUpper,
       showScore: contentOptions.showScore,
-      hideItemVarRelation: contentOptions.hideItemVarRelation
+      hideItemVarRelation: contentOptions.hideItemVarRelation,
+      trainingRequirement: this.normalizeTrainingRequirement(
+        contentOptions.trainingRequirement
+      ),
+      jobDefinitionId: this.normalizeOptionalPositiveInteger(
+        contentOptions.jobDefinitionId,
+        'contentOptions.jobDefinitionId'
+      ),
+      variableBundleIds: this.normalizeOptionalPositiveIntegerList(
+        contentOptions.variableBundleIds,
+        'contentOptions.variableBundleIds'
+      )
     };
+  }
+
+  private normalizeTrainingRequirement(
+    value: unknown
+  ): CodebookTrainingRequirementFilter {
+    if (value === undefined || value === null || value === '') {
+      return 'all';
+    }
+
+    if (
+      value === 'all' ||
+      value === 'required' ||
+      value === 'not-required'
+    ) {
+      return value;
+    }
+
+    throw new BadRequestException(
+      'contentOptions.trainingRequirement must be one of "all", "required", or "not-required"'
+    );
   }
 
   private normalizeExportFormat(value: unknown): CodebookExportFormat {
@@ -484,6 +548,34 @@ export class WorkspaceCodingCodebookController {
       throw new BadRequestException(this.getIntegerValidationMessage(fieldName, minValue));
     }
     return normalized;
+  }
+
+  private normalizeOptionalPositiveInteger(
+    value: unknown,
+    fieldName: string
+  ): number | null {
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+
+    return this.normalizeInteger(value, 1, fieldName);
+  }
+
+  private normalizeOptionalPositiveIntegerList(
+    value: unknown,
+    fieldName: string
+  ): number[] {
+    if (value === undefined || value === null) {
+      return [];
+    }
+
+    if (!Array.isArray(value)) {
+      throw new BadRequestException(this.getIntegerValidationMessage(fieldName, 1));
+    }
+
+    const normalized = value.map(id => this.normalizeInteger(id, 1, fieldName));
+
+    return Array.from(new Set(normalized));
   }
 
   private getIntegerValidationMessage(fieldName: string, minValue: number): string {

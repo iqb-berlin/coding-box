@@ -10,7 +10,10 @@ import { Queue, JobOptions, Job } from 'bull';
 import { FileIo } from '../admin/workspace/file-io.interface';
 import { ValidationTask } from '../database/entities/validation-task.entity';
 import { ProcessDto } from '../../../../../api-dto/workspaces/process-dto';
-import { CodebookExportFormat } from '../../../../../api-dto/coding/codebook-content-setting';
+import {
+  CodebookExportFormat,
+  CodebookTrainingRequirementFilter
+} from '../../../../../api-dto/coding/codebook-content-setting';
 
 type ProcessOverviewValidationTask = Pick<
 ValidationTask,
@@ -60,6 +63,9 @@ export interface CodebookGenerationJobData {
     codeLabelToUpper: boolean;
     showScore: boolean;
     hideItemVarRelation: boolean;
+    trainingRequirement?: CodebookTrainingRequirementFilter;
+    jobDefinitionId?: number | null;
+    variableBundleIds?: number[];
   };
   unitIds: number[];
 }

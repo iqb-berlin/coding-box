@@ -1,41 +1,104 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DatePipe } from '@angular/common';
+import { MatDialog } from '@angular/material/dialog';
 import {
   of, throwError, BehaviorSubject, Subject
 } from 'rxjs';
 import { TranslateService } from '@ngx-translate/core';
 import { ExportCodingBookComponent } from './export-coding-book.component';
 import { CodingExportService } from '../../services/coding-export.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
 import { ValidationStateService, ValidationProgress } from '../../services/validation-state.service';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
+import { CodebookJobDefinitionPickerDialogComponent } from './codebook-job-definition-picker-dialog.component';
 
 describe('ExportCodingBookComponent', () => {
   let component: ExportCodingBookComponent;
   let fixture: ComponentFixture<ExportCodingBookComponent>;
   let exportService: jest.Mocked<CodingExportService>;
+  let codingJobBackendService: jest.Mocked<CodingJobBackendService>;
   let missingsProfileService: jest.Mocked<MissingsProfileService>;
   let fileService: jest.Mocked<FileService>;
   let appService: jest.Mocked<AppService>;
   let validationStateService: jest.Mocked<ValidationStateService>;
+  let matDialog: jest.Mocked<MatDialog>;
 
   const mockUnits = [
     {
-      id: 1, unitId: 'unit1', fileName: 'test1.vocs', data: 'data1'
+      id: 1,
+      unitId: 'unit1',
+      fileName: 'test1.vocs',
+      data: JSON.stringify({
+        variableCodings: [{ id: 'VAR1', alias: 'PUBLIC1' }]
+      })
     },
     {
-      id: 2, unitId: 'unit2', fileName: 'test2.vocs', data: 'data2'
+      id: 2,
+      unitId: 'unit2',
+      fileName: 'test2.vocs',
+      data: JSON.stringify({
+        variableCodings: [
+          { id: 'VAR2' },
+          { id: 'OTHER_VAR' }
+        ]
+      })
     },
     {
-      id: 3, unitId: 'unit3', fileName: 'test3.vocs', data: 'data3'
+      id: 3,
+      unitId: 'unit3',
+      fileName: 'test3.vocs',
+      data: JSON.stringify({
+        variableCodings: [{ id: 'VAR3' }]
+      })
     }
   ];
 
   const mockMissingsProfiles = [
     { id: 1, label: 'Profile 1' },
     { id: 2, label: 'Profile 2' }
+  ];
+
+  const mockJobDefinitions = [
+    {
+      id: 10,
+      assignedVariables: [{ unitName: 'unit1', variableId: 'PUBLIC1' }],
+      assignedVariableBundles: [
+        {
+          id: 5,
+          name: 'Bundle',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          variables: [{ unitName: 'unit2', variableId: 'STALE_VAR' }]
+        }
+      ]
+    }
+  ];
+
+  const mockVariableBundles = [
+    {
+      id: 5,
+      name: 'Bundle',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      variables: [{ unitName: 'unit3', variableId: 'VAR3' }]
+    },
+    {
+      id: 8,
+      name: 'Bundle 2',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      variables: [{ unitName: 'unit2', variableId: 'VAR2' }]
+    },
+    {
+      id: 7,
+      name: 'Bundle 1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      variables: [{ unitName: 'unit1', variableId: 'VAR1' }]
+    }
   ];
 
   const mockValidationProgress$ = new BehaviorSubject<ValidationProgress>({
@@ -52,6 +115,11 @@ describe('ExportCodingBookComponent', () => {
       startCodebookJob: jest.fn(),
       getCodebookJobStatus: jest.fn(),
       downloadCodebookFile: jest.fn()
+    };
+
+    const codingJobBackendServiceMock = {
+      getJobDefinitions: jest.fn(),
+      getVariableBundles: jest.fn()
     };
 
     const missingsProfileServiceMock = {
@@ -74,6 +142,12 @@ describe('ExportCodingBookComponent', () => {
       getValidationProgress: jest.fn()
     };
 
+    const matDialogMock = {
+      open: jest.fn(() => ({
+        afterClosed: () => of(undefined)
+      }))
+    };
+
     const translateServiceMock = {
       instant: jest.fn((key: string) => key),
       get: jest.fn((key: string) => of(key)),
@@ -92,23 +166,29 @@ describe('ExportCodingBookComponent', () => {
       imports: [ExportCodingBookComponent],
       providers: [
         { provide: CodingExportService, useValue: exportServiceMock },
+        { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
         { provide: MissingsProfileService, useValue: missingsProfileServiceMock },
         { provide: FileService, useValue: fileServiceMock },
         { provide: AppService, useValue: appServiceMock },
         { provide: ValidationStateService, useValue: validationStateServiceMock },
         { provide: TranslateService, useValue: translateServiceMock },
+        { provide: MatDialog, useValue: matDialogMock },
         DatePipe
       ]
     }).compileComponents();
 
     exportService = TestBed.inject(CodingExportService) as jest.Mocked<CodingExportService>;
+    codingJobBackendService = TestBed.inject(CodingJobBackendService) as jest.Mocked<CodingJobBackendService>;
     missingsProfileService = TestBed.inject(MissingsProfileService) as jest.Mocked<MissingsProfileService>;
     fileService = TestBed.inject(FileService) as jest.Mocked<FileService>;
     appService = TestBed.inject(AppService) as jest.Mocked<AppService>;
     validationStateService = TestBed.inject(ValidationStateService) as jest.Mocked<ValidationStateService>;
+    matDialog = TestBed.inject(MatDialog) as jest.Mocked<MatDialog>;
 
     // Setup default mock returns
     fileService.getUnitsWithFileIds.mockReturnValue(of(mockUnits));
+    codingJobBackendService.getJobDefinitions.mockReturnValue(of(mockJobDefinitions));
+    codingJobBackendService.getVariableBundles.mockReturnValue(of(mockVariableBundles));
     missingsProfileService.getMissingsProfiles.mockReturnValue(of(mockMissingsProfiles));
     validationStateService.getValidationResults.mockReturnValue(null);
     validationStateService.getValidationProgress.mockReturnValue({
@@ -119,6 +199,7 @@ describe('ExportCodingBookComponent', () => {
 
     fixture = TestBed.createComponent(ExportCodingBookComponent);
     component = fixture.componentInstance;
+    (component as unknown as { dialog: MatDialog }).dialog = matDialog;
   });
 
   beforeAll(() => {
@@ -145,8 +226,12 @@ describe('ExportCodingBookComponent', () => {
       fixture.detectChanges();
 
       expect(fileService.getUnitsWithFileIds).toHaveBeenCalledWith(1);
+      expect(codingJobBackendService.getJobDefinitions).toHaveBeenCalledWith(1);
+      expect(codingJobBackendService.getVariableBundles).toHaveBeenCalledWith(1);
       expect(missingsProfileService.getMissingsProfiles).toHaveBeenCalledWith(1);
       expect(component.availableUnits.length).toBe(3);
+      expect(component.availableJobDefinitions.length).toBe(1);
+      expect(component.availableVariableBundles.map(bundle => bundle.id)).toEqual([5, 7, 8]);
       expect(component.missingsProfiles.length).toBe(3); // includes default empty profile
     });
 
@@ -233,9 +318,27 @@ describe('ExportCodingBookComponent', () => {
       fixture.detectChanges();
 
       expect(component.availableUnits).toEqual([
-        { unitId: 1, unitName: 'test1.vocs', unitAlias: null },
-        { unitId: 2, unitName: 'test2.vocs', unitAlias: null },
-        { unitId: 3, unitName: 'test3.vocs', unitAlias: null }
+        {
+          unitId: 1,
+          unitKey: 'unit1',
+          unitName: 'test1.vocs',
+          unitAlias: null,
+          unitData: mockUnits[0].data
+        },
+        {
+          unitId: 2,
+          unitKey: 'unit2',
+          unitName: 'test2.vocs',
+          unitAlias: null,
+          unitData: mockUnits[1].data
+        },
+        {
+          unitId: 3,
+          unitKey: 'unit3',
+          unitName: 'test3.vocs',
+          unitAlias: null,
+          unitData: mockUnits[2].data
+        }
       ]);
       expect(component.dataSource.data.length).toBe(3);
       expect(component.isLoading).toBe(false);
@@ -272,7 +375,13 @@ describe('ExportCodingBookComponent', () => {
       fixture.detectChanges();
 
       const filterPredicate = component.dataSource.filterPredicate;
-      const testData = { unitId: 1, unitName: 'test.vocs', unitAlias: null };
+      const testData = {
+        unitId: 1,
+        unitKey: 'test.vocs',
+        unitName: 'test.vocs',
+        unitAlias: null,
+        unitData: ''
+      };
 
       expect(filterPredicate(testData, 'test')).toBe(true);
       expect(filterPredicate(testData, 'other')).toBe(false);
@@ -307,6 +416,139 @@ describe('ExportCodingBookComponent', () => {
       fixture.detectChanges();
 
       expect(missingsProfileService.getMissingsProfiles).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('quick filters', () => {
+    it('should select units from the selected job definition', () => {
+      fixture.detectChanges();
+
+      component.onJobDefinitionFilterChange(10);
+
+      expect(component.contentOptions.jobDefinitionId).toBe(10);
+      expect(component.unitList).toEqual([1, 3]);
+    });
+
+    it('should clear unit selection when the job definition filter is removed', () => {
+      fixture.detectChanges();
+      component.onJobDefinitionFilterChange(10);
+
+      component.onJobDefinitionFilterChange(null);
+
+      expect(component.contentOptions.jobDefinitionId).toBeNull();
+      expect(component.unitList).toEqual([]);
+    });
+
+    it('should update training requirement filter option', () => {
+      component.onTrainingRequirementChange('required');
+
+      expect(component.contentOptions.trainingRequirement).toBe('required');
+    });
+
+    it('should select units from selected variable bundles', () => {
+      fixture.detectChanges();
+
+      component.onVariableBundleFilterChange([8]);
+
+      expect(component.contentOptions.variableBundleIds).toEqual([8]);
+      expect(component.unitList).toEqual([2]);
+    });
+
+    it('should clear unit selection when the variable bundle filter is removed', () => {
+      fixture.detectChanges();
+      component.onVariableBundleFilterChange([8]);
+
+      component.onVariableBundleFilterChange([]);
+
+      expect(component.contentOptions.variableBundleIds).toEqual([]);
+      expect(component.unitList).toEqual([]);
+    });
+
+    it('should intersect job definition and variable bundle quick filter unit selections', () => {
+      fixture.detectChanges();
+
+      component.onJobDefinitionFilterChange(10);
+      component.onVariableBundleFilterChange([7]);
+
+      expect(component.unitList).toEqual([1]);
+    });
+
+    it('should clear unit selection if quick filters share only a unit but no variable', () => {
+      fixture.detectChanges();
+
+      component.availableJobDefinitions = [{
+        id: 11,
+        assignedVariables: [{ unitName: 'unit2', variableId: 'OTHER_VAR' }],
+        assignedVariableBundles: []
+      }];
+
+      component.onJobDefinitionFilterChange(11);
+      component.onVariableBundleFilterChange([8]);
+
+      expect(component.unitList).toEqual([]);
+    });
+
+    it('should open job definition picker with precomputed options and apply selected definition', () => {
+      fixture.detectChanges();
+      matDialog.open.mockReturnValue({
+        afterClosed: () => of(10)
+      } as ReturnType<MatDialog['open']>);
+
+      component.openJobDefinitionPicker();
+
+      expect(matDialog.open).toHaveBeenCalledWith(
+        CodebookJobDefinitionPickerDialogComponent,
+        expect.objectContaining({
+          width: '960px',
+          data: expect.objectContaining({
+            selectedJobDefinitionId: null,
+            options: expect.arrayContaining([
+              expect.objectContaining({ id: 10 })
+            ])
+          })
+        })
+      );
+      expect(component.selectedJobDefinitionId).toBe(10);
+      expect(component.contentOptions.jobDefinitionId).toBe(10);
+    });
+
+    it('should keep current job definition when picker is cancelled', () => {
+      fixture.detectChanges();
+      component.onJobDefinitionFilterChange(10);
+      matDialog.open.mockReturnValue({
+        afterClosed: () => of(undefined)
+      } as ReturnType<MatDialog['open']>);
+
+      component.openJobDefinitionPicker();
+
+      expect(component.selectedJobDefinitionId).toBe(10);
+      expect(component.contentOptions.jobDefinitionId).toBe(10);
+    });
+
+    it('should not open job definition picker while job definitions are loading', () => {
+      component.isLoadingJobDefinitions = true;
+
+      component.openJobDefinitionPicker();
+
+      expect(matDialog.open).not.toHaveBeenCalled();
+    });
+
+    it('should not load job definitions if no workspace selected', () => {
+      (appService.selectedWorkspaceId as number | null) = null;
+      codingJobBackendService.getJobDefinitions.mockClear();
+
+      fixture.detectChanges();
+
+      expect(codingJobBackendService.getJobDefinitions).not.toHaveBeenCalled();
+    });
+
+    it('should not load variable bundles if no workspace selected', () => {
+      (appService.selectedWorkspaceId as number | null) = null;
+      codingJobBackendService.getVariableBundles.mockClear();
+
+      fixture.detectChanges();
+
+      expect(codingJobBackendService.getVariableBundles).not.toHaveBeenCalled();
     });
   });
 
@@ -502,7 +744,10 @@ describe('ExportCodingBookComponent', () => {
         hasClosedVars: true,
         codeLabelToUpper: true,
         showScore: true,
-        hideItemVarRelation: true
+        hideItemVarRelation: true,
+        trainingRequirement: 'all',
+        jobDefinitionId: null,
+        variableBundleIds: []
       });
     });
   });

@@ -11,6 +11,7 @@ export interface ItemMetadata {
  * Settings for codebook content generation
  */
 export type CodebookExportFormat = 'docx' | 'json';
+export type CodebookTrainingRequirementFilter = 'all' | 'required' | 'not-required';
 
 export interface CodeBookContentSetting {
   /** Export format (docx or json) */
@@ -33,6 +34,12 @@ export interface CodeBookContentSetting {
   showScore: boolean;
   /** Hide item-variable relation */
   hideItemVarRelation: boolean;
+  /** Filter variables by increased coder training requirement */
+  trainingRequirement?: CodebookTrainingRequirementFilter;
+  /** Restrict variables to a job definition */
+  jobDefinitionId?: number | null;
+  /** Restrict variables to one or more variable bundles */
+  variableBundleIds?: number[];
 }
 
 /**
