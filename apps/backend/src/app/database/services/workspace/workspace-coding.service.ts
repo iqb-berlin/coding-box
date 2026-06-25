@@ -604,6 +604,7 @@ export class WorkspaceCodingService {
           trainingId: number | null;
           trainingLabel: string | null;
           code: number | null;
+          codingIssueOption: number | null;
           score: number | null;
           notes: string | null;
           codedAt: Date;

@@ -323,6 +323,7 @@ describe('CodeSelectorComponent', () => {
     component.reviewCodeSelections = [
       { code: 1, coderNames: ['Coder A', 'Coder B'] },
       { code: 2, coderNames: ['Coder C'] },
+      { code: -3, coderNames: ['Coder F', 'Coder G'] },
       { code: -2, coderNames: ['Coder D', 'Coder E'] }
     ];
 
@@ -342,12 +343,16 @@ describe('CodeSelectorComponent', () => {
     expect(component.hasReviewCodeSelection(1)).toBe(true);
     expect(component.getReviewCodeSelectionCount(1)).toBe(2);
     expect(component.hasReviewCodeSelection(2)).toBe(true);
+    expect(component.hasReviewCodeSelection(-3)).toBe(true);
     expect(component.getReviewCodeSelectionCount(-2)).toBe(2);
     expect(component.getReviewCodeSelectionCount(99)).toBe(0);
     expect(badge.textContent).toContain('2');
     expect(codeRow).toBeTruthy();
     expect(issueBadge.textContent).toContain('2');
-    expect(issueRows).toHaveLength(1);
+    expect(issueRows).toHaveLength(2);
+    expect(component.getCodingIssueOptionRowTooltip(
+      component.codingIssueOptionCodes.find(item => item.id === -3)!
+    )).toContain('Coder F, Coder G');
     expect(component.getCodingIssueOptionRowTooltip(
       component.codingIssueOptionCodes.find(item => item.id === -2)!
     )).toContain('Coder D, Coder E');
