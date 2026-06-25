@@ -1104,6 +1104,7 @@ export class TestPersonCodingService {
           jobId: number;
           jobName: string;
           code: number | null;
+          codingIssueOption: number | null;
           score: number | null;
           notes: string | null;
           supervisorComment: string | null;
@@ -1168,6 +1169,7 @@ export class TestPersonCodingService {
           jobId: number;
           jobName: string;
           code: number | null;
+          codingIssueOption: number | null;
           score: number | null;
           notes: string | null;
           supervisorComment: string | null;

@@ -35,6 +35,7 @@ type ReviewCoderResult = {
   trainingId: number | null;
   trainingLabel: string | null;
   code: number | null;
+  codingIssueOption?: number | null;
   score: number | null;
   notes: string | null;
   supervisorComment: string | null;
@@ -178,6 +179,7 @@ export class CodingReviewService {
           trainingId: number | null;
           trainingLabel: string | null;
           code: number | null;
+          codingIssueOption: number | null;
           score: number | null;
           notes: string | null;
           supervisorComment: string | null;
@@ -483,6 +485,7 @@ export class CodingReviewService {
           trainingId: number | null;
           trainingLabel: string | null;
           code: number | null;
+          codingIssueOption: number | null;
           score: number | null;
           notes: string | null;
           supervisorComment: string | null;
@@ -543,6 +546,7 @@ export class CodingReviewService {
             trainingId: unit.coding_job?.training_id ?? null,
             trainingLabel: unit.coding_job?.training?.label ?? null,
             code: resolvedCodeAndScore.code,
+            codingIssueOption: unit.coding_issue_option ?? null,
             score: resolvedCodeAndScore.score,
             notes: unit.notes,
             supervisorComment: unit.supervisor_comment || null,
