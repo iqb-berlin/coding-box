@@ -1083,6 +1083,41 @@ describe('CodingJobService distribution from job definitions', () => {
     });
   });
 
+  it('does not deduplicate same-person responses from different booklets', async () => {
+    const responses = [
+      {
+        ...makeSameCaseResponse(1, 'Unit 1', 'Var 1', 1, 'same-value'),
+        bookletName: 'Booklet A'
+      },
+      {
+        ...makeSameCaseResponse(2, 'Unit 1', 'Var 1', 1, 'same-value'),
+        bookletName: 'Booklet A'
+      },
+      {
+        ...makeSameCaseResponse(3, 'Unit 1', 'Var 1', 1, 'same-value'),
+        bookletName: 'Booklet B'
+      }
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode')
+      .mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const usageByKey = await service.calculateDistributionVariableUsageByStatusBatch(5, [
+      {
+        key: 'requested',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        caseOrderingMode: 'continuous',
+        distributionSeed: 'seed-booklet-deduplicated'
+      }
+    ]);
+
+    expect(Object.fromEntries(usageByKey.get('requested')?.entries() || [])).toEqual({
+      'Unit 1::Var 1': { regular: 2, deriveError: 0, total: 2 }
+    });
+  });
+
   it('treats an assigned duplicate as assigned when calculating batched variable usage', async () => {
     const responses = [
       makeSameCaseResponse(1, 'Unit 1', 'Var 1', 1, 'same-value'),
