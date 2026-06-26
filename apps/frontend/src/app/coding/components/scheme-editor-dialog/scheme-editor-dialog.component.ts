@@ -290,11 +290,7 @@ export class SchemeEditorDialogComponent implements OnInit {
           if (this.hasCodingFreshnessWarning(result.issues)) {
             this.showCodingFreshnessWarning();
           } else {
-            this.snackBar.open(
-              this.translate.instant('coding.schemer.save-success'),
-              'Success',
-              { duration: 3000 }
-            );
+            this.showCodingFreshnessSuccess();
           }
           this.dialogRef.close(true);
         } else {
@@ -320,6 +316,22 @@ export class SchemeEditorDialogComponent implements OnInit {
       { duration: 10000 }
     ) as ReturnType<MatSnackBar['open']> | undefined;
 
+    this.navigateToCodingStatusOnAction(snackBarRef);
+  }
+
+  private showCodingFreshnessSuccess(): void {
+    const snackBarRef = this.snackBar.open(
+      this.translate.instant('coding.schemer.save-success'),
+      this.translate.instant('coding.schemer.check-coding-status'),
+      { duration: 10000 }
+    ) as ReturnType<MatSnackBar['open']> | undefined;
+
+    this.navigateToCodingStatusOnAction(snackBarRef);
+  }
+
+  private navigateToCodingStatusOnAction(
+    snackBarRef: ReturnType<MatSnackBar['open']> | undefined
+  ): void {
     snackBarRef?.onAction().subscribe(() => {
       this.router.navigate(
         [`/workspace-admin/${this.data.workspaceId}/coding/management`],

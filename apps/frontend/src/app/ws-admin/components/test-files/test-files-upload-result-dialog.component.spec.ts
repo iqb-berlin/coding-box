@@ -97,6 +97,7 @@ describe('TestFilesUploadResultDialogComponent', () => {
     component.filterText = 'nomatch';
     expect(component.filteredUploadedFiles).toHaveLength(0);
     expect(component.hasCodingFreshnessWarning).toBe(true);
+    expect(component.hasUploadedCodingScheme).toBe(false);
     expect(component.canCheckCodingStatus).toBe(true);
 
     expect(component.trackByUploaded(0, data.uploadedFiles[0])).toContain('booklet.xml');
@@ -142,6 +143,34 @@ describe('TestFilesUploadResultDialogComponent', () => {
     );
   });
 
+  it('allows checking coding status after successful coding scheme uploads without freshness warnings', async () => {
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [TestFilesUploadResultDialogComponent, NoopAnimationsModule],
+      providers: [
+        { provide: MatDialogRef, useValue: dialogRef },
+        { provide: Router, useValue: router },
+        {
+          provide: MAT_DIALOG_DATA,
+          useValue: {
+            workspaceId: 1,
+            attempted: 1,
+            uploadedFiles: [{ filename: 'UNIT_A.vocs', fileId: 'UNIT_A.VOCS', fileType: 'Resource' } as never],
+            failedFiles: [],
+            remainingConflicts: [],
+            issues: []
+          } satisfies TestFilesUploadResultDialogData
+        }
+      ]
+    }).compileComponents();
+
+    component = TestBed.createComponent(TestFilesUploadResultDialogComponent).componentInstance;
+
+    expect(component.hasCodingFreshnessWarning).toBe(false);
+    expect(component.hasUploadedCodingScheme).toBe(true);
+    expect(component.canCheckCodingStatus).toBe(true);
+  });
+
   it('falls back to defaults when optional data is absent', async () => {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
@@ -172,5 +201,6 @@ describe('TestFilesUploadResultDialogComponent', () => {
     expect(component.remainingConflictsCount).toBe(0);
     expect(component.overwriteSelectedCount).toBe(0);
     expect(component.filteredIssues).toEqual([]);
+    expect(component.canCheckCodingStatus).toBe(false);
   });
 });
