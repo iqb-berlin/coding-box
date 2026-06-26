@@ -34,6 +34,14 @@ class FileUpload {
   @Column({ type: 'varchar' })
     file_id!: string;
 
+  @Index()
+  @Column({ type: 'varchar', nullable: true })
+    file_id_normalized?: string | null;
+
+  @Index()
+  @Column({ type: 'varchar', nullable: true })
+    coding_scheme_ref_normalized?: string | null;
+
   @Column({ type: 'timestamp' })
     created_at: number;
 

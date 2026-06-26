@@ -376,7 +376,9 @@ export class WorkspaceFilesService implements OnModuleInit {
   private async enrichTestCenterImportEntries(
     entries: Record<string, unknown>[]
   ): Promise<Record<string, unknown>[]> {
-    return Promise.all(entries.map(entry => this.enrichTestCenterUnitEntry(entry)));
+    const enrichedEntries =
+      await Promise.all(entries.map(entry => this.enrichTestCenterUnitEntry(entry)));
+    return enrichedEntries.map(entry => this.withNormalizedFileLookupFields(entry));
   }
 
   private normalizeCodingSchemeUnitName(fileId: unknown): string {
@@ -384,6 +386,60 @@ export class WorkspaceFilesService implements OnModuleInit {
       .trim()
       .toUpperCase()
       .replace(/\.VOCS$/i, '');
+  }
+
+  private normalizeFileIdForLookup(fileId: unknown): string | null {
+    const normalized = String(fileId || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\.XML$/i, '');
+    return normalized || null;
+  }
+
+  private normalizeCodingSchemeRefForLookup(value: unknown): string | null {
+    const normalized = String(value || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\.VOCS$/i, '')
+      .replace(/\.XML$/i, '')
+      .split(/[\\/]/)
+      .filter(Boolean)
+      .pop() || '';
+    return normalized || null;
+  }
+
+  private getCodingSchemeRefForLookup(
+    fileType: unknown,
+    structuredData: StructuredFileData | null | undefined
+  ): string | null {
+    if (String(fileType || '').toLowerCase() !== 'unit') {
+      return null;
+    }
+
+    const extractedInfo = structuredData?.extractedInfo || {};
+    const refs = extractedInfo.codingSchemeRefs;
+    if (Array.isArray(refs) && refs.length > 0) {
+      return this.normalizeCodingSchemeRefForLookup(refs[0]);
+    }
+
+    return this.normalizeCodingSchemeRefForLookup(
+      extractedInfo.codingSchemeRefNormalized ||
+        extractedInfo.codingSchemeRef
+    );
+  }
+
+  private withNormalizedFileLookupFields(
+    entry: Record<string, unknown>
+  ): Record<string, unknown> {
+    const structuredData = entry.structured_data as StructuredFileData | null | undefined;
+    return {
+      ...entry,
+      file_id_normalized: this.normalizeFileIdForLookup(entry.file_id),
+      coding_scheme_ref_normalized: this.getCodingSchemeRefForLookup(
+        entry.file_type,
+        structuredData
+      )
+    };
   }
 
   private parseCodingSchemeData(data: unknown): ParsedCodingScheme | null {
@@ -1601,7 +1657,7 @@ ${bookletRefs}
       };
 
       await this.fileUploadRepository.upsert(
-        {
+        this.withNormalizedFileLookupFields({
           workspace_id: workspaceId,
           filename: file.originalname,
           file_type: fileType,
@@ -1610,7 +1666,7 @@ ${bookletRefs}
           data: file.buffer.toString(),
           file_id: resolvedFileId,
           structured_data: structuredData
-        },
+        }),
         ['file_id', 'workspace_id']
       );
 
@@ -1673,7 +1729,7 @@ ${bookletRefs}
           };
         }
         await this.fileUploadRepository.upsert(
-          {
+          this.withNormalizedFileLookupFields({
             filename: file.originalname,
             workspace_id: workspaceId,
             file_type: 'Schemer',
@@ -1682,7 +1738,7 @@ ${bookletRefs}
             file_id: resourceFileId,
             data: file.buffer.toString(),
             structured_data: structuredData
-          },
+          }),
           ['file_id', 'workspace_id']
         );
 
@@ -1714,7 +1770,7 @@ ${bookletRefs}
         };
       }
       await this.fileUploadRepository.upsert(
-        {
+        this.withNormalizedFileLookupFields({
           filename: file.originalname,
           workspace_id: workspaceId,
           file_type: 'Resource',
@@ -1723,7 +1779,7 @@ ${bookletRefs}
           file_id: resourceFileId,
           data: file.buffer.toString(),
           structured_data: structuredData
-        },
+        }),
         ['file_id', 'workspace_id']
       );
 
@@ -1736,7 +1792,7 @@ ${bookletRefs}
       const resourceFileId =
         this.workspaceFileParsingService.getResourceId(file);
       await this.fileUploadRepository.upsert(
-        {
+        this.withNormalizedFileLookupFields({
           filename: file.originalname,
           workspace_id: workspaceId,
           file_type: 'Resource',
@@ -1745,7 +1801,7 @@ ${bookletRefs}
           file_id: resourceFileId,
           data: file.buffer.toString(),
           structured_data: { metadata: {} }
-        },
+        }),
         ['file_id', 'workspace_id']
       );
 
@@ -1833,16 +1889,18 @@ ${bookletRefs}
         extractedInfo
       };
 
-      const fileUpload = this.fileUploadRepository.create({
-        workspace_id: workspaceId,
-        filename: file.originalname,
-        file_id: file.originalname.toUpperCase(),
-        file_type: fileType,
-        file_size: file.size,
-        created_at: new Date() as unknown as number,
-        data: fileContent,
-        structured_data: structuredData
-      });
+      const fileUpload = this.fileUploadRepository.create(
+        this.withNormalizedFileLookupFields({
+          workspace_id: workspaceId,
+          filename: file.originalname,
+          file_id: file.originalname.toUpperCase(),
+          file_type: fileType,
+          file_size: file.size,
+          created_at: new Date() as unknown as number,
+          data: fileContent,
+          structured_data: structuredData
+        })
+      );
 
       const existing = await this.fileUploadRepository.findOne({
         where: { file_id: fileUpload.file_id, workspace_id: workspaceId }
