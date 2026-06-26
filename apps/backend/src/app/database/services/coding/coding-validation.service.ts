@@ -78,6 +78,7 @@ type SlimCodingResponse = {
   personLogin?: string | null;
   personCode?: string | null;
   personGroup?: string | null;
+  bookletName?: string | null;
 };
 
 type VariableCaseInfo = {
