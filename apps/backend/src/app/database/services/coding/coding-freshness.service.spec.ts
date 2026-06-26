@@ -352,7 +352,7 @@ describe('CodingFreshnessService', () => {
           codingSchemeRefs: string[]
         ) => Promise<number[]>;
       }
-    ).getUnitIdsByCodingSchemeRefs(1, ['separate_scheme']);
+    ).getUnitIdsByCodingSchemeRefs(1, ['schemes\\separate_scheme.vocs']);
 
     const [sql, params] = (connection.query as jest.Mock).mock.calls[0];
     expect(sql).toContain('matching_unit_files');
@@ -368,7 +368,7 @@ describe('CodingFreshnessService', () => {
       "REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') = unit_refs.unit_ref"
     );
     expect(sql).not.toContain('unit_candidates AS');
-    expect(params).toEqual([1, ['SEPARATE_SCHEME']]);
+    expect(params).toEqual([1, ['SCHEMES\\SEPARATE_SCHEME', 'SEPARATE_SCHEME']]);
   });
 
   it('does not run the legacy regex fallback when all Unit files have normalized lookup state', async () => {
