@@ -870,6 +870,101 @@ describe('CodingJobService distribution from job definitions', () => {
     expect(createdJobCalls[0].subset.map(response => response.variableid).sort()).toEqual(['Var 1', 'Var 2']);
   });
 
+  it('double-codes whole bundled cases instead of mixing variables from different cases', async () => {
+    const responses = [
+      makeSameCaseResponse(1, 'Unit 1', 'Var 1', 1),
+      makeSameCaseResponse(2, 'Unit 2', 'Var 2', 1),
+      makeSameCaseResponse(3, 'Unit 1', 'Var 1', 2),
+      makeSameCaseResponse(4, 'Unit 2', 'Var 2', 2),
+      makeSameCaseResponse(5, 'Unit 1', 'Var 1', 3),
+      makeSameCaseResponse(6, 'Unit 2', 'Var 2', 3)
+    ];
+    const createdJobCalls: Array<{ subset: SlimResponseForTest[] }> = [];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+    jest.spyOn(
+      service as unknown as {
+        createCodingJobWithUnitSubsetInManager: (
+          workspaceId: number,
+          dto: unknown,
+          subset: SlimResponseForTest[]
+        ) => Promise<CodingJob>
+      },
+      'createCodingJobWithUnitSubsetInManager'
+    ).mockImplementation(async (_workspaceId, _dto, subset) => {
+      createdJobCalls.push({ subset: subset as SlimResponseForTest[] });
+      return { id: 470 + createdJobCalls.length } as CodingJob;
+    });
+
+    const result = await service.createDistributedCodingJobs(5, {
+      selectedVariables: [],
+      selectedVariableBundles: [{
+        id: 9,
+        name: 'Bundle A',
+        caseOrderingMode: 'alternating',
+        variables: [
+          { unitName: 'Unit 1', variableId: 'Var 1' },
+          { unitName: 'Unit 2', variableId: 'Var 2' }
+        ]
+      }],
+      selectedCoders: [
+        { id: 1, name: 'Ada', username: 'ada' },
+        { id: 2, name: 'Bea', username: 'bea' },
+        { id: 3, name: 'Chris', username: 'chris' }
+      ],
+      doubleCodingAbsolute: 2,
+      caseOrderingMode: 'continuous',
+      jobDefinitionId: 86,
+      distributionSeed: 'double-coded-bundle-cases'
+    });
+
+    const caseOccurrencesByLogin = new Map<string, number>();
+    const assignmentCountsByResponseId = new Map<number, number>();
+
+    createdJobCalls.forEach(call => {
+      const responsesByLogin = new Map<string, SlimResponseForTest[]>();
+      call.subset.forEach(response => {
+        responsesByLogin.set(
+          response.personLogin,
+          [...(responsesByLogin.get(response.personLogin) || []), response]
+        );
+        assignmentCountsByResponseId.set(
+          response.id,
+          (assignmentCountsByResponseId.get(response.id) || 0) + 1
+        );
+      });
+
+      responsesByLogin.forEach(caseResponses => {
+        expect(caseResponses.map(response => response.variableid).sort()).toEqual(['Var 1', 'Var 2']);
+        caseOccurrencesByLogin.set(
+          caseResponses[0].personLogin,
+          (caseOccurrencesByLogin.get(caseResponses[0].personLogin) || 0) + 1
+        );
+      });
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.doubleCodingInfo['bundle:9']).toMatchObject({
+      distinctCases: 3,
+      codingTasksTotal: 10,
+      doubleCodedCases: 2,
+      singleCodedCasesAssigned: 1
+    });
+    expect([...caseOccurrencesByLogin.values()].sort()).toEqual([1, 2, 2]);
+    expect(createdJobCalls.flatMap(call => call.subset)).toHaveLength(10);
+    responses.forEach(response => {
+      const pairedResponse = responses.find(candidate => (
+        candidate.personLogin === response.personLogin &&
+        candidate.variableid !== response.variableid
+      ));
+      expect(assignmentCountsByResponseId.get(response.id)).toBe(
+        assignmentCountsByResponseId.get(pairedResponse?.id || 0)
+      );
+    });
+  });
+
   it('keeps bundles with duplicate names separate by bundle id', async () => {
     const responses = [
       makeResponse(1, 'Unit 1', 'Var 1'),
