@@ -158,8 +158,13 @@ export class AppService {
     }
 
     if (this.loggedUser?.sub) {
-      this.getAuthData(this.loggedUser.sub).subscribe(authData => {
-        this.updateAuthData(authData);
+      this.getAuthDataWithRetry(this.loggedUser.sub).subscribe({
+        next: authData => {
+          this.updateAuthData(authData);
+        },
+        error: () => {
+          this.markAuthDataFailed();
+        }
       });
     }
   }
