@@ -16,6 +16,7 @@ import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import FileUpload, {
+  NO_CODING_SCHEME_REF_NORMALIZED,
   StructuredFileData
 } from '../../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
@@ -419,13 +420,14 @@ export class WorkspaceFilesService implements OnModuleInit {
     const extractedInfo = structuredData?.extractedInfo || {};
     const refs = extractedInfo.codingSchemeRefs;
     if (Array.isArray(refs) && refs.length > 0) {
-      return this.normalizeCodingSchemeRefForLookup(refs[0]);
+      return this.normalizeCodingSchemeRefForLookup(refs[0]) ||
+        NO_CODING_SCHEME_REF_NORMALIZED;
     }
 
     return this.normalizeCodingSchemeRefForLookup(
       extractedInfo.codingSchemeRefNormalized ||
         extractedInfo.codingSchemeRef
-    );
+    ) || NO_CODING_SCHEME_REF_NORMALIZED;
   }
 
   private withNormalizedFileLookupFields(

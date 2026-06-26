@@ -2,6 +2,7 @@ import { ConsoleLogger, Logger } from '@nestjs/common';
 import { WorkspaceFilesService } from './workspace-files.service';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
+import { NO_CODING_SCHEME_REF_NORMALIZED } from '../../entities/file_upload.entity';
 
 describe('WorkspaceFilesService.handleFile', () => {
   beforeAll(() => {
@@ -484,6 +485,43 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
             codingSchemeRefNormalized: 'UNIT_A'
           })
         }
+      }),
+      ['file_id', 'workspace_id']
+    );
+  });
+
+  it('marks Unit files without coding scheme refs as normalized no-ref lookups', async () => {
+    const service = makeService();
+    const unitXml = `
+      <Unit>
+        <Metadata><Id>UNIT_WITHOUT_SCHEME</Id></Metadata>
+      </Unit>
+    `;
+    mockFileUploadRepository.findOne.mockResolvedValue(null);
+    mockWorkspaceFileParsingService.extractUnitInfo.mockResolvedValue({});
+
+    await (
+      service as unknown as {
+        handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
+      }
+    ).handleOctetStreamFile(
+      1,
+      {
+        fieldname: 'files',
+        originalname: 'unit_without_scheme.xml',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        buffer: Buffer.from(unitXml),
+        size: Buffer.byteLength(unitXml)
+      },
+      true
+    );
+
+    expect(mockFileUploadRepository.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        file_id_normalized: 'UNIT_WITHOUT_SCHEME',
+        coding_scheme_ref_normalized: NO_CODING_SCHEME_REF_NORMALIZED,
+        file_type: 'Unit'
       }),
       ['file_id', 'workspace_id']
     );
