@@ -222,8 +222,21 @@ describe('AppService', () => {
 
       const req = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
       expect(req.request.method).toBe('GET');
-      expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(false);
+      expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       req.flush(mockAuthData);
+    });
+
+    it('should mark auth data as failed without a global HTTP error when refresh cannot find the user', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.setAuthBootstrapStatus('ready');
+
+      service.refreshAuthData();
+
+      const req = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
+      expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+      req.flush('Not found', { status: 404, statusText: 'Not Found' });
+
+      expect(service.authBootstrapStatus).toBe('auth-data-failed');
     });
 
     it('should not refresh data while backend login is still running', () => {
