@@ -776,9 +776,8 @@ export class CodeSelectorComponent implements OnChanges {
   get shouldShowBundleVariableChips(): boolean {
     const context = this.currentBundleContext;
     return !!context &&
-      context.caseOrderingMode === 'alternating' &&
       context.variables.length > 1 &&
-      context.variables.length < 5;
+      context.variables.length <= 8;
   }
 
   get shouldShowBundleVariableDropdown(): boolean {
