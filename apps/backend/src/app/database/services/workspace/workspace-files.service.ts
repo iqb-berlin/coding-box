@@ -16,6 +16,7 @@ import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import FileUpload, {
+  NO_CODING_SCHEME_REF_NORMALIZED,
   StructuredFileData
 } from '../../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
@@ -135,6 +136,12 @@ interface CodingSchemeFreshnessImpact {
   autoCodingChanged: boolean;
   manualCodingChanged: boolean;
 }
+
+type UploadedFileForCacheInvalidation = {
+  fileId?: string;
+  filename?: string;
+  fileType?: string;
+};
 
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
@@ -287,11 +294,154 @@ export class WorkspaceFilesService implements OnModuleInit {
     return String(fileId || '').trim().toUpperCase().endsWith('.VOCS');
   }
 
+  private isUploadedCodingSchemeFile(
+    file: UploadedFileForCacheInvalidation
+  ): boolean {
+    return [file.fileId, file.filename]
+      .some(value => this.isCodingSchemeFileId(value));
+  }
+
+  private shouldInvalidateCodingStatisticsAfterUpload(
+    result: TestFilesUploadResultDto
+  ): boolean {
+    const uploadedFiles = result.uploadedFiles || [];
+    if (uploadedFiles.length === 0) {
+      return false;
+    }
+    return !uploadedFiles.every(file => this.isUploadedCodingSchemeFile(file));
+  }
+
+  private hasUploadedFiles(result: TestFilesUploadResultDto): boolean {
+    return (result.uploadedFiles || []).length > 0;
+  }
+
+  private mergeExtractedFileInfo(
+    existingStructuredData: unknown,
+    extractedInfo: Record<string, unknown>
+  ): StructuredFileData {
+    const existing =
+      existingStructuredData &&
+      typeof existingStructuredData === 'object' &&
+      !Array.isArray(existingStructuredData) ?
+        existingStructuredData as StructuredFileData :
+        {};
+
+    return {
+      ...existing,
+      extractedInfo: {
+        ...(existing.extractedInfo || {}),
+        ...extractedInfo
+      }
+    };
+  }
+
+  private async enrichTestCenterUnitEntry(
+    entry: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    if (String(entry.file_type || '').toLowerCase() !== 'unit') {
+      return entry;
+    }
+    if (entry.data === null || entry.data === undefined) {
+      return entry;
+    }
+
+    try {
+      const xmlContent = Buffer.isBuffer(entry.data) ?
+        entry.data.toString('utf8') :
+        String(entry.data);
+      const xmlDocument = cheerio.load(xmlContent, { xmlMode: true });
+      const extractedInfo =
+        await this.workspaceFileParsingService.extractUnitInfo(xmlDocument);
+
+      if (Object.keys(extractedInfo).length === 0) {
+        return entry;
+      }
+
+      return {
+        ...entry,
+        structured_data: this.mergeExtractedFileInfo(
+          entry.structured_data,
+          extractedInfo
+        )
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Could not extract Unit metadata from Testcenter import file ${
+          String(entry.file_id || entry.filename || '')
+        }: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      return entry;
+    }
+  }
+
+  private async enrichTestCenterImportEntries(
+    entries: Record<string, unknown>[]
+  ): Promise<Record<string, unknown>[]> {
+    const enrichedEntries =
+      await Promise.all(entries.map(entry => this.enrichTestCenterUnitEntry(entry)));
+    return enrichedEntries.map(entry => this.withNormalizedFileLookupFields(entry));
+  }
+
   private normalizeCodingSchemeUnitName(fileId: unknown): string {
     return String(fileId || '')
       .trim()
       .toUpperCase()
       .replace(/\.VOCS$/i, '');
+  }
+
+  private normalizeFileIdForLookup(fileId: unknown): string | null {
+    const normalized = String(fileId || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\.XML$/i, '');
+    return normalized || null;
+  }
+
+  private normalizeCodingSchemeRefForLookup(value: unknown): string | null {
+    const normalized = String(value || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\.VOCS$/i, '')
+      .replace(/\.XML$/i, '')
+      .split(/[\\/]/)
+      .filter(Boolean)
+      .pop() || '';
+    return normalized || null;
+  }
+
+  private getCodingSchemeRefForLookup(
+    fileType: unknown,
+    structuredData: StructuredFileData | null | undefined
+  ): string | null {
+    if (String(fileType || '').toLowerCase() !== 'unit') {
+      return null;
+    }
+
+    const extractedInfo = structuredData?.extractedInfo || {};
+    const refs = extractedInfo.codingSchemeRefs;
+    if (Array.isArray(refs) && refs.length > 0) {
+      return this.normalizeCodingSchemeRefForLookup(refs[0]) ||
+        NO_CODING_SCHEME_REF_NORMALIZED;
+    }
+
+    return this.normalizeCodingSchemeRefForLookup(
+      extractedInfo.codingSchemeRefNormalized ||
+        extractedInfo.codingSchemeRef
+    ) || NO_CODING_SCHEME_REF_NORMALIZED;
+  }
+
+  private withNormalizedFileLookupFields(
+    entry: Record<string, unknown>
+  ): Record<string, unknown> {
+    const structuredData = entry.structured_data as StructuredFileData | null | undefined;
+    return {
+      ...entry,
+      file_id_normalized: this.normalizeFileIdForLookup(entry.file_id),
+      coding_scheme_ref_normalized: this.getCodingSchemeRefForLookup(
+        entry.file_type,
+        structuredData
+      )
+    };
   }
 
   private parseCodingSchemeData(data: unknown): ParsedCodingScheme | null {
@@ -1162,10 +1312,14 @@ ${bookletRefs}
       // Invalidate memory caches inside this service
       await this.invalidateWorkspaceFileCaches(workspace_id);
 
-      await this.codingStatisticsService.invalidateCache(workspace_id);
-      await this.codingStatisticsService.invalidateIncompleteVariablesCache(
-        workspace_id
-      );
+      if (this.shouldInvalidateCodingStatisticsAfterUpload(result)) {
+        await this.codingStatisticsService.invalidateCache(workspace_id);
+      }
+      if (this.hasUploadedFiles(result)) {
+        await this.codingStatisticsService.invalidateIncompleteVariablesCache(
+          workspace_id
+        );
+      }
       return result;
     } catch (error) {
       this.logger.error(
@@ -1505,7 +1659,7 @@ ${bookletRefs}
       };
 
       await this.fileUploadRepository.upsert(
-        {
+        this.withNormalizedFileLookupFields({
           workspace_id: workspaceId,
           filename: file.originalname,
           file_type: fileType,
@@ -1514,7 +1668,7 @@ ${bookletRefs}
           data: file.buffer.toString(),
           file_id: resolvedFileId,
           structured_data: structuredData
-        },
+        }),
         ['file_id', 'workspace_id']
       );
 
@@ -1577,7 +1731,7 @@ ${bookletRefs}
           };
         }
         await this.fileUploadRepository.upsert(
-          {
+          this.withNormalizedFileLookupFields({
             filename: file.originalname,
             workspace_id: workspaceId,
             file_type: 'Schemer',
@@ -1586,7 +1740,7 @@ ${bookletRefs}
             file_id: resourceFileId,
             data: file.buffer.toString(),
             structured_data: structuredData
-          },
+          }),
           ['file_id', 'workspace_id']
         );
 
@@ -1618,7 +1772,7 @@ ${bookletRefs}
         };
       }
       await this.fileUploadRepository.upsert(
-        {
+        this.withNormalizedFileLookupFields({
           filename: file.originalname,
           workspace_id: workspaceId,
           file_type: 'Resource',
@@ -1627,7 +1781,7 @@ ${bookletRefs}
           file_id: resourceFileId,
           data: file.buffer.toString(),
           structured_data: structuredData
-        },
+        }),
         ['file_id', 'workspace_id']
       );
 
@@ -1640,7 +1794,7 @@ ${bookletRefs}
       const resourceFileId =
         this.workspaceFileParsingService.getResourceId(file);
       await this.fileUploadRepository.upsert(
-        {
+        this.withNormalizedFileLookupFields({
           filename: file.originalname,
           workspace_id: workspaceId,
           file_type: 'Resource',
@@ -1649,7 +1803,7 @@ ${bookletRefs}
           file_id: resourceFileId,
           data: file.buffer.toString(),
           structured_data: { metadata: {} }
-        },
+        }),
         ['file_id', 'workspace_id']
       );
 
@@ -1674,7 +1828,7 @@ ${bookletRefs}
       const fileExtension = path.extname(file.originalname).toLowerCase();
       let fileType = 'Resource';
       let fileContent: string | Buffer;
-      let extractedInfo = {};
+      let extractedInfo: Record<string, unknown> = {};
 
       const textFileExtensions = [
         '.xml',
@@ -1716,7 +1870,8 @@ ${bookletRefs}
             fileType = 'Unit';
             extractedInfo = {
               rootElement: 'Unit',
-              detectedVia: 'octet-stream-handler'
+              detectedVia: 'octet-stream-handler',
+              ...await this.workspaceFileParsingService.extractUnitInfo($)
             };
           } else if ($('SysCheck').length > 0) {
             fileType = 'SysCheck';
@@ -1736,16 +1891,18 @@ ${bookletRefs}
         extractedInfo
       };
 
-      const fileUpload = this.fileUploadRepository.create({
-        workspace_id: workspaceId,
-        filename: file.originalname,
-        file_id: file.originalname.toUpperCase(),
-        file_type: fileType,
-        file_size: file.size,
-        created_at: new Date() as unknown as number,
-        data: fileContent,
-        structured_data: structuredData
-      });
+      const fileUpload = this.fileUploadRepository.create(
+        this.withNormalizedFileLookupFields({
+          workspace_id: workspaceId,
+          filename: file.originalname,
+          file_id: file.originalname.toUpperCase(),
+          file_type: fileType,
+          file_size: file.size,
+          created_at: new Date() as unknown as number,
+          data: fileContent,
+          structured_data: structuredData
+        })
+      );
 
       const existing = await this.fileUploadRepository.findOne({
         where: { file_id: fileUpload.file_id, workspace_id: workspaceId }
@@ -1957,7 +2114,9 @@ ${bookletRefs}
     overwriteFileIds?: string[]
   ): Promise<TestFilesUploadResultDto> {
     try {
-      const normalized = Array.isArray(entries) ? entries : [];
+      const normalized = await this.enrichTestCenterImportEntries(
+        Array.isArray(entries) ? entries : []
+      );
       const workspaceId = Number(
         (normalized[0] as { workspace_id?: unknown } | undefined)?.workspace_id
       );

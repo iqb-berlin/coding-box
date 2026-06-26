@@ -208,8 +208,18 @@ export class TestFilesUploadResultDialogComponent {
     return this.issues.some(issue => issue.category === 'coding_freshness');
   }
 
+  get hasUploadedCodingScheme(): boolean {
+    return this.uploadedFiles.some(file => this.isCodingSchemeFile(file));
+  }
+
   get canCheckCodingStatus(): boolean {
-    return !!this.data.workspaceId && this.hasCodingFreshnessWarning;
+    return !!this.data.workspaceId &&
+      (this.hasCodingFreshnessWarning || this.hasUploadedCodingScheme);
+  }
+
+  private isCodingSchemeFile(file: TestFilesUploadUploadedDto): boolean {
+    return [file.fileId, file.filename]
+      .some(value => String(value || '').trim().toUpperCase().endsWith('.VOCS'));
   }
 
   private matchesQuery(

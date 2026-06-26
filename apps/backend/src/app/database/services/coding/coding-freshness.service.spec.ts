@@ -55,7 +55,7 @@ describe('CodingFreshnessService', () => {
     revision: number
   ): void => {
     (connection.query as jest.Mock).mockImplementation((sql: string) => {
-      if (sql.includes('WITH unit_candidates')) {
+      if (sql.includes('matching_unit_files')) {
         return Promise.resolve(unitIds.map(id => ({ id })));
       }
       if (sql.includes('workspace_test_results_revision')) {
@@ -306,7 +306,7 @@ describe('CodingFreshnessService', () => {
     });
 
     expect(connection.query).toHaveBeenCalledWith(
-      expect.stringContaining('codingschemeref'),
+      expect.stringContaining('coding_scheme_ref_normalized'),
       [1, ['SEPARATE_SCHEME']]
     );
     expect(freshnessRepository.upsert).toHaveBeenCalledWith(
@@ -340,6 +340,83 @@ describe('CodingFreshnessService', () => {
       expect.stringContaining('UPDATE coding_job cj'),
       [1, [10], 'stale_source', 'CODING_SCHEME_CHANGED']
     );
+  });
+
+  it('prefilters unit files by indexed normalized coding scheme refs', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([]);
+
+    await (
+      service as unknown as {
+        getUnitIdsByCodingSchemeRefs: (
+          workspaceId: number,
+          codingSchemeRefs: string[]
+        ) => Promise<number[]>;
+      }
+    ).getUnitIdsByCodingSchemeRefs(1, ['schemes\\separate_scheme.vocs']);
+
+    const [sql, params] = (connection.query as jest.Mock).mock.calls[0];
+    expect(sql).toContain('matching_unit_files');
+    expect(sql).toContain('unit_file.coding_scheme_ref_normalized = candidate.scheme_ref');
+    expect(sql).toContain('unit_file.file_id_normalized IS NOT NULL');
+    expect(sql).toContain('unit_refs AS');
+    expect(sql).toContain('CROSS JOIN LATERAL');
+    expect(sql).toContain('matched_unit_ids');
+    expect(sql).toContain(
+      "REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') = unit_refs.unit_ref"
+    );
+    expect(sql).toContain(
+      "REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') = unit_refs.unit_ref"
+    );
+    expect(sql).not.toContain('unit_candidates AS');
+    expect(params).toEqual([1, ['SCHEMES\\SEPARATE_SCHEME', 'SEPARATE_SCHEME']]);
+  });
+
+  it('does not run the legacy regex fallback when all Unit files have normalized lookup state', async () => {
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 10 }])
+      .mockResolvedValueOnce([{ hasLegacy: false }]);
+
+    await expect((
+      service as unknown as {
+        getUnitIdsByCodingSchemeRefs: (
+          workspaceId: number,
+          codingSchemeRefs: string[]
+        ) => Promise<number[]>;
+      }
+    ).getUnitIdsByCodingSchemeRefs(1, ['scheme_a'])).resolves.toEqual([10]);
+
+    expect(connection.query).toHaveBeenCalledTimes(2);
+    expect(
+      (connection.query as jest.Mock).mock.calls
+        .some(([sql]) => String(sql).includes('legacy_matching_unit_files'))
+    ).toBe(false);
+  });
+
+  it('uses candidate-driven index probes for the legacy regex fallback', async () => {
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ hasLegacy: true }])
+      .mockResolvedValueOnce([{ id: 11 }]);
+
+    await expect((
+      service as unknown as {
+        getUnitIdsByCodingSchemeRefs: (
+          workspaceId: number,
+          codingSchemeRefs: string[]
+        ) => Promise<number[]>;
+      }
+    ).getUnitIdsByCodingSchemeRefs(1, ['scheme_a'])).resolves.toEqual([11]);
+
+    expect(connection.query).toHaveBeenCalledTimes(3);
+    const [sql, params] = (connection.query as jest.Mock).mock.calls[2];
+    expect(sql).toContain('legacy_matching_unit_files');
+    expect(sql).toContain('CROSS JOIN LATERAL');
+    expect(sql).toContain(
+      "REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') ="
+    );
+    expect(sql).toContain('legacy_matching_unit_files.unit_ref');
+    expect(sql).not.toContain('unit_candidates AS');
+    expect(params).toEqual([1, ['SCHEME_A']]);
   });
 
   it('marks coding scheme instruction-only changes for manual review only', async () => {
