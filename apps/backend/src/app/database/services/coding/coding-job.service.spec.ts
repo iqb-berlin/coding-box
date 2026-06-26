@@ -1254,6 +1254,55 @@ describe('CodingJobService', () => {
     });
   });
 
+  it('groups existing refresh tasks by the item key expression instead of the select alias', async () => {
+    const queryBuilder = createQueryBuilder([
+      {
+        responseId: '10',
+        itemKey: 'Unit 1::Var 1',
+        coderId: '3',
+        taskCount: '1'
+      }
+    ]);
+    const itemKeyExpression =
+      "CASE WHEN cju.variable_bundle_id IS NOT NULL THEN CONCAT('bundle:', cju.variable_bundle_id) ELSE CONCAT(cju.unit_name, '::', cju.variable_id) END";
+    jest
+      .spyOn(
+        service as unknown as {
+          applyCodingJobUnitExclusions: (...args: unknown[]) => Promise<void>;
+        },
+        'applyCodingJobUnitExclusions'
+      )
+      .mockResolvedValueOnce(undefined);
+    codingJobUnitRepository.createQueryBuilder.mockReturnValueOnce(
+      queryBuilder
+    );
+
+    await expect(
+      (
+        service as unknown as {
+          getJobDefinitionExistingTaskRows: (
+            workspaceId: number,
+            jobDefinitionId: number
+          ) => Promise<unknown[]>;
+        }
+      ).getJobDefinitionExistingTaskRows(3, 9)
+    ).resolves.toEqual([
+      {
+        responseId: 10,
+        itemKey: 'Unit 1::Var 1',
+        coderId: 3,
+        taskCount: 1
+      }
+    ]);
+
+    expect(queryBuilder.addSelect).toHaveBeenCalledWith(
+      itemKeyExpression,
+      'itemKey'
+    );
+    expect(queryBuilder.addGroupBy).toHaveBeenCalledWith(itemKeyExpression);
+    expect(queryBuilder.addGroupBy).not.toHaveBeenCalledWith('itemKey');
+  });
+
   it('rejects DERIVE_ERROR opt-ins in job definition refresh previews when the setting is disabled', async () => {
     const buildDistributionPlanSpy = jest.spyOn(
       service as unknown as { buildDistributionPlan: jest.Mock },
