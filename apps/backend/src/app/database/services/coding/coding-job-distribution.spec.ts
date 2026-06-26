@@ -1057,6 +1057,61 @@ describe('CodingJobService distribution from job definitions', () => {
     });
   });
 
+  it('deduplicates identical manual coding responses before calculating batched variable usage', async () => {
+    const responses = [
+      makeSameCaseResponse(1, 'Unit 1', 'Var 1', 1, 'same-value'),
+      makeSameCaseResponse(2, 'Unit 1', 'Var 1', 1, 'same-value'),
+      makeSameCaseResponse(3, 'Unit 1', 'Var 1', 2, 'other-value')
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode')
+      .mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const usageByKey = await service.calculateDistributionVariableUsageByStatusBatch(5, [
+      {
+        key: 'requested',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        caseOrderingMode: 'continuous',
+        distributionSeed: 'seed-deduplicated'
+      }
+    ]);
+
+    expect(Object.fromEntries(usageByKey.get('requested')?.entries() || [])).toEqual({
+      'Unit 1::Var 1': { regular: 2, deriveError: 0, total: 2 }
+    });
+  });
+
+  it('treats an assigned duplicate as assigned when calculating batched variable usage', async () => {
+    const responses = [
+      makeSameCaseResponse(1, 'Unit 1', 'Var 1', 1, 'same-value'),
+      makeSameCaseResponse(2, 'Unit 1', 'Var 1', 1, 'same-value'),
+      makeSameCaseResponse(3, 'Unit 1', 'Var 1', 2, 'other-value')
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode')
+      .mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+    (
+      service as unknown as { getAssignedResponseIdsForVariables: jest.Mock }
+    ).getAssignedResponseIdsForVariables.mockResolvedValue(new Set([2]));
+
+    const usageByKey = await service.calculateDistributionVariableUsageByStatusBatch(5, [
+      {
+        key: 'requested',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        caseOrderingMode: 'continuous',
+        distributionSeed: 'seed-assigned-deduplicated'
+      }
+    ]);
+
+    expect(Object.fromEntries(usageByKey.get('requested')?.entries() || [])).toEqual({
+      'Unit 1::Var 1': { regular: 1, deriveError: 0, total: 1 }
+    });
+  });
+
   it('counts mixed aggregated regular and DERIVE_ERROR cases as regular usage', async () => {
     const responses = [
       {
