@@ -1236,7 +1236,7 @@ export class CodingFreshnessService {
       }
 
       candidates.add(normalized);
-      const basename = normalized.split('/').pop();
+      const basename = normalized.split(/[\\/]/).filter(Boolean).pop();
       if (basename) {
         candidates.add(basename);
       }
