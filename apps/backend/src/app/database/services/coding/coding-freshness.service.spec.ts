@@ -55,7 +55,7 @@ describe('CodingFreshnessService', () => {
     revision: number
   ): void => {
     (connection.query as jest.Mock).mockImplementation((sql: string) => {
-      if (sql.includes('WITH unit_candidates')) {
+      if (sql.includes('matching_unit_files')) {
         return Promise.resolve(unitIds.map(id => ({ id })));
       }
       if (sql.includes('workspace_test_results_revision')) {
@@ -306,7 +306,7 @@ describe('CodingFreshnessService', () => {
     });
 
     expect(connection.query).toHaveBeenCalledWith(
-      expect.stringContaining('codingschemeref'),
+      expect.stringContaining('coding_scheme_ref_normalized'),
       [1, ['SEPARATE_SCHEME']]
     );
     expect(freshnessRepository.upsert).toHaveBeenCalledWith(
@@ -342,7 +342,7 @@ describe('CodingFreshnessService', () => {
     );
   });
 
-  it('normalizes mixed-case and xml-suffixed unit file ids when resolving separate coding scheme refs', async () => {
+  it('prefilters unit files by indexed normalized coding scheme refs', async () => {
     (connection.query as jest.Mock).mockResolvedValue([]);
 
     await (
@@ -355,9 +355,12 @@ describe('CodingFreshnessService', () => {
     ).getUnitIdsByCodingSchemeRefs(1, ['separate_scheme']);
 
     const [sql, params] = (connection.query as jest.Mock).mock.calls[0];
-    expect(sql).toContain(
-      "REGEXP_REPLACE(UPPER(unit_file.file_id), '\\.XML$', '', 'i') IN"
-    );
+    expect(sql).toContain('matching_unit_files');
+    expect(sql).toContain('unit_file.coding_scheme_ref_normalized = candidate.scheme_ref');
+    expect(sql).toContain('unit_file.file_id_normalized IS NOT NULL');
+    expect(sql).toContain('matched_unit_ids');
+    expect(sql).toContain('matching_unit_files.file_id_normalized = unit_candidates.unit_name');
+    expect(sql).toContain('matching_unit_files.file_id_normalized = unit_candidates.unit_alias');
     expect(sql).toContain(
       "REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i')"
     );

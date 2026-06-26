@@ -1256,55 +1256,135 @@ export class CodingFreshnessService {
 
     const rows = await this.connection.query(
       `
-        WITH unit_candidates AS (
+        WITH scheme_ref_candidates AS (
+          SELECT unnest($2::text[]) AS scheme_ref
+        ),
+        matching_unit_files AS (
+          SELECT DISTINCT unit_file.file_id_normalized
+          FROM file_upload unit_file
+          INNER JOIN scheme_ref_candidates candidate
+            ON unit_file.coding_scheme_ref_normalized = candidate.scheme_ref
+          WHERE unit_file.workspace_id = $1
+            AND unit_file.file_type = 'Unit'
+            AND unit_file.file_id_normalized IS NOT NULL
+        ),
+        unit_candidates AS (
           SELECT
             unit.id AS id,
             REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') AS unit_name,
-            REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') AS unit_alias,
-            COALESCE(
-              NULLIF(
-                UPPER(unit_file.structured_data #>> '{extractedInfo,codingSchemeRefNormalized}'),
-                ''
-              ),
-              REGEXP_REPLACE(
-                REGEXP_REPLACE(
-                  UPPER(COALESCE(
-                    NULLIF(unit_file.structured_data #>> '{extractedInfo,codingSchemeRef}', ''),
-                    (REGEXP_MATCH(unit_file.data, '<\\s*codingschemeref[^>]*>\\s*([^<]+)', 'i'))[1],
-                    ''
-                  )),
-                  '\\.VOCS$',
-                  '',
-                  'i'
-                ),
-                '\\.XML$',
-                '',
-                'i'
-              )
-            ) AS scheme_ref
+            REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') AS unit_alias
           FROM "unit" unit
           INNER JOIN booklet booklet ON booklet.id = unit.bookletid
           INNER JOIN persons person ON person.id = booklet.personid
-          LEFT JOIN file_upload unit_file
-            ON unit_file.workspace_id = person.workspace_id
-            AND unit_file.file_type = 'Unit'
-            AND REGEXP_REPLACE(UPPER(unit_file.file_id), '\\.XML$', '', 'i') IN (
-              REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i'),
-              REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i')
-            )
           WHERE person.workspace_id = $1
+        ),
+        matched_unit_ids AS (
+          SELECT id
+          FROM unit_candidates
+          WHERE unit_name = ANY($2::text[])
+            OR unit_alias = ANY($2::text[])
+          UNION
+          SELECT unit_candidates.id
+          FROM unit_candidates
+          INNER JOIN matching_unit_files
+            ON matching_unit_files.file_id_normalized = unit_candidates.unit_name
+          UNION
+          SELECT unit_candidates.id
+          FROM unit_candidates
+          INNER JOIN matching_unit_files
+            ON matching_unit_files.file_id_normalized = unit_candidates.unit_alias
         )
-        SELECT DISTINCT id
-        FROM unit_candidates
-        WHERE unit_name = ANY($2::text[])
-          OR unit_alias = ANY($2::text[])
-          OR scheme_ref = ANY($2::text[])
-          OR REGEXP_REPLACE(scheme_ref, '^.*/', '') = ANY($2::text[])
+        SELECT DISTINCT id FROM matched_unit_ids
       `,
       [workspaceId, schemeRefCandidates]
     ) as Array<{ id: number | string }>;
 
-    return this.uniquePositiveIds(rows.map(row => Number(row.id)));
+    const indexedUnitIds = this.uniquePositiveIds(rows.map(row => Number(row.id)));
+    if (!await this.hasLegacyUnitCodingSchemeRefs(workspaceId)) {
+      return indexedUnitIds;
+    }
+
+    const legacyRows = await this.connection.query(
+      `
+        WITH legacy_matching_unit_files AS (
+          SELECT DISTINCT REGEXP_REPLACE(UPPER(unit_file.file_id), '\\.XML$', '', 'i') AS file_id_normalized
+          FROM file_upload unit_file
+          WHERE unit_file.workspace_id = $1
+            AND unit_file.file_type = 'Unit'
+            AND unit_file.file_id_normalized IS NOT NULL
+            AND unit_file.coding_scheme_ref_normalized IS NULL
+            AND COALESCE(
+              REGEXP_REPLACE(
+                REGEXP_REPLACE(
+                  REGEXP_REPLACE(
+                    UPPER(COALESCE(
+                      NULLIF(unit_file.structured_data #>> '{extractedInfo,codingSchemeRef}', ''),
+                      (REGEXP_MATCH(unit_file.data, '<\\s*codingschemeref[^>]*>\\s*([^<]+)', 'i'))[1],
+                      ''
+                    )),
+                    '\\.VOCS$',
+                    '',
+                    'i'
+                  ),
+                  '\\.XML$',
+                  '',
+                  'i'
+                ),
+                '^.*[/\\\\]',
+                '',
+                'i'
+              ),
+              ''
+            ) = ANY($2::text[])
+        ),
+        unit_candidates AS (
+          SELECT
+            unit.id AS id,
+            REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') AS unit_name,
+            REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') AS unit_alias
+          FROM "unit" unit
+          INNER JOIN booklet booklet ON booklet.id = unit.bookletid
+          INNER JOIN persons person ON person.id = booklet.personid
+          WHERE person.workspace_id = $1
+        ),
+        matched_unit_ids AS (
+          SELECT unit_candidates.id
+          FROM unit_candidates
+          INNER JOIN legacy_matching_unit_files
+            ON legacy_matching_unit_files.file_id_normalized = unit_candidates.unit_name
+          UNION
+          SELECT unit_candidates.id
+          FROM unit_candidates
+          INNER JOIN legacy_matching_unit_files
+            ON legacy_matching_unit_files.file_id_normalized = unit_candidates.unit_alias
+        )
+        SELECT DISTINCT id FROM matched_unit_ids
+      `,
+      [workspaceId, schemeRefCandidates]
+    ) as Array<{ id: number | string }>;
+
+    return this.uniquePositiveIds([
+      ...indexedUnitIds,
+      ...legacyRows.map(row => Number(row.id))
+    ]);
+  }
+
+  private async hasLegacyUnitCodingSchemeRefs(workspaceId: number): Promise<boolean> {
+    const rows = await this.connection.query(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM file_upload unit_file
+          WHERE unit_file.workspace_id = $1
+            AND unit_file.file_type = 'Unit'
+            AND unit_file.coding_scheme_ref_normalized IS NULL
+          LIMIT 1
+        ) AS "hasLegacy"
+      `,
+      [workspaceId]
+    ) as Array<{ hasLegacy: boolean | string }>;
+
+    return rows[0]?.hasLegacy === true || rows[0]?.hasLegacy === 'true';
   }
 
   private async markCodingJobsStaleForAddedUnitIds(

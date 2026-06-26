@@ -474,6 +474,8 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     expect(mockWorkspaceFileParsingService.extractUnitInfo).toHaveBeenCalled();
     expect(mockFileUploadRepository.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
+        file_id_normalized: 'UNIT_A',
+        coding_scheme_ref_normalized: 'UNIT_A',
         file_type: 'Unit',
         structured_data: {
           extractedInfo: expect.objectContaining({
@@ -563,6 +565,8 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     expect(insertQueryBuilder.values).toHaveBeenCalledWith([
       expect.objectContaining({
         file_id: 'UnitA',
+        file_id_normalized: 'UNITA',
+        coding_scheme_ref_normalized: 'UNIT_A',
         structured_data: {
           extractedInfo: expect.objectContaining({
             codingSchemeRefNormalized: 'UNIT_A'
