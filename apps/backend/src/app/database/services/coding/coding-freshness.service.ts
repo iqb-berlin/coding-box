@@ -1260,7 +1260,7 @@ export class CodingFreshnessService {
           SELECT unnest($2::text[]) AS scheme_ref
         ),
         matching_unit_files AS (
-          SELECT DISTINCT unit_file.file_id_normalized
+          SELECT DISTINCT unit_file.file_id_normalized AS unit_ref
           FROM file_upload unit_file
           INNER JOIN scheme_ref_candidates candidate
             ON unit_file.coding_scheme_ref_normalized = candidate.scheme_ref
@@ -1268,31 +1268,28 @@ export class CodingFreshnessService {
             AND unit_file.file_type = 'Unit'
             AND unit_file.file_id_normalized IS NOT NULL
         ),
-        unit_candidates AS (
-          SELECT
-            unit.id AS id,
-            REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') AS unit_name,
-            REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') AS unit_alias
-          FROM "unit" unit
-          INNER JOIN booklet booklet ON booklet.id = unit.bookletid
-          INNER JOIN persons person ON person.id = booklet.personid
-          WHERE person.workspace_id = $1
+        unit_refs AS (
+          SELECT scheme_ref AS unit_ref
+          FROM scheme_ref_candidates
+          UNION
+          SELECT unit_ref
+          FROM matching_unit_files
         ),
         matched_unit_ids AS (
-          SELECT id
-          FROM unit_candidates
-          WHERE unit_name = ANY($2::text[])
-            OR unit_alias = ANY($2::text[])
-          UNION
-          SELECT unit_candidates.id
-          FROM unit_candidates
-          INNER JOIN matching_unit_files
-            ON matching_unit_files.file_id_normalized = unit_candidates.unit_name
-          UNION
-          SELECT unit_candidates.id
-          FROM unit_candidates
-          INNER JOIN matching_unit_files
-            ON matching_unit_files.file_id_normalized = unit_candidates.unit_alias
+          SELECT matched_unit.id
+          FROM unit_refs
+          CROSS JOIN LATERAL (
+            SELECT unit.id, unit.bookletid
+            FROM "unit" unit
+            WHERE REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') = unit_refs.unit_ref
+            UNION
+            SELECT unit.id, unit.bookletid
+            FROM "unit" unit
+            WHERE REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') = unit_refs.unit_ref
+          ) matched_unit
+          INNER JOIN booklet booklet ON booklet.id = matched_unit.bookletid
+          INNER JOIN persons person ON person.id = booklet.personid
+          WHERE person.workspace_id = $1
         )
         SELECT DISTINCT id FROM matched_unit_ids
       `,
@@ -1307,7 +1304,7 @@ export class CodingFreshnessService {
     const legacyRows = await this.connection.query(
       `
         WITH legacy_matching_unit_files AS (
-          SELECT DISTINCT REGEXP_REPLACE(UPPER(unit_file.file_id), '\\.XML$', '', 'i') AS file_id_normalized
+          SELECT DISTINCT REGEXP_REPLACE(UPPER(unit_file.file_id), '\\.XML$', '', 'i') AS unit_ref
           FROM file_upload unit_file
           WHERE unit_file.workspace_id = $1
             AND unit_file.file_type = 'Unit'
@@ -1337,26 +1334,23 @@ export class CodingFreshnessService {
               ''
             ) = ANY($2::text[])
         ),
-        unit_candidates AS (
-          SELECT
-            unit.id AS id,
-            REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') AS unit_name,
-            REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') AS unit_alias
-          FROM "unit" unit
-          INNER JOIN booklet booklet ON booklet.id = unit.bookletid
+        matched_unit_ids AS (
+          SELECT matched_unit.id
+          FROM legacy_matching_unit_files
+          CROSS JOIN LATERAL (
+            SELECT unit.id, unit.bookletid
+            FROM "unit" unit
+            WHERE REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') =
+              legacy_matching_unit_files.unit_ref
+            UNION
+            SELECT unit.id, unit.bookletid
+            FROM "unit" unit
+            WHERE REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') =
+              legacy_matching_unit_files.unit_ref
+          ) matched_unit
+          INNER JOIN booklet booklet ON booklet.id = matched_unit.bookletid
           INNER JOIN persons person ON person.id = booklet.personid
           WHERE person.workspace_id = $1
-        ),
-        matched_unit_ids AS (
-          SELECT unit_candidates.id
-          FROM unit_candidates
-          INNER JOIN legacy_matching_unit_files
-            ON legacy_matching_unit_files.file_id_normalized = unit_candidates.unit_name
-          UNION
-          SELECT unit_candidates.id
-          FROM unit_candidates
-          INNER JOIN legacy_matching_unit_files
-            ON legacy_matching_unit_files.file_id_normalized = unit_candidates.unit_alias
         )
         SELECT DISTINCT id FROM matched_unit_ids
       `,
