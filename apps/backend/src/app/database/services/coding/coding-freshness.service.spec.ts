@@ -358,15 +358,16 @@ describe('CodingFreshnessService', () => {
     expect(sql).toContain('matching_unit_files');
     expect(sql).toContain('unit_file.coding_scheme_ref_normalized = candidate.scheme_ref');
     expect(sql).toContain('unit_file.file_id_normalized IS NOT NULL');
+    expect(sql).toContain('unit_refs AS');
+    expect(sql).toContain('CROSS JOIN LATERAL');
     expect(sql).toContain('matched_unit_ids');
-    expect(sql).toContain('matching_unit_files.file_id_normalized = unit_candidates.unit_name');
-    expect(sql).toContain('matching_unit_files.file_id_normalized = unit_candidates.unit_alias');
     expect(sql).toContain(
-      "REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i')"
+      "REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') = unit_refs.unit_ref"
     );
     expect(sql).toContain(
-      "REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i')"
+      "REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') = unit_refs.unit_ref"
     );
+    expect(sql).not.toContain('unit_candidates AS');
     expect(params).toEqual([1, ['SEPARATE_SCHEME']]);
   });
 
@@ -389,6 +390,33 @@ describe('CodingFreshnessService', () => {
       (connection.query as jest.Mock).mock.calls
         .some(([sql]) => String(sql).includes('legacy_matching_unit_files'))
     ).toBe(false);
+  });
+
+  it('uses candidate-driven index probes for the legacy regex fallback', async () => {
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ hasLegacy: true }])
+      .mockResolvedValueOnce([{ id: 11 }]);
+
+    await expect((
+      service as unknown as {
+        getUnitIdsByCodingSchemeRefs: (
+          workspaceId: number,
+          codingSchemeRefs: string[]
+        ) => Promise<number[]>;
+      }
+    ).getUnitIdsByCodingSchemeRefs(1, ['scheme_a'])).resolves.toEqual([11]);
+
+    expect(connection.query).toHaveBeenCalledTimes(3);
+    const [sql, params] = (connection.query as jest.Mock).mock.calls[2];
+    expect(sql).toContain('legacy_matching_unit_files');
+    expect(sql).toContain('CROSS JOIN LATERAL');
+    expect(sql).toContain(
+      "REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') ="
+    );
+    expect(sql).toContain('legacy_matching_unit_files.unit_ref');
+    expect(sql).not.toContain('unit_candidates AS');
+    expect(params).toEqual([1, ['SCHEME_A']]);
   });
 
   it('marks coding scheme instruction-only changes for manual review only', async () => {
