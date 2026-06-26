@@ -2003,13 +2003,12 @@ export class CodingJobService {
     const repository = manager ?
       manager.getRepository(CodingJobUnit) :
       this.codingJobUnitRepository;
+    const itemKeyExpression =
+      "CASE WHEN cju.variable_bundle_id IS NOT NULL THEN CONCAT('bundle:', cju.variable_bundle_id) ELSE CONCAT(cju.unit_name, '::', cju.variable_id) END";
     const query = repository
       .createQueryBuilder('cju')
       .select('cju.response_id', 'responseId')
-      .addSelect(
-        "CASE WHEN cju.variable_bundle_id IS NOT NULL THEN CONCAT('bundle:', cju.variable_bundle_id) ELSE CONCAT(cju.unit_name, '::', cju.variable_id) END",
-        'itemKey'
-      )
+      .addSelect(itemKeyExpression, 'itemKey')
       .addSelect('coding_job_coder.user_id', 'coderId')
       .addSelect('COUNT(cju.id)', 'taskCount')
       .innerJoin('cju.coding_job', 'coding_job')
@@ -2020,7 +2019,7 @@ export class CodingJobService {
       })
       .andWhere('coding_job.training_id IS NULL')
       .groupBy('cju.response_id')
-      .addGroupBy('itemKey')
+      .addGroupBy(itemKeyExpression)
       .addGroupBy('coding_job_coder.user_id');
     this.applyNonCodingIssueReviewJobFilter(
       query,
