@@ -990,6 +990,62 @@ describe('CodingValidationService', () => {
       ]);
     });
 
+    it('should treat assigned duplicate responses as assigned after deduplication and aggregation', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '4' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const deriveErrorQb = createQueryBuilderMock([]);
+      const assignedResponsesQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseId: '2' }
+      ]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(assignedResponsesQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(2);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([
+        {
+          id: 1, unitName: 'unit1', variableid: 'var1', value: 'same-value', personLogin: 'person-1', personCode: 'code-1', personGroup: 'group'
+        },
+        {
+          id: 2, unitName: 'unit1', variableid: 'var1', value: 'same-value', personLogin: 'person-1', personCode: 'code-1', personGroup: 'group'
+        },
+        {
+          id: 3, unitName: 'unit1', variableid: 'var1', value: 'same-value', personLogin: 'person-2', personCode: 'code-2', personGroup: 'group'
+        },
+        {
+          id: 4, unitName: 'unit1', variableid: 'var1', value: 'other-value', personLogin: 'person-3', personCode: 'code-3', personGroup: 'group'
+        }
+      ] as never);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'var1',
+          responseCount: 4,
+          casesInJobs: 1,
+          availableCases: 1,
+          uniqueCasesAfterAggregation: 2
+        })
+      ]);
+    });
+
     it('should expose aggregation-aware case counts when DERIVE_ERROR is included', async () => {
       const codingIncompleteQb = createQueryBuilderMock([
         { unitName: 'unit1', variableId: 'var1', responseCount: '2' }

@@ -1112,6 +1112,35 @@ describe('CodingJobService distribution from job definitions', () => {
     });
   });
 
+  it('keeps assigned duplicate cases reserved after deduplication and aggregation', async () => {
+    const responses = [
+      makeSameCaseResponse(1, 'Unit 1', 'Var 1', 1, 'same-value'),
+      makeSameCaseResponse(2, 'Unit 1', 'Var 1', 1, 'same-value'),
+      makeSameCaseResponse(3, 'Unit 1', 'Var 1', 2, 'same-value'),
+      makeSameCaseResponse(4, 'Unit 1', 'Var 1', 3, 'other-value')
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(2);
+    (
+      service as unknown as { getAssignedResponseIdsForVariables: jest.Mock }
+    ).getAssignedResponseIdsForVariables.mockResolvedValue(new Set([2]));
+
+    const usageByKey = await service.calculateDistributionVariableUsageByStatusBatch(5, [
+      {
+        key: 'requested',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        caseOrderingMode: 'continuous',
+        distributionSeed: 'seed-assigned-aggregation'
+      }
+    ]);
+
+    expect(Object.fromEntries(usageByKey.get('requested')?.entries() || [])).toEqual({
+      'Unit 1::Var 1': { regular: 1, deriveError: 0, total: 1 }
+    });
+  });
+
   it('counts mixed aggregated regular and DERIVE_ERROR cases as regular usage', async () => {
     const responses = [
       {

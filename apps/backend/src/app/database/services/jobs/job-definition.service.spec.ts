@@ -821,6 +821,113 @@ describe('JobDefinitionService', () => {
     });
   });
 
+  it('allows updating a pending definition when its own retained cases are excluded from reservations', async () => {
+    const retainedVariable = { unitName: 'Unit 1', variableId: 'Var 1' };
+    const addedVariable = { unitName: 'Unit 2', variableId: 'Var 2' };
+    const existingDefinition = {
+      id: 74,
+      workspace_id: 7,
+      status: 'pending_review',
+      assigned_variables: [retainedVariable],
+      assigned_variable_bundles: [],
+      assigned_coders: [1, 2],
+      duration_seconds: 1,
+      max_coding_cases: null,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'definition-74-seed'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 2 },
+      { unitName: 'Unit 2', variableId: 'Var 2', availableCases: 1 }
+    ]);
+
+    await expect(service.updateJobDefinition(74, 7, {
+      assignedVariables: [retainedVariable, addedVariable],
+      assignedVariableBundles: [],
+      maxCodingCases: null,
+      caseOrderingMode: 'continuous'
+    })).resolves.toMatchObject({
+      id: 74,
+      assigned_variables: [retainedVariable, addedVariable]
+    });
+
+    expect(codingValidationService.getCodingIncompleteVariables).toHaveBeenCalledWith(
+      7,
+      undefined,
+      undefined,
+      false,
+      74
+    );
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 'requested',
+        excludeJobDefinitionId: 74,
+        selectedVariables: [retainedVariable, addedVariable]
+      })
+    ]);
+    expect(jobDefinitionRepository.save).toHaveBeenCalled();
+  });
+
+  it('rejects updating a pending definition when another unstarted definition reserves the remaining cases', async () => {
+    const selectedVariable = { unitName: 'Unit 1', variableId: 'Var 1' };
+    const existingDefinition = {
+      id: 74,
+      workspace_id: 7,
+      status: 'pending_review',
+      assigned_variables: [selectedVariable],
+      assigned_variable_bundles: [],
+      assigned_coders: [1, 2],
+      duration_seconds: 1,
+      max_coding_cases: 1,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'definition-74-seed'
+    };
+    const otherDefinition = {
+      id: 75,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [selectedVariable],
+      assigned_variable_bundles: [],
+      assigned_coders: [3],
+      duration_seconds: 1,
+      max_coding_cases: 2,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'definition-75-seed'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition, otherDefinition]);
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 3 }
+    ]);
+
+    await expect(service.updateJobDefinition(74, 7, {
+      assignedVariables: [selectedVariable],
+      assignedVariableBundles: [],
+      maxCodingCases: 2,
+      caseOrderingMode: 'continuous'
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 'requested',
+        excludeJobDefinitionId: 74,
+        selectedVariables: [selectedVariable],
+        maxCodingCases: 2
+      }),
+      expect.objectContaining({
+        key: 75,
+        jobDefinitionId: 75,
+        selectedVariables: [selectedVariable],
+        maxCodingCases: 2
+      })
+    ]);
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
+  });
+
   it('does not reserve planned cases again for definitions that already have created jobs', async () => {
     codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
       { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 5 }
