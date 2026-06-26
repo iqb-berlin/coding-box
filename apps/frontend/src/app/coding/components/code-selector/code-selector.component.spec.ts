@@ -916,12 +916,58 @@ describe('CodeSelectorComponent', () => {
     expect(panelItems[1].textContent).toContain('UNIT_2 / VAR3');
   });
 
-  it('shows a bundle variable dropdown for single non-chip bundle jobs', () => {
+  it('renders continuous bundle variables up to eight as chips', () => {
     component.showProgress = true;
     component.codingService = {
       isUnitCoded: jest.fn().mockReturnValue(false)
     } as never;
-    const variables = ['VAR1', 'VAR2', 'VAR3', 'VAR4', 'VAR5'].map((variableId, index) => ({
+    const variables = ['VAR1', 'VAR2', 'VAR3', 'VAR4', 'VAR5', 'VAR6', 'VAR7', 'VAR8'].map((variableId, index) => ({
+      responseId: index + 1,
+      unitName: 'UNIT_1',
+      variableId,
+      variableAnchor: variableId,
+      variablePage: '0',
+      status: 'manual-open' as const,
+      code: null,
+      score: null,
+      source: 'manual' as const
+    }));
+    const bundleContext = {
+      bundleId: 9,
+      bundleName: 'Bundle A',
+      caseKey: 'case-1',
+      caseOrderingMode: 'continuous' as const,
+      variables
+    };
+    component.unitsData = {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: variables.map((variable, index) => ({
+        id: index + 1,
+        name: 'UNIT_1',
+        alias: 'UNIT_1',
+        bookletId: 0,
+        variableId: variable.variableId,
+        variableBundleId: 9,
+        bundleContext
+      }))
+    };
+
+    fixture.detectChanges();
+
+    expect(component.shouldShowBundleVariableChips).toBe(true);
+    expect(component.shouldShowBundleVariableDropdown).toBe(false);
+    expect(fixture.nativeElement.querySelectorAll('.bundle-variable-chip')).toHaveLength(8);
+    expect(fixture.nativeElement.querySelector('.bundle-variable-dropdown-wrapper .variable-trigger-btn')).toBeNull();
+  });
+
+  it('shows a bundle variable dropdown above eight variables', () => {
+    component.showProgress = true;
+    component.codingService = {
+      isUnitCoded: jest.fn().mockReturnValue(false)
+    } as never;
+    const variables = ['VAR1', 'VAR2', 'VAR3', 'VAR4', 'VAR5', 'VAR6', 'VAR7', 'VAR8', 'VAR9'].map((variableId, index) => ({
       responseId: index + 1,
       unitName: 'UNIT_1',
       variableId,
@@ -972,13 +1018,13 @@ describe('CodeSelectorComponent', () => {
     const panelItems = fixture.nativeElement.querySelectorAll(
       '.bundle-variable-dropdown-wrapper .variable-panel-item'
     ) as NodeListOf<HTMLElement>;
-    expect(panelItems).toHaveLength(5);
-    expect(panelItems[4].textContent).toContain('UNIT_1 / VAR5');
+    expect(panelItems).toHaveLength(9);
+    expect(panelItems[8].textContent).toContain('UNIT_1 / VAR9');
 
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
-    component.selectBundleVariable('UNIT_1::VAR5', false);
+    component.selectBundleVariable('UNIT_1::VAR9', false);
 
-    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[4]);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[8]);
   });
 
   it('keeps bundle variable navigation within the current bundle case', () => {
