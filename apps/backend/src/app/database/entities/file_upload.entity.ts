@@ -11,6 +11,8 @@ export interface StructuredFileData {
   };
 }
 
+export const NO_CODING_SCHEME_REF_NORMALIZED = '__NO_CODING_SCHEME_REF__';
+
 @Entity()
 @Unique('file_upload_id', ['file_id', 'workspace_id'])
 class FileUpload {

@@ -78,32 +78,22 @@ SET "file_id_normalized" = NULLIF(
 )
 WHERE "file_id_normalized" IS NULL;
 
-WITH extracted_refs AS (
+WITH structured_refs AS (
   SELECT
     f."id",
     NULLIF(
-      COALESCE(
-        UPPER(BTRIM(f."structured_data" #>> '{extractedInfo,codingSchemeRefNormalized}')),
-        UPPER(BTRIM((match."ref_match")[1]))
-      ),
-      ''
-    ) AS "coding_scheme_ref"
-  FROM "public"."file_upload" f
-  LEFT JOIN LATERAL regexp_matches(
-    f."data",
-    '<[[:space:]]*codingschemeref[^>]*>[[:space:]]*([^<]+)',
-    'i'
-  ) AS match("ref_match") ON TRUE
-  WHERE f."file_type" = 'Unit'
-    AND f."coding_scheme_ref_normalized" IS NULL
-),
-normalized_refs AS (
-  SELECT
-    "id",
-    NULLIF(
       regexp_replace(
         regexp_replace(
-          regexp_replace("coding_scheme_ref", '\.VOCS$', '', 'i'),
+          regexp_replace(
+            UPPER(BTRIM(COALESCE(
+              f."structured_data" #>> '{extractedInfo,codingSchemeRefNormalized}',
+              f."structured_data" #>> '{extractedInfo,codingSchemeRef}',
+              ''
+            ))),
+            '\.VOCS$',
+            '',
+            'i'
+          ),
           '\.XML$',
           '',
           'i'
@@ -114,14 +104,52 @@ normalized_refs AS (
       ),
       ''
     ) AS "coding_scheme_ref_normalized"
-  FROM extracted_refs
-  WHERE "coding_scheme_ref" IS NOT NULL
+  FROM "public"."file_upload" f
+  WHERE f."file_type" = 'Unit'
+    AND f."coding_scheme_ref_normalized" IS NULL
 )
 UPDATE "public"."file_upload" f
 SET "coding_scheme_ref_normalized" = refs."coding_scheme_ref_normalized"
-FROM normalized_refs refs
+FROM structured_refs refs
 WHERE f."id" = refs."id"
   AND refs."coding_scheme_ref_normalized" IS NOT NULL;
+
+WITH extracted_refs AS (
+  SELECT
+    f."id",
+    NULLIF(
+      regexp_replace(
+        regexp_replace(
+            regexp_replace(UPPER(BTRIM((match."ref_match")[1])), '\.VOCS$', '', 'i'),
+            '\.XML$',
+            '',
+            'i'
+        ),
+        '^.*[/\\]',
+        '',
+        'i'
+      ),
+      ''
+    ) AS "coding_scheme_ref_normalized"
+  FROM "public"."file_upload" f
+  CROSS JOIN LATERAL regexp_matches(
+    f."data",
+    '<[[:space:]]*codingschemeref[^>]*>[[:space:]]*([^<]+)',
+    'i'
+  ) AS match("ref_match")
+  WHERE f."file_type" = 'Unit'
+    AND f."coding_scheme_ref_normalized" IS NULL
+)
+UPDATE "public"."file_upload" f
+SET "coding_scheme_ref_normalized" = refs."coding_scheme_ref_normalized"
+FROM extracted_refs refs
+WHERE f."id" = refs."id"
+  AND refs."coding_scheme_ref_normalized" IS NOT NULL;
+
+UPDATE "public"."file_upload"
+SET "coding_scheme_ref_normalized" = '__NO_CODING_SCHEME_REF__'
+WHERE "file_type" = 'Unit'
+  AND "coding_scheme_ref_normalized" IS NULL;
 
 CREATE INDEX IF NOT EXISTS "idx_file_upload_workspace_type_file_id_norm"
   ON "public"."file_upload" ("workspace_id", "file_type", "file_id_normalized");

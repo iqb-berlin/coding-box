@@ -370,6 +370,27 @@ describe('CodingFreshnessService', () => {
     expect(params).toEqual([1, ['SEPARATE_SCHEME']]);
   });
 
+  it('does not run the legacy regex fallback when all Unit files have normalized lookup state', async () => {
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 10 }])
+      .mockResolvedValueOnce([{ hasLegacy: false }]);
+
+    await expect((
+      service as unknown as {
+        getUnitIdsByCodingSchemeRefs: (
+          workspaceId: number,
+          codingSchemeRefs: string[]
+        ) => Promise<number[]>;
+      }
+    ).getUnitIdsByCodingSchemeRefs(1, ['scheme_a'])).resolves.toEqual([10]);
+
+    expect(connection.query).toHaveBeenCalledTimes(2);
+    expect(
+      (connection.query as jest.Mock).mock.calls
+        .some(([sql]) => String(sql).includes('legacy_matching_unit_files'))
+    ).toBe(false);
+  });
+
   it('marks coding scheme instruction-only changes for manual review only', async () => {
     mockCodingSchemeChangeQueries([10], 12);
     const responseCountsQb = queryBuilder({
