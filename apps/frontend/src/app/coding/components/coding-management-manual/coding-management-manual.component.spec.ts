@@ -130,6 +130,12 @@ describe('CodingManagementManualComponent', () => {
         'completed-jobs': {
           'readonly-note': 'Nur lesbar'
         },
+        'response-analysis': {
+          'outdated-note':
+            'Diese Antwort-Analyse basiert auf {{analysisRawCases}} Rohantworten. Der aktuelle manuelle Vorbereitungsbestand umfasst {{referenceRawCases}} Rohantworten. Bitte neu berechnen; deshalb kann die hier gezeigte Einsparung von den Fortschrittswerten abweichen.',
+          'rest-scope-note':
+            'Diese Antwort-Analyse basiert auf {{analysisRawCases}} vorbereiteten Rohantworten. Der aktuelle Restbestand umfasst {{currentRawManualResponses}} Rohantworten, weil bereits Ergebnisse angewendet wurden oder Fälle nicht mehr separat gezählt werden.'
+        },
         errors: {
           'replay-auth-token-failed':
             'Replay-Links konnten nicht vorbereitet werden, weil kein Auth-Token erstellt werden konnte. Exportjob wurde nicht gestartet.'
@@ -512,7 +518,7 @@ describe('CodingManagementManualComponent', () => {
     expect(component.isPreparationReady()).toBe(true);
   });
 
-  it('should flag response analysis as outdated when raw manual counts changed', () => {
+  it('should flag response analysis as outdated when the status pool count changed', () => {
     component.responseAnalysis = {
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
       duplicateValues: {
@@ -535,9 +541,55 @@ describe('CodingManagementManualComponent', () => {
     };
     setAppliedResults(897, 8, 889);
     component.appliedResultsOverview!.rawTotalIncompleteResponses = 973;
+    setCodingProgress(973, 8);
+    component.codingProgressOverview!.statusTotalCasesToCode = 973;
 
     expect(component.getCurrentRawManualResponses()).toBe(973);
+    expect(component.getResponseAnalysisReferenceRawCases()).toBe(973);
     expect(component.isResponseAnalysisOutdated()).toBe(true);
+  });
+
+  it('should not require preparation refresh when only the applied result rest scope is smaller', () => {
+    component.responseAnalysis = {
+      emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+      duplicateValues: {
+        total: 840,
+        totalResponses: 5840,
+        groups: [],
+        isAggregationApplied: true
+      },
+      aggregationSummary: {
+        duplicateGroups: 840,
+        duplicateResponses: 5840,
+        collapsedCases: 5000,
+        rawCases: 21606,
+        effectiveCases: 16606,
+        threshold: 2,
+        aggregationActive: true
+      },
+      matchingFlags: [],
+      analysisTimestamp: new Date().toISOString()
+    };
+    setCodingProgress(16606, 12000);
+    component.codingProgressOverview!.rawTotalCasesToCode = 17705;
+    component.codingProgressOverview!.statusTotalCasesToCode = 21606;
+    setAppliedResults(17705, 3901, 13804);
+
+    expect(component.getCurrentRawManualResponses()).toBe(17705);
+    expect(component.getResponseAnalysisReferenceRawCases()).toBe(21606);
+    expect(component.isResponseAnalysisOutdated()).toBe(false);
+    expect(component.hasResponseAnalysisRestScopeDifference()).toBe(true);
+    expect(component.hasPreparationWarnings()).toBe(false);
+    expect(component.isPreparationReady()).toBe(true);
+
+    fixture.detectChanges();
+    const pageText = fixture.nativeElement.textContent as string;
+    expect(pageText).toContain(
+      'Der aktuelle Restbestand umfasst 17705 Rohantworten'
+    );
+    expect(pageText).not.toContain(
+      'Der aktuelle manuelle Vorbereitungsbestand umfasst'
+    );
   });
 
   it('should describe completed coding jobs as ready to apply', () => {

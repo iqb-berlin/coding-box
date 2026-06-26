@@ -1514,6 +1514,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       0;
   }
 
+  getResponseAnalysisReferenceRawCases(): number {
+    return this.getManualStatusPoolCount();
+  }
+
   getManualStatusPoolCount(): number {
     return this.codingProgressOverview?.statusTotalCasesToCode ??
       this.caseCoverageOverview?.statusTotalCasesToCode ??
@@ -1557,9 +1561,19 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   isResponseAnalysisOutdated(): boolean {
     const analysisRawCases = this.responseAnalysis?.aggregationSummary?.rawCases ?? 0;
+    const referenceRawCases = this.getResponseAnalysisReferenceRawCases();
+    return !!this.responseAnalysis &&
+      !this.responseAnalysis.isCalculating &&
+      referenceRawCases > 0 &&
+      analysisRawCases !== referenceRawCases;
+  }
+
+  hasResponseAnalysisRestScopeDifference(): boolean {
+    const analysisRawCases = this.responseAnalysis?.aggregationSummary?.rawCases ?? 0;
     const currentRawManualResponses = this.getCurrentRawManualResponses();
     return !!this.responseAnalysis &&
       !this.responseAnalysis.isCalculating &&
+      !this.isResponseAnalysisOutdated() &&
       currentRawManualResponses > 0 &&
       analysisRawCases !== currentRawManualResponses;
   }
