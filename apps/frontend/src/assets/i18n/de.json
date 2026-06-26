@@ -1943,6 +1943,8 @@
       "more": "weitere",
       "last-updated": "Letzte Aktualisierung",
       "no-data": "Keine Analysedaten verfügbar. Bitte laden Sie die Analyse neu.",
+      "outdated-note": "Diese Antwort-Analyse basiert auf {{analysisRawCases}} Rohantworten. Der aktuelle manuelle Vorbereitungsbestand umfasst {{referenceRawCases}} Rohantworten. Bitte neu berechnen; deshalb kann die hier gezeigte Einsparung von den Fortschrittswerten abweichen.",
+      "rest-scope-note": "Diese Antwort-Analyse basiert auf {{analysisRawCases}} vorbereiteten Rohantworten. Der aktuelle Restbestand umfasst {{currentRawManualResponses}} Rohantworten, weil bereits Ergebnisse angewendet wurden oder Fälle nicht mehr separat gezählt werden.",
       "showing-first-50": "Zeige die ersten 50 von {{total}} Einträgen",
       "showing-first-20-groups": "Zeige die ersten 20 von {{total}} Gruppen",
       "table": {
