@@ -1,5 +1,5 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import {
   ExportJobService,
   REPLAY_AUTH_TOKEN_ERROR_CODE,
@@ -205,6 +205,24 @@ describe('ExportJobService', () => {
       expect(clickSpy).toHaveBeenCalled();
 
       createElementSpy.mockRestore();
+    });
+
+    it('should allow cancelling an in-flight file download without cancelling the completed job', () => {
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+      const fileDownload$ = new Subject<Blob>();
+      codingJobBackendServiceMock.downloadExportFile.mockReturnValue(fileDownload$);
+
+      service.startJob(1, { exportType: 'aggregated', userId: 1 }).subscribe();
+      service.downloadFile(1, 'j1', 'aggregated', 'export.xlsx');
+
+      expect(service.activeJobs[0].status).toBe('downloading');
+      expect(fileDownload$.observers.length).toBe(1);
+
+      service.cancelJob(service.activeJobs[0]);
+
+      expect(fileDownload$.observers.length).toBe(0);
+      expect(codingJobBackendServiceMock.cancelExportJob).not.toHaveBeenCalled();
+      expect(service.completedJobs[0].status).toBe('completed');
     });
   });
 });

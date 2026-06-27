@@ -89,6 +89,7 @@ describe('ExportToastComponent', () => {
     expect(component.failedJobCount).toBe(1);
     expect(component.getStatusIcon('waiting')).toBe('hourglass_empty');
     expect(component.getStatusIcon('active')).toBe('sync');
+    expect(component.getStatusIcon('downloading')).toBe('file_download');
     expect(component.getStatusIcon('completed')).toBe('check_circle');
     expect(component.getStatusIcon('failed')).toBe('error');
     expect(component.getStatusIcon('cancelled')).toBe('cancel');

@@ -98,6 +98,10 @@
         animation: spin 1s linear infinite;
       }
 
+      &.status-downloading {
+        color: #1976d2;
+      }
+
       &.status-completed {
         color: #4caf50;
       }

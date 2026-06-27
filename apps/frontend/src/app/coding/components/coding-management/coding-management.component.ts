@@ -17,13 +17,15 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
 import {
   MatAnchor,
-  MatButton
+  MatButton,
+  MatIconButton
 } from '@angular/material/button';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
@@ -104,6 +106,8 @@ import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
     MatIcon,
     MatAnchor,
     MatButton,
+    MatIconButton,
+    MatTooltipModule,
     TranslateModule,
     StatisticsCardComponent,
     ResponseFiltersComponent,
@@ -547,6 +551,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   onDownloadResults(): void {
     this.openDownloadCodingResultsDialog();
+  }
+
+  onCancelDownloadResults(): void {
+    this.codingManagementService.cancelCodingResultsDownload();
+  }
+
+  cancelCodingListDownload(): void {
+    this.codingManagementService.cancelCodingListDownload();
   }
 
   onResetVersion(): void {
