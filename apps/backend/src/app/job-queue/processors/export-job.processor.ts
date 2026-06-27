@@ -258,14 +258,10 @@ export class ExportJobProcessor {
               includeGeoGebraFiles: job.data.includeGeoGebraFiles === true,
               checkCancellation
             };
-            if (job.data.includeGeoGebraFiles) {
-              buffer = await this.codingExportOrchestratorService.exportResultsByVersionAsExcel(excelOptions);
-            } else {
-              await this.codingExportOrchestratorService.exportResultsByVersionAsExcelToFile(
-                filePath,
-                excelOptions
-              );
-            }
+            await this.codingExportOrchestratorService.exportResultsByVersionAsExcelToFile(
+              filePath,
+              excelOptions
+            );
           } else {
             // CSV Stream
             const stream = await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({

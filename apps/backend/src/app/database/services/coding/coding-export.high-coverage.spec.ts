@@ -72,6 +72,7 @@ const codingListService = () => ({
   getCodingResultsByVersionCsvStream: jest.fn().mockResolvedValue(Readable.from(['version-csv'])),
   getCodingResultsByVersionAsExcel: jest.fn().mockResolvedValue(Buffer.from('version-excel')),
   writeCodingResultsByVersionExcelToFile: jest.fn().mockResolvedValue(undefined),
+  writeCodingResultsByVersionGeoGebraZipToFile: jest.fn().mockResolvedValue(undefined),
   getVariablePageMap: jest.fn().mockResolvedValue(new Map([['VAR', '2']])),
   getCodingListVariables: jest.fn().mockResolvedValue([{ unitName: 'UNIT', variableId: 'VAR' }])
 });

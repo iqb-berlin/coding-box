@@ -276,7 +276,9 @@ describe('ExportJobProcessor', () => {
 
   it('uses ZIP extension for final result GeoGebra package exports', async () => {
     const { processor, codingExportOrchestratorService } = createProcessor();
-    codingExportOrchestratorService.exportResultsByVersionAsExcel.mockResolvedValue(Buffer.from('zip'));
+    codingExportOrchestratorService.exportResultsByVersionAsExcelToFile.mockImplementationOnce(
+      (filePath: string) => fs.promises.writeFile(filePath, 'zip')
+    );
     let filePath: string | undefined;
 
     try {
@@ -292,18 +294,22 @@ describe('ExportJobProcessor', () => {
       }));
       filePath = result.filePath;
 
-      expect(codingExportOrchestratorService.exportResultsByVersionAsExcel).toHaveBeenCalledWith({
-        workspaceId: 7,
-        version: 'v2',
-        authToken: 'auth-token',
-        serverUrl: 'http://app.example',
-        includeReplayUrl: true,
-        onProgress: expect.any(Function),
-        includeResponseValues: true,
-        includeGeoGebraResponseValues: false,
-        includeGeoGebraFiles: true,
-        checkCancellation: expect.any(Function)
-      });
+      expect(codingExportOrchestratorService.exportResultsByVersionAsExcelToFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\.zip$/),
+        {
+          workspaceId: 7,
+          version: 'v2',
+          authToken: 'auth-token',
+          serverUrl: 'http://app.example',
+          includeReplayUrl: true,
+          onProgress: expect.any(Function),
+          includeResponseValues: true,
+          includeGeoGebraResponseValues: false,
+          includeGeoGebraFiles: true,
+          checkCancellation: expect.any(Function)
+        }
+      );
+      expect(codingExportOrchestratorService.exportResultsByVersionAsExcel).not.toHaveBeenCalled();
       expect(result.fileName).toMatch(/\.zip$/);
       expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('zip');
     } finally {
