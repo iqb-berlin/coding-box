@@ -164,6 +164,7 @@ export class ExportJobProcessor {
     this.logger.log(
       `Processing export job ${job.id} for workspace ${job.data.workspaceId}, type: ${job.data.exportType}`
     );
+    const startedAt = Date.now();
 
     const validExportTypes = [
       'aggregated',
@@ -231,6 +232,7 @@ export class ExportJobProcessor {
       };
 
       let buffer: Buffer | undefined;
+      const generationStartedAt = Date.now();
 
       // eslint-disable-next-line default-case
       switch (job.data.exportType) {
@@ -510,12 +512,14 @@ export class ExportJobProcessor {
       }
 
       await this.checkCancellation(job, filePath);
+      const generationFinishedAt = Date.now();
 
       await job.progress(90);
 
       if (buffer) {
         await fs.promises.writeFile(filePath, buffer);
       }
+      const fileWriteFinishedAt = Date.now();
 
       await this.checkCancellation(job, filePath);
 
@@ -524,7 +528,10 @@ export class ExportJobProcessor {
       const finalFileName = path.basename(filePath);
 
       this.logger.log(
-        `Export file generated successfully: ${finalFileName} (${fileSize} bytes)`
+        `Export file generated successfully: ${finalFileName} (${fileSize} bytes) ` +
+        `in ${fileWriteFinishedAt - startedAt}ms ` +
+        `(generation: ${generationFinishedAt - generationStartedAt}ms, ` +
+        `file write: ${fileWriteFinishedAt - generationFinishedAt}ms)`
       );
 
       // Cache file metadata in Redis with 1 hour TTL
@@ -547,11 +554,11 @@ export class ExportJobProcessor {
 
       await job.progress(100);
 
-      this.logger.log(`Job ${job.id} completed successfully`);
+      this.logger.log(`Job ${job.id} completed successfully in ${Date.now() - startedAt}ms`);
       return metadata;
     } catch (error) {
       if (error instanceof ExportJobCancelledException) {
-        this.logger.log(`Export job ${job.id} was cancelled`);
+        this.logger.log(`Export job ${job.id} was cancelled after ${Date.now() - startedAt}ms`);
         throw error;
       }
       this.logger.error(
