@@ -84,16 +84,19 @@ export class CodingListStreamService {
 
   private async getCodingListFilterContext(
     workspaceId: number,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
   ): Promise<{
       filterOptions: ResponseFilterOptions;
       trainingRequiredMap: Map<string, Set<string>> | null;
     }> {
+    await checkCancellation?.();
     const trainingRequiredMap = await (
       trainingRequired !== undefined ?
         this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId) :
         Promise.resolve(null)
     );
+    await checkCancellation?.();
 
     return {
       filterOptions: {
@@ -105,12 +108,14 @@ export class CodingListStreamService {
 
   private async loadVariableAnchorMapsForResponses(
     responses: ResponseEntity[],
-    workspaceId: number
+    workspaceId: number,
+    checkCancellation?: () => Promise<void>
   ): Promise<CodingVariableAnchorMaps> {
     if (!this.replayAnchorService) {
       return new Map();
     }
 
+    await checkCancellation?.();
     const unitNames = Array.from(new Set(
       responses
         .map(response => response.unit?.name || '')
@@ -122,7 +127,9 @@ export class CodingListStreamService {
     }
 
     try {
-      return await this.replayAnchorService.getVariableAnchorMaps(unitNames, workspaceId);
+      const anchorMaps = await this.replayAnchorService.getVariableAnchorMaps(unitNames, workspaceId);
+      await checkCancellation?.();
+      return anchorMaps;
     } catch (error) {
       this.logger.warn(
         `Failed to load replay anchor overrides for workspace ${workspaceId}: ${error.message}`
@@ -141,7 +148,8 @@ export class CodingListStreamService {
     authToken: string,
     serverUrl?: string,
     progressCallback?: (percentage: number) => Promise<void>,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
   ) {
     this.logger.log(
       `Memory-efficient CSV export for workspace ${workspace_id} (trainingRequired: ${trainingRequired})`
@@ -151,35 +159,42 @@ export class CodingListStreamService {
 
     (async () => {
       try {
+        await checkCancellation?.();
         const { filterOptions, trainingRequiredMap } =
-          await this.getCodingListFilterContext(workspace_id, trainingRequired);
+          await this.getCodingListFilterContext(workspace_id, trainingRequired, checkCancellation);
+        await checkCancellation?.();
         const totalRows = await this.responseFilterService.countResponses(
           workspace_id,
           filterOptions
         );
+        await checkCancellation?.();
         const batchSize = 500;
         let lastId = 0;
         let totalWritten = 0;
 
         for (; ;) {
+          await checkCancellation?.();
           const responses = await this.responseFilterService.getResponsesBatch(
             workspace_id,
             lastId,
             batchSize,
             filterOptions
           );
+          await checkCancellation?.();
 
           if (!responses.length) break;
 
           const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
             responses,
-            workspace_id
+            workspace_id,
+            checkCancellation
           );
 
           // Process responses
           const items: CodingItem[] = [];
 
           for (const response of responses) {
+            await checkCancellation?.();
             // Apply trainingRequired filter here
             if (trainingRequired !== undefined && trainingRequiredMap) {
               const unitKey = response.unit?.name || '';
@@ -204,6 +219,7 @@ export class CodingListStreamService {
 
           // Write items to CSV stream
           for (const item of items) {
+            await checkCancellation?.();
             const ok = csvStream.write(item);
             totalWritten += 1;
 
@@ -253,7 +269,8 @@ export class CodingListStreamService {
     authToken?: string,
     serverUrl?: string,
     progressCallback?: (percentage: number) => Promise<void>,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     this.logger.log(
       `Streaming Excel export for workspace ${workspace_id} (trainingRequired: ${trainingRequired})`
@@ -294,32 +311,39 @@ export class CodingListStreamService {
     ];
 
     try {
+      await checkCancellation?.();
       const { filterOptions, trainingRequiredMap } =
-        await this.getCodingListFilterContext(workspace_id, trainingRequired);
+        await this.getCodingListFilterContext(workspace_id, trainingRequired, checkCancellation);
+      await checkCancellation?.();
       const totalRows = await this.responseFilterService.countResponses(
         workspace_id,
         filterOptions
       );
+      await checkCancellation?.();
       const batchSize = 1000; // Reduced batch size for streaming
       let lastId = 0;
       let totalWritten = 0;
 
       for (; ;) {
+        await checkCancellation?.();
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
           lastId,
           batchSize,
           filterOptions
         );
+        await checkCancellation?.();
 
         if (!responses.length) break;
 
         const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
           responses,
-          workspace_id
+          workspace_id,
+          checkCancellation
         );
 
         for (const response of responses) {
+          await checkCancellation?.();
           // Apply trainingRequired filter here
           if (trainingRequired !== undefined && trainingRequiredMap) {
             const unitKey = response.unit?.name || '';
@@ -393,7 +417,8 @@ export class CodingListStreamService {
     authToken: string,
     serverUrl?: string,
     progressCallback?: (percentage: number) => Promise<void>,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
   ): JsonStream {
     this.logger.log(
       `Memory-efficient JSON stream export for workspace ${workspace_id} (trainingRequired: ${trainingRequired})`
@@ -420,7 +445,8 @@ export class CodingListStreamService {
             () => endListener?.(),
             err => errorListener?.(err),
             progressCallback,
-            trainingRequired
+            trainingRequired,
+            checkCancellation
           );
         } else if (event === 'end') {
           endListener = listener as () => void;
@@ -442,35 +468,43 @@ export class CodingListStreamService {
     onEnd: () => void,
     onError: (error: Error) => void,
     progressCallback?: (percentage: number) => Promise<void>,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
   ) {
     try {
+      await checkCancellation?.();
       const { filterOptions, trainingRequiredMap } =
-        await this.getCodingListFilterContext(workspace_id, trainingRequired);
+        await this.getCodingListFilterContext(workspace_id, trainingRequired, checkCancellation);
+      await checkCancellation?.();
       const totalRows = await this.responseFilterService.countResponses(
         workspace_id,
         filterOptions
       );
+      await checkCancellation?.();
       const batchSize = 5000;
       let lastId = 0;
       let totalWritten = 0;
 
       for (; ;) {
+        await checkCancellation?.();
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
           lastId,
           batchSize,
           filterOptions
         );
+        await checkCancellation?.();
 
         if (!responses.length) break;
 
         const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
           responses,
-          workspace_id
+          workspace_id,
+          checkCancellation
         );
 
         for (const response of responses) {
+          await checkCancellation?.();
           // Apply trainingRequired filter here
           if (trainingRequired !== undefined && trainingRequiredMap) {
             const unitKey = response.unit?.name || '';
@@ -532,7 +566,8 @@ export class CodingListStreamService {
     includeReplayUrls: boolean = false,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
   ) {
     this.logger.log(
       `Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
@@ -547,11 +582,13 @@ export class CodingListStreamService {
 
     (async () => {
       try {
+        await checkCancellation?.();
         const totalRows = await this.responseFilterService.countResponses(workspace_id, {
           version,
           validCodingVariablesOnly: true,
           givenResponsesOnly: true
         });
+        await checkCancellation?.();
         const batchSize = 500;
         let lastId = 0;
         let totalWritten = 0;
@@ -561,6 +598,7 @@ export class CodingListStreamService {
         // We will report 0-100% of *this* process.
 
         for (; ;) {
+          await checkCancellation?.();
           const responses = await this.responseFilterService.getResponsesBatch(
             workspace_id,
             lastId,
@@ -571,15 +609,18 @@ export class CodingListStreamService {
               givenResponsesOnly: true
             }
           );
+          await checkCancellation?.();
 
           if (!responses.length) break;
 
           const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
             responses,
-            workspace_id
+            workspace_id,
+            checkCancellation
           );
 
           for (const response of responses) {
+            await checkCancellation?.();
             const item = await this.itemBuilderService.buildCodingItemWithVersions(
               response,
               version,
@@ -650,7 +691,8 @@ export class CodingListStreamService {
     includeReplayUrls: boolean = false,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     this.logger.log(
       `Starting streaming Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
@@ -691,13 +733,16 @@ export class CodingListStreamService {
     let totalWritten = 0;
 
     try {
+      await checkCancellation?.();
       const totalRows = await this.responseFilterService.countResponses(workspace_id, {
         version,
         validCodingVariablesOnly: true,
         givenResponsesOnly: true
       });
+      await checkCancellation?.();
 
       for (; ;) {
+        await checkCancellation?.();
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
           lastId,
@@ -708,15 +753,18 @@ export class CodingListStreamService {
             givenResponsesOnly: true
           }
         );
+        await checkCancellation?.();
 
         if (!responses.length) break;
 
         const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
           responses,
-          workspace_id
+          workspace_id,
+          checkCancellation
         );
 
         for (const response of responses) {
+          await checkCancellation?.();
           const item = await this.itemBuilderService.buildCodingItemWithVersions(
             response,
             version,
@@ -793,7 +841,8 @@ export class CodingListStreamService {
     authToken?: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     this.logger.log(
       `Starting GeoGebra ZIP export for coding results version ${version}, workspace ${workspace_id}`
@@ -830,13 +879,16 @@ export class CodingListStreamService {
     let totalWritten = 0;
 
     try {
+      await checkCancellation?.();
       const totalRows = await this.responseFilterService.countResponses(workspace_id, {
         version,
         validCodingVariablesOnly: true,
         givenResponsesOnly: true
       });
+      await checkCancellation?.();
 
       for (; ;) {
+        await checkCancellation?.();
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
           lastId,
@@ -847,15 +899,18 @@ export class CodingListStreamService {
             givenResponsesOnly: true
           }
         );
+        await checkCancellation?.();
 
         if (!responses.length) break;
 
         const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
           responses,
-          workspace_id
+          workspace_id,
+          checkCancellation
         );
 
         for (const response of responses) {
+          await checkCancellation?.();
           const item = await this.itemBuilderService.buildCodingItemWithVersions(
             response,
             version,
@@ -942,7 +997,10 @@ export class CodingListStreamService {
       const workbookBuffer = Buffer.concat(chunks);
       const zip = new AdmZip();
       zip.addFile(`coding-results-${version}.xlsx`, workbookBuffer);
-      geoGebraFiles.forEach(file => zip.addFile(file.relativePath, file.buffer));
+      for (const file of geoGebraFiles) {
+        await checkCancellation?.();
+        zip.addFile(file.relativePath, file.buffer);
+      }
 
       this.logger.log(
         `GeoGebra ZIP export completed for version ${version}. Rows written: ${totalWritten}, GeoGebra files: ${geoGebraFiles.length}`

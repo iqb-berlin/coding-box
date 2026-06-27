@@ -84,14 +84,16 @@ export class CodingListService {
     authToken: string,
     serverUrl?: string,
     progressCallback?: (percentage: number) => Promise<void>,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
   ) {
     return this.streamService.getCodingListCsvStream(
       workspace_id,
       authToken,
       serverUrl,
       progressCallback,
-      trainingRequired
+      trainingRequired,
+      checkCancellation
     );
   }
 
@@ -104,14 +106,16 @@ export class CodingListService {
     authToken?: string,
     serverUrl?: string,
     progressCallback?: (percentage: number) => Promise<void>,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     return this.streamService.getCodingListAsExcel(
       workspace_id,
       authToken,
       serverUrl,
       progressCallback,
-      trainingRequired
+      trainingRequired,
+      checkCancellation
     );
   }
 
@@ -124,14 +128,16 @@ export class CodingListService {
     authToken: string,
     serverUrl?: string,
     progressCallback?: (percentage: number) => Promise<void>,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
   ): JsonStream {
     return this.streamService.getCodingListJsonStream(
       workspace_id,
       authToken,
       serverUrl,
       progressCallback,
-      trainingRequired
+      trainingRequired,
+      checkCancellation
     );
   }
 
@@ -158,7 +164,8 @@ export class CodingListService {
     includeReplayUrls: boolean = false,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
   ) {
     return this.streamService.getCodingResultsByVersionCsvStream(
       workspace_id,
@@ -168,7 +175,8 @@ export class CodingListService {
       includeReplayUrls,
       progressCallback,
       includeResponseValues,
-      includeGeoGebraResponseValues
+      includeGeoGebraResponseValues,
+      checkCancellation
     );
   }
 
@@ -184,7 +192,8 @@ export class CodingListService {
     includeReplayUrls: boolean = false,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     return this.streamService.getCodingResultsByVersionAsExcel(
       workspace_id,
@@ -194,7 +203,8 @@ export class CodingListService {
       includeReplayUrls,
       progressCallback,
       includeResponseValues,
-      includeGeoGebraResponseValues
+      includeGeoGebraResponseValues,
+      checkCancellation
     );
   }
 
@@ -204,7 +214,8 @@ export class CodingListService {
     authToken?: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     return this.streamService.getCodingResultsByVersionAsGeoGebraZip(
       workspace_id,
@@ -212,7 +223,8 @@ export class CodingListService {
       authToken,
       serverUrl,
       includeReplayUrls,
-      progressCallback
+      progressCallback,
+      checkCancellation
     );
   }
 }

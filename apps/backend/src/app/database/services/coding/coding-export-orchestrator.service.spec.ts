@@ -65,7 +65,8 @@ describe('CodingExportOrchestratorService', () => {
       true,
       onProgress,
       false,
-      false
+      false,
+      undefined
     );
   });
 
@@ -89,7 +90,8 @@ describe('CodingExportOrchestratorService', () => {
       false,
       undefined,
       true,
-      true
+      true,
+      undefined
     );
   });
 
@@ -115,7 +117,8 @@ describe('CodingExportOrchestratorService', () => {
       'token',
       'http://app.example',
       true,
-      onProgress
+      onProgress,
+      undefined
     );
     expect(codingResultsExportService.exportCodingResultsByVersionAsExcel).not.toHaveBeenCalled();
   });
