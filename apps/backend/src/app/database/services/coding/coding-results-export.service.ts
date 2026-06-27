@@ -214,7 +214,8 @@ export class CodingResultsExportService {
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
   ): Promise<Readable> {
     return this.codingListService.getCodingResultsByVersionCsvStream(
       workspaceId,
@@ -224,7 +225,8 @@ export class CodingResultsExportService {
       includeReplayUrls,
       progressCallback,
       includeResponseValues,
-      includeGeoGebraResponseValues
+      includeGeoGebraResponseValues,
+      checkCancellation
     );
   }
 
@@ -236,7 +238,8 @@ export class CodingResultsExportService {
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     return this.codingListService.getCodingResultsByVersionAsExcel(
       workspaceId,
@@ -246,7 +249,8 @@ export class CodingResultsExportService {
       includeReplayUrls,
       progressCallback,
       includeResponseValues,
-      includeGeoGebraResponseValues
+      includeGeoGebraResponseValues,
+      checkCancellation
     );
   }
 
@@ -256,7 +260,8 @@ export class CodingResultsExportService {
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     return this.codingListService.getCodingResultsByVersionAsGeoGebraZip(
       workspaceId,
@@ -264,7 +269,8 @@ export class CodingResultsExportService {
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
-      progressCallback
+      progressCallback,
+      checkCancellation
     );
   }
 

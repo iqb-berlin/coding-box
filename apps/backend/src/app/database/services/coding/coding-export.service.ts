@@ -510,14 +510,16 @@ export class CodingExportService {
     authToken: string,
     serverUrl: string,
     progressCallback?: (percentage: number) => Promise<void>,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
   ): Promise<Readable> {
     return this.codingListService.getCodingListCsvStream(
       workspaceId,
       authToken || '',
       serverUrl || '',
       progressCallback,
-      trainingRequired
+      trainingRequired,
+      checkCancellation
     );
   }
 
@@ -526,14 +528,16 @@ export class CodingExportService {
     authToken: string,
     serverUrl: string,
     progressCallback?: (percentage: number) => Promise<void>,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     return this.codingListService.getCodingListAsExcel(
       workspaceId,
       authToken || '',
       serverUrl || '',
       progressCallback,
-      trainingRequired
+      trainingRequired,
+      checkCancellation
     );
   }
 
@@ -542,14 +546,16 @@ export class CodingExportService {
     authToken: string,
     serverUrl: string,
     progressCallback?: (percentage: number) => Promise<void>,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
   ): Promise<Readable> {
     const stream = this.codingListService.getCodingListJsonStream(
       workspaceId,
       authToken || '',
       serverUrl || '',
       progressCallback,
-      trainingRequired
+      trainingRequired,
+      checkCancellation
     );
 
     const passThrough = new PassThrough();

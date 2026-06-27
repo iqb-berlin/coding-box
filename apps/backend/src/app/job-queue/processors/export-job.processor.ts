@@ -253,7 +253,8 @@ export class ExportJobProcessor {
               onProgress,
               includeResponseValues: job.data.includeResponseValues !== false,
               includeGeoGebraResponseValues: job.data.includeGeoGebraResponseValues === true,
-              includeGeoGebraFiles: job.data.includeGeoGebraFiles === true
+              includeGeoGebraFiles: job.data.includeGeoGebraFiles === true,
+              checkCancellation
             });
           } else {
             // CSV Stream
@@ -265,7 +266,8 @@ export class ExportJobProcessor {
               includeReplayUrl: job.data.includeReplayUrl || false,
               onProgress,
               includeResponseValues: job.data.includeResponseValues !== false,
-              includeGeoGebraResponseValues: job.data.includeGeoGebraResponseValues === true
+              includeGeoGebraResponseValues: job.data.includeGeoGebraResponseValues === true,
+              checkCancellation
             });
 
             await this.writeStreamToFile(stream, filePath, {
@@ -290,7 +292,8 @@ export class ExportJobProcessor {
               job.data.authToken || '',
               job.data.serverUrl || '',
               onProgress,
-              job.data.trainingRequired
+              job.data.trainingRequired,
+              checkCancellation
             );
           } else if (job.data.format === 'json') {
             const stream = await this.codingExportService.exportCodingListForJobAsJson(
@@ -298,7 +301,8 @@ export class ExportJobProcessor {
               job.data.authToken || '',
               job.data.serverUrl || '',
               onProgress,
-              job.data.trainingRequired
+              job.data.trainingRequired,
+              checkCancellation
             );
 
             await this.writeStreamToFile(stream, filePath, { checkCancellation, cancellationSignal });
@@ -309,7 +313,8 @@ export class ExportJobProcessor {
               job.data.authToken || '',
               job.data.serverUrl || '',
               onProgress,
-              job.data.trainingRequired
+              job.data.trainingRequired,
+              checkCancellation
             );
 
             await this.writeStreamToFile(stream, filePath, {

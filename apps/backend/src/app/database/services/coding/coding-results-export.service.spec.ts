@@ -246,7 +246,8 @@ describe('CodingResultsExportService', () => {
       true,
       undefined,
       true,
-      false
+      false,
+      undefined
     );
     expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(
       1,
@@ -256,7 +257,8 @@ describe('CodingResultsExportService', () => {
       false,
       undefined,
       true,
-      false
+      false,
+      undefined
     );
   });
 
@@ -274,7 +276,8 @@ describe('CodingResultsExportService', () => {
       '',
       '',
       true,
-      onProgress
+      onProgress,
+      undefined
     );
   });
 

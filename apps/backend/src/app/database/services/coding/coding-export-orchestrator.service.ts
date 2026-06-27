@@ -21,6 +21,7 @@ export interface VersionedCodingResultsExportOptions {
   includeGeoGebraResponseValues?: boolean;
   includeGeoGebraFiles?: boolean;
   onProgress?: (percentage: number) => Promise<void>;
+  checkCancellation?: () => Promise<void>;
 }
 
 export interface DetailedCodingResultsExportOptions {
@@ -66,7 +67,8 @@ export class CodingExportOrchestratorService {
       options.includeReplayUrl || false,
       options.onProgress,
       options.includeResponseValues !== false,
-      options.includeGeoGebraResponseValues === true
+      options.includeGeoGebraResponseValues === true,
+      options.checkCancellation
     );
   }
 
@@ -80,7 +82,8 @@ export class CodingExportOrchestratorService {
         options.authToken || '',
         options.serverUrl || '',
         options.includeReplayUrl || false,
-        options.onProgress
+        options.onProgress,
+        options.checkCancellation
       );
     }
 
@@ -92,7 +95,8 @@ export class CodingExportOrchestratorService {
       options.includeReplayUrl || false,
       options.onProgress,
       options.includeResponseValues !== false,
-      options.includeGeoGebraResponseValues === true
+      options.includeGeoGebraResponseValues === true,
+      options.checkCancellation
     );
   }
 

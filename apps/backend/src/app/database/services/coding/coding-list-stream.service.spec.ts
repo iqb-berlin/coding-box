@@ -175,6 +175,36 @@ describe('CodingListStreamService', () => {
       expect(mockFileCacheService.clearCaches).toHaveBeenCalled();
     });
 
+    it('should emit cancellation before reading versioned CSV batches', async () => {
+      const cancellationError = new Error('cancelled');
+      const checkCancellation = jest.fn(async () => {
+        await new Promise(resolve => {
+          setImmediate(resolve);
+        });
+        throw cancellationError;
+      });
+
+      const stream = await service.getCodingResultsByVersionCsvStream(
+        1,
+        'v1',
+        'token',
+        'http://server',
+        false,
+        undefined,
+        true,
+        false,
+        checkCancellation
+      );
+
+      await expect(new Promise((resolve, reject) => {
+        stream.on('end', resolve);
+        stream.on('error', reject);
+      })).rejects.toThrow('cancelled');
+
+      expect(mockResponseFilterService.countResponses).not.toHaveBeenCalled();
+      expect(mockResponseFilterService.getResponsesBatch).not.toHaveBeenCalled();
+    });
+
     it('should write headers for empty versioned CSV exports', async () => {
       mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
 

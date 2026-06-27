@@ -91,7 +91,8 @@ describe('ExportJobProcessor', () => {
         'auth-token',
         'http://app.example',
         expect.any(Function),
-        true
+        true,
+        expect.any(Function)
       );
       expect(result.fileName).toMatch(/\.xlsx$/);
       expect(cacheService.set).toHaveBeenCalledWith(
@@ -121,7 +122,8 @@ describe('ExportJobProcessor', () => {
         '',
         '',
         expect.any(Function),
-        false
+        false,
+        expect.any(Function)
       );
       expect(result.fileName).toMatch(/\.json$/);
     } finally {
@@ -152,7 +154,8 @@ describe('ExportJobProcessor', () => {
         includeReplayUrl: true,
         onProgress: expect.any(Function),
         includeResponseValues: true,
-        includeGeoGebraResponseValues: false
+        includeGeoGebraResponseValues: false,
+        checkCancellation: expect.any(Function)
       });
       expect(result.fileName).toMatch(/\.csv$/);
       expect(filePath).toBeDefined();
@@ -254,7 +257,8 @@ describe('ExportJobProcessor', () => {
         onProgress: expect.any(Function),
         includeResponseValues: true,
         includeGeoGebraResponseValues: false,
-        includeGeoGebraFiles: true
+        includeGeoGebraFiles: true,
+        checkCancellation: expect.any(Function)
       });
       expect(result.fileName).toMatch(/\.zip$/);
       expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('zip');
