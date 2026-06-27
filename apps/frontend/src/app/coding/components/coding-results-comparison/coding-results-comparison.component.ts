@@ -37,6 +37,7 @@ import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import type { ReviewCodeSelection } from '../../../replay/services/units-replay.service';
 import {
   hasInvalidRegexFilter,
   matchesTextFilter
@@ -137,6 +138,7 @@ interface ReplayDisplayOptions {
   showScore?: boolean;
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
+  reviewCodeSelections?: string;
 }
 
 interface ComparisonFilters {
@@ -320,6 +322,8 @@ export class CodingResultsComparisonComponent implements OnInit {
     [-3]: 'Spaßantwort',
     [-4]: 'Technisch'
   };
+
+  private readonly standaloneCodingIssueOptionIds = new Set([-3, -4]);
 
   tableFilters: ComparisonFilters = {
     unitName: '',
@@ -1302,7 +1306,7 @@ export class CodingResultsComparisonComponent implements OnInit {
           window.open(this.buildReplayUrl(
             result.replayUrl,
             responseId,
-            this.getReplayDisplayOptions()
+            this.getReplayDisplayOptions(comparison)
           ), '_blank');
         } else {
           this.snackBar.open('Replay-URL konnte nicht erzeugt werden.', this.translate.instant('common.close'), { duration: 3000 });
@@ -1314,21 +1318,77 @@ export class CodingResultsComparisonComponent implements OnInit {
     });
   }
 
-  private getReplayDisplayOptions(): ReplayDisplayOptions {
+  private getReplayDisplayOptions(comparison?: TrainingComparison | WithinTrainingComparison): ReplayDisplayOptions {
+    const reviewCodeSelections = comparison ? this.serializeReviewCodeSelections(comparison) : undefined;
     if (this.comparisonMode !== 'within-training') {
-      return {};
+      return { reviewCodeSelections };
     }
 
     const selectedTraining = this.getSelectedWithinTraining();
     if (!selectedTraining) {
-      return {};
+      return { reviewCodeSelections };
     }
 
     return {
       showScore: selectedTraining.show_score ?? false,
       allowComments: selectedTraining.allow_comments ?? true,
-      suppressGeneralInstructions: selectedTraining.suppress_general_instructions ?? false
+      suppressGeneralInstructions: selectedTraining.suppress_general_instructions ?? false,
+      reviewCodeSelections
     };
+  }
+
+  private serializeReviewCodeSelections(comparison: TrainingComparison | WithinTrainingComparison): string | undefined {
+    const selections = this.getReviewCodeSelections(comparison);
+    return selections.length > 0 ? JSON.stringify(selections) : undefined;
+  }
+
+  private getReviewCodeSelections(comparison: TrainingComparison | WithinTrainingComparison): ReviewCodeSelection[] {
+    const coderNamesByCode = new Map<number, string[]>();
+
+    comparison.coders.forEach(coder => {
+      const coderName = this.getCoderSourceLabel(coder);
+      this.getReviewSelectionCodes(coder).forEach(code => {
+        const coderNames = coderNamesByCode.get(code) || [];
+        if (!coderNames.includes(coderName)) {
+          coderNames.push(coderName);
+        }
+        coderNamesByCode.set(code, coderNames);
+      });
+    });
+
+    return Array.from(coderNamesByCode.entries())
+      .sort(([codeA], [codeB]) => codeA - codeB)
+      .map(([code, coderNames]) => ({ code, coderNames }));
+  }
+
+  private getReviewSelectionCodes(coder: ComparisonCoderResult): number[] {
+    if (
+      coder.codingIssueOption !== null &&
+      coder.codingIssueOption !== undefined &&
+      this.standaloneCodingIssueOptionIds.has(coder.codingIssueOption)
+    ) {
+      return [coder.codingIssueOption];
+    }
+
+    const codes = new Set<number>();
+    const code = this.parseReviewCode(coder.code);
+    if (code !== null) {
+      codes.add(code);
+    }
+    if (coder.codingIssueOption !== null && coder.codingIssueOption !== undefined) {
+      codes.add(coder.codingIssueOption);
+    }
+    return Array.from(codes);
+  }
+
+  private parseReviewCode(code: string | null): number | null {
+    const trimmedCode = code?.trim();
+    if (!trimmedCode) {
+      return null;
+    }
+
+    const parsedCode = Number(trimmedCode);
+    return Number.isFinite(parsedCode) ? parsedCode : null;
   }
 
   private buildReplayUrl(
@@ -1350,6 +1410,9 @@ export class CodingResultsComparisonComponent implements OnInit {
       }
       if (displayOptions.suppressGeneralInstructions !== undefined) {
         params.set('suppressGeneralInstructions', String(displayOptions.suppressGeneralInstructions));
+      }
+      if (displayOptions.reviewCodeSelections) {
+        params.set('reviewCodeSelections', displayOptions.reviewCodeSelections);
       }
       const serializedParams = params.toString();
       return serializedParams ? `${path}?${serializedParams}` : path;
