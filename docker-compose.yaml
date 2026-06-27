@@ -67,6 +67,7 @@ services:
       API_HOST: backend
       JWT_SECRET: ${JWT_SECRET}
       GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
+      DISABLED_JOB_QUEUE_PROCESSORS: data-export
       <<: [ *env-redis, *env-postgres, *env-keycloak ]
     healthcheck:
       test:
@@ -78,6 +79,23 @@ services:
       timeout: 3s
       retries: 12
       start_period: 30s
+    networks:
+      - application-network
+
+  backend-export-worker:
+    depends_on:
+      db:
+        condition: service_healthy
+      liquibase:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      API_HOST: backend-export-worker
+      JWT_SECRET: ${JWT_SECRET}
+      GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
+      JOB_QUEUE_PROCESSORS: data-export
+      <<: [ *env-redis, *env-postgres, *env-keycloak ]
     networks:
       - application-network
 
@@ -95,6 +113,7 @@ services:
 volumes:
   db_vol:
   backend_vol:
+  export_temp_vol:
   redis_data:
 
 networks:

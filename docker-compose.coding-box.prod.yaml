@@ -30,6 +30,22 @@ services:
       GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
     volumes:
       - "backend_vol:/usr/src/coding-box-backend/packages"
+      - "export_temp_vol:/usr/src/coding-box-backend/temp"
+    restart: always
+
+  backend-export-worker:
+    image: ${REGISTRY_PATH}iqbberlin/coding-box-backend:${TAG}
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PREFIX: ${REDIS_PREFIX:-coding-box}
+      GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
+    volumes:
+      - "backend_vol:/usr/src/coding-box-backend/packages"
+      - "export_temp_vol:/usr/src/coding-box-backend/temp"
     restart: always
 
   frontend:
