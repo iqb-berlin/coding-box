@@ -146,7 +146,11 @@ describe('TestFilesUploadResultDialogComponent', () => {
   it('allows checking coding status after successful coding scheme uploads without freshness warnings', async () => {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
-      imports: [TestFilesUploadResultDialogComponent, NoopAnimationsModule],
+      imports: [
+        TestFilesUploadResultDialogComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot()
+      ],
       providers: [
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: Router, useValue: router },
