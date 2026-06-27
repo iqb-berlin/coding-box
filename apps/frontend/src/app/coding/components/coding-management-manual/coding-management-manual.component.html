@@ -491,20 +491,39 @@
 
             <div
               class="analysis-stale-note"
-              *ngIf="isResponseAnalysisOutdated()"
+              *ngIf="
+                isResponseAnalysisOutdated() ||
+                hasResponseAnalysisRestScopeDifference()
+              "
             >
               <ng-container
                 *ngIf="responseAnalysis?.aggregationSummary as aggregation"
               >
                 <mat-icon>warning</mat-icon>
-                <span>
-                  Diese Antwort-Analyse basiert auf
-                  {{ aggregation.rawCases }} Rohantworten. Der aktuelle manuelle
-                  Bestand umfasst
-                  {{ getCurrentRawManualResponses() }} Rohantworten. Bitte neu
-                  berechnen; deshalb kann die hier gezeigte Einsparung von den
-                  Fortschrittswerten abweichen.
+                <span *ngIf="isResponseAnalysisOutdated(); else restScopeDifference">
+                  {{
+                    'coding-management-manual.response-analysis.outdated-note'
+                      | translate
+                        : {
+                            analysisRawCases: aggregation.rawCases,
+                            referenceRawCases:
+                              getResponseAnalysisReferenceRawCases()
+                          }
+                  }}
                 </span>
+                <ng-template #restScopeDifference>
+                  <span>
+                    {{
+                      'coding-management-manual.response-analysis.rest-scope-note'
+                        | translate
+                          : {
+                              analysisRawCases: aggregation.rawCases,
+                              currentRawManualResponses:
+                                getCurrentRawManualResponses()
+                            }
+                    }}
+                  </span>
+                </ng-template>
               </ng-container>
             </div>
           </div>
