@@ -78,7 +78,7 @@ export class CodingItemMatrixExportService {
 
     (async () => {
       try {
-        const context = await this.buildMatrixContext(workspaceId);
+        const context = await this.buildMatrixContext(workspaceId, checkCancellation);
         const headers = this.getHeaders(context.columns);
         const matrixStream = fastCsv.format({
           headers,
@@ -123,7 +123,7 @@ export class CodingItemMatrixExportService {
     progressCallback?: (percentage: number) => Promise<void>,
     checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
-    const context = await this.buildMatrixContext(workspaceId);
+    const context = await this.buildMatrixContext(workspaceId, checkCancellation);
     const chunks: Buffer[] = [];
     const stream = new PassThrough();
 
@@ -168,15 +168,20 @@ export class CodingItemMatrixExportService {
     return Buffer.concat(chunks);
   }
 
-  private async buildMatrixContext(workspaceId: number): Promise<{
-    rows: MatrixRow[];
-    columns: MatrixColumn[];
-  }> {
+  private async buildMatrixContext(
+    workspaceId: number,
+    checkCancellation?: () => Promise<void>
+  ): Promise<{
+      rows: MatrixRow[];
+      columns: MatrixColumn[];
+    }> {
     this.missingValueCache.clear();
+    await checkCancellation?.();
     const [rows, columns] = await Promise.all([
-      this.getRows(workspaceId),
-      this.getColumns(workspaceId)
+      this.getRows(workspaceId, checkCancellation),
+      this.getColumns(workspaceId, checkCancellation)
     ]);
+    await checkCancellation?.();
 
     this.logger.log(
       `Prepared item matrix context for workspace ${workspaceId}: ${rows.length} rows, ${columns.length} columns`
@@ -195,8 +200,13 @@ export class CodingItemMatrixExportService {
     ];
   }
 
-  private async getRows(workspaceId: number): Promise<MatrixRow[]> {
+  private async getRows(
+    workspaceId: number,
+    checkCancellation?: () => Promise<void>
+  ): Promise<MatrixRow[]> {
+    await checkCancellation?.();
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    await checkCancellation?.();
     const rows = await this.bookletRepository
       .createQueryBuilder('booklet')
       .innerJoin('booklet.person', 'person')
@@ -213,6 +223,7 @@ export class CodingItemMatrixExportService {
       .addOrderBy('person.code', 'ASC')
       .addOrderBy('bookletinfo.name', 'ASC')
       .getRawMany<RawMatrixRow>();
+    await checkCancellation?.();
 
     return rows
       .filter(row => !isExcludedByResolvedExclusions(exclusions, row.bookletName, ''))
@@ -225,41 +236,44 @@ export class CodingItemMatrixExportService {
       }));
   }
 
-  private async getColumns(workspaceId: number): Promise<MatrixColumn[]> {
+  private async getColumns(
+    workspaceId: number,
+    checkCancellation?: () => Promise<void>
+  ): Promise<MatrixColumn[]> {
+    await checkCancellation?.();
     const [unitVariableMap, unitAliases, exclusions] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
-      this.getUnitAliases(workspaceId),
+      this.getUnitAliases(workspaceId, checkCancellation),
       this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId)
     ]);
+    await checkCancellation?.();
 
     const preferredHeaders = new Map<string, number>();
     const columns: MatrixColumn[] = [];
 
-    Array.from(unitVariableMap.entries())
-      .sort(([unitA], [unitB]) => unitA.localeCompare(unitB))
-      .forEach(([unitName, variables]) => {
-        if (isExcludedByResolvedExclusions(exclusions, '', unitName)) {
-          return;
-        }
+    for (const [unitName, variables] of Array.from(unitVariableMap.entries())
+      .sort(([unitA], [unitB]) => unitA.localeCompare(unitB))) {
+      await checkCancellation?.();
+      if (isExcludedByResolvedExclusions(exclusions, '', unitName)) {
+        continue;
+      }
 
-        Array.from(variables)
-          .sort((a, b) => a.localeCompare(b))
-          .forEach(variableId => {
-            const alias = unitAliases.get(normalizeExclusionUnitId(unitName));
-            const preferredHeader = `${alias || unitName}__${variableId}`;
-            const header = this.createUniqueHeader(
-              preferredHeader,
-              `${unitName}__${variableId}`,
-              preferredHeaders
-            );
-            columns.push({
-              key: `${normalizeExclusionUnitId(unitName)}\u001F${variableId}`,
-              header,
-              unitName,
-              variableId
-            });
-          });
-      });
+      for (const variableId of Array.from(variables).sort((a, b) => a.localeCompare(b))) {
+        const alias = unitAliases.get(normalizeExclusionUnitId(unitName));
+        const preferredHeader = `${alias || unitName}__${variableId}`;
+        const header = this.createUniqueHeader(
+          preferredHeader,
+          `${unitName}__${variableId}`,
+          preferredHeaders
+        );
+        columns.push({
+          key: `${normalizeExclusionUnitId(unitName)}\u001F${variableId}`,
+          header,
+          unitName,
+          variableId
+        });
+      }
+    }
 
     return columns;
   }
@@ -284,7 +298,11 @@ export class CodingItemMatrixExportService {
     return `${fallbackHeader}__${nextCount}`;
   }
 
-  private async getUnitAliases(workspaceId: number): Promise<Map<string, string>> {
+  private async getUnitAliases(
+    workspaceId: number,
+    checkCancellation?: () => Promise<void>
+  ): Promise<Map<string, string>> {
+    await checkCancellation?.();
     const rows = await this.unitRepository
       .createQueryBuilder('unit')
       .innerJoin('unit.booklet', 'booklet')
@@ -296,18 +314,19 @@ export class CodingItemMatrixExportService {
       .andWhere("unit.alias != ''")
       .distinct(true)
       .getRawMany<{ unitName: string; unitAlias: string }>();
+    await checkCancellation?.();
 
     const aliasesByUnit = new Map<string, Set<string>>();
-    rows.forEach(row => {
+    for (const row of rows) {
       const normalizedUnit = normalizeExclusionUnitId(row.unitName);
       const alias = String(row.unitAlias || '').trim();
       if (!normalizedUnit || !alias) {
-        return;
+        continue;
       }
       const aliases = aliasesByUnit.get(normalizedUnit) || new Set<string>();
       aliases.add(alias);
       aliasesByUnit.set(normalizedUnit, aliases);
-    });
+    }
 
     const stableAliases = new Map<string, string>();
     aliasesByUnit.forEach((aliases, unitName) => {
@@ -337,10 +356,13 @@ export class CodingItemMatrixExportService {
       const responseValues = await this.getResponseValuesForRows(
         workspaceId,
         batchRows,
-        version
+        version,
+        checkCancellation
       );
+      await checkCancellation?.();
 
       for (const row of batchRows) {
+        await checkCancellation?.();
         const exportRow: Record<string, string | number> = {
           person_login: row.personLogin,
           person_code: row.personCode,
@@ -373,14 +395,18 @@ export class CodingItemMatrixExportService {
   private async getResponseValuesForRows(
     workspaceId: number,
     rows: MatrixRow[],
-    version: ItemMatrixVersion
+    version: ItemMatrixVersion,
+    checkCancellation?: () => Promise<void>
   ): Promise<Map<number, Map<string, ResponseValue>>> {
     if (rows.length === 0) {
       return new Map();
     }
 
+    await checkCancellation?.();
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    await checkCancellation?.();
     const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    await checkCancellation?.();
     const validPairs = new Set(
       Array.from(unitVariableMap.entries()).flatMap(([unitName, variables]) => (
         Array.from(variables).map(variableId => `${normalizeExclusionUnitId(unitName)}\u001F${variableId}`)
@@ -395,9 +421,14 @@ export class CodingItemMatrixExportService {
       .where('booklet.id IN (:...bookletIds)', { bookletIds })
       .orderBy('response.id', 'ASC')
       .getMany();
+    await checkCancellation?.();
     const result = new Map<number, Map<string, ResponseValue>>();
 
-    for (const response of responses) {
+    for (let index = 0; index < responses.length; index += 1) {
+      if (index % 500 === 0) {
+        await checkCancellation?.();
+      }
+      const response = responses[index];
       const unitName = response.unit?.name || '';
       const bookletName = response.unit?.booklet?.bookletinfo?.name || '';
       if (isExcludedByResolvedExclusions(exclusions, bookletName, unitName)) {
