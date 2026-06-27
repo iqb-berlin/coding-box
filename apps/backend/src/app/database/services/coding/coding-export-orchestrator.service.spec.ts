@@ -19,12 +19,14 @@ describe('CodingExportOrchestratorService', () => {
     const codingResultsExportService = {
       exportCodingResultsByVersionAsCsv: jest.fn(),
       exportCodingResultsByVersionAsExcel: jest.fn(),
+      exportCodingResultsByVersionAsExcelToFile: jest.fn(),
       exportCodingResultsByVersionAsGeoGebraZip: jest.fn(),
       exportCodingResultsDetailed: jest.fn()
     };
     const codingItemMatrixExportService = {
       exportItemMatrixAsCsvStream: jest.fn(),
-      exportItemMatrixAsExcel: jest.fn()
+      exportItemMatrixAsExcel: jest.fn(),
+      writeItemMatrixExcelToFile: jest.fn().mockResolvedValue(undefined)
     };
 
     const service = new CodingExportOrchestratorService(
@@ -123,6 +125,37 @@ describe('CodingExportOrchestratorService', () => {
     expect(codingResultsExportService.exportCodingResultsByVersionAsExcel).not.toHaveBeenCalled();
   });
 
+  it('routes versioned Excel file exports to the specialized results export service', async () => {
+    const { service, codingResultsExportService } = createService();
+    const onProgress = jest.fn();
+    const checkCancellation = jest.fn();
+
+    await expect(service.exportResultsByVersionAsExcelToFile('/tmp/export.xlsx', {
+      workspaceId: 7,
+      version: 'v3',
+      authToken: 'token',
+      serverUrl: 'http://app.example',
+      includeReplayUrl: true,
+      includeResponseValues: false,
+      includeGeoGebraResponseValues: true,
+      onProgress,
+      checkCancellation
+    })).resolves.toBeUndefined();
+
+    expect(codingResultsExportService.exportCodingResultsByVersionAsExcelToFile).toHaveBeenCalledWith(
+      '/tmp/export.xlsx',
+      7,
+      'v3',
+      'token',
+      'http://app.example',
+      true,
+      onProgress,
+      false,
+      true,
+      checkCancellation
+    );
+  });
+
   it('routes item matrix CSV exports to the item matrix export service', async () => {
     const { service, codingItemMatrixExportService } = createService();
     const csvStream = Readable.from(['csv']);
@@ -164,6 +197,29 @@ describe('CodingExportOrchestratorService', () => {
       'v2',
       undefined,
       undefined
+    );
+  });
+
+  it('routes item matrix Excel file exports to the item matrix export service', async () => {
+    const { service, codingItemMatrixExportService } = createService();
+    const onProgress = jest.fn();
+    const checkCancellation = jest.fn();
+
+    await expect(service.exportItemMatrixAsExcelToFile('/tmp/matrix.xlsx', {
+      workspaceId: 7,
+      matrixValue: 'score',
+      version: 'v2',
+      onProgress,
+      checkCancellation
+    })).resolves.toBeUndefined();
+
+    expect(codingItemMatrixExportService.writeItemMatrixExcelToFile).toHaveBeenCalledWith(
+      '/tmp/matrix.xlsx',
+      7,
+      'score',
+      'v2',
+      onProgress,
+      checkCancellation
     );
   });
 

@@ -541,6 +541,26 @@ export class CodingExportService {
     );
   }
 
+  async exportCodingListForJobAsExcelToFile(
+    filePath: string,
+    workspaceId: number,
+    authToken: string,
+    serverUrl: string,
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    return this.codingListService.writeCodingListExcelToFile(
+      filePath,
+      workspaceId,
+      authToken || '',
+      serverUrl || '',
+      progressCallback,
+      trainingRequired,
+      checkCancellation
+    );
+  }
+
   async exportCodingListForJobAsJson(
     workspaceId: number,
     authToken: string,

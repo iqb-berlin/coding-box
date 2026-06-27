@@ -246,7 +246,7 @@ export class ExportJobProcessor {
           };
 
           if (job.data.format === 'excel') {
-            buffer = await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
+            const excelOptions = {
               workspaceId: job.data.workspaceId,
               version,
               authToken: job.data.authToken || '',
@@ -257,7 +257,15 @@ export class ExportJobProcessor {
               includeGeoGebraResponseValues: job.data.includeGeoGebraResponseValues === true,
               includeGeoGebraFiles: job.data.includeGeoGebraFiles === true,
               checkCancellation
-            });
+            };
+            if (job.data.includeGeoGebraFiles) {
+              buffer = await this.codingExportOrchestratorService.exportResultsByVersionAsExcel(excelOptions);
+            } else {
+              await this.codingExportOrchestratorService.exportResultsByVersionAsExcelToFile(
+                filePath,
+                excelOptions
+              );
+            }
           } else {
             // CSV Stream
             const stream = await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
@@ -289,7 +297,8 @@ export class ExportJobProcessor {
           };
 
           if (job.data.format === 'excel') {
-            buffer = await this.codingExportService.exportCodingListForJobAsExcel(
+            await this.codingExportService.exportCodingListForJobAsExcelToFile(
+              filePath,
               job.data.workspaceId,
               job.data.authToken || '',
               job.data.serverUrl || '',
@@ -336,13 +345,16 @@ export class ExportJobProcessor {
           };
 
           if (job.data.format === 'excel') {
-            buffer = await this.codingExportOrchestratorService.exportItemMatrixAsExcel({
-              workspaceId: job.data.workspaceId,
-              matrixValue: job.data.matrixValue || 'score',
-              version: job.data.version || 'v2',
-              onProgress,
-              checkCancellation
-            });
+            await this.codingExportOrchestratorService.exportItemMatrixAsExcelToFile(
+              filePath,
+              {
+                workspaceId: job.data.workspaceId,
+                matrixValue: job.data.matrixValue || 'score',
+                version: job.data.version || 'v2',
+                onProgress,
+                checkCancellation
+              }
+            );
           } else {
             const stream = await this.codingExportOrchestratorService.exportItemMatrixAsCsv({
               workspaceId: job.data.workspaceId,

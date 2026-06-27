@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
+import * as fs from 'fs';
 import { PassThrough } from 'stream';
 import { Repository } from 'typeorm';
 import { Booklet } from '../../entities/booklet.entity';
@@ -166,6 +167,57 @@ export class CodingItemMatrixExportService {
     await streamComplete;
 
     return Buffer.concat(chunks);
+  }
+
+  async writeItemMatrixExcelToFile(
+    filePath: string,
+    workspaceId: number,
+    value: ItemMatrixValue,
+    version: ItemMatrixVersion = 'v2',
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    const context = await this.buildMatrixContext(workspaceId, checkCancellation);
+    const outputStream = fs.createWriteStream(filePath);
+    const streamComplete = new Promise<void>((resolve, reject) => {
+      outputStream.on('finish', resolve);
+      outputStream.on('error', reject);
+    });
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: outputStream,
+      useStyles: false,
+      useSharedStrings: false
+    });
+    const worksheet = workbook.addWorksheet('Itemmatrix');
+    worksheet.columns = this.getHeaders(context.columns).map(header => ({
+      header,
+      key: header,
+      width: header.length > 24 ? 28 : 18
+    }));
+
+    try {
+      await this.writeRows(
+        workspaceId,
+        context.rows,
+        context.columns,
+        value,
+        version,
+        async row => {
+          worksheet.addRow(row).commit();
+        },
+        progressCallback,
+        checkCancellation
+      );
+
+      await checkCancellation?.();
+      await worksheet.commit();
+      await workbook.commit();
+      await streamComplete;
+      await checkCancellation?.();
+    } catch (error) {
+      outputStream.destroy(error);
+      throw error;
+    }
   }
 
   private async buildMatrixContext(

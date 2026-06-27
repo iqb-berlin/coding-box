@@ -30,15 +30,18 @@ describe('ExportJobProcessor', () => {
   const createProcessor = () => {
     const codingExportService = {
       exportCodingListForJobAsExcel: jest.fn(),
+      exportCodingListForJobAsExcelToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'xlsx')),
       exportCodingListForJobAsJson: jest.fn(),
       exportCodingResultsByVariableCompactAsCsvStream: jest.fn()
     };
     const codingExportOrchestratorService = {
       exportResultsByVersionAsCsv: jest.fn(),
       exportResultsByVersionAsExcel: jest.fn(),
+      exportResultsByVersionAsExcelToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'xlsx')),
       exportDetailed: jest.fn(),
       exportItemMatrixAsCsv: jest.fn(),
-      exportItemMatrixAsExcel: jest.fn()
+      exportItemMatrixAsExcel: jest.fn(),
+      exportItemMatrixAsExcelToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'xlsx'))
     };
     const cacheService = {
       set: jest.fn().mockResolvedValue(undefined)
@@ -74,7 +77,6 @@ describe('ExportJobProcessor', () => {
 
   it('passes trainingRequired to coding-list Excel exports', async () => {
     const { processor, codingExportService, cacheService } = createProcessor();
-    codingExportService.exportCodingListForJobAsExcel.mockResolvedValue(Buffer.from('xlsx'));
     let filePath: string | undefined;
 
     try {
@@ -86,7 +88,8 @@ describe('ExportJobProcessor', () => {
       }));
       filePath = result.filePath;
 
-      expect(codingExportService.exportCodingListForJobAsExcel).toHaveBeenCalledWith(
+      expect(codingExportService.exportCodingListForJobAsExcelToFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\.xlsx$/),
         7,
         'auth-token',
         'http://app.example',
@@ -94,12 +97,53 @@ describe('ExportJobProcessor', () => {
         true,
         expect.any(Function)
       );
+      expect(codingExportService.exportCodingListForJobAsExcel).not.toHaveBeenCalled();
       expect(result.fileName).toMatch(/\.xlsx$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('xlsx');
       expect(cacheService.set).toHaveBeenCalledWith(
         'export-result:job-1',
         expect.objectContaining({ exportType: 'coding-list' }),
         3600
       );
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('writes final result Excel exports directly to the target file', async () => {
+    const { processor, codingExportOrchestratorService } = createProcessor();
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'results-by-version',
+        version: 'v3',
+        format: 'excel',
+        includeReplayUrl: true,
+        includeResponseValues: true,
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example'
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportOrchestratorService.exportResultsByVersionAsExcelToFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\.xlsx$/),
+        {
+          workspaceId: 7,
+          version: 'v3',
+          authToken: 'auth-token',
+          serverUrl: 'http://app.example',
+          includeReplayUrl: true,
+          onProgress: expect.any(Function),
+          includeResponseValues: true,
+          includeGeoGebraResponseValues: false,
+          includeGeoGebraFiles: false,
+          checkCancellation: expect.any(Function)
+        }
+      );
+      expect(codingExportOrchestratorService.exportResultsByVersionAsExcel).not.toHaveBeenCalled();
+      expect(result.fileName).toMatch(/\.xlsx$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('xlsx');
     } finally {
       cleanup(filePath);
     }
@@ -297,7 +341,6 @@ describe('ExportJobProcessor', () => {
 
   it('routes item matrix Excel exports through the orchestrator', async () => {
     const { processor, codingExportOrchestratorService } = createProcessor();
-    codingExportOrchestratorService.exportItemMatrixAsExcel.mockResolvedValue(Buffer.from('xlsx'));
     let filePath: string | undefined;
 
     try {
@@ -309,13 +352,17 @@ describe('ExportJobProcessor', () => {
       }));
       filePath = result.filePath;
 
-      expect(codingExportOrchestratorService.exportItemMatrixAsExcel).toHaveBeenCalledWith({
-        workspaceId: 7,
-        matrixValue: 'code',
-        version: 'v3',
-        onProgress: expect.any(Function),
-        checkCancellation: expect.any(Function)
-      });
+      expect(codingExportOrchestratorService.exportItemMatrixAsExcelToFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\.xlsx$/),
+        {
+          workspaceId: 7,
+          matrixValue: 'code',
+          version: 'v3',
+          onProgress: expect.any(Function),
+          checkCancellation: expect.any(Function)
+        }
+      );
+      expect(codingExportOrchestratorService.exportItemMatrixAsExcel).not.toHaveBeenCalled();
       expect(result.fileName).toMatch(/\.xlsx$/);
       expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('xlsx');
     } finally {
@@ -335,6 +382,7 @@ describe('ExportJobProcessor', () => {
 
     expect(codingExportOrchestratorService.exportItemMatrixAsCsv).not.toHaveBeenCalled();
     expect(codingExportOrchestratorService.exportItemMatrixAsExcel).not.toHaveBeenCalled();
+    expect(codingExportOrchestratorService.exportItemMatrixAsExcelToFile).not.toHaveBeenCalled();
   });
 
   it('rejects GeoGebra package exports without response values', async () => {
@@ -348,6 +396,7 @@ describe('ExportJobProcessor', () => {
     }))).rejects.toThrow('GeoGebra file packages require response values');
 
     expect(codingExportOrchestratorService.exportResultsByVersionAsExcel).not.toHaveBeenCalled();
+    expect(codingExportOrchestratorService.exportResultsByVersionAsExcelToFile).not.toHaveBeenCalled();
   });
 
   it('routes detailed export jobs through the orchestrator', async () => {
@@ -450,5 +499,6 @@ describe('ExportJobProcessor', () => {
 
     expect(codingExportOrchestratorService.exportResultsByVersionAsCsv).not.toHaveBeenCalled();
     expect(codingExportOrchestratorService.exportResultsByVersionAsExcel).not.toHaveBeenCalled();
+    expect(codingExportOrchestratorService.exportResultsByVersionAsExcelToFile).not.toHaveBeenCalled();
   });
 });

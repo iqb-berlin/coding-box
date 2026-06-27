@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import * as ExcelJS from 'exceljs';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import AdmZip = require('adm-zip');
 import { CodingListStreamService } from './coding-list-stream.service';
 import { CodingResponseFilterService } from './coding-response-filter.service';
@@ -461,6 +464,51 @@ describe('CodingListStreamService', () => {
       );
 
       expect(result).toBeInstanceOf(Buffer);
+    });
+
+    it('should write versioned Excel exports directly to a file', async () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-export-'));
+      const filePath = path.join(tempDir, 'results.xlsx');
+      const response = createMockResponse(1);
+      mockResponseFilterService.countResponses.mockResolvedValueOnce(1);
+      mockResponseFilterService.getResponsesBatch
+        .mockResolvedValueOnce([response])
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'status_v1'
+      ]);
+      mockItemBuilderService.buildCodingItemWithVersions.mockResolvedValue({
+        unit_key: 'unit1',
+        unit_alias: 'Unit 1',
+        person_login: 'user1',
+        person_code: 'code1',
+        person_group: 'group1',
+        booklet_name: 'booklet1',
+        variable_id: 'var1',
+        variable_page: '1',
+        variable_anchor: 'var1',
+        value: 'answer',
+        status_v1: 'VALUE_CHANGED'
+      });
+
+      try {
+        await service.writeCodingResultsByVersionExcelToFile(
+          filePath,
+          1,
+          'v1',
+          'token',
+          'http://server'
+        );
+
+        expect(fs.statSync(filePath).size).toBeGreaterThan(0);
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(filePath);
+        const worksheet = workbook.getWorksheet('Coding Results');
+        expect(worksheet?.getRow(2).getCell(1).value).toBe('unit1');
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
     });
 
     it('should pass response value option to versioned Excel headers', async () => {
