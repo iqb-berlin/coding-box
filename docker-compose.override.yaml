@@ -46,10 +46,29 @@ services:
       - "./apps/backend/src:/usr/src/coding-box-base/apps/backend/src"
       - "./api-dto:/usr/src/coding-box-base/api-dto"
       - "backend_vol:/usr/src/coding-box/packages"
+      - "export_temp_vol:/usr/src/coding-box-base/temp"
     command:
       - "serve"
       - "backend"
       - "--host=backend"
+
+  backend-export-worker:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+      target: dev
+      args:
+        REGISTRY_PATH: ${REGISTRY_PATH}
+        PROJECT: backend
+    volumes:
+      - "./apps/backend/src:/usr/src/coding-box-base/apps/backend/src"
+      - "./api-dto:/usr/src/coding-box-base/api-dto"
+      - "backend_vol:/usr/src/coding-box/packages"
+      - "export_temp_vol:/usr/src/coding-box-base/temp"
+    command:
+      - "serve"
+      - "backend"
+      - "--host=backend-export-worker"
 
   frontend:
     labels:

@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module, Type, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -21,6 +21,56 @@ import { WorkspaceModule } from '../workspace/workspace.module';
 import { CacheModule } from '../cache/cache.module';
 import { ResponseEntity } from '../database/entities/response.entity';
 import { ValidationTask } from '../database/entities/validation-task.entity';
+
+const processorProviders = {
+  'test-person-coding': TestPersonCodingProcessor,
+  'coding-statistics': CodingStatisticsProcessor,
+  'data-export': ExportJobProcessor,
+  'flat-response-filter-options': FlatResponseFilterOptionsProcessor,
+  'test-results-upload': UploadResultsProcessor,
+  'codebook-generation': CodebookGenerationProcessor,
+  'reset-coding-version': ResetCodingVersionProcessor,
+  'validation-task': ValidationTaskProcessor,
+  'response-analysis': CodingAnalysisProcessor,
+  'variable-analysis': VariableAnalysisProcessor,
+  'external-coding-import': ExternalCodingImportProcessor
+} satisfies Record<string, Type<unknown>>;
+
+type JobQueueProcessorName = keyof typeof processorProviders;
+
+function parseProcessorList(value?: string): Set<string> | null {
+  if (!value) {
+    return null;
+  }
+
+  const names = value
+    .split(',')
+    .map(name => name.trim())
+    .filter(Boolean);
+
+  return names.length ? new Set(names) : null;
+}
+
+export function getEnabledJobQueueProcessors(
+  enabledValue = process.env.JOB_QUEUE_PROCESSORS,
+  disabledValue = process.env.DISABLED_JOB_QUEUE_PROCESSORS
+): Type<unknown>[] {
+  const enabled = parseProcessorList(enabledValue);
+  const disabled = parseProcessorList(disabledValue) || new Set<string>();
+  const allProcessorNames = Object.keys(processorProviders) as JobQueueProcessorName[];
+
+  if (enabled?.has('none')) {
+    return [];
+  }
+
+  const selectedNames = !enabled || enabled.has('all') ?
+    allProcessorNames :
+    allProcessorNames.filter(name => enabled.has(name));
+
+  return selectedNames
+    .filter(name => !disabled.has(name))
+    .map(name => processorProviders[name]);
+}
 
 @Module({
   imports: [
@@ -78,17 +128,7 @@ import { ValidationTask } from '../database/entities/validation-task.entity';
   ],
   providers: [
     JobQueueService,
-    TestPersonCodingProcessor,
-    CodingStatisticsProcessor,
-    ExportJobProcessor,
-    FlatResponseFilterOptionsProcessor,
-    UploadResultsProcessor,
-    CodebookGenerationProcessor,
-    ResetCodingVersionProcessor,
-    ValidationTaskProcessor,
-    CodingAnalysisProcessor,
-    VariableAnalysisProcessor,
-    ExternalCodingImportProcessor
+    ...getEnabledJobQueueProcessors()
   ],
   exports: [JobQueueService]
 })
