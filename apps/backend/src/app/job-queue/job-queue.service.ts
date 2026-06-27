@@ -226,6 +226,8 @@ export interface RedisConnectionStatus {
 export class JobQueueService {
   private readonly logger = new Logger(JobQueueService.name);
 
+  private readonly exportCancellationControllers = new Map<string, AbortController>();
+
   private readonly DEPENDENCY_RULES: ReadonlyArray<{
     target: string;
     blockedBy: string;
@@ -385,6 +387,9 @@ export class JobQueueService {
       if (state === 'active') {
         if (queueName === 'data-export' || queueName === 'database-export') {
           await job.update({ ...job.data, isCancelled: true });
+          if (queueName === 'data-export') {
+            this.abortExportJob(job.id.toString());
+          }
           await job.discard();
           return true;
         }
@@ -849,6 +854,20 @@ export class JobQueueService {
     return jobs.filter(job => job.data.workspaceId === workspaceId);
   }
 
+  createExportJobCancellationSignal(jobId: string): AbortSignal {
+    const controller = new AbortController();
+    this.exportCancellationControllers.set(jobId, controller);
+    return controller.signal;
+  }
+
+  clearExportJobCancellationSignal(jobId: string): void {
+    this.exportCancellationControllers.delete(jobId);
+  }
+
+  private abortExportJob(jobId: string): void {
+    this.exportCancellationControllers.get(jobId)?.abort();
+  }
+
   async cancelExportJob(jobId: string): Promise<boolean> {
     const job = await this.dataExportQueue.getJob(jobId);
     if (!job) {
@@ -871,6 +890,8 @@ export class JobQueueService {
       // For active jobs, we can't remove them - the processor will check the isCancelled flag
       // and handle the cancellation. We use discard() to prevent retries.
       if (state === 'active') {
+        await job.update({ ...job.data, isCancelled: true });
+        this.abortExportJob(jobId);
         await job.discard();
         this.logger.log(
           `Export job ${jobId} is active, marked for cancellation (will stop at next checkpoint)`
@@ -914,6 +935,7 @@ export class JobQueueService {
         isCancelled: true
       };
       await job.update(updatedData);
+      this.abortExportJob(jobId);
       this.logger.log(`Export job ${jobId} has been marked as cancelled`);
       return true;
     } catch (error) {

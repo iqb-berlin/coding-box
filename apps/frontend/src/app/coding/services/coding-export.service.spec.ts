@@ -179,6 +179,17 @@ describe('CodingExportService', () => {
     req.flush({ jobId: 'job-1', message: 'started' });
   });
 
+  it('should cancel export jobs', () => {
+    service.cancelExportJob(1, 'job-1').subscribe(res => {
+      expect(res.success).toBe(true);
+    });
+
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/export/job/job-1/cancel`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({});
+    req.flush({ success: true, message: 'cancelled' });
+  });
+
   it('should get coding book', () => {
     const mockContent = {
       unitName: true, variableId: true, variableLabel: true, variableDescription: true, value: true, valueLabel: true, valueDescription: true

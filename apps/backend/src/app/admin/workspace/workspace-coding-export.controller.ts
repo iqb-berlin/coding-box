@@ -1297,6 +1297,12 @@ export class WorkspaceCodingExportController {
       const state = await job.getState();
       const progress = await job.progress();
       const failedReason = job.failedReason;
+      const cancellationRequested = job.data.isCancelled === true;
+      const failedBecauseCancelled = typeof failedReason === 'string' &&
+        (
+          failedReason.includes('ExportJobCancelledException') ||
+          /^Export job .* was cancelled$/.test(failedReason)
+        );
 
       let status: string;
       switch (state) {
@@ -1304,10 +1310,10 @@ export class WorkspaceCodingExportController {
           status = 'completed';
           break;
         case 'failed':
-          status = 'failed';
+          status = cancellationRequested || failedBecauseCancelled ? 'cancelled' : 'failed';
           break;
         case 'active':
-          status = 'processing';
+          status = cancellationRequested ? 'cancelled' : 'processing';
           break;
         case 'waiting':
         case 'delayed':

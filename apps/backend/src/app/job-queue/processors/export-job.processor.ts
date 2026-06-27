@@ -5,6 +5,7 @@ import {
 import { Job } from 'bull';
 import * as path from 'path';
 import * as fs from 'fs';
+import { pipeline } from 'stream/promises';
 import {
   ExportJobData,
   ExportJobResult,
@@ -116,25 +117,49 @@ export class ExportJobProcessor {
     }
   }
 
-  private writeStreamToFile(
+  private async writeStreamToFile(
     stream: NodeJS.ReadableStream,
     filePath: string,
-    options: { prependUtf8Bom?: boolean } = {}
+    options: {
+      prependUtf8Bom?: boolean;
+      checkCancellation?: () => Promise<void>;
+      cancellationSignal?: AbortSignal;
+    } = {}
   ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const writeStream = fs.createWriteStream(filePath);
-      writeStream.on('finish', resolve);
-      writeStream.on('error', reject);
-      stream.on('error', reject);
+    const writeStream = fs.createWriteStream(filePath);
+    let cancellationTimer: ReturnType<typeof setInterval> | undefined;
 
+    try {
       if (options.prependUtf8Bom) {
         writeStream.write('\uFEFF');
       }
-      stream.pipe(writeStream);
-    });
+
+      if (options.checkCancellation) {
+        cancellationTimer = setInterval(() => {
+          options.checkCancellation?.().catch(error => {
+            (stream as NodeJS.ReadableStream & { destroy?: (error?: Error) => void }).destroy?.(error);
+            writeStream.destroy(error);
+          });
+        }, 1000);
+      }
+
+      await pipeline(stream, writeStream, {
+        signal: options.cancellationSignal
+      });
+    } catch (error) {
+      if (options.cancellationSignal?.aborted && options.checkCancellation) {
+        await options.checkCancellation();
+      }
+
+      throw error;
+    } finally {
+      if (cancellationTimer) {
+        clearInterval(cancellationTimer);
+      }
+    }
   }
 
-  @Process()
+  @Process({ concurrency: 1 })
   async process(job: Job<ExportJobData>): Promise<ExportJobResult> {
     this.logger.log(
       `Processing export job ${job.id} for workspace ${job.data.workspaceId}, type: ${job.data.exportType}`
@@ -163,6 +188,8 @@ export class ExportJobProcessor {
 
     this.validateExportJobData(job);
 
+    const jobId = job.id.toString();
+    const cancellationSignal = this.jobQueueService.createExportJobCancellationSignal(jobId);
     let filePath: string | undefined;
 
     try {
@@ -242,7 +269,9 @@ export class ExportJobProcessor {
             });
 
             await this.writeStreamToFile(stream, filePath, {
-              prependUtf8Bom: true
+              prependUtf8Bom: true,
+              checkCancellation,
+              cancellationSignal
             });
           }
           break;
@@ -272,7 +301,7 @@ export class ExportJobProcessor {
               job.data.trainingRequired
             );
 
-            await this.writeStreamToFile(stream, filePath);
+            await this.writeStreamToFile(stream, filePath, { checkCancellation, cancellationSignal });
           } else {
             // CSV
             const stream = await this.codingExportService.exportCodingListForJobAsCsv(
@@ -284,7 +313,9 @@ export class ExportJobProcessor {
             );
 
             await this.writeStreamToFile(stream, filePath, {
-              prependUtf8Bom: true
+              prependUtf8Bom: true,
+              checkCancellation,
+              cancellationSignal
             });
           }
           break;
@@ -315,7 +346,9 @@ export class ExportJobProcessor {
             });
 
             await this.writeStreamToFile(stream, filePath, {
-              prependUtf8Bom: true
+              prependUtf8Bom: true,
+              checkCancellation,
+              cancellationSignal
             });
           }
           break;
@@ -402,7 +435,11 @@ export class ExportJobProcessor {
               job.data.serverUrl || ''
             ),
             filePath,
-            { prependUtf8Bom: true }
+            {
+              prependUtf8Bom: true,
+              checkCancellation,
+              cancellationSignal
+            }
           );
           break;
 
@@ -517,6 +554,8 @@ export class ExportJobProcessor {
         error.stack
       );
       throw error;
+    } finally {
+      this.jobQueueService.clearExportJobCancellationSignal(jobId);
     }
   }
 }

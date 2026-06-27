@@ -278,4 +278,14 @@ export class CodingExportService {
       }
     );
   }
+
+  cancelExportJob(
+    workspaceId: number,
+    jobId: string
+  ): Observable<{ success: boolean; message: string }> {
+    return this.http.post<{ success: boolean; message: string }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/cancel`,
+      {}
+    );
+  }
 }

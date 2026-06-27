@@ -1,6 +1,6 @@
 import { Job } from 'bull';
 import * as fs from 'fs';
-import { Readable } from 'stream';
+import { PassThrough, Readable } from 'stream';
 import { CodingExportOrchestratorService, CodingExportService } from '../../database/services/coding';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import { CacheService } from '../../cache/cache.service';
@@ -44,7 +44,9 @@ describe('ExportJobProcessor', () => {
       set: jest.fn().mockResolvedValue(undefined)
     };
     const jobQueueService = {
-      isExportJobCancelled: jest.fn().mockResolvedValue(false)
+      isExportJobCancelled: jest.fn().mockResolvedValue(false),
+      createExportJobCancellationSignal: jest.fn(() => new AbortController().signal),
+      clearExportJobCancellationSignal: jest.fn()
     };
 
     const processor = new ExportJobProcessor(
@@ -59,7 +61,8 @@ describe('ExportJobProcessor', () => {
       processor,
       codingExportService,
       codingExportOrchestratorService,
-      cacheService
+      cacheService,
+      jobQueueService
     };
   };
 
@@ -157,6 +160,71 @@ describe('ExportJobProcessor', () => {
     } finally {
       cleanup(filePath);
     }
+  });
+
+  it('aborts stream writing when an export job is cancelled while streaming', async () => {
+    jest.useFakeTimers();
+    const {
+      processor,
+      codingExportOrchestratorService,
+      cacheService,
+      jobQueueService
+    } = createProcessor();
+    const stream = new PassThrough();
+    codingExportOrchestratorService.exportResultsByVersionAsCsv.mockResolvedValue(stream);
+    jobQueueService.isExportJobCancelled
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    const processPromise = expect(processor.process(createJob({
+      exportType: 'results-by-version',
+      version: 'v2',
+      format: 'csv'
+    }))).rejects.toThrow('Export job job-1 was cancelled');
+
+    try {
+      await jest.advanceTimersByTimeAsync(1000);
+
+      await processPromise;
+      expect(codingExportOrchestratorService.exportResultsByVersionAsCsv).toHaveBeenCalled();
+      expect(cacheService.set).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('aborts stream writing immediately when the local cancellation signal fires', async () => {
+    const {
+      processor,
+      codingExportOrchestratorService,
+      cacheService,
+      jobQueueService
+    } = createProcessor();
+    const controller = new AbortController();
+    const stream = new PassThrough();
+    codingExportOrchestratorService.exportResultsByVersionAsCsv.mockResolvedValue(stream);
+    jobQueueService.createExportJobCancellationSignal.mockReturnValue(controller.signal);
+    jobQueueService.isExportJobCancelled
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    const processPromise = expect(processor.process(createJob({
+      exportType: 'results-by-version',
+      version: 'v2',
+      format: 'csv'
+    }))).rejects.toThrow('Export job job-1 was cancelled');
+
+    await new Promise(resolve => {
+      setImmediate(resolve);
+    });
+    controller.abort();
+
+    await processPromise;
+    expect(codingExportOrchestratorService.exportResultsByVersionAsCsv).toHaveBeenCalled();
+    expect(cacheService.set).not.toHaveBeenCalled();
+    expect(jobQueueService.clearExportJobCancellationSignal).toHaveBeenCalledWith('job-1');
   });
 
   it('uses ZIP extension for final result GeoGebra package exports', async () => {

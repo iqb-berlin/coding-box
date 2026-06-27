@@ -63,7 +63,7 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   get activeJobCount(): number {
-    return this.jobs.filter(j => j.status === 'waiting' || j.status === 'active').length;
+    return this.jobs.filter(j => j.status === 'waiting' || j.status === 'active' || j.status === 'downloading').length;
   }
 
   get completedJobCount(): number {
@@ -84,6 +84,8 @@ export class ExportToastComponent implements OnInit, OnDestroy {
         return 'hourglass_empty';
       case 'active':
         return 'sync';
+      case 'downloading':
+        return 'file_download';
       case 'completed':
         return 'check_circle';
       case 'failed':

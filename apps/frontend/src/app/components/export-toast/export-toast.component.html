@@ -21,12 +21,12 @@
             <span class="job-type">{{ getExportTypeLabel(job) }}</span>
           </div>
 
-          <div class="job-progress" *ngIf="job.status === 'waiting' || job.status === 'active'">
+          <div class="job-progress" *ngIf="job.status === 'waiting' || job.status === 'active' || job.status === 'downloading'">
             <mat-progress-bar
-              mode="determinate"
+              [mode]="job.status === 'downloading' ? 'indeterminate' : 'determinate'"
               [value]="job.progress">
             </mat-progress-bar>
-            <span class="progress-text">{{ job.progress }}%</span>
+            <span class="progress-text" *ngIf="job.status !== 'downloading'">{{ job.progress }}%</span>
           </div>
 
           <div class="job-error" *ngIf="job.status === 'failed' && job.error">
@@ -41,7 +41,7 @@
           <div class="job-actions">
             <button
               mat-icon-button
-              *ngIf="job.status === 'waiting' || job.status === 'active'"
+              *ngIf="job.status === 'waiting' || job.status === 'active' || job.status === 'downloading'"
               (click)="cancelJob(job)"
               matTooltip="{{ 'export-toast.cancel' | translate }}">
               <mat-icon>cancel</mat-icon>
