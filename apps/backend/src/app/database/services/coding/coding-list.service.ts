@@ -119,6 +119,26 @@ export class CodingListService {
     );
   }
 
+  async writeCodingListExcelToFile(
+    filePath: string,
+    workspace_id: number,
+    authToken?: string,
+    serverUrl?: string,
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    return this.streamService.writeCodingListExcelToFile(
+      filePath,
+      workspace_id,
+      authToken,
+      serverUrl,
+      progressCallback,
+      trainingRequired,
+      checkCancellation
+    );
+  }
+
   /**
    * Stream coding list as JSON.
    * Delegates to CodingListStreamService.
@@ -196,6 +216,32 @@ export class CodingListService {
     checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     return this.streamService.getCodingResultsByVersionAsExcel(
+      workspace_id,
+      version,
+      authToken,
+      serverUrl,
+      includeReplayUrls,
+      progressCallback,
+      includeResponseValues,
+      includeGeoGebraResponseValues,
+      checkCancellation
+    );
+  }
+
+  async writeCodingResultsByVersionExcelToFile(
+    filePath: string,
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken?: string,
+    serverUrl?: string,
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    return this.streamService.writeCodingResultsByVersionExcelToFile(
+      filePath,
       workspace_id,
       version,
       authToken,

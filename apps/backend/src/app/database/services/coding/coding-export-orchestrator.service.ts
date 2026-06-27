@@ -100,6 +100,30 @@ export class CodingExportOrchestratorService {
     );
   }
 
+  async exportResultsByVersionAsExcelToFile(
+    filePath: string,
+    options: VersionedCodingResultsExportOptions
+  ): Promise<void> {
+    if (options.includeGeoGebraFiles) {
+      const buffer = await this.exportResultsByVersionAsExcel(options);
+      await import('fs').then(fs => fs.promises.writeFile(filePath, buffer));
+      return;
+    }
+
+    await this.codingResultsExportService.exportCodingResultsByVersionAsExcelToFile(
+      filePath,
+      options.workspaceId,
+      options.version || 'v2',
+      options.authToken || '',
+      options.serverUrl || '',
+      options.includeReplayUrl || false,
+      options.onProgress,
+      options.includeResponseValues !== false,
+      options.includeGeoGebraResponseValues === true,
+      options.checkCancellation
+    );
+  }
+
   exportDetailed(options: DetailedCodingResultsExportOptions): Promise<Buffer> {
     if (this.canUseSpecializedDetailedExport(options)) {
       return this.codingResultsExportService.exportCodingResultsDetailed(
@@ -144,6 +168,20 @@ export class CodingExportOrchestratorService {
 
   exportItemMatrixAsExcel(options: ItemMatrixExportOptions): Promise<Buffer> {
     return this.codingItemMatrixExportService.exportItemMatrixAsExcel(
+      options.workspaceId,
+      options.matrixValue || 'score',
+      options.version || 'v2',
+      options.onProgress,
+      options.checkCancellation
+    );
+  }
+
+  exportItemMatrixAsExcelToFile(
+    filePath: string,
+    options: ItemMatrixExportOptions
+  ): Promise<void> {
+    return this.codingItemMatrixExportService.writeItemMatrixExcelToFile(
+      filePath,
       options.workspaceId,
       options.matrixValue || 'score',
       options.version || 'v2',

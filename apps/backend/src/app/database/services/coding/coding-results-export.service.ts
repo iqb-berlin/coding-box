@@ -254,6 +254,32 @@ export class CodingResultsExportService {
     );
   }
 
+  async exportCodingResultsByVersionAsExcelToFile(
+    filePath: string,
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken: string,
+    serverUrl: string,
+    includeReplayUrls: boolean,
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    return this.codingListService.writeCodingResultsByVersionExcelToFile(
+      filePath,
+      workspaceId,
+      version,
+      authToken || '',
+      serverUrl || '',
+      includeReplayUrls,
+      progressCallback,
+      includeResponseValues,
+      includeGeoGebraResponseValues,
+      checkCancellation
+    );
+  }
+
   async exportCodingResultsByVersionAsGeoGebraZip(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',

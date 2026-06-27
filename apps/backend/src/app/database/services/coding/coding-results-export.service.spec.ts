@@ -188,6 +188,7 @@ function createService(overrides: {
     getVariablePageMap: jest.fn().mockResolvedValue(overrides.pageMap ?? new Map([['VAR1', '3']])),
     getCodingResultsByVersionCsvStream: jest.fn().mockResolvedValue(Readable.from(['csv'])),
     getCodingResultsByVersionAsExcel: jest.fn().mockResolvedValue(Buffer.from('xlsx')),
+    writeCodingResultsByVersionExcelToFile: jest.fn().mockResolvedValue(undefined),
     getCodingResultsByVersionAsGeoGebraZip: jest.fn().mockResolvedValue(Buffer.from('zip')),
     getCodingListVariables: jest.fn().mockResolvedValue(overrides.codingListVariables ?? [{ unitName: 'UNIT1', variableId: 'VAR1' }])
   } as unknown as CodingListService;
@@ -259,6 +260,38 @@ describe('CodingResultsExportService', () => {
       true,
       false,
       undefined
+    );
+  });
+
+  it('delegates versioned Excel file exports with cancellation checks', async () => {
+    const { service, codingListService } = createService();
+    const onProgress = jest.fn();
+    const checkCancellation = jest.fn();
+
+    await expect(service.exportCodingResultsByVersionAsExcelToFile(
+      '/tmp/export.xlsx',
+      1,
+      'v3',
+      '',
+      '',
+      false,
+      onProgress,
+      true,
+      true,
+      checkCancellation
+    )).resolves.toBeUndefined();
+
+    expect(codingListService.writeCodingResultsByVersionExcelToFile).toHaveBeenCalledWith(
+      '/tmp/export.xlsx',
+      1,
+      'v3',
+      '',
+      '',
+      false,
+      onProgress,
+      true,
+      true,
+      checkCancellation
     );
   });
 

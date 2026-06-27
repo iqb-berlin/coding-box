@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import * as AdmZip from 'adm-zip';
+import * as fs from 'fs';
 // eslint-disable-next-line import/no-cycle
 import {
   CodingResponseFilterService,
@@ -405,6 +406,134 @@ export class CodingListStreamService {
       throw error;
     } finally {
       // Clear caches after export to free memory
+      this.fileCacheService.clearCaches();
+    }
+  }
+
+  async writeCodingListExcelToFile(
+    filePath: string,
+    workspace_id: number,
+    authToken?: string,
+    serverUrl?: string,
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    this.logger.log(
+      `Direct-to-file Excel export for workspace ${workspace_id} (trainingRequired: ${trainingRequired})`
+    );
+    this.fileCacheService.clearCaches();
+
+    const outputStream = fs.createWriteStream(filePath);
+    const streamComplete = new Promise<void>((resolve, reject) => {
+      outputStream.on('finish', resolve);
+      outputStream.on('error', reject);
+    });
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: outputStream,
+      useStyles: false,
+      useSharedStrings: false
+    });
+    const worksheet = workbook.addWorksheet('Coding List');
+
+    worksheet.columns = [
+      { header: 'unit_key', key: 'unit_key', width: 30 },
+      { header: 'unit_alias', key: 'unit_alias', width: 30 },
+      { header: 'person_login', key: 'person_login', width: 25 },
+      { header: 'person_code', key: 'person_code', width: 25 },
+      { header: 'person_group', key: 'person_group', width: 25 },
+      { header: 'booklet_name', key: 'booklet_name', width: 30 },
+      { header: 'variable_id', key: 'variable_id', width: 30 },
+      { header: 'variable_page', key: 'variable_page', width: 15 },
+      { header: 'variable_anchor', key: 'variable_anchor', width: 30 },
+      { header: 'status_v1', key: 'status_v1', width: 20 },
+      { header: 'url', key: 'url', width: 60 }
+    ];
+
+    try {
+      await checkCancellation?.();
+      const { filterOptions, trainingRequiredMap } =
+        await this.getCodingListFilterContext(workspace_id, trainingRequired, checkCancellation);
+      await checkCancellation?.();
+      const totalRows = await this.responseFilterService.countResponses(
+        workspace_id,
+        filterOptions
+      );
+      await checkCancellation?.();
+      const batchSize = 1000;
+      let lastId = 0;
+      let totalWritten = 0;
+
+      for (; ;) {
+        await checkCancellation?.();
+        const responses = await this.responseFilterService.getResponsesBatch(
+          workspace_id,
+          lastId,
+          batchSize,
+          filterOptions
+        );
+        await checkCancellation?.();
+
+        if (!responses.length) break;
+
+        const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
+          responses,
+          workspace_id,
+          checkCancellation
+        );
+
+        for (const response of responses) {
+          await checkCancellation?.();
+          if (trainingRequired !== undefined && trainingRequiredMap) {
+            const unitKey = response.unit?.name || '';
+            const variableId = response.variableid || '';
+            const isRequired = trainingRequiredMap.get(unitKey.toUpperCase())?.has(variableId) || false;
+            if (isRequired !== trainingRequired) {
+              continue;
+            }
+          }
+
+          const item = await this.itemBuilderService.buildCodingItem(
+            response,
+            authToken!,
+            serverUrl!,
+            workspace_id,
+            variableAnchorMaps
+          );
+          if (item) {
+            worksheet.addRow(item).commit();
+            totalWritten += 1;
+          }
+        }
+
+        if (global.gc) {
+          global.gc();
+        }
+
+        lastId = responses[responses.length - 1].id;
+
+        if (progressCallback && totalRows > 0) {
+          const percentage = Math.min(100, Math.round((totalWritten / totalRows) * 100));
+          await progressCallback(percentage);
+        }
+
+        await new Promise(resolve => {
+          setImmediate(resolve);
+        });
+      }
+
+      await checkCancellation?.();
+      await worksheet.commit();
+      await workbook.commit();
+      await streamComplete;
+      await checkCancellation?.();
+
+      this.logger.log(`Direct-to-file Excel export finished. Rows written: ${totalWritten}`);
+    } catch (error) {
+      outputStream.destroy(error);
+      this.logger.error(`Error creating direct-to-file Excel export: ${error.message}`);
+      throw error;
+    } finally {
       this.fileCacheService.clearCaches();
     }
   }
@@ -828,6 +957,140 @@ export class CodingListStreamService {
     } catch (error) {
       this.logger.error(
         `Error during Excel export for version ${version}: ${error.message}`
+      );
+      throw error;
+    } finally {
+      this.fileCacheService.clearCaches();
+    }
+  }
+
+  async writeCodingResultsByVersionExcelToFile(
+    filePath: string,
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken?: string,
+    serverUrl?: string,
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    this.logger.log(
+      `Starting direct-to-file Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
+    );
+    this.fileCacheService.clearCaches();
+
+    const outputStream = fs.createWriteStream(filePath);
+    const streamComplete = new Promise<void>((resolve, reject) => {
+      outputStream.on('finish', resolve);
+      outputStream.on('error', reject);
+    });
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: outputStream,
+      useStyles: false,
+      useSharedStrings: false
+    });
+    const worksheet = workbook.addWorksheet('Coding Results');
+
+    let headers = this.itemBuilderService.getHeadersForVersion(version, includeResponseValues);
+
+    if (includeReplayUrls) {
+      headers = [...headers, 'url'];
+    }
+
+    worksheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
+
+    const batchSize = 500;
+    let lastId = 0;
+    let totalWritten = 0;
+
+    try {
+      await checkCancellation?.();
+      const totalRows = await this.responseFilterService.countResponses(workspace_id, {
+        version,
+        validCodingVariablesOnly: true,
+        givenResponsesOnly: true
+      });
+      await checkCancellation?.();
+
+      for (; ;) {
+        await checkCancellation?.();
+        const responses = await this.responseFilterService.getResponsesBatch(
+          workspace_id,
+          lastId,
+          batchSize,
+          {
+            version,
+            validCodingVariablesOnly: true,
+            givenResponsesOnly: true
+          }
+        );
+        await checkCancellation?.();
+
+        if (!responses.length) break;
+
+        const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
+          responses,
+          workspace_id,
+          checkCancellation
+        );
+
+        for (const response of responses) {
+          await checkCancellation?.();
+          const item = await this.itemBuilderService.buildCodingItemWithVersions(
+            response,
+            version,
+            authToken || '',
+            serverUrl || '',
+            workspace_id,
+            includeReplayUrls,
+            includeResponseValues,
+            includeGeoGebraResponseValues,
+            variableAnchorMaps
+          );
+
+          if (item !== null) {
+            worksheet.addRow(item).commit();
+            totalWritten += 1;
+          }
+        }
+
+        if (global.gc) {
+          global.gc();
+        }
+
+        lastId = responses[responses.length - 1].id;
+
+        if (totalWritten % 10000 === 0) {
+          this.logger.log(
+            `Direct-to-file Excel export progress for version ${version}: ${totalWritten} rows written`
+          );
+        }
+
+        if (progressCallback && totalRows > 0) {
+          const percentage = Math.min(100, Math.round((totalWritten / totalRows) * 100));
+          await progressCallback(percentage);
+        }
+
+        await new Promise(resolve => {
+          setImmediate(resolve);
+        });
+      }
+
+      await checkCancellation?.();
+      await worksheet.commit();
+      await workbook.commit();
+      await streamComplete;
+      await checkCancellation?.();
+
+      this.logger.log(
+        `Direct-to-file Excel export completed for version ${version}. Rows written: ${totalWritten}`
+      );
+    } catch (error) {
+      outputStream.destroy(error);
+      this.logger.error(
+        `Error during direct-to-file Excel export for version ${version}: ${error.message}`
       );
       throw error;
     } finally {
