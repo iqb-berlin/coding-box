@@ -292,6 +292,58 @@ describe('CodingResultsComparisonComponent', () => {
     );
   });
 
+  it('should pass coder code assignments to the discussion replay', () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    codingStatisticsService.getReplayUrl.mockReturnValue(of({
+      replayUrl: 'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1'
+    }));
+
+    component.openReplay({
+      responseId: 77,
+      unitName: 'UNIT_1',
+      variableId: 'VAR_1',
+      testperson: 'login@code@booklet',
+      coders: [
+        {
+          jobId: 1,
+          coderName: 'Coder A',
+          code: '2',
+          score: 1,
+          codingIssueOption: null
+        },
+        {
+          jobId: 2,
+          coderName: 'Coder B',
+          code: '2',
+          score: 1,
+          codingIssueOption: -1
+        },
+        {
+          jobId: 3,
+          coderName: 'Coder C',
+          code: null,
+          score: null,
+          codingIssueOption: -3
+        },
+        {
+          jobId: 4,
+          coderName: 'Coder D',
+          code: '2',
+          score: null,
+          codingIssueOption: -3
+        }
+      ]
+    } as never);
+
+    const openedUrl = openSpy.mock.calls[0][0] as string;
+    const reviewCodeSelections = new URLSearchParams(openedUrl.split('?')[1]).get('reviewCodeSelections');
+    expect(JSON.parse(reviewCodeSelections || '[]')).toEqual([
+      { code: -3, coderNames: ['Coder C', 'Coder D'] },
+      { code: -1, coderNames: ['Coder B'] },
+      { code: 2, coderNames: ['Coder A', 'Coder B'] }
+    ]);
+  });
+
   it('should pass selected training display options to the discussion replay', () => {
     const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
     codingStatisticsService.getReplayUrl.mockReturnValue(of({
