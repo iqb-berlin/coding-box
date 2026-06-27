@@ -514,7 +514,7 @@ export class ExportJobProcessor {
       await job.progress(90);
 
       if (buffer) {
-        fs.writeFileSync(filePath, buffer);
+        await fs.promises.writeFile(filePath, buffer);
       }
 
       await this.checkCancellation(job, filePath);
