@@ -273,4 +273,26 @@ export class CodingListService {
       checkCancellation
     );
   }
+
+  async writeCodingResultsByVersionGeoGebraZipToFile(
+    filePath: string,
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken?: string,
+    serverUrl?: string,
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    return this.streamService.writeCodingResultsByVersionGeoGebraZipToFile(
+      filePath,
+      workspace_id,
+      version,
+      authToken,
+      serverUrl,
+      includeReplayUrls,
+      progressCallback,
+      checkCancellation
+    );
+  }
 }

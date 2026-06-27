@@ -300,6 +300,28 @@ export class CodingResultsExportService {
     );
   }
 
+  async exportCodingResultsByVersionAsGeoGebraZipToFile(
+    filePath: string,
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken: string,
+    serverUrl: string,
+    includeReplayUrls: boolean,
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    return this.codingListService.writeCodingResultsByVersionGeoGebraZipToFile(
+      filePath,
+      workspaceId,
+      version,
+      authToken || '',
+      serverUrl || '',
+      includeReplayUrls,
+      progressCallback,
+      checkCancellation
+    );
+  }
+
   private async generateReplayUrlWithPageLookup(
     req: Request,
     loginName: string,

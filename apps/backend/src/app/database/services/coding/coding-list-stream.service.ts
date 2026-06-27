@@ -2,8 +2,9 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
-import * as AdmZip from 'adm-zip';
 import * as fs from 'fs';
+import archiver = require('archiver');
+import { PassThrough, Writable } from 'stream';
 // eslint-disable-next-line import/no-cycle
 import {
   CodingResponseFilterService,
@@ -278,7 +279,6 @@ export class CodingListStreamService {
     );
     this.fileCacheService.clearCaches();
 
-    const { PassThrough } = await import('stream');
     const chunks: Buffer[] = [];
 
     // Create a PassThrough stream that collects chunks
@@ -828,7 +828,6 @@ export class CodingListStreamService {
     );
     this.fileCacheService.clearCaches();
 
-    const { PassThrough } = await import('stream');
     const chunks: Buffer[] = [];
 
     // Create a PassThrough stream that collects chunks
@@ -1110,9 +1109,6 @@ export class CodingListStreamService {
     this.logger.log(
       `Starting GeoGebra ZIP export for coding results version ${version}, workspace ${workspace_id}`
     );
-    this.fileCacheService.clearCaches();
-
-    const { PassThrough } = await import('stream');
     const chunks: Buffer[] = [];
     const stream = new PassThrough();
 
@@ -1120,8 +1116,86 @@ export class CodingListStreamService {
       chunks.push(chunk);
     });
 
-    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+    await this.writeCodingResultsByVersionGeoGebraZipToStream(
       stream,
+      workspace_id,
+      version,
+      authToken,
+      serverUrl,
+      includeReplayUrls,
+      progressCallback,
+      checkCancellation
+    );
+
+    return Buffer.concat(chunks);
+  }
+
+  async writeCodingResultsByVersionGeoGebraZipToFile(
+    filePath: string,
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken?: string,
+    serverUrl?: string,
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    const outputStream = fs.createWriteStream(filePath);
+
+    try {
+      await this.writeCodingResultsByVersionGeoGebraZipToStream(
+        outputStream,
+        workspace_id,
+        version,
+        authToken,
+        serverUrl,
+        includeReplayUrls,
+        progressCallback,
+        checkCancellation
+      );
+    } catch (error) {
+      outputStream.destroy();
+      await fs.promises.unlink(filePath).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  private async writeCodingResultsByVersionGeoGebraZipToStream(
+    outputStream: Writable,
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken?: string,
+    serverUrl?: string,
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    this.logger.log(
+      `Starting streaming GeoGebra ZIP export for coding results version ${version}, workspace ${workspace_id}`
+    );
+    this.fileCacheService.clearCaches();
+
+    const zipArchive = archiver('zip', {
+      zlib: { level: 9 }
+    });
+    const workbookStream = new PassThrough();
+    const zipComplete = new Promise<void>((resolve, reject) => {
+      outputStream.on('finish', resolve);
+      outputStream.on('close', resolve);
+      outputStream.on('error', reject);
+      zipArchive.on('error', reject);
+      zipArchive.on('warning', warning => {
+        this.logger.warn(
+          `GeoGebra ZIP export warning for workspace ${workspace_id}: ${warning.message}`
+        );
+      });
+    });
+
+    zipArchive.pipe(outputStream);
+    zipArchive.append(workbookStream, { name: `coding-results-${version}.xlsx` });
+
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: workbookStream,
       useStyles: false,
       useSharedStrings: false
     });
@@ -1133,9 +1207,9 @@ export class CodingListStreamService {
     }
     worksheet.columns = headers.map(h => ({ header: h, key: h, width: h === 'value' ? 35 : 20 }));
 
-    const geoGebraFiles: Array<{ relativePath: string; buffer: Buffer }> = [];
     const usedRelativePaths = new Set<string>();
     let geoGebraBytes = 0;
+    let geoGebraFileCount = 0;
     const geoGebraExportLimits = this.getGeoGebraExportLimits();
     const batchSize = 500;
     let lastId = 0;
@@ -1191,7 +1265,7 @@ export class CodingListStreamService {
             const geoGebraBuffer = decodeGeoGebraValue(item.value);
 
             if (geoGebraBuffer) {
-              const nextFileCount = geoGebraFiles.length + 1;
+              const nextFileCount = geoGebraFileCount + 1;
               if (nextFileCount > geoGebraExportLimits.maxFileCount) {
                 throw new Error(
                   `GeoGebra-ZIP-Export abgebrochen: ${nextFileCount} GeoGebra-Dateien überschreiten das Limit von ${geoGebraExportLimits.maxFileCount}.`
@@ -1220,7 +1294,8 @@ export class CodingListStreamService {
                 text: relativePath.split('/').pop() || relativePath,
                 hyperlink: relativePath
               };
-              geoGebraFiles.push({ relativePath, buffer: geoGebraBuffer });
+              geoGebraFileCount += 1;
+              zipArchive.append(geoGebraBuffer, { name: relativePath });
             }
 
             worksheet.addRow(rowData).commit();
@@ -1244,33 +1319,25 @@ export class CodingListStreamService {
         });
       }
 
-      if (geoGebraFiles.length === 0) {
+      if (geoGebraFileCount === 0) {
         throw new Error('GeoGebra-ZIP-Export abgebrochen: Im exportierten Datenbestand wurden keine GeoGebra-Antworten gefunden.');
       }
 
-      const streamComplete = new Promise<void>((resolve, reject) => {
-        stream.on('end', resolve);
-        stream.on('error', reject);
-      });
-
+      await checkCancellation?.();
       await worksheet.commit();
       await workbook.commit();
-      await streamComplete;
-
-      const workbookBuffer = Buffer.concat(chunks);
-      const zip = new AdmZip();
-      zip.addFile(`coding-results-${version}.xlsx`, workbookBuffer);
-      for (const file of geoGebraFiles) {
-        await checkCancellation?.();
-        zip.addFile(file.relativePath, file.buffer);
-      }
+      await checkCancellation?.();
+      await zipArchive.finalize();
+      await zipComplete;
+      await checkCancellation?.();
 
       this.logger.log(
-        `GeoGebra ZIP export completed for version ${version}. Rows written: ${totalWritten}, GeoGebra files: ${geoGebraFiles.length}`
+        `GeoGebra ZIP export completed for version ${version}. Rows written: ${totalWritten}, GeoGebra files: ${geoGebraFileCount}`
       );
-
-      return zip.toBuffer();
     } catch (error) {
+      zipArchive.abort();
+      workbookStream.destroy();
+      outputStream.destroy();
       this.logger.error(
         `Error during GeoGebra ZIP export for version ${version}: ${error.message}`
       );

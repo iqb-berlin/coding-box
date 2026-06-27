@@ -612,6 +612,63 @@ describe('CodingListStreamService', () => {
       expect(worksheet.getCell('J3').value).toBe('plain answer');
     });
 
+    it('should write GeoGebra ZIP exports directly to a file', async () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'geogebra-export-'));
+      const filePath = path.join(tempDir, 'geogebra.zip');
+      mockResponseFilterService.countResponses.mockResolvedValue(1);
+      mockResponseFilterService.getResponsesBatch
+        .mockResolvedValueOnce([createMockResponse(1)])
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'unit_alias',
+        'person_login',
+        'person_code',
+        'person_group',
+        'booklet_name',
+        'variable_id',
+        'variable_page',
+        'variable_anchor',
+        'value',
+        'status_v1',
+        'code_v1',
+        'score_v1'
+      ]);
+      mockItemBuilderService.buildCodingItemWithVersions.mockResolvedValue({
+        unit_key: 'Unit/1',
+        unit_alias: 'Unit 1',
+        person_login: 'login',
+        person_code: 'code',
+        person_group: 'group',
+        booklet_name: 'Booklet',
+        variable_id: 'Geo:Var',
+        variable_page: '1',
+        variable_anchor: 'Geo:Var',
+        value: 'UEsDBA==',
+        status_v1: 'VALUE_CHANGED',
+        code_v1: '',
+        score_v1: ''
+      } as never);
+
+      try {
+        await service.writeCodingResultsByVersionGeoGebraZipToFile(
+          filePath,
+          1,
+          'v1',
+          'token',
+          'http://server'
+        );
+
+        expect(fs.statSync(filePath).size).toBeGreaterThan(0);
+        const zip = new AdmZip(filePath);
+        const entries = zip.getEntries().map(entry => entry.entryName);
+        expect(entries).toContain('coding-results-v1.xlsx');
+        expect(entries).toContain('geogebra/login__code__Booklet__Unit_1__Geo_Var__response-1.ggb');
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it('should abort GeoGebra ZIP export when configured file count limit is exceeded', async () => {
       mockConfigService.get.mockImplementation((key: string) => {
         if (key === 'GEOGEBRA_EXPORT_MAX_FILES') return '1';

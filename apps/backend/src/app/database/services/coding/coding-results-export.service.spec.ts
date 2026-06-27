@@ -190,6 +190,7 @@ function createService(overrides: {
     getCodingResultsByVersionAsExcel: jest.fn().mockResolvedValue(Buffer.from('xlsx')),
     writeCodingResultsByVersionExcelToFile: jest.fn().mockResolvedValue(undefined),
     getCodingResultsByVersionAsGeoGebraZip: jest.fn().mockResolvedValue(Buffer.from('zip')),
+    writeCodingResultsByVersionGeoGebraZipToFile: jest.fn().mockResolvedValue(undefined),
     getCodingListVariables: jest.fn().mockResolvedValue(overrides.codingListVariables ?? [{ unitName: 'UNIT1', variableId: 'VAR1' }])
   } as unknown as CodingListService;
   const workspaceExclusionService = {
@@ -311,6 +312,36 @@ describe('CodingResultsExportService', () => {
       true,
       onProgress,
       undefined
+    );
+  });
+
+  it('delegates versioned GeoGebra ZIP file exports', async () => {
+    const { service, codingListService } = createService();
+    const onProgress = jest.fn();
+    const checkCancellation = jest.fn();
+
+    await expect(
+      service.exportCodingResultsByVersionAsGeoGebraZipToFile(
+        '/tmp/geogebra.zip',
+        1,
+        'v2',
+        '',
+        '',
+        true,
+        onProgress,
+        checkCancellation
+      )
+    ).resolves.toBeUndefined();
+
+    expect(codingListService.writeCodingResultsByVersionGeoGebraZipToFile).toHaveBeenCalledWith(
+      '/tmp/geogebra.zip',
+      1,
+      'v2',
+      '',
+      '',
+      true,
+      onProgress,
+      checkCancellation
     );
   });
 

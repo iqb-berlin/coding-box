@@ -105,8 +105,16 @@ export class CodingExportOrchestratorService {
     options: VersionedCodingResultsExportOptions
   ): Promise<void> {
     if (options.includeGeoGebraFiles) {
-      const buffer = await this.exportResultsByVersionAsExcel(options);
-      await import('fs').then(fs => fs.promises.writeFile(filePath, buffer));
+      await this.codingResultsExportService.exportCodingResultsByVersionAsGeoGebraZipToFile(
+        filePath,
+        options.workspaceId,
+        options.version || 'v2',
+        options.authToken || '',
+        options.serverUrl || '',
+        options.includeReplayUrl || false,
+        options.onProgress,
+        options.checkCancellation
+      );
       return;
     }
 
