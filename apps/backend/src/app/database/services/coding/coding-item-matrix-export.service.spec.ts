@@ -57,6 +57,48 @@ describe('CodingItemMatrixExportService', () => {
     expect(output).toContain('login-1;code-1;group-1;BOOKLET-1;2');
   });
 
+  it('checks cancellation before writing item matrix rows', async () => {
+    const service = createService();
+    const cancellationError = new Error('cancelled');
+    const checkCancellation = jest.fn().mockRejectedValue(cancellationError);
+    const buildMatrixContext = jest.fn(async (
+      _workspaceId: number,
+      passedCheckCancellation?: () => Promise<void>
+    ) => {
+      await passedCheckCancellation?.();
+      return {
+        rows: [{
+          bookletId: 10,
+          bookletName: 'BOOKLET-1',
+          personLogin: 'login-1',
+          personCode: 'code-1',
+          personGroup: 'group-1'
+        }],
+        columns: [{
+          key: 'UNIT1\u001FVAR1',
+          header: 'Alias1__VAR1',
+          unitName: 'UNIT1',
+          variableId: 'VAR1'
+        }]
+      };
+    });
+    const getResponseValuesForRows = jest.fn();
+    (service as never as {
+      buildMatrixContext: typeof buildMatrixContext;
+      getResponseValuesForRows: typeof getResponseValuesForRows;
+    }).buildMatrixContext = buildMatrixContext;
+    (service as never as {
+      getResponseValuesForRows: typeof getResponseValuesForRows;
+    }).getResponseValuesForRows = getResponseValuesForRows;
+
+    await expect(collectStream(
+      service.exportItemMatrixAsCsvStream(7, 'score', 'v2', undefined, checkCancellation)
+    )).rejects.toThrow('cancelled');
+
+    expect(buildMatrixContext).toHaveBeenCalledWith(7, checkCancellation);
+    expect(getResponseValuesForRows).not.toHaveBeenCalled();
+  });
+
   it('maps internal manual missing codes through the missing profile', async () => {
     const missingsProfilesService = {
       getMissingByIdForProfileOrDefault: jest.fn().mockResolvedValue({
