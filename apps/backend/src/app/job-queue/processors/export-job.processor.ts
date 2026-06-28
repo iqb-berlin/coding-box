@@ -102,18 +102,23 @@ export class ExportJobProcessor {
       (await this.jobQueueService.isExportJobCancelled(job.id.toString()))
     ) {
       this.logger.log(`Export job ${job.id} cancellation detected`);
-      // Clean up partial file if it exists
-      if (filePath && fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-          this.logger.log(`Cleaned up partial export file: ${filePath}`);
-        } catch (cleanupError) {
-          this.logger.warn(
-            `Failed to clean up partial file ${filePath}: ${cleanupError.message}`
-          );
-        }
-      }
+      this.cleanupPartialExportFile(filePath);
       throw new ExportJobCancelledException(job.id);
+    }
+  }
+
+  private cleanupPartialExportFile(filePath?: string): void {
+    if (!filePath || !fs.existsSync(filePath)) {
+      return;
+    }
+
+    try {
+      fs.unlinkSync(filePath);
+      this.logger.log(`Cleaned up partial export file: ${filePath}`);
+    } catch (cleanupError) {
+      this.logger.warn(
+        `Failed to clean up partial file ${filePath}: ${cleanupError.message}`
+      );
     }
   }
 
@@ -576,6 +581,7 @@ export class ExportJobProcessor {
         `Error processing export job ${job.id}: ${error.message}`,
         error.stack
       );
+      this.cleanupPartialExportFile(filePath);
       throw error;
     } finally {
       this.jobQueueService.clearExportJobCancellationSignal(jobId);
