@@ -14,6 +14,7 @@ import { ValidationTaskProcessor } from './processors/validation-task.processor'
 import { CodingAnalysisProcessor } from './processors/coding-analysis.processor';
 import { VariableAnalysisProcessor } from './processors/variable-analysis.processor';
 import { ExternalCodingImportProcessor } from './processors/external-coding-import.processor';
+import { getEnabledProcessorNames } from './job-queue-processor-selection';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
 // eslint-disable-next-line import/no-cycle
@@ -38,37 +39,13 @@ const processorProviders = {
 
 type JobQueueProcessorName = keyof typeof processorProviders;
 
-function parseProcessorList(value?: string): Set<string> | null {
-  if (!value) {
-    return null;
-  }
-
-  const names = value
-    .split(',')
-    .map(name => name.trim())
-    .filter(Boolean);
-
-  return names.length ? new Set(names) : null;
-}
-
 export function getEnabledJobQueueProcessors(
   enabledValue = process.env.JOB_QUEUE_PROCESSORS,
   disabledValue = process.env.DISABLED_JOB_QUEUE_PROCESSORS
 ): Type<unknown>[] {
-  const enabled = parseProcessorList(enabledValue);
-  const disabled = parseProcessorList(disabledValue) || new Set<string>();
   const allProcessorNames = Object.keys(processorProviders) as JobQueueProcessorName[];
 
-  if (enabled?.has('none')) {
-    return [];
-  }
-
-  const selectedNames = !enabled || enabled.has('all') ?
-    allProcessorNames :
-    allProcessorNames.filter(name => enabled.has(name));
-
-  return selectedNames
-    .filter(name => !disabled.has(name))
+  return getEnabledProcessorNames(allProcessorNames, enabledValue, disabledValue)
     .map(name => processorProviders[name]);
 }
 

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, Type } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -28,6 +28,23 @@ import { ContentPoolSettingsController } from '../content-pool/content-pool-sett
 import { ContentPoolIntegrationService } from '../content-pool/content-pool-integration.service';
 import { LegalNoticeController } from '../legal-notice/legal-notice.controller';
 import { LegalNoticeService } from '../legal-notice/legal-notice.service';
+import { getEnabledProcessorNames } from '../../job-queue/job-queue-processor-selection';
+
+const processorProviders = {
+  'database-export': DatabaseExportProcessor
+} satisfies Record<string, Type<unknown>>;
+
+type CoreAdminProcessorName = keyof typeof processorProviders;
+
+export function getEnabledCoreAdminProcessors(
+  enabledValue = process.env.JOB_QUEUE_PROCESSORS,
+  disabledValue = process.env.DISABLED_JOB_QUEUE_PROCESSORS
+): Type<unknown>[] {
+  const allProcessorNames = Object.keys(processorProviders) as CoreAdminProcessorName[];
+
+  return getEnabledProcessorNames(allProcessorNames, enabledValue, disabledValue)
+    .map(name => processorProviders[name]);
+}
 
 @Module({
   imports: [
@@ -61,7 +78,7 @@ import { LegalNoticeService } from '../legal-notice/legal-notice.service';
   ],
   providers: [
     DatabaseExportService,
-    DatabaseExportProcessor,
+    ...getEnabledCoreAdminProcessors(),
     ContentPoolIntegrationService,
     LegalNoticeService
   ]
