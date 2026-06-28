@@ -32,6 +32,10 @@ describe('ExportJobProcessor', () => {
       exportCodingListForJobAsExcel: jest.fn(),
       exportCodingListForJobAsExcelToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'xlsx')),
       exportCodingListForJobAsJson: jest.fn(),
+      exportCodingResultsAggregatedToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'aggregated')),
+      exportCodingResultsByCoderToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'by-coder')),
+      exportCodingResultsByVariableToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'by-variable')),
+      exportCodingTimesReportToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'coding-times')),
       exportCodingResultsByVariableCompactAsCsvStream: jest.fn()
     };
     const codingExportOrchestratorService = {
@@ -39,6 +43,7 @@ describe('ExportJobProcessor', () => {
       exportResultsByVersionAsExcel: jest.fn(),
       exportResultsByVersionAsExcelToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'xlsx')),
       exportDetailed: jest.fn(),
+      exportDetailedToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'csv')),
       exportItemMatrixAsCsv: jest.fn(),
       exportItemMatrixAsExcel: jest.fn(),
       exportItemMatrixAsExcelToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'xlsx'))
@@ -407,7 +412,6 @@ describe('ExportJobProcessor', () => {
 
   it('routes detailed export jobs through the orchestrator', async () => {
     const { processor, codingExportOrchestratorService } = createProcessor();
-    codingExportOrchestratorService.exportDetailed.mockResolvedValue(Buffer.from('csv'));
     let filePath: string | undefined;
 
     try {
@@ -426,21 +430,201 @@ describe('ExportJobProcessor', () => {
       }));
       filePath = result.filePath;
 
-      expect(codingExportOrchestratorService.exportDetailed).toHaveBeenCalledWith({
-        workspaceId: 7,
+      expect(codingExportOrchestratorService.exportDetailedToFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\.csv$/),
+        {
+          workspaceId: 7,
+          outputCommentsInsteadOfCodes: true,
+          includeReplayUrl: true,
+          anonymizeCoders: true,
+          usePseudoCoders: false,
+          authToken: 'auth-token',
+          excludeAutoCoded: true,
+          checkCancellation: expect.any(Function),
+          jobDefinitionIds: [1],
+          coderTrainingIds: [2],
+          coderIds: [3],
+          serverUrl: 'http://app.example'
+        }
+      );
+      expect(codingExportOrchestratorService.exportDetailed).not.toHaveBeenCalled();
+      expect(result.fileName).toMatch(/\.csv$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('csv');
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('writes aggregated Excel export jobs directly to the target file', async () => {
+    const { processor, codingExportService } = createProcessor();
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'aggregated',
+        outputCommentsInsteadOfCodes: true,
+        includeReplayUrl: true,
+        anonymizeCoders: true,
+        usePseudoCoders: true,
+        doubleCodingMethod: 'new-row-per-variable',
+        includeComments: true,
+        includeModalValue: true,
+        excludeAutoCoded: true,
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example',
+        jobDefinitionIds: [1],
+        coderTrainingIds: [2],
+        coderIds: [3]
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportService.exportCodingResultsAggregatedToFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\.xlsx$/),
+        7,
+        true,
+        true,
+        true,
+        true,
+        'new-row-per-variable',
+        true,
+        true,
+        'auth-token',
+        undefined,
+        true,
+        expect.any(Function),
+        [1],
+        [2],
+        [3],
+        'http://app.example'
+      );
+      expect(result.fileName).toMatch(/\.xlsx$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('aggregated');
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('writes by-coder Excel export jobs directly to the target file', async () => {
+    const { processor, codingExportService } = createProcessor();
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'by-coder',
         outputCommentsInsteadOfCodes: true,
         includeReplayUrl: true,
         anonymizeCoders: true,
         usePseudoCoders: false,
-        authToken: 'auth-token',
         excludeAutoCoded: true,
-        checkCancellation: expect.any(Function),
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example',
         jobDefinitionIds: [1],
         coderTrainingIds: [2],
-        coderIds: [3],
-        serverUrl: 'http://app.example'
-      });
-      expect(result.fileName).toMatch(/\.csv$/);
+        coderIds: [3]
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportService.exportCodingResultsByCoderToFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\.xlsx$/),
+        7,
+        true,
+        true,
+        true,
+        false,
+        'auth-token',
+        undefined,
+        true,
+        expect.any(Function),
+        [1],
+        [2],
+        [3],
+        'http://app.example'
+      );
+      expect(result.fileName).toMatch(/\.xlsx$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('by-coder');
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('writes by-variable Excel export jobs directly to the target file', async () => {
+    const { processor, codingExportService } = createProcessor();
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'by-variable',
+        includeModalValue: true,
+        includeDoubleCoded: true,
+        includeComments: true,
+        outputCommentsInsteadOfCodes: false,
+        includeReplayUrl: true,
+        anonymizeCoders: true,
+        usePseudoCoders: true,
+        excludeAutoCoded: true,
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example',
+        jobDefinitionIds: [1],
+        coderTrainingIds: [2],
+        coderIds: [3]
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportService.exportCodingResultsByVariableToFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\.xlsx$/),
+        7,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        'auth-token',
+        undefined,
+        true,
+        expect.any(Function),
+        [1],
+        [2],
+        [3],
+        'http://app.example'
+      );
+      expect(result.fileName).toMatch(/\.xlsx$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('by-variable');
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('writes coding-times Excel export jobs directly to the target file', async () => {
+    const { processor, codingExportService } = createProcessor();
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'coding-times',
+        anonymizeCoders: true,
+        usePseudoCoders: true,
+        excludeAutoCoded: true,
+        jobDefinitionIds: [1],
+        coderTrainingIds: [2],
+        coderIds: [3]
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportService.exportCodingTimesReportToFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\.xlsx$/),
+        7,
+        true,
+        true,
+        true,
+        expect.any(Function),
+        [1],
+        [2],
+        [3]
+      );
+      expect(result.fileName).toMatch(/\.xlsx$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('coding-times');
     } finally {
       cleanup(filePath);
     }

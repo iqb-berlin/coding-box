@@ -14,7 +14,8 @@ jest.mock('./coding-results-export.service', () => ({
 describe('CodingExportOrchestratorService', () => {
   const createService = () => {
     const codingExportService = {
-      exportCodingResultsDetailed: jest.fn()
+      exportCodingResultsDetailed: jest.fn(),
+      exportCodingResultsDetailedToFile: jest.fn().mockResolvedValue(undefined)
     };
     const codingResultsExportService = {
       exportCodingResultsByVersionAsCsv: jest.fn(),
@@ -349,6 +350,44 @@ describe('CodingExportOrchestratorService', () => {
       undefined,
       undefined,
       undefined,
+      'http://app.example'
+    );
+    expect(codingResultsExportService.exportCodingResultsDetailed).not.toHaveBeenCalled();
+  });
+
+  it('routes detailed file exports to the monolithic file export path', async () => {
+    const { service, codingExportService, codingResultsExportService } = createService();
+    const checkCancellation = jest.fn();
+
+    await expect(service.exportDetailedToFile('/tmp/detailed.csv', {
+      workspaceId: 5,
+      outputCommentsInsteadOfCodes: true,
+      includeReplayUrl: true,
+      anonymizeCoders: true,
+      usePseudoCoders: false,
+      authToken: 'token',
+      excludeAutoCoded: true,
+      checkCancellation,
+      jobDefinitionIds: [1],
+      coderTrainingIds: [2],
+      coderIds: [3],
+      serverUrl: 'http://app.example'
+    })).resolves.toBeUndefined();
+
+    expect(codingExportService.exportCodingResultsDetailedToFile).toHaveBeenCalledWith(
+      '/tmp/detailed.csv',
+      5,
+      true,
+      true,
+      true,
+      false,
+      'token',
+      undefined,
+      true,
+      checkCancellation,
+      [1],
+      [2],
+      [3],
       'http://app.example'
     );
     expect(codingResultsExportService.exportCodingResultsDetailed).not.toHaveBeenCalled();
