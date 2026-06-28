@@ -154,6 +154,54 @@ describe('ExportJobProcessor', () => {
     }
   });
 
+  it('stores structured row progress for final result exports', async () => {
+    const { processor, codingExportOrchestratorService } = createProcessor();
+    const job = createJob({
+      exportType: 'results-by-version',
+      version: 'v1',
+      format: 'excel'
+    });
+    let filePath: string | undefined;
+
+    (codingExportOrchestratorService.exportResultsByVersionAsExcelToFile as jest.Mock).mockImplementationOnce(
+      async (targetPath: string, options: {
+        onProgress?: (
+          percentage: number,
+          details?: { phase?: 'writing'; processedRows?: number; totalRows?: number }
+        ) => Promise<void>;
+      }) => {
+        filePath = targetPath;
+        await options.onProgress?.(50, {
+          phase: 'writing',
+          processedRows: 100,
+          totalRows: 200
+        });
+        await fs.promises.writeFile(targetPath, 'xlsx');
+      }
+    );
+
+    try {
+      await processor.process(job);
+
+      expect(job.progress).toHaveBeenCalledWith(expect.objectContaining({
+        percentage: 55,
+        phase: 'writing',
+        processedRows: 100,
+        totalRows: 200
+      }));
+      expect(job.progress).toHaveBeenCalledWith(expect.objectContaining({
+        percentage: 90,
+        phase: 'finalizing'
+      }));
+      expect(job.progress).toHaveBeenCalledWith(expect.objectContaining({
+        percentage: 100,
+        phase: 'completed'
+      }));
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
   it('removes partial files when direct-to-file export generation fails', async () => {
     const { processor, codingExportService, cacheService } = createProcessor();
     let filePath: string | undefined;
@@ -251,18 +299,25 @@ describe('ExportJobProcessor', () => {
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true);
 
-    const processPromise = expect(processor.process(createJob({
+    const processPromise = processor.process(createJob({
       exportType: 'results-by-version',
       version: 'v2',
       format: 'csv'
-    }))).rejects.toThrow('Export job job-1 was cancelled');
+    }));
 
     try {
       await jest.advanceTimersByTimeAsync(1000);
 
-      await processPromise;
+      const result = await processPromise;
       expect(codingExportOrchestratorService.exportResultsByVersionAsCsv).toHaveBeenCalled();
       expect(cacheService.set).not.toHaveBeenCalled();
+      expect(result).toEqual(expect.objectContaining({
+        fileId: 'job-1',
+        fileName: '',
+        filePath: '',
+        fileSize: 0,
+        exportType: 'results-by-version'
+      }));
     } finally {
       jest.useRealTimers();
     }
@@ -284,20 +339,27 @@ describe('ExportJobProcessor', () => {
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true);
 
-    const processPromise = expect(processor.process(createJob({
+    const processPromise = processor.process(createJob({
       exportType: 'results-by-version',
       version: 'v2',
       format: 'csv'
-    }))).rejects.toThrow('Export job job-1 was cancelled');
+    }));
 
     await new Promise(resolve => {
       setImmediate(resolve);
     });
     controller.abort();
 
-    await processPromise;
+    const result = await processPromise;
     expect(codingExportOrchestratorService.exportResultsByVersionAsCsv).toHaveBeenCalled();
     expect(cacheService.set).not.toHaveBeenCalled();
+    expect(result).toEqual(expect.objectContaining({
+      fileId: 'job-1',
+      fileName: '',
+      filePath: '',
+      fileSize: 0,
+      exportType: 'results-by-version'
+    }));
     expect(jobQueueService.clearExportJobCancellationSignal).toHaveBeenCalledWith('job-1');
   });
 

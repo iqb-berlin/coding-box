@@ -191,6 +191,21 @@ export interface ExportJobData {
   coderIds?: number[];
 }
 
+export type ExportJobProgressPhase =
+  | 'preparing'
+  | 'counting'
+  | 'writing'
+  | 'finalizing'
+  | 'completed';
+
+export interface ExportJobProgress {
+  percentage: number;
+  phase?: ExportJobProgressPhase;
+  processedRows?: number;
+  totalRows?: number;
+  message?: string;
+}
+
 export interface ExportJobResult {
   fileId: string;
   fileName: string;

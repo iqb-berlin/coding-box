@@ -1673,7 +1673,7 @@ export class CodingResultsExportService {
       throw new Error(
         `Der Export enthaelt ${filteredUnitVariableResults.length} Unit-Variable-Kombinationen ` +
         `und ueberschreitet das konfigurierte Limit von ${MAX_WORKSHEETS} Tabellenblaettern. ` +
-        'Bitte EXPORT_MAX_WORKSHEETS erhoehen, damit der Export vollstaendig erzeugt wird.'
+        'Bitte die Auswahl einschraenken oder den kompakten Nach-Variable-Export verwenden.'
       );
     }
 

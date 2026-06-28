@@ -267,4 +267,79 @@ describe('CodingItemMatrixExportService', () => {
 
     expect(columns.map(column => column.header)).toEqual(['UNIT2__VAR2']);
   });
+
+  it('loads item-matrix response values with raw selects instead of hydrated entities', async () => {
+    const responseQueryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([{
+        id: '1',
+        bookletId: '10',
+        bookletName: 'BOOKLET-1',
+        unitName: 'UNIT1',
+        variableId: 'VAR1',
+        codeV1: null,
+        scoreV1: null,
+        codeV2: '4',
+        scoreV2: '2',
+        codeV3: null,
+        scoreV3: null
+      }])
+    };
+    const responseRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(responseQueryBuilder)
+    };
+    const workspaceFilesService = {
+      getUnitVariableMap: jest.fn().mockResolvedValue(new Map([
+        ['UNIT1', new Set(['VAR1'])]
+      ]))
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+    const service = new CodingItemMatrixExportService(
+      responseRepository as never,
+      {} as never,
+      {} as never,
+      workspaceFilesService as never,
+      workspaceExclusionService as never
+    );
+
+    const values = await (service as never as {
+      getResponseValuesForRows: (
+        workspaceId: number,
+        rows: Array<{
+          bookletId: number;
+          bookletName: string;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+        }>,
+        version: 'v1' | 'v2' | 'v3'
+      ) => Promise<Map<number, Map<string, { code: number | null; score: number | null }>>>;
+    }).getResponseValuesForRows(
+      7,
+      [{
+        bookletId: 10,
+        bookletName: 'BOOKLET-1',
+        personLogin: 'login-1',
+        personCode: 'code-1',
+        personGroup: 'group-1'
+      }],
+      'v2'
+    );
+
+    expect(responseQueryBuilder.innerJoin).toHaveBeenCalledWith('response.unit', 'unit');
+    expect(responseQueryBuilder.innerJoin).toHaveBeenCalledWith('unit.booklet', 'booklet');
+    expect(responseQueryBuilder.innerJoin).toHaveBeenCalledWith('booklet.bookletinfo', 'bookletinfo');
+    expect(responseQueryBuilder.getRawMany).toHaveBeenCalled();
+    expect(values.get(10)?.get('UNIT1\u001FVAR1')).toEqual({ code: 4, score: 2 });
+  });
 });

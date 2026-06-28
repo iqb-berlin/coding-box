@@ -18,6 +18,32 @@ import {
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES } from '../../utils/manual-coding-candidate.util';
 import { isCodingResponseCandidateByPattern } from './coding-response-candidate.util';
+import type { CodingItemVersionRow } from './coding-item-builder.service';
+
+type RawNumericValue = number | string | null;
+
+interface RawCodingItemVersionRow extends Omit<CodingItemVersionRow,
+'id' |
+'statusV1' |
+'codeV1' |
+'scoreV1' |
+'statusV2' |
+'codeV2' |
+'scoreV2' |
+'statusV3' |
+'codeV3' |
+'scoreV3'> {
+  id: number | string;
+  statusV1: RawNumericValue;
+  codeV1: RawNumericValue;
+  scoreV1: RawNumericValue;
+  statusV2: RawNumericValue;
+  codeV2: RawNumericValue;
+  scoreV2: RawNumericValue;
+  statusV3: RawNumericValue;
+  codeV3: RawNumericValue;
+  scoreV3: RawNumericValue;
+}
 
 export interface ResponseFilterOptions {
   status?: string;
@@ -123,11 +149,10 @@ export class CodingResponseFilterService {
     // Establish base conditions
     if (version) {
       const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
-      queryBuilder.where(`${effectiveStatusExpression} IS NOT NULL`)
-        .andWhere(
-          `${effectiveStatusExpression} NOT IN (:...statisticsIgnoredStatuses)`,
-          { statisticsIgnoredStatuses: STATISTICS_IGNORED_STATUSES }
-        );
+      queryBuilder.where(
+        `${effectiveStatusExpression} NOT IN (:...statisticsIgnoredStatuses)`,
+        { statisticsIgnoredStatuses: STATISTICS_IGNORED_STATUSES }
+      );
     } else if (options.manualCodingCandidatesOnly) {
       queryBuilder.where('response.status_v1 IN (:...statuses)', {
         statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
@@ -185,6 +210,18 @@ export class CodingResponseFilterService {
     return `${unitName}\u001F${variableId}`;
   }
 
+  private toIntegerOrNull(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const parsed = typeof value === 'number' ?
+      value :
+      Number.parseInt(String(value), 10);
+
+    return Number.isInteger(parsed) ? parsed : null;
+  }
+
   /**
    * Get responses in batches for streaming operations.
    * Uses cursor-based pagination for memory efficiency.
@@ -203,6 +240,53 @@ export class CodingResponseFilterService {
       .take(batchSize);
 
     return queryBuilder.getMany();
+  }
+
+  async getVersionedResponsesBatchRaw(
+    workspaceId: number,
+    lastId: number,
+    batchSize: number,
+    options: ResponseFilterOptions = {}
+  ): Promise<CodingItemVersionRow[]> {
+    const queryBuilder = await this.createBatchQueryBuilder(workspaceId, options);
+
+    const rows = await queryBuilder
+      .select('response.id', 'id')
+      .addSelect('unit.name', 'unitKey')
+      .addSelect('unit.alias', 'unitAlias')
+      .addSelect('person.login', 'personLogin')
+      .addSelect('person.code', 'personCode')
+      .addSelect('person.group', 'personGroup')
+      .addSelect('bookletinfo.name', 'bookletName')
+      .addSelect('response.variableid', 'variableId')
+      .addSelect('response.value', 'value')
+      .addSelect('response.status_v1', 'statusV1')
+      .addSelect('response.code_v1', 'codeV1')
+      .addSelect('response.score_v1', 'scoreV1')
+      .addSelect('response.status_v2', 'statusV2')
+      .addSelect('response.code_v2', 'codeV2')
+      .addSelect('response.score_v2', 'scoreV2')
+      .addSelect('response.status_v3', 'statusV3')
+      .addSelect('response.code_v3', 'codeV3')
+      .addSelect('response.score_v3', 'scoreV3')
+      .andWhere('response.id > :lastId', { lastId })
+      .orderBy('response.id', 'ASC')
+      .take(batchSize)
+      .getRawMany<RawCodingItemVersionRow>();
+
+    return rows.map(row => ({
+      ...row,
+      id: Number(row.id),
+      statusV1: this.toIntegerOrNull(row.statusV1),
+      codeV1: this.toIntegerOrNull(row.codeV1),
+      scoreV1: this.toIntegerOrNull(row.scoreV1),
+      statusV2: this.toIntegerOrNull(row.statusV2),
+      codeV2: this.toIntegerOrNull(row.codeV2),
+      scoreV2: this.toIntegerOrNull(row.scoreV2),
+      statusV3: this.toIntegerOrNull(row.statusV3),
+      codeV3: this.toIntegerOrNull(row.codeV3),
+      scoreV3: this.toIntegerOrNull(row.scoreV3)
+    }));
   }
 
   /**

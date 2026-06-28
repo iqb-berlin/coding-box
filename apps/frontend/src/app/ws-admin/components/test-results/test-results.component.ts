@@ -447,6 +447,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   variableValidationResult: VariableValidationDto | null = null;
   readonly SHORT_PROCESSING_TIME_THRESHOLD_MS: number = 60000;
   private validationStatusInterval: number | null = null;
+  private exportStatusInterval: number | null = null;
   private isInitialized: boolean = false;
 
   overview: TestResultsOverviewResponse | null = null;
@@ -551,6 +552,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     this.stopValidationStatusCheck();
+    this.stopExportStatusPolling();
   }
 
   toggleTableView(): void {
@@ -3141,8 +3143,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        if (result.type === 'download') {
+        if (result.type === 'download' && result.jobId) {
           this.downloadExportResult(result.jobId);
+        } else if (result.type === 'cancel') {
+          this.cancelExportJob(result.jobId);
         } else if (result.type === 'results' || result.type === 'logs') {
           this.startExportJob(result.type);
         }
@@ -3257,9 +3261,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private pollExportJobStatus(jobId: string): void {
     const pollingInterval = 2000;
-    const timer = setInterval(() => {
+    this.stopExportStatusPolling();
+    this.exportStatusInterval = window.setInterval(() => {
       if (!this.appService.selectedWorkspaceId) {
-        clearInterval(timer);
+        this.stopExportStatusPolling();
         return;
       }
       this.testResultBackendService
@@ -3272,7 +3277,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               this.exportJobProgress = job.progress;
 
               if (job.status === 'completed') {
-                clearInterval(timer);
+                this.stopExportStatusPolling();
                 this.isExporting = false;
                 const snackBarRef = this.snackBar.open(
                   'Export abgeschlossen',
@@ -3283,23 +3288,71 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                   this.downloadExportResult(jobId);
                 });
               } else if (job.status === 'failed') {
-                clearInterval(timer);
+                this.stopExportStatusPolling();
                 this.isExporting = false;
                 this.snackBar.open('Export fehlgeschlagen', 'Fehler', {
                   duration: 5000
                 });
+              } else if (job.status === 'cancelled') {
+                this.resetExportState();
+                this.snackBar.open('Export abgebrochen', 'OK', {
+                  duration: 3000
+                });
               }
             } else {
-              clearInterval(timer);
-              this.isExporting = false;
+              this.resetExportState();
             }
           },
           error: () => {
-            clearInterval(timer);
-            this.isExporting = false;
+            this.resetExportState();
           }
         });
     }, pollingInterval);
+  }
+
+  private cancelExportJob(jobId?: string | null): void {
+    if (!this.appService.selectedWorkspaceId || !jobId) {
+      return;
+    }
+
+    this.testResultBackendService
+      .cancelTestResultExportJob(this.appService.selectedWorkspaceId, jobId)
+      .subscribe({
+        next: response => {
+          if (response.success) {
+            this.resetExportState();
+            this.snackBar.open('Export abgebrochen', 'OK', {
+              duration: 3000
+            });
+            return;
+          }
+
+          this.snackBar.open('Export konnte nicht abgebrochen werden', 'Fehler', {
+            duration: 5000
+          });
+        },
+        error: () => {
+          this.snackBar.open('Export konnte nicht abgebrochen werden', 'Fehler', {
+            duration: 5000
+          });
+        }
+      });
+  }
+
+  private resetExportState(): void {
+    this.stopExportStatusPolling();
+    this.isExporting = false;
+    this.exportJobStatus = null;
+    this.exportJobProgress = 0;
+    this.exportJobId = null;
+    this.exportTypeInProgress = null;
+  }
+
+  private stopExportStatusPolling(): void {
+    if (this.exportStatusInterval !== null) {
+      window.clearInterval(this.exportStatusInterval);
+      this.exportStatusInterval = null;
+    }
   }
 
   downloadExportResult(jobId: string): void {
@@ -3321,9 +3374,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           window.URL.revokeObjectURL(url);
 
           // Hide the download button after successful download
-          this.exportJobStatus = null;
-          this.exportJobId = null;
-          this.exportTypeInProgress = null;
+          this.resetExportState();
 
           // Delete the job from the server
           this.testResultBackendService

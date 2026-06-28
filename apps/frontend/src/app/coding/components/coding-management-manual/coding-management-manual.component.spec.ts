@@ -88,7 +88,15 @@ describe('CodingManagementManualComponent', () => {
         },
         {
           provide: ExportJobService,
-          useValue: { startJob: jest.fn().mockReturnValue(of({ jobId: 'export-1' })) }
+          useValue: {
+            startJob: jest.fn().mockReturnValue(of({ jobId: 'export-1' })),
+            estimateJob: jest.fn().mockReturnValue(of({
+              exportType: 'by-variable',
+              unitVariableCount: 12,
+              worksheetLimit: 1000,
+              exceedsWorksheetLimit: false
+            }))
+          }
         },
         {
           provide: Router,
@@ -1553,6 +1561,7 @@ describe('CodingManagementManualComponent', () => {
   it('should label manual review exports by their double-coding method', () => {
     const exportJobService = TestBed.inject(ExportJobService) as unknown as {
       startJob: jest.Mock;
+      estimateJob: jest.Mock;
     };
     const componentInternals = component as unknown as {
       startManualCodingExport: (
@@ -1616,6 +1625,16 @@ describe('CodingManagementManualComponent', () => {
         downloadFilePrefix: 'manual-review-new-column-per-coder'
       })
     );
+
+    expect(exportJobService.estimateJob).toHaveBeenCalledTimes(1);
+    expect(exportJobService.estimateJob).toHaveBeenCalledWith(
+      5,
+      expect.objectContaining({
+        exportType: 'by-variable',
+        excludeAutoCoded: true,
+        jobDefinitionIds: [11]
+      })
+    );
     expect(exportJobService.startJob).toHaveBeenNthCalledWith(
       3,
       5,
@@ -1624,6 +1643,107 @@ describe('CodingManagementManualComponent', () => {
         doubleCodingMethod: 'new-row-per-variable',
         displayLabelKey: 'export-toast.types.manual-review-new-row-per-variable',
         downloadFilePrefix: 'manual-review-new-row-per-variable'
+      })
+    );
+  });
+
+  it('warns before starting oversized new-row-per-variable exports', () => {
+    const exportJobService = TestBed.inject(ExportJobService) as unknown as {
+      startJob: jest.Mock;
+      estimateJob: jest.Mock;
+    };
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    const componentInternals = component as unknown as {
+      dialog: typeof dialog;
+      startManualCodingExport: (
+        context: 'training' | 'execution',
+        result: {
+          exportType: 'aggregated';
+          doubleCodingMethod: 'new-row-per-variable';
+          jobDefinitionIds: number[];
+        }
+      ) => void;
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+    };
+    componentInternals.dialog = dialog;
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    exportJobService.estimateJob.mockReturnValue(of({
+      exportType: 'by-variable',
+      unitVariableCount: 2791,
+      worksheetLimit: 1000,
+      exceedsWorksheetLimit: true
+    }));
+    dialog.open.mockReturnValue({ afterClosed: () => of(false) });
+    exportJobService.startJob.mockClear();
+
+    componentInternals.startManualCodingExport('execution', {
+      exportType: 'aggregated',
+      doubleCodingMethod: 'new-row-per-variable',
+      jobDefinitionIds: [11]
+    });
+
+    expect(exportJobService.startJob).not.toHaveBeenCalled();
+    expect(dialog.open).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          alternativeButtonValue: 'compact'
+        })
+      })
+    );
+  });
+
+  it('starts the compact by-variable export from the oversized export warning', () => {
+    const exportJobService = TestBed.inject(ExportJobService) as unknown as {
+      startJob: jest.Mock;
+      estimateJob: jest.Mock;
+    };
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    const componentInternals = component as unknown as {
+      dialog: typeof dialog;
+      startManualCodingExport: (
+        context: 'training' | 'execution',
+        result: {
+          exportType: 'aggregated';
+          doubleCodingMethod: 'new-row-per-variable';
+          jobDefinitionIds: number[];
+        }
+      ) => void;
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+    };
+    componentInternals.dialog = dialog;
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    exportJobService.estimateJob.mockReturnValue(of({
+      exportType: 'by-variable',
+      unitVariableCount: 2791,
+      worksheetLimit: 1000,
+      exceedsWorksheetLimit: true
+    }));
+    dialog.open.mockReturnValue({ afterClosed: () => of('compact') });
+    exportJobService.startJob.mockClear();
+
+    componentInternals.startManualCodingExport('execution', {
+      exportType: 'aggregated',
+      doubleCodingMethod: 'new-row-per-variable',
+      jobDefinitionIds: [11]
+    });
+
+    expect(exportJobService.startJob).toHaveBeenCalledWith(
+      5,
+      expect.objectContaining({
+        exportType: 'by-variable-compact',
+        displayLabelKey: 'export-toast.types.by-variable-compact',
+        downloadFilePrefix: 'manual-review-by-variable-compact',
+        excludeAutoCoded: true,
+        jobDefinitionIds: [11]
       })
     );
   });

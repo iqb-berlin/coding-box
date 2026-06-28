@@ -2,14 +2,25 @@ import { Injectable } from '@nestjs/common';
 import { Request } from 'express';
 import { Readable } from 'stream';
 import { CodingExportService } from './coding-export.service';
+import { CodingListService } from './coding-list.service';
 import {
   CodingItemMatrixExportService,
   ItemMatrixValue,
   ItemMatrixVersion
 } from './coding-item-matrix-export.service';
-import { CodingResultsExportService } from './coding-results-export.service';
 
 type CodingVersion = 'v1' | 'v2' | 'v3';
+
+export interface ExportProgressDetails {
+  phase?: 'counting' | 'writing' | 'finalizing';
+  processedRows?: number;
+  totalRows?: number;
+}
+
+export type ExportProgressCallback = (
+  percentage: number,
+  details?: ExportProgressDetails
+) => Promise<void>;
 
 export interface VersionedCodingResultsExportOptions {
   workspaceId: number;
@@ -20,7 +31,7 @@ export interface VersionedCodingResultsExportOptions {
   includeResponseValues?: boolean;
   includeGeoGebraResponseValues?: boolean;
   includeGeoGebraFiles?: boolean;
-  onProgress?: (percentage: number) => Promise<void>;
+  onProgress?: ExportProgressCallback;
   checkCancellation?: () => Promise<void>;
 }
 
@@ -44,7 +55,7 @@ export interface ItemMatrixExportOptions {
   workspaceId: number;
   matrixValue?: ItemMatrixValue;
   version?: ItemMatrixVersion;
-  onProgress?: (percentage: number) => Promise<void>;
+  onProgress?: ExportProgressCallback;
   checkCancellation?: () => Promise<void>;
 }
 
@@ -52,14 +63,14 @@ export interface ItemMatrixExportOptions {
 export class CodingExportOrchestratorService {
   constructor(
     private readonly codingExportService: CodingExportService,
-    private readonly codingResultsExportService: CodingResultsExportService,
+    private readonly codingListService: CodingListService,
     private readonly codingItemMatrixExportService: CodingItemMatrixExportService
   ) { }
 
   exportResultsByVersionAsCsv(
     options: VersionedCodingResultsExportOptions
   ): Promise<Readable> {
-    return this.codingResultsExportService.exportCodingResultsByVersionAsCsv(
+    return this.codingListService.getCodingResultsByVersionCsvStream(
       options.workspaceId,
       options.version || 'v2',
       options.authToken || '',
@@ -76,7 +87,7 @@ export class CodingExportOrchestratorService {
     options: VersionedCodingResultsExportOptions
   ): Promise<Buffer> {
     if (options.includeGeoGebraFiles) {
-      return this.codingResultsExportService.exportCodingResultsByVersionAsGeoGebraZip(
+      return this.codingListService.getCodingResultsByVersionAsGeoGebraZip(
         options.workspaceId,
         options.version || 'v2',
         options.authToken || '',
@@ -87,7 +98,7 @@ export class CodingExportOrchestratorService {
       );
     }
 
-    return this.codingResultsExportService.exportCodingResultsByVersionAsExcel(
+    return this.codingListService.getCodingResultsByVersionAsExcel(
       options.workspaceId,
       options.version || 'v2',
       options.authToken || '',
@@ -105,7 +116,7 @@ export class CodingExportOrchestratorService {
     options: VersionedCodingResultsExportOptions
   ): Promise<void> {
     if (options.includeGeoGebraFiles) {
-      await this.codingResultsExportService.exportCodingResultsByVersionAsGeoGebraZipToFile(
+      await this.codingListService.writeCodingResultsByVersionGeoGebraZipToFile(
         filePath,
         options.workspaceId,
         options.version || 'v2',
@@ -118,7 +129,7 @@ export class CodingExportOrchestratorService {
       return;
     }
 
-    await this.codingResultsExportService.exportCodingResultsByVersionAsExcelToFile(
+    await this.codingListService.writeCodingResultsByVersionExcelToFile(
       filePath,
       options.workspaceId,
       options.version || 'v2',
@@ -133,20 +144,6 @@ export class CodingExportOrchestratorService {
   }
 
   exportDetailed(options: DetailedCodingResultsExportOptions): Promise<Buffer> {
-    if (this.canUseSpecializedDetailedExport(options)) {
-      return this.codingResultsExportService.exportCodingResultsDetailed(
-        options.workspaceId,
-        options.outputCommentsInsteadOfCodes || false,
-        options.includeReplayUrl || false,
-        options.anonymizeCoders || false,
-        options.usePseudoCoders || false,
-        options.authToken || '',
-        options.req,
-        options.excludeAutoCoded || false,
-        options.checkCancellation
-      );
-    }
-
     return this.codingExportService.exportCodingResultsDetailed(
       options.workspaceId,
       options.outputCommentsInsteadOfCodes || false,
@@ -218,21 +215,5 @@ export class CodingExportOrchestratorService {
       options.onProgress,
       options.checkCancellation
     );
-  }
-
-  private canUseSpecializedDetailedExport(
-    options: DetailedCodingResultsExportOptions
-  ): boolean {
-    const hasScopedJobFilters = !!(
-      options.jobDefinitionIds?.length ||
-      options.coderTrainingIds?.length ||
-      options.coderIds?.length
-    );
-
-    if (hasScopedJobFilters) {
-      return false;
-    }
-
-    return !options.includeReplayUrl || !!options.req;
   }
 }

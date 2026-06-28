@@ -8,6 +8,8 @@ import * as fs from 'fs';
 import { pipeline } from 'stream/promises';
 import {
   ExportJobData,
+  ExportJobProgress,
+  ExportJobProgressPhase,
   ExportJobResult,
   JobQueueService
 } from '../job-queue.service';
@@ -122,6 +124,55 @@ export class ExportJobProcessor {
     }
   }
 
+  private createCancelledResult(
+    job: Job<ExportJobData>
+  ): ExportJobResult {
+    return {
+      fileId: job.id.toString(),
+      fileName: '',
+      filePath: '',
+      fileSize: 0,
+      workspaceId: job.data.workspaceId,
+      userId: job.data.userId,
+      exportType: job.data.exportType,
+      createdAt: Date.now()
+    };
+  }
+
+  private clampProgress(percentage: number): number {
+    return Math.max(0, Math.min(100, Math.round(percentage)));
+  }
+
+  private async updateJobProgress(
+    job: Job<ExportJobData>,
+    percentage: number,
+    details: {
+      phase?: ExportJobProgressPhase;
+      processedRows?: number;
+      totalRows?: number;
+      message?: string;
+    } = {}
+  ): Promise<void> {
+    const progress: ExportJobProgress = {
+      percentage: this.clampProgress(percentage)
+    };
+
+    if (details.phase) {
+      progress.phase = details.phase;
+    }
+    if (typeof details.processedRows === 'number') {
+      progress.processedRows = Math.max(0, Math.round(details.processedRows));
+    }
+    if (typeof details.totalRows === 'number') {
+      progress.totalRows = Math.max(0, Math.round(details.totalRows));
+    }
+    if (details.message) {
+      progress.message = details.message;
+    }
+
+    await job.progress(progress);
+  }
+
   private async writeStreamToFile(
     stream: NodeJS.ReadableStream,
     filePath: string,
@@ -200,7 +251,7 @@ export class ExportJobProcessor {
 
     try {
       await this.checkCancellation(job);
-      await job.progress(10);
+      await this.updateJobProgress(job, 10, { phase: 'preparing' });
       const tempDir = path.join(process.cwd(), 'temp');
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
@@ -231,7 +282,7 @@ export class ExportJobProcessor {
       this.logger.log(`Generating export file: ${filePath}`);
       await this.checkCancellation(job, filePath);
 
-      await job.progress(20);
+      await this.updateJobProgress(job, 20, { phase: 'preparing' });
       const checkCancellation = async (): Promise<void> => {
         await this.checkCancellation(job, filePath);
       };
@@ -242,10 +293,21 @@ export class ExportJobProcessor {
       switch (job.data.exportType) {
         case 'results-by-version': {
           const version = job.data.version || 'v2';
-          const onProgress = async (percentage: number) => {
+          const onProgress = async (
+            percentage: number,
+            details?: {
+              phase?: ExportJobProgressPhase;
+              processedRows?: number;
+              totalRows?: number;
+            }
+          ) => {
             // Map 0-100% of sub-task to 20-90% of overall job
             const jobProgress = 20 + Math.round((percentage / 100) * 70);
-            await job.progress(jobProgress);
+            await this.updateJobProgress(job, jobProgress, {
+              phase: details?.phase || 'writing',
+              processedRows: details?.processedRows,
+              totalRows: details?.totalRows
+            });
             await checkCancellation();
           };
 
@@ -292,7 +354,7 @@ export class ExportJobProcessor {
         case 'coding-list': {
           const onProgress = async (percentage: number) => {
             const jobProgress = 20 + Math.round((percentage / 100) * 70);
-            await job.progress(jobProgress);
+            await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
             await checkCancellation();
           };
 
@@ -340,7 +402,7 @@ export class ExportJobProcessor {
         case 'item-matrix': {
           const onProgress = async (percentage: number) => {
             const jobProgress = 20 + Math.round((percentage / 100) * 70);
-            await job.progress(jobProgress);
+            await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
             await checkCancellation();
           };
 
@@ -507,7 +569,7 @@ export class ExportJobProcessor {
             job.data.testResultFilters,
             async progress => {
               const jobProgress = 20 + Math.round((progress / 100) * 70);
-              await job.progress(jobProgress);
+              await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
               await this.checkCancellation(job, filePath);
             }
           );
@@ -521,7 +583,7 @@ export class ExportJobProcessor {
             job.data.testResultFilters,
             async progress => {
               const jobProgress = 20 + Math.round((progress / 100) * 70);
-              await job.progress(jobProgress);
+              await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
               await this.checkCancellation(job, filePath);
             }
           );
@@ -533,7 +595,7 @@ export class ExportJobProcessor {
       await this.checkCancellation(job, filePath);
       const generationFinishedAt = Date.now();
 
-      await job.progress(90);
+      await this.updateJobProgress(job, 90, { phase: 'finalizing' });
 
       const fileWriteFinishedAt = Date.now();
 
@@ -568,14 +630,15 @@ export class ExportJobProcessor {
         3600 // 1 hour TTL
       );
 
-      await job.progress(100);
+      await this.updateJobProgress(job, 100, { phase: 'completed' });
 
       this.logger.log(`Job ${job.id} completed successfully in ${Date.now() - startedAt}ms`);
       return metadata;
     } catch (error) {
       if (error instanceof ExportJobCancelledException) {
         this.logger.log(`Export job ${job.id} was cancelled after ${Date.now() - startedAt}ms`);
-        throw error;
+        this.cleanupPartialExportFile(filePath);
+        return this.createCancelledResult(job);
       }
       this.logger.error(
         `Error processing export job ${job.id}: ${error.message}`,

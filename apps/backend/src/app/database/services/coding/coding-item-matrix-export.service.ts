@@ -44,6 +44,20 @@ interface RawMatrixRow {
   personGroup: string;
 }
 
+interface RawResponseValueRow {
+  id: number;
+  bookletId: number | string;
+  bookletName: string;
+  unitName: string;
+  variableId: string;
+  codeV1: number | string | null;
+  scoreV1: number | string | null;
+  codeV2: number | string | null;
+  scoreV2: number | string | null;
+  codeV3: number | string | null;
+  scoreV3: number | string | null;
+}
+
 interface ResponseValue {
   code: number | null;
   score: number | null;
@@ -52,6 +66,7 @@ interface ResponseValue {
 @Injectable()
 export class CodingItemMatrixExportService {
   private readonly logger = new Logger(CodingItemMatrixExportService.name);
+  private static readonly exportYieldEveryItems = 50;
 
   private readonly missingValueCache = new Map<string, ResolvedMissingValue>();
 
@@ -67,6 +82,26 @@ export class CodingItemMatrixExportService {
     @Optional()
     private readonly missingsProfilesService?: MissingsProfilesService
   ) {}
+
+  private async yieldToEventLoop(): Promise<void> {
+    await new Promise<void>(resolve => {
+      setImmediate(resolve);
+    });
+  }
+
+  private shouldYieldExportItem(index: number): boolean {
+    return index > 0 &&
+      index % CodingItemMatrixExportService.exportYieldEveryItems === 0;
+  }
+
+  private toNullableNumber(value: number | string | null | undefined): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const parsedValue = Number(value);
+    return Number.isFinite(parsedValue) ? parsedValue : null;
+  }
 
   exportItemMatrixAsCsvStream(
     workspaceId: number,
@@ -101,12 +136,14 @@ export class CodingItemMatrixExportService {
               await new Promise(resolve => {
                 matrixStream.once('drain', resolve);
               });
+              await checkCancellation?.();
             }
           },
           progressCallback,
           checkCancellation
         );
 
+        await checkCancellation?.();
         matrixStream.end();
       } catch (error) {
         this.logger.error(`Error streaming item matrix export: ${error.message}`, error.stack);
@@ -162,9 +199,11 @@ export class CodingItemMatrixExportService {
       checkCancellation
     );
 
+    await checkCancellation?.();
     await worksheet.commit();
     await workbook.commit();
     await streamComplete;
+    await checkCancellation?.();
 
     return Buffer.concat(chunks);
   }
@@ -216,6 +255,10 @@ export class CodingItemMatrixExportService {
       await checkCancellation?.();
     } catch (error) {
       outputStream.destroy(error);
+      await streamComplete.catch(() => undefined);
+      if (this.isExportCancellationError(error)) {
+        this.logger.log(`Item matrix Excel export cancelled: ${error.message}`);
+      }
       throw error;
     }
   }
@@ -310,7 +353,14 @@ export class CodingItemMatrixExportService {
         continue;
       }
 
-      for (const variableId of Array.from(variables).sort((a, b) => a.localeCompare(b))) {
+      const sortedVariables = Array.from(variables).sort((a, b) => a.localeCompare(b));
+      for (let variableIndex = 0; variableIndex < sortedVariables.length; variableIndex += 1) {
+        if (this.shouldYieldExportItem(variableIndex)) {
+          await checkCancellation?.();
+          await this.yieldToEventLoop();
+        }
+
+        const variableId = sortedVariables[variableIndex];
         const alias = unitAliases.get(normalizeExclusionUnitId(unitName));
         const preferredHeader = `${alias || unitName}__${variableId}`;
         const header = this.createUniqueHeader(
@@ -413,7 +463,13 @@ export class CodingItemMatrixExportService {
       );
       await checkCancellation?.();
 
-      for (const row of batchRows) {
+      for (let rowIndex = 0; rowIndex < batchRows.length; rowIndex += 1) {
+        if (this.shouldYieldExportItem(rowIndex)) {
+          await checkCancellation?.();
+          await this.yieldToEventLoop();
+        }
+
+        const row = batchRows[rowIndex];
         await checkCancellation?.();
         const exportRow: Record<string, string | number> = {
           person_login: row.personLogin,
@@ -423,7 +479,13 @@ export class CodingItemMatrixExportService {
         };
         const rowValues = responseValues.get(row.bookletId) || new Map<string, ResponseValue>();
 
-        for (const column of columns) {
+        for (let columnIndex = 0; columnIndex < columns.length; columnIndex += 1) {
+          if (this.shouldYieldExportItem(columnIndex)) {
+            await checkCancellation?.();
+            await this.yieldToEventLoop();
+          }
+
+          const column = columns[columnIndex];
           const cellValue = rowValues.get(column.key);
           exportRow[column.header] = cellValue ?
             await this.resolveExportCellValue(workspaceId, cellValue, value) :
@@ -438,9 +500,7 @@ export class CodingItemMatrixExportService {
         await progressCallback(Math.min(100, Math.round((written / rows.length) * 100)));
       }
 
-      await new Promise(resolve => {
-        setImmediate(resolve);
-      });
+      await this.yieldToEventLoop();
     }
   }
 
@@ -467,12 +527,23 @@ export class CodingItemMatrixExportService {
     const bookletIds = rows.map(row => row.bookletId);
     const responses = await this.responseRepository
       .createQueryBuilder('response')
-      .innerJoinAndSelect('response.unit', 'unit')
-      .innerJoinAndSelect('unit.booklet', 'booklet')
-      .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .select('response.id', 'id')
+      .addSelect('booklet.id', 'bookletId')
+      .addSelect('bookletinfo.name', 'bookletName')
+      .addSelect('unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .addSelect('response.code_v1', 'codeV1')
+      .addSelect('response.score_v1', 'scoreV1')
+      .addSelect('response.code_v2', 'codeV2')
+      .addSelect('response.score_v2', 'scoreV2')
+      .addSelect('response.code_v3', 'codeV3')
+      .addSelect('response.score_v3', 'scoreV3')
       .where('booklet.id IN (:...bookletIds)', { bookletIds })
       .orderBy('response.id', 'ASC')
-      .getMany();
+      .getRawMany<RawResponseValueRow>();
     await checkCancellation?.();
     const result = new Map<number, Map<string, ResponseValue>>();
 
@@ -481,41 +552,61 @@ export class CodingItemMatrixExportService {
         await checkCancellation?.();
       }
       const response = responses[index];
-      const unitName = response.unit?.name || '';
-      const bookletName = response.unit?.booklet?.bookletinfo?.name || '';
+      const unitName = response.unitName || '';
+      const bookletName = response.bookletName || '';
       if (isExcludedByResolvedExclusions(exclusions, bookletName, unitName)) {
         continue;
       }
 
-      const key = `${normalizeExclusionUnitId(unitName)}\u001F${response.variableid}`;
-      if (!validPairs.has(key)) {
+      const variableId = response.variableId || '';
+      const responseKey = `${normalizeExclusionUnitId(unitName)}\u001F${variableId}`;
+      if (!validPairs.has(responseKey)) {
         continue;
       }
 
-      const bookletId = response.unit.bookletid;
+      const bookletId = Number(response.bookletId);
       if (!result.has(bookletId)) {
         result.set(bookletId, new Map());
       }
-      result.get(bookletId)!.set(key, this.getVersionedValue(response, version));
+      result.get(bookletId)!.set(responseKey, this.getVersionedValue(response, version));
     }
 
     return result;
   }
 
   private getVersionedValue(
-    response: ResponseEntity,
+    response: ResponseEntity | RawResponseValueRow,
     version: ItemMatrixVersion
   ): ResponseValue {
     switch (version) {
       case 'v1':
-        return { code: response.code_v1, score: response.score_v1 };
+        return 'code_v1' in response ?
+          { code: response.code_v1, score: response.score_v1 } :
+          {
+            code: this.toNullableNumber(response.codeV1),
+            score: this.toNullableNumber(response.scoreV1)
+          };
       case 'v2':
-        return { code: response.code_v2, score: response.score_v2 };
+        return 'code_v2' in response ?
+          { code: response.code_v2, score: response.score_v2 } :
+          {
+            code: this.toNullableNumber(response.codeV2),
+            score: this.toNullableNumber(response.scoreV2)
+          };
       case 'v3':
-        return { code: response.code_v3, score: response.score_v3 };
+        return 'code_v3' in response ?
+          { code: response.code_v3, score: response.score_v3 } :
+          {
+            code: this.toNullableNumber(response.codeV3),
+            score: this.toNullableNumber(response.scoreV3)
+          };
       default:
         throw new Error(`Unsupported item-matrix version: ${version}`);
     }
+  }
+
+  private isExportCancellationError(error: Error): boolean {
+    return /^Export job .* was cancelled$/.test(error.message);
   }
 
   private async resolveExportCellValue(

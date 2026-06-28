@@ -6,7 +6,10 @@
         <span class="title">{{ 'export-toast.title' | translate }}</span>
         <span class="badge" *ngIf="activeJobCount > 0">{{ activeJobCount }}</span>
       </div>
-      <button mat-icon-button class="collapse-btn">
+      <button
+        mat-icon-button
+        class="collapse-btn"
+        [attr.aria-label]="(isCollapsed ? 'export-toast.expand' : 'export-toast.collapse') | translate">
         <mat-icon>{{ isCollapsed ? 'expand_less' : 'expand_more' }}</mat-icon>
       </button>
     </div>
@@ -22,11 +25,14 @@
           </div>
 
           <div class="job-progress" *ngIf="job.status === 'waiting' || job.status === 'active' || job.status === 'downloading'">
-            <mat-progress-bar
-              [mode]="job.status === 'downloading' ? 'indeterminate' : 'determinate'"
-              [value]="job.progress">
-            </mat-progress-bar>
-            <span class="progress-text" *ngIf="job.status !== 'downloading'">{{ job.progress }}%</span>
+            <div class="progress-bar-row">
+              <mat-progress-bar
+                [mode]="getProgressMode(job)"
+                [value]="job.progress">
+              </mat-progress-bar>
+              <span class="progress-text" *ngIf="getProgressMode(job) === 'determinate'">{{ job.progress }}%</span>
+            </div>
+            <span class="progress-message">{{ getProgressDescription(job) }}</span>
           </div>
 
           <div class="job-error" *ngIf="job.status === 'failed' && job.error">
@@ -43,21 +49,24 @@
               mat-icon-button
               *ngIf="job.status === 'waiting' || job.status === 'active' || job.status === 'downloading'"
               (click)="cancelJob(job)"
-              matTooltip="{{ 'export-toast.cancel' | translate }}">
+              matTooltip="{{ 'export-toast.cancel' | translate }}"
+              [attr.aria-label]="'export-toast.cancel' | translate">
               <mat-icon>cancel</mat-icon>
             </button>
             <button
               mat-icon-button
               *ngIf="job.status === 'completed'"
               (click)="downloadFile(job)"
-              matTooltip="{{ 'export-toast.download' | translate }}">
+              matTooltip="{{ 'export-toast.download' | translate }}"
+              [attr.aria-label]="'export-toast.download' | translate">
               <mat-icon>file_download</mat-icon>
             </button>
             <button
               mat-icon-button
               *ngIf="job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled'"
               (click)="removeJob(job)"
-              matTooltip="{{ 'export-toast.remove' | translate }}">
+              matTooltip="{{ 'export-toast.remove' | translate }}"
+              [attr.aria-label]="'export-toast.remove' | translate">
               <mat-icon>close</mat-icon>
             </button>
           </div>
