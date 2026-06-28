@@ -71,6 +71,16 @@ describe('ExportToastComponent', () => {
           'too-many-worksheets-title': 'Export zu groß',
           'too-many-worksheets-message': 'Dieser Export würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}.',
           'generic-title': 'Export fehlgeschlagen'
+        },
+        progress: {
+          waiting: 'Wartet auf den Export-Worker',
+          active: 'Export wird verarbeitet',
+          preparing: 'Export wird vorbereitet',
+          counting: 'Datensätze werden gezählt',
+          writing: 'Datensätze werden geschrieben',
+          'writing-rows': '{{processed}}/{{total}} Zeilen geschrieben',
+          finalizing: 'Datei wird finalisiert',
+          downloading: 'Datei wird heruntergeladen'
         }
       }
     });
@@ -148,6 +158,26 @@ describe('ExportToastComponent', () => {
       'Dieser Export würde 2578 Tabellenblätter erzeugen. Erlaubt sind aktuell 1000.'
     );
     expect(component.hasTechnicalDetails(job)).toBe(true);
+  });
+
+  it('formats structured progress details', () => {
+    const writingJob = {
+      ...jobs[1],
+      progress: 55,
+      progressPhase: 'writing',
+      processedRows: 1000,
+      totalRows: 2000
+    } as ExportJob;
+    const countingJob = {
+      ...jobs[1],
+      progress: 20,
+      progressPhase: 'counting'
+    } as ExportJob;
+
+    expect(component.getProgressMode(writingJob)).toBe('determinate');
+    expect(component.getProgressDescription(writingJob)).toBe('1.000/2.000 Zeilen geschrieben');
+    expect(component.getProgressMode(countingJob)).toBe('indeterminate');
+    expect(component.getProgressDescription(countingJob)).toBe('Datensätze werden gezählt');
   });
 
   it('keeps a fallback for legacy worksheet limit messages', () => {

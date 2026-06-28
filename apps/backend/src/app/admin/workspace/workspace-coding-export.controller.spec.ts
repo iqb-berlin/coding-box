@@ -12,9 +12,7 @@ import { AccessLevelGuard } from './access-level.guard';
 import {
   CodingExportService,
   CodingExportOrchestratorService,
-  CodingListExportService,
-  CodingResultsExportService,
-  CodingTimesExportService
+  CodingListExportService
 } from '../../database/services/coding';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
@@ -65,9 +63,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       {} as CodingExportService,
-      {} as CodingTimesExportService,
       codingExportOrchestratorService as unknown as CodingExportOrchestratorService,
       {} as JobQueueService,
       {} as CacheService
@@ -125,9 +121,7 @@ describe('WorkspaceCodingExportController', () => {
 
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       {} as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       {} as JobQueueService,
       cacheService as unknown as CacheService
@@ -164,9 +158,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       {} as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
       {} as CacheService
@@ -190,9 +182,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       {} as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
       {} as CacheService
@@ -216,9 +206,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       {} as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
       {} as CacheService
@@ -242,6 +230,83 @@ describe('WorkspaceCodingExportController', () => {
     });
   });
 
+  it('uses the streaming-capable export service for direct by-coder exports', async () => {
+    const codingExportService = {
+      exportCodingResultsByCoder: jest.fn().mockResolvedValue(Buffer.from('xlsx'))
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      codingExportService as unknown as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      {} as JobQueueService,
+      {} as CacheService
+    );
+    const response = {
+      setHeader: jest.fn(),
+      send: jest.fn(),
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+    const request = {};
+
+    await controller.exportCodingResultsByCoder(
+      5,
+      response as never,
+      request as never,
+      'true',
+      'true',
+      'token',
+      'true',
+      'false',
+      'true'
+    );
+
+    expect(codingExportService.exportCodingResultsByCoder).toHaveBeenCalledWith(
+      5,
+      true,
+      true,
+      true,
+      false,
+      'token',
+      request,
+      true
+    );
+    expect(response.send).toHaveBeenCalledWith(Buffer.from('xlsx'));
+  });
+
+  it('uses the streaming-capable export service for direct coding-times exports', async () => {
+    const codingExportService = {
+      exportCodingTimesReport: jest.fn().mockResolvedValue(Buffer.from('xlsx'))
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      codingExportService as unknown as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      {} as JobQueueService,
+      {} as CacheService
+    );
+    const response = {
+      setHeader: jest.fn(),
+      send: jest.fn()
+    };
+
+    await controller.exportCodingTimesReport(
+      5,
+      response as never,
+      'true',
+      'false',
+      'true'
+    );
+
+    expect(codingExportService.exportCodingTimesReport).toHaveBeenCalledWith(
+      5,
+      true,
+      false,
+      true
+    );
+    expect(response.send).toHaveBeenCalledWith(Buffer.from('xlsx'));
+  });
+
   it('estimates by-variable export sizes before starting a background job', async () => {
     const codingExportService = {
       estimateCodingResultsByVariableExport: jest.fn().mockResolvedValue({
@@ -253,9 +318,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       codingExportService as unknown as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       {} as JobQueueService,
       {} as CacheService
@@ -298,9 +361,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       codingExportService as unknown as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       {} as JobQueueService,
       {} as CacheService
@@ -334,9 +395,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       codingExportService as unknown as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       {} as JobQueueService,
       {} as CacheService
@@ -372,9 +431,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       {} as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
       {} as CacheService
@@ -410,9 +467,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       {} as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
       {} as CacheService
@@ -430,6 +485,38 @@ describe('WorkspaceCodingExportController', () => {
     });
   });
 
+  it('normalizes structured export progress details in job status', async () => {
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: { workspaceId: 5 },
+        getState: jest.fn().mockResolvedValue('active'),
+        progress: jest.fn().mockResolvedValue({
+          percentage: 57.4,
+          phase: 'writing',
+          processedRows: 5820,
+          totalRows: 10922,
+          message: 'Rows are being written'
+        })
+      })
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+      status: 'processing',
+      progress: 57,
+      progressPhase: 'writing',
+      processedRows: 5820,
+      totalRows: 10922,
+      progressMessage: 'Rows are being written'
+    });
+  });
+
   it('reports cancellation-marked export jobs as cancelled', async () => {
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
@@ -440,9 +527,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       {} as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
       {} as CacheService
@@ -451,6 +536,38 @@ describe('WorkspaceCodingExportController', () => {
     await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
       status: 'cancelled',
       progress: 55
+    });
+  });
+
+  it('reports completed cancellation-marked export jobs as cancelled without result metadata', async () => {
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: { workspaceId: 5, isCancelled: true },
+        getState: jest.fn().mockResolvedValue('completed'),
+        progress: jest.fn().mockResolvedValue(21),
+        returnvalue: {
+          fileId: 'job-1',
+          fileName: '',
+          filePath: '',
+          fileSize: 0,
+          workspaceId: 5,
+          userId: 2,
+          exportType: 'results-by-version',
+          createdAt: 123
+        }
+      })
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+      status: 'cancelled',
+      progress: 21
     });
   });
 
@@ -465,9 +582,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       {} as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
       {} as CacheService
@@ -479,6 +594,178 @@ describe('WorkspaceCodingExportController', () => {
     });
   });
 
+  it('maps cancelled export jobs consistently in the job list', async () => {
+    const jobQueueService = {
+      getExportJobs: jest.fn().mockResolvedValue([
+        {
+          id: 'active-cancelled',
+          data: { workspaceId: 5, exportType: 'coding-list', isCancelled: true },
+          timestamp: 100,
+          getState: jest.fn().mockResolvedValue('active'),
+          progress: jest.fn().mockResolvedValue(55)
+        },
+        {
+          id: 'failed-cancelled',
+          data: { workspaceId: 5, exportType: 'detailed' },
+          timestamp: 101,
+          failedReason: 'Export job failed-cancelled was cancelled',
+          getState: jest.fn().mockResolvedValue('failed'),
+          progress: jest.fn().mockResolvedValue(20)
+        },
+        {
+          id: 'waiting-job',
+          data: { workspaceId: 5, exportType: 'by-variable' },
+          timestamp: 102,
+          getState: jest.fn().mockResolvedValue('waiting'),
+          progress: jest.fn().mockResolvedValue(0)
+        }
+      ])
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.getExportJobs(5)).resolves.toEqual([
+      {
+        jobId: 'active-cancelled',
+        status: 'cancelled',
+        progress: 55,
+        exportType: 'coding-list',
+        createdAt: 100
+      },
+      {
+        jobId: 'failed-cancelled',
+        status: 'cancelled',
+        progress: 20,
+        exportType: 'detailed',
+        createdAt: 101
+      },
+      {
+        jobId: 'waiting-job',
+        status: 'pending',
+        progress: 0,
+        exportType: 'by-variable',
+        createdAt: 102
+      }
+    ]);
+  });
+
+  it('does not clean up cached export metadata when cancelling coding export jobs', async () => {
+    const job = {
+      data: { workspaceId: 5 },
+      getState: jest.fn().mockResolvedValue('active')
+    };
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue(job),
+      markExportJobCancelled: jest.fn().mockResolvedValue(true),
+      cancelExportJob: jest.fn().mockResolvedValue(false)
+    };
+    const cacheService = {
+      get: jest.fn(),
+      delete: jest.fn()
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      cacheService as unknown as CacheService
+    );
+
+    await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
+      success: true,
+      message: 'Export job cancellation requested (job will stop at next checkpoint)'
+    });
+    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1');
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+    expect(cacheService.get).not.toHaveBeenCalled();
+    expect(cacheService.delete).not.toHaveBeenCalled();
+  });
+
+  it('allows cancelling a job that already failed because of cancellation', async () => {
+    const job = {
+      data: { workspaceId: 5, isCancelled: true },
+      getState: jest.fn().mockResolvedValue('failed')
+    };
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue(job),
+      markExportJobCancelled: jest.fn().mockResolvedValue(true),
+      cancelExportJob: jest.fn().mockResolvedValue(true)
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
+      success: true,
+      message: 'Export job cancelled successfully'
+    });
+    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1');
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+  });
+
+  it('does not report coding export cancellation as successful when queue cancellation was not accepted', async () => {
+    const job = {
+      data: { workspaceId: 5 },
+      getState: jest.fn().mockResolvedValue('active')
+    };
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue(job),
+      markExportJobCancelled: jest.fn().mockResolvedValue(false),
+      cancelExportJob: jest.fn().mockResolvedValue(false)
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
+      success: false,
+      message: 'Export job cancellation could not be requested'
+    });
+    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1');
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+  });
+
+  it('reports coding export cancellation as successful when cancellation completes during the request', async () => {
+    const job = {
+      data: { workspaceId: 5 },
+      getState: jest.fn()
+        .mockResolvedValueOnce('active')
+        .mockResolvedValueOnce('completed')
+    };
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue(job),
+      markExportJobCancelled: jest.fn().mockResolvedValue(true),
+      cancelExportJob: jest.fn().mockResolvedValue(true)
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
+      success: true,
+      message: 'Export job cancellation requested (job will stop at next checkpoint)'
+    });
+    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1');
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+  });
+
   it('rejects export job status access for jobs from another workspace', async () => {
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
@@ -487,9 +774,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      {} as CodingResultsExportService,
       {} as CodingExportService,
-      {} as CodingTimesExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
       {} as CacheService

@@ -90,6 +90,49 @@ interface StreamingWorkbookTarget {
   chunks: Buffer[];
 }
 
+interface CodingTimesRawRow {
+  id: number | string;
+  variableId: string;
+  updatedAt: Date | string;
+  unitName: string;
+  bookletName: string | null;
+  coderAssignmentId: number | string | null;
+  coderName: string | null;
+}
+
+interface DetailedCodingResultRawRow {
+  id: number | string;
+  createdAt: Date | string | null;
+  trainingId: number | string | null;
+  missingsProfileId: number | string | null;
+  responseId: number | string | null;
+  unitName: string | null;
+  responseUnitName: string | null;
+  variableId: string;
+  code: number | string | null;
+  notes: string | null;
+  codingIssueOption: number | string | null;
+  updatedAt: Date | string | null;
+  coderName: string | null;
+  statusV1: number | string | null;
+  bookletName: string | null;
+  personLogin: string | null;
+  personCode: string | null;
+  personGroup: string | null;
+}
+
+interface CoderJobRawRow {
+  jobId: number | string;
+  trainingId: number | string | null;
+  userId: number | string | null;
+  username: string | null;
+}
+
+interface CoderExportJob {
+  id: number;
+  training_id: number | null;
+}
+
 interface TrainingDiscussionExportResult {
   code: number | null;
   score: number | null;
@@ -177,6 +220,16 @@ export class CodingExportService {
     outputFilePath?: string
   ): Buffer {
     return outputFilePath ? Buffer.alloc(0) : Buffer.concat(chunks);
+  }
+
+  private async yieldToEventLoop(): Promise<void> {
+    await new Promise<void>(resolve => {
+      setImmediate(resolve);
+    });
+  }
+
+  private isExportCancellationError(error: Error): boolean {
+    return /^Export job .* was cancelled$/.test(error.message);
   }
 
   private async getManualMissingExportValue(
@@ -2192,8 +2245,12 @@ export class CodingExportService {
     if (checkCancellation) await checkCancellation();
 
     const codingJobsQuery = this.codingJobRepository.createQueryBuilder('cj')
-      .leftJoinAndSelect('cj.codingJobCoders', 'cjc')
-      .leftJoinAndSelect('cjc.user', 'user')
+      .leftJoin('cj.codingJobCoders', 'cjc')
+      .leftJoin('cjc.user', 'user')
+      .select('cj.id', 'jobId')
+      .addSelect('cj.training_id', 'trainingId')
+      .addSelect('user.id', 'userId')
+      .addSelect('user.username', 'username')
       .where('cj.workspace_id = :workspaceId', { workspaceId });
 
     this.applyJobFilters(
@@ -2206,33 +2263,48 @@ export class CodingExportService {
       codingJobsQuery.andWhere('cj.training_id IS NULL');
     }
 
-    const codingJobs = await codingJobsQuery.getMany();
+    const codingJobRows = await codingJobsQuery.getRawMany<CoderJobRawRow>();
+    await checkCancellation?.();
 
-    if (codingJobs.length === 0) {
+    if (codingJobRows.length === 0) {
       throw new Error(this.getNoCodingResultsMessage(hasScopedJobFilters));
     }
 
-    const coderJobsMap = new Map<string, CodingJob[]>();
+    const jobsById = new Map<number, CoderExportJob>();
+    const coderJobsMap = new Map<string, CoderExportJob[]>();
     const allCoderNames = new Set<string>();
     const managerCoderKeySuffix = '|||manager';
 
-    for (const job of codingJobs) {
-      for (const jc of job.codingJobCoders) {
-        if (normalizedCoderIds.length > 0 && !normalizedCoderIds.includes(jc.user.id)) {
-          continue;
-        }
-        allCoderNames.add(jc.user.username);
-        const coderKey = `${jc.user.username}_${jc.user.id}`;
-        if (!coderJobsMap.has(coderKey)) {
-          coderJobsMap.set(coderKey, []);
-        }
-        coderJobsMap.get(coderKey)!.push(job);
+    for (const row of codingJobRows) {
+      const jobId = this.toIntegerOrNull(row.jobId);
+      if (!jobId) {
+        continue;
       }
+      const trainingId = this.toIntegerOrNull(row.trainingId);
+      const job = jobsById.get(jobId) ?? {
+        id: jobId,
+        training_id: trainingId
+      };
+      jobsById.set(jobId, job);
+
+      const userId = this.toIntegerOrNull(row.userId);
+      if (!userId || !row.username) {
+        continue;
+      }
+      if (normalizedCoderIds.length > 0 && !normalizedCoderIds.includes(userId)) {
+        continue;
+      }
+      allCoderNames.add(row.username);
+      const coderKey = `${row.username}_${userId}`;
+      if (!coderJobsMap.has(coderKey)) {
+        coderJobsMap.set(coderKey, []);
+      }
+      coderJobsMap.get(coderKey)!.push(job);
     }
 
     if (normalizedCoderTrainingIds.length > 0) {
       const managerUsernames = await this.getTrainingManagerUsernames(workspaceId, normalizedCoderTrainingIds);
-      const trainingJobs = codingJobs.filter(
+      const trainingJobs = Array.from(jobsById.values()).filter(
         job => job.training_id && normalizedCoderTrainingIds.includes(job.training_id)
       );
 
@@ -2621,7 +2693,7 @@ export class CodingExportService {
       throw new Error(
         `Der Export enthaelt ${filteredCombinations.length} Unit-Variable-Kombinationen ` +
         `und ueberschreitet das konfigurierte Limit von ${MAX_WORKSHEETS} Tabellenblaettern. ` +
-        'Bitte EXPORT_MAX_WORKSHEETS erhoehen, damit der Export vollstaendig erzeugt wird.'
+        'Bitte die Auswahl einschraenken oder den kompakten Nach-Variable-Export verwenden.'
       );
     }
 
@@ -3592,14 +3664,32 @@ export class CodingExportService {
       for (let i = 0; i < totalCount; i += batchSize) {
         if (checkCancellation) await checkCancellation();
         const unitsBatchQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
-          .innerJoinAndSelect('cju.coding_job', 'cj')
-          .leftJoinAndSelect('cj.codingJobCoders', 'cjc')
-          .leftJoinAndSelect('cjc.user', 'user')
-          .leftJoinAndSelect('cju.response', 'resp')
-          .leftJoinAndSelect('resp.unit', 'unit')
-          .leftJoinAndSelect('unit.booklet', 'booklet')
-          .leftJoinAndSelect('booklet.person', 'person')
-          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo') // bookletinfo is used for replay URL
+          .innerJoin('cju.coding_job', 'cj')
+          .leftJoin('cj.codingJobCoders', 'cjc')
+          .leftJoin('cjc.user', 'user')
+          .leftJoin('cju.response', 'resp')
+          .leftJoin('resp.unit', 'unit')
+          .leftJoin('unit.booklet', 'booklet')
+          .leftJoin('booklet.person', 'person')
+          .leftJoin('booklet.bookletinfo', 'bookletinfo') // bookletinfo is used for replay URL
+          .select('cju.id', 'id')
+          .addSelect('cju.created_at', 'createdAt')
+          .addSelect('cj.training_id', 'trainingId')
+          .addSelect('cj.missings_profile_id', 'missingsProfileId')
+          .addSelect('cju.response_id', 'responseId')
+          .addSelect('cju.unit_name', 'unitName')
+          .addSelect('unit.name', 'responseUnitName')
+          .addSelect('cju.variable_id', 'variableId')
+          .addSelect('cju.code', 'code')
+          .addSelect('cju.notes', 'notes')
+          .addSelect('cju.coding_issue_option', 'codingIssueOption')
+          .addSelect('cju.updated_at', 'updatedAt')
+          .addSelect('user.username', 'coderName')
+          .addSelect('resp.status_v1', 'statusV1')
+          .addSelect('bookletinfo.name', 'bookletName')
+          .addSelect('person.login', 'personLogin')
+          .addSelect('person.code', 'personCode')
+          .addSelect('person.group', 'personGroup')
           .where('cj.workspace_id = :workspaceId', { workspaceId })
           .orderBy('cju.created_at', 'ASC')
           .skip(i)
@@ -3619,16 +3709,18 @@ export class CodingExportService {
           '(resp.status_v1 IS NULL OR resp.status_v1 NOT IN (:...excludedStatuses))',
           { excludedStatuses: EXCLUDED_STATUSES }
         );
-        const unitsBatch = await unitsBatchQuery.getMany();
+        const unitsBatch = await unitsBatchQuery.getRawMany<DetailedCodingResultRawRow>();
+        await checkCancellation?.();
 
         let discussionResultMap = new Map<string, TrainingDiscussionExportResult>();
         if (includeDiscussionResult && unitsBatch.length > 0) {
           const trainingIdSet = new Set<number>();
           const responseIdSet = new Set<number>();
           for (const unit of unitsBatch) {
-            const tId = unit.coding_job?.training_id;
+            const tId = this.toIntegerOrNull(unit.trainingId);
+            const responseId = this.toIntegerOrNull(unit.responseId);
             if (tId) trainingIdSet.add(tId);
-            if (unit.response_id) responseIdSet.add(unit.response_id);
+            if (responseId) responseIdSet.add(responseId);
           }
 
           if (trainingIdSet.size > 0 && responseIdSet.size > 0) {
@@ -3637,6 +3729,7 @@ export class CodingExportService {
               Array.from(trainingIdSet),
               Array.from(responseIdSet)
             );
+            await checkCancellation?.();
           }
         }
 
@@ -3645,18 +3738,20 @@ export class CodingExportService {
         // Ensure that all coder rows for the same case (training_id + response_id) are emitted first,
         // then a single coding manager row at the end of that case.
         const sortedUnitsBatch = [...unitsBatch].sort((a, b) => {
-          const aTrainingId = a.coding_job?.training_id ?? 0;
-          const bTrainingId = b.coding_job?.training_id ?? 0;
+          const aTrainingId = this.toIntegerOrNull(a.trainingId) ?? 0;
+          const bTrainingId = this.toIntegerOrNull(b.trainingId) ?? 0;
           if (aTrainingId !== bTrainingId) return aTrainingId - bTrainingId;
-          if (a.response_id !== b.response_id) return a.response_id - b.response_id;
-          if (a.variable_id !== b.variable_id) return a.variable_id.localeCompare(b.variable_id);
-          const aUpdated = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-          const bUpdated = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+          const aResponseId = this.toIntegerOrNull(a.responseId) ?? 0;
+          const bResponseId = this.toIntegerOrNull(b.responseId) ?? 0;
+          if (aResponseId !== bResponseId) return aResponseId - bResponseId;
+          if (a.variableId !== b.variableId) return a.variableId.localeCompare(b.variableId);
+          const aUpdated = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+          const bUpdated = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
           return aUpdated - bUpdated;
         });
 
         let currentCaseKey: string | null = null;
-        let currentCaseRepresentative: CodingJobUnit | null = null;
+        let currentCaseRepresentative: DetailedCodingResultRawRow | null = null;
         let emittedManagerForCurrentCase = false;
 
         const flushManagerRowIfNeeded = async (): Promise<boolean> => {
@@ -3664,19 +3759,18 @@ export class CodingExportService {
           if (!currentCaseRepresentative) return false;
           if (emittedManagerForCurrentCase) return false;
 
-          const trainingId = currentCaseRepresentative.coding_job?.training_id;
-          const responseId = currentCaseRepresentative.response_id;
+          const trainingId = this.toIntegerOrNull(currentCaseRepresentative.trainingId);
+          const responseId = this.toIntegerOrNull(currentCaseRepresentative.responseId);
           if (!trainingId || !responseId) return false;
 
           const discussion = discussionResultMap.get(`${trainingId}|${responseId}`);
           if (!discussion) return false;
           if (!discussion.managerUsername) return false;
 
-          const person = currentCaseRepresentative.response?.unit?.booklet?.person;
-          const personLogin = person?.login || '';
-          const personCode = person?.code || '';
-          const personGroup = person?.group || '';
-          const unitName = currentCaseRepresentative.unit_name || currentCaseRepresentative.response?.unit?.name || '';
+          const personLogin = currentCaseRepresentative.personLogin || '';
+          const personCode = currentCaseRepresentative.personCode || '';
+          const personGroup = currentCaseRepresentative.personGroup || '';
+          const unitName = currentCaseRepresentative.unitName || currentCaseRepresentative.responseUnitName || '';
           const managerDisplayName = discussion.managerUsername;
           const discussionTimestamp = discussion.updatedAt ? new Date(discussion.updatedAt).toLocaleString('de-DE').replace(',', '') : '';
           const mappedDiscussionCode = mapCodeForExport(discussion.code);
@@ -3689,7 +3783,7 @@ export class CodingExportService {
             escapeCsvField(personGroup),
             escapeCsvField(managerDisplayName),
             escapeCsvField(unitName),
-            escapeCsvField(currentCaseRepresentative.variable_id),
+            escapeCsvField(currentCaseRepresentative.variableId),
             escapeCsvField(discussionNoteValue),
             escapeCsvField(discussionTimestamp),
             escapeCsvField(discussionCodeValue),
@@ -3697,9 +3791,9 @@ export class CodingExportService {
           ];
 
           if (includeReplayUrl && (req || serverUrl)) {
-            const bookletName = currentCaseRepresentative.response?.unit?.booklet?.bookletinfo?.name || '';
-            const replayUnitName = currentCaseRepresentative.response?.unit?.name || unitName;
-            const replayUrl = await this.generateReplayUrlWithPageLookup(req, personLogin, personCode, personGroup, bookletName, replayUnitName, currentCaseRepresentative.variable_id, workspaceId, authToken, serverUrl);
+            const bookletName = currentCaseRepresentative.bookletName || '';
+            const replayUnitName = currentCaseRepresentative.responseUnitName || unitName;
+            const replayUrl = await this.generateReplayUrlWithPageLookup(req, personLogin, personCode, personGroup, bookletName, replayUnitName, currentCaseRepresentative.variableId, workspaceId, authToken, serverUrl);
             discussionRowFields.push(escapeCsvField(replayUrl));
           }
 
@@ -3708,16 +3802,26 @@ export class CodingExportService {
           return true;
         };
 
-        for (const unit of sortedUnitsBatch) {
-          if (unit.unit_name && isExcluded(unit.response?.unit?.booklet?.bookletinfo?.name || '', unit.unit_name)) continue;
+        for (let rowIndex = 0; rowIndex < sortedUnitsBatch.length; rowIndex += 1) {
+          if (rowIndex > 0 && rowIndex % 100 === 0) {
+            await checkCancellation?.();
+            await this.yieldToEventLoop();
+          }
+
+          const unit = sortedUnitsBatch[rowIndex];
+          const unitName = unit.unitName || unit.responseUnitName || '';
+          const bookletName = unit.bookletName || '';
+          if (unitName && isExcluded(bookletName, unitName)) continue;
           if (
             manualCodingVariableSet &&
-            !manualCodingVariableSet.has(toManualCodingVariablePairKey(unit.unit_name, unit.variable_id))
+            !manualCodingVariableSet.has(toManualCodingVariablePairKey(unitName, unit.variableId))
           ) continue;
-          if (unit.response?.status_v1 !== null && unit.response?.status_v1 !== undefined && EXCLUDED_STATUSES.includes(unit.response.status_v1)) continue;
+          const statusV1 = this.toIntegerOrNull(unit.statusV1);
+          if (statusV1 !== null && EXCLUDED_STATUSES.includes(statusV1)) continue;
 
-          const trainingId = unit.coding_job?.training_id ?? 0;
-          const caseKey = `${trainingId}|${unit.response_id}`;
+          const trainingId = this.toIntegerOrNull(unit.trainingId) ?? 0;
+          const responseId = this.toIntegerOrNull(unit.responseId) ?? 0;
+          const caseKey = `${trainingId}|${responseId}`;
 
           if (currentCaseKey !== null && caseKey !== currentCaseKey) {
             if (await flushManagerRowIfNeeded()) exportedRowCount += 1;
@@ -3728,18 +3832,17 @@ export class CodingExportService {
           currentCaseKey = caseKey;
           if (!currentCaseRepresentative) currentCaseRepresentative = unit;
 
-          if (unit.code === null || unit.code === undefined) continue;
+          const rawCode = this.toIntegerOrNull(unit.code);
+          if (rawCode === null) continue;
 
-          const person = unit.response?.unit?.booklet?.person;
-          const personLogin = person?.login || '';
-          const personCode = person?.code || '';
-          const personGroup = person?.group || '';
-          const unitName = unit.unit_name || unit.response?.unit?.name || '';
-          let coder = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
+          const personLogin = unit.personLogin || '';
+          const personCode = unit.personCode || '';
+          const personGroup = unit.personGroup || '';
+          let coder = unit.coderName || '';
 
           if (anonymizeCoders && coder) {
             if (usePseudoCoders) {
-              const varPersonKey = `${unit.variable_id}_${personLogin}_${personCode}`;
+              const varPersonKey = `${unit.variableId}_${personLogin}_${personCode}`;
               if (!pseudoCoderMappings.has(varPersonKey)) {
                 pseudoCoderMappings.set(varPersonKey, new Map<string, string>());
               }
@@ -3753,20 +3856,21 @@ export class CodingExportService {
             }
           }
 
-          const timestamp = unit.updated_at ? new Date(unit.updated_at).toLocaleString('de-DE').replace(',', '') : '';
+          const timestamp = unit.updatedAt ? new Date(unit.updatedAt).toLocaleString('de-DE').replace(',', '') : '';
           const mapped = await this.mapCodeAndScoreForExport(
             workspaceId,
-            unit.code,
+            rawCode,
             null,
-            unit.coding_job?.missings_profile_id
+            this.toIntegerOrNull(unit.missingsProfileId)
           );
           const codeValue = mapped.code === null ? '' : mapped.code.toString();
 
           let commentValue = unit.notes || '';
-          if (!outputCommentsInsteadOfCodes && unit.coding_issue_option) {
-            commentValue = this.getCodingIssueText(unit.coding_issue_option) || commentValue;
+          const codingIssueOption = this.toIntegerOrNull(unit.codingIssueOption);
+          if (!outputCommentsInsteadOfCodes && codingIssueOption) {
+            commentValue = this.getCodingIssueText(codingIssueOption) || commentValue;
           }
-          const codeIssueValue = this.getCodingIssueText(unit.coding_issue_option);
+          const codeIssueValue = this.getCodingIssueText(codingIssueOption);
 
           const rowFields = [
             escapeCsvField(personLogin),
@@ -3774,7 +3878,7 @@ export class CodingExportService {
             escapeCsvField(personGroup),
             escapeCsvField(coder),
             escapeCsvField(unitName),
-            escapeCsvField(unit.variable_id),
+            escapeCsvField(unit.variableId),
             escapeCsvField(commentValue),
             escapeCsvField(timestamp),
             escapeCsvField(codeValue),
@@ -3782,9 +3886,8 @@ export class CodingExportService {
           ];
 
           if (includeReplayUrl && (req || serverUrl)) {
-            const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
-            const replayUnitName = unit.response?.unit?.name || unitName;
-            const replayUrl = await this.generateReplayUrlWithPageLookup(req, personLogin, personCode, personGroup, bookletName, replayUnitName, unit.variable_id, workspaceId, authToken, serverUrl);
+            const replayUnitName = unit.responseUnitName || unitName;
+            const replayUrl = await this.generateReplayUrlWithPageLookup(req, personLogin, personCode, personGroup, bookletName, replayUnitName, unit.variableId, workspaceId, authToken, serverUrl);
             rowFields.push(escapeCsvField(replayUrl));
           }
 
@@ -3799,6 +3902,8 @@ export class CodingExportService {
         } else {
           chunks.push(Buffer.from(batchCsv, 'utf-8'));
         }
+        await checkCancellation?.();
+        await this.yieldToEventLoop();
       }
 
       if (exportedRowCount === 0 && hasScopedJobFilters) {
@@ -3806,8 +3911,12 @@ export class CodingExportService {
       }
 
       this.logger.log(`Exported detailed results for workspace ${workspaceId}`);
+      await checkCancellation?.();
       return outputFilePath ? Buffer.alloc(0) : Buffer.concat(chunks);
     } catch (error) {
+      if (this.isExportCancellationError(error)) {
+        throw error;
+      }
       this.logger.error(`Error exporting detailed coding results: ${error.message}`, error.stack);
       throw new Error(`Could not export detailed coding results: ${error.message}`);
     }
@@ -3882,137 +3991,145 @@ export class CodingExportService {
       manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
-    const codingJobUnitsQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
-      .innerJoinAndSelect('cju.coding_job', 'cj')
-      .leftJoinAndSelect('cj.codingJobCoders', 'cjc')
-      .leftJoinAndSelect('cjc.user', 'user')
-      .leftJoinAndSelect('cju.response', 'resp')
-      .leftJoinAndSelect('resp.unit', 'unit')
-      .leftJoinAndSelect('unit.booklet', 'booklet')
-      .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-      .where('cj.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('cju.code IS NOT NULL')
-      .orderBy('cju.updated_at', 'ASC');
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    applyResolvedExclusionsToQuery(codingJobUnitsQuery, exclusions, {
-      unitNameExpression: 'cju.unit_name',
-      bookletNameExpression: 'cju.booklet_name'
-    });
-
-    this.applyJobFilters(
-      codingJobUnitsQuery,
-      normalizedJobDefinitionIds,
-      normalizedCoderTrainingIds,
-      normalizedCoderIds,
-      'cju'
-    );
-    if (normalizedCoderTrainingIds.length === 0) {
-      codingJobUnitsQuery.andWhere('cj.training_id IS NULL');
-    }
-    const codingJobUnitsRaw = await codingJobUnitsQuery.getMany();
-
-    const isExcluded = await this.getExclusionChecker(workspaceId);
-
-    const codingJobUnits = codingJobUnitsRaw.filter(
-      unit => unit.response?.unit?.name && !isExcluded(unit.response.unit.booklet?.bookletinfo?.name || '', unit.response.unit.name)
-    );
-
-    this.logger.log(`Found ${codingJobUnits.length} coded coding job units for workspace ${workspaceId} after filtering ignored units`);
-
     try {
-      let coderNameMapping: Map<string, string> | null = null;
-      if (anonymizeCoders) {
-        const allCoders = new Set<string>();
-        for (const unit of codingJobUnits) {
-          const coderName = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
-          if (coderName) {
-            allCoders.add(coderName);
-          }
-        }
-        coderNameMapping = buildCoderNameMapping(Array.from(allCoders), usePseudoCoders);
-      }
-
-      if (codingJobUnits.length > 0) {
-        this.logger.log('Sample coded coding job unit:', {
-          id: codingJobUnits[0].id,
-          variable_id: codingJobUnits[0].variable_id,
-          code: codingJobUnits[0].code,
-          updated_at: codingJobUnits[0].updated_at,
-          unit_name: codingJobUnits[0].response?.unit?.name,
-          coders_count: codingJobUnits[0].coding_job?.codingJobCoders?.length,
-          first_coder: codingJobUnits[0].coding_job?.codingJobCoders?.[0]?.user?.username
-        });
-      } else {
-        this.logger.warn(`No coded coding job units found for workspace ${workspaceId}`);
-      }
-
-      if (codingJobUnits.length === 0) {
-        if (hasScopedJobFilters) {
-          throw new Error(this.getNoCodingResultsMessage(true));
-        }
-
-        const { workbook, chunks } = this.createStreamingWorkbookTarget(outputFilePath);
-        const worksheet = workbook.addWorksheet('Kodierzeiten-Bericht');
-
-        worksheet.columns = [
-          { header: 'Unit', key: 'unit', width: 20 },
-          { header: 'Variable', key: 'variable', width: 20 },
-          { header: 'Gesamt', key: 'gesamt', width: 15 }
-        ];
-
-        worksheet.getRow(1).font = { bold: true };
-        worksheet.getRow(1).fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFE0E0E0' }
-        };
-
-        worksheet.getColumn('unit').font = { bold: true };
-        worksheet.getColumn('variable').font = { bold: true };
-
-        this.logger.log('Generated empty coding times report (no coded units found)');
-        await worksheet.commit();
-        await workbook.commit();
-        return this.getStreamingWorkbookBuffer(chunks, outputFilePath);
-      }
-
       const variableUnitCoders = new Map<string, Set<string>>();
       const variableUnitCoderTimestamps = new Map<string, Map<string, Date[]>>();
       const variableUnitLabels = new Map<string, { unitName: string; variableId: string }>();
+      const allCoderNames = new Set<string>();
+      const codingTimesBatchSize = 2000;
+      let totalRowsRead = 0;
+      let lastUpdatedAt: Date | string | null = null;
+      let lastId: number | string | null = null;
+      let sampleRow: CodingTimesRawRow | null = null;
 
-      for (const unit of codingJobUnits) {
-        if (!unit.response?.unit?.name || !unit.updated_at) continue;
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
-        const variableId = unit.variable_id;
-        const unitName = unit.response.unit.name;
-        const variableUnitKey = toManualCodingVariablePairKey(unitName, variableId);
-        const timestamp = new Date(unit.updated_at);
+      let hasMoreCodingTimesRows = true;
+      while (hasMoreCodingTimesRows) {
+        await checkCancellation?.();
 
-        if (manualCodingVariableSet) {
-          if (!manualCodingVariableSet.has(variableUnitKey)) {
+        const codingTimesQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
+          .select('cju.id', 'id')
+          .addSelect('cju.variable_id', 'variableId')
+          .addSelect('cju.updated_at', 'updatedAt')
+          .addSelect('cju.unit_name', 'unitName')
+          .addSelect('cju.booklet_name', 'bookletName')
+          .addSelect('cjc.id', 'coderAssignmentId')
+          .addSelect('user.username', 'coderName')
+          .innerJoin('cju.coding_job', 'cj')
+          .leftJoin('cj.codingJobCoders', 'cjc')
+          .leftJoin('cjc.user', 'user')
+          .where('cj.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('cju.code IS NOT NULL')
+          .andWhere('cju.updated_at IS NOT NULL');
+
+        applyResolvedExclusionsToQuery(codingTimesQuery, exclusions, {
+          unitNameExpression: 'cju.unit_name',
+          bookletNameExpression: 'cju.booklet_name'
+        });
+
+        this.applyJobFilters(
+          codingTimesQuery,
+          normalizedJobDefinitionIds,
+          normalizedCoderTrainingIds,
+          normalizedCoderIds,
+          'cju'
+        );
+        if (normalizedCoderTrainingIds.length === 0) {
+          codingTimesQuery.andWhere('cj.training_id IS NULL');
+        }
+        if (lastUpdatedAt !== null && lastId !== null) {
+          codingTimesQuery.andWhere(
+            '(cju.updated_at > :lastUpdatedAt OR (cju.updated_at = :lastUpdatedAt AND cju.id > :lastId))',
+            { lastUpdatedAt, lastId }
+          );
+        }
+
+        const rows = await codingTimesQuery
+          .orderBy('cju.updated_at', 'ASC')
+          .addOrderBy('cju.id', 'ASC')
+          .limit(codingTimesBatchSize)
+          .getRawMany<CodingTimesRawRow>();
+
+        await checkCancellation?.();
+
+        if (rows.length === 0) {
+          hasMoreCodingTimesRows = false;
+          continue;
+        }
+
+        totalRowsRead += rows.length;
+        sampleRow ??= rows[0];
+
+        for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+          if (rowIndex > 0 && rowIndex % 500 === 0) {
+            await checkCancellation?.();
+            await this.yieldToEventLoop();
+          }
+
+          const row = rows[rowIndex];
+          if (!row.unitName || !row.variableId || !row.updatedAt || row.coderAssignmentId === null) {
             continue;
           }
-        }
 
-        if (!variableUnitCoders.has(variableUnitKey)) {
-          variableUnitCoders.set(variableUnitKey, new Set());
-          variableUnitLabels.set(variableUnitKey, { unitName, variableId });
-        }
+          const variableUnitKey = toManualCodingVariablePairKey(row.unitName, row.variableId);
+          if (manualCodingVariableSet && !manualCodingVariableSet.has(variableUnitKey)) {
+            continue;
+          }
 
-        if (!variableUnitCoderTimestamps.has(variableUnitKey)) {
-          variableUnitCoderTimestamps.set(variableUnitKey, new Map<string, Date[]>());
-        }
+          if (!variableUnitCoders.has(variableUnitKey)) {
+            variableUnitCoders.set(variableUnitKey, new Set());
+            variableUnitLabels.set(variableUnitKey, { unitName: row.unitName, variableId: row.variableId });
+          }
 
-        for (const jobCoder of unit.coding_job?.codingJobCoders || []) {
-          const coderName = jobCoder.user?.username || 'Unknown';
+          if (!variableUnitCoderTimestamps.has(variableUnitKey)) {
+            variableUnitCoderTimestamps.set(variableUnitKey, new Map<string, Date[]>());
+          }
+
+          const coderName = row.coderName || 'Unknown';
+          allCoderNames.add(coderName);
           variableUnitCoders.get(variableUnitKey)!.add(coderName);
 
           const coderTimestampsByVariableUnit = variableUnitCoderTimestamps.get(variableUnitKey)!;
           if (!coderTimestampsByVariableUnit.has(coderName)) {
             coderTimestampsByVariableUnit.set(coderName, []);
           }
-          coderTimestampsByVariableUnit.get(coderName)!.push(timestamp);
+          coderTimestampsByVariableUnit.get(coderName)!.push(new Date(row.updatedAt));
         }
+
+        const lastRow = rows[rows.length - 1];
+        lastUpdatedAt = lastRow.updatedAt;
+        lastId = lastRow.id;
+
+        if (rows.length < codingTimesBatchSize) {
+          hasMoreCodingTimesRows = false;
+          continue;
+        }
+
+        await this.yieldToEventLoop();
+      }
+
+      this.logger.log(`Found ${totalRowsRead} coded coding-times rows for workspace ${workspaceId} after database-side exclusion filtering`);
+      if (sampleRow) {
+        this.logger.log('Sample coded coding-times row:', {
+          id: sampleRow.id,
+          variable_id: sampleRow.variableId,
+          updated_at: sampleRow.updatedAt,
+          unit_name: sampleRow.unitName,
+          booklet_name: sampleRow.bookletName,
+          first_coder: sampleRow.coderName
+        });
+      } else {
+        this.logger.warn(`No coded coding-times rows found for workspace ${workspaceId}`);
+      }
+
+      if (totalRowsRead === 0 && hasScopedJobFilters) {
+        throw new Error(this.getNoCodingResultsMessage(true));
+      }
+
+      let coderNameMapping: Map<string, string> | null = null;
+      if (anonymizeCoders) {
+        coderNameMapping = buildCoderNameMapping(Array.from(allCoderNames), usePseudoCoders);
       }
 
       const coderList = Array.from(new Set(
@@ -4037,9 +4154,24 @@ export class CodingExportService {
         { header: 'Gesamt', key: 'gesamt', width: 15 }
       ];
 
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+      worksheet.getColumn('unit').font = { bold: true };
+      worksheet.getColumn('variable').font = { bold: true };
+
       const sortedVariableUnitKeys = Array.from(variableUnitCoders.keys()).sort();
 
-      for (const variableUnitKey of sortedVariableUnitKeys) {
+      for (let rowIndex = 0; rowIndex < sortedVariableUnitKeys.length; rowIndex += 1) {
+        if (rowIndex > 0 && rowIndex % 250 === 0) {
+          await checkCancellation?.();
+          await this.yieldToEventLoop();
+        }
+
+        const variableUnitKey = sortedVariableUnitKeys[rowIndex];
         const { unitName, variableId } = variableUnitLabels.get(variableUnitKey) || {
           unitName: variableUnitKey,
           variableId: ''
@@ -4079,22 +4211,18 @@ export class CodingExportService {
         worksheet.addRow(rowData).commit();
       }
 
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
-
-      worksheet.getColumn('unit').font = { bold: true };
-      worksheet.getColumn('variable').font = { bold: true };
-
       this.logger.log(`Generated coding times pivot table with ${sortedVariableUnitKeys.length} variable-unit combinations and ${coderList.length} coders`);
 
+      await checkCancellation?.();
       await worksheet.commit();
+      await checkCancellation?.();
       await workbook.commit();
+      await checkCancellation?.();
       return this.getStreamingWorkbookBuffer(chunks, outputFilePath);
     } catch (error) {
+      if (this.isExportCancellationError(error)) {
+        throw error;
+      }
       this.logger.error(`Error exporting coding times report: ${error.message}`, error.stack);
       throw new Error(`Could not export coding times report: ${error.message}`);
     }

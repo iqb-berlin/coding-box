@@ -131,6 +131,10 @@ export class TestResultFacadeService {
     return this.testResultBackendService.deleteTestResultExportJob(workspaceId, jobId);
   }
 
+  cancelTestResultExportJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
+    return this.testResultBackendService.cancelTestResultExportJob(workspaceId, jobId);
+  }
+
   getPersonTestResults(workspaceId: number, personId: number): Observable<PersonTestResult[]> {
     return this.testResultService.getPersonTestResults(workspaceId, personId);
   }

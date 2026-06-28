@@ -23,6 +23,10 @@ export interface ExportJob {
   workspaceId: number;
   status: 'waiting' | 'active' | 'downloading' | 'completed' | 'failed' | 'cancelled';
   progress: number;
+  progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+  processedRows?: number;
+  totalRows?: number;
+  progressMessage?: string;
   exportType: string;
   displayLabelKey?: string;
   downloadFilePrefix?: string;
@@ -207,6 +211,10 @@ export class ExportJobService implements OnDestroy {
           const statusAny = status as unknown as {
             status?: string;
             progress?: number;
+            progressPhase?: ExportJob['progressPhase'];
+            processedRows?: number;
+            totalRows?: number;
+            progressMessage?: string;
             result?: { fileName?: string; fileSize?: number };
             error?: string;
             errorCode?: string;
@@ -232,6 +240,10 @@ export class ExportJobService implements OnDestroy {
           this.updateJob(jobId, {
             status: mappedStatus,
             progress: statusAny.progress || 0,
+            progressPhase: statusAny.progressPhase,
+            processedRows: statusAny.processedRows,
+            totalRows: statusAny.totalRows,
+            progressMessage: statusAny.progressMessage,
             result,
             error: statusAny.error,
             errorCode: statusAny.errorCode,

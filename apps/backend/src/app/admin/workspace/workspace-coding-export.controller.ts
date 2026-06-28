@@ -25,6 +25,7 @@ import { Readable } from 'stream';
 import {
   JobQueueService,
   ExportJobData,
+  ExportJobProgress,
   ExportJobResult
 } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
@@ -35,9 +36,7 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   CodingExportService,
   CodingExportOrchestratorService,
-  CodingListExportService,
-  CodingResultsExportService,
-  CodingTimesExportService
+  CodingListExportService
 } from '../../database/services/coding';
 
 type PublicExportJobResult = Omit<ExportJobResult, 'filePath'>;
@@ -45,6 +44,10 @@ type PublicExportJobStatus =
   | {
     status: string;
     progress: number;
+    progressPhase?: string;
+    processedRows?: number;
+    totalRows?: number;
+    progressMessage?: string;
     result?: PublicExportJobResult;
     error?: string;
     errorCode?: string;
@@ -67,13 +70,54 @@ export class WorkspaceCodingExportController {
 
   constructor(
     private codingListExportService: CodingListExportService,
-    private codingResultsExportService: CodingResultsExportService,
     private codingExportService: CodingExportService,
-    private codingTimesExportService: CodingTimesExportService,
     private codingExportOrchestratorService: CodingExportOrchestratorService,
     private jobQueueService: JobQueueService,
     private cacheService: CacheService
   ) { }
+
+  private mapExportJobState(
+    state: string,
+    job: { data?: { isCancelled?: boolean }; failedReason?: string }
+  ): string {
+    const failedReason = job.failedReason;
+    const failedBecauseCancelled = typeof failedReason === 'string' &&
+      (
+        failedReason.includes('ExportJobCancelledException') ||
+        /^Export job .* was cancelled$/.test(failedReason)
+      );
+
+    if (
+      job.data?.isCancelled === true &&
+      (
+        state === 'waiting' ||
+        state === 'delayed' ||
+        state === 'active' ||
+        state === 'completed' ||
+        state === 'failed'
+      )
+    ) {
+      return 'cancelled';
+    }
+
+    if (state === 'failed' && failedBecauseCancelled) {
+      return 'cancelled';
+    }
+
+    switch (state) {
+      case 'completed':
+        return 'completed';
+      case 'active':
+        return 'processing';
+      case 'waiting':
+      case 'delayed':
+        return 'pending';
+      case 'paused':
+        return 'paused';
+      default:
+        return state;
+    }
+  }
 
   private validateBackgroundExportRequest(
     body: Omit<ExportJobData, 'workspaceId' | 'userId'>
@@ -170,6 +214,41 @@ export class WorkspaceCodingExportController {
         actual: Number(worksheetLimitMatch[1]),
         max: Number(worksheetLimitMatch[2])
       }
+    };
+  }
+
+  private toPublicExportProgress(
+    progress: unknown
+  ): {
+      progress: number;
+      progressPhase?: string;
+      processedRows?: number;
+      totalRows?: number;
+      progressMessage?: string;
+    } {
+    if (typeof progress === 'number') {
+      return {
+        progress: Math.max(0, Math.min(100, Math.round(progress)))
+      };
+    }
+
+    if (!progress || typeof progress !== 'object') {
+      return { progress: 0 };
+    }
+
+    const progressObject = progress as Partial<ExportJobProgress>;
+    const percentage = Number(progressObject.percentage);
+    const processedRows = Number(progressObject.processedRows);
+    const totalRows = Number(progressObject.totalRows);
+
+    return {
+      progress: Number.isFinite(percentage) ?
+        Math.max(0, Math.min(100, Math.round(percentage))) :
+        0,
+      ...(progressObject.phase ? { progressPhase: progressObject.phase } : {}),
+      ...(Number.isFinite(processedRows) ? { processedRows } : {}),
+      ...(Number.isFinite(totalRows) ? { totalRows } : {}),
+      ...(progressObject.message ? { progressMessage: progressObject.message } : {})
     };
   }
 
@@ -799,7 +878,7 @@ export class WorkspaceCodingExportController {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
-      const buffer = await this.codingResultsExportService.exportCodingResultsByCoder(
+      const buffer = await this.codingExportService.exportCodingResultsByCoder(
         workspace_id,
         outputCommentsParam,
         includeReplayUrlParam,
@@ -922,7 +1001,7 @@ export class WorkspaceCodingExportController {
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
       const buffer =
-        await this.codingResultsExportService.exportCodingResultsByVariable(
+        await this.codingExportService.exportCodingResultsByVariable(
           workspace_id,
           includeModal,
           includeDouble,
@@ -1091,7 +1170,7 @@ export class WorkspaceCodingExportController {
     const anonymizeCodersParam = anonymizeCoders === 'true';
     const usePseudoCodersParam = usePseudoCoders === 'true';
     const excludeAutoCodedParam = excludeAutoCoded === 'true';
-    const buffer = await this.codingTimesExportService.exportCodingTimesReport(
+    const buffer = await this.codingExportService.exportCodingTimesReport(
       workspace_id,
       anonymizeCodersParam,
       usePseudoCodersParam,
@@ -1269,6 +1348,23 @@ export class WorkspaceCodingExportController {
           type: 'number',
           description: 'Progress percentage (0-100)'
         },
+        progressPhase: {
+          type: 'string',
+          enum: ['preparing', 'counting', 'writing', 'finalizing', 'completed'],
+          description: 'Current export progress phase'
+        },
+        processedRows: {
+          type: 'number',
+          description: 'Number of rows already written, when available'
+        },
+        totalRows: {
+          type: 'number',
+          description: 'Estimated total number of rows, when available'
+        },
+        progressMessage: {
+          type: 'string',
+          description: 'Optional human-readable progress message'
+        },
         result: {
           type: 'object',
           description:
@@ -1295,40 +1391,13 @@ export class WorkspaceCodingExportController {
       }
 
       const state = await job.getState();
-      const progress = await job.progress();
+      const progress = this.toPublicExportProgress(await job.progress());
       const failedReason = job.failedReason;
-      const cancellationRequested = job.data.isCancelled === true;
-      const failedBecauseCancelled = typeof failedReason === 'string' &&
-        (
-          failedReason.includes('ExportJobCancelledException') ||
-          /^Export job .* was cancelled$/.test(failedReason)
-        );
-
-      let status: string;
-      switch (state) {
-        case 'completed':
-          status = 'completed';
-          break;
-        case 'failed':
-          status = cancellationRequested || failedBecauseCancelled ? 'cancelled' : 'failed';
-          break;
-        case 'active':
-          status = cancellationRequested ? 'cancelled' : 'processing';
-          break;
-        case 'waiting':
-        case 'delayed':
-          status = 'pending';
-          break;
-        case 'paused':
-          status = 'paused';
-          break;
-        default:
-          status = state;
-      }
+      const status = this.mapExportJobState(state, job);
 
       return {
         status,
-        progress: typeof progress === 'number' ? progress : 0,
+        ...progress,
         ...(status === 'completed' && job.returnvalue ?
           { result: this.toPublicExportJobResult(job.returnvalue as ExportJobResult) } :
           {}),
@@ -1456,6 +1525,13 @@ export class WorkspaceCodingExportController {
           jobId: { type: 'string' },
           status: { type: 'string' },
           progress: { type: 'number' },
+          progressPhase: {
+            type: 'string',
+            enum: ['preparing', 'counting', 'writing', 'finalizing', 'completed']
+          },
+          processedRows: { type: 'number' },
+          totalRows: { type: 'number' },
+          progressMessage: { type: 'string' },
           exportType: { type: 'string' },
           createdAt: { type: 'number' }
         }
@@ -1467,6 +1543,10 @@ export class WorkspaceCodingExportController {
     jobId: string;
     status: string;
     progress: number;
+    progressPhase?: string;
+    processedRows?: number;
+    totalRows?: number;
+    progressMessage?: string;
     exportType: string;
     createdAt: number;
   }>
@@ -1477,12 +1557,12 @@ export class WorkspaceCodingExportController {
       return await Promise.all(
         jobs.map(async job => {
           const state = await job.getState();
-          const progress = await job.progress();
+          const progress = this.toPublicExportProgress(await job.progress());
 
           return {
             jobId: job.id.toString(),
-            status: state,
-            progress: typeof progress === 'number' ? progress : 0,
+            status: this.mapExportJobState(state, job),
+            ...progress,
             exportType: job.data.exportType,
             createdAt: job.timestamp
           };
@@ -1620,7 +1700,7 @@ export class WorkspaceCodingExportController {
         };
       }
 
-      if (state === 'failed') {
+      if (state === 'failed' && !job.data.isCancelled) {
         return {
           success: false,
           message: 'Job already failed'
@@ -1628,23 +1708,37 @@ export class WorkspaceCodingExportController {
       }
 
       // Mark the job as cancelled (for active jobs to check)
-      await this.jobQueueService.markExportJobCancelled(jobId);
+      const marked = await this.jobQueueService.markExportJobCancelled(jobId);
 
       // Try to remove the job from queue
       const removed = await this.jobQueueService.cancelExportJob(jobId);
 
-      // Clean up any cached metadata and temp files
-      const metadata = await this.cacheService.get<ExportJobResult>(
-        `export-result:${jobId}`
-      );
-      if (metadata && metadata.filePath) {
-        const fs = await import('fs');
-        if (fs.existsSync(metadata.filePath)) {
-          fs.unlinkSync(metadata.filePath);
-          this.logger.log(`Cleaned up export file: ${metadata.filePath}`);
+      const stateAfterCancellationRequest = await job.getState();
+      if (stateAfterCancellationRequest === 'completed') {
+        if (marked || job.data.isCancelled) {
+          return {
+            success: true,
+            message: 'Export job cancellation requested (job will stop at next checkpoint)'
+          };
         }
+        return {
+          success: false,
+          message: 'Job already completed'
+        };
       }
-      await this.cacheService.delete(`export-result:${jobId}`);
+      if (stateAfterCancellationRequest === 'failed' && !job.data.isCancelled) {
+        return {
+          success: false,
+          message: 'Job already failed'
+        };
+      }
+
+      if (!marked && !removed) {
+        return {
+          success: false,
+          message: 'Export job cancellation could not be requested'
+        };
+      }
 
       if (removed) {
         this.logger.log(`Export job ${jobId} cancelled and removed from queue`);

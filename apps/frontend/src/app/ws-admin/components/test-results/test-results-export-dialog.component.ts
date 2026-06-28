@@ -14,7 +14,8 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 export type TestResultsExportDialogResult =
   | { type: 'results' }
   | { type: 'logs' }
-  | { type: 'download'; jobId?: string | null };
+  | { type: 'download'; jobId?: string | null }
+  | { type: 'cancel'; jobId?: string | null };
 
 export type TestResultsExportDialogData = {
   isExporting?: boolean;
@@ -90,7 +91,13 @@ export type TestResultsExportDialogData = {
       </div>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button (click)="cancel()">Abbrechen</button>
+      <button mat-button (click)="cancel()">
+        {{
+          data?.isExporting && data?.exportJobId ?
+            'Export abbrechen' :
+            'Abbrechen'
+        }}
+      </button>
     </mat-dialog-actions>
   `,
   styles: [
@@ -174,6 +181,11 @@ export class TestResultsExportDialogComponent {
   }
 
   cancel(): void {
+    if (this.data?.isExporting && this.data.exportJobId) {
+      this.dialogRef.close({ type: 'cancel', jobId: this.data.exportJobId });
+      return;
+    }
+
     this.dialogRef.close(undefined);
   }
 }

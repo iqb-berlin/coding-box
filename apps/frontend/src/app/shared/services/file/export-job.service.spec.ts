@@ -60,6 +60,32 @@ describe('ExportJobService', () => {
       service.ngOnDestroy(); // cleanup
     }));
 
+    it('should keep structured progress details from polling', fakeAsync(() => {
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
+        status: 'active',
+        progress: 55,
+        progressPhase: 'writing',
+        processedRows: 100,
+        totalRows: 200,
+        progressMessage: '100/200 rows'
+      }));
+
+      service.startJob(1, { exportType: 'results-by-version', userId: 1 }).subscribe();
+
+      tick(2000);
+
+      expect(service.activeJobs[0]).toEqual(expect.objectContaining({
+        progress: 55,
+        progressPhase: 'writing',
+        processedRows: 100,
+        totalRows: 200,
+        progressMessage: '100/200 rows'
+      }));
+
+      service.ngOnDestroy();
+    }));
+
     it('should keep display metadata on the local job', () => {
       codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
 

@@ -164,6 +164,10 @@ export class CodingExportService {
   ): Observable<{
       status: string;
       progress: number;
+      progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+      processedRows?: number;
+      totalRows?: number;
+      progressMessage?: string;
       result?: {
         fileId: string;
         fileName: string;
@@ -177,6 +181,10 @@ export class CodingExportService {
     return this.http.get<{
       status: string;
       progress: number;
+      progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+      processedRows?: number;
+      totalRows?: number;
+      progressMessage?: string;
       result?: {
         fileId: string;
         fileName: string;

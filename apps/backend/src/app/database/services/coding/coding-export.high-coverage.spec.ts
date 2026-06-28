@@ -12,6 +12,7 @@ const row = {
   variableId: 'VAR',
   responseId: '1',
   trainingId: '1',
+  userId: '2',
   username: 'Coder A',
   jobId: '1',
   cju_code: '1',

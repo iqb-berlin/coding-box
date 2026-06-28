@@ -108,6 +108,51 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     return translationKey ? this.translateService.instant(translationKey) : exportType;
   }
 
+  getProgressMode(job: ExportJob): 'determinate' | 'indeterminate' {
+    if (job.status === 'downloading' || job.progressPhase === 'counting') {
+      return 'indeterminate';
+    }
+
+    if (job.progressPhase === 'writing' && !job.totalRows) {
+      return 'indeterminate';
+    }
+
+    return 'determinate';
+  }
+
+  getProgressDescription(job: ExportJob): string {
+    if (job.progressMessage) {
+      return job.progressMessage;
+    }
+
+    if (job.status === 'waiting') {
+      return this.translateService.instant('export-toast.progress.waiting');
+    }
+
+    if (job.status === 'downloading') {
+      return this.translateService.instant('export-toast.progress.downloading');
+    }
+
+    if (
+      job.progressPhase === 'writing' &&
+      typeof job.processedRows === 'number' &&
+      typeof job.totalRows === 'number' &&
+      job.totalRows > 0
+    ) {
+      return this.translateService.instant('export-toast.progress.writing-rows', {
+        processed: this.formatNumber(job.processedRows),
+        total: this.formatNumber(job.totalRows)
+      });
+    }
+
+    const phaseKey = job.progressPhase || 'active';
+    return this.translateService.instant(`export-toast.progress.${phaseKey}`);
+  }
+
+  private formatNumber(value: number): string {
+    return value.toLocaleString(this.translateService.currentLang || undefined);
+  }
+
   getErrorTitle(job: ExportJob): string {
     if (this.getWorksheetLimitError(job)) {
       return this.translateService.instant('export-toast.errors.too-many-worksheets-title');
