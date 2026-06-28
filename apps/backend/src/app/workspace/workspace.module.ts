@@ -90,9 +90,9 @@ import {
 } from '../database/services/jobs';
 import { JournalService } from '../database/services/shared';
 // eslint-disable-next-line import/no-cycle
-import { JobQueueModule } from '../job-queue/job-queue.module';
+import { JobQueueClientModule } from '../job-queue/job-queue-client.module';
 // eslint-disable-next-line import/no-cycle
-import { CacheModule } from '../cache/cache.module';
+import { CacheClientModule } from '../cache/cache-client.module';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
 
@@ -132,8 +132,8 @@ import { CodingModule } from '../coding/coding.module';
       CodingUnitFreshness
     ]),
     HttpModule,
-    forwardRef(() => JobQueueModule),
-    forwardRef(() => CacheModule),
+    JobQueueClientModule,
+    CacheClientModule,
     forwardRef(() => CodingModule)
   ],
   providers: [

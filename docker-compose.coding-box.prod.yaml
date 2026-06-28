@@ -24,6 +24,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      APP_ROLE: api
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PREFIX: ${REDIS_PREFIX:-coding-box}
@@ -43,6 +44,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      APP_ROLE: export-worker
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PREFIX: ${REDIS_PREFIX:-coding-box}
