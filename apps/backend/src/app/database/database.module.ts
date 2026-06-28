@@ -41,6 +41,11 @@ import { CoderTrainingCoder } from './entities/coder-training-coder.entity';
 import { CoderTrainingDiscussionResult } from './entities/coder-training-discussion-result.entity';
 import { CodingUnitFreshness } from './entities/coding-unit-freshness.entity';
 
+export function parsePostgresPoolMax(value: string | number | undefined, fallback = 10): number {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
@@ -93,7 +98,10 @@ import { CodingUnitFreshness } from './entities/coding-unit-freshness.entity';
           CodingUnitFreshness,
           MissingsProfile
         ],
-        synchronize: false
+        synchronize: false,
+        extra: {
+          max: parsePostgresPoolMax(configService.get<string>('POSTGRES_POOL_MAX'))
+        }
       }),
       inject: [ConfigService]
     })
