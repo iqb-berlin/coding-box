@@ -23,7 +23,8 @@ import {
   getCoveredSourceKeysForManualDerivedVariables,
   isCoveredSourceVariable,
   ManualCodingExcludedSourceSummary,
-  summarizeCoveredSourceVariables
+  summarizeCoveredSourceVariables,
+  UnitVariableReference
 } from '../../utils/manual-coding-scope.util';
 import {
   applyNonCodingIssueReviewJobFilter,
@@ -92,6 +93,12 @@ interface CrossDefinitionCaseRow {
   responseId: number | string;
   definitionId: number | string;
   definitionStatus: string;
+}
+
+interface ManualCodingVariableLookups {
+  validVariableSets: Map<string, Set<string>>;
+  manualInstructionSets: Map<string, Set<string>>;
+  derivedVariablesBySourceMap: Map<string, Set<string>>;
 }
 
 @Injectable()
@@ -345,24 +352,42 @@ export class CodingProgressService {
       this.getCoverageResponses(workspaceId, true)
     ]);
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
-    const derivedVariablesBySourceMap =
-      await this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId);
+    const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+    const {
+      validVariableSets,
+      manualInstructionSets,
+      derivedVariablesBySourceMap
+    } = await this.getManualCodingVariableLookups(workspaceId);
     const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
       manualPoolResponses
         .filter(response => response.statusV1 === codingIncompleteStatus)
+        .filter(response => this.isValidManualVariable(response, validVariableSets))
         .map(response => ({
           unitName: response.unitName,
           variableId: response.variableId
         })),
       derivedVariablesBySourceMap
     );
-    const manualResponses = manualPoolResponses.filter(response => (
-      response.statusV1 === codingIncompleteStatus ||
-      !isCoveredSourceVariable(response, coveredSourceKeys)
+    const intendedIncompleteBeforeSourceExclusion = manualPoolResponses.filter(response => (
+      response.statusV1 === intendedIncompleteStatus &&
+      this.isValidManualVariable(response, validVariableSets) &&
+      this.hasManualInstruction(response, manualInstructionSets)
     ));
+    const manualResponses = manualPoolResponses.filter(response => {
+      if (response.statusV1 === codingIncompleteStatus) {
+        return this.isValidManualVariable(response, validVariableSets);
+      }
+
+      if (response.statusV1 === intendedIncompleteStatus) {
+        return this.isValidManualVariable(response, validVariableSets) &&
+          this.hasManualInstruction(response, manualInstructionSets) &&
+          !isCoveredSourceVariable(response, coveredSourceKeys);
+      }
+
+      return !isCoveredSourceVariable(response, coveredSourceKeys);
+    });
     const excludedSourceSummary = summarizeCoveredSourceVariables(
-      manualPoolResponses
-        .filter(response => response.statusV1 !== codingIncompleteStatus)
+      intendedIncompleteBeforeSourceExclusion
         .map(response => ({
           unitName: response.unitName,
           variableId: response.variableId,
@@ -731,6 +756,52 @@ export class CodingProgressService {
     }
   }
 
+  private async getManualCodingVariableLookups(
+    workspaceId: number
+  ): Promise<ManualCodingVariableLookups> {
+    const [
+      unitVariableMap,
+      derivedVariablesBySourceMap,
+      manualInstructionMap
+    ] = await Promise.all([
+      this.workspaceFilesService.getUnitVariableMap(workspaceId),
+      this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId),
+      this.workspaceFilesService.getManualInstructionVariableMap(workspaceId)
+    ]);
+
+    return {
+      validVariableSets: this.toUppercaseVariableSetMap(unitVariableMap),
+      manualInstructionSets: this.toUppercaseVariableSetMap(manualInstructionMap),
+      derivedVariablesBySourceMap
+    };
+  }
+
+  private toUppercaseVariableSetMap(
+    variableMap: Map<string, Set<string>>
+  ): Map<string, Set<string>> {
+    const normalized = new Map<string, Set<string>>();
+    variableMap.forEach((variables: Set<string>, unitNameKey: string) => {
+      normalized.set(unitNameKey.toUpperCase(), variables);
+    });
+    return normalized;
+  }
+
+  private isValidManualVariable(
+    row: UnitVariableReference,
+    validVariableSets: Map<string, Set<string>>
+  ): boolean {
+    const validVars = validVariableSets.get(row.unitName?.toUpperCase());
+    return validVars?.has(row.variableId) || false;
+  }
+
+  private hasManualInstruction(
+    row: UnitVariableReference,
+    manualInstructionSets: Map<string, Set<string>>
+  ): boolean {
+    const manualVars = manualInstructionSets.get(row.unitName?.toUpperCase());
+    return manualVars?.has(row.variableId) || false;
+  }
+
   async getVariableCoverageOverview(workspaceId: number): Promise<{
     totalVariables: number;
     coveredVariables: number;
@@ -810,24 +881,41 @@ export class CodingProgressService {
       const incompleteVariablesResult = await incompleteVariablesQuery.getRawMany();
 
       const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
-      const derivedVariablesBySourceMap =
-        await this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId);
+      const {
+        validVariableSets,
+        manualInstructionSets,
+        derivedVariablesBySourceMap
+      } = await this.getManualCodingVariableLookups(workspaceId);
       const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
         incompleteVariablesResult
           .filter(row => Number(row.statusV1) === codingIncompleteStatus)
+          .filter(row => this.isValidManualVariable(row, validVariableSets))
           .map(row => ({
             unitName: row.unitName,
             variableId: row.variableId
           })),
         derivedVariablesBySourceMap
       );
-      const filteredIncompleteVariablesResult = incompleteVariablesResult.filter(row => (
-        Number(row.statusV1) === codingIncompleteStatus ||
-        !isCoveredSourceVariable(row, coveredSourceKeys)
-      ));
+      const filteredIntendedIncompleteBeforeSourceExclusion =
+        incompleteVariablesResult.filter(row => (
+          Number(row.statusV1) !== codingIncompleteStatus &&
+          this.isValidManualVariable(row, validVariableSets) &&
+          this.hasManualInstruction(row, manualInstructionSets)
+        ));
+      const filteredIncompleteVariablesResult = incompleteVariablesResult.filter(row => {
+        if (!this.isValidManualVariable(row, validVariableSets)) {
+          return false;
+        }
+
+        if (Number(row.statusV1) === codingIncompleteStatus) {
+          return true;
+        }
+
+        return this.hasManualInstruction(row, manualInstructionSets) &&
+          !isCoveredSourceVariable(row, coveredSourceKeys);
+      });
       const excludedSourceSummary = summarizeCoveredSourceVariables(
-        incompleteVariablesResult
-          .filter(row => Number(row.statusV1) !== codingIncompleteStatus)
+        filteredIntendedIncompleteBeforeSourceExclusion
           .map(row => ({
             unitName: row.unitName,
             variableId: row.variableId,
