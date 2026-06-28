@@ -41,6 +41,11 @@ type ExportProgressCallback = (
   }
 ) => Promise<void>;
 
+interface VersionedExportProgressState {
+  lastReportedRows: number;
+  lastReportedAt: number;
+}
+
 /**
  * Service responsible for streaming exports of coding data.
  *
@@ -59,6 +64,8 @@ export class CodingListStreamService {
   private static readonly defaultCodingListExportBatchSize = 500;
   private static readonly defaultVersionedExportBatchSize = 250;
   private static readonly exportYieldEveryRows = 50;
+  private static readonly versionedProgressEveryRows = 500;
+  private static readonly versionedProgressEveryMs = 1000;
 
   constructor(
     private readonly responseFilterService: CodingResponseFilterService,
@@ -151,18 +158,39 @@ export class CodingListStreamService {
   private async reportRowBasedProgress(
     progressCallback: ExportProgressCallback | undefined,
     processedRows: number,
-    totalRows: number
+    totalRows: number,
+    state?: VersionedExportProgressState,
+    force: boolean = false
   ): Promise<void> {
-    if (progressCallback && totalRows > 0) {
-      const percentage = Math.min(
-        99,
-        Math.max(1, Math.round((processedRows / totalRows) * 100))
-      );
-      await progressCallback(percentage, {
-        phase: 'writing',
-        processedRows,
-        totalRows
-      });
+    if (!progressCallback || totalRows <= 0) {
+      return;
+    }
+
+    const now = Date.now();
+    const rowsSinceLastReport = processedRows - (state?.lastReportedRows ?? 0);
+    const msSinceLastReport = now - (state?.lastReportedAt ?? 0);
+
+    if (
+      !force &&
+      rowsSinceLastReport < CodingListStreamService.versionedProgressEveryRows &&
+      msSinceLastReport < CodingListStreamService.versionedProgressEveryMs
+    ) {
+      return;
+    }
+
+    const percentage = Math.min(
+      99,
+      Math.max(1, Math.round((processedRows / totalRows) * 100))
+    );
+    await progressCallback(percentage, {
+      phase: 'writing',
+      processedRows,
+      totalRows
+    });
+
+    if (state) {
+      state.lastReportedRows = processedRows;
+      state.lastReportedAt = now;
     }
   }
 
@@ -886,6 +914,10 @@ export class CodingListStreamService {
           processedRows: 0,
           totalRows
         });
+        const progressState: VersionedExportProgressState = {
+          lastReportedRows: 0,
+          lastReportedAt: Date.now()
+        };
 
         let hasMoreRows = true;
         while (hasMoreRows) {
@@ -931,6 +963,12 @@ export class CodingListStreamService {
             if (item !== null) {
               const ok = csvStream.write(item);
               totalWritten += 1;
+              await this.reportRowBasedProgress(
+                progressCallback,
+                totalWritten,
+                totalRows,
+                progressState
+              );
 
               if (!ok) {
                 await new Promise(resolve => {
@@ -947,7 +985,13 @@ export class CodingListStreamService {
           }
 
           lastId = rows[rows.length - 1].id;
-          await this.reportRowBasedProgress(progressCallback, totalWritten, totalRows);
+          await this.reportRowBasedProgress(
+            progressCallback,
+            totalWritten,
+            totalRows,
+            progressState,
+            true
+          );
 
           await this.yieldToEventLoop();
         }
@@ -1041,6 +1085,10 @@ export class CodingListStreamService {
         processedRows: 0,
         totalRows
       });
+      const progressState: VersionedExportProgressState = {
+        lastReportedRows: 0,
+        lastReportedAt: Date.now()
+      };
 
       let hasMoreRows = true;
       while (hasMoreRows) {
@@ -1086,6 +1134,12 @@ export class CodingListStreamService {
           if (item !== null) {
             worksheet.addRow(item).commit(); // Commit each row immediately
             totalWritten += 1;
+            await this.reportRowBasedProgress(
+              progressCallback,
+              totalWritten,
+              totalRows,
+              progressState
+            );
           }
         }
 
@@ -1103,7 +1157,13 @@ export class CodingListStreamService {
           );
         }
 
-        await this.reportRowBasedProgress(progressCallback, totalWritten, totalRows);
+        await this.reportRowBasedProgress(
+          progressCallback,
+          totalWritten,
+          totalRows,
+          progressState,
+          true
+        );
 
         await this.yieldToEventLoop();
       }
@@ -1198,6 +1258,10 @@ export class CodingListStreamService {
         processedRows: 0,
         totalRows
       });
+      const progressState: VersionedExportProgressState = {
+        lastReportedRows: 0,
+        lastReportedAt: Date.now()
+      };
 
       let hasMoreRows = true;
       while (hasMoreRows) {
@@ -1243,6 +1307,12 @@ export class CodingListStreamService {
           if (item !== null) {
             worksheet.addRow(item).commit();
             totalWritten += 1;
+            await this.reportRowBasedProgress(
+              progressCallback,
+              totalWritten,
+              totalRows,
+              progressState
+            );
           }
         }
 
@@ -1258,7 +1328,13 @@ export class CodingListStreamService {
           );
         }
 
-        await this.reportRowBasedProgress(progressCallback, totalWritten, totalRows);
+        await this.reportRowBasedProgress(
+          progressCallback,
+          totalWritten,
+          totalRows,
+          progressState,
+          true
+        );
 
         await this.yieldToEventLoop();
       }
@@ -1425,6 +1501,10 @@ export class CodingListStreamService {
         processedRows: 0,
         totalRows
       });
+      const progressState: VersionedExportProgressState = {
+        lastReportedRows: 0,
+        lastReportedAt: Date.now()
+      };
 
       let hasMoreRows = true;
       while (hasMoreRows) {
@@ -1507,6 +1587,12 @@ export class CodingListStreamService {
 
             worksheet.addRow(rowData).commit();
             totalWritten += 1;
+            await this.reportRowBasedProgress(
+              progressCallback,
+              totalWritten,
+              totalRows,
+              progressState
+            );
           }
         }
 
@@ -1516,7 +1602,13 @@ export class CodingListStreamService {
 
         lastId = rows[rows.length - 1].id;
 
-        await this.reportRowBasedProgress(progressCallback, totalWritten, totalRows);
+        await this.reportRowBasedProgress(
+          progressCallback,
+          totalWritten,
+          totalRows,
+          progressState,
+          true
+        );
 
         await this.yieldToEventLoop();
       }

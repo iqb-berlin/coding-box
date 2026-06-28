@@ -658,6 +658,64 @@ describe('CodingListStreamService', () => {
       }
     });
 
+    it('reports direct-to-file versioned Excel row progress', async () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-export-'));
+      const filePath = path.join(tempDir, 'results.xlsx');
+      const rows = [
+        createMockVersionRow(1),
+        createMockVersionRow(2)
+      ];
+      const progressCallback = jest.fn().mockResolvedValue(undefined);
+      mockResponseFilterService.countResponses.mockResolvedValueOnce(rows.length);
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce(rows)
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'status_v1'
+      ]);
+      mockItemBuilderService.buildCodingItemWithVersionRow.mockImplementation(async row => ({
+        unit_key: row.unitKey,
+        unit_alias: row.unitAlias,
+        person_login: row.personLogin,
+        person_code: row.personCode,
+        person_group: row.personGroup,
+        booklet_name: row.bookletName,
+        variable_id: row.variableId,
+        status_v1: 'VALUE_CHANGED'
+      } as never));
+
+      try {
+        await service.writeCodingResultsByVersionExcelToFile(
+          filePath,
+          1,
+          'v1',
+          'token',
+          'http://server',
+          false,
+          progressCallback
+        );
+
+        expect(progressCallback).toHaveBeenCalledWith(1, {
+          phase: 'writing',
+          processedRows: 0,
+          totalRows: 2
+        });
+        expect(progressCallback).toHaveBeenCalledWith(99, {
+          phase: 'writing',
+          processedRows: 2,
+          totalRows: 2
+        });
+        expect(progressCallback).toHaveBeenLastCalledWith(100, {
+          phase: 'finalizing',
+          processedRows: 2,
+          totalRows: 2
+        });
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it('does not leave an unhandled stream rejection when cancelling direct-to-file versioned Excel exports', async () => {
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-export-'));
       const filePath = path.join(tempDir, 'results.xlsx');
