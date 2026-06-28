@@ -40,7 +40,7 @@ export type TestResultsExportDialogData = {
   template: `
     <h2 mat-dialog-title>Testergebnisse exportieren</h2>
     <mat-dialog-content>
-      <mat-list>
+      <mat-list *ngIf="!data.isExporting">
         <mat-list-item (click)="selectExportType('results')">
           <mat-icon matListItemIcon>download</mat-icon>
           <div matListItemTitle>Testergebnisse ohne Kodierung exportieren</div>
@@ -57,7 +57,7 @@ export type TestResultsExportDialogData = {
       <mat-divider class="export-divider"></mat-divider>
 
       <!-- Export Progress Section -->
-      <div *ngIf="data?.isExporting" class="export-progress-section">
+      <div *ngIf="data.isExporting" class="export-progress-section">
         <div class="export-progress-header">
           <span class="export-status">
             {{
@@ -76,9 +76,9 @@ export type TestResultsExportDialogData = {
       <!-- Download Ready Section -->
       <div
         *ngIf="
-          data?.exportJobStatus === 'completed' &&
-          !data?.isExporting &&
-          data?.exportJobId
+          data.exportJobStatus === 'completed' &&
+          !data.isExporting &&
+          data.exportJobId
         "
         class="download-ready-section"
       >
@@ -93,7 +93,7 @@ export type TestResultsExportDialogData = {
     <mat-dialog-actions align="end">
       <button mat-button (click)="cancel()">
         {{
-          data?.isExporting && data?.exportJobId ?
+          data.isExporting && data.exportJobId ?
             'Export abbrechen' :
             'Abbrechen'
         }}
@@ -181,7 +181,7 @@ export class TestResultsExportDialogComponent {
   }
 
   cancel(): void {
-    if (this.data?.isExporting && this.data.exportJobId) {
+    if (this.data.isExporting && this.data.exportJobId) {
       this.dialogRef.close({ type: 'cancel', jobId: this.data.exportJobId });
       return;
     }
