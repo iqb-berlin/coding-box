@@ -7,11 +7,20 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AppModule } from './app/app.module';
+import { ExportWorkerModule } from './app/export-worker/export-worker.module';
+import { isExportWorkerProcess } from './app/export-worker/export-worker-role';
 import { GlobalHttpExceptionFilter } from './app/http/global-http-exception.filter';
 import { REQUEST_ID_HEADER } from './app/http/request-id';
 import { requestIdMiddleware } from './app/http/request-id.middleware';
 
 async function bootstrap() {
+  if (isExportWorkerProcess()) {
+    const workerApp = await NestFactory.createApplicationContext(ExportWorkerModule);
+    workerApp.enableShutdownHooks();
+    Logger.log('Export worker started');
+    return;
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
   const host = configService.get('API_HOST') || 'localhost';

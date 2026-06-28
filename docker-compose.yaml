@@ -64,6 +64,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      APP_ROLE: api
       API_HOST: backend
       JWT_SECRET: ${JWT_SECRET}
       GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
@@ -94,6 +95,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      APP_ROLE: export-worker
       API_HOST: backend-export-worker
       JWT_SECRET: ${JWT_SECRET}
       GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
