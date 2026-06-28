@@ -154,6 +154,28 @@ describe('ExportJobProcessor', () => {
     }
   });
 
+  it('removes partial files when direct-to-file export generation fails', async () => {
+    const { processor, codingExportService, cacheService } = createProcessor();
+    let filePath: string | undefined;
+    codingExportService.exportCodingResultsAggregatedToFile.mockImplementationOnce(async (targetPath: string) => {
+      filePath = targetPath;
+      await fs.promises.writeFile(targetPath, 'partial export');
+      throw new Error('export exploded');
+    });
+
+    try {
+      await expect(processor.process(createJob({
+        exportType: 'aggregated'
+      }))).rejects.toThrow('export exploded');
+
+      expect(filePath).toBeDefined();
+      expect(fs.existsSync(filePath as string)).toBe(false);
+      expect(cacheService.set).not.toHaveBeenCalled();
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
   it('keeps JSON extension for coding-list JSON exports', async () => {
     const { processor, codingExportService } = createProcessor();
     codingExportService.exportCodingListForJobAsJson.mockResolvedValue(Readable.from(['[]']));
