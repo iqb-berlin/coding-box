@@ -231,7 +231,6 @@ export class ExportJobProcessor {
         await this.checkCancellation(job, filePath);
       };
 
-      let buffer: Buffer | undefined;
       const generationStartedAt = Date.now();
 
       // eslint-disable-next-line default-case
@@ -370,7 +369,8 @@ export class ExportJobProcessor {
         }
 
         case 'aggregated':
-          buffer = await this.codingExportService.exportCodingResultsAggregated(
+          await this.codingExportService.exportCodingResultsAggregatedToFile(
+            filePath,
             job.data.workspaceId,
             job.data.outputCommentsInsteadOfCodes || false,
             job.data.includeReplayUrl || false,
@@ -391,7 +391,8 @@ export class ExportJobProcessor {
           break;
 
         case 'by-coder':
-          buffer = await this.codingExportService.exportCodingResultsByCoder(
+          await this.codingExportService.exportCodingResultsByCoderToFile(
+            filePath,
             job.data.workspaceId,
             job.data.outputCommentsInsteadOfCodes || false,
             job.data.includeReplayUrl || false,
@@ -409,7 +410,8 @@ export class ExportJobProcessor {
           break;
 
         case 'by-variable':
-          buffer = await this.codingExportService.exportCodingResultsByVariable(
+          await this.codingExportService.exportCodingResultsByVariableToFile(
+            filePath,
             job.data.workspaceId,
             job.data.includeModalValue || false,
             job.data.includeDoubleCoded || false,
@@ -459,24 +461,28 @@ export class ExportJobProcessor {
           break;
 
         case 'detailed':
-          buffer = await this.codingExportOrchestratorService.exportDetailed({
-            workspaceId: job.data.workspaceId,
-            outputCommentsInsteadOfCodes: job.data.outputCommentsInsteadOfCodes || false,
-            includeReplayUrl: job.data.includeReplayUrl || false,
-            anonymizeCoders: job.data.anonymizeCoders || false,
-            usePseudoCoders: job.data.usePseudoCoders || false,
-            authToken: job.data.authToken || '',
-            excludeAutoCoded: job.data.excludeAutoCoded || false,
-            checkCancellation,
-            jobDefinitionIds: job.data.jobDefinitionIds,
-            coderTrainingIds: job.data.coderTrainingIds,
-            coderIds: job.data.coderIds,
-            serverUrl: job.data.serverUrl || ''
-          });
+          await this.codingExportOrchestratorService.exportDetailedToFile(
+            filePath,
+            {
+              workspaceId: job.data.workspaceId,
+              outputCommentsInsteadOfCodes: job.data.outputCommentsInsteadOfCodes || false,
+              includeReplayUrl: job.data.includeReplayUrl || false,
+              anonymizeCoders: job.data.anonymizeCoders || false,
+              usePseudoCoders: job.data.usePseudoCoders || false,
+              authToken: job.data.authToken || '',
+              excludeAutoCoded: job.data.excludeAutoCoded || false,
+              checkCancellation,
+              jobDefinitionIds: job.data.jobDefinitionIds,
+              coderTrainingIds: job.data.coderTrainingIds,
+              coderIds: job.data.coderIds,
+              serverUrl: job.data.serverUrl || ''
+            }
+          );
           break;
 
         case 'coding-times':
-          buffer = await this.codingExportService.exportCodingTimesReport(
+          await this.codingExportService.exportCodingTimesReportToFile(
+            filePath,
             job.data.workspaceId,
             job.data.anonymizeCoders || false,
             job.data.usePseudoCoders || false,
@@ -524,9 +530,6 @@ export class ExportJobProcessor {
 
       await job.progress(90);
 
-      if (buffer) {
-        await fs.promises.writeFile(filePath, buffer);
-      }
       const fileWriteFinishedAt = Date.now();
 
       await this.checkCancellation(job, filePath);

@@ -164,6 +164,28 @@ export class CodingExportOrchestratorService {
     );
   }
 
+  exportDetailedToFile(
+    filePath: string,
+    options: DetailedCodingResultsExportOptions
+  ): Promise<void> {
+    return this.codingExportService.exportCodingResultsDetailedToFile(
+      filePath,
+      options.workspaceId,
+      options.outputCommentsInsteadOfCodes || false,
+      options.includeReplayUrl || false,
+      options.anonymizeCoders || false,
+      options.usePseudoCoders || false,
+      options.authToken || '',
+      options.req,
+      options.excludeAutoCoded || false,
+      options.checkCancellation,
+      options.jobDefinitionIds,
+      options.coderTrainingIds,
+      options.coderIds,
+      options.serverUrl || ''
+    );
+  }
+
   exportItemMatrixAsCsv(options: ItemMatrixExportOptions): Promise<Readable> {
     return Promise.resolve(this.codingItemMatrixExportService.exportItemMatrixAsCsvStream(
       options.workspaceId,

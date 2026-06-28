@@ -5,6 +5,7 @@ import {
   In, Repository, SelectQueryBuilder, FindOperator
 } from 'typeorm';
 import * as ExcelJS from 'exceljs';
+import * as fs from 'fs';
 import { Request, Response } from 'express';
 import { EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { generateReplayUrl, generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
@@ -84,6 +85,11 @@ interface CompactByVariableCoding {
   updatedAt: Date | string | null;
 }
 
+interface StreamingWorkbookTarget {
+  workbook: ExcelJS.stream.xlsx.WorkbookWriter;
+  chunks: Buffer[];
+}
+
 interface TrainingDiscussionExportResult {
   code: number | null;
   score: number | null;
@@ -140,6 +146,38 @@ export class CodingExportService {
   ) { }
 
   private readonly manualMissingExportValueCache = new Map<string, ResolvedMissingValue>();
+
+  private createStreamingWorkbookTarget(outputFilePath?: string): StreamingWorkbookTarget {
+    if (outputFilePath) {
+      return {
+        workbook: new ExcelJS.stream.xlsx.WorkbookWriter({
+          filename: outputFilePath,
+          useStyles: true,
+          useSharedStrings: false
+        }),
+        chunks: []
+      };
+    }
+
+    const chunks: Buffer[] = [];
+    const stream = new PassThrough();
+    stream.on('data', chunk => chunks.push(chunk));
+    return {
+      workbook: new ExcelJS.stream.xlsx.WorkbookWriter({
+        stream,
+        useStyles: true,
+        useSharedStrings: false
+      }),
+      chunks
+    };
+  }
+
+  private getStreamingWorkbookBuffer(
+    chunks: Buffer[],
+    outputFilePath?: string
+  ): Buffer {
+    return outputFilePath ? Buffer.alloc(0) : Buffer.concat(chunks);
+  }
 
   private async getManualMissingExportValue(
     workspaceId: number,
@@ -839,7 +877,8 @@ export class CodingExportService {
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
     coderIds?: number[],
-    serverUrl?: string
+    serverUrl?: string,
+    outputFilePath?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId} with method: ${doubleCodingMethod}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ' (including auto-coded)'}`);
 
@@ -870,7 +909,8 @@ export class CodingExportService {
         normalizedJobDefinitionIds,
         normalizedCoderTrainingIds,
         normalizedCoderIds,
-        serverUrl
+        serverUrl,
+        outputFilePath
       );
     } if (doubleCodingMethod === 'new-column-per-coder') {
       return this.exportAggregatedNewColumnPerCoder(
@@ -884,7 +924,8 @@ export class CodingExportService {
         checkCancellation,
         normalizedJobDefinitionIds,
         normalizedCoderTrainingIds,
-        normalizedCoderIds
+        normalizedCoderIds,
+        outputFilePath
       );
     }
 
@@ -1014,10 +1055,7 @@ export class CodingExportService {
     }
 
     // 3. Setup Streaming Workbook
-    const chunks: Buffer[] = [];
-    const stream = new PassThrough();
-    stream.on('data', chunk => chunks.push(chunk));
-    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
+    const { workbook, chunks } = this.createStreamingWorkbookTarget(outputFilePath);
     const worksheet = workbook.addWorksheet('Coding Results');
 
     const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
@@ -1256,7 +1294,47 @@ export class CodingExportService {
     }
 
     await workbook.commit();
-    return Buffer.concat(chunks);
+    return this.getStreamingWorkbookBuffer(chunks, outputFilePath);
+  }
+
+  async exportCodingResultsAggregatedToFile(
+    filePath: string,
+    workspaceId: number,
+    outputCommentsInsteadOfCodes = false,
+    includeReplayUrl = false,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent',
+    includeComments = false,
+    includeModalValue = false,
+    authToken = '',
+    req?: Request,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[],
+    serverUrl?: string
+  ): Promise<void> {
+    await this.exportCodingResultsAggregated(
+      workspaceId,
+      outputCommentsInsteadOfCodes,
+      includeReplayUrl,
+      anonymizeCoders,
+      usePseudoCoders,
+      doubleCodingMethod,
+      includeComments,
+      includeModalValue,
+      authToken,
+      req,
+      excludeAutoCoded,
+      checkCancellation,
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds,
+      serverUrl,
+      filePath
+    );
   }
 
   private async exportAggregatedNewRowPerVariable(
@@ -1274,7 +1352,8 @@ export class CodingExportService {
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
     coderIds?: number[],
-    serverUrl?: string
+    serverUrl?: string,
+    outputFilePath?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated results with new-row-per-variable method for workspace ${workspaceId}`);
     if (checkCancellation) await checkCancellation();
@@ -1423,10 +1502,7 @@ export class CodingExportService {
     }
 
     // 4. Setup Streaming Workbook
-    const chunks: Buffer[] = [];
-    const stream = new PassThrough();
-    stream.on('data', chunk => chunks.push(chunk));
-    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
+    const { workbook, chunks } = this.createStreamingWorkbookTarget(outputFilePath);
     const worksheet = workbook.addWorksheet('Coding Results');
 
     const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group', 'Unit', 'Variable'];
@@ -1670,7 +1746,7 @@ export class CodingExportService {
     }
 
     await workbook.commit();
-    return Buffer.concat(chunks);
+    return this.getStreamingWorkbookBuffer(chunks, outputFilePath);
   }
 
   private async exportAggregatedNewColumnPerCoder(
@@ -1684,7 +1760,8 @@ export class CodingExportService {
     checkCancellation?: () => Promise<void>,
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
-    coderIds?: number[]
+    coderIds?: number[],
+    outputFilePath?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated results with new-column-per-coder method for workspace ${workspaceId}`);
     if (checkCancellation) await checkCancellation();
@@ -1877,10 +1954,7 @@ export class CodingExportService {
     }
 
     // 4. Setup Streaming Workbook
-    const chunks: Buffer[] = [];
-    const stream = new PassThrough();
-    stream.on('data', chunk => chunks.push(chunk));
-    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
+    const { workbook, chunks } = this.createStreamingWorkbookTarget(outputFilePath);
     const worksheet = workbook.addWorksheet('Coding Results');
 
     const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
@@ -2079,7 +2153,7 @@ export class CodingExportService {
     }
 
     await workbook.commit();
-    return Buffer.concat(chunks);
+    return this.getStreamingWorkbookBuffer(chunks, outputFilePath);
   }
 
   async exportCodingResultsByCoder(
@@ -2095,7 +2169,8 @@ export class CodingExportService {
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
     coderIds?: number[],
-    serverUrl?: string
+    serverUrl?: string,
+    outputFilePath?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
@@ -2180,10 +2255,7 @@ export class CodingExportService {
       manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
     }
 
-    const chunks: Buffer[] = [];
-    const stream = new PassThrough();
-    stream.on('data', chunk => chunks.push(chunk));
-    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
+    const { workbook, chunks } = this.createStreamingWorkbookTarget(outputFilePath);
 
     for (const [coderKey, jobs] of coderJobsMap) {
       if (checkCancellation) await checkCancellation();
@@ -2442,7 +2514,41 @@ export class CodingExportService {
     }
 
     await workbook.commit();
-    return Buffer.concat(chunks);
+    return this.getStreamingWorkbookBuffer(chunks, outputFilePath);
+  }
+
+  async exportCodingResultsByCoderToFile(
+    filePath: string,
+    workspaceId: number,
+    outputCommentsInsteadOfCodes = false,
+    includeReplayUrl = false,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    authToken = '',
+    req?: Request,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[],
+    serverUrl?: string
+  ): Promise<void> {
+    await this.exportCodingResultsByCoder(
+      workspaceId,
+      outputCommentsInsteadOfCodes,
+      includeReplayUrl,
+      anonymizeCoders,
+      usePseudoCoders,
+      authToken,
+      req,
+      excludeAutoCoded,
+      checkCancellation,
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds,
+      serverUrl,
+      filePath
+    );
   }
 
   async exportCodingResultsByVariable(
@@ -2461,7 +2567,8 @@ export class CodingExportService {
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
     coderIds?: number[],
-    serverUrl?: string
+    serverUrl?: string,
+    outputFilePath?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (manual coding only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
@@ -2518,10 +2625,7 @@ export class CodingExportService {
       );
     }
 
-    const chunks: Buffer[] = [];
-    const stream = new PassThrough();
-    stream.on('data', chunk => chunks.push(chunk));
-    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
+    const { workbook, chunks } = this.createStreamingWorkbookTarget(outputFilePath);
 
     for (const { unitName, variableId } of filteredCombinations) {
       if (checkCancellation) await checkCancellation();
@@ -2796,7 +2900,47 @@ export class CodingExportService {
     }
 
     await workbook.commit();
-    return Buffer.concat(chunks);
+    return this.getStreamingWorkbookBuffer(chunks, outputFilePath);
+  }
+
+  async exportCodingResultsByVariableToFile(
+    filePath: string,
+    workspaceId: number,
+    includeModalValue = false,
+    includeDoubleCoded = false,
+    includeComments = false,
+    outputCommentsInsteadOfCodes = false,
+    includeReplayUrl = false,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    authToken = '',
+    req?: Request,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[],
+    serverUrl?: string
+  ): Promise<void> {
+    await this.exportCodingResultsByVariable(
+      workspaceId,
+      includeModalValue,
+      includeDoubleCoded,
+      includeComments,
+      outputCommentsInsteadOfCodes,
+      includeReplayUrl,
+      anonymizeCoders,
+      usePseudoCoders,
+      authToken,
+      req,
+      excludeAutoCoded,
+      checkCancellation,
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds,
+      serverUrl,
+      filePath
+    );
   }
 
   exportCodingResultsByVariableCompactAsCsvStream(
@@ -3352,7 +3496,8 @@ export class CodingExportService {
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
     coderIds?: number[],
-    serverUrl?: string
+    serverUrl?: string,
+    outputFilePath?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting detailed coding results for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
@@ -3428,7 +3573,12 @@ export class CodingExportService {
 
       const headerColumns = ['"Person Login"', '"Person Code"', '"Person Group"', '"Kodierer"', '"Unit"', '"Variable"', '"Kommentar"', '"Kodierzeitpunkt"', '"Code"', '"Code-Hinweis"'];
       if (includeReplayUrl) headerColumns.push('"Replay URL"');
-      chunks.push(Buffer.from(`${headerColumns.join(';')}\n`, 'utf-8'));
+      const headerCsv = `${headerColumns.join(';')}\n`;
+      if (outputFilePath) {
+        await fs.promises.writeFile(outputFilePath, headerCsv, 'utf-8');
+      } else {
+        chunks.push(Buffer.from(headerCsv, 'utf-8'));
+      }
 
       if (totalCount === 0 && hasScopedJobFilters) {
         throw new Error(this.getNoCodingResultsMessage(true));
@@ -3644,7 +3794,11 @@ export class CodingExportService {
 
         // Flush last case in this batch
         if (await flushManagerRowIfNeeded()) exportedRowCount += 1;
-        chunks.push(Buffer.from(batchCsv, 'utf-8'));
+        if (outputFilePath) {
+          await fs.promises.appendFile(outputFilePath, batchCsv, 'utf-8');
+        } else {
+          chunks.push(Buffer.from(batchCsv, 'utf-8'));
+        }
       }
 
       if (exportedRowCount === 0 && hasScopedJobFilters) {
@@ -3652,11 +3806,45 @@ export class CodingExportService {
       }
 
       this.logger.log(`Exported detailed results for workspace ${workspaceId}`);
-      return Buffer.concat(chunks);
+      return outputFilePath ? Buffer.alloc(0) : Buffer.concat(chunks);
     } catch (error) {
       this.logger.error(`Error exporting detailed coding results: ${error.message}`, error.stack);
       throw new Error(`Could not export detailed coding results: ${error.message}`);
     }
+  }
+
+  async exportCodingResultsDetailedToFile(
+    filePath: string,
+    workspaceId: number,
+    outputCommentsInsteadOfCodes = false,
+    includeReplayUrl = false,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    authToken = '',
+    req?: Request,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[],
+    serverUrl?: string
+  ): Promise<void> {
+    await this.exportCodingResultsDetailed(
+      workspaceId,
+      outputCommentsInsteadOfCodes,
+      includeReplayUrl,
+      anonymizeCoders,
+      usePseudoCoders,
+      authToken,
+      req,
+      excludeAutoCoded,
+      checkCancellation,
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds,
+      serverUrl,
+      filePath
+    );
   }
 
   async exportCodingTimesReport(
@@ -3667,7 +3855,8 @@ export class CodingExportService {
     checkCancellation?: () => Promise<void>,
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
-    coderIds?: number[]
+    coderIds?: number[],
+    outputFilePath?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting coding times report for workspace ${workspaceId}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
     const {
@@ -3762,7 +3951,7 @@ export class CodingExportService {
           throw new Error(this.getNoCodingResultsMessage(true));
         }
 
-        const workbook = new ExcelJS.Workbook();
+        const { workbook, chunks } = this.createStreamingWorkbookTarget(outputFilePath);
         const worksheet = workbook.addWorksheet('Kodierzeiten-Bericht');
 
         worksheet.columns = [
@@ -3782,8 +3971,9 @@ export class CodingExportService {
         worksheet.getColumn('variable').font = { bold: true };
 
         this.logger.log('Generated empty coding times report (no coded units found)');
-        const buffer = await workbook.xlsx.writeBuffer();
-        return Buffer.from(buffer);
+        await worksheet.commit();
+        await workbook.commit();
+        return this.getStreamingWorkbookBuffer(chunks, outputFilePath);
       }
 
       const variableUnitCoders = new Map<string, Set<string>>();
@@ -3837,7 +4027,7 @@ export class CodingExportService {
         coderList.map(coder => coderNameMapping.get(coder) || coder) :
         coderList;
 
-      const workbook = new ExcelJS.Workbook();
+      const { workbook, chunks } = this.createStreamingWorkbookTarget(outputFilePath);
       const worksheet = workbook.addWorksheet('Kodierzeiten-Bericht');
 
       worksheet.columns = [
@@ -3886,7 +4076,7 @@ export class CodingExportService {
 
         rowData.gesamt = totalValidCodings > 0 ? Math.round((totalTimeSum / totalValidCodings) * 100) / 100 : null;
 
-        worksheet.addRow(rowData);
+        worksheet.addRow(rowData).commit();
       }
 
       worksheet.getRow(1).font = { bold: true };
@@ -3901,12 +4091,37 @@ export class CodingExportService {
 
       this.logger.log(`Generated coding times pivot table with ${sortedVariableUnitKeys.length} variable-unit combinations and ${coderList.length} coders`);
 
-      const buffer = await workbook.xlsx.writeBuffer();
-      return Buffer.from(buffer);
+      await worksheet.commit();
+      await workbook.commit();
+      return this.getStreamingWorkbookBuffer(chunks, outputFilePath);
     } catch (error) {
       this.logger.error(`Error exporting coding times report: ${error.message}`, error.stack);
       throw new Error(`Could not export coding times report: ${error.message}`);
     }
+  }
+
+  async exportCodingTimesReportToFile(
+    filePath: string,
+    workspaceId: number,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
+  ): Promise<void> {
+    await this.exportCodingTimesReport(
+      workspaceId,
+      anonymizeCoders,
+      usePseudoCoders,
+      excludeAutoCoded,
+      checkCancellation,
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds,
+      filePath
+    );
   }
 
   private calculateAverageCodingTime(timestamps: Date[]): number | null {
