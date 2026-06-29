@@ -5,7 +5,9 @@ import { ConfigService } from '@nestjs/config';
 import { KeycloakJwksService } from './keycloak-jwks.service';
 import { UsersService } from '../database/services/users';
 import {
+  ALLOW_LEGACY_WORKSPACE_REPLAY_TOKENS_ENV,
   WORKSPACE_API_TOKEN_TYPE,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
   WorkspaceTokenScope
 } from './workspace-token';
 
@@ -46,6 +48,7 @@ const ADMIN_ROLES = ['admin', 'system-admin', 'sys-admin', 'administrator'];
 export class JwtStrategy extends PassportStrategy(Strategy) {
   private readonly expectedIssuer?: string;
   private readonly keycloakClientId?: string;
+  private readonly allowLegacyWorkspaceReplayTokens: boolean;
 
   constructor(
     configService: ConfigService,
@@ -82,6 +85,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     this.expectedIssuer = expectedIssuer;
     this.keycloakClientId = keycloakClientId;
+    this.allowLegacyWorkspaceReplayTokens = resolveAllowLegacyWorkspaceReplayTokens(configService);
   }
 
   async validate(
@@ -154,6 +158,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   private getWorkspaceTokenScopes(scopes: unknown): WorkspaceTokenScope[] {
+    if (scopes === undefined) {
+      return this.allowLegacyWorkspaceReplayTokens ?
+        [WORKSPACE_TOKEN_SCOPE_REPLAY_READ] :
+        [];
+    }
+
     if (!Array.isArray(scopes)) {
       return [];
     }
@@ -227,4 +237,13 @@ function resolveExpectedIssuer(configService: ConfigService): string | undefined
   }
 
   return `${keycloakUrl.replace(/\/+$/, '')}/realms/${realm}`;
+}
+
+function resolveAllowLegacyWorkspaceReplayTokens(configService: ConfigService): boolean {
+  const configuredValue = configService.get<string>(ALLOW_LEGACY_WORKSPACE_REPLAY_TOKENS_ENV);
+  if (configuredValue === undefined || configuredValue === null || configuredValue.trim() === '') {
+    return true;
+  }
+
+  return !['false', '0', 'no', 'off'].includes(configuredValue.trim().toLowerCase());
 }
