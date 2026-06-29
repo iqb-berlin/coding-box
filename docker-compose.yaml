@@ -64,9 +64,14 @@ services:
       redis:
         condition: service_healthy
     environment:
+      APP_ROLE: api
       API_HOST: backend
       JWT_SECRET: ${JWT_SECRET}
       GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
+      EXPORT_CODING_LIST_BATCH_SIZE: ${EXPORT_CODING_LIST_BATCH_SIZE:-500}
+      EXPORT_VERSIONED_BATCH_SIZE: ${EXPORT_VERSIONED_BATCH_SIZE:-250}
+      POSTGRES_POOL_MAX: ${POSTGRES_POOL_MAX:-10}
+      DISABLED_JOB_QUEUE_PROCESSORS: data-export
       <<: [ *env-redis, *env-postgres, *env-keycloak ]
     healthcheck:
       test:
@@ -78,6 +83,28 @@ services:
       timeout: 3s
       retries: 12
       start_period: 30s
+    networks:
+      - application-network
+
+  backend-export-worker:
+    depends_on:
+      db:
+        condition: service_healthy
+      liquibase:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ROLE: export-worker
+      API_HOST: backend-export-worker
+      JWT_SECRET: ${JWT_SECRET}
+      GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
+      EXPORT_CODING_LIST_BATCH_SIZE: ${EXPORT_CODING_LIST_BATCH_SIZE:-500}
+      EXPORT_VERSIONED_BATCH_SIZE: ${EXPORT_VERSIONED_BATCH_SIZE:-250}
+      POSTGRES_POOL_MAX: ${EXPORT_WORKER_POSTGRES_POOL_MAX:-4}
+      JOB_QUEUE_PROCESSORS: data-export
+      PGOPTIONS: ${EXPORT_WORKER_PGOPTIONS:--c jit=off}
+      <<: [ *env-redis, *env-postgres, *env-keycloak ]
     networks:
       - application-network
 
@@ -95,6 +122,7 @@ services:
 volumes:
   db_vol:
   backend_vol:
+  export_temp_vol:
   redis_data:
 
 networks:

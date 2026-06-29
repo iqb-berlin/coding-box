@@ -21,8 +21,12 @@ import { AppService } from '../../../core/services/app.service';
 export interface ExportJob {
   jobId: string;
   workspaceId: number;
-  status: 'waiting' | 'active' | 'completed' | 'failed' | 'cancelled';
+  status: 'waiting' | 'active' | 'downloading' | 'completed' | 'failed' | 'cancelled';
   progress: number;
+  progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+  processedRows?: number;
+  totalRows?: number;
+  progressMessage?: string;
   exportType: string;
   displayLabelKey?: string;
   downloadFilePrefix?: string;
@@ -100,6 +104,7 @@ export function isReplayAuthTokenError(error: unknown): error is ReplayAuthToken
 export class ExportJobService implements OnDestroy {
   private jobsSubject = new BehaviorSubject<ExportJob[]>([]);
   private pollingSubscriptions = new Map<string, Subscription>();
+  private downloadSubscriptions = new Map<string, Subscription>();
   private stopPolling$ = new Subject<void>();
 
   readonly jobs$ = this.jobsSubject.asObservable();
@@ -111,7 +116,7 @@ export class ExportJobService implements OnDestroy {
 
   get activeJobs(): ExportJob[] {
     return this.jobsSubject.value.filter(
-      job => job.status === 'waiting' || job.status === 'active'
+      job => job.status === 'waiting' || job.status === 'active' || job.status === 'downloading'
     );
   }
 
@@ -206,6 +211,10 @@ export class ExportJobService implements OnDestroy {
           const statusAny = status as unknown as {
             status?: string;
             progress?: number;
+            progressPhase?: ExportJob['progressPhase'];
+            processedRows?: number;
+            totalRows?: number;
+            progressMessage?: string;
             result?: { fileName?: string; fileSize?: number };
             error?: string;
             errorCode?: string;
@@ -231,6 +240,10 @@ export class ExportJobService implements OnDestroy {
           this.updateJob(jobId, {
             status: mappedStatus,
             progress: statusAny.progress || 0,
+            progressPhase: statusAny.progressPhase,
+            processedRows: statusAny.processedRows,
+            totalRows: statusAny.totalRows,
+            progressMessage: statusAny.progressMessage,
             result,
             error: statusAny.error,
             errorCode: statusAny.errorCode,
@@ -292,11 +305,18 @@ export class ExportJobService implements OnDestroy {
 
   removeJob(jobId: string): void {
     this.stopPollingForJob(jobId);
+    this.stopDownloadForJob(jobId);
     const currentJobs = this.jobsSubject.value;
     this.jobsSubject.next(currentJobs.filter(job => job.jobId !== jobId));
   }
 
   cancelJob(job: ExportJob): void {
+    if (job.status === 'downloading') {
+      this.stopDownloadForJob(job.jobId);
+      this.updateJob(job.jobId, { status: 'completed', progress: 100 });
+      return;
+    }
+
     this.codingJobBackendService.cancelExportJob(job.workspaceId, job.jobId).subscribe({
       next: (response: { success: boolean }) => {
         if (response.success) {
@@ -320,7 +340,12 @@ export class ExportJobService implements OnDestroy {
     fileName?: string,
     downloadFilePrefix?: string
   ): void {
-    this.codingJobBackendService.downloadExportFile(workspaceId, jobId).subscribe({
+    if (this.downloadSubscriptions.has(jobId)) {
+      return;
+    }
+
+    this.updateJob(jobId, { status: 'downloading', progress: 0 });
+    const subscription = this.codingJobBackendService.downloadExportFile(workspaceId, jobId).subscribe({
       next: (blob: Blob) => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -332,9 +357,26 @@ export class ExportJobService implements OnDestroy {
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
+        this.downloadSubscriptions.delete(jobId);
+        this.updateJob(jobId, { status: 'completed', progress: 100 });
       },
-      error: () => { }
+      error: () => {
+        this.downloadSubscriptions.delete(jobId);
+        this.updateJob(jobId, { status: 'completed', progress: 100 });
+      }
     });
+    this.downloadSubscriptions.set(jobId, subscription);
+    if (subscription.closed) {
+      this.downloadSubscriptions.delete(jobId);
+    }
+  }
+
+  private stopDownloadForJob(jobId: string): void {
+    const subscription = this.downloadSubscriptions.get(jobId);
+    if (subscription) {
+      subscription.unsubscribe();
+      this.downloadSubscriptions.delete(jobId);
+    }
   }
 
   private getDownloadExtension(exportType: string, fileName?: string): string {
@@ -350,5 +392,7 @@ export class ExportJobService implements OnDestroy {
     this.stopPolling$.complete();
     this.pollingSubscriptions.forEach(sub => sub.unsubscribe());
     this.pollingSubscriptions.clear();
+    this.downloadSubscriptions.forEach(sub => sub.unsubscribe());
+    this.downloadSubscriptions.clear();
   }
 }

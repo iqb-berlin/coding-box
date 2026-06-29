@@ -34,10 +34,11 @@
       </mat-form-field>
       @if (!hideActionButtons) {
       <div class="button-group">
-        <button mat-icon-button (click)="onDownloadResults()"
-          [matTooltip]="'coding-management.download-dialog.download-tooltip' | translate" color="primary"
-          [disabled]="isDownloadInProgress" class="download-results-button">
-          <mat-icon>download</mat-icon>
+        <button mat-icon-button
+          (click)="isDownloadInProgress ? onCancelDownloadResults() : onDownloadResults()"
+          [matTooltip]="(isDownloadInProgress ? 'coding-management.download-dialog.cancel-tooltip' : 'coding-management.download-dialog.download-tooltip') | translate"
+          [color]="isDownloadInProgress ? 'warn' : 'primary'" class="download-results-button">
+          <mat-icon>{{ isDownloadInProgress ? 'cancel' : 'download' }}</mat-icon>
         </button>
         @if (isDownloadInProgress) {
         @if (downloadProgress !== null) {

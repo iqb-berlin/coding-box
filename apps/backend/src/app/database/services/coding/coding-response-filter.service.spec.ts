@@ -10,12 +10,15 @@ import { STATISTICS_IGNORED_STATUSES } from '../../utils/response-status-convert
 function createQueryBuilderMock() {
   const queryBuilder: Record<string, jest.Mock> = {};
   queryBuilder.leftJoinAndSelect = jest.fn(() => queryBuilder);
+  queryBuilder.select = jest.fn(() => queryBuilder);
+  queryBuilder.addSelect = jest.fn(() => queryBuilder);
   queryBuilder.where = jest.fn(() => queryBuilder);
   queryBuilder.andWhere = jest.fn(() => queryBuilder);
   queryBuilder.orderBy = jest.fn(() => queryBuilder);
   queryBuilder.take = jest.fn(() => queryBuilder);
   queryBuilder.getCount = jest.fn().mockResolvedValue(0);
   queryBuilder.getMany = jest.fn().mockResolvedValue([]);
+  queryBuilder.getRawMany = jest.fn().mockResolvedValue([]);
   return queryBuilder;
 }
 
@@ -62,15 +65,11 @@ describe('CodingResponseFilterService', () => {
     });
 
     expect(queryBuilder.where).toHaveBeenCalledWith(
-      expect.stringContaining('response.status_v2 = 8')
-    );
-    expect(queryBuilder.where).toHaveBeenCalledWith(
-      expect.stringContaining('IS NOT NULL')
-    );
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('NOT IN (:...statisticsIgnoredStatuses)'),
       { statisticsIgnoredStatuses: STATISTICS_IGNORED_STATUSES }
     );
+    expect(queryBuilder.where.mock.calls[0][0]).toContain('response.status_v2 = 8');
+    expect(queryBuilder.where.mock.calls[0][0]).not.toContain('IS NOT NULL');
   });
 
   it('uses the same v3 generated-row expression as coding statistics', async () => {
@@ -83,18 +82,13 @@ describe('CodingResponseFilterService', () => {
     });
 
     const whereCondition = queryBuilder.where.mock.calls[0][0] as string;
-    const ignoredStatusCondition = queryBuilder.andWhere.mock.calls.find(
-      ([condition]) => String(condition).includes('statisticsIgnoredStatuses')
-    )?.[0] as string;
 
     expect(whereCondition).not.toContain("response.status_v3 ~ '^-?[0-9]+$'");
     expect(whereCondition).not.toContain('response.status_v3::smallint');
     expect(whereCondition).toContain('COALESCE(response.status_v3');
     expect(whereCondition).toContain('response.status_v2 = 8');
     expect(whereCondition).toContain('response.status_v2, response.status_v1');
-    expect(ignoredStatusCondition).not.toContain("response.status_v3 ~ '^-?[0-9]+$'");
-    expect(ignoredStatusCondition).toContain('COALESCE(response.status_v3');
-    expect(ignoredStatusCondition).toContain('NOT IN (:...statisticsIgnoredStatuses)');
+    expect(whereCondition).toContain('NOT IN (:...statisticsIgnoredStatuses)');
   });
 
   it('requires valid coding variable pairs for generated responses as well', async () => {
@@ -130,5 +124,55 @@ describe('CodingResponseFilterService', () => {
         ]
       }
     );
+  });
+
+  it('loads versioned export batches as raw rows without hydrating entities', async () => {
+    const { service, queryBuilder } = createService();
+    queryBuilder.getRawMany.mockResolvedValueOnce([{
+      id: '42',
+      unitKey: 'UNIT1',
+      unitAlias: 'Unit 1',
+      personLogin: 'login',
+      personCode: 'code',
+      personGroup: 'group',
+      bookletName: 'Booklet',
+      variableId: 'VAR1',
+      value: 'answer',
+      statusV1: '8',
+      codeV1: '-111',
+      scoreV1: '2',
+      statusV2: null,
+      codeV2: null,
+      scoreV2: null,
+      statusV3: '5',
+      codeV3: '-3',
+      scoreV3: ''
+    }]);
+
+    const rows = await service.getVersionedResponsesBatchRaw(1, 41, 500, {
+      version: 'v1',
+      validCodingVariablesOnly: true,
+      givenResponsesOnly: true
+    });
+
+    expect(queryBuilder.select).toHaveBeenCalledWith('response.id', 'id');
+    expect(queryBuilder.addSelect).toHaveBeenCalledWith('response.variableid', 'variableId');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith('response.id > :lastId', { lastId: 41 });
+    expect(queryBuilder.orderBy).toHaveBeenCalledWith('response.id', 'ASC');
+    expect(queryBuilder.take).toHaveBeenCalledWith(500);
+    expect(queryBuilder.getRawMany).toHaveBeenCalled();
+    expect(queryBuilder.getMany).not.toHaveBeenCalled();
+    expect(rows[0].id).toBe(42);
+    expect(rows[0]).toMatchObject({
+      statusV1: 8,
+      codeV1: -111,
+      scoreV1: 2,
+      statusV2: null,
+      codeV2: null,
+      scoreV2: null,
+      statusV3: 5,
+      codeV3: -3,
+      scoreV3: null
+    });
   });
 });

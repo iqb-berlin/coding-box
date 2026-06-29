@@ -83,6 +83,7 @@ import {
   withRegexSearchStatementTimeout
 } from '../../../utils/regex-search.util';
 import { hasVisibleManualInstruction } from '../../../utils/manual-instruction.util';
+import { isExportWorkerProcess } from '../../../export-worker/export-worker-role';
 
 type WorkspaceUnitVisibility = {
   globalIgnoredUnits: Set<string>;
@@ -2992,6 +2993,11 @@ ${bookletRefs}
   }
 
   async onModuleInit(): Promise<void> {
+    if (isExportWorkerProcess()) {
+      this.logger.log('Skipping unit variable cache startup refresh in export worker');
+      return;
+    }
+
     this.logger.log(
       'Initializing WorkspaceFilesService - refreshing unit variable cache for all workspaces'
     );

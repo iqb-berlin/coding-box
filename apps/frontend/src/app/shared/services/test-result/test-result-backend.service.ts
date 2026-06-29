@@ -100,4 +100,12 @@ export class TestResultBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/jobs/${jobId}`;
     return this.http.delete<{ success: boolean; message: string }>(url, {});
   }
+
+  cancelTestResultExportJob(
+    workspaceId: number,
+    jobId: string
+  ): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/jobs/${jobId}/cancel`;
+    return this.http.post<{ success: boolean; message: string }>(url, {}, {});
+  }
 }
