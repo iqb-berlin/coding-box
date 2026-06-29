@@ -15,6 +15,7 @@ import {
   toRegexSearchException,
   withRegexSearchStatementTimeout
 } from '../../../utils/regex-search.util';
+import { generateReplayUrl } from '../../../utils/replay-url.util';
 
 interface CodingScheme {
   variableCodings?: {
@@ -328,7 +329,18 @@ export class VariableAnalysisReplayService {
 
           // Get variable page from VOUD data
           const variablePage = variablePageMaps.get(unitId)?.get(variableId) || '0';
-          const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
+          const replayUrl = generateReplayUrl({
+            serverUrl: serverUrl || '',
+            loginName,
+            loginCode,
+            loginGroup,
+            bookletId,
+            unitId,
+            variablePage,
+            variableAnchor: variableId,
+            authToken,
+            workspaceId: workspace_id
+          });
 
           result.push({
             replayUrl,

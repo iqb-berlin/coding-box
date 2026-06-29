@@ -169,3 +169,23 @@ CREATE INDEX IF NOT EXISTS "idx_unit_alias_normalized"
 -- rollback DROP INDEX IF EXISTS "public"."idx_file_upload_workspace_type_file_id_norm";
 -- rollback ALTER TABLE "public"."file_upload" DROP COLUMN IF EXISTS "coding_scheme_ref_normalized";
 -- rollback ALTER TABLE "public"."file_upload" DROP COLUMN IF EXISTS "file_id_normalized";
+
+-- changeset julian:3
+-- comment: Track whether replay statistics came from internal or external token-based replay
+
+ALTER TABLE "public"."replay_statistics"
+  ADD COLUMN IF NOT EXISTS "replay_source" VARCHAR(20) NOT NULL DEFAULT 'internal';
+
+UPDATE "public"."replay_statistics"
+SET "replay_source" = 'internal'
+WHERE "replay_source" IS NULL;
+
+ALTER TABLE "public"."replay_statistics"
+  ALTER COLUMN "replay_source" SET DEFAULT 'internal',
+  ALTER COLUMN "replay_source" SET NOT NULL;
+
+CREATE INDEX IF NOT EXISTS "replay_statistics_workspace_source_timestamp_idx"
+  ON "public"."replay_statistics" ("workspace_id", "replay_source", "timestamp");
+
+-- rollback DROP INDEX IF EXISTS "public"."replay_statistics_workspace_source_timestamp_idx";
+-- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN IF EXISTS "replay_source";

@@ -3,7 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, forkJoin, map } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
-import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
+import { suppressGlobalAndAuthRedirectHttpErrorContext } from '../../core/interceptors/http-error-context';
 
 export type ReplayUnitResponse = {
   responses: {
@@ -13,6 +13,7 @@ export type ReplayUnitResponse = {
 };
 
 export type ReplayTimingMap = Record<string, number | null>;
+export type ReplayStatisticsSource = 'internal' | 'external';
 export type ReplayClientTimings = {
   routeToVisibleMs: number | null;
   loadToVisibleMs: number | null;
@@ -49,10 +50,17 @@ export type ReplayStatisticsResponse = {
   test_person_code?: string;
   duration_milliseconds: number;
   replay_url?: string;
+  replay_source?: ReplayStatisticsSource;
   success?: boolean;
   error_message?: string;
   client_timings?: ReplayClientTimings;
   server_timings?: ReplayServerTimings;
+};
+
+export type ReplaySourceSummaryResponse = {
+  internal: number;
+  external: number;
+  total: number;
 };
 
 @Injectable({
@@ -88,7 +96,7 @@ export class ReplayBackendService {
       this.authHeader;
     return this.http.post<ReplayStatisticsResponse>(url, data, {
       headers,
-      context: suppressGlobalHttpErrorContext()
+      context: suppressGlobalAndAuthRedirectHttpErrorContext()
     });
   }
 
@@ -175,6 +183,24 @@ export class ReplayBackendService {
       params = params.set('limit', options.limit.toString());
     }
     return this.http.get<Record<string, number>>(url, { params, headers: this.authHeader });
+  }
+
+  getReplaySourceSummary(
+    workspaceId: number,
+    options?: { from?: string; to?: string; lastDays?: number }
+  ): Observable<ReplaySourceSummaryResponse> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/sources`;
+    let params = new HttpParams();
+    if (options?.from) {
+      params = params.set('from', options.from);
+    }
+    if (options?.to) {
+      params = params.set('to', options.to);
+    }
+    if (options?.lastDays !== undefined) {
+      params = params.set('lastDays', options.lastDays.toString());
+    }
+    return this.http.get<ReplaySourceSummaryResponse>(url, { params, headers: this.authHeader });
   }
 
   getReplayDurationStatistics(

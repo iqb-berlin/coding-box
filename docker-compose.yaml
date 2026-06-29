@@ -18,6 +18,9 @@ x-env-keycloak: &env-keycloak
   OIDC_ISSUER: ${OIDC_ISSUER}
   OIDC_JWKS_URI: ${OIDC_JWKS_URI}
 
+x-env-auth-policy: &env-auth-policy
+  WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS: ${WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS:-90}
+
 services:
   redis:
     image: redis:alpine
@@ -74,7 +77,7 @@ services:
       EXPORT_VERSIONED_BATCH_SIZE: ${EXPORT_VERSIONED_BATCH_SIZE:-250}
       POSTGRES_POOL_MAX: ${POSTGRES_POOL_MAX:-10}
       DISABLED_JOB_QUEUE_PROCESSORS: data-export
-      <<: [ *env-redis, *env-postgres, *env-keycloak ]
+      <<: [ *env-redis, *env-postgres, *env-keycloak, *env-auth-policy ]
     healthcheck:
       test:
         [
@@ -106,7 +109,7 @@ services:
       POSTGRES_POOL_MAX: ${EXPORT_WORKER_POSTGRES_POOL_MAX:-4}
       JOB_QUEUE_PROCESSORS: data-export
       PGOPTIONS: ${EXPORT_WORKER_PGOPTIONS:--c jit=off}
-      <<: [ *env-redis, *env-postgres, *env-keycloak ]
+      <<: [ *env-redis, *env-postgres, *env-keycloak, *env-auth-policy ]
     networks:
       - application-network
 

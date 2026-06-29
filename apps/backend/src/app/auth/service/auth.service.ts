@@ -5,22 +5,31 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../../database/services/users';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 import {
+  createWorkspaceTokenPolicy,
+  DEFAULT_REPLAY_READ_WORKSPACE_TOKEN_MAX_DURATION_DAYS,
+  getWorkspaceTokenMaxDurationDays,
   WORKSPACE_API_TOKEN_TYPE,
   WORKSPACE_TOKEN_SCOPES,
+  WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS_ENV,
+  WorkspaceTokenPolicy,
   WorkspaceTokenScope
 } from '../workspace-token';
-
-export const MAX_WORKSPACE_TOKEN_DURATION_DAYS = 1;
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
+    private configService: ConfigService
   ) {
+  }
+
+  getWorkspaceTokenPolicy(): WorkspaceTokenPolicy {
+    return createWorkspaceTokenPolicy(this.getReplayReadMaxDurationDays());
   }
 
   async createToken(
@@ -66,8 +75,8 @@ export class AuthService {
     duration: number,
     scopes: WorkspaceTokenScope[]
   ): string {
-    this.validateWorkspaceTokenDuration(duration);
     this.validateWorkspaceTokenScopes(scopes);
+    this.validateWorkspaceTokenDuration(duration, scopes);
     const payload = {
       userId: user.id,
       username: user.username,
@@ -80,14 +89,15 @@ export class AuthService {
     return JSON.stringify(token);
   }
 
-  private validateWorkspaceTokenDuration(duration: number): void {
+  private validateWorkspaceTokenDuration(duration: number, scopes: WorkspaceTokenScope[]): void {
+    const maxDurationDays = getWorkspaceTokenMaxDurationDays(scopes, this.getWorkspaceTokenPolicy());
     if (
       !Number.isInteger(duration) ||
       duration < 1 ||
-      duration > MAX_WORKSPACE_TOKEN_DURATION_DAYS
+      duration > maxDurationDays
     ) {
       throw new BadRequestException(
-        `Token duration must be a whole number between 1 and ${MAX_WORKSPACE_TOKEN_DURATION_DAYS} days`
+        `Token duration must be a whole number between 1 and ${maxDurationDays} days for the requested scopes`
       );
     }
   }
@@ -102,6 +112,16 @@ export class AuthService {
     if (invalidScope) {
       throw new BadRequestException(`Unsupported token scope: ${invalidScope}`);
     }
+  }
+
+  private getReplayReadMaxDurationDays(): number {
+    const configuredValue = Number(this.configService.get<string>(
+      WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS_ENV
+    ));
+
+    return Number.isInteger(configuredValue) && configuredValue >= 1 ?
+      configuredValue :
+      DEFAULT_REPLAY_READ_WORKSPACE_TOKEN_MAX_DURATION_DAYS;
   }
 
   async isAdminUser(userId: number): Promise<boolean> {

@@ -49,7 +49,14 @@ describe('WsSettingsComponent', () => {
     mockAppService = {
       selectedWorkspaceId: 1,
       loggedUser: { sub: 'test-user' },
-      createOwnToken: jest.fn().mockReturnValue(of('test-token'))
+      createOwnToken: jest.fn().mockReturnValue(of('test-token')),
+      getWorkspaceTokenPolicy: jest.fn().mockReturnValue(of({
+        scopes: {
+          'replay:read': { maxDurationDays: 90 },
+          'replay-statistics:write': { maxDurationDays: 1 },
+          'coding-job:operate': { maxDurationDays: 1 }
+        }
+      }))
     } as unknown as jest.Mocked<AppService>;
 
     mockWorkspaceSettingsService = {
@@ -120,6 +127,7 @@ describe('WsSettingsComponent', () => {
 
   describe('ngOnInit', () => {
     it('should load workspace settings on init', () => {
+      expect(mockAppService.getWorkspaceTokenPolicy).toHaveBeenCalled();
       expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
       expect(component.autoFetchCodingStatistics).toBe(true);
       expect(mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1);
@@ -146,10 +154,29 @@ describe('WsSettingsComponent', () => {
       expect(mockAppService.createOwnToken).toHaveBeenCalledWith(
         1,
         component.duration,
-        ['replay:read', 'replay-statistics:write']
+        ['replay:read']
       );
       expect(component.authToken).toBe('test-token');
       expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should use the token policy maximum for duration validation', () => {
+      mockAppService.getWorkspaceTokenPolicy.mockReturnValueOnce(of({
+        scopes: {
+          'replay:read': { maxDurationDays: 60 },
+          'replay-statistics:write': { maxDurationDays: 1 },
+          'coding-job:operate': { maxDurationDays: 1 }
+        }
+      }));
+
+      component.ngOnInit();
+
+      expect(component.maxTokenDurationDays).toBe(60);
+      expect(component.duration).toBe(60);
+      expect(component.isTokenDurationValid()).toBe(true);
+
+      component.duration = 61;
+      expect(component.isTokenDurationValid()).toBe(false);
     });
 
     it('should reject decimal durations before requesting a token', () => {

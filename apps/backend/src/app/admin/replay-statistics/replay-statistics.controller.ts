@@ -5,6 +5,7 @@ import {
   Param,
   Post,
   Query,
+  Req,
   ValidationPipe,
   UseGuards
 } from '@nestjs/common';
@@ -18,7 +19,10 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import {
-  AllowWorkspaceTokenScopes,
+  AllowAnyWorkspaceTokenScopes,
+  isWorkspaceApiTokenUser,
+  WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
   WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
 } from '../../auth/workspace-token';
 import {
@@ -27,8 +31,17 @@ import {
 } from '../workspace/access-level.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { ReplayStatisticsService } from '../../database/services/test-results';
-import { ReplayStatistics } from '../../database/entities/replay-statistics.entity';
+import {
+  REPLAY_STATISTICS_SOURCE_EXTERNAL,
+  REPLAY_STATISTICS_SOURCE_INTERNAL,
+  ReplayStatistics,
+  ReplayStatisticsSource
+} from '../../database/entities/replay-statistics.entity';
 import { StoreReplayStatisticsDto } from './dto/store-replay-statistics.dto';
+
+type ReplayStatisticsRequest = {
+  user?: unknown;
+};
 
 /**
  * Controller for managing replay statistics
@@ -51,18 +64,38 @@ export class ReplayStatisticsController {
   })
   @ApiBody({ type: StoreReplayStatisticsDto })
   @Post()
-  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE)
+  @AllowAnyWorkspaceTokenScopes(
+    WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
+    WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
+  )
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async storeReplayStatistics(
     @Param('workspace_id') workspaceId: string,
       @Body(new ValidationPipe({ transform: true, whitelist: true }))
-                           data: StoreReplayStatisticsDto
+                           data: StoreReplayStatisticsDto,
+                           @Req() request?: ReplayStatisticsRequest
   ): Promise<ReplayStatistics> {
     return this.replayStatisticsService.storeReplayStatistics({
       workspaceId: Number(workspaceId),
       ...data,
+      replaySource: this.resolveReplaySource(request?.user),
       replayUrl: this.sanitizeReplayUrl(data.replayUrl)
     });
+  }
+
+  private resolveReplaySource(user: unknown): ReplayStatisticsSource {
+    if (!isWorkspaceApiTokenUser(user)) {
+      return REPLAY_STATISTICS_SOURCE_INTERNAL;
+    }
+
+    const scopes = Array.isArray(user.scopes) ? user.scopes : [];
+    const hasInternalReplayScope =
+      scopes.includes(WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE) ||
+      scopes.includes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE);
+
+    return hasInternalReplayScope ?
+      REPLAY_STATISTICS_SOURCE_INTERNAL :
+      REPLAY_STATISTICS_SOURCE_EXTERNAL;
   }
 
   private sanitizeReplayUrl(replayUrl?: string): string | undefined {
@@ -115,6 +148,54 @@ export class ReplayStatisticsController {
   ): Promise<ReplayStatistics[]> {
     return this.replayStatisticsService.getReplayStatistics(
       Number(workspaceId)
+    );
+  }
+
+  /**
+   * Get replay source summary
+   */
+  @ApiOperation({ summary: 'Get replay source summary' })
+  @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'from',
+    required: false,
+    description: 'ISO timestamp (inclusive) to filter replay statistics'
+  })
+  @ApiQuery({
+    name: 'to',
+    required: false,
+    description: 'ISO timestamp (exclusive) to filter replay statistics'
+  })
+  @ApiQuery({
+    name: 'lastDays',
+    required: false,
+    description:
+      'Convenience filter: last N days (overrides from/to if provided)'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Replay source summary retrieved successfully'
+  })
+  @Get('sources')
+  @UseGuards(JwtAuthGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async getReplaySourceSummary(
+    @Param('workspace_id') workspaceId: string,
+      @Query('from') from?: string,
+      @Query('to') to?: string,
+      @Query('lastDays') lastDays?: string
+  ): Promise<{
+        internal: number;
+        external: number;
+        total: number;
+      }> {
+    return this.replayStatisticsService.getReplaySourceSummary(
+      Number(workspaceId),
+      {
+        from,
+        to,
+        lastDays
+      }
     );
   }
 

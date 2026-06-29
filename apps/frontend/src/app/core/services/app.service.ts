@@ -24,6 +24,12 @@ import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../interceptors/http-error-context';
 import { WorkspaceTokenScope } from './auth-session.config';
 
+export interface WorkspaceTokenPolicy {
+  scopes: Record<WorkspaceTokenScope, {
+    maxDurationDays: number;
+  }>;
+}
+
 export type AuthBootstrapStatus =
   'checking'
   | 'backend-login-running'
@@ -94,6 +100,12 @@ export class AppService {
     return this.http.get<string>(
       `${this.serverUrl}admin/workspace/${workspace_id}/${encodedIdentity}/token/${duration}`,
       { params: this.createTokenScopeParams(scopes) }
+    );
+  }
+
+  getWorkspaceTokenPolicy(): Observable<WorkspaceTokenPolicy> {
+    return this.http.get<WorkspaceTokenPolicy>(
+      `${this.serverUrl}admin/workspace/token-policy`
     );
   }
 
