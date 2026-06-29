@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -7,7 +7,7 @@ import { CodingValidationService } from '../database/services/coding';
 import Persons from '../database/entities/persons.entity';
 
 @Injectable()
-export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
+export class CodingIncompleteCacheSchedulerService {
   private readonly logger = new Logger(CodingIncompleteCacheSchedulerService.name);
 
   constructor(
@@ -21,6 +21,13 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
    * Run on module initialization to pre-cache all manual coding variables.
    */
   async onModuleInit(): Promise<void> {
+    if (!this.isStartupWarmupEnabled()) {
+      this.logger.log(
+        'Skipping manual coding variables cache warmup on startup'
+      );
+      return;
+    }
+
     this.logger.log('Starting manual coding variables cache warmup on application startup');
 
     try {
@@ -171,5 +178,10 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
     const rssMB = (memUsage.rss / 1024 / 1024).toFixed(1);
 
     return `Heap: ${heapUsedMB}MB/${heapTotalMB}MB (${heapPercent}%), RSS: ${rssMB}MB`;
+  }
+
+  private isStartupWarmupEnabled(): boolean {
+    return process.env.ENABLE_STARTUP_CACHE_WARMUP === 'true' ||
+      process.env.ENABLE_CODING_INCOMPLETE_STARTUP_WARMUP === 'true';
   }
 }

@@ -51,7 +51,11 @@ describe('ExternalCodingImportService', () => {
         }
       }
     };
-    const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1),
+      deleteByPattern: jest.fn().mockResolvedValue(undefined)
+    };
     const codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
@@ -140,7 +144,11 @@ describe('ExternalCodingImportService', () => {
         }
       }
     };
-    const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1),
+      deleteByPattern: jest.fn().mockResolvedValue(undefined)
+    };
     const codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
@@ -221,7 +229,11 @@ describe('ExternalCodingImportService', () => {
         }
       }
     };
-    const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1),
+      deleteByPattern: jest.fn().mockResolvedValue(undefined)
+    };
     const codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };

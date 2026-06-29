@@ -43,7 +43,10 @@ import {
   CodingFreshnessVersion,
   StartCodingFreshnessJobDto
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
-import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
+import {
+  AutocodingReadinessDetailLevel,
+  AutocodingReadinessDto
+} from '../../../../../../api-dto/coding/autocoding-readiness.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { sanitizeCsvText } from '../../utils/csv.util';
 
@@ -962,17 +965,25 @@ export class WorkspaceCodingStatisticsController {
     required: false,
     description: 'Ignore the short-lived readiness cache and recalculate.'
   })
+  @ApiQuery({
+    name: 'detailLevel',
+    required: false,
+    description: 'Return a lightweight summary or full diagnostics.',
+    enum: ['summary', 'full']
+  })
   @ApiOkResponse({
     description: 'Auto-coding readiness diagnostics retrieved successfully.'
   })
   async getAutocodingReadiness(
     @WorkspaceId() workspace_id: number,
       @Query('autoCoderRun') autoCoderRun?: string | string[],
-      @Query('forceRefresh') forceRefresh?: string | string[]
+      @Query('forceRefresh') forceRefresh?: string | string[],
+      @Query('detailLevel') detailLevel?: string | string[]
   ): Promise<AutocodingReadinessDto> {
     return this.codingReadinessService.getReadiness(workspace_id, {
       autoCoderRun: this.parseAutoCoderRun(autoCoderRun),
-      forceRefresh: this.parseBooleanQuery(forceRefresh)
+      forceRefresh: this.parseBooleanQuery(forceRefresh),
+      detailLevel: this.parseReadinessDetailLevel(detailLevel)
     });
   }
 
@@ -1139,6 +1150,22 @@ export class WorkspaceCodingStatisticsController {
       return numericValue;
     }
     throw new BadRequestException('autoCoderRun must be 1 or 2');
+  }
+
+  private parseReadinessDetailLevel(
+    value?: string | string[]
+  ): AutocodingReadinessDetailLevel {
+    const values = this.parseArrayQuery(value);
+    if (values.length === 0) {
+      return 'full';
+    }
+    if (values.length > 1) {
+      throw new BadRequestException('detailLevel must be provided only once');
+    }
+    if (values[0] === 'summary' || values[0] === 'full') {
+      return values[0];
+    }
+    throw new BadRequestException('detailLevel must be summary or full');
   }
 
   private parseBooleanQuery(value?: string | string[]): boolean {

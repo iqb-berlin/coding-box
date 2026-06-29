@@ -62,6 +62,16 @@ const mockQueryBuilder = () => ({
   execute: jest.fn().mockResolvedValue({ affected: 0 })
 });
 
+const createDeferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
 type WorkspaceTestResultsServiceWithLogAnomalyLookup = {
   findLogAnomaliesForBooklets: (
     bookletIds: number[],
@@ -1254,6 +1264,97 @@ describe('WorkspaceTestResultsService', () => {
   });
 
   describe('getWorkspaceTestResultsOverview', () => {
+    it('should return cached overview by test results revision without querying aggregates', async () => {
+      const workspaceId = 1;
+      const cachedOverview = {
+        testPersons: 10,
+        testGroups: 2,
+        uniqueBooklets: 3,
+        uniqueUnits: 4,
+        uniqueResponses: 5,
+        responseStatusCounts: { DISPLAYED: 5 },
+        sessionBrowserCounts: { Chrome: 1 },
+        sessionOsCounts: { Windows: 1 },
+        sessionScreenCounts: { '1920x1080': 1 }
+      };
+      (dataSource.query as jest.Mock).mockResolvedValue([{ revision: 7 }]);
+      cacheService.get.mockResolvedValue(cachedOverview);
+
+      const result = await service.getWorkspaceTestResultsOverview(workspaceId);
+
+      expect(result).toBe(cachedOverview);
+      expect(cacheService.get).toHaveBeenCalledWith(
+        'workspace-overview-stats-1:v7'
+      );
+      expect(personsRepository.count).not.toHaveBeenCalled();
+      expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('should reuse an in-flight overview query for the same workspace revision', async () => {
+      const workspaceId = 1;
+      const overview = {
+        testPersons: 1,
+        testGroups: 1,
+        uniqueBooklets: 1,
+        uniqueUnits: 1,
+        uniqueResponses: 1,
+        responseStatusCounts: {},
+        sessionBrowserCounts: {},
+        sessionOsCounts: {},
+        sessionScreenCounts: {}
+      };
+      const overviewDeferred = createDeferred<typeof overview>();
+      const serviceInternals = service as unknown as {
+        computeAndCacheWorkspaceTestResultsOverview: (
+          workspaceId: number,
+          revision: number,
+          cacheKey: string,
+          cacheGeneration: number
+        ) => Promise<typeof overview>;
+      };
+      (dataSource.query as jest.Mock).mockResolvedValue([{ revision: 8 }]);
+      cacheService.get.mockResolvedValue(null);
+      const computeSpy = jest
+        .spyOn(serviceInternals, 'computeAndCacheWorkspaceTestResultsOverview')
+        .mockReturnValue(overviewDeferred.promise);
+
+      const firstRequest = service.getWorkspaceTestResultsOverview(workspaceId);
+      const secondRequest = service.getWorkspaceTestResultsOverview(workspaceId);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(computeSpy).toHaveBeenCalledTimes(1);
+      expect(computeSpy).toHaveBeenCalledWith(
+        workspaceId,
+        8,
+        'workspace-overview-stats-1:v8',
+        0
+      );
+
+      overviewDeferred.resolve(overview);
+      await expect(Promise.all([firstRequest, secondRequest])).resolves.toEqual(
+        [overview, overview]
+      );
+    });
+
+    it('should not cache an overview if the test results revision changes while computing', async () => {
+      const workspaceId = 1;
+      (dataSource.query as jest.Mock)
+        .mockResolvedValueOnce([{ revision: 1 }])
+        .mockResolvedValueOnce([{ revision: 2 }]);
+      cacheService.get.mockResolvedValue(null);
+      (personsRepository.count as jest.Mock).mockResolvedValue(10);
+
+      await service.getWorkspaceTestResultsOverview(workspaceId);
+
+      expect(cacheService.set).not.toHaveBeenCalledWith(
+        'workspace-overview-stats-1:v1',
+        expect.anything(),
+        0
+      );
+    });
+
     it('should return correct statistics', async () => {
       const workspaceId = 1;
 
@@ -1274,15 +1375,12 @@ describe('WorkspaceTestResultsService', () => {
       unitQb.getRawMany.mockResolvedValue(['unit1', 'unit2']);
       unitQb.getRawOne.mockResolvedValue({ count: 2 });
 
-      const responseCountQb = mockQueryBuilder();
       const responseStatusQb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(responseCountQb)
         .mockReturnValueOnce(responseStatusQb);
-      responseCountQb.getCount.mockResolvedValue(100);
       responseStatusQb.getRawMany.mockResolvedValue([
-        { status: '0', count: '5' },
-        { status: '1', count: '10' }
+        { status: '0', count: '55' },
+        { status: '1', count: '45' }
       ]);
 
       const sessionBrowserQb = mockQueryBuilder();
@@ -1304,13 +1402,22 @@ describe('WorkspaceTestResultsService', () => {
       expect(result.uniqueBooklets).toBe(1); // 1 booklet row mock
       expect(result.uniqueUnits).toBe(2);
       expect(result.uniqueResponses).toBe(100);
-      expect(result.responseStatusCounts).toEqual({ UNSET: 5, NOT_REACHED: 10 });
+      expect(result.responseStatusCounts).toEqual({ UNSET: 55, NOT_REACHED: 45 });
       expect(result.sessionBrowserCounts).toEqual({ Chrome: 20 });
-      expect(responseCountQb.andWhere).toHaveBeenCalledWith(
-        'response.is_autocoder_generated IS NOT TRUE'
-      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
       expect(responseStatusQb.andWhere).toHaveBeenCalledWith(
         'response.is_autocoder_generated IS NOT TRUE'
+      );
+      expect(cacheService.set).toHaveBeenCalledWith(
+        'workspace-overview-stats-1:v0',
+        expect.objectContaining({
+          testPersons: 10,
+          testGroups: 2,
+          uniqueBooklets: 1,
+          uniqueUnits: 2,
+          uniqueResponses: 100
+        }),
+        0
       );
     });
 
@@ -1349,6 +1456,112 @@ describe('WorkspaceTestResultsService', () => {
       expect(unitQb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining("REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') NOT IN"),
         expect.objectContaining({ workspaceExclusionIgnoredUnits: ['UNIT1'] }) // .XML stripped and uppercase
+      );
+    });
+
+    it('should invalidate legacy and revisioned overview cache entries', async () => {
+      const workspaceId = 1;
+
+      await service.invalidateWorkspaceStatsCache(workspaceId);
+
+      expect(cacheService.delete).toHaveBeenCalledWith(
+        'workspace-overview-stats-1'
+      );
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(
+        'workspace-overview-stats-1:*'
+      );
+    });
+  });
+
+  describe('hasGeogebraResponses', () => {
+    it('uses a revisioned cache and stops the database query after the first match', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getRawOne.mockResolvedValue({ exists: 1 });
+      (dataSource.query as jest.Mock).mockResolvedValue([{ revision: 4 }]);
+
+      await expect(service.hasGeogebraResponses(1)).resolves.toBe(true);
+
+      expect(cacheService.get).toHaveBeenCalledWith(
+        'geogebra-existence:1:v4'
+      );
+      expect(qb.select).toHaveBeenCalledWith('1', 'exists');
+      expect(qb.limit).toHaveBeenCalledWith(1);
+      expect(qb.getCount).not.toHaveBeenCalled();
+      expect(qb.innerJoin).not.toHaveBeenCalledWith(
+        'booklet.bookletinfo',
+        'bookletinfo'
+      );
+      expect(cacheService.set).toHaveBeenCalledWith(
+        'geogebra-existence:1:v4',
+        true,
+        0
+      );
+    });
+
+    it('joins bookletinfo for geogebra existence only when booklet exclusions need it', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getRawOne.mockResolvedValue(null);
+      (dataSource.query as jest.Mock).mockResolvedValue([{ revision: 4 }]);
+      (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock)
+        .mockResolvedValue({
+          globalIgnoredUnits: [],
+          ignoredBooklets: ['BOOKLET1'],
+          testletIgnoredUnits: []
+        });
+
+      await expect(service.hasGeogebraResponses(1)).resolves.toBe(false);
+
+      expect(qb.innerJoin).toHaveBeenCalledWith(
+        'booklet.bookletinfo',
+        'bookletinfo'
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'UPPER(bookletinfo.name) NOT IN (:...workspaceExclusionIgnoredBooklets)',
+        { workspaceExclusionIgnoredBooklets: ['BOOKLET1'] }
+      );
+    });
+
+    it('returns cached geogebra existence without querying responses', async () => {
+      (dataSource.query as jest.Mock).mockResolvedValue([{ revision: 4 }]);
+      cacheService.get.mockResolvedValueOnce(false);
+
+      await expect(service.hasGeogebraResponses(1)).resolves.toBe(false);
+
+      expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('reuses an in-flight geogebra existence query for the same workspace revision', async () => {
+      const geogebraDeferred = createDeferred<boolean>();
+      const serviceInternals = service as unknown as {
+        computeAndCacheGeoGebraExistence: (
+          workspaceId: number,
+          revision: number,
+          cacheKey: string
+        ) => Promise<boolean>;
+      };
+      (dataSource.query as jest.Mock).mockResolvedValue([{ revision: 4 }]);
+      const computeSpy = jest
+        .spyOn(serviceInternals, 'computeAndCacheGeoGebraExistence')
+        .mockReturnValue(geogebraDeferred.promise);
+
+      const firstRequest = service.hasGeogebraResponses(1);
+      const secondRequest = service.hasGeogebraResponses(1);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(computeSpy).toHaveBeenCalledTimes(1);
+      expect(computeSpy).toHaveBeenCalledWith(
+        1,
+        4,
+        'geogebra-existence:1:v4'
+      );
+
+      geogebraDeferred.resolve(true);
+      await expect(Promise.all([firstRequest, secondRequest])).resolves.toEqual(
+        [true, true]
       );
     });
   });

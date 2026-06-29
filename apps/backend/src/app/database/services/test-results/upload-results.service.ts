@@ -25,6 +25,7 @@ import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/jo
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
+import { CodingProgressService } from '../coding/coding-progress.service';
 import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 type PersonWithoutBooklets = Omit<Person, 'booklets'>;
@@ -63,7 +64,9 @@ export class UploadResultsService {
     @Optional()
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
-    private readonly codingAnalysisService?: CodingAnalysisService
+    private readonly codingAnalysisService?: CodingAnalysisService,
+    @Optional()
+    private readonly codingProgressService?: CodingProgressService
   ) {
   }
 
@@ -132,7 +135,11 @@ export class UploadResultsService {
       await Promise.all([
         this.codingAnalysisService?.invalidateCache(workspaceId),
         this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId),
-        this.workspaceTestResultsService.invalidateCodingAvailabilityCache(workspaceId)
+        this.workspaceTestResultsService.invalidateCodingAvailabilityCache(workspaceId),
+        this.codingProgressService?.invalidateAppliedResultsOverviewCache(
+          workspaceId,
+          { prewarm: true }
+        )
       ]);
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown error';

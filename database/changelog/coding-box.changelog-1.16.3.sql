@@ -189,3 +189,12 @@ CREATE INDEX IF NOT EXISTS "replay_statistics_workspace_source_timestamp_idx"
 
 -- rollback DROP INDEX IF EXISTS "public"."replay_statistics_workspace_source_timestamp_idx";
 -- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN IF EXISTS "replay_source";
+
+-- changeset julian:4
+-- comment: Speed up GeoGebra response existence checks without indexing full response values
+
+CREATE INDEX IF NOT EXISTS "idx_response_geogebra_value_unit"
+  ON "public"."response" ("unitid")
+  WHERE "value" LIKE 'UEsD%' OR "value" ILIKE 'data:%;base64,UEsD%';
+
+-- rollback DROP INDEX IF EXISTS "public"."idx_response_geogebra_value_unit";

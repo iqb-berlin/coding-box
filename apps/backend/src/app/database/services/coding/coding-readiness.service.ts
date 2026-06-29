@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException, Injectable, Logger, Optional
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository, SelectQueryBuilder
@@ -17,6 +19,7 @@ import {
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
   AutocodingInvalidVariableSampleDto,
+  AutocodingReadinessDetailLevel,
   AutocodingReadinessBlocker,
   AutocodingReadinessDto,
   AutocodingReadinessStatus
@@ -25,18 +28,21 @@ import {
   getCodingVariableIdCandidateSql,
   isCodingVariableIdCandidate
 } from './coding-response-candidate.util';
+import { CacheService } from '../../../cache/cache.service';
 
 export type AutocodingReadinessOptions = {
   personIds?: string[];
   unitIds?: number[];
   autoCoderRun?: 1 | 2;
   forceRefresh?: boolean;
+  detailLevel?: AutocodingReadinessDetailLevel;
 };
 
 type ReadinessCacheSignature = {
   sourceRevision: number;
   fileRevision: string;
   cacheRevision: number;
+  activePersonHash: string;
   scopedUnitHash: string;
 };
 
@@ -49,6 +55,11 @@ type CandidateVariableCountRow = {
   unitid: string | number;
   variableid: string;
   response_count: string | number;
+};
+
+type SummaryReadinessCountRow = {
+  raw_responses_total: string | number;
+  raw_responses_with_relevant_status: string | number;
 };
 
 type CandidateVariableCount = {
@@ -88,7 +99,8 @@ export class CodingReadinessService {
   private readonly logger = new Logger(CodingReadinessService.name);
   private readonly maxSamplesPerUnit = 8;
   private readonly maxSampleUnits = 10;
-  private readonly cacheTtlMs = 60_000;
+  private readonly cacheTtlMs = 10 * 60_000;
+  private readonly distributedCacheTtlSeconds = 60 * 60;
   private readonly readinessCache = new Map<string, ReadinessCacheEntry>();
   private readonly readinessInFlight = new Map<string, Promise<AutocodingReadinessDto>>();
   private readonly cacheRevisionByWorkspace = new Map<number, number>();
@@ -101,7 +113,9 @@ export class CodingReadinessService {
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,
     private readonly workspaceFilesService: WorkspaceFilesService,
-    private readonly workspaceExclusionService: WorkspaceExclusionService
+    private readonly workspaceExclusionService: WorkspaceExclusionService,
+    @Optional()
+    private readonly cacheService?: CacheService
   ) {}
 
   async getReadiness(
@@ -110,29 +124,41 @@ export class CodingReadinessService {
   ): Promise<AutocodingReadinessDto> {
     const startedAt = Date.now();
     const autoCoderRun = options.autoCoderRun || 1;
-    const units = await this.getScopedUnits(workspaceId, options);
-    const unitIds = units.map(unit => unit.id);
+    const detailLevel = options.detailLevel || 'full';
+    const workspaceWide = this.isWorkspaceWideReadiness(options);
+    const scopedUnits = workspaceWide ?
+      null :
+      await this.getScopedUnits(workspaceId, options);
+    const unitIds = scopedUnits?.map(unit => unit.id) || [];
 
-    if (unitIds.length === 0) {
-      return this.withComputationMetadata(
-        this.emptyReadiness(workspaceId, autoCoderRun, 'NO_RESULTS'),
-        startedAt,
-        false,
-        {
-          sourceRevision: 0,
-          fileRevision: '0:',
-          cacheRevision: this.getWorkspaceCacheRevision(workspaceId),
-          scopedUnitHash: ''
-        }
-      );
-    }
-
-    const cacheSignature = await this.getCacheSignature(workspaceId, unitIds, options);
-    const cacheKey = this.buildCacheKey(workspaceId, autoCoderRun, cacheSignature);
+    const cacheSignature = await this.getCacheSignature(
+      workspaceId,
+      unitIds,
+      options,
+      workspaceWide
+    );
+    const cacheKey = this.buildCacheKey(
+      workspaceId,
+      autoCoderRun,
+      detailLevel,
+      cacheSignature
+    );
     if (!options.forceRefresh) {
       const cached = this.getCachedReadiness(cacheKey);
       if (cached) {
         return cached;
+      }
+      const distributedCached = await this.getDistributedCachedReadiness(
+        workspaceId,
+        autoCoderRun,
+        cacheKey
+      );
+      if (distributedCached) {
+        this.setCachedReadiness(cacheKey, distributedCached);
+        return {
+          ...distributedCached,
+          fromCache: true
+        };
       }
     }
 
@@ -144,8 +170,9 @@ export class CodingReadinessService {
     const readinessPromise = this.computeReadiness(
       workspaceId,
       autoCoderRun,
+      detailLevel,
       options,
-      units,
+      scopedUnits,
       startedAt,
       cacheSignature,
       cacheKey
@@ -235,12 +262,42 @@ export class CodingReadinessService {
   private async computeReadiness(
     workspaceId: number,
     autoCoderRun: 1 | 2,
+    detailLevel: AutocodingReadinessDetailLevel,
     options: AutocodingReadinessOptions,
-    units: Unit[],
+    scopedUnits: Unit[] | null,
     startedAt: number,
     cacheSignature: ReadinessCacheSignature,
     cacheKey: string
   ): Promise<AutocodingReadinessDto> {
+    if (detailLevel === 'summary') {
+      return this.computeSummaryReadiness(
+        workspaceId,
+        autoCoderRun,
+        options,
+        scopedUnits,
+        startedAt,
+        cacheSignature,
+        cacheKey
+      );
+    }
+
+    const units = scopedUnits ?? await this.getScopedUnits(workspaceId, options);
+    if (units.length === 0) {
+      const emptyReadiness = this.withComputationMetadata(
+        this.emptyReadiness(
+          workspaceId,
+          autoCoderRun,
+          'NO_RESULTS',
+          detailLevel
+        ),
+        startedAt,
+        false,
+        cacheSignature
+      );
+      this.setCachedReadiness(cacheKey, emptyReadiness);
+      return emptyReadiness;
+    }
+
     const [rawResponsesTotal, candidateVariableCounts] = await Promise.all([
       this.countRawResponses(workspaceId, options, autoCoderRun),
       this.getCandidateVariableCounts(workspaceId, options, autoCoderRun)
@@ -279,6 +336,8 @@ export class CodingReadinessService {
     const readiness = this.withComputationMetadata({
       workspaceId,
       autoCoderRun,
+      detailLevel: 'full',
+      detailsComplete: true,
       readiness: this.getReadinessStatus(
         rawResponsesTotal,
         codeableResponses,
@@ -304,6 +363,61 @@ export class CodingReadinessService {
     this.logger.debug(
       `Computed autocoding readiness for workspace ${workspaceId}, run ${autoCoderRun} ` +
       `in ${readiness.computationMs}ms: ${readiness.readiness}.`
+    );
+    return readiness;
+  }
+
+  private async computeSummaryReadiness(
+    workspaceId: number,
+    autoCoderRun: 1 | 2,
+    options: AutocodingReadinessOptions,
+    scopedUnits: Unit[] | null,
+    startedAt: number,
+    cacheSignature: ReadinessCacheSignature,
+    cacheKey: string
+  ): Promise<AutocodingReadinessDto> {
+    const {
+      rawResponsesTotal,
+      rawResponsesWithRelevantStatus
+    } = await this.countSummaryResponses(workspaceId, options, autoCoderRun);
+    const potentialCodeableResponses = rawResponsesWithRelevantStatus;
+    const blockers = this.getSummaryBlockers({
+      rawResponsesTotal,
+      rawResponsesWithRelevantStatus
+    });
+    const needsFullDiagnostics =
+      rawResponsesTotal > 0 &&
+      rawResponsesWithRelevantStatus > 0;
+
+    const readiness = this.withComputationMetadata({
+      workspaceId,
+      autoCoderRun,
+      detailLevel: 'summary',
+      detailsComplete: !needsFullDiagnostics,
+      readiness: needsFullDiagnostics ?
+        'DIAGNOSTICS_PENDING' :
+        this.getReadinessStatus(rawResponsesTotal, 0, blockers),
+      blockers,
+      rawResponsesTotal,
+      rawResponsesWithRelevantStatus,
+      resultUnitsTotal: scopedUnits?.length || 0,
+      resultUnitKeysTotal: 0,
+      matchedUnitFiles: 0,
+      missingUnitFiles: [],
+      matchedCodingSchemes: 0,
+      missingCodingSchemes: [],
+      invalidCodingSchemes: [],
+      validVariablePairs: 0,
+      validResponses: 0,
+      potentialCodeableResponses,
+      codeableResponses: 0,
+      invalidVariableSamples: []
+    }, startedAt, false, cacheSignature);
+
+    this.setCachedReadiness(cacheKey, readiness);
+    this.logger.debug(
+      `Computed summary autocoding readiness for workspace ${workspaceId}, ` +
+      `run ${autoCoderRun} in ${readiness.computationMs}ms: ${readiness.readiness}.`
     );
     return readiness;
   }
@@ -344,6 +458,36 @@ export class CodingReadinessService {
     const query = await this.createScopedResponseQuery(workspaceId, options);
     this.applyAutocoderGeneratedFilter(query, autoCoderRun);
     return query.getCount();
+  }
+
+  private async countSummaryResponses(
+    workspaceId: number,
+    options: AutocodingReadinessOptions,
+    autoCoderRun: 1 | 2
+  ): Promise<{
+      rawResponsesTotal: number;
+      rawResponsesWithRelevantStatus: number;
+    }> {
+    const query = await this.createScopedResponseQuery(workspaceId, options);
+    this.applyAutocoderGeneratedFilter(query, autoCoderRun);
+    const derivePending = statusStringToNumber('DERIVE_PENDING') as number;
+    const candidateCondition =
+      `((response.status IN (3, 2, 1) OR response.status_v1 = ${derivePending}) ` +
+      `AND ${getCodingVariableIdCandidateSql('response')})`;
+    const row = await query
+      .select('COUNT(response.id)', 'raw_responses_total')
+      .addSelect(
+        `COUNT(response.id) FILTER (WHERE ${candidateCondition})`,
+        'raw_responses_with_relevant_status'
+      )
+      .getRawOne<SummaryReadinessCountRow>();
+
+    return {
+      rawResponsesTotal: Number(row?.raw_responses_total || 0),
+      rawResponsesWithRelevantStatus: Number(
+        row?.raw_responses_with_relevant_status || 0
+      )
+    };
   }
 
   private async getCandidateVariableCounts(
@@ -753,6 +897,21 @@ export class CodingReadinessService {
     return blockers;
   }
 
+  private getSummaryBlockers(input: {
+    rawResponsesTotal: number;
+    rawResponsesWithRelevantStatus: number;
+  }): AutocodingReadinessBlocker[] {
+    if (input.rawResponsesTotal === 0) {
+      return [];
+    }
+
+    const blockers: AutocodingReadinessBlocker[] = [];
+    if (input.rawResponsesWithRelevantStatus === 0) {
+      blockers.push('NO_RELEVANT_RESPONSES');
+    }
+    return blockers;
+  }
+
   private getReadinessStatus(
     rawResponsesTotal: number,
     codeableResponses: number,
@@ -800,11 +959,14 @@ export class CodingReadinessService {
   private emptyReadiness(
     workspaceId: number,
     autoCoderRun: 1 | 2,
-    readiness: AutocodingReadinessStatus
+    readiness: AutocodingReadinessStatus,
+    detailLevel: AutocodingReadinessDetailLevel = 'full'
   ): AutocodingReadinessDto {
     return {
       workspaceId,
       autoCoderRun,
+      detailLevel,
+      detailsComplete: true,
       readiness,
       blockers: [],
       rawResponsesTotal: 0,
@@ -847,19 +1009,35 @@ export class CodingReadinessService {
   private async getCacheSignature(
     workspaceId: number,
     unitIds: number[],
-    options: AutocodingReadinessOptions
+    options: AutocodingReadinessOptions,
+    workspaceWide: boolean
   ): Promise<ReadinessCacheSignature> {
-    const [sourceRevision, fileRevision] = await Promise.all([
+    const [sourceRevision, fileRevision, activePersonHash] = await Promise.all([
       this.getWorkspaceResultsRevision(workspaceId),
-      this.getWorkspaceFileRevision(workspaceId)
+      this.getWorkspaceFileRevision(workspaceId),
+      workspaceWide ?
+        this.getWorkspaceActivePersonHash(workspaceId) :
+        Promise.resolve('scoped')
     ]);
 
     return {
       sourceRevision,
       fileRevision,
       cacheRevision: this.getWorkspaceCacheRevision(workspaceId),
-      scopedUnitHash: this.hashScope(unitIds, options)
+      activePersonHash,
+      scopedUnitHash: workspaceWide ?
+        this.hashValues(['workspace-wide']) :
+        this.hashScope(unitIds, options)
     };
+  }
+
+  private isWorkspaceWideReadiness(
+    options: AutocodingReadinessOptions
+  ): boolean {
+    return (
+      this.uniquePositiveIds((options.personIds || []).map(id => Number(id))).length === 0 &&
+      this.uniquePositiveIds(options.unitIds || []).length === 0
+    );
   }
 
   private getWorkspaceCacheRevision(workspaceId: number): number {
@@ -917,17 +1095,44 @@ export class CodingReadinessService {
     }
   }
 
+  private async getWorkspaceActivePersonHash(workspaceId: number): Promise<string> {
+    try {
+      const rows = await this.responseRepository.query(
+        `
+          SELECT
+            COUNT(id)::text AS active_count,
+            COALESCE(md5(string_agg(id::text, ',' ORDER BY id)), '') AS active_hash
+          FROM persons
+          WHERE workspace_id = $1
+            AND consider = true
+        `,
+        [workspaceId]
+      ) as Array<{ active_count: string; active_hash: string }>;
+      const row = rows[0];
+      return `${row?.active_count || '0'}:${row?.active_hash || ''}`;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Could not resolve active person signature for readiness cache: ${message}`
+      );
+      return '0:';
+    }
+  }
+
   private buildCacheKey(
     workspaceId: number,
     autoCoderRun: 1 | 2,
+    detailLevel: AutocodingReadinessDetailLevel,
     signature: ReadinessCacheSignature
   ): string {
     return [
       workspaceId,
       autoCoderRun,
+      detailLevel,
       signature.sourceRevision,
       signature.fileRevision,
       signature.cacheRevision,
+      signature.activePersonHash,
       signature.scopedUnitHash
     ].join('|');
   }
@@ -956,6 +1161,52 @@ export class CodingReadinessService {
     this.readinessCache.set(cacheKey, {
       expiresAt: Date.now() + this.cacheTtlMs,
       readiness
+    });
+    this.setDistributedCachedReadiness(cacheKey, readiness);
+  }
+
+  private getDistributedReadinessCacheKey(
+    workspaceId: number,
+    autoCoderRun: 1 | 2,
+    cacheKey: string
+  ): string {
+    return `coding_readiness:${workspaceId}:run${autoCoderRun}:${this.hashValues([cacheKey])}`;
+  }
+
+  private async getDistributedCachedReadiness(
+    workspaceId: number,
+    autoCoderRun: 1 | 2,
+    cacheKey: string
+  ): Promise<AutocodingReadinessDto | null> {
+    if (!this.cacheService) {
+      return null;
+    }
+    return this.cacheService.get<AutocodingReadinessDto>(
+      this.getDistributedReadinessCacheKey(workspaceId, autoCoderRun, cacheKey)
+    );
+  }
+
+  private setDistributedCachedReadiness(
+    cacheKey: string,
+    readiness: AutocodingReadinessDto
+  ): void {
+    if (!this.cacheService) {
+      return;
+    }
+    const distributedCacheKey = this.getDistributedReadinessCacheKey(
+      readiness.workspaceId,
+      readiness.autoCoderRun,
+      cacheKey
+    );
+    this.cacheService.set(
+      distributedCacheKey,
+      readiness,
+      this.distributedCacheTtlSeconds
+    ).catch(error => {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Could not store autocoding readiness cache ${distributedCacheKey}: ${message}`
+      );
     });
   }
 

@@ -10,8 +10,19 @@ jest.mock('../workspace/workspace-files.service', () => ({
 const createRepository = () => ({
   createQueryBuilder: jest.fn(),
   find: jest.fn(),
-  findOne: jest.fn()
+  findOne: jest.fn(),
+  query: jest.fn().mockResolvedValue([])
 });
+
+const createDeferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
 
 type MockQueryBuilder = Record<string, jest.Mock> & {
   subQueryProbes: Record<string, jest.Mock>[];
@@ -67,26 +78,47 @@ const createQueryBuilder = (rawResults: unknown[] = []) => {
     'orderBy'
   ].forEach(method => {
     queryBuilder[method] = jest.fn((condition?: unknown) => {
+      if (method === 'leftJoin' && typeof condition === 'function') {
+        condition(createSubQueryProbe(queryBuilder));
+      }
       executeBrackets(condition, queryBuilder);
       return queryBuilder;
     });
   });
   queryBuilder.getRawMany = jest.fn().mockResolvedValue(rawResults);
+  queryBuilder.getRawOne = jest.fn().mockResolvedValue({
+    count: rawResults.length.toString()
+  });
   queryBuilder.getCount = jest.fn().mockResolvedValue(0);
   return queryBuilder;
 };
 
 const expectProductiveManualPoolExists = (queryBuilder: MockQueryBuilder) => {
-  expect(queryBuilder.subQueryProbes).toHaveLength(1);
-  const [existsBuilder] = queryBuilder.subQueryProbes;
-  expect(existsBuilder.from).toHaveBeenCalledWith('coding_job_unit', 'manual_cju');
-  expect(existsBuilder.innerJoin).toHaveBeenCalledWith(
+  const assignedResponsesBuilder = queryBuilder.subQueryProbes.find(
+    probe => probe.select.mock.calls.some(
+      call => call[0] === 'DISTINCT manual_cju.response_id'
+    )
+  );
+  expect(assignedResponsesBuilder).toBeDefined();
+  expect(assignedResponsesBuilder.select).toHaveBeenCalledWith(
+    'DISTINCT manual_cju.response_id',
+    'response_id'
+  );
+  expect(assignedResponsesBuilder.from).toHaveBeenCalledWith(
+    'coding_job_unit',
+    'manual_cju'
+  );
+  expect(assignedResponsesBuilder.innerJoin).toHaveBeenCalledWith(
     'coding_job',
     'manual_cj',
     'manual_cj.id = manual_cju.coding_job_id'
   );
-  expect(existsBuilder.where).toHaveBeenCalledWith('manual_cju.response_id = response.id');
-  expect(existsBuilder.andWhere).toHaveBeenCalledWith('manual_cj.training_id IS NULL');
+  expect(assignedResponsesBuilder.where).toHaveBeenCalledWith(
+    'manual_cj.training_id IS NULL'
+  );
+  expect(assignedResponsesBuilder.andWhere).toHaveBeenCalledWith(
+    expect.stringContaining('coding_issue_review')
+  );
 };
 
 describe('CodingProgressService variable coverage conflicts', () => {
@@ -102,6 +134,15 @@ describe('CodingProgressService variable coverage conflicts', () => {
     getManualInstructionVariableMap: jest.Mock;
   };
   let service: CodingProgressService;
+
+  const mockCoverageResponseCounts = (...counts: number[]) => {
+    responseRepository.query.mockImplementation((sql: string) => {
+      if (sql.includes('SELECT COUNT(response.id) AS count')) {
+        return Promise.resolve([{ count: String(counts.shift() ?? 0) }]);
+      }
+      return Promise.resolve([]);
+    });
+  };
 
   beforeEach(() => {
     responseRepository = createRepository();
@@ -138,6 +179,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
   it('keeps covered source responses in status totals but excludes them from progress totals', async () => {
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+    mockCoverageResponseCounts(3);
 
     responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([
       {
@@ -200,6 +242,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
   it('does not let unassigned pre-coded derived responses cover source responses in manual totals', async () => {
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+    mockCoverageResponseCounts(3, 3);
     const allResponses = [
       {
         responseId: '100',
@@ -232,9 +275,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
     const manualPoolResponses = allResponses.slice(1);
 
     responseRepository.createQueryBuilder
-      .mockReturnValueOnce(createQueryBuilder(allResponses))
       .mockReturnValueOnce(createQueryBuilder(manualPoolResponses))
-      .mockReturnValueOnce(createQueryBuilder(allResponses))
       .mockReturnValueOnce(createQueryBuilder(manualPoolResponses));
     codingJobUnitRepository.createQueryBuilder
       .mockReturnValueOnce(createQueryBuilder([]))
@@ -280,6 +321,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const deriveErrorStatus = statusStringToNumber('DERIVE_ERROR');
     const codingCompleteStatus = statusStringToNumber('CODING_COMPLETE');
+    mockCoverageResponseCounts(2);
     const responses = [
       {
         responseId: '100',
@@ -302,7 +344,6 @@ describe('CodingProgressService variable coverage conflicts', () => {
     ];
 
     responseRepository.createQueryBuilder
-      .mockReturnValueOnce(createQueryBuilder(responses))
       .mockReturnValueOnce(createQueryBuilder(responses));
     settingRepository.findOne.mockResolvedValue({ content: 'disabled' });
     workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
@@ -325,15 +366,287 @@ describe('CodingProgressService variable coverage conflicts', () => {
     });
   });
 
-  it('limits manual pool existence checks to non-training coding jobs', async () => {
-    const allResponsesQuery = createQueryBuilder([]);
-    const manualPoolQuery = createQueryBuilder([]);
-    const variableCoverageQuery = createQueryBuilder([]);
+  it('returns cached applied result overview by test results revision', async () => {
+    const cachedOverview = {
+      totalIncompleteResponses: 2,
+      appliedResponses: 1,
+      remainingResponses: 1,
+      completionPercentage: 50,
+      rawTotalIncompleteResponses: 2,
+      rawAppliedResponses: 1,
+      rawCompletionPercentage: 50,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0,
+      statusTotalIncompleteResponses: 2,
+      coveredSourceVariableCount: 0,
+      coveredSourceResponseCount: 0,
+      deriveErrorTotalResponses: 0,
+      deriveErrorAppliedResponses: 0,
+      deriveErrorRemainingResponses: 0,
+      deriveErrorRawTotalResponses: 0,
+      deriveErrorRawAppliedResponses: 0
+    };
+    const cacheService = {
+      get: jest.fn().mockResolvedValue(cachedOverview),
+      set: jest.fn(),
+      getNumber: jest.fn().mockResolvedValue(3),
+      incr: jest.fn(),
+      deleteByPattern: jest.fn()
+    };
+    responseRepository.query.mockResolvedValue([{ revision: 9 }]);
+    const cachedService = new CodingProgressService(
+      responseRepository as never,
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      settingRepository as never,
+      workspaceFilesService as never,
+      { resolveExclusionsForQueries: jest.fn() } as never,
+      undefined,
+      cacheService as never
+    );
 
-    responseRepository.createQueryBuilder
-      .mockReturnValueOnce(allResponsesQuery)
-      .mockReturnValueOnce(manualPoolQuery)
-      .mockReturnValueOnce(variableCoverageQuery);
+    const result = await cachedService.getAppliedResultsOverview(5);
+
+    expect(result).toBe(cachedOverview);
+    expect(cacheService.get).toHaveBeenCalledWith(
+      'coding_applied_results_overview:5:r9:c3'
+    );
+    expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('reuses an in-flight applied result overview query for the same revision', async () => {
+    const overview = {
+      totalIncompleteResponses: 1,
+      appliedResponses: 0,
+      remainingResponses: 1,
+      completionPercentage: 0,
+      rawTotalIncompleteResponses: 1,
+      rawAppliedResponses: 0,
+      rawCompletionPercentage: 0,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0,
+      statusTotalIncompleteResponses: 1,
+      coveredSourceVariableCount: 0,
+      coveredSourceResponseCount: 0,
+      deriveErrorTotalResponses: 0,
+      deriveErrorAppliedResponses: 0,
+      deriveErrorRemainingResponses: 0,
+      deriveErrorRawTotalResponses: 0,
+      deriveErrorRawAppliedResponses: 0
+    };
+    const overviewDeferred = createDeferred<typeof overview>();
+    const cacheService = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn(),
+      getNumber: jest.fn().mockResolvedValue(4),
+      incr: jest.fn(),
+      deleteByPattern: jest.fn()
+    };
+    responseRepository.query.mockResolvedValue([{ revision: 10 }]);
+    const cachedService = new CodingProgressService(
+      responseRepository as never,
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      settingRepository as never,
+      workspaceFilesService as never,
+      { resolveExclusionsForQueries: jest.fn() } as never,
+      undefined,
+      cacheService as never
+    );
+    const internals = cachedService as unknown as {
+      computeAndCacheAppliedResultsOverview: (
+        workspaceId: number,
+        testResultsRevision: number,
+        codingRevision: number,
+        cacheKey: string
+      ) => Promise<typeof overview>;
+    };
+    const computeSpy = jest
+      .spyOn(internals, 'computeAndCacheAppliedResultsOverview')
+      .mockReturnValue(overviewDeferred.promise);
+
+    const firstRequest = cachedService.getAppliedResultsOverview(5);
+    const secondRequest = cachedService.getAppliedResultsOverview(5);
+    await new Promise(resolve => {
+      setImmediate(resolve);
+    });
+
+    expect(computeSpy).toHaveBeenCalledTimes(1);
+    expect(computeSpy).toHaveBeenCalledWith(
+      5,
+      10,
+      4,
+      'coding_applied_results_overview:5:r10:c4'
+    );
+
+    overviewDeferred.resolve(overview);
+    await expect(Promise.all([firstRequest, secondRequest])).resolves.toEqual(
+      [overview, overview]
+    );
+  });
+
+  it('does not cache stale applied result overview when revision changes while computing', async () => {
+    const overview = {
+      totalIncompleteResponses: 1,
+      appliedResponses: 1,
+      remainingResponses: 0,
+      completionPercentage: 100,
+      rawTotalIncompleteResponses: 1,
+      rawAppliedResponses: 1,
+      rawCompletionPercentage: 100,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0,
+      statusTotalIncompleteResponses: 1,
+      coveredSourceVariableCount: 0,
+      coveredSourceResponseCount: 0,
+      deriveErrorTotalResponses: 0,
+      deriveErrorAppliedResponses: 0,
+      deriveErrorRemainingResponses: 0,
+      deriveErrorRawTotalResponses: 0,
+      deriveErrorRawAppliedResponses: 0
+    };
+    const cacheService = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn(),
+      getNumber: jest.fn().mockResolvedValue(0),
+      incr: jest.fn(),
+      deleteByPattern: jest.fn()
+    };
+    responseRepository.query
+      .mockResolvedValueOnce([{ revision: 11 }])
+      .mockResolvedValueOnce([{ revision: 12 }]);
+    const cachedService = new CodingProgressService(
+      responseRepository as never,
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      settingRepository as never,
+      workspaceFilesService as never,
+      { resolveExclusionsForQueries: jest.fn() } as never,
+      undefined,
+      cacheService as never
+    );
+    const internals = cachedService as unknown as {
+      computeAppliedResultsOverview: (
+        workspaceId: number
+      ) => Promise<typeof overview>;
+    };
+    jest
+      .spyOn(internals, 'computeAppliedResultsOverview')
+      .mockResolvedValue(overview);
+
+    await cachedService.getAppliedResultsOverview(5);
+
+    expect(cacheService.set).not.toHaveBeenCalledWith(
+      'coding_applied_results_overview:5:r11:c0',
+      expect.anything(),
+      0
+    );
+  });
+
+  it('does not cache stale applied result overview when coding revision changes while computing', async () => {
+    const overview = {
+      totalIncompleteResponses: 1,
+      appliedResponses: 1,
+      remainingResponses: 0,
+      completionPercentage: 100,
+      rawTotalIncompleteResponses: 1,
+      rawAppliedResponses: 1,
+      rawCompletionPercentage: 100,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0,
+      statusTotalIncompleteResponses: 1,
+      coveredSourceVariableCount: 0,
+      coveredSourceResponseCount: 0,
+      deriveErrorTotalResponses: 0,
+      deriveErrorAppliedResponses: 0,
+      deriveErrorRemainingResponses: 0,
+      deriveErrorRawTotalResponses: 0,
+      deriveErrorRawAppliedResponses: 0
+    };
+    const cacheService = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn(),
+      getNumber: jest.fn()
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(3),
+      incr: jest.fn(),
+      deleteByPattern: jest.fn()
+    };
+    responseRepository.query.mockResolvedValue([{ revision: 11 }]);
+    const cachedService = new CodingProgressService(
+      responseRepository as never,
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      settingRepository as never,
+      workspaceFilesService as never,
+      { resolveExclusionsForQueries: jest.fn() } as never,
+      undefined,
+      cacheService as never
+    );
+    const internals = cachedService as unknown as {
+      computeAppliedResultsOverview: (
+        workspaceId: number
+      ) => Promise<typeof overview>;
+    };
+    jest
+      .spyOn(internals, 'computeAppliedResultsOverview')
+      .mockResolvedValue(overview);
+
+    await cachedService.getAppliedResultsOverview(5);
+
+    expect(cacheService.set).not.toHaveBeenCalledWith(
+      'coding_applied_results_overview:5:r11:c2',
+      expect.anything(),
+      0
+    );
+  });
+
+  it('invalidates applied result overview keys and bumps the coding revision', async () => {
+    const cacheService = {
+      get: jest.fn(),
+      set: jest.fn(),
+      getNumber: jest.fn(),
+      incr: jest.fn().mockResolvedValue(8),
+      deleteByPattern: jest.fn().mockResolvedValue(undefined)
+    };
+    const cachedService = new CodingProgressService(
+      responseRepository as never,
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      settingRepository as never,
+      workspaceFilesService as never,
+      { resolveExclusionsForQueries: jest.fn() } as never,
+      undefined,
+      cacheService as never
+    );
+
+    await cachedService.invalidateAppliedResultsOverviewCache(5);
+
+    expect(cacheService.incr).toHaveBeenCalledWith(
+      'coding_applied_results_overview:version:5'
+    );
+    expect(cacheService.deleteByPattern).toHaveBeenCalledWith(
+      'coding_applied_results_overview:5:*'
+    );
+  });
+
+  it('limits manual pool existence checks to non-training coding jobs', async () => {
+    mockCoverageResponseCounts(0);
+    const responseQueries: MockQueryBuilder[] = [];
+    responseRepository.createQueryBuilder.mockImplementation(() => {
+      const query = createQueryBuilder([]);
+      responseQueries.push(query);
+      return query;
+    });
     codingJobUnitRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([]));
     settingRepository.findOne.mockResolvedValue({ content: 'disabled' });
     jobDefinitionRepository.find.mockResolvedValue([]);
@@ -341,13 +654,17 @@ describe('CodingProgressService variable coverage conflicts', () => {
     await service.getCodingProgressOverview(5);
     await service.getVariableCoverageOverview(5);
 
-    expectProductiveManualPoolExists(manualPoolQuery);
-    expectProductiveManualPoolExists(variableCoverageQuery);
+    const manualPoolQueries = responseQueries.filter(query => query.subQueryProbes.some(probe => probe.select.mock.calls.some(
+      call => call[0] === 'DISTINCT manual_cju.response_id'
+    )));
+    expect(manualPoolQueries.length).toBeGreaterThanOrEqual(1);
+    manualPoolQueries.forEach(expectProductiveManualPoolExists);
   });
 
   it('excludes covered source responses from case coverage while preserving status totals', async () => {
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+    mockCoverageResponseCounts(3);
 
     responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([
       {
@@ -522,6 +839,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
   it('excludes intended-incomplete variables without manual instructions from case coverage', async () => {
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+    mockCoverageResponseCounts(2);
     const responses = [
       {
         responseId: '100',
@@ -544,7 +862,6 @@ describe('CodingProgressService variable coverage conflicts', () => {
     ];
 
     responseRepository.createQueryBuilder
-      .mockReturnValueOnce(createQueryBuilder(responses))
       .mockReturnValueOnce(createQueryBuilder(responses));
     codingJobUnitRepository.createQueryBuilder
       .mockReturnValueOnce(createQueryBuilder([]))
