@@ -1,21 +1,33 @@
 import {
+  BadRequestException,
   Body,
-  Controller, Get, Post, Query, UseGuards
+  Controller,
+  ForbiddenException,
+  Get,
+  NotFoundException,
+  Post,
+  Query,
+  Req,
+  UseGuards
 } from '@nestjs/common';
 
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { AuthService } from './auth/service/auth.service';
-import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
+import { Request } from 'express';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 import { UsersService } from './database/services/users';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { TestcenterService } from './database/services/test-results';
 import { WorkspaceUsersService } from './database/services/workspace';
 
+type AuthenticatedRequest = Request & {
+  user?: {
+    identity?: string;
+  };
+};
+
 @Controller()
 export class AppController {
-  constructor(private authService:AuthService,
-              private usersService: UsersService,
+  constructor(private usersService: UsersService,
               private testCenterService: TestcenterService,
               private workspaceUsersService: WorkspaceUsersService) {}
 
@@ -23,9 +35,31 @@ export class AppController {
   @UseGuards(JwtAuthGuard)
   @ApiOkResponse({ description: 'User auth data successfully retrieved.' })
   @ApiTags('auth')
-  async getUserAuthData(@Query('identity') identity: string): Promise<AuthDataDto> {
-    const user = await this.usersService.findUserByIdentity(identity);
-    const workspaces = await this.workspaceUsersService.findAllUserWorkspaces(identity);
+  async getUserAuthData(
+    @Query('identity') identity: string | undefined,
+      @Req() req: AuthenticatedRequest
+  ): Promise<AuthDataDto> {
+    const tokenIdentity = req.user?.identity;
+    if (!tokenIdentity) {
+      throw new BadRequestException('authenticated identity is required');
+    }
+
+    if (identity !== undefined && typeof identity !== 'string') {
+      throw new BadRequestException('identity query parameter must be a string');
+    }
+
+    const requestedIdentity = typeof identity === 'string' && identity.trim() ?
+      identity.trim() :
+      tokenIdentity;
+
+    this.assertTokenMatchesRequestedIdentity(requestedIdentity, tokenIdentity);
+
+    const user = await this.usersService.findUserByIdentity(requestedIdentity);
+    if (!user) {
+      throw new NotFoundException(`User with identity ${requestedIdentity} not found`);
+    }
+
+    const workspaces = await this.workspaceUsersService.findAllUserWorkspaces(requestedIdentity);
     return <AuthDataDto><unknown>{
       userId: user.id,
       userName: user.username,
@@ -34,12 +68,10 @@ export class AppController {
     };
   }
 
-  @Post('keycloak-login')
-  @ApiTags('auth')
-  @ApiOkResponse({ description: 'Keycloak login successful.' })
-  async keycloakLogin(@Body() user: CreateUserDto) {
-    const token = await this.authService.keycloakLogin(user);
-    return `"${token}"`;
+  private assertTokenMatchesRequestedIdentity(requestedIdentity: string, tokenIdentity?: string): void {
+    if (!tokenIdentity || tokenIdentity !== requestedIdentity) {
+      throw new ForbiddenException('Requested identity does not match the authenticated user');
+    }
   }
 
   @Post('tc_authentication')

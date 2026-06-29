@@ -62,6 +62,10 @@ interface JobDefinitionForUsage {
   distribution_seed?: string;
 }
 
+type GetJobDefinitionsOptions = {
+  includePlannedUsage?: boolean;
+};
+
 export type JobDefinitionWithCreatedJobsCount = JobDefinition & {
   createdJobsCount: number;
   created_jobs_count: number;
@@ -1158,7 +1162,8 @@ export class JobDefinitionService {
   }
 
   private async attachCreatedJobsCounts(
-    definitions: JobDefinition[]
+    definitions: JobDefinition[],
+    options: GetJobDefinitionsOptions = {}
   ): Promise<JobDefinitionWithCreatedJobsCount[]> {
     const definitionsByWorkspaceId = new Map<number, JobDefinition[]>();
 
@@ -1196,53 +1201,55 @@ export class JobDefinitionService {
         const plannedUsageByStatusByDefinitionId =
           new Map<number, Record<string, DistributionVariableUsageByStatus>>();
 
-        const usageRequestPromises: Promise<PlannedVariableUsageBatchRequest | undefined>[] =
-          workspaceDefinitions.map(async definition => {
-            if (definition.id === undefined) {
-              return undefined;
-            }
+        if (options.includePlannedUsage) {
+          const usageRequestPromises: Promise<PlannedVariableUsageBatchRequest | undefined>[] =
+            workspaceDefinitions.map(async definition => {
+              if (definition.id === undefined) {
+                return undefined;
+              }
 
-            const createdJobsCount = countsByDefinitionId.get(definition.id) || 0;
-            if (createdJobsCount > 0) {
-              plannedUsageByDefinitionId.set(definition.id, {});
-              plannedUsageByStatusByDefinitionId.set(definition.id, {});
-              return undefined;
-            }
+              const createdJobsCount = countsByDefinitionId.get(definition.id) || 0;
+              if (createdJobsCount > 0) {
+                plannedUsageByDefinitionId.set(definition.id, {});
+                plannedUsageByStatusByDefinitionId.set(definition.id, {});
+                return undefined;
+              }
 
-            const hydratedBundles = await this.hydrateVariableBundles(
-              definition.assigned_variable_bundles || []
+              const hydratedBundles = await this.hydrateVariableBundles(
+                definition.assigned_variable_bundles || []
+              );
+
+              return this.buildPlannedVariableUsageBatchRequest(definition.id, {
+                id: definition.id,
+                assigned_variables: definition.assigned_variables || [],
+                assigned_variable_bundles: hydratedBundles,
+                max_coding_cases: definition.max_coding_cases,
+                case_ordering_mode: definition.case_ordering_mode,
+                distribution_seed: this.getDefinitionDistributionSeed(definition)
+              });
+            });
+          const usageRequests = (await Promise.all(usageRequestPromises))
+            .filter((request): request is PlannedVariableUsageBatchRequest => request !== undefined);
+
+          if (usageRequests.length > 0) {
+            const usageByDefinitionId = await this.codingJobService.calculateDistributionVariableUsageByStatusBatch(
+              definitionWorkspaceId,
+              usageRequests
             );
 
-            return this.buildPlannedVariableUsageBatchRequest(definition.id, {
-              id: definition.id,
-              assigned_variables: definition.assigned_variables || [],
-              assigned_variable_bundles: hydratedBundles,
-              max_coding_cases: definition.max_coding_cases,
-              case_ordering_mode: definition.case_ordering_mode,
-              distribution_seed: this.getDefinitionDistributionSeed(definition)
+            usageRequests.forEach(request => {
+              if (typeof request.key === 'number') {
+                const usageByStatus = this.mapVariableUsageByStatusToRecord(
+                  usageByDefinitionId.get(request.key) || new Map()
+                );
+                plannedUsageByStatusByDefinitionId.set(request.key, usageByStatus);
+                plannedUsageByDefinitionId.set(
+                  request.key,
+                  this.mapVariableUsageByStatusRecordToTotals(usageByStatus)
+                );
+              }
             });
-          });
-        const usageRequests = (await Promise.all(usageRequestPromises))
-          .filter((request): request is PlannedVariableUsageBatchRequest => request !== undefined);
-
-        if (usageRequests.length > 0) {
-          const usageByDefinitionId = await this.codingJobService.calculateDistributionVariableUsageByStatusBatch(
-            definitionWorkspaceId,
-            usageRequests
-          );
-
-          usageRequests.forEach(request => {
-            if (typeof request.key === 'number') {
-              const usageByStatus = this.mapVariableUsageByStatusToRecord(
-                usageByDefinitionId.get(request.key) || new Map()
-              );
-              plannedUsageByStatusByDefinitionId.set(request.key, usageByStatus);
-              plannedUsageByDefinitionId.set(
-                request.key,
-                this.mapVariableUsageByStatusRecordToTotals(usageByStatus)
-              );
-            }
-          });
+          }
         }
 
         workspaceDefinitions.forEach(definition => {
@@ -1296,7 +1303,10 @@ export class JobDefinitionService {
     return definitions as JobDefinitionWithCreatedJobsCount[];
   }
 
-  async getJobDefinitions(workspaceId?: number): Promise<JobDefinitionWithCreatedJobsCount[]> {
+  async getJobDefinitions(
+    workspaceId?: number,
+    options: GetJobDefinitionsOptions = {}
+  ): Promise<JobDefinitionWithCreatedJobsCount[]> {
     const whereClause = workspaceId ? {
       workspace_id: workspaceId
     } : {};
@@ -1310,7 +1320,7 @@ export class JobDefinitionService {
       await this.hydrateAssignedVariableBundles(definition);
     }
 
-    return this.attachCreatedJobsCounts(definitions);
+    return this.attachCreatedJobsCounts(definitions, options);
   }
 
   private async assertJobDefinitionHasNoBlockingCreatedJobs(jobDefinition: JobDefinition): Promise<void> {

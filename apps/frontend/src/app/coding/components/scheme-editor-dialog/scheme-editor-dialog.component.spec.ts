@@ -166,8 +166,20 @@ describe('SchemeEditorDialogComponent', () => {
       true,
       ['test-scheme.json']
     );
-    expect(mockSnackBar.open).toHaveBeenCalledWith('coding.schemer.save-success', 'Success', expect.any(Object));
+    expect(mockSnackBar.open).toHaveBeenCalledWith(
+      'coding.schemer.save-success',
+      'coding.schemer.check-coding-status',
+      { duration: 10000 }
+    );
     expect(mockDialogRef.close).toHaveBeenCalledWith(true);
+
+    snackBarAction$.next();
+    tick();
+
+    expect(mockRouter.navigate).toHaveBeenCalledWith(
+      ['/workspace-admin/1/coding/management'],
+      { queryParams: { refreshCodingFreshness: '1' } }
+    );
   }));
 
   it('should show a freshness warning with navigation action after saving', fakeAsync(() => {
@@ -230,7 +242,11 @@ describe('SchemeEditorDialogComponent', () => {
 
     expect(mockFileService.deleteFiles).not.toHaveBeenCalled();
     expect(mockFileService.uploadTestFiles).toHaveBeenCalled();
-    expect(mockSnackBar.open).toHaveBeenCalledWith('coding.schemer.save-success', 'Success', expect.any(Object));
+    expect(mockSnackBar.open).toHaveBeenCalledWith(
+      'coding.schemer.save-success',
+      'coding.schemer.check-coding-status',
+      { duration: 10000 }
+    );
     expect(mockDialogRef.close).toHaveBeenCalledWith(true);
   }));
 

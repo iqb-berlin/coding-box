@@ -12,7 +12,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute, Params, Router } from '@angular/router';
 import {
-  firstValueFrom, of, Subject, Subscription, catchError
+  firstValueFrom, of, Subject, Subscription, catchError, debounceTime
 } from 'rxjs';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
@@ -43,6 +43,11 @@ import { ReplayCodingService } from '../../services/replay-coding.service';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { hasManualInstruction } from '../../../coding/utils/manual-coding.util';
+import {
+  CODING_JOB_WORKSPACE_TOKEN_SCOPES,
+  REPLAY_WORKSPACE_TOKEN_SCOPES,
+  WorkspaceTokenScope
+} from '../../../core/services/auth-session.config';
 
 interface ReplayUnitPayload {
   unitDef: FilesDto[];
@@ -55,6 +60,11 @@ interface ReplayUnitPayload {
   player: FilesDto[];
   vocs: FilesDto[];
   serverTimings?: ReplayServerTimings;
+}
+
+interface PendingReplayNotesCommit {
+  variableId: string;
+  notes: string;
 }
 
 @Component({
@@ -120,6 +130,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private codingProgressLoadedForJobKey: string | null = null;
   private activeStatusUpdatedForJobKey: string | null = null;
   private authBootstrapSubscription: Subscription | null = null;
+  private replayNotesCommitSubscription: Subscription | null = null;
+  private readonly replayNotesCommitSubject = new Subject<PendingReplayNotesCommit>();
   private replayReAuthenticationPending = false;
   private replayTokenRefreshRunning = false;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
@@ -150,6 +162,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private unitPayloadRunId = 0;
   private readonly ANCHOR_HIGHLIGHT_RETRY_DELAY_MS = 100;
   private readonly ANCHOR_HIGHLIGHT_MAX_ATTEMPTS = 40;
+  private readonly REPLAY_NOTES_COMMIT_DEBOUNCE_MS = 750;
+  private readonly REPLAY_NOTES_COMMIT_DEDUPE_MS = 1000;
+  private lastReplayNotesCommitKey: string | null = null;
+  private replayNotesCommitDedupeTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // Resize handle state
   codePanelWidth: number = 350;
@@ -172,6 +188,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.refreshReplayAuthTokenAfterReAuthentication().catch(() => undefined);
       }
     });
+    this.replayNotesCommitSubscription = this.replayNotesCommitSubject
+      .pipe(debounceTime(this.REPLAY_NOTES_COMMIT_DEBOUNCE_MS))
+      .subscribe(commit => this.sendReplayNotesCommitted(commit.variableId, commit.notes));
     this.subscribeRouter();
   }
 
@@ -274,7 +293,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
     this.replayTokenRefreshRunning = true;
     try {
-      const token = await firstValueFrom(this.appService.createOwnToken(workspaceId, 1));
+      const token = await firstValueFrom(this.appService.createOwnToken(
+        workspaceId,
+        1,
+        this.getReplayTokenScopes()
+      ));
       if (!token) {
         return false;
       }
@@ -289,6 +312,22 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     } finally {
       this.replayTokenRefreshRunning = false;
     }
+  }
+
+  private getReplayTokenScopes(): WorkspaceTokenScope[] {
+    return this.isCodingTokenContext() ?
+      CODING_JOB_WORKSPACE_TOKEN_SCOPES :
+      REPLAY_WORKSPACE_TOKEN_SCOPES;
+  }
+
+  private isCodingTokenContext(): boolean {
+    const [, hashQuery = ''] = window.location.hash.split('?');
+    const queryParams = new URLSearchParams(hashQuery);
+    const mode = queryParams.get('mode') || '';
+    return this.isCodingMode ||
+      !!this.codingService.codingJobId ||
+      !!queryParams.get('codingJobId') ||
+      mode.startsWith('coding');
   }
 
   private removeReplayAuthTokenFromUrl(authToken: string): void {
@@ -897,7 +936,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getWorkspaceIdFromToken(): number | null {
-    const candidateTokens = [this.authToken, localStorage.getItem('id_token')]
+    const candidateTokens = [this.authToken]
       .filter((token): token is string => !!token);
 
     for (const token of candidateTokens) {
@@ -1030,12 +1069,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
     this.authBootstrapSubscription?.unsubscribe();
+    this.replayNotesCommitSubscription?.unsubscribe();
     this.routerSubscription = null;
     this.authBootstrapSubscription = null;
+    this.replayNotesCommitSubscription = null;
     this.cancelPendingAnchorHighlight();
     this.resetSnackBars();
     this.watermarkObserver?.disconnect();
     this.watermarkObserver = null;
+    this.clearReplayNotesCommitDedupeTimeout();
   }
 
   private scheduleAnchorHighlight(): void {
@@ -1152,14 +1194,63 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   onNotesChanged(notes: string): void {
     if (this.isCodingReadOnly()) return;
 
+    const variableId = this.codingService.currentVariableId;
     this.codingService.saveNotes(
       this.workspaceId,
       this.testPerson,
       this.unitId,
-      this.codingService.currentVariableId,
+      variableId,
       notes,
       this.unitsData
     ).catch(() => undefined);
+    this.replayNotesCommitSubject.next({ variableId, notes });
+  }
+
+  onNotesCommitted(notes: string): void {
+    if (this.isCodingReadOnly()) return;
+
+    this.sendReplayNotesCommitted(this.codingService.currentVariableId, notes);
+  }
+
+  private sendReplayNotesCommitted(variableId: string, notes: string): void {
+    if (!window.opener || !this.originResponseId || !variableId) {
+      return;
+    }
+
+    const commitKey = JSON.stringify({
+      testPerson: this.testPerson,
+      unitId: this.unitId,
+      variableId,
+      notes,
+      responseId: this.originResponseId
+    });
+    if (commitKey === this.lastReplayNotesCommitKey) {
+      return;
+    }
+    this.lastReplayNotesCommitKey = commitKey;
+    this.clearReplayNotesCommitDedupeTimeout();
+    this.replayNotesCommitDedupeTimeout = setTimeout(() => {
+      if (this.lastReplayNotesCommitKey === commitKey) {
+        this.lastReplayNotesCommitKey = null;
+      }
+      this.replayNotesCommitDedupeTimeout = null;
+    }, this.REPLAY_NOTES_COMMIT_DEDUPE_MS);
+
+    window.opener.postMessage({
+      type: 'replayNotesCommitted',
+      testPerson: this.testPerson,
+      unitId: this.unitId,
+      variableId,
+      notes,
+      responseId: this.originResponseId
+    }, '*');
+  }
+
+  private clearReplayNotesCommitDedupeTimeout(): void {
+    if (this.replayNotesCommitDedupeTimeout) {
+      clearTimeout(this.replayNotesCommitDedupeTimeout);
+      this.replayNotesCommitDedupeTimeout = null;
+    }
   }
 
   getCompletedCount(): number {

@@ -39,7 +39,7 @@ export class TestResultCacheService {
   private readonly CACHE_EXPIRATION = 5 * 60 * 1000;
 
   get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+    return {};
   }
 
   /**

@@ -23,6 +23,7 @@ export interface ManualCodingDeduplicationResponse extends AggregationSourceResp
   personLogin?: string | null;
   personCode?: string | null;
   personGroup?: string | null;
+  bookletName?: string | null;
 }
 
 export function normalizeAggregationValue(
@@ -67,6 +68,7 @@ export function getManualCodingDeduplicationKey(
     response.personLogin || '',
     response.personCode || '',
     response.personGroup || '',
+    response.bookletName || '',
     response.unitName,
     response.variableId,
     valueHash

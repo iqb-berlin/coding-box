@@ -1,7 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
+import {
+  forkJoin, Observable, of
+} from 'rxjs';
+import {
+  map, switchMap, tap
+} from 'rxjs/operators';
+import Keycloak from 'keycloak-js';
 import { SERVER_URL } from '../../injection-tokens';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 import type {
@@ -289,23 +294,58 @@ export interface ManualCodingScopeSummary {
 export class CodingJobBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private keycloak = inject(Keycloak, { optional: true });
   private validationTaskStateService = inject(ValidationTaskStateService);
 
-  private getAuthHeader(authToken?: string) {
-    return {
-      Authorization: `Bearer ${authToken || localStorage.getItem('id_token')}`
-    };
+  private getAuthHeader(authToken?: string): Record<string, string> {
+    return authToken ? { Authorization: `Bearer ${authToken}` } : {};
   }
 
-  private get authHeader() {
+  private get authHeader(): Record<string, string> {
     return this.getAuthHeader();
+  }
+
+  private getFetchAuthHeader(authToken?: string): Record<string, string> {
+    if (authToken) {
+      return this.getAuthHeader(authToken);
+    }
+
+    const token = this.keycloak?.authenticated ? this.keycloak.token : undefined;
+    return this.getAuthHeader(token);
   }
 
   getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/variable-bundle`;
-    return this.http
-      .get<PaginatedResponse<VariableBundle>>(url, { headers: this.authHeader })
-      .pipe(map(response => response.data));
+    const limit = 100;
+    const getPage = (page: number): Observable<PaginatedResponse<VariableBundle>> => (
+      this.http.get<PaginatedResponse<VariableBundle>>(url, {
+        headers: this.authHeader,
+        params: new HttpParams()
+          .set('page', page.toString())
+          .set('limit', limit.toString())
+      })
+    );
+
+    return getPage(1).pipe(
+      switchMap(firstPage => {
+        const pageCount = Math.ceil((firstPage.total || firstPage.data.length) / limit);
+        if (pageCount <= 1) {
+          return of(firstPage.data);
+        }
+
+        const remainingPages = Array.from(
+          { length: pageCount - 1 },
+          (_value, index) => getPage(index + 2)
+        );
+
+        return forkJoin(remainingPages).pipe(
+          map(pages => [
+            ...firstPage.data,
+            ...pages.flatMap(page => page.data)
+          ])
+        );
+      })
+    );
   }
 
   private mapApiCodingJob(job: unknown): CodingJob {
@@ -740,7 +780,7 @@ export class CodingJobBackendService {
       method: 'PUT',
       keepalive: true,
       headers: {
-        ...this.getAuthHeader(authToken),
+        ...this.getFetchAuthHeader(authToken),
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(codingJob)
@@ -756,7 +796,7 @@ export class CodingJobBackendService {
     fetch(url, {
       method: 'POST',
       keepalive: true,
-      headers: this.getAuthHeader(authToken)
+      headers: this.getFetchAuthHeader(authToken)
     }).catch(() => undefined);
   }
 
@@ -918,10 +958,16 @@ export class CodingJobBackendService {
     );
   }
 
-  getJobDefinitions(workspaceId: number): Observable<JobDefinition[]> {
+  getJobDefinitions(
+    workspaceId: number,
+    options: { includePlannedUsage?: boolean } = {}
+  ): Observable<JobDefinition[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions`;
+    const params = options.includePlannedUsage ?
+      new HttpParams().set('includePlannedUsage', 'true') :
+      undefined;
     return this.http
-      .get<JobDefinitionApiResponse[]>(url, { headers: this.authHeader })
+      .get<JobDefinitionApiResponse[]>(url, { headers: this.authHeader, params })
       .pipe(
         map((definitions: JobDefinitionApiResponse[]) => definitions.map(def => ({
           id: def.id,
@@ -1103,6 +1149,10 @@ export class CodingJobBackendService {
   ): Observable<{
       status: string;
       progress: number;
+      progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+      processedRows?: number;
+      totalRows?: number;
+      progressMessage?: string;
       result?: {
         fileId: string;
         fileName: string;
@@ -1120,6 +1170,10 @@ export class CodingJobBackendService {
     return this.http.get<{
       status: string;
       progress: number;
+      progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+      processedRows?: number;
+      totalRows?: number;
+      progressMessage?: string;
       result?: {
         fileId: string;
         fileName: string;
@@ -1130,6 +1184,8 @@ export class CodingJobBackendService {
         createdAt: number;
       };
       error?: string;
+      errorCode?: string;
+      errorDetails?: Record<string, number | string | boolean>;
     }>(url, {
       headers: this.authHeader
     });

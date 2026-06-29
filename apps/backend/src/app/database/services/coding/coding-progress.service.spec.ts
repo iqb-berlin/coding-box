@@ -96,8 +96,10 @@ describe('CodingProgressService variable coverage conflicts', () => {
   let variableBundleRepository: ReturnType<typeof createRepository>;
   let settingRepository: ReturnType<typeof createRepository>;
   let workspaceFilesService: {
+    getUnitVariableMap: jest.Mock;
     getDerivedVariableMap: jest.Mock;
     getDerivedVariablesBySourceMap: jest.Mock;
+    getManualInstructionVariableMap: jest.Mock;
   };
   let service: CodingProgressService;
 
@@ -109,8 +111,10 @@ describe('CodingProgressService variable coverage conflicts', () => {
     settingRepository = createRepository();
 
     workspaceFilesService = {
+      getUnitVariableMap: jest.fn().mockResolvedValue(new Map()),
       getDerivedVariableMap: jest.fn().mockResolvedValue(new Map()),
-      getDerivedVariablesBySourceMap: jest.fn().mockResolvedValue(new Map())
+      getDerivedVariablesBySourceMap: jest.fn().mockResolvedValue(new Map()),
+      getManualInstructionVariableMap: jest.fn().mockResolvedValue(new Map())
     };
     const workspaceExclusionService = {
       resolveExclusionsForQueries: jest.fn().mockResolvedValue({
@@ -173,6 +177,12 @@ describe('CodingProgressService variable coverage conflicts', () => {
     workspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map([
       [getManualCodingScopeKey('UnitA', 'base-var'), new Set(['derived-var'])]
     ]));
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['derived-var', 'base-var', 'standalone-var'])]
+    ]));
+    workspaceFilesService.getManualInstructionVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['base-var', 'standalone-var'])]
+    ]));
 
     const result = await service.getCodingProgressOverview(5);
 
@@ -234,6 +244,12 @@ describe('CodingProgressService variable coverage conflicts', () => {
     workspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map([
       [getManualCodingScopeKey('UnitA', 'base-var'), new Set(['derived-var'])]
     ]));
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['derived-var', 'base-var', 'standalone-var'])]
+    ]));
+    workspaceFilesService.getManualInstructionVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['base-var', 'standalone-var'])]
+    ]));
 
     const progress = await service.getCodingProgressOverview(5);
     const coverage = await service.getCaseCoverageOverview(5);
@@ -289,6 +305,9 @@ describe('CodingProgressService variable coverage conflicts', () => {
       .mockReturnValueOnce(createQueryBuilder(responses))
       .mockReturnValueOnce(createQueryBuilder(responses));
     settingRepository.findOne.mockResolvedValue({ content: 'disabled' });
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['standard-var', 'derived-error-var'])]
+    ]));
 
     const result = await service.getAppliedResultsOverview(5);
 
@@ -374,6 +393,12 @@ describe('CodingProgressService variable coverage conflicts', () => {
     workspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map([
       [getManualCodingScopeKey('UnitA', 'base-var'), new Set(['derived-var'])]
     ]));
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['derived-var', 'base-var', 'standalone-var'])]
+    ]));
+    workspaceFilesService.getManualInstructionVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['base-var', 'standalone-var'])]
+    ]));
 
     const result = await service.getCaseCoverageOverview(5);
 
@@ -433,6 +458,12 @@ describe('CodingProgressService variable coverage conflicts', () => {
     workspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map([
       [getManualCodingScopeKey('UnitA', 'base-var'), new Set(['derived-var'])]
     ]));
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['derived-var', 'base-var', 'standalone-var'])]
+    ]));
+    workspaceFilesService.getManualInstructionVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['base-var', 'standalone-var'])]
+    ]));
 
     const result = await service.getVariableCoverageOverview(5);
 
@@ -452,9 +483,104 @@ describe('CodingProgressService variable coverage conflicts', () => {
     ]);
   });
 
-  it('does not flag split definitions when their created jobs cover disjoint cases', async () => {
+  it('excludes intended-incomplete variables without manual instructions from variable coverage', async () => {
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+
     responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([
-      { unitName: 'MDB091', variableId: '01', caseCount: '7' }
+      {
+        unitName: 'UnitA',
+        variableId: 'manual-var',
+        statusV1: String(codingIncompleteStatus),
+        caseCount: '3'
+      },
+      {
+        unitName: 'UnitA',
+        variableId: 'auto-intended-var',
+        statusV1: String(intendedIncompleteStatus),
+        caseCount: '5'
+      }
+    ]));
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['manual-var', 'auto-intended-var'])]
+    ]));
+    workspaceFilesService.getManualInstructionVariableMap.mockResolvedValue(new Map());
+    jobDefinitionRepository.find.mockResolvedValue([]);
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder([]))
+      .mockReturnValueOnce(createQueryBuilder([]));
+
+    const result = await service.getVariableCoverageOverview(5);
+
+    expect(result.totalVariables).toBe(1);
+    expect(result.missingVariables).toBe(1);
+    expect(result.variableCaseCounts).toEqual([
+      { unitName: 'UnitA', variableId: 'manual-var', caseCount: 3 }
+    ]);
+  });
+
+  it('excludes intended-incomplete variables without manual instructions from case coverage', async () => {
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+    const responses = [
+      {
+        responseId: '100',
+        unitName: 'UnitA',
+        variableId: 'manual-var',
+        value: 'manual value',
+        codeV2: null,
+        statusV2: null,
+        statusV1: String(codingIncompleteStatus)
+      },
+      {
+        responseId: '101',
+        unitName: 'UnitA',
+        variableId: 'auto-intended-var',
+        value: 'auto intended value',
+        codeV2: null,
+        statusV2: null,
+        statusV1: String(intendedIncompleteStatus)
+      }
+    ];
+
+    responseRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder(responses))
+      .mockReturnValueOnce(createQueryBuilder(responses));
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder([]))
+      .mockReturnValueOnce(createQueryBuilder([]));
+    settingRepository.findOne.mockResolvedValue({ content: 'disabled' });
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['manual-var', 'auto-intended-var'])]
+    ]));
+    workspaceFilesService.getManualInstructionVariableMap.mockResolvedValue(new Map());
+
+    const result = await service.getCaseCoverageOverview(5);
+
+    expect(result).toMatchObject({
+      totalCasesToCode: 1,
+      effectiveTotalCasesToCode: 1,
+      casesInJobs: 0,
+      effectiveCasesInJobs: 0,
+      unassignedCases: 1,
+      effectiveUnassignedCases: 1,
+      statusTotalCasesToCode: 2
+    });
+  });
+
+  it('does not flag split definitions when their created jobs cover disjoint cases', async () => {
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+
+    responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([
+      {
+        unitName: 'MDB091',
+        variableId: '01',
+        statusV1: String(codingIncompleteStatus),
+        caseCount: '7'
+      }
+    ]));
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['MDB091', new Set(['01'])]
     ]));
     jobDefinitionRepository.find.mockResolvedValue([
       {
@@ -518,10 +644,32 @@ describe('CodingProgressService variable coverage conflicts', () => {
   });
 
   it('classifies fully, partially, and missing variable coverage separately', async () => {
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+
     responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([
-      { unitName: 'FULL_UNIT', variableId: '01', caseCount: '3' },
-      { unitName: 'PARTIAL_UNIT', variableId: '01', caseCount: '3' },
-      { unitName: 'MISSING_UNIT', variableId: '01', caseCount: '2' }
+      {
+        unitName: 'FULL_UNIT',
+        variableId: '01',
+        statusV1: String(codingIncompleteStatus),
+        caseCount: '3'
+      },
+      {
+        unitName: 'PARTIAL_UNIT',
+        variableId: '01',
+        statusV1: String(codingIncompleteStatus),
+        caseCount: '3'
+      },
+      {
+        unitName: 'MISSING_UNIT',
+        variableId: '01',
+        statusV1: String(codingIncompleteStatus),
+        caseCount: '2'
+      }
+    ]));
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['FULL_UNIT', new Set(['01'])],
+      ['PARTIAL_UNIT', new Set(['01'])],
+      ['MISSING_UNIT', new Set(['01'])]
     ]));
     jobDefinitionRepository.find.mockResolvedValue([
       {
@@ -557,8 +705,18 @@ describe('CodingProgressService variable coverage conflicts', () => {
   });
 
   it('flags variables when the same response is assigned through multiple job definitions', async () => {
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+
     responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([
-      { unitName: 'MDB091', variableId: '01', caseCount: '2' }
+      {
+        unitName: 'MDB091',
+        variableId: '01',
+        statusV1: String(codingIncompleteStatus),
+        caseCount: '2'
+      }
+    ]));
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['MDB091', new Set(['01'])]
     ]));
     jobDefinitionRepository.find.mockResolvedValue([
       {

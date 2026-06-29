@@ -1209,6 +1209,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const exportConfig: ExportJobConfig = {
       exportType: result.exportType,
       userId: this.appService.userId,
+      ...this.getManualCodingExportDisplayMetadata(result),
       includeReplayUrl: result.includeReplayUrl ?? false,
       outputCommentsInsteadOfCodes: result.outputCommentsInsteadOfCodes,
       anonymizeCoders: result.anonymizeCoders,
@@ -1226,6 +1227,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         undefined
     };
 
+    if (this.requiresByVariableWorksheetEstimate(result)) {
+      this.estimateManualByVariableExport(workspaceId, exportConfig);
+      return;
+    }
+
+    this.startManualCodingExportJob(workspaceId, exportConfig);
+  }
+
+  private startManualCodingExportJob(
+    workspaceId: number,
+    exportConfig: ExportJobConfig
+  ): void {
     this.isStartingManualExport = true;
     this.exportJobService.startJob(workspaceId, exportConfig)
       .pipe(finalize(() => {
@@ -1245,6 +1258,125 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.showError('Exportjob konnte nicht gestartet werden.');
         }
       });
+  }
+
+  private requiresByVariableWorksheetEstimate(result: ManualCodingExportDialogResult): boolean {
+    return result.exportType === 'aggregated' &&
+      result.doubleCodingMethod === 'new-row-per-variable';
+  }
+
+  private estimateManualByVariableExport(
+    workspaceId: number,
+    exportConfig: ExportJobConfig
+  ): void {
+    const estimateConfig: ExportJobConfig = {
+      ...exportConfig,
+      exportType: 'by-variable',
+      doubleCodingMethod: undefined
+    };
+
+    this.isStartingManualExport = true;
+    this.exportJobService.estimateJob(workspaceId, estimateConfig)
+      .pipe(
+        takeUntil(this.destroy$)
+      )
+      .subscribe({
+        next: estimate => {
+          this.isStartingManualExport = false;
+          if (!estimate.exceedsWorksheetLimit || !estimate.worksheetLimit) {
+            this.startManualCodingExportJob(workspaceId, exportConfig);
+            return;
+          }
+
+          this.openLargeByVariableExportDialog(
+            workspaceId,
+            exportConfig,
+            estimate.unitVariableCount,
+            estimate.worksheetLimit
+          );
+        },
+        error: () => {
+          this.isStartingManualExport = false;
+          this.showError(
+            this.translateService.instant('manual-coding-export.worksheet-estimate-failed')
+          );
+        }
+      });
+  }
+
+  private openLargeByVariableExportDialog(
+    workspaceId: number,
+    exportConfig: ExportJobConfig,
+    actualWorksheetCount: number,
+    worksheetLimit: number
+  ): void {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '560px',
+      data: {
+        title: this.translateService.instant('manual-coding-export.too-many-worksheets-title'),
+        message: this.translateService.instant(
+          'manual-coding-export.too-many-worksheets-message',
+          { actual: actualWorksheetCount, max: worksheetLimit }
+        ),
+        confirmButtonText: this.translateService.instant('manual-coding-export.too-many-worksheets-continue'),
+        alternativeButtonText: this.translateService.instant('manual-coding-export.too-many-worksheets-compact'),
+        alternativeButtonValue: 'compact',
+        cancelButtonText: this.translateService.instant('cancel')
+      }
+    });
+
+    dialogRef.afterClosed()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(decision => {
+        if (decision === true) {
+          this.startManualCodingExportJob(workspaceId, exportConfig);
+          return;
+        }
+
+        if (decision === 'compact') {
+          this.startManualCodingExportJob(
+            workspaceId,
+            this.createCompactByVariableExportConfig(exportConfig)
+          );
+        }
+      });
+  }
+
+  private createCompactByVariableExportConfig(exportConfig: ExportJobConfig): ExportJobConfig {
+    return {
+      ...exportConfig,
+      exportType: 'by-variable-compact',
+      doubleCodingMethod: undefined,
+      displayLabelKey: 'export-toast.types.by-variable-compact',
+      downloadFilePrefix: 'manual-review-by-variable-compact'
+    };
+  }
+
+  private getManualCodingExportDisplayMetadata(
+    result: ManualCodingExportDialogResult
+  ): Pick<ExportJobConfig, 'displayLabelKey' | 'downloadFilePrefix'> {
+    if (result.exportType !== 'aggregated') {
+      return {};
+    }
+
+    switch (result.doubleCodingMethod || 'most-frequent') {
+      case 'new-column-per-coder':
+        return {
+          displayLabelKey: 'export-toast.types.manual-review-new-column-per-coder',
+          downloadFilePrefix: 'manual-review-new-column-per-coder'
+        };
+      case 'new-row-per-variable':
+        return {
+          displayLabelKey: 'export-toast.types.manual-review-new-row-per-variable',
+          downloadFilePrefix: 'manual-review-new-row-per-variable'
+        };
+      case 'most-frequent':
+      default:
+        return {
+          displayLabelKey: 'export-toast.types.manual-review-most-frequent',
+          downloadFilePrefix: 'manual-review-most-frequent'
+        };
+    }
   }
 
   private getCoderTrainingIds(): number[] {
@@ -1486,6 +1618,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       0;
   }
 
+  getResponseAnalysisReferenceRawCases(): number {
+    return this.getManualStatusPoolCount();
+  }
+
   getManualStatusPoolCount(): number {
     return this.codingProgressOverview?.statusTotalCasesToCode ??
       this.caseCoverageOverview?.statusTotalCasesToCode ??
@@ -1529,9 +1665,19 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   isResponseAnalysisOutdated(): boolean {
     const analysisRawCases = this.responseAnalysis?.aggregationSummary?.rawCases ?? 0;
+    const referenceRawCases = this.getResponseAnalysisReferenceRawCases();
+    return !!this.responseAnalysis &&
+      !this.responseAnalysis.isCalculating &&
+      referenceRawCases > 0 &&
+      analysisRawCases !== referenceRawCases;
+  }
+
+  hasResponseAnalysisRestScopeDifference(): boolean {
+    const analysisRawCases = this.responseAnalysis?.aggregationSummary?.rawCases ?? 0;
     const currentRawManualResponses = this.getCurrentRawManualResponses();
     return !!this.responseAnalysis &&
       !this.responseAnalysis.isCalculating &&
+      !this.isResponseAnalysisOutdated() &&
       currentRawManualResponses > 0 &&
       analysisRawCases !== currentRawManualResponses;
   }

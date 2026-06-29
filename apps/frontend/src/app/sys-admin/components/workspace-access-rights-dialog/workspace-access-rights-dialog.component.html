@@ -8,6 +8,7 @@
   <button mat-raised-button
           color="primary"
           type="submit"
+          [disabled]="isLoadingUserWorkspaces || userWorkspacesLoadingFailed"
           [mat-dialog-close]="result">
     {{ 'save' | translate }}
   </button>

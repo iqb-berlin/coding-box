@@ -1,17 +1,48 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthGuard } from '@nestjs/passport';
+import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import {
+  AllowAnyWorkspaceTokenScopes,
+  AllowWorkspaceTokenScopes,
+  WORKSPACE_API_TOKEN_TYPE,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
+} from './workspace-token';
 
 describe('JwtAuthGuard (Backend)', () => {
   let guard: JwtAuthGuard;
+  let passportCanActivateSpy: jest.SpyInstance;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [JwtAuthGuard]
+      providers: [
+        JwtAuthGuard,
+        Reflector
+      ]
     }).compile();
 
     guard = module.get<JwtAuthGuard>(JwtAuthGuard);
+    passportCanActivateSpy = jest
+      .spyOn(Object.getPrototypeOf(JwtAuthGuard.prototype), 'canActivate')
+      .mockResolvedValue(true);
   });
+
+  afterEach(() => {
+    passportCanActivateSpy.mockRestore();
+  });
+
+  const createContext = (
+    user: Record<string, unknown>,
+    handler: () => void = jest.fn()
+  ): ExecutionContext => ({
+    switchToHttp: () => ({
+      getRequest: () => ({ user })
+    }),
+    getHandler: () => handler,
+    getClass: () => class TestController {}
+  } as unknown as ExecutionContext);
 
   describe('Guard Configuration', () => {
     it('should be defined', () => {
@@ -58,6 +89,43 @@ describe('JwtAuthGuard (Backend)', () => {
     it('should properly extend base AuthGuard', () => {
       // Verify the guard extends AuthGuard by checking it's an instance
       expect(guard).toBeInstanceOf(AuthGuard('jwt'));
+    });
+
+    it('should allow regular authenticated users', async () => {
+      await expect(guard.canActivate(createContext({ id: 1 }))).resolves.toBe(true);
+    });
+
+    it('should reject workspace API tokens without allowed scope metadata', async () => {
+      await expect(guard.canActivate(createContext({
+        id: 1,
+        tokenType: WORKSPACE_API_TOKEN_TYPE,
+        scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+      }))).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should allow workspace API tokens when the endpoint allows the token scope', async () => {
+      const handler = jest.fn();
+      AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)(handler);
+
+      await expect(guard.canActivate(createContext({
+        id: 1,
+        tokenType: WORKSPACE_API_TOKEN_TYPE,
+        scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+      }, handler))).resolves.toBe(true);
+    });
+
+    it('should allow workspace API tokens when the endpoint allows any matching token scope', async () => {
+      const handler = jest.fn();
+      AllowAnyWorkspaceTokenScopes(
+        WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
+        WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
+      )(handler);
+
+      await expect(guard.canActivate(createContext({
+        id: 1,
+        tokenType: WORKSPACE_API_TOKEN_TYPE,
+        scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE]
+      }, handler))).resolves.toBe(true);
     });
   });
 

@@ -16,6 +16,10 @@
         <mat-spinner diameter="20" class="inline-spinner"></mat-spinner>
         {{ 'coding-management.descriptions.coding-list-progress' | translate:{progress: codingListDownloadProgress} }}
       </button>
+      <button mat-icon-button color="warn" (click)="cancelCodingListDownload()"
+        [matTooltip]="'coding-management.download-dialog.cancel-tooltip' | translate">
+        <mat-icon>cancel</mat-icon>
+      </button>
       } @else {
       <a mat-raised-button color="primary" (click)="fetchCodingList()">
         <mat-icon>list</mat-icon>
@@ -110,7 +114,14 @@
       </div>
     </div>
 
-    @if (activeFreshnessJobId) {
+    @if (isStartingFreshnessCoding) {
+    <div class="coding-freshness-job">
+      <mat-spinner diameter="18"></mat-spinner>
+      <span>
+        {{ 'coding-management.readiness.starting-freshness-coding' | translate }}
+      </span>
+    </div>
+    } @else if (activeFreshnessJobId) {
     <div class="coding-freshness-job">
       <mat-spinner diameter="18"></mat-spinner>
       <span>
@@ -173,7 +184,7 @@
           [statisticsLoaded]="statisticsLoaded" [resetProgress]="resetProgress" [downloadProgress]="downloadProgress"
           [hideResetButton]="hideActionButtons"
           (versionChange)="onVersionChange($event)" (loadStatistics)="fetchCodingStatistics()"
-          (downloadResults)="onDownloadResults()" (resetVersion)="onResetVersion()"
+          (downloadResults)="onDownloadResults()" (cancelDownloadResults)="onCancelDownloadResults()" (resetVersion)="onResetVersion()"
           (statusClick)="onStatusClick($event)" (derivedClick)="onDerivedClick()">
         </app-statistics-card>
       </div>

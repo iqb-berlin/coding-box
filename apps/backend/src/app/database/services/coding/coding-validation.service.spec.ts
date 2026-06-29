@@ -990,6 +990,113 @@ describe('CodingValidationService', () => {
       ]);
     });
 
+    it('should treat assigned duplicate responses as assigned after deduplication and aggregation', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '4' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const deriveErrorQb = createQueryBuilderMock([]);
+      const assignedResponsesQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseId: '2' }
+      ]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(assignedResponsesQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(2);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([
+        {
+          id: 1, unitName: 'unit1', variableid: 'var1', value: 'same-value', personLogin: 'person-1', personCode: 'code-1', personGroup: 'group'
+        },
+        {
+          id: 2, unitName: 'unit1', variableid: 'var1', value: 'same-value', personLogin: 'person-1', personCode: 'code-1', personGroup: 'group'
+        },
+        {
+          id: 3, unitName: 'unit1', variableid: 'var1', value: 'same-value', personLogin: 'person-2', personCode: 'code-2', personGroup: 'group'
+        },
+        {
+          id: 4, unitName: 'unit1', variableid: 'var1', value: 'other-value', personLogin: 'person-3', personCode: 'code-3', personGroup: 'group'
+        }
+      ] as never);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'var1',
+          responseCount: 4,
+          casesInJobs: 1,
+          availableCases: 1,
+          uniqueCasesAfterAggregation: 2
+        })
+      ]);
+    });
+
+    it('should not deduplicate same-person responses from different booklets when counting availability', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '3' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const deriveErrorQb = createQueryBuilderMock([]);
+      const assignedResponsesQb = createQueryBuilderMock([]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb)
+        .mockReturnValueOnce(deriveErrorQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(assignedResponsesQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([
+        {
+          id: 1, unitName: 'unit1', variableid: 'var1', value: 'same-value', personLogin: 'person-1', personCode: 'code-1', personGroup: 'group', bookletName: 'Booklet A'
+        },
+        {
+          id: 2, unitName: 'unit1', variableid: 'var1', value: 'same-value', personLogin: 'person-1', personCode: 'code-1', personGroup: 'group', bookletName: 'Booklet A'
+        },
+        {
+          id: 3, unitName: 'unit1', variableid: 'var1', value: 'same-value', personLogin: 'person-1', personCode: 'code-1', personGroup: 'group', bookletName: 'Booklet B'
+        }
+      ] as never);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'var1',
+          responseCount: 3,
+          casesInJobs: 0,
+          availableCases: 2,
+          uniqueCasesAfterAggregation: 2
+        })
+      ]);
+    });
+
     it('should expose aggregation-aware case counts when DERIVE_ERROR is included', async () => {
       const codingIncompleteQb = createQueryBuilderMock([
         { unitName: 'unit1', variableId: 'var1', responseCount: '2' }
@@ -1336,9 +1443,11 @@ describe('CodingValidationService', () => {
   });
 
   describe('validateManualCodeAvailability', () => {
-    const mockManualScopeQueries = (): void => {
+    const mockManualScopeQueries = (
+      variableId = 'var1'
+    ): void => {
       const codingIncompleteQb = createQueryBuilderMock([
-        { unitName: 'unit1', variableId: 'var1', responseCount: '5' }
+        { unitName: 'unit1', variableId, responseCount: '5' }
       ]);
       const intendedIncompleteQb = createQueryBuilderMock([]);
       const deriveErrorQb = createQueryBuilderMock([]);
@@ -1354,14 +1463,14 @@ describe('CodingValidationService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockCacheService.set.mockResolvedValue(true);
       mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
-        new Map([['UNIT1', new Set(['var1'])]])
+        new Map([['UNIT1', new Set([variableId])]])
       );
       mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
       mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
       mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
       mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
       mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue(
-        createSlimResponses('unit1', 'var1', 5) as never
+        createSlimResponses('unit1', variableId, 5) as never
       );
     };
 
@@ -1438,6 +1547,52 @@ describe('CodingValidationService', () => {
                   label: 'Hidden',
                   manualInstruction: ''
                 },
+                {
+                  id: 2,
+                  label: 'Manual',
+                  manualInstruction: '<p>Manuell auswählbar</p>'
+                }
+              ]
+            }
+          ]
+        }
+      ]);
+
+      const result = await service.validateManualCodeAvailability(1);
+
+      expect(result).toEqual({
+        checkedVariables: 1,
+        warningCount: 0,
+        warnings: []
+      });
+    });
+
+    it('should match manual code availability by alias when ids collide with aliases', async () => {
+      mockManualScopeQueries('04');
+      mockWorkspaceFilesService.getUnitVariableDetails.mockResolvedValue([
+        {
+          unitName: 'unit1',
+          unitId: 'unit1',
+          variables: [
+            {
+              id: '04',
+              alias: '02',
+              type: 'string',
+              hasCodingScheme: true,
+              codes: [
+                {
+                  id: 1,
+                  label: 'Only special',
+                  manualInstruction: ''
+                }
+              ]
+            },
+            {
+              id: '07',
+              alias: '04',
+              type: 'string',
+              hasCodingScheme: true,
+              codes: [
                 {
                   id: 2,
                   label: 'Manual',

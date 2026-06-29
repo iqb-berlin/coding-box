@@ -14,6 +14,7 @@ import {
   ReplayBackendService,
   ReplayClientTimings,
   ReplayServerTimings,
+  ReplaySourceSummaryResponse,
   ReplayStatisticsResponse
 } from '../../replay/services/replay-backend.service';
 import {
@@ -101,6 +102,10 @@ export interface BulkApplyCodingResultsResponse {
 export interface ExportJobStatus {
   status: string;
   progress: number;
+  progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+  processedRows?: number;
+  totalRows?: number;
+  progressMessage?: string;
   result?: {
     fileId: string;
     fileName: string;
@@ -397,6 +402,13 @@ export class CodingFacadeService {
 
   getReplayFrequencyByUnit(workspaceId: number, options?: Record<string, unknown>): Observable<Record<string, number>> {
     return this.replayBackendService.getReplayFrequencyByUnit(workspaceId, options);
+  }
+
+  getReplaySourceSummary(workspaceId: number, options?: Record<string, unknown>): Observable<ReplaySourceSummaryResponse> {
+    return this.replayBackendService.getReplaySourceSummary(
+      workspaceId,
+      options as { from?: string; to?: string; lastDays?: number }
+    );
   }
 
   getReplayDurationStatistics(workspaceId: number, unitId?: string, options?: Record<string, unknown>): Observable<{ min: number; max: number; average: number; distribution: Record<string, number>; unitAverages?: Record<string, number>; }> {

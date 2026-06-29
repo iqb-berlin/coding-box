@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import * as path from 'path';
 import * as fs from 'fs';
-import { CodebookGenerationService } from '../../database/services/coding';
+import { CodebookGenerationService } from '../../database/services/coding/codebook-generation.service';
 import { CacheService } from '../../cache/cache.service';
 import { CodebookGenerationJobData, CodebookJobResult } from '../job-queue.service';
 

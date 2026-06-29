@@ -3,7 +3,9 @@ import {
 } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of, throwError } from 'rxjs';
+import {
+  Observable, Subject, of, throwError
+} from 'rxjs';
 import { CodingManagementService } from './coding-management.service';
 import {
   CodingJobStatus
@@ -55,7 +57,8 @@ describe('CodingManagementService', () => {
       getCodingResultsByVersionAsExcel: jest.fn(),
       startExportJob: jest.fn(),
       getExportJobStatus: jest.fn(),
-      downloadExportFile: jest.fn()
+      downloadExportFile: jest.fn(),
+      cancelExportJob: jest.fn()
     } as unknown as jest.Mocked<CodingExportService>;
 
     versionServiceMock = {
@@ -302,6 +305,95 @@ describe('CodingManagementService', () => {
         false,
         true
       );
+    });
+
+    it('should cancel a running coding results download', async () => {
+      exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'processing', progress: 50 }) as never);
+      exportServiceMock.cancelExportJob.mockReturnValue(of({ success: true, message: 'cancelled' }));
+
+      const downloadPromise = service.downloadCodingResults('v2', 'csv', false, true);
+      await new Promise(resolve => { setTimeout(resolve, 20); });
+
+      service.cancelCodingResultsDownload();
+      await downloadPromise;
+
+      expect(exportServiceMock.cancelExportJob).toHaveBeenCalledWith(1, 'job-1');
+      expect(exportServiceMock.downloadExportFile).not.toHaveBeenCalled();
+    });
+
+    it('should keep polling active when cancelling a running download fails', async () => {
+      exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'processing', progress: 50 }) as never);
+      exportServiceMock.cancelExportJob.mockReturnValue(throwError(() => new Error('cancel failed')));
+
+      const downloadPromise = service.downloadCodingResults('v2', 'csv', false, true);
+      await new Promise(resolve => { setTimeout(resolve, 20); });
+
+      service.cancelCodingResultsDownload();
+      await new Promise(resolve => { setTimeout(resolve, 20); });
+
+      let progress: number | null = null;
+      const progressSubscription = service.downloadProgress$.subscribe(value => {
+        progress = value;
+      });
+      progressSubscription.unsubscribe();
+
+      expect(exportServiceMock.cancelExportJob).toHaveBeenCalledWith(1, 'job-1');
+      expect(progress).toBe(50);
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        'coding-management.download-dialog.cancel-failed',
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+      expect(exportServiceMock.downloadExportFile).not.toHaveBeenCalled();
+
+      exportServiceMock.cancelExportJob.mockReturnValue(of({ success: true, message: 'cancelled' }));
+      service.cancelCodingResultsDownload();
+      await downloadPromise;
+    });
+
+    it('should treat server-side cancelled export jobs as cancelled downloads', async () => {
+      exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'cancelled', progress: 50 }) as never);
+
+      await service.downloadCodingResults('v2', 'csv', false, true);
+
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        'coding-management.download-dialog.download-cancelled',
+        'Schließen',
+        { duration: 3000 }
+      );
+      expect(exportServiceMock.downloadExportFile).not.toHaveBeenCalled();
+    });
+
+    it('should not download a completed job while cancellation is still pending', async () => {
+      const cancelResponse$ = new Subject<{ success: boolean; message: string }>();
+      const mockBlob = new Blob(['csv data'], { type: 'text/csv' });
+
+      exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(new Observable(subscriber => {
+        subscriber.next({ status: 'processing', progress: 50 });
+        service.cancelCodingResultsDownload();
+        subscriber.next({ status: 'completed', progress: 100 });
+        subscriber.complete();
+      }) as never);
+      exportServiceMock.cancelExportJob.mockReturnValue(cancelResponse$);
+      exportServiceMock.downloadExportFile.mockReturnValue(of(mockBlob));
+      global.URL.createObjectURL = jest.fn();
+      global.URL.revokeObjectURL = jest.fn();
+
+      const downloadPromise = service.downloadCodingResults('v2', 'csv', false, true);
+      await new Promise(resolve => { setTimeout(resolve, 20); });
+
+      expect(exportServiceMock.cancelExportJob).toHaveBeenCalledWith(1, 'job-1');
+      expect(exportServiceMock.downloadExportFile).not.toHaveBeenCalled();
+
+      cancelResponse$.next({ success: false, message: 'Job already completed' });
+      cancelResponse$.complete();
+      await downloadPromise;
+
+      expect(exportServiceMock.downloadExportFile).toHaveBeenCalledWith(1, 'job-1');
     });
   });
 });

@@ -147,6 +147,26 @@ describe('JobQueueService', () => {
     await expect(service.cancelVariableAnalysisJob('job-1')).resolves.toBe(true);
   });
 
+  it('aborts registered export cancellation signals when an export job is marked cancelled', async () => {
+    const exportJob = createJob({ workspaceId: 1, exportType: 'coding-list' }, 'active');
+    queues[2].getJob.mockResolvedValue(exportJob);
+    const signal = service.createExportJobCancellationSignal('job-1');
+
+    await expect(service.markExportJobCancelled('job-1')).resolves.toBe(true);
+
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('aborts registered export cancellation signals when cancelling an active export job directly', async () => {
+    const exportJob = createJob({ workspaceId: 1, exportType: 'coding-list' }, 'active');
+    queues[2].getJob.mockResolvedValue(exportJob);
+    const signal = service.createExportJobCancellationSignal('job-1');
+
+    await expect(service.cancelExportJob('job-1')).resolves.toBe(true);
+
+    expect(signal.aborted).toBe(true);
+  });
+
   it('only cancels workspace jobs that belong to the requested workspace', async () => {
     const ownJob = createJob({ workspaceId: 1 }, 'waiting');
     const otherWorkspaceJob = createJob({ workspaceId: 2 }, 'waiting');

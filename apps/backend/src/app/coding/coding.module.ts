@@ -50,9 +50,9 @@ import { CODING_PROCESS_CACHE_INVALIDATOR } from '../database/services/coding/co
 import { CODING_READINESS_CACHE_INVALIDATOR } from '../database/services/coding/coding-readiness-cache-invalidator.token';
 import { JobDefinitionService } from '../database/services/jobs';
 // eslint-disable-next-line import/no-cycle
-import { JobQueueModule } from '../job-queue/job-queue.module';
+import { JobQueueClientModule } from '../job-queue/job-queue-client.module';
 // eslint-disable-next-line import/no-cycle
-import { CacheModule } from '../cache/cache.module';
+import { CacheClientModule } from '../cache/cache-client.module';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { UserModule } from '../user/user.module';
@@ -83,8 +83,8 @@ import { UserModule } from '../user/user.module';
       ChunkEntity,
       CodingUnitFreshness
     ]),
-    forwardRef(() => JobQueueModule),
-    forwardRef(() => CacheModule),
+    JobQueueClientModule,
+    CacheClientModule,
     forwardRef(() => WorkspaceModule),
     UserModule
   ],

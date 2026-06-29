@@ -10,7 +10,7 @@ export class AuthService {
   private readonly appService = inject(AppService);
   getLoggedUser(): KeycloakTokenParsed | undefined {
     try {
-      return this.keycloak.idTokenParsed;
+      return this.keycloak.tokenParsed || this.keycloak.idTokenParsed;
     } catch (e) {
       return undefined;
     }
@@ -19,6 +19,19 @@ export class AuthService {
   getToken() {
     const token = this.keycloak.token;
     return token;
+  }
+
+  async getValidToken(minValidity = 30): Promise<string | undefined> {
+    if (!this.keycloak.authenticated) {
+      return undefined;
+    }
+
+    await this.keycloak.updateToken(minValidity);
+    return this.keycloak.token;
+  }
+
+  getIdentity(): string | undefined {
+    return this.keycloak.tokenParsed?.sub || this.keycloak.idTokenParsed?.sub;
   }
 
   isLoggedIn(): boolean | undefined {

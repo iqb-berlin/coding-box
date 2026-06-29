@@ -2,8 +2,15 @@ import {
   Test, TestingModule
 } from '@nestjs/testing';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
+import {
+  AllowWorkspaceTokenScopes,
+  WORKSPACE_API_TOKEN_TYPE,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
+  WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE
+} from '../../auth/workspace-token';
 
 describe('WorkspaceGuard (Backend)', () => {
   let guard: WorkspaceGuard;
@@ -17,6 +24,7 @@ describe('WorkspaceGuard (Backend)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WorkspaceGuard,
+        Reflector,
         {
           provide: AuthService,
           useValue: mockAuthService
@@ -31,17 +39,22 @@ describe('WorkspaceGuard (Backend)', () => {
   const createMockExecutionContext = (
     userId: number,
     workspaceId: string,
-    tokenWorkspaceId?: string | number
+    tokenWorkspaceId?: string | number,
+    userOverrides: Record<string, unknown> = {},
+    handler: () => void = jest.fn()
   ): ExecutionContext => ({
     switchToHttp: () => ({
       getRequest: () => ({
         user: {
           id: userId,
-          ...(tokenWorkspaceId === undefined ? {} : { workspace: tokenWorkspaceId })
+          ...(tokenWorkspaceId === undefined ? {} : { workspace: tokenWorkspaceId }),
+          ...userOverrides
         },
         params: { workspace_id: workspaceId }
       })
-    })
+    }),
+    getHandler: () => handler,
+    getClass: () => class TestController {}
   } as unknown as ExecutionContext);
 
   describe('Security Validation - Workspace Access', () => {
@@ -247,6 +260,100 @@ describe('WorkspaceGuard (Backend)', () => {
 
     it('should reject ambiguous token workspace claims before service lookup', async () => {
       const context = createMockExecutionContext(1, '123', '1e2');
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Security Validation - Workspace API Token Scopes', () => {
+    const createScopedHandler = () => {
+      const handler = jest.fn();
+      AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)(handler);
+      return handler;
+    };
+
+    const createCodingScopedHandler = () => {
+      const handler = jest.fn();
+      AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)(handler);
+      return handler;
+    };
+
+    it('should reject workspace API tokens for endpoints without allowed scopes', async () => {
+      const context = createMockExecutionContext(
+        1,
+        '123',
+        123,
+        {
+          tokenType: WORKSPACE_API_TOKEN_TYPE,
+          scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+        }
+      );
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+    });
+
+    it('should allow workspace API tokens when the endpoint allows the token scope', async () => {
+      authService.canAccessWorkSpace.mockResolvedValue(true);
+      const context = createMockExecutionContext(
+        1,
+        '123',
+        123,
+        {
+          tokenType: WORKSPACE_API_TOKEN_TYPE,
+          scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+        },
+        createScopedHandler()
+      );
+
+      await expect(guard.canActivate(context)).resolves.toBe(true);
+      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
+    });
+
+    it('should reject workspace API tokens with a missing required scope', async () => {
+      const context = createMockExecutionContext(
+        1,
+        '123',
+        123,
+        {
+          tokenType: WORKSPACE_API_TOKEN_TYPE,
+          scopes: [WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE]
+        },
+        createScopedHandler()
+      );
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+    });
+
+    it('should reject replay-only workspace API tokens for coding job endpoints', async () => {
+      const context = createMockExecutionContext(
+        1,
+        '123',
+        123,
+        {
+          tokenType: WORKSPACE_API_TOKEN_TYPE,
+          scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+        },
+        createCodingScopedHandler()
+      );
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+    });
+
+    it('should reject correctly scoped workspace API tokens for a different workspace', async () => {
+      const context = createMockExecutionContext(
+        1,
+        '123',
+        456,
+        {
+          tokenType: WORKSPACE_API_TOKEN_TYPE,
+          scopes: [WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE]
+        },
+        createCodingScopedHandler()
+      );
 
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
       expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();

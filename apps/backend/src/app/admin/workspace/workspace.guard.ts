@@ -1,13 +1,16 @@
 import {
   CanActivate, ExecutionContext, Injectable, UnauthorizedException
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { AuthService } from '../../auth/service/auth.service';
+import { assertWorkspaceApiTokenScopes } from '../../auth/workspace-token';
 import { parseWorkspaceId } from './workspace-id.util';
 
 @Injectable()
 export class WorkspaceGuard implements CanActivate {
   constructor(
-    private authService: AuthService
+    private authService: AuthService,
+    private reflector: Reflector
   ) {}
 
   async canActivate(
@@ -35,6 +38,7 @@ export class WorkspaceGuard implements CanActivate {
     if (tokenWorkspaceId && tokenWorkspaceId !== workspaceId) {
       throw new UnauthorizedException();
     }
+    assertWorkspaceApiTokenScopes(context, this.reflector, req.user);
 
     const canAccess = await this.authService.canAccessWorkSpace(userId, workspaceId);
     if (!canAccess) {

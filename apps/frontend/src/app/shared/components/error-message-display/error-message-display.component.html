@@ -35,6 +35,23 @@
   </div>
   }
 
+  @if (showSessionExpiryWarning) {
+  <div class="error-message session-expiry-warning">
+    <div class="error-content">
+      <mat-icon class="error-icon">timer</mat-icon>
+      <div class="error-text">
+        <h3>{{ 'error.session_expiry_warning_title' | translate }}</h3>
+        <p>{{ 'error.session_expiry_warning_message' | translate }}</p>
+      </div>
+    </div>
+    <div class="error-actions">
+      <button mat-raised-button color="primary" (click)="handleExtendSession()">
+        {{ 'error.session_extend_button' | translate }}
+      </button>
+    </div>
+  </div>
+  }
+
   <!-- Other Error Messages -->
   @for (error of appService.errorMessages; track error.id) {
   <div class="error-message other-error">

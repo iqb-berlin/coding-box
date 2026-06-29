@@ -17,13 +17,23 @@ import {
 } from 'rxjs/operators';
 import { CodingExportEstimate, CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
+import {
+  API_SPECIAL_TOKEN_DURATION_DAYS,
+  REPLAY_WORKSPACE_TOKEN_SCOPES
+} from '../../../core/services/auth-session.config';
 
 export interface ExportJob {
   jobId: string;
   workspaceId: number;
-  status: 'waiting' | 'active' | 'completed' | 'failed' | 'cancelled';
+  status: 'waiting' | 'active' | 'downloading' | 'completed' | 'failed' | 'cancelled';
   progress: number;
+  progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+  processedRows?: number;
+  totalRows?: number;
+  progressMessage?: string;
   exportType: string;
+  displayLabelKey?: string;
+  downloadFilePrefix?: string;
   result?: {
     fileName: string;
     fileSize: number;
@@ -68,6 +78,8 @@ export interface ExportJobConfig {
   coderIds?: number[];
   authToken?: string;
   serverUrl?: string;
+  displayLabelKey?: string;
+  downloadFilePrefix?: string;
 }
 
 export const REPLAY_AUTH_TOKEN_ERROR_CODE = 'replay-auth-token-failed';
@@ -96,6 +108,7 @@ export function isReplayAuthTokenError(error: unknown): error is ReplayAuthToken
 export class ExportJobService implements OnDestroy {
   private jobsSubject = new BehaviorSubject<ExportJob[]>([]);
   private pollingSubscriptions = new Map<string, Subscription>();
+  private downloadSubscriptions = new Map<string, Subscription>();
   private stopPolling$ = new Subject<void>();
 
   readonly jobs$ = this.jobsSubject.asObservable();
@@ -107,7 +120,7 @@ export class ExportJobService implements OnDestroy {
 
   get activeJobs(): ExportJob[] {
     return this.jobsSubject.value.filter(
-      job => job.status === 'waiting' || job.status === 'active'
+      job => job.status === 'waiting' || job.status === 'active' || job.status === 'downloading'
     );
   }
 
@@ -125,13 +138,20 @@ export class ExportJobService implements OnDestroy {
 
   startJob(workspaceId: number, config: ExportJobConfig): Observable<ExportJob> {
     return this.withReplayAuthToken(workspaceId, config).pipe(
-      switchMap(preparedConfig => this.codingJobBackendService.startExportJob(workspaceId, preparedConfig)),
+      switchMap(preparedConfig => {
+        const requestConfig = { ...preparedConfig };
+        delete requestConfig.displayLabelKey;
+        delete requestConfig.downloadFilePrefix;
+        return this.codingJobBackendService.startExportJob(workspaceId, requestConfig);
+      }),
       map((response: { jobId: string }) => ({
         jobId: response.jobId,
         workspaceId,
         status: 'waiting' as const,
         progress: 0,
         exportType: config.exportType,
+        displayLabelKey: config.displayLabelKey,
+        downloadFilePrefix: config.downloadFilePrefix,
         createdAt: Date.now()
       })),
       tap(job => {
@@ -153,7 +173,11 @@ export class ExportJobService implements OnDestroy {
       return of(config);
     }
 
-    return this.appService.createOwnToken(workspaceId, 60).pipe(
+    return this.appService.createOwnToken(
+      workspaceId,
+      API_SPECIAL_TOKEN_DURATION_DAYS,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    ).pipe(
       map(authToken => ({
         ...config,
         authToken,
@@ -195,6 +219,10 @@ export class ExportJobService implements OnDestroy {
           const statusAny = status as unknown as {
             status?: string;
             progress?: number;
+            progressPhase?: ExportJob['progressPhase'];
+            processedRows?: number;
+            totalRows?: number;
+            progressMessage?: string;
             result?: { fileName?: string; fileSize?: number };
             error?: string;
             errorCode?: string;
@@ -220,6 +248,10 @@ export class ExportJobService implements OnDestroy {
           this.updateJob(jobId, {
             status: mappedStatus,
             progress: statusAny.progress || 0,
+            progressPhase: statusAny.progressPhase,
+            processedRows: statusAny.processedRows,
+            totalRows: statusAny.totalRows,
+            progressMessage: statusAny.progressMessage,
             result,
             error: statusAny.error,
             errorCode: statusAny.errorCode,
@@ -281,11 +313,18 @@ export class ExportJobService implements OnDestroy {
 
   removeJob(jobId: string): void {
     this.stopPollingForJob(jobId);
+    this.stopDownloadForJob(jobId);
     const currentJobs = this.jobsSubject.value;
     this.jobsSubject.next(currentJobs.filter(job => job.jobId !== jobId));
   }
 
   cancelJob(job: ExportJob): void {
+    if (job.status === 'downloading') {
+      this.stopDownloadForJob(job.jobId);
+      this.updateJob(job.jobId, { status: 'completed', progress: 100 });
+      return;
+    }
+
     this.codingJobBackendService.cancelExportJob(job.workspaceId, job.jobId).subscribe({
       next: (response: { success: boolean }) => {
         if (response.success) {
@@ -302,22 +341,50 @@ export class ExportJobService implements OnDestroy {
     });
   }
 
-  downloadFile(workspaceId: number, jobId: string, exportType: string, fileName?: string): void {
-    this.codingJobBackendService.downloadExportFile(workspaceId, jobId).subscribe({
+  downloadFile(
+    workspaceId: number,
+    jobId: string,
+    exportType: string,
+    fileName?: string,
+    downloadFilePrefix?: string
+  ): void {
+    if (this.downloadSubscriptions.has(jobId)) {
+      return;
+    }
+
+    this.updateJob(jobId, { status: 'downloading', progress: 0 });
+    const subscription = this.codingJobBackendService.downloadExportFile(workspaceId, jobId).subscribe({
       next: (blob: Blob) => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         const ext = this.getDownloadExtension(exportType, fileName);
         const date = new Date().toISOString().slice(0, 10);
-        a.download = `export-${exportType}-${date}.${ext}`;
+        a.download = `export-${downloadFilePrefix || exportType}-${date}.${ext}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
+        this.downloadSubscriptions.delete(jobId);
+        this.updateJob(jobId, { status: 'completed', progress: 100 });
       },
-      error: () => { }
+      error: () => {
+        this.downloadSubscriptions.delete(jobId);
+        this.updateJob(jobId, { status: 'completed', progress: 100 });
+      }
     });
+    this.downloadSubscriptions.set(jobId, subscription);
+    if (subscription.closed) {
+      this.downloadSubscriptions.delete(jobId);
+    }
+  }
+
+  private stopDownloadForJob(jobId: string): void {
+    const subscription = this.downloadSubscriptions.get(jobId);
+    if (subscription) {
+      subscription.unsubscribe();
+      this.downloadSubscriptions.delete(jobId);
+    }
   }
 
   private getDownloadExtension(exportType: string, fileName?: string): string {
@@ -333,5 +400,7 @@ export class ExportJobService implements OnDestroy {
     this.stopPolling$.complete();
     this.pollingSubscriptions.forEach(sub => sub.unsubscribe());
     this.pollingSubscriptions.clear();
+    this.downloadSubscriptions.forEach(sub => sub.unsubscribe());
+    this.downloadSubscriptions.clear();
   }
 }

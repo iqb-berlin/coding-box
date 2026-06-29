@@ -8,14 +8,16 @@ import {
   UseGuards,
   Body,
   ValidationPipe,
-  Res
+  Res,
+  Query
 } from '@nestjs/common';
 import {
   ApiOkResponse,
   ApiParam,
   ApiTags,
   ApiBody,
-  ApiProduces
+  ApiProduces,
+  ApiQuery
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -198,6 +200,12 @@ export class WorkspaceCodingJobDefinitionController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'includePlannedUsage',
+    required: false,
+    type: Boolean,
+    description: 'Include expensive planned variable usage calculations.'
+  })
   @ApiOkResponse({
     description: 'List of job definitions retrieved successfully.',
     schema: {
@@ -242,9 +250,12 @@ export class WorkspaceCodingJobDefinitionController {
     }
   })
   async getJobDefinitions(
-    @WorkspaceId() workspace_id: number
+    @WorkspaceId() workspace_id: number,
+      @Query('includePlannedUsage') includePlannedUsage?: string
   ): Promise<JobDefinitionWithCreatedJobsCount[]> {
-    return this.jobDefinitionService.getJobDefinitions(workspace_id);
+    return this.jobDefinitionService.getJobDefinitions(workspace_id, {
+      includePlannedUsage: includePlannedUsage === 'true'
+    });
   }
 
   @Get(':workspace_id/coding/job-definitions/approved')

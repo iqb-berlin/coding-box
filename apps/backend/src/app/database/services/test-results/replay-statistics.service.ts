@@ -2,9 +2,19 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import type { SelectQueryBuilder } from 'typeorm';
-import { ReplayStatistics } from '../../entities/replay-statistics.entity';
+import {
+  REPLAY_STATISTICS_SOURCE_EXTERNAL,
+  REPLAY_STATISTICS_SOURCE_INTERNAL,
+  ReplayStatistics,
+  ReplayStatisticsSource
+} from '../../entities/replay-statistics.entity';
 
 type ReplayTimingMap = Record<string, number | null>;
+export type ReplayStatisticsSourceSummary = {
+  internal: number;
+  external: number;
+  total: number;
+};
 
 /**
  * Service for managing replay statistics
@@ -98,6 +108,7 @@ export class ReplayStatisticsService {
     errorMessage?: string;
     clientTimings?: Record<string, unknown>;
     serverTimings?: Record<string, unknown>;
+    replaySource?: ReplayStatisticsSource;
   }): Promise<ReplayStatistics> {
     try {
       const mappedData = {
@@ -125,6 +136,7 @@ export class ReplayStatisticsService {
           data.replayUrl,
           ReplayStatisticsService.MAX_MESSAGE_LENGTH
         ),
+        replay_source: data.replaySource || REPLAY_STATISTICS_SOURCE_INTERNAL,
         success: data.success !== undefined ? data.success : true,
         error_message: this.truncateString(
           data.errorMessage,
@@ -210,6 +222,58 @@ export class ReplayStatisticsService {
     } catch (error) {
       this.logger.error(
         `Error retrieving replay statistics: ${error.message}`,
+        error.stack
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get replay counts by source
+   * @param workspaceId The ID of the workspace
+   * @returns Counts for internal and externally token-authenticated replays
+   */
+  async getReplaySourceSummary(
+    workspaceId: number,
+    options?: { from?: string; to?: string; lastDays?: string }
+  ): Promise<ReplayStatisticsSourceSummary> {
+    try {
+      const qb = this.replayStatisticsRepository
+        .createQueryBuilder('stats')
+        .select([
+          'stats.replay_source as source',
+          'COUNT(*) as count'
+        ])
+        .where('stats.workspace_id = :workspaceId', { workspaceId });
+
+      this.applyTimeFilters(qb, options);
+
+      const result = await qb
+        .groupBy('stats.replay_source')
+        .getRawMany();
+
+      const summary: ReplayStatisticsSourceSummary = {
+        internal: 0,
+        external: 0,
+        total: 0
+      };
+
+      result.forEach(row => {
+        const source = row.source as ReplayStatisticsSource;
+        const count = parseInt(row.count, 10);
+        if (
+          source === REPLAY_STATISTICS_SOURCE_INTERNAL ||
+          source === REPLAY_STATISTICS_SOURCE_EXTERNAL
+        ) {
+          summary[source] = count;
+          summary.total += count;
+        }
+      });
+
+      return summary;
+    } catch (error) {
+      this.logger.error(
+        `Error calculating replay source summary: ${error.message}`,
         error.stack
       );
       throw error;

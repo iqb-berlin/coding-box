@@ -4,5 +4,10 @@
 </mat-dialog-content>
 <mat-dialog-actions align="end">
   <button mat-button (click)="onCancel()">{{ data.cancelButtonText }}</button>
+  @if (data.alternativeButtonText) {
+  <button mat-raised-button color="primary" (click)="onAlternative()">
+    {{ data.alternativeButtonText }}
+  </button>
+  }
   <button mat-raised-button color="warn" (click)="onConfirm()">{{ data.confirmButtonText }}</button>
 </mat-dialog-actions>

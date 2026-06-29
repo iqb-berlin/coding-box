@@ -26,9 +26,17 @@ import { MatButton } from '@angular/material/button';
       <button mat-raised-button color="primary" [mat-dialog-close]="true">
         {{ confirmData.confirmButtonLabel }}
       </button>
+      @if (confirmData.alternativeButtonLabel) {
+      <button
+        mat-raised-button
+        [mat-dialog-close]="confirmData.alternativeButtonValue ?? 'alternative'"
+      >
+        {{ confirmData.alternativeButtonLabel }}
+      </button>
+      }
       @if (showCancel) {
       <button mat-raised-button [mat-dialog-close]="false">
-        {{ 'workspace.cancel' | translate }}
+        {{ confirmData.cancelButtonLabel || ('workspace.cancel' | translate) }}
       </button>
       }
     </mat-dialog-actions>
@@ -74,4 +82,7 @@ export interface ConfirmDialogData {
   content: string;
   confirmButtonLabel: string;
   showCancel: boolean;
+  alternativeButtonLabel?: string;
+  alternativeButtonValue?: unknown;
+  cancelButtonLabel?: string;
 }

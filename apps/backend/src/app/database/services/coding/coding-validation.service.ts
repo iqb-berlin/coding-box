@@ -78,6 +78,7 @@ type SlimCodingResponse = {
   personLogin?: string | null;
   personCode?: string | null;
   personGroup?: string | null;
+  bookletName?: string | null;
 };
 
 type VariableCaseInfo = {
@@ -890,8 +891,7 @@ export class CodingValidationService {
 
       unitDetails.variables.forEach(variable => {
         const variableIds = [
-          variable.alias,
-          variable.id
+          variable.alias || variable.id
         ].filter(Boolean);
 
         unitKeys.forEach(unitKey => {

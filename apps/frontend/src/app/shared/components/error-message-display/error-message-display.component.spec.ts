@@ -11,24 +11,33 @@ describe('ErrorMessageDisplayComponent', () => {
   let appService: {
     backendUnavailable: boolean;
     needsReAuthentication: boolean;
+    sessionExpiryWarning: boolean;
     errorMessages: AppHttpError[];
     reAuthenticationReturnUrl?: string;
     setBackendUnavailable: jest.Mock;
     setNeedsReAuthentication: jest.Mock;
+    setSessionExpiryWarning: jest.Mock;
+    requireReAuthentication: jest.Mock;
   };
-  let authService: { login: jest.Mock };
+  let authService: { login: jest.Mock; getValidToken: jest.Mock };
   let router: { url: string };
 
   beforeEach(async () => {
     appService = {
       backendUnavailable: false,
       needsReAuthentication: true,
+      sessionExpiryWarning: false,
       errorMessages: [],
       reAuthenticationReturnUrl: '/coding',
       setBackendUnavailable: jest.fn(),
-      setNeedsReAuthentication: jest.fn()
+      setNeedsReAuthentication: jest.fn(),
+      setSessionExpiryWarning: jest.fn(),
+      requireReAuthentication: jest.fn()
     };
-    authService = { login: jest.fn() };
+    authService = {
+      login: jest.fn(),
+      getValidToken: jest.fn().mockResolvedValue('token')
+    };
     router = { url: '/home?auth=session-expired' };
 
     await TestBed.configureTestingModule({
@@ -68,6 +77,33 @@ describe('ErrorMessageDisplayComponent', () => {
     fixture.componentInstance.handleLogin();
 
     expect(authService.login).toHaveBeenCalledWith('/coding');
+  });
+
+  it('should show an idle session warning outside the home route', () => {
+    router.url = '/coding';
+    appService.needsReAuthentication = false;
+    appService.sessionExpiryWarning = true;
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('error.session_expiry_warning_title');
+  });
+
+  it('should extend the session from the idle warning', async () => {
+    await fixture.componentInstance.handleExtendSession();
+
+    expect(authService.getValidToken).toHaveBeenCalledWith(-1);
+    expect(appService.setSessionExpiryWarning).toHaveBeenCalledWith(false);
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('should require reauthentication when extending the session fails', async () => {
+    router.url = '/coding';
+    authService.getValidToken.mockRejectedValue(new Error('refresh failed'));
+
+    await fixture.componentInstance.handleExtendSession();
+
+    expect(appService.requireReAuthentication).toHaveBeenCalledWith('/coding');
   });
 
   it('should hide request details until the user expands them', () => {

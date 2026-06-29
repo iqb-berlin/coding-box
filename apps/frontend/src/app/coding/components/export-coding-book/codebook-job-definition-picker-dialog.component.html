@@ -1,0 +1,105 @@
+<h2 mat-dialog-title class="job-definition-picker-title">
+  <mat-icon>rule_folder</mat-icon>
+  {{ 'coding.job-definition-picker-title' | translate }}
+</h2>
+
+<mat-dialog-content class="job-definition-picker-content">
+  <mat-form-field appearance="outline" class="job-definition-search">
+    <mat-label>{{ 'coding.job-definition-picker-search' | translate }}</mat-label>
+    <input
+      matInput
+      [(ngModel)]="filterText"
+      [placeholder]="'coding.job-definition-picker-search-placeholder' | translate">
+    <mat-icon matSuffix>search</mat-icon>
+    @if (filterText) {
+      <button
+        mat-icon-button
+        matSuffix
+        type="button"
+        [attr.aria-label]="'coding.job-definition-picker-clear-search' | translate"
+        [matTooltip]="'coding.job-definition-picker-clear-search' | translate"
+        (click)="clearFilter()">
+        <mat-icon>close</mat-icon>
+      </button>
+    }
+  </mat-form-field>
+
+  <div class="job-definition-picker-layout">
+    <div
+      class="job-definition-list"
+      role="listbox"
+      [attr.aria-label]="'coding.job-definition-picker-title' | translate">
+      <button
+        type="button"
+        class="job-definition-row"
+        [class.selected]="selectedJobDefinitionId === null"
+        role="option"
+        [attr.aria-selected]="selectedJobDefinitionId === null"
+        (click)="selectJobDefinition(null)">
+        <mat-icon>{{ selectedJobDefinitionId === null ? 'radio_button_checked' : 'radio_button_unchecked' }}</mat-icon>
+        <span class="job-definition-row-text">
+          <span class="job-definition-row-title">{{ 'coding.job-definition-all' | translate }}</span>
+          <span class="job-definition-row-meta">
+            {{ 'coding.job-definition-picker-all-summary' | translate }}
+          </span>
+        </span>
+      </button>
+
+      @for (option of filteredOptions; track option.id) {
+        <button
+          type="button"
+          class="job-definition-row"
+          [class.selected]="selectedJobDefinitionId === option.id"
+          role="option"
+          [attr.aria-selected]="selectedJobDefinitionId === option.id"
+          (click)="selectJobDefinition(option.id)">
+          <mat-icon>{{ selectedJobDefinitionId === option.id ? 'radio_button_checked' : 'radio_button_unchecked' }}</mat-icon>
+          <span class="job-definition-row-text">
+            <span class="job-definition-row-title">{{ option.label }}</span>
+            <span class="job-definition-row-meta">{{ option.meta }}</span>
+            @if (option.bundleSummary) {
+              <span class="job-definition-row-bundles">{{ option.bundleSummary }}</span>
+            }
+          </span>
+        </button>
+      }
+
+      @if (data.options.length === 0) {
+        <div class="job-definition-empty">
+          <mat-icon>info</mat-icon>
+          <span>{{ 'coding.job-definition-none' | translate }}</span>
+        </div>
+      } @else if (filteredOptions.length === 0) {
+        <div class="job-definition-empty">
+          <mat-icon>search_off</mat-icon>
+          <span>{{ 'coding.job-definition-picker-no-results' | translate }}</span>
+        </div>
+      }
+    </div>
+
+    <mat-divider vertical></mat-divider>
+
+    <aside class="job-definition-detail">
+      <span class="detail-label">{{ 'coding.job-definition-picker-detail-label' | translate }}</span>
+      @if (selectedOption; as option) {
+        <h3>{{ option.label }}</h3>
+        <p>{{ option.meta }}</p>
+        @if (option.bundleSummary) {
+          <p>{{ option.bundleSummary }}</p>
+        }
+      } @else {
+        <h3>{{ 'coding.job-definition-all' | translate }}</h3>
+        <p>{{ 'coding.job-definition-picker-all-detail' | translate }}</p>
+      }
+    </aside>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="dialogRef.close()">
+    {{ 'cancel' | translate }}
+  </button>
+  <button mat-raised-button color="primary" type="button" (click)="applySelection()">
+    {{ 'coding.job-definition-picker-apply' | translate }}
+  </button>
+</mat-dialog-actions>

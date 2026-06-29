@@ -30,6 +30,27 @@ export interface CodingItem {
 
 export type CodingVariableAnchorMaps = Map<string, Map<string, string>>;
 
+export interface CodingItemVersionRow {
+  id: number;
+  unitKey: string;
+  unitAlias: string | null;
+  personLogin: string | null;
+  personCode: string | null;
+  personGroup: string | null;
+  bookletName: string | null;
+  variableId: string;
+  value: string | null;
+  statusV1: number | null;
+  codeV1: number | null;
+  scoreV1: number | null;
+  statusV2: number | null;
+  codeV2: number | null;
+  scoreV2: number | null;
+  statusV3: number | null;
+  codeV3: number | null;
+  scoreV3: number | null;
+}
+
 /**
  * Service responsible for building CodingItem objects from ResponseEntity data.
  *
@@ -258,6 +279,108 @@ export class CodingItemBuilderService {
     } catch (error) {
       this.logger.error(
         `Error building coding item with versions for response ${response.id}: ${error.message}`
+      );
+      return null;
+    }
+  }
+
+  async buildCodingItemWithVersionRow(
+    row: CodingItemVersionRow,
+    targetVersion: 'v1' | 'v2' | 'v3',
+    authToken: string,
+    serverUrl: string,
+    workspaceId: number,
+    includeReplayUrls: boolean = false,
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false,
+    variableAnchorMaps?: CodingVariableAnchorMaps
+  ): Promise<CodingItem | null> {
+    try {
+      const unitKey = row.unitKey || '';
+      const variableId = row.variableId || '';
+
+      if (!unitKey || !variableId) {
+        return null;
+      }
+
+      const variablePageMap = await this.fileCacheService.loadVoudData(
+        unitKey,
+        workspaceId
+      );
+      const variablePage = variablePageMap.get(variableId) || '0';
+      const variableAnchor = await this.resolveVariableAnchor(
+        workspaceId,
+        unitKey,
+        variableId,
+        variableAnchorMaps
+      );
+
+      const loginName = row.personLogin || '';
+      const loginCode = row.personCode || '';
+      const loginGroup = row.personGroup || '';
+      const bookletId = row.bookletName || '';
+      const url = generateReplayUrl({
+        serverUrl,
+        loginName,
+        loginCode,
+        loginGroup,
+        bookletId,
+        unitId: unitKey,
+        variablePage,
+        variableAnchor,
+        authToken
+      });
+
+      const baseItem: CodingItem & Record<string, unknown> = {
+        unit_key: unitKey,
+        unit_alias: row.unitAlias || '',
+        person_login: loginName,
+        person_code: loginCode,
+        person_group: loginGroup,
+        booklet_name: bookletId,
+        variable_id: variableId,
+        variable_page: variablePage,
+        variable_anchor: variableAnchor
+      };
+
+      if (includeResponseValues) {
+        baseItem.value = this.formatResponseValue(
+          row.value,
+          includeGeoGebraResponseValues
+        );
+      }
+
+      if (targetVersion === 'v1') {
+        baseItem.status_v1 = this.formatStatus(row.statusV1);
+        baseItem.code_v1 = mapCodeForExport(row.codeV1) ?? '';
+        baseItem.score_v1 = row.scoreV1 ?? '';
+      } else if (targetVersion === 'v2') {
+        baseItem.status_v1 = this.formatStatus(row.statusV1);
+        baseItem.code_v1 = mapCodeForExport(row.codeV1) ?? '';
+        baseItem.score_v1 = row.scoreV1 ?? '';
+        baseItem.status_v2 = this.formatStatus(row.statusV2);
+        baseItem.code_v2 = mapCodeForExport(row.codeV2) ?? '';
+        baseItem.score_v2 = row.scoreV2 ?? '';
+      } else {
+        baseItem.status_v1 = this.formatStatus(row.statusV1);
+        baseItem.code_v1 = mapCodeForExport(row.codeV1) ?? '';
+        baseItem.score_v1 = row.scoreV1 ?? '';
+        baseItem.status_v2 = this.formatStatus(row.statusV2);
+        baseItem.code_v2 = mapCodeForExport(row.codeV2) ?? '';
+        baseItem.score_v2 = row.scoreV2 ?? '';
+        baseItem.status_v3 = this.formatStatus(row.statusV3);
+        baseItem.code_v3 = mapCodeForExport(row.codeV3) ?? '';
+        baseItem.score_v3 = row.scoreV3 ?? '';
+      }
+
+      if (includeReplayUrls) {
+        baseItem.url = url;
+      }
+
+      return baseItem;
+    } catch (error) {
+      this.logger.error(
+        `Error building coding item with versions for response ${row.id}: ${error.message}`
       );
       return null;
     }

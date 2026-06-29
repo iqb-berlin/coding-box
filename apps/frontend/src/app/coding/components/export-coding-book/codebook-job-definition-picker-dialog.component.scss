@@ -1,0 +1,145 @@
+.job-definition-picker-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.job-definition-picker-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(920px, 86vw);
+  max-width: 100%;
+  min-height: min(620px, 72vh);
+}
+
+.job-definition-search {
+  width: 100%;
+}
+
+.job-definition-picker-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.4fr) auto minmax(260px, .85fr);
+  gap: 18px;
+  flex: 1;
+  min-height: 0;
+}
+
+.job-definition-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.job-definition-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.job-definition-row:hover {
+  background: #f8fbfb;
+  border-color: rgba(0, 96, 100, 0.28);
+}
+
+.job-definition-row.selected {
+  background: rgba(0, 96, 100, 0.08);
+  border-color: #006064;
+}
+
+.job-definition-row mat-icon {
+  color: #006064;
+  margin-top: 1px;
+}
+
+.job-definition-row-text,
+.job-definition-row-title,
+.job-definition-row-meta,
+.job-definition-row-bundles {
+  display: block;
+  min-width: 0;
+}
+
+.job-definition-row-title {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.job-definition-row-meta,
+.job-definition-row-bundles {
+  color: rgba(0, 0, 0, 0.62);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-definition-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  min-width: 0;
+}
+
+.detail-label {
+  color: rgba(0, 0, 0, 0.56);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.job-definition-detail h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.job-definition-detail p {
+  margin: 0;
+  color: rgba(0, 0, 0, 0.72);
+  line-height: 1.45;
+}
+
+.job-definition-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 120px;
+  color: rgba(0, 0, 0, 0.58);
+}
+
+@media (max-width: 760px) {
+  .job-definition-picker-content {
+    width: auto;
+    min-height: 0;
+  }
+
+  .job-definition-picker-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .job-definition-picker-layout mat-divider {
+    display: none;
+  }
+
+  .job-definition-list {
+    max-height: 48vh;
+  }
+}

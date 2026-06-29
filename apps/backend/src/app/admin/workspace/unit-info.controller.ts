@@ -11,16 +11,22 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import {
+  AllowWorkspaceTokenScopes,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_READ
+} from '../../auth/workspace-token';
+import { WorkspaceGuard } from './workspace.guard';
 import { UnitInfoService } from '../../database/services/workspace';
 import { UnitInfoDto } from '../../../../../../api-dto/unit-info/unit-info.dto';
 
 @ApiTags('Unit Info')
 @Controller('admin/workspace/:workspaceId/unit')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, WorkspaceGuard)
 export class UnitInfoController {
   constructor(private readonly unitInfoService: UnitInfoService) {}
 
   @Get(':unitId/info')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
   @ApiOperation({ summary: 'Get unit info from XML' })
   @ApiParam({ name: 'workspaceId', type: Number })
   @ApiParam({ name: 'unitId', type: String })

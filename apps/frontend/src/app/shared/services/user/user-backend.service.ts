@@ -78,12 +78,20 @@ export class UserBackendService {
   }
 
   getWorkspacesByUserList(userId: number): Observable<number[]> {
-    return this.http
-      .get<number[]>(`${this.serverUrl}admin/users/${userId}/workspaces`,
-      {})
+    return this.requestWorkspacesByUserList(userId)
       .pipe(
         catchError(() => of([]))
       );
+  }
+
+  getWorkspacesByUserListOrFail(userId: number): Observable<number[]> {
+    return this.requestWorkspacesByUserList(userId);
+  }
+
+  private requestWorkspacesByUserList(userId: number): Observable<number[]> {
+    return this.http
+      .get<number[]>(`${this.serverUrl}admin/users/${userId}/workspaces`,
+      {});
   }
 
   setUserWorkspaceAccessRight(userId: number, workspaceIds: number[]): Observable<boolean> {

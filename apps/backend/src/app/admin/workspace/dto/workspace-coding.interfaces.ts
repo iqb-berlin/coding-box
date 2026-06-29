@@ -40,6 +40,7 @@ export interface DoubleCodedReviewItem {
     trainingId: number | null;
     trainingLabel: string | null;
     code: number | null;
+    codingIssueOption: number | null;
     score: number | null;
     notes: string | null;
     supervisorComment: string | null;

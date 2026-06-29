@@ -9,7 +9,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -290,6 +290,58 @@ describe('CodingResultsComparisonComponent', () => {
       'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=77',
       '_blank'
     );
+  });
+
+  it('should pass coder code assignments to the discussion replay', () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    codingStatisticsService.getReplayUrl.mockReturnValue(of({
+      replayUrl: 'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1'
+    }));
+
+    component.openReplay({
+      responseId: 77,
+      unitName: 'UNIT_1',
+      variableId: 'VAR_1',
+      testperson: 'login@code@booklet',
+      coders: [
+        {
+          jobId: 1,
+          coderName: 'Coder A',
+          code: '2',
+          score: 1,
+          codingIssueOption: null
+        },
+        {
+          jobId: 2,
+          coderName: 'Coder B',
+          code: '2',
+          score: 1,
+          codingIssueOption: -1
+        },
+        {
+          jobId: 3,
+          coderName: 'Coder C',
+          code: null,
+          score: null,
+          codingIssueOption: -3
+        },
+        {
+          jobId: 4,
+          coderName: 'Coder D',
+          code: '2',
+          score: null,
+          codingIssueOption: -3
+        }
+      ]
+    } as never);
+
+    const openedUrl = openSpy.mock.calls[0][0] as string;
+    const reviewCodeSelections = new URLSearchParams(openedUrl.split('?')[1]).get('reviewCodeSelections');
+    expect(JSON.parse(reviewCodeSelections || '[]')).toEqual([
+      { code: -3, coderNames: ['Coder C', 'Coder D'] },
+      { code: -1, coderNames: ['Coder B'] },
+      { code: 2, coderNames: ['Coder A', 'Coder B'] }
+    ]);
   });
 
   it('should pass selected training display options to the discussion replay', () => {
@@ -993,6 +1045,351 @@ describe('CodingResultsComparisonComponent', () => {
     expect(row.discussionScore).toBe(2);
     expect(row.discussionNotes).toBe('Replay note');
     expect(row.discussionSource).toBe('manual');
+  });
+
+  it('should resave an existing replay discussion result when notes are committed later', () => {
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'login@code@booklet',
+      discussionCode: 7,
+      discussionScore: 2,
+      discussionNotes: null,
+      discussionSource: 'manual' as 'manual' | 'auto_agreement' | null,
+      coders: [
+        {
+          jobId: 1,
+          coderName: 'Coder1',
+          code: '7',
+          score: 2
+        }
+      ]
+    };
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValueOnce(of({
+      success: true,
+      code: 7,
+      score: 2,
+      notes: 'Late replay note',
+      source: 'manual',
+      managerUserId: 2,
+      managerName: 'Test User'
+    }));
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+    component.discussionCodeByResponseId[1] = '7';
+    component.discussionScoreByResponseId[1] = 2;
+
+    (component as unknown as {
+      handleReplayNotesCommitted: (data: {
+        type: 'replayNotesCommitted';
+        testPerson: string;
+        unitId: string;
+        variableId: string;
+        notes?: string | null;
+        responseId: number;
+      }) => void;
+    }).handleReplayNotesCommitted({
+      type: 'replayNotesCommitted',
+      testPerson: 'login@code@booklet',
+      unitId: 'Unit1',
+      variableId: 'Var1',
+      notes: 'Late replay note',
+      responseId: 1
+    });
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2, 'Late replay note');
+    expect(component.discussionNotesByResponseId[1]).toBe('Late replay note');
+    expect(row.discussionNotes).toBe('Late replay note');
+  });
+
+  it('should queue replay notes committed while the replay code save is still running', () => {
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'login@code@booklet',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: [
+        {
+          jobId: 1,
+          coderName: 'Coder1',
+          code: '7',
+          score: 2
+        }
+      ]
+    };
+    const codeSave = new Subject<{
+      success: boolean;
+      code: number;
+      score: number;
+      notes: string | null;
+      source: 'manual';
+      managerUserId: number;
+      managerName: string;
+    }>();
+    const notesSave = new Subject<{
+      success: boolean;
+      code: number;
+      score: number;
+      notes: string | null;
+      source: 'manual';
+      managerUserId: number;
+      managerName: string;
+    }>();
+    codingTrainingBackendService.saveDiscussionResult
+      .mockReturnValueOnce(codeSave.asObservable())
+      .mockReturnValueOnce(notesSave.asObservable());
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+
+    const privateComponent = component as unknown as {
+      handleReplayCodeSelected: (data: {
+        type: 'replayCodeSelected';
+        testPerson: string;
+        unitId: string;
+        variableId: string;
+        code: string;
+        score?: number | null;
+        notes?: string | null;
+        responseId: number;
+      }) => void;
+      handleReplayNotesCommitted: (data: {
+        type: 'replayNotesCommitted';
+        testPerson: string;
+        unitId: string;
+        variableId: string;
+        notes?: string | null;
+        responseId: number;
+      }) => void;
+    };
+
+    privateComponent.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'login@code@booklet',
+      unitId: 'Unit1',
+      variableId: 'Var1',
+      code: '7',
+      score: 2,
+      notes: null,
+      responseId: 1
+    });
+    privateComponent.handleReplayNotesCommitted({
+      type: 'replayNotesCommitted',
+      testPerson: 'login@code@booklet',
+      unitId: 'Unit1',
+      variableId: 'Var1',
+      notes: 'Late replay note',
+      responseId: 1
+    });
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledTimes(1);
+    expect(component.discussionNotesByResponseId[1]).toBe('Late replay note');
+
+    codeSave.next({
+      success: true,
+      code: 7,
+      score: 2,
+      notes: null,
+      source: 'manual',
+      managerUserId: 2,
+      managerName: 'Test User'
+    });
+    codeSave.complete();
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledTimes(2);
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenLastCalledWith(1, 5, 1, 7, 2, 'Late replay note');
+
+    notesSave.next({
+      success: true,
+      code: 7,
+      score: 2,
+      notes: 'Late replay note',
+      source: 'manual',
+      managerUserId: 2,
+      managerName: 'Test User'
+    });
+    notesSave.complete();
+
+    expect(row.discussionNotes).toBe('Late replay note');
+  });
+
+  it('should clear queued replay notes when the active discussion save fails', () => {
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'login@code@booklet',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: [
+        {
+          jobId: 1,
+          coderName: 'Coder1',
+          code: '7',
+          score: 2
+        }
+      ]
+    };
+    const codeSave = new Subject<{
+      success: boolean;
+      code: number;
+      score: number;
+      notes: string | null;
+      source: 'manual';
+      managerUserId: number;
+      managerName: string;
+    }>();
+    codingTrainingBackendService.saveDiscussionResult
+      .mockReturnValueOnce(codeSave.asObservable())
+      .mockReturnValueOnce(of({
+        success: true,
+        code: 7,
+        score: 2,
+        notes: null,
+        source: 'manual',
+        managerUserId: 2,
+        managerName: 'Test User'
+      }));
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+
+    const privateComponent = component as unknown as {
+      handleReplayCodeSelected: (data: {
+        type: 'replayCodeSelected';
+        testPerson: string;
+        unitId: string;
+        variableId: string;
+        code: string;
+        score?: number | null;
+        notes?: string | null;
+        responseId: number;
+      }) => void;
+      handleReplayNotesCommitted: (data: {
+        type: 'replayNotesCommitted';
+        testPerson: string;
+        unitId: string;
+        variableId: string;
+        notes?: string | null;
+        responseId: number;
+      }) => void;
+    };
+
+    privateComponent.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'login@code@booklet',
+      unitId: 'Unit1',
+      variableId: 'Var1',
+      code: '7',
+      score: 2,
+      notes: null,
+      responseId: 1
+    });
+    privateComponent.handleReplayNotesCommitted({
+      type: 'replayNotesCommitted',
+      testPerson: 'login@code@booklet',
+      unitId: 'Unit1',
+      variableId: 'Var1',
+      notes: 'Stale replay note',
+      responseId: 1
+    });
+
+    codeSave.error(new HttpErrorResponse({
+      status: 400,
+      error: { message: 'Unsupported code for variable Var1: 7' }
+    }));
+
+    component.discussionCodeByResponseId[1] = '7';
+    component.discussionNotesByResponseId[1] = '';
+    component.onDiscussionCodeBlur(row, 2);
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledTimes(2);
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenLastCalledWith(1, 5, 1, 7, 2, null);
+    expect(row.discussionNotes).toBeNull();
+  });
+
+  it('should keep committed replay notes until a later replay code selection is saved', () => {
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'login@code@booklet',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: [
+        {
+          jobId: 1,
+          coderName: 'Coder1',
+          code: '7',
+          score: 2
+        }
+      ]
+    };
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValueOnce(of({
+      success: true,
+      code: 7,
+      score: 2,
+      notes: 'Committed first',
+      source: 'manual',
+      managerUserId: 2,
+      managerName: 'Test User'
+    }));
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+
+    const privateComponent = component as unknown as {
+      handleReplayNotesCommitted: (data: {
+        type: 'replayNotesCommitted';
+        testPerson: string;
+        unitId: string;
+        variableId: string;
+        notes?: string | null;
+        responseId: number;
+      }) => void;
+      handleReplayCodeSelected: (data: {
+        type: 'replayCodeSelected';
+        testPerson: string;
+        unitId: string;
+        variableId: string;
+        code: string;
+        score?: number | null;
+        responseId: number;
+      }) => void;
+    };
+
+    privateComponent.handleReplayNotesCommitted({
+      type: 'replayNotesCommitted',
+      testPerson: 'login@code@booklet',
+      unitId: 'Unit1',
+      variableId: 'Var1',
+      notes: 'Committed first',
+      responseId: 1
+    });
+    expect(codingTrainingBackendService.saveDiscussionResult).not.toHaveBeenCalled();
+
+    privateComponent.handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'login@code@booklet',
+      unitId: 'Unit1',
+      variableId: 'Var1',
+      code: '7',
+      score: 2,
+      responseId: 1
+    });
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2, 'Committed first');
+    expect(row.discussionNotes).toBe('Committed first');
   });
 
   it('should show a validation message when a discussion code is not supported by the coding scheme', () => {

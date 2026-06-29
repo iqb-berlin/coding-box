@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UsersService } from '../../database/services/users';
+import { assertWorkspaceApiTokenScopes } from '../../auth/workspace-token';
 import { parseWorkspaceId } from './workspace-id.util';
 
 /**
@@ -33,13 +34,14 @@ export class AccessLevelGuard implements CanActivate {
       this.reflector.getAllAndOverride<number>('accessLevel', metadataTargets) :
       this.reflector.get<number>('accessLevel', context.getHandler());
 
+    const request = context.switchToHttp().getRequest();
+    const userId = request.user?.id;
+    assertWorkspaceApiTokenScopes(context, this.reflector, request.user);
+
     // If no access level is specified, allow access
     if (requiredLevel === undefined || requiredLevel === null) {
       return true;
     }
-
-    const request = context.switchToHttp().getRequest();
-    const userId = request.user?.id;
 
     if (!userId) {
       throw new UnauthorizedException('User ID not found in request');
