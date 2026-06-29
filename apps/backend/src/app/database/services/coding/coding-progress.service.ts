@@ -12,6 +12,9 @@ import { Setting } from '../../entities/setting.entity';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
   applyResolvedExclusionsToQuery,
+  normalizeExclusionBookletId,
+  normalizeExclusionUnitId,
+  ResolvedWorkspaceExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import {
@@ -32,6 +35,12 @@ import {
   applyNonCodingIssueReviewJobFilter,
   getNonCodingIssueReviewJobSqlCondition
 } from './coding-job-type.util';
+import { CacheService } from '../../../cache/cache.service';
+import {
+  getCodingAppliedResultsOverviewCacheKey,
+  getCodingAppliedResultsOverviewCachePattern,
+  getCodingAppliedResultsOverviewVersionKey
+} from './coding-applied-results-overview-cache-key.util';
 
 type ResponseMatchingFlag =
   | 'NO_AGGREGATION'
@@ -53,7 +62,7 @@ interface CoverageResponse {
 }
 
 interface CoverageResponseScope {
-  allResponses: CoverageResponse[];
+  statusTotalResponseCount: number;
   manualResponses: CoverageResponse[];
   excludedSourceSummary: ManualCodingExcludedSourceSummary;
 }
@@ -81,6 +90,27 @@ interface EffectiveVariableCaseCoverage {
 }
 
 interface DeriveErrorManualProgress {
+  deriveErrorTotalResponses: number;
+  deriveErrorAppliedResponses: number;
+  deriveErrorRemainingResponses: number;
+  deriveErrorRawTotalResponses: number;
+  deriveErrorRawAppliedResponses: number;
+}
+
+interface AppliedResultsOverview {
+  totalIncompleteResponses: number;
+  appliedResponses: number;
+  remainingResponses: number;
+  completionPercentage: number;
+  rawTotalIncompleteResponses: number;
+  rawAppliedResponses: number;
+  rawCompletionPercentage: number;
+  aggregationActive: boolean;
+  aggregationThreshold: number | null;
+  aggregatedDuplicateCases: number;
+  statusTotalIncompleteResponses: number;
+  coveredSourceVariableCount: number;
+  coveredSourceResponseCount: number;
   deriveErrorTotalResponses: number;
   deriveErrorAppliedResponses: number;
   deriveErrorRemainingResponses: number;
@@ -123,6 +153,15 @@ interface ManualCodingVariableLookups {
 @Injectable()
 export class CodingProgressService {
   private readonly logger = new Logger(CodingProgressService.name);
+  private readonly appliedResultsOverviewInFlight = new Map<
+  string,
+  Promise<AppliedResultsOverview>
+  >();
+
+  private readonly appliedResultsOverviewPrewarmTimers = new Map<
+  number,
+  NodeJS.Timeout
+  >();
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -138,7 +177,9 @@ export class CodingProgressService {
     private workspaceFilesService: WorkspaceFilesService,
     private workspaceExclusionService: WorkspaceExclusionService,
     @Optional()
-    private missingsProfilesService?: MissingsProfilesService
+    private missingsProfilesService?: MissingsProfilesService,
+    @Optional()
+    private cacheService?: CacheService
   ) { }
 
   private async getDefaultMirCode(workspaceId: number): Promise<number> {
@@ -152,6 +193,112 @@ export class CodingProgressService {
       'mir'
     );
     return missing.code;
+  }
+
+  private async createAppliedResultsOverviewCacheKey(
+    workspaceId: number
+  ): Promise<string> {
+    const [testResultsRevision, codingRevision] = await Promise.all([
+      this.resolveTestResultsRevision(workspaceId),
+      this.resolveAppliedResultsOverviewRevision(workspaceId)
+    ]);
+    return this.getAppliedResultsOverviewCacheKey(
+      workspaceId,
+      testResultsRevision,
+      codingRevision
+    );
+  }
+
+  private getAppliedResultsOverviewCacheKey(
+    workspaceId: number,
+    testResultsRevision: number,
+    codingRevision: number
+  ): string {
+    return getCodingAppliedResultsOverviewCacheKey(
+      workspaceId,
+      testResultsRevision,
+      codingRevision
+    );
+  }
+
+  async invalidateAppliedResultsOverviewCache(
+    workspaceId: number,
+    options: { prewarm?: boolean } = {}
+  ): Promise<void> {
+    if (!this.cacheService) {
+      return;
+    }
+
+    this.dropAppliedResultsOverviewInFlight(workspaceId);
+    await Promise.all([
+      this.cacheService.incr(
+        getCodingAppliedResultsOverviewVersionKey(workspaceId)
+      ),
+      this.cacheService.deleteByPattern(
+        getCodingAppliedResultsOverviewCachePattern(workspaceId)
+      )
+    ]);
+
+    if (options.prewarm) {
+      this.scheduleAppliedResultsOverviewPrewarm(workspaceId);
+    }
+  }
+
+  private dropAppliedResultsOverviewInFlight(workspaceId: number): void {
+    const prefix = `coding_applied_results_overview:${workspaceId}:`;
+    Array.from(this.appliedResultsOverviewInFlight.keys())
+      .filter(cacheKey => cacheKey.startsWith(prefix))
+      .forEach(cacheKey => this.appliedResultsOverviewInFlight.delete(cacheKey));
+  }
+
+  private scheduleAppliedResultsOverviewPrewarm(workspaceId: number): void {
+    if (!this.cacheService || process.env.NODE_ENV === 'test') {
+      return;
+    }
+
+    const existingTimer = this.appliedResultsOverviewPrewarmTimers.get(workspaceId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(() => {
+      this.appliedResultsOverviewPrewarmTimers.delete(workspaceId);
+      this.getAppliedResultsOverview(workspaceId).catch(error => {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          `Could not prewarm applied results overview for workspace ${workspaceId}: ${message}`
+        );
+      });
+    }, 500);
+
+    timer.unref?.();
+    this.appliedResultsOverviewPrewarmTimers.set(workspaceId, timer);
+  }
+
+  private async resolveTestResultsRevision(workspaceId: number): Promise<number> {
+    try {
+      const rows = (await this.responseRepository.query(
+        'SELECT revision FROM workspace_test_results_revision WHERE workspace_id = $1',
+        [workspaceId]
+      )) as Array<{ revision: number | string }>;
+      return Number(rows[0]?.revision || 0);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Could not resolve test result revision for applied results overview cache: ${message}`
+      );
+      return 0;
+    }
+  }
+
+  private async resolveAppliedResultsOverviewRevision(workspaceId: number): Promise<number> {
+    if (!this.cacheService) {
+      return 0;
+    }
+    return this.cacheService.getNumber(
+      getCodingAppliedResultsOverviewVersionKey(workspaceId),
+      0
+    );
   }
 
   async getCodingProgressOverview(workspaceId: number): Promise<{
@@ -200,7 +347,7 @@ export class CodingProgressService {
       aggregationActive: effectiveProgress.aggregationActive,
       aggregationThreshold: effectiveProgress.aggregationThreshold,
       aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases,
-      statusTotalCasesToCode: responseScope.allResponses.length,
+      statusTotalCasesToCode: responseScope.statusTotalResponseCount,
       coveredSourceVariableCount:
         responseScope.excludedSourceSummary.coveredSourceVariableCount,
       coveredSourceResponseCount:
@@ -208,26 +355,77 @@ export class CodingProgressService {
     };
   }
 
-  async getAppliedResultsOverview(workspaceId: number): Promise<{
-    totalIncompleteResponses: number;
-    appliedResponses: number;
-    remainingResponses: number;
-    completionPercentage: number;
-    rawTotalIncompleteResponses: number;
-    rawAppliedResponses: number;
-    rawCompletionPercentage: number;
-    aggregationActive: boolean;
-    aggregationThreshold: number | null;
-    aggregatedDuplicateCases: number;
-    statusTotalIncompleteResponses: number;
-    coveredSourceVariableCount: number;
-    coveredSourceResponseCount: number;
-    deriveErrorTotalResponses: number;
-    deriveErrorAppliedResponses: number;
-    deriveErrorRemainingResponses: number;
-    deriveErrorRawTotalResponses: number;
-    deriveErrorRawAppliedResponses: number;
-  }> {
+  async getAppliedResultsOverview(workspaceId: number): Promise<AppliedResultsOverview> {
+    if (!this.cacheService) {
+      return this.computeAppliedResultsOverview(workspaceId);
+    }
+
+    const [testResultsRevision, codingRevision] = await Promise.all([
+      this.resolveTestResultsRevision(workspaceId),
+      this.resolveAppliedResultsOverviewRevision(workspaceId)
+    ]);
+    const cacheKey = this.getAppliedResultsOverviewCacheKey(
+      workspaceId,
+      testResultsRevision,
+      codingRevision
+    );
+    const cached = await this.cacheService.get<AppliedResultsOverview>(
+      cacheKey
+    );
+    if (cached) {
+      return cached;
+    }
+
+    const inFlightOverview = this.appliedResultsOverviewInFlight.get(cacheKey);
+    if (inFlightOverview) {
+      return inFlightOverview;
+    }
+
+    const overviewPromise = this.computeAndCacheAppliedResultsOverview(
+      workspaceId,
+      testResultsRevision,
+      codingRevision,
+      cacheKey
+    );
+    this.appliedResultsOverviewInFlight.set(cacheKey, overviewPromise);
+    try {
+      return await overviewPromise;
+    } finally {
+      if (this.appliedResultsOverviewInFlight.get(cacheKey) === overviewPromise) {
+        this.appliedResultsOverviewInFlight.delete(cacheKey);
+      }
+    }
+  }
+
+  private async computeAndCacheAppliedResultsOverview(
+    workspaceId: number,
+    testResultsRevision: number,
+    codingRevision: number,
+    cacheKey: string
+  ): Promise<AppliedResultsOverview> {
+    const overview = await this.computeAppliedResultsOverview(workspaceId);
+    const [currentTestResultsRevision, currentCodingRevision] = await Promise.all([
+      this.resolveTestResultsRevision(workspaceId),
+      this.resolveAppliedResultsOverviewRevision(workspaceId)
+    ]);
+    if (
+      currentTestResultsRevision === testResultsRevision &&
+      currentCodingRevision === codingRevision
+    ) {
+      await this.cacheService?.set(cacheKey, overview, 0);
+    } else {
+      this.logger.log(
+        `Skipped caching stale applied results overview for workspace ${workspaceId} ` +
+        `(planned test revision ${testResultsRevision}, current test revision ${currentTestResultsRevision}; ` +
+        `planned coding revision ${codingRevision}, current coding revision ${currentCodingRevision})`
+      );
+    }
+    return overview;
+  }
+
+  private async computeAppliedResultsOverview(
+    workspaceId: number
+  ): Promise<AppliedResultsOverview> {
     const responseScope = await this.getCoverageResponseScope(workspaceId);
     const responses = responseScope.manualResponses;
     const appliedResponseIds = new Set(
@@ -252,7 +450,7 @@ export class CodingProgressService {
       appliedResponseIds
     );
 
-    return {
+    const overview = {
       totalIncompleteResponses: effectiveProgress.effectiveTotalCasesToCode,
       appliedResponses: effectiveProgress.effectiveCompletedCases,
       remainingResponses: Math.max(
@@ -266,13 +464,14 @@ export class CodingProgressService {
       aggregationActive: effectiveProgress.aggregationActive,
       aggregationThreshold: effectiveProgress.aggregationThreshold,
       aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases,
-      statusTotalIncompleteResponses: responseScope.allResponses.length,
+      statusTotalIncompleteResponses: responseScope.statusTotalResponseCount,
       coveredSourceVariableCount:
         responseScope.excludedSourceSummary.coveredSourceVariableCount,
       coveredSourceResponseCount:
         responseScope.excludedSourceSummary.coveredSourceResponseCount,
       ...deriveErrorProgress
     };
+    return overview;
   }
 
   async getCaseCoverageOverview(workspaceId: number): Promise<{
@@ -334,7 +533,7 @@ export class CodingProgressService {
       aggregationActive: effectiveCoverage.aggregationActive,
       aggregationThreshold: effectiveCoverage.aggregationThreshold,
       aggregatedDuplicateCases: effectiveCoverage.aggregatedDuplicateCases,
-      statusTotalCasesToCode: responseScope.allResponses.length,
+      statusTotalCasesToCode: responseScope.statusTotalResponseCount,
       coveredSourceVariableCount:
         responseScope.excludedSourceSummary.coveredSourceVariableCount,
       coveredSourceResponseCount:
@@ -366,8 +565,8 @@ export class CodingProgressService {
   }
 
   private async getCoverageResponseScope(workspaceId: number): Promise<CoverageResponseScope> {
-    const [allResponses, manualPoolResponses] = await Promise.all([
-      this.getCoverageResponses(workspaceId),
+    const [statusTotalResponseCount, manualPoolResponses] = await Promise.all([
+      this.getCoverageResponseCount(workspaceId),
       this.getCoverageResponses(workspaceId, true)
     ]);
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
@@ -417,7 +616,7 @@ export class CodingProgressService {
     );
 
     return {
-      allResponses,
+      statusTotalResponseCount,
       manualResponses,
       excludedSourceSummary
     };
@@ -568,25 +767,27 @@ export class CodingProgressService {
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .leftJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .orderBy('response.id', 'ASC');
+      .andWhere('person.consider = :consider', { consider: true });
     this.applyManualProgressStatusFilter(query, 'andWhere');
 
     if (manualPoolOnly) {
+      query.leftJoin(
+        subQuery => subQuery
+          .select('DISTINCT manual_cju.response_id', 'response_id')
+          .from('coding_job_unit', 'manual_cju')
+          .innerJoin(
+            'coding_job',
+            'manual_cj',
+            'manual_cj.id = manual_cju.coding_job_id'
+          )
+          .where('manual_cj.training_id IS NULL')
+          .andWhere(getNonCodingIssueReviewJobSqlCondition('manual_cj')),
+        'assigned_manual_response',
+        'assigned_manual_response.response_id = response.id'
+      );
       query.andWhere(new Brackets(qb => {
         qb.where('response.code_v2 IS NULL')
-          .orWhere(subQuery => {
-            const exists = subQuery
-              .subQuery()
-              .select('1')
-              .from('coding_job_unit', 'manual_cju')
-              .innerJoin('coding_job', 'manual_cj', 'manual_cj.id = manual_cju.coding_job_id')
-              .where('manual_cju.response_id = response.id')
-              .andWhere('manual_cj.training_id IS NULL')
-              .andWhere(getNonCodingIssueReviewJobSqlCondition('manual_cj'))
-              .getQuery();
-            return `EXISTS (${exists})`;
-          });
+          .orWhere('assigned_manual_response.response_id IS NOT NULL');
       }));
     } else {
       query.andWhere(
@@ -619,6 +820,108 @@ export class CodingProgressService {
       personCode: row.personCode ?? '',
       personGroup: row.personGroup ?? ''
     }));
+  }
+
+  private async getCoverageResponseCount(workspaceId: number): Promise<number> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const defaultMirCode = await this.getDefaultMirCode(workspaceId);
+    const params: unknown[] = [
+      workspaceId,
+      true,
+      statusStringToNumber('CODING_INCOMPLETE'),
+      statusStringToNumber('INTENDED_INCOMPLETE'),
+      statusStringToNumber('DERIVE_ERROR'),
+      -111,
+      defaultMirCode
+    ];
+    const exclusionSql = this.buildCoverageResponseCountExclusionSql(
+      exclusions,
+      params
+    );
+    const rows = await this.responseRepository.query(
+      `
+        WITH scoped_units AS MATERIALIZED (
+          SELECT unit.id
+          FROM persons person
+          INNER JOIN booklet booklet
+            ON booklet.personid = person.id
+          INNER JOIN unit unit
+            ON unit.bookletid = booklet.id
+          LEFT JOIN bookletinfo bookletinfo
+            ON bookletinfo.id = booklet.infoid
+          WHERE person.workspace_id = $1
+            AND person.consider = $2
+            ${exclusionSql}
+        ),
+        manual_derive_responses AS MATERIALIZED (
+          SELECT DISTINCT manual_derive_cju.response_id
+          FROM coding_job_unit manual_derive_cju
+          INNER JOIN coding_job manual_derive_cj
+            ON manual_derive_cj.id = manual_derive_cju.coding_job_id
+          WHERE manual_derive_cj.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('manual_derive_cj')}
+        )
+        SELECT COUNT(response.id) AS count
+        FROM scoped_units
+        INNER JOIN response response
+          ON response.unitid = scoped_units.id
+        LEFT JOIN manual_derive_responses
+          ON manual_derive_responses.response_id = response.id
+        WHERE (
+          response.status_v1 IN ($3, $4)
+          OR (
+            response.status_v1 = $5
+            AND manual_derive_responses.response_id IS NOT NULL
+          )
+        )
+          AND (
+            response.code_v2 IS NULL
+            OR (response.code_v2 != $6 AND response.code_v2 != $7)
+          )
+      `,
+      params
+    ) as Array<{ count?: number | string }>;
+    return Number(rows[0]?.count || 0);
+  }
+
+  private buildCoverageResponseCountExclusionSql(
+    exclusions: ResolvedWorkspaceExclusions,
+    params: unknown[]
+  ): string {
+    const conditions: string[] = [];
+    const unitNameSql = 'REGEXP_REPLACE(UPPER(unit.name), \'\\.XML$\', \'\', \'i\')';
+    const bookletNameSql = 'UPPER(bookletinfo.name)';
+
+    if (exclusions.globalIgnoredUnits.length > 0) {
+      const placeholders = exclusions.globalIgnoredUnits.map(value => {
+        params.push(normalizeExclusionUnitId(value));
+        return `$${params.length}`;
+      });
+      conditions.push(`${unitNameSql} NOT IN (${placeholders.join(', ')})`);
+    }
+
+    if (exclusions.ignoredBooklets.length > 0) {
+      const placeholders = exclusions.ignoredBooklets.map(value => {
+        params.push(normalizeExclusionBookletId(value));
+        return `$${params.length}`;
+      });
+      conditions.push(`${bookletNameSql} NOT IN (${placeholders.join(', ')})`);
+    }
+
+    if (exclusions.testletIgnoredUnits.length > 0) {
+      const pairConditions = exclusions.testletIgnoredUnits.map(exclusion => {
+        params.push(normalizeExclusionBookletId(exclusion.bookletId));
+        const bookletPlaceholder = `$${params.length}`;
+        params.push(normalizeExclusionUnitId(exclusion.unitId));
+        const unitPlaceholder = `$${params.length}`;
+        return `(${bookletNameSql} = ${bookletPlaceholder} AND ${unitNameSql} = ${unitPlaceholder})`;
+      });
+      conditions.push(`NOT (${pairConditions.join(' OR ')})`);
+    }
+
+    return conditions.length > 0 ?
+      `AND ${conditions.join('\n            AND ')}` :
+      '';
   }
 
   private async getAssignedCoverageResponseRows(workspaceId: number): Promise<number[]> {

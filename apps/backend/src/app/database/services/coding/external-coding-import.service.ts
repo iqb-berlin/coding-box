@@ -15,6 +15,10 @@ import FileUpload from '../../entities/file_upload.entity';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import {
+  getCodingAppliedResultsOverviewCachePattern,
+  getCodingAppliedResultsOverviewVersionKey
+} from './coding-applied-results-overview-cache-key.util';
 
 interface ExternalCodingRow {
   unit_key?: string;
@@ -1251,7 +1255,15 @@ export class ExternalCodingImportService {
    */
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
     const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
-    await this.cacheService.delete(cacheKey);
-    this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
+    await Promise.all([
+      this.cacheService.delete(cacheKey),
+      this.cacheService.incr(
+        getCodingAppliedResultsOverviewVersionKey(workspaceId)
+      ),
+      this.cacheService.deleteByPattern(
+        getCodingAppliedResultsOverviewCachePattern(workspaceId)
+      )
+    ]);
+    this.logger.log(`Invalidated manual coding variables and applied results overview cache for workspace ${workspaceId}`);
   }
 }

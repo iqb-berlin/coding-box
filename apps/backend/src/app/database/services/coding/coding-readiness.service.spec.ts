@@ -21,11 +21,13 @@ type QueryBuilderMock = {
 type ReadinessFixture = {
   units: Unit[];
   rawResponsesTotal: number;
+  activePersonHash?: string;
   candidateRows: Array<{
     unitid: number | string;
     variableid: string;
     response_count: number | string;
   }>;
+  candidateResponsesTotal?: number;
   unitFiles: FileUpload[];
   codingSchemeFiles?: FileUpload[];
   unitVariableMap: Map<string, Set<string>>;
@@ -35,6 +37,16 @@ type ReadinessQueryMocks = {
   unitQuery: QueryBuilderMock;
   countQuery: QueryBuilderMock;
   candidateQuery: QueryBuilderMock;
+  fileUploadRepository: {
+    find: jest.Mock;
+  };
+  responseRepository: {
+    createQueryBuilder: jest.Mock;
+    query: jest.Mock;
+  };
+  workspaceFilesService: {
+    getUnitVariableMap: jest.Mock;
+  };
 };
 
 const createQueryBuilderMock = (): QueryBuilderMock => {
@@ -109,9 +121,25 @@ const createService = (
 
   const countQuery = createQueryBuilderMock();
   countQuery.getCount.mockResolvedValue(fixture.rawResponsesTotal);
+  countQuery.getRawOne.mockResolvedValue({
+    raw_responses_total: fixture.rawResponsesTotal,
+    raw_responses_with_relevant_status:
+      fixture.candidateResponsesTotal ??
+      fixture.candidateRows.reduce(
+        (sum, row) => sum + Number(row.response_count || 0),
+        0
+      )
+  });
 
   const candidateQuery = createQueryBuilderMock();
   candidateQuery.getRawMany.mockResolvedValue(fixture.candidateRows);
+  candidateQuery.getCount.mockResolvedValue(
+    fixture.candidateResponsesTotal ??
+      fixture.candidateRows.reduce(
+        (sum, row) => sum + Number(row.response_count || 0),
+        0
+      )
+  );
 
   const fileRevisionQuery = createQueryBuilderMock();
   fileRevisionQuery.getRawOne.mockResolvedValue({
@@ -119,17 +147,19 @@ const createService = (
     max_created_at: '2026-05-20T08:00:00.000Z'
   });
 
-  Object.assign(queryMocks || {}, {
-    unitQuery,
-    countQuery,
-    candidateQuery
-  });
-
   const responseRepository = {
     createQueryBuilder: jest.fn()
       .mockReturnValueOnce(countQuery)
       .mockReturnValueOnce(candidateQuery),
-    query: jest.fn().mockResolvedValue([{ revision: 1 }])
+    query: jest.fn().mockImplementation((query: string) => {
+      if (query.includes('FROM persons')) {
+        return Promise.resolve([{
+          active_count: '1',
+          active_hash: fixture.activePersonHash || 'active-person-hash'
+        }]);
+      }
+      return Promise.resolve([{ revision: 1 }]);
+    })
   };
   const unitRepository = {
     createQueryBuilder: jest.fn().mockReturnValue(unitQuery)
@@ -150,6 +180,15 @@ const createService = (
       testletIgnoredUnits: []
     })
   };
+
+  Object.assign(queryMocks || {}, {
+    unitQuery,
+    countQuery,
+    candidateQuery,
+    fileUploadRepository,
+    responseRepository,
+    workspaceFilesService
+  });
 
   return new CodingReadinessService(
     responseRepository as never,
@@ -235,6 +274,150 @@ describe('CodingReadinessService', () => {
     expect(internals.readinessCache.has('2|1|1|files|0|scope')).toBe(true);
     expect(internals.readinessInFlight.has('1|1|1|files|0|scope')).toBe(false);
     expect(internals.cacheRevisionByWorkspace.get(1)).toBe(5);
+  });
+
+  it('returns summary readiness without loading units, variables or files', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
+    const service = createService({
+      units: [
+        createUnit(1, 'UNIT_OK')
+      ],
+      rawResponsesTotal: 3,
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 3 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])]
+      ])
+    }, queryMocks);
+
+    const readiness = await service.getReadiness(1, {
+      forceRefresh: true,
+      detailLevel: 'summary'
+    });
+
+    expect(readiness).toMatchObject({
+      detailLevel: 'summary',
+      detailsComplete: false,
+      readiness: 'DIAGNOSTICS_PENDING',
+      rawResponsesTotal: 3,
+      rawResponsesWithRelevantStatus: 3,
+      validResponses: 0,
+      potentialCodeableResponses: 3,
+      codeableResponses: 0,
+      matchedUnitFiles: 0,
+      matchedCodingSchemes: 0
+    });
+    expect(queryMocks.unitQuery?.getMany).not.toHaveBeenCalled();
+    expect(queryMocks.countQuery?.getRawOne).toHaveBeenCalledTimes(1);
+    expect(queryMocks.candidateQuery?.getCount).not.toHaveBeenCalled();
+    expect(queryMocks.candidateQuery?.getRawMany).not.toHaveBeenCalled();
+    expect(queryMocks.fileUploadRepository?.find).not.toHaveBeenCalled();
+    expect(
+      queryMocks.workspaceFilesService?.getUnitVariableMap
+    ).not.toHaveBeenCalled();
+  });
+
+  it('does not reuse workspace-wide summary readiness when active persons changed', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
+    const service = createService({
+      units: [
+        createUnit(1, 'UNIT_OK')
+      ],
+      rawResponsesTotal: 3,
+      activePersonHash: 'first-active-set',
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 3 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])]
+      ])
+    }, queryMocks);
+    queryMocks.responseRepository?.createQueryBuilder.mockReturnValue(
+      queryMocks.countQuery
+    );
+
+    await service.getReadiness(1, {
+      detailLevel: 'summary'
+    });
+    queryMocks.responseRepository?.createQueryBuilder.mockReset();
+    queryMocks.responseRepository?.createQueryBuilder.mockReturnValue(
+      queryMocks.countQuery
+    );
+    queryMocks.responseRepository?.query.mockImplementation((query: string) => {
+      if (query.includes('FROM persons')) {
+        return Promise.resolve([{
+          active_count: '2',
+          active_hash: 'second-active-set'
+        }]);
+      }
+      return Promise.resolve([{ revision: 1 }]);
+    });
+    queryMocks.countQuery?.getRawOne.mockReset();
+    queryMocks.countQuery?.getRawOne.mockResolvedValue({
+      raw_responses_total: 7,
+      raw_responses_with_relevant_status: 5
+    });
+
+    const readiness = await service.getReadiness(1, {
+      detailLevel: 'summary'
+    });
+
+    expect(readiness.rawResponsesTotal).toBe(7);
+    expect(readiness.rawResponsesWithRelevantStatus).toBe(5);
+    expect(readiness.fromCache).toBe(false);
+    expect(queryMocks.countQuery?.getRawOne).toHaveBeenCalledTimes(1);
+  });
+
+  it('can block from summary readiness when no relevant candidate responses exist', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
+    const service = createService({
+      units: [
+        createUnit(1, 'UNIT_OK')
+      ],
+      rawResponsesTotal: 2,
+      candidateResponsesTotal: 0,
+      candidateRows: [],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])]
+      ])
+    }, queryMocks);
+
+    const readiness = await service.getReadiness(1, {
+      forceRefresh: true,
+      detailLevel: 'summary'
+    });
+
+    expect(readiness).toMatchObject({
+      detailLevel: 'summary',
+      detailsComplete: true,
+      readiness: 'BLOCKED',
+      validResponses: 0,
+      codeableResponses: 0
+    });
+    expect(readiness.blockers).toEqual(['NO_RELEVANT_RESPONSES']);
+    expect(queryMocks.fileUploadRepository?.find).not.toHaveBeenCalled();
+    expect(
+      queryMocks.workspaceFilesService?.getUnitVariableMap
+    ).not.toHaveBeenCalled();
   });
 
   it('keeps missing files as diagnostics without blocking partially codeable data', async () => {

@@ -1,4 +1,10 @@
-export type AutocodingReadinessStatus = 'READY' | 'BLOCKED' | 'NO_RESULTS';
+export type AutocodingReadinessStatus =
+  | 'READY'
+  | 'BLOCKED'
+  | 'NO_RESULTS'
+  | 'DIAGNOSTICS_PENDING';
+
+export type AutocodingReadinessDetailLevel = 'summary' | 'full';
 
 export type AutocodingReadinessBlocker =
   | 'NO_RELEVANT_RESPONSES'
@@ -18,6 +24,8 @@ export interface AutocodingInvalidVariableSampleDto {
 export interface AutocodingReadinessDto {
   workspaceId: number;
   autoCoderRun: 1 | 2;
+  detailLevel?: AutocodingReadinessDetailLevel;
+  detailsComplete?: boolean;
   readiness: AutocodingReadinessStatus;
   blockers: AutocodingReadinessBlocker[];
   rawResponsesTotal: number;
@@ -31,6 +39,7 @@ export interface AutocodingReadinessDto {
   invalidCodingSchemes: string[];
   validVariablePairs: number;
   validResponses: number;
+  potentialCodeableResponses?: number;
   codeableResponses: number;
   invalidVariableSamples: AutocodingInvalidVariableSampleDto[];
   computedAt?: string;
