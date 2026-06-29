@@ -3,7 +3,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
+import { Subject, of } from 'rxjs';
 import { CoderTrainingsListComponent } from './coder-trainings-list.component';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { AppService } from '../../../core/services/app.service';
@@ -92,6 +92,26 @@ describe('CoderTrainingsListComponent', () => {
     component.onTrainingNameFilterChange();
 
     expect(component.coderTrainings.map(training => training.id)).toEqual([10, 11]);
+  });
+
+  it('reuses an in-flight training list request', async () => {
+    const service = TestBed.inject(CodingTrainingBackendService) as unknown as {
+      getCoderTrainings: jest.Mock;
+    };
+    const trainings$ = new Subject<CoderTraining[]>();
+    service.getCoderTrainings.mockReturnValue(trainings$.asObservable());
+
+    const firstLoad = component.loadCoderTrainings();
+    const secondLoad = component.loadCoderTrainings();
+
+    expect(secondLoad).toBe(firstLoad);
+    expect(service.getCoderTrainings).toHaveBeenCalledTimes(1);
+
+    trainings$.next(trainings);
+    trainings$.complete();
+
+    await firstLoad;
+    await secondLoad;
   });
 
   it('builds descriptive action labels for training rows', () => {

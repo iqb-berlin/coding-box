@@ -1,176 +1,291 @@
 <div class="coding-main-container">
   @if (!hideActionButtons) {
-  <div>
-    <div class="action-buttons-toolbar">
-      <a mat-raised-button color="primary" (click)="onAutoCode()">
-        <mat-icon>auto_fix_high</mat-icon>
-        {{ 'coding-management.buttons.auto-code' | translate }}
-      </a>
-      <a mat-raised-button color="primary" (click)="openManualCoding()">
-        <mat-icon>keyboard</mat-icon>
-        {{ 'coding-management.buttons.manual-code' | translate }}
-      </a>
+    <div>
+      <div class="action-buttons-toolbar">
+        <a mat-raised-button color="primary" (click)="onAutoCode()">
+          <mat-icon>auto_fix_high</mat-icon>
+          {{ 'coding-management.buttons.auto-code' | translate }}
+        </a>
+        <a mat-raised-button color="primary" (click)="openManualCoding()">
+          <mat-icon>keyboard</mat-icon>
+          {{ 'coding-management.buttons.manual-code' | translate }}
+        </a>
 
-      @if (codingListDownloadProgress !== null) {
-      <button mat-raised-button disabled class="progress-button">
-        <mat-spinner diameter="20" class="inline-spinner"></mat-spinner>
-        {{ 'coding-management.descriptions.coding-list-progress' | translate:{progress: codingListDownloadProgress} }}
-      </button>
-      <button mat-icon-button color="warn" (click)="cancelCodingListDownload()"
-        [matTooltip]="'coding-management.download-dialog.cancel-tooltip' | translate">
-        <mat-icon>cancel</mat-icon>
-      </button>
-      } @else {
-      <a mat-raised-button color="primary" (click)="fetchCodingList()">
-        <mat-icon>list</mat-icon>
-        {{ 'coding-management.buttons.coding-list' | translate }}
-      </a>
-      }
-      <a mat-raised-button color="primary" (click)="openExportCodingBook()">
-        <mat-icon>book</mat-icon>
-        {{ 'coding-management.buttons.codebook' | translate }}
-      </a>
-      <a mat-raised-button color="primary" (click)="openItemListDialog()">
-        <mat-icon>list_alt</mat-icon>
-        {{ 'Itemliste' }}
-      </a>
-      <a mat-raised-button color="primary" (click)="fetchVariableAnalysis()">
-        <mat-icon>analytics</mat-icon>
-        {{ 'coding-management.buttons.item-variable-analysis' | translate }}
-      </a>
-      <a mat-raised-button color="primary" (click)="fetchUnitVariables()">
-        <mat-icon>list_alt</mat-icon>
-        {{ 'coding-management.buttons.coding-variables' | translate }}
-      </a>
+        @if (codingListDownloadProgress !== null) {
+          <button mat-raised-button disabled class="progress-button">
+            <mat-spinner diameter="20" class="inline-spinner"></mat-spinner>
+            {{
+              'coding-management.descriptions.coding-list-progress'
+                | translate: { progress: codingListDownloadProgress }
+            }}
+          </button>
+          <button
+            mat-icon-button
+            color="warn"
+            (click)="cancelCodingListDownload()"
+            [matTooltip]="
+              'coding-management.download-dialog.cancel-tooltip' | translate
+            "
+          >
+            <mat-icon>cancel</mat-icon>
+          </button>
+        } @else {
+          <a mat-raised-button color="primary" (click)="fetchCodingList()">
+            <mat-icon>list</mat-icon>
+            {{ 'coding-management.buttons.coding-list' | translate }}
+          </a>
+        }
+        <a mat-raised-button color="primary" (click)="openExportCodingBook()">
+          <mat-icon>book</mat-icon>
+          {{ 'coding-management.buttons.codebook' | translate }}
+        </a>
+        <a mat-raised-button color="primary" (click)="openItemListDialog()">
+          <mat-icon>list_alt</mat-icon>
+          {{ 'Itemliste' }}
+        </a>
+        <a mat-raised-button color="primary" (click)="fetchVariableAnalysis()">
+          <mat-icon>analytics</mat-icon>
+          {{ 'coding-management.buttons.item-variable-analysis' | translate }}
+        </a>
+        <a mat-raised-button color="primary" (click)="fetchUnitVariables()">
+          <mat-icon>list_alt</mat-icon>
+          {{ 'coding-management.buttons.coding-variables' | translate }}
+        </a>
+      </div>
     </div>
-  </div>
   }
 
-  <section class="coding-freshness-panel" [class.is-current]="!hasCodingFreshnessAttention">
+  <section
+    class="coding-freshness-panel"
+    [class.is-current]="!hasCodingFreshnessAttention"
+  >
     <div class="coding-freshness-main">
-      @if (isLoadingCodingFreshness || isLoadingAutocodingReadiness || isLoadingManualAppliedResultsOverview) {
-      <mat-spinner diameter="22" class="coding-freshness-state-spinner"></mat-spinner>
+      @if (
+        isLoadingCodingFreshness ||
+        isLoadingAutocodingReadiness ||
+        isLoadingManualAppliedResultsOverview
+      ) {
+        <mat-spinner
+          diameter="22"
+          class="coding-freshness-state-spinner"
+        ></mat-spinner>
       } @else {
-      <mat-icon>{{ hasCodingFreshnessAttention ? 'warning' : 'check_circle' }}</mat-icon>
+        <mat-icon>{{
+          hasCodingFreshnessAttention ? 'warning' : 'check_circle'
+        }}</mat-icon>
       }
       <div class="coding-freshness-copy">
         <div class="coding-freshness-title">
           {{ codingFreshnessPanelTitle }}
         </div>
         <div class="coding-freshness-text">
-          @if (isLoadingCodingFreshness || isLoadingAutocodingReadiness || isLoadingManualAppliedResultsOverview) {
-          {{ 'coding-management.readiness.checking' | translate }}
+          @if (
+            isLoadingCodingFreshness ||
+            isLoadingAutocodingReadiness ||
+            isLoadingManualAppliedResultsOverview
+          ) {
+            {{ 'coding-management.readiness.checking' | translate }}
+          } @else if (!hasRequestedCodingStatusOverview) {
+            {{ 'coding-management.readiness.not-checked' | translate }}
           } @else if (hasAutocodingReadinessLoadFailed) {
-          {{ 'coding-management.readiness.load-failed' | translate }}
+            {{ 'coding-management.readiness.load-failed' | translate }}
+          } @else if (isAutocodingReadinessDiagnosticsPending) {
+            <div>{{ autocodingReadinessSummaryPendingText }}</div>
+            <div class="coding-freshness-help">
+              {{
+                'coding-management.readiness.pending-diagnostics-help'
+                  | translate
+              }}
+            </div>
           } @else if (isAutocodingReadinessBlocked) {
-          <div>{{ autocodingReadinessSummaryText }}</div>
-          <div class="coding-freshness-help">{{ autocodingReadinessDetailsText }}</div>
-          @if (autocodingReadinessMissingUnitPreview) {
-          <div>
-            {{ 'coding-management.readiness.missing-unit-files' | translate:{items: autocodingReadinessMissingUnitPreview} }}
-          </div>
-          }
-          @if (autocodingReadinessMissingCodingSchemePreview) {
-          <div>
-            {{ 'coding-management.readiness.missing-coding-schemes' | translate:{items: autocodingReadinessMissingCodingSchemePreview} }}
-          </div>
-          }
-          @if (autocodingReadinessInvalidCodingSchemePreview) {
-          <div>
-            {{ 'coding-management.readiness.invalid-coding-schemes' | translate:{items: autocodingReadinessInvalidCodingSchemePreview} }}
-          </div>
-          }
-          @if (autocodingReadinessInvalidVariablePreview) {
-          <div>
-            {{ 'coding-management.readiness.invalid-variables' | translate:{items: autocodingReadinessInvalidVariablePreview} }}
-          </div>
-          }
+            <div>{{ autocodingReadinessSummaryText }}</div>
+            <div class="coding-freshness-help">
+              {{ autocodingReadinessDetailsText }}
+            </div>
+            @if (autocodingReadinessMissingUnitPreview) {
+              <div>
+                {{
+                  'coding-management.readiness.missing-unit-files'
+                    | translate
+                      : { items: autocodingReadinessMissingUnitPreview }
+                }}
+              </div>
+            }
+            @if (autocodingReadinessMissingCodingSchemePreview) {
+              <div>
+                {{
+                  'coding-management.readiness.missing-coding-schemes'
+                    | translate
+                      : { items: autocodingReadinessMissingCodingSchemePreview }
+                }}
+              </div>
+            }
+            @if (autocodingReadinessInvalidCodingSchemePreview) {
+              <div>
+                {{
+                  'coding-management.readiness.invalid-coding-schemes'
+                    | translate
+                      : { items: autocodingReadinessInvalidCodingSchemePreview }
+                }}
+              </div>
+            }
+            @if (autocodingReadinessInvalidVariablePreview) {
+              <div>
+                {{
+                  'coding-management.readiness.invalid-variables'
+                    | translate
+                      : { items: autocodingReadinessInvalidVariablePreview }
+                }}
+              </div>
+            }
           } @else if (hasCodingFreshnessWarnings) {
-          <div>{{ codingFreshnessSummaryText }}</div>
-          @if (manualCodingFreshnessGuidanceText) {
-          <div>{{ manualCodingFreshnessGuidanceText }}</div>
-          }
-          <div class="coding-freshness-help">{{ codingFreshnessExplanationText }}</div>
-          @if (codingFreshnessGroupPreview) {
-          <div>
-            {{ 'coding-management.readiness.affected-groups' | translate:{groups: codingFreshnessGroupPreview} }}
-          </div>
-          }
+            <div>{{ codingFreshnessSummaryText }}</div>
+            @if (manualCodingFreshnessGuidanceText) {
+              <div>{{ manualCodingFreshnessGuidanceText }}</div>
+            }
+            <div class="coding-freshness-help">
+              {{ codingFreshnessExplanationText }}
+            </div>
+            @if (codingFreshnessGroupPreview) {
+              <div>
+                {{
+                  'coding-management.readiness.affected-groups'
+                    | translate: { groups: codingFreshnessGroupPreview }
+                }}
+              </div>
+            }
           } @else if (hasImportedResultsWithoutCoding) {
-          {{ 'coding-management.readiness.imported-results-without-coding' | translate }}
+            {{
+              'coding-management.readiness.imported-results-without-coding'
+                | translate
+            }}
           } @else {
-          {{ 'coding-management.readiness.current' | translate }}
+            {{ 'coding-management.readiness.current' | translate }}
           }
         </div>
         @if (hasCodingFreshnessWarnings) {
-        <div class="coding-freshness-chip-row">
-          @for (item of codingFreshnessChipWarnings; track item.version + item.state) {
-          <span class="coding-freshness-chip">
-            {{ getFreshnessChipLabel(item) }}
-          </span>
-          }
-        </div>
+          <div class="coding-freshness-chip-row">
+            @for (
+              item of codingFreshnessChipWarnings;
+              track item.version + item.state
+            ) {
+              <span class="coding-freshness-chip">
+                {{ getFreshnessChipLabel(item) }}
+              </span>
+            }
+          </div>
         }
       </div>
     </div>
 
+    @if (shouldShowManualCodingStatusRefresh()) {
+      <div class="coding-freshness-actions">
+        <button
+          mat-stroked-button
+          color="primary"
+          [disabled]="isCodingStatusOverviewLoading()"
+          (click)="refreshCodingStatusOverview()"
+        >
+          <mat-icon>refresh</mat-icon>
+          {{ 'coding-management.readiness.refresh-status' | translate }}
+        </button>
+      </div>
+    }
+
     @if (isStartingFreshnessCoding) {
-    <div class="coding-freshness-job">
-      <mat-spinner diameter="18"></mat-spinner>
-      <span>
-        {{ 'coding-management.readiness.starting-freshness-coding' | translate }}
-      </span>
-    </div>
+      <div class="coding-freshness-job">
+        <mat-spinner diameter="18"></mat-spinner>
+        <span>
+          {{
+            'coding-management.readiness.starting-freshness-coding' | translate
+          }}
+        </span>
+      </div>
     } @else if (activeFreshnessJobId) {
-    <div class="coding-freshness-job">
-      <mat-spinner diameter="18"></mat-spinner>
-      <span>
-        {{ 'coding-management.readiness.update-running' | translate:{progress: activeFreshnessJobProgress || 0} }}
-      </span>
-    </div>
+      <div class="coding-freshness-job">
+        <mat-spinner diameter="18"></mat-spinner>
+        <span>
+          {{
+            'coding-management.readiness.update-running'
+              | translate: { progress: activeFreshnessJobProgress || 0 }
+          }}
+        </span>
+      </div>
     } @else if (hasAutocodingReadinessLoadFailed) {
-    <div class="coding-freshness-actions">
-      <button mat-stroked-button color="primary" [disabled]="isLoadingAutocodingReadiness"
-        (click)="refreshAutocodingReadiness()">
-        <mat-icon>refresh</mat-icon>
-        {{ 'coding-management.readiness.retry' | translate }}
-      </button>
-    </div>
+      <div class="coding-freshness-actions">
+        <button
+          mat-stroked-button
+          color="primary"
+          [disabled]="isLoadingAutocodingReadiness"
+          (click)="retryAutocodingReadiness()"
+        >
+          <mat-icon>refresh</mat-icon>
+          {{ 'coding-management.readiness.retry' | translate }}
+        </button>
+      </div>
+    } @else if (isAutocodingReadinessDiagnosticsPending) {
+      <div class="coding-freshness-actions">
+        <button
+          mat-stroked-button
+          color="primary"
+          [disabled]="isLoadingAutocodingReadiness"
+          (click)="loadAutocodingReadinessDetails()"
+        >
+          <mat-icon>fact_check</mat-icon>
+          {{ 'coding-management.readiness.check-details' | translate }}
+        </button>
+      </div>
     } @else if (isAutocodingReadinessBlocked) {
-    <div class="coding-freshness-actions">
-      <button mat-stroked-button color="primary" [disabled]="isLoadingAutocodingReadiness"
-        (click)="refreshAutocodingReadiness()">
-        <mat-icon>refresh</mat-icon>
-        {{ 'coding-management.readiness.retry' | translate }}
-      </button>
-      <button mat-stroked-button color="primary" (click)="openTestFiles()">
-        <mat-icon>folder_open</mat-icon>
-        {{ 'coding-management.readiness.check-test-files' | translate }}
-      </button>
-    </div>
+      <div class="coding-freshness-actions">
+        <button
+          mat-stroked-button
+          color="primary"
+          [disabled]="isLoadingAutocodingReadiness"
+          (click)="refreshAutocodingReadiness()"
+        >
+          <mat-icon>refresh</mat-icon>
+          {{ 'coding-management.readiness.retry' | translate }}
+        </button>
+        <button mat-stroked-button color="primary" (click)="openTestFiles()">
+          <mat-icon>folder_open</mat-icon>
+          {{ 'coding-management.readiness.check-test-files' | translate }}
+        </button>
+      </div>
     } @else if (hasCodingFreshnessWarnings) {
-    <div class="coding-freshness-actions">
-      @if (hasFreshnessAutoCodingWork('v1')) {
-      <button mat-stroked-button color="primary" [disabled]="isStartingFreshnessCoding"
-        (click)="startFreshnessCoding('v1')">
-        <mat-icon>auto_fix_high</mat-icon>
-        {{ getFreshnessAutoCodingButtonLabel('v1') }}
-      </button>
-      }
-      @if (hasFreshnessAutoCodingWork('v3')) {
-      <button mat-stroked-button color="primary" [disabled]="isStartingFreshnessCoding"
-        (click)="startFreshnessCoding('v3')">
-        <mat-icon>auto_fix_high</mat-icon>
-        {{ getFreshnessAutoCodingButtonLabel('v3') }}
-      </button>
-      }
-      @if (hasManualCodingFreshnessAction) {
-      <button mat-stroked-button color="primary" (click)="openManualCoding(true)">
-        <mat-icon>keyboard</mat-icon>
-        {{ 'coding-management.readiness.open-manual-review' | translate }}
-      </button>
-      }
-    </div>
+      <div class="coding-freshness-actions">
+        @if (hasFreshnessAutoCodingWork('v1')) {
+          <button
+            mat-stroked-button
+            color="primary"
+            [disabled]="isStartingFreshnessCoding"
+            (click)="startFreshnessCoding('v1')"
+          >
+            <mat-icon>auto_fix_high</mat-icon>
+            {{ getFreshnessAutoCodingButtonLabel('v1') }}
+          </button>
+        }
+        @if (hasFreshnessAutoCodingWork('v3')) {
+          <button
+            mat-stroked-button
+            color="primary"
+            [disabled]="isStartingFreshnessCoding"
+            (click)="startFreshnessCoding('v3')"
+          >
+            <mat-icon>auto_fix_high</mat-icon>
+            {{ getFreshnessAutoCodingButtonLabel('v3') }}
+          </button>
+        }
+        @if (hasManualCodingFreshnessAction) {
+          <button
+            mat-stroked-button
+            color="primary"
+            (click)="openManualCoding(true)"
+          >
+            <mat-icon>keyboard</mat-icon>
+            {{ 'coding-management.readiness.open-manual-review' | translate }}
+          </button>
+        }
+      </div>
     }
   </section>
 
@@ -178,36 +293,68 @@
     <div class="content-row-container">
       <!-- Statistics Section -->
       <div class="statistics-section">
-        <app-statistics-card [codingStatistics]="codingStatistics" [referenceStatistics]="referenceStatistics"
-          [referenceVersion]="referenceVersion" [selectedVersion]="selectedStatisticsVersion"
-          [isLoading]="isLoadingStatistics" [isDownloadInProgress]="isDownloadInProgress"
-          [statisticsLoaded]="statisticsLoaded" [resetProgress]="resetProgress" [downloadProgress]="downloadProgress"
+        <app-statistics-card
+          [codingStatistics]="codingStatistics"
+          [referenceStatistics]="referenceStatistics"
+          [referenceVersion]="referenceVersion"
+          [selectedVersion]="selectedStatisticsVersion"
+          [isLoading]="isLoadingStatistics"
+          [isDownloadInProgress]="isDownloadInProgress"
+          [statisticsLoaded]="statisticsLoaded"
+          [resetProgress]="resetProgress"
+          [downloadProgress]="downloadProgress"
           [hideResetButton]="hideActionButtons"
-          (versionChange)="onVersionChange($event)" (loadStatistics)="fetchCodingStatistics()"
-          (downloadResults)="onDownloadResults()" (cancelDownloadResults)="onCancelDownloadResults()" (resetVersion)="onResetVersion()"
-          (statusClick)="onStatusClick($event)" (derivedClick)="onDerivedClick()">
+          (versionChange)="onVersionChange($event)"
+          (loadStatistics)="fetchCodingStatistics()"
+          (downloadResults)="onDownloadResults()"
+          (cancelDownloadResults)="onCancelDownloadResults()"
+          (resetVersion)="onResetVersion()"
+          (statusClick)="onStatusClick($event)"
+          (derivedClick)="onDerivedClick()"
+        >
         </app-statistics-card>
       </div>
 
       <!-- Filter Section -->
       <div class="filters-section">
-        <app-response-filters [filterParams]="filterParams" [availableStatuses]="getAvailableStatuses()"
-          [isLoading]="isLoading" [isGeogebraAvailable]="isGeogebraAvailable"
-          [enableRegexSearch]="enableRegexSearch" (filterChange)="onFilterChange($event)"
-          (clearFilters)="onClearFilters()">
+        <app-response-filters
+          [filterParams]="filterParams"
+          [availableStatuses]="getAvailableStatuses()"
+          [isLoading]="isLoading"
+          [isGeogebraAvailable]="isGeogebraAvailable"
+          [enableRegexSearch]="enableRegexSearch"
+          (filterChange)="onFilterChange($event)"
+          (clearFilters)="onClearFilters()"
+        >
         </app-response-filters>
       </div>
 
       <!-- Data Section -->
       <div class="data-section">
-        <app-response-table [data]="data" [displayedColumns]="displayedColumns" [totalRecords]="totalRecords"
-          [pageSize]="pageSize" [pageIndex]="pageIndex" [pageSizeOptions]="pageSizeOptions" [isLoading]="isLoading"
-          [currentStatusFilter]="filterParams.codedStatus || currentStatusFilter" [selectedVersion]="selectedStatisticsVersion"
-          [isGeogebraFilterActive]="filterParams.geogebra" [isDerivedFilterActive]="filterParams.responseSource === 'derived'"
-          [isReviewLoading]="isLoadingReview" [sortBy]="sortBy" [sortDirection]="sortDirection"
+        <app-response-table
+          [data]="data"
+          [displayedColumns]="displayedColumns"
+          [totalRecords]="totalRecords"
+          [pageSize]="pageSize"
+          [pageIndex]="pageIndex"
+          [pageSizeOptions]="pageSizeOptions"
+          [isLoading]="isLoading"
+          [currentStatusFilter]="
+            filterParams.codedStatus || currentStatusFilter
+          "
+          [selectedVersion]="selectedStatisticsVersion"
+          [isGeogebraFilterActive]="filterParams.geogebra"
+          [isDerivedFilterActive]="filterParams.responseSource === 'derived'"
+          [isReviewLoading]="isLoadingReview"
+          [sortBy]="sortBy"
+          [sortDirection]="sortDirection"
           (pageChange)="onPageChange($event)"
-          (replayClick)="onReplayClick($event)" (showCodingScheme)="onShowCodingScheme($event)"
-          (showUnitXml)="onShowUnitXml($event)" (reviewClick)="onReviewClick()" (sortChange)="onSortChange($event)">
+          (replayClick)="onReplayClick($event)"
+          (showCodingScheme)="onShowCodingScheme($event)"
+          (showUnitXml)="onShowUnitXml($event)"
+          (reviewClick)="onReviewClick()"
+          (sortChange)="onSortChange($event)"
+        >
         </app-response-table>
       </div>
     </div>

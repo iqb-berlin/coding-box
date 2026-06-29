@@ -316,6 +316,105 @@ describe('TestPersonCodingService', () => {
     });
   });
 
+  describe('getAutocodingReadiness', () => {
+    const readinessResponse = {
+      workspaceId: mockWorkspaceId,
+      autoCoderRun: 1 as const,
+      detailLevel: 'summary' as const,
+      detailsComplete: false,
+      readiness: 'DIAGNOSTICS_PENDING' as const,
+      blockers: [],
+      rawResponsesTotal: 10,
+      rawResponsesWithRelevantStatus: 8,
+      resultUnitsTotal: 0,
+      resultUnitKeysTotal: 0,
+      matchedUnitFiles: 0,
+      missingUnitFiles: [],
+      matchedCodingSchemes: 0,
+      missingCodingSchemes: [],
+      invalidCodingSchemes: [],
+      validVariablePairs: 0,
+      validResponses: 0,
+      codeableResponses: 0,
+      invalidVariableSamples: []
+    };
+
+    it('should reuse cached readiness for repeated non-forced requests', () => {
+      service.getAutocodingReadiness(mockWorkspaceId, 1, false, 'summary')
+        .subscribe(response => {
+          expect(response).toEqual(readinessResponse);
+        });
+
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1' &&
+        request.params.get('detailLevel') === 'summary'
+      ));
+      expect(req.request.method).toBe('GET');
+      req.flush(readinessResponse);
+
+      service.getAutocodingReadiness(mockWorkspaceId, 1, false, 'summary')
+        .subscribe(response => {
+          expect(response).toEqual({
+            ...readinessResponse,
+            fromCache: true
+          });
+        });
+
+      httpMock.expectNone(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness`);
+    });
+
+    it('should share in-flight readiness requests', () => {
+      const firstResponse = jest.fn();
+      const secondResponse = jest.fn();
+
+      service.getAutocodingReadiness(mockWorkspaceId, 1, false, 'summary')
+        .subscribe(firstResponse);
+      service.getAutocodingReadiness(mockWorkspaceId, 1, false, 'summary')
+        .subscribe(secondResponse);
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness?autoCoderRun=1&detailLevel=summary`);
+      req.flush(readinessResponse);
+
+      expect(firstResponse).toHaveBeenCalledWith(readinessResponse);
+      expect(secondResponse).toHaveBeenCalledWith(readinessResponse);
+    });
+
+    it('should bypass cached readiness on force refresh', () => {
+      service.getAutocodingReadiness(mockWorkspaceId, 1, false, 'summary')
+        .subscribe();
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness?autoCoderRun=1&detailLevel=summary`)
+        .flush(readinessResponse);
+
+      service.getAutocodingReadiness(mockWorkspaceId, 1, true, 'summary')
+        .subscribe(response => {
+          expect(response).toEqual(readinessResponse);
+        });
+
+      const forcedReq = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('forceRefresh') === 'true'
+      ));
+      forcedReq.flush(readinessResponse);
+    });
+
+    it('should invalidate cached readiness when test results change', () => {
+      service.getAutocodingReadiness(mockWorkspaceId, 1, false, 'summary')
+        .subscribe();
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness?autoCoderRun=1&detailLevel=summary`)
+        .flush(readinessResponse);
+
+      service.notifyTestResultsChanged({ workspaceId: mockWorkspaceId });
+      service.getAutocodingReadiness(mockWorkspaceId, 1, false, 'summary')
+        .subscribe(response => {
+          expect(response).toEqual(readinessResponse);
+        });
+
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness?autoCoderRun=1&detailLevel=summary`)
+        .flush(readinessResponse);
+    });
+  });
+
   describe('getResponseAnalysis', () => {
     it('should request response analysis with threshold and pagination params', () => {
       const mockResponse = {
@@ -853,7 +952,7 @@ describe('TestPersonCodingService', () => {
   });
 
   describe('coding freshness', () => {
-    it('should request autocoding readiness with run and force-refresh params', () => {
+    it('should request autocoding readiness with run, force-refresh and detail-level params', () => {
       const mockResponse = {
         workspaceId: mockWorkspaceId,
         autoCoderRun: 1,
@@ -874,7 +973,7 @@ describe('TestPersonCodingService', () => {
         invalidVariableSamples: []
       };
 
-      service.getAutocodingReadiness(mockWorkspaceId, 1, true)
+      service.getAutocodingReadiness(mockWorkspaceId, 1, true, 'summary')
         .subscribe(response => {
           expect(response).toEqual(mockResponse);
         });
@@ -882,7 +981,8 @@ describe('TestPersonCodingService', () => {
       const req = httpMock.expectOne(request => (
         request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
         request.params.get('autoCoderRun') === '1' &&
-        request.params.get('forceRefresh') === 'true'
+        request.params.get('forceRefresh') === 'true' &&
+        request.params.get('detailLevel') === 'summary'
       ));
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
