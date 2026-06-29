@@ -11,7 +11,8 @@ describe('CodingAnalysisProcessor', () => {
       {} as never,
       cacheService as CacheService,
       {} as WorkspaceExclusionService,
-      {} as WorkspaceFilesService
+      {} as WorkspaceFilesService,
+      { getCodingIncompleteVariables: jest.fn() } as never
     );
     const analysis: ResponseAnalysisDto = {
       emptyResponses: {
@@ -71,23 +72,77 @@ describe('CodingAnalysisProcessor', () => {
       get: jest.fn().mockResolvedValue('newer-run'),
       set: jest.fn().mockResolvedValue(true)
     };
-    const { processor, analysis } = createProcessor(cacheService);
+    const { processor } = createProcessor(cacheService);
 
-    await expect(processor.handleResponseAnalysis(createJob('old-run'))).resolves.toBe(analysis);
+    await expect(processor.handleResponseAnalysis(createJob('old-run'))).resolves.toMatchObject({
+      cacheKey: 'response-analysis:7__t2',
+      status: 'stale-skip',
+      workspaceId: 7
+    });
 
     expect(cacheService.get).toHaveBeenCalledWith('response-analysis:7__t2:run');
     expect(cacheService.set).not.toHaveBeenCalled();
   });
 
-  it('caches analysis results for the latest marked run', async () => {
+  it('caches lightweight analysis pages for the latest marked run', async () => {
     const cacheService = {
       get: jest.fn().mockResolvedValue('current-run'),
       set: jest.fn().mockResolvedValue(true)
     };
     const { processor, analysis } = createProcessor(cacheService);
 
-    await expect(processor.handleResponseAnalysis(createJob('current-run'))).resolves.toBe(analysis);
+    await expect(processor.handleResponseAnalysis(createJob('current-run'))).resolves.toMatchObject({
+      cacheKey: 'response-analysis:7__t2',
+      status: 'cached',
+      workspaceId: 7
+    });
 
-    expect(cacheService.set).toHaveBeenCalledWith('response-analysis:7__t2', analysis);
+    expect(cacheService.set).not.toHaveBeenCalledWith(
+      'response-analysis:7__t2',
+      analysis
+    );
+    expect(cacheService.set.mock.calls[0][0]).toBe(
+      'response-analysis:7__t2:summary'
+    );
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'response-analysis:7__t2:empty-chunk:0',
+      expect.objectContaining({ chunkIndex: 0 })
+    );
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'response-analysis:7__t2:duplicate-chunk:0',
+      expect.objectContaining({ chunkIndex: 0 })
+    );
+  });
+
+  it('normalizes manual analysis variable keys for query filters', async () => {
+    const codingValidationService = {
+      getCodingIncompleteVariables: jest.fn().mockResolvedValue([
+        { unitName: ' unit-a.XML ', variableId: 'var1' },
+        { unitName: 'UNIT-A', variableId: 'var1' },
+        { unitName: 'unit-b', variableId: ' var2 ' },
+        { unitName: '', variableId: 'ignored' },
+        { unitName: 'unit-c', variableId: '' }
+      ])
+    };
+    const processor = new CodingAnalysisProcessor(
+      {} as never,
+      {} as CacheService,
+      {} as WorkspaceExclusionService,
+      {} as WorkspaceFilesService,
+      codingValidationService as never
+    );
+
+    const variables = await (processor as unknown as {
+      getManualAnalysisVariables: (workspaceId: number) => Promise<
+      { unitName: string; variableId: string }[]
+      >;
+    }).getManualAnalysisVariables(7);
+
+    expect(codingValidationService.getCodingIncompleteVariables)
+      .toHaveBeenCalledWith(7);
+    expect(variables).toEqual([
+      { unitName: 'UNIT-A', variableId: 'var1' },
+      { unitName: 'UNIT-B', variableId: 'var2' }
+    ]);
   });
 });
