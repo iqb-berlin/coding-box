@@ -223,11 +223,10 @@ export class TestPersonCodingComponent implements OnInit {
     this.isLoading = true;
     this.currentPage = page;
     this.pageSize = limit;
-    const authToken = localStorage.getItem('id_token') || '';
     const serverUrl = window.location.origin;
 
     this.testPersonCodingService
-      .getCodingList(this.workspaceId, authToken, serverUrl, page, limit)
+      .getCodingList(this.workspaceId, '', serverUrl, page, limit)
       .pipe(
         tap(result => this.codingList$.next(result)),
         finalize(() => {

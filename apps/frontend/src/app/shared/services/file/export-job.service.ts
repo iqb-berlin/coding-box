@@ -17,6 +17,10 @@ import {
 } from 'rxjs/operators';
 import { CodingExportEstimate, CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
+import {
+  API_SPECIAL_TOKEN_DURATION_DAYS,
+  REPLAY_WORKSPACE_TOKEN_SCOPES
+} from '../../../core/services/auth-session.config';
 
 export interface ExportJob {
   jobId: string;
@@ -169,7 +173,11 @@ export class ExportJobService implements OnDestroy {
       return of(config);
     }
 
-    return this.appService.createOwnToken(workspaceId, 60).pipe(
+    return this.appService.createOwnToken(
+      workspaceId,
+      API_SPECIAL_TOKEN_DURATION_DAYS,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    ).pipe(
       map(authToken => ({
         ...config,
         authToken,

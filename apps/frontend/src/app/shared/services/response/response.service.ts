@@ -28,7 +28,7 @@ export class ResponseService {
   private validationTaskStateService = inject(ValidationTaskStateService);
 
   get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+    return {};
   }
 
   getResponses(workspaceId: number, testPerson: string, unitId: string, authToken?: string): Observable<ResponseDto[]> {

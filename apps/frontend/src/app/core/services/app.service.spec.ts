@@ -6,7 +6,6 @@ import { KeycloakTokenParsed } from 'keycloak-js';
 import { AppService } from './app.service';
 import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
-import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import {
   AppHttpError,
@@ -59,119 +58,101 @@ describe('AppService', () => {
 
   describe('createOwnToken', () => {
     it('should request a self-service workspace token', () => {
-      service.createOwnToken(7, 1).subscribe(token => {
+      service.createOwnToken(7, 1, ['replay:read', 'replay-statistics:write']).subscribe(token => {
         expect(token).toBe('signed-token');
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/7/token/1`);
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/7/token/1`);
       expect(req.request.method).toBe('GET');
+      expect(req.request.params.getAll('scopes')).toEqual(['replay:read', 'replay-statistics:write']);
       req.flush('signed-token');
     });
   });
 
   describe('createTokenForIdentity', () => {
     it('should request a workspace admin token for an encoded target identity', () => {
-      service.createTokenForIdentity(7, 'issuer/user@example.test', 30).subscribe(token => {
+      service.createTokenForIdentity(
+        7,
+        'issuer/user@example.test',
+        1,
+        ['coding-job:operate']
+      ).subscribe(token => {
         expect(token).toBe('admin-token');
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/7/issuer%2Fuser%40example.test/token/30`);
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/7/issuer%2Fuser%40example.test/token/1`
+      ));
       expect(req.request.method).toBe('GET');
+      expect(req.request.params.getAll('scopes')).toEqual(['coding-job:operate']);
       req.flush('admin-token');
     });
   });
 
-  describe('keycloakLogin', () => {
-    it('should login and fetch auth data on success', () => {
-      const mockToken = 'new-token';
-      const mockUser = { username: 'user', identity: 'id1' } as unknown as CreateUserDto;
+  describe('getWorkspaceTokenPolicy', () => {
+    it('should request the workspace token policy', () => {
+      const policy = {
+        scopes: {
+          'replay:read': { maxDurationDays: 90 },
+          'replay-statistics:write': { maxDurationDays: 1 },
+          'coding-job:operate': { maxDurationDays: 1 }
+        }
+      };
+
+      service.getWorkspaceTokenPolicy().subscribe(result => {
+        expect(result).toEqual(policy);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/token-policy`);
+      expect(req.request.method).toBe('GET');
+      req.flush(policy);
+    });
+  });
+
+  describe('loadAuthenticatedUser', () => {
+    it('should fetch auth data on success', () => {
       const mockAuthData = { userId: 1, userName: 'user' } as unknown as AuthDataDto;
 
-      service.keycloakLogin(mockUser).subscribe(result => {
+      service.loadAuthenticatedUser('id1').subscribe(result => {
         expect(result).toBe(true);
-        expect(localStorage.setItem).toHaveBeenCalledWith('id_token', mockToken);
         expect(service.authBootstrapStatus).toBe('ready');
       });
 
       expect(service.authBootstrapStatus).toBe('backend-login-running');
 
-      // 1. Login POST
-      const reqLogin = httpMock.expectOne(`${mockServerUrl}keycloak-login`);
-      expect(reqLogin.request.method).toBe('POST');
-      expect(reqLogin.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
-      reqLogin.flush(mockToken);
-
-      // 2. Auth Data GET
       const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
       expect(reqAuth.request.method).toBe('GET');
       expect(reqAuth.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       reqAuth.flush(mockAuthData);
     });
 
-    it('should retry backend login after transient backend errors', fakeAsync(() => {
-      const mockToken = 'new-token';
-      const mockUser = { username: 'user', identity: 'id1' } as unknown as CreateUserDto;
+    it('should retry auth data after transient backend errors', fakeAsync(() => {
       const mockAuthData = { userId: 1, userName: 'user' } as unknown as AuthDataDto;
       let loginResult: boolean | undefined;
 
-      service.keycloakLogin(mockUser).subscribe(result => {
+      service.loadAuthenticatedUser('id1').subscribe(result => {
         loginResult = result;
       });
 
-      const firstLoginRequest = httpMock.expectOne(`${mockServerUrl}keycloak-login`);
-      firstLoginRequest.flush('Service unavailable', { status: 503, statusText: 'Service Unavailable' });
+      const firstAuthRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+      firstAuthRequest.flush('Service unavailable', { status: 503, statusText: 'Service Unavailable' });
 
       tick(500);
 
-      const secondLoginRequest = httpMock.expectOne(`${mockServerUrl}keycloak-login`);
-      expect(secondLoginRequest.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
-      secondLoginRequest.flush(mockToken);
-
       const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+      expect(reqAuth.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       reqAuth.flush(mockAuthData);
 
       expect(loginResult).toBe(true);
       expect(service.authBootstrapStatus).toBe('ready');
     }));
 
-    it('should retry auth data after transient backend errors', fakeAsync(() => {
-      const mockToken = 'new-token';
-      const mockUser = { username: 'user', identity: 'id1' } as unknown as CreateUserDto;
-      const mockAuthData = { userId: 1, userName: 'user' } as unknown as AuthDataDto;
-      let loginResult: boolean | undefined;
-
-      service.keycloakLogin(mockUser).subscribe(result => {
-        loginResult = result;
-      });
-
-      const reqLogin = httpMock.expectOne(`${mockServerUrl}keycloak-login`);
-      reqLogin.flush(mockToken);
-
-      const firstAuthRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
-      expect(firstAuthRequest.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
-      firstAuthRequest.flush('Service unavailable', { status: 503, statusText: 'Service Unavailable' });
-
-      tick(500);
-
-      const secondAuthRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
-      expect(secondAuthRequest.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
-      secondAuthRequest.flush(mockAuthData);
-
-      expect(loginResult).toBe(true);
-      expect(service.authBootstrapStatus).toBe('ready');
-    }));
-
     it('should not retry auth data after authorization errors', fakeAsync(() => {
-      const mockToken = 'new-token';
-      const mockUser = { username: 'user', identity: 'id1' } as unknown as CreateUserDto;
       let loginResult: boolean | undefined;
 
-      service.keycloakLogin(mockUser).subscribe(result => {
+      service.loadAuthenticatedUser('id1').subscribe(result => {
         loginResult = result;
       });
-
-      const reqLogin = httpMock.expectOne(`${mockServerUrl}keycloak-login`);
-      reqLogin.flush(mockToken);
 
       const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
       reqAuth.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
@@ -183,16 +164,14 @@ describe('AppService', () => {
       expect(service.authBootstrapStatus).toBe('auth-data-failed');
     }));
 
-    it('should return false on login failure', () => {
-      const mockUser = { username: 'user' } as unknown as CreateUserDto;
-
-      service.keycloakLogin(mockUser).subscribe(result => {
+    it('should return false on auth data failure', () => {
+      service.loadAuthenticatedUser('id1').subscribe(result => {
         expect(result).toBe(false);
         expect(service.authBootstrapStatus).toBe('auth-data-failed');
       });
 
-      const reqLogin = httpMock.expectOne(`${mockServerUrl}keycloak-login`);
-      reqLogin.flush('Error', { status: 401, statusText: 'Unauthorized' });
+      const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+      reqAuth.flush('Error', { status: 401, statusText: 'Unauthorized' });
     });
   });
 
@@ -253,8 +232,9 @@ describe('AppService', () => {
     it('should clear stored auth state', () => {
       service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
       service.isLoggedInKeycloak = true;
-      service.kcUser = { username: 'user' } as CreateUserDto;
+      service.keycloakIdentity = 'user1';
       service.needsReAuthentication = true;
+      service.sessionExpiryWarning = true;
       service.reAuthenticationReturnUrl = '/coding';
       service.updateAuthData({ userId: 1, userName: 'user' } as AuthDataDto);
 
@@ -262,10 +242,11 @@ describe('AppService', () => {
 
       expect(localStorage.removeItem).toHaveBeenCalledWith('id_token');
       expect(service.loggedUser).toBeUndefined();
-      expect(service.kcUser).toBeUndefined();
+      expect(service.keycloakIdentity).toBeUndefined();
       expect(service.isLoggedInKeycloak).toBe(false);
       expect(service.authData).toEqual(AppService.defaultAuthData);
       expect(service.needsReAuthentication).toBe(false);
+      expect(service.sessionExpiryWarning).toBe(false);
       expect(service.reAuthenticationReturnUrl).toBeUndefined();
       expect(service.authBootstrapStatus).toBe('ready');
     });
@@ -275,6 +256,7 @@ describe('AppService', () => {
 
       expect(localStorage.removeItem).toHaveBeenCalledWith('id_token');
       expect(service.needsReAuthentication).toBe(true);
+      expect(service.sessionExpiryWarning).toBe(false);
       expect(service.reAuthenticationReturnUrl).toBe('/coding');
       expect(service.authBootstrapStatus).toBe('session-expired');
     });

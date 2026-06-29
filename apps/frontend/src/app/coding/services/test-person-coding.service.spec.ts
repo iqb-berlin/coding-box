@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import Keycloak from 'keycloak-js';
 import {
   TestPersonCodingService,
   CodingStatistics,
@@ -15,11 +16,21 @@ import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings
 describe('TestPersonCodingService', () => {
   let service: TestPersonCodingService;
   let httpMock: HttpTestingController;
+  let keycloak: { authenticated: boolean; token?: string; updateToken: jest.Mock };
+  let fetchMock: jest.Mock;
+  let originalFetch: typeof globalThis.fetch | undefined;
   const mockServerUrl = 'http://localhost:3000/';
   const mockWorkspaceId = 123;
   const mockAuthToken = 'test-token';
 
   beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    keycloak = {
+      authenticated: true,
+      token: 'keycloak-token',
+      updateToken: jest.fn().mockResolvedValue(true)
+    };
+
     // Mock localStorage using Object.defineProperty
     Object.defineProperty(window, 'localStorage', {
       value: {
@@ -33,6 +44,7 @@ describe('TestPersonCodingService', () => {
         provideHttpClient(withInterceptorsFromDi()),
         provideHttpClientTesting(),
         TestPersonCodingService,
+        { provide: Keycloak, useValue: keycloak },
         { provide: SERVER_URL, useValue: mockServerUrl }
       ]
     });
@@ -42,6 +54,11 @@ describe('TestPersonCodingService', () => {
   });
 
   afterEach(() => {
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      delete (globalThis as { fetch?: unknown }).fetch;
+    }
     try {
       httpMock.verify();
     } catch (error) {
@@ -67,7 +84,7 @@ describe('TestPersonCodingService', () => {
 
       const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` && request.params.get('testPersons') === mockTestPersonIds && request.params.get('autoCoderRun') === '1');
       expect(req.request.method).toBe('GET');
-      expect(req.request.headers.get('Authorization')).toBe(`Bearer ${mockAuthToken}`);
+      expect(req.request.headers.get('Authorization')).toBeNull();
       req.flush(mockResponse);
     });
 
@@ -100,6 +117,39 @@ describe('TestPersonCodingService', () => {
         { message: 'Der 2. Autocoder-Lauf kann nicht gestartet werden.' },
         { status: 400, statusText: 'Bad Request' }
       );
+    });
+  });
+
+  describe('importExternalCodingWithProgress', () => {
+    it('should attach a valid Keycloak token to streaming fetch imports', async () => {
+      fetchMock = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized'
+      });
+      globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+      const onError = jest.fn();
+
+      await service.importExternalCodingWithProgress(
+        mockWorkspaceId,
+        { file: 'content', fileName: 'coding.csv' },
+        jest.fn(),
+        jest.fn(),
+        onError
+      );
+
+      expect(keycloak.updateToken).toHaveBeenCalledWith(30);
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/external-coding-import/stream`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer keycloak-token'
+          }
+        })
+      );
+      expect(onError).toHaveBeenCalledWith('HTTP 401: Unauthorized');
     });
   });
 
@@ -329,7 +379,7 @@ describe('TestPersonCodingService', () => {
         `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/progress-overview`
       );
       expect(req.request.method).toBe('GET');
-      expect(req.request.headers.get('Authorization')).toBe(`Bearer ${mockAuthToken}`);
+      expect(req.request.headers.get('Authorization')).toBeNull();
       req.flush(mockResponse);
     });
 
@@ -362,7 +412,7 @@ describe('TestPersonCodingService', () => {
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/aggregation-settings`);
       expect(req.request.method).toBe('GET');
-      expect(req.request.headers.get('Authorization')).toBe(`Bearer ${mockAuthToken}`);
+      expect(req.request.headers.get('Authorization')).toBeNull();
       req.flush(mockResponse);
     });
 
@@ -388,7 +438,7 @@ describe('TestPersonCodingService', () => {
         threshold: 9,
         flags: [ResponseMatchingFlag.NO_AGGREGATION]
       });
-      expect(req.request.headers.get('Authorization')).toBe(`Bearer ${mockAuthToken}`);
+      expect(req.request.headers.get('Authorization')).toBeNull();
       req.flush(mockResponse);
     });
   });

@@ -2,7 +2,6 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { Test } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { AppController } from './app.controller';
-import { AuthService } from './auth/service/auth.service';
 import { UsersService } from './database/services/users';
 import { TestcenterService } from './database/services/test-results';
 import { WorkspaceUsersService } from './database/services/workspace';
@@ -19,10 +18,6 @@ describe('AppController', () => {
     const module = await Test.createTestingModule({
       controllers: [AppController],
       providers: [
-        {
-          provide: AuthService,
-          useValue: createMock<AuthService>()
-        },
         {
           provide: UsersService,
           useValue: usersService
@@ -64,13 +59,25 @@ describe('AppController', () => {
       expect(workspaceUsersService.findAllUserWorkspaces).toHaveBeenCalledWith('identity-1');
     });
 
-    it('rejects missing identity parameters', async () => {
+    it('falls back to the authenticated identity when the query is blank', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({
+        id: 5,
+        username: 'new-user',
+        isAdmin: false
+      });
+      workspaceUsersService.findAllUserWorkspaces.mockResolvedValue([]);
+
       await expect(controller.getUserAuthData(
         ' ',
         { user: { identity: 'identity-1' } } as never
-      )).rejects.toBeInstanceOf(BadRequestException);
+      )).resolves.toEqual({
+        userId: 5,
+        userName: 'new-user',
+        isAdmin: false,
+        workspaces: []
+      });
 
-      expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
+      expect(usersService.findUserByIdentity).toHaveBeenCalledWith('identity-1');
     });
 
     it('rejects repeated identity parameters', async () => {
@@ -95,7 +102,7 @@ describe('AppController', () => {
       await expect(controller.getUserAuthData(
         'requested-identity',
         { user: {} } as never
-      )).rejects.toBeInstanceOf(ForbiddenException);
+      )).rejects.toBeInstanceOf(BadRequestException);
 
       expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
     });

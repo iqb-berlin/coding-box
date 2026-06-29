@@ -448,14 +448,19 @@ export class UsersService {
     });
   }
 
-  async createKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
+  async syncKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
     const {
-      username, identity, issuer, isAdmin
+      username, identity, issuer, isAdmin = false
     } = keycloakUser;
+
+    if (!username || !identity || !issuer) {
+      throw new BadRequestException('Keycloak user requires username, identity and issuer.');
+    }
+
     const existingUser = await this.usersRepository.findOne({
       where: [
-        { username },
-        { identity, issuer }
+        { identity, issuer },
+        { username }
       ],
       select: {
         id: true, username: true, identity: true, issuer: true, isAdmin: true
@@ -464,9 +469,10 @@ export class UsersService {
 
     if (existingUser) {
       const updatedFields: Partial<User> = {};
-      const nextIsAdmin = existingUser.isAdmin || isAdmin;
+      const nextIsAdmin = existingUser.isAdmin || !!isAdmin;
       if (identity && existingUser.identity !== identity) updatedFields.identity = identity;
       if (issuer && existingUser.issuer !== issuer) updatedFields.issuer = issuer;
+      if (username && existingUser.username !== username) updatedFields.username = username;
       if (existingUser.isAdmin !== nextIsAdmin) updatedFields.isAdmin = nextIsAdmin;
 
       if (Object.keys(updatedFields).length > 0) {
@@ -477,9 +483,18 @@ export class UsersService {
       return existingUser.id;
     }
     this.logger.log(`Creating new Keycloak user: ${JSON.stringify(keycloakUser)}`);
-    const newUser = this.usersRepository.create(keycloakUser);
+    const newUser = this.usersRepository.create({
+      username,
+      identity,
+      issuer,
+      isAdmin: !!isAdmin
+    });
     await this.usersRepository.save(newUser);
 
     return newUser.id;
+  }
+
+  async createKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
+    return this.syncKeycloakUser(keycloakUser);
   }
 }

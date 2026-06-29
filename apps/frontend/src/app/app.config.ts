@@ -25,6 +25,7 @@ import { environment } from '../environments/environment';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { journalInterceptor } from './core/interceptors/journal-interceptor';
 import { SERVER_URL } from './injection-tokens';
+import { AUTH_SESSION_IDLE_TIMEOUT_MS } from './core/services/auth-session.config';
 
 export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
   return new TranslateHttpLoader(http, './assets/i18n/', '.json');
@@ -47,7 +48,7 @@ export const provideKeycloakAngular = () => provideKeycloak({
   features: [
     withAutoRefreshToken({
       onInactivityTimeout: 'none',
-      sessionTimeout: 300000
+      sessionTimeout: AUTH_SESSION_IDLE_TIMEOUT_MS
     })
   ],
 
