@@ -1,4 +1,9 @@
-import { BadRequestException, INestApplication, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ExecutionContext,
+  INestApplication,
+  InternalServerErrorException
+} from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
 import { WorkspaceUsersController } from './workspace-users.controller';
@@ -47,7 +52,12 @@ describe('WorkspaceUsersController', () => {
       ]
     })
       .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate: () => true })
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          context.switchToHttp().getRequest().user = { id: 12 };
+          return true;
+        }
+      })
       .overrideGuard(WorkspaceGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(AccessLevelGuard)
@@ -105,6 +115,45 @@ describe('WorkspaceUsersController', () => {
         expect(authService.createTokenForUserId).not.toHaveBeenCalled();
       }
     );
+
+    it('creates a self-service token over HTTP with repeated scope query params', async () => {
+      authService.createTokenForUserId.mockResolvedValue('"token"');
+      let app: INestApplication | undefined;
+
+      try {
+        app = await createTestApp();
+
+        const response = await fetch(
+          `${await app.getUrl()}/admin/workspace/7/token/1?scopes=replay:read&scopes=replay-statistics:write`
+        );
+
+        expect(response.status).toBe(200);
+        await expect(response.text()).resolves.toBe('"token"');
+        expect(authService.createTokenForUserId).toHaveBeenCalledWith(
+          12,
+          7,
+          1,
+          ['replay:read', 'replay-statistics:write']
+        );
+      } finally {
+        await app?.close();
+      }
+    });
+
+    it('rejects a self-service token HTTP request without scopes', async () => {
+      let app: INestApplication | undefined;
+
+      try {
+        app = await createTestApp();
+
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/7/token/1`);
+
+        expect(response.status).toBe(400);
+        expect(authService.createTokenForUserId).not.toHaveBeenCalled();
+      } finally {
+        await app?.close();
+      }
+    });
   });
 
   describe('createToken', () => {

@@ -273,6 +273,12 @@ describe('WorkspaceGuard (Backend)', () => {
       return handler;
     };
 
+    const createCodingScopedHandler = () => {
+      const handler = jest.fn();
+      AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)(handler);
+      return handler;
+    };
+
     it('should reject workspace API tokens for endpoints without allowed scopes', async () => {
       const context = createMockExecutionContext(
         1,
@@ -315,6 +321,38 @@ describe('WorkspaceGuard (Backend)', () => {
           scopes: [WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE]
         },
         createScopedHandler()
+      );
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+    });
+
+    it('should reject replay-only workspace API tokens for coding job endpoints', async () => {
+      const context = createMockExecutionContext(
+        1,
+        '123',
+        123,
+        {
+          tokenType: WORKSPACE_API_TOKEN_TYPE,
+          scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+        },
+        createCodingScopedHandler()
+      );
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+    });
+
+    it('should reject correctly scoped workspace API tokens for a different workspace', async () => {
+      const context = createMockExecutionContext(
+        1,
+        '123',
+        456,
+        {
+          tokenType: WORKSPACE_API_TOKEN_TYPE,
+          scopes: [WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE]
+        },
+        createCodingScopedHandler()
       );
 
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
