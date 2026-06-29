@@ -153,7 +153,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
     const options = new Map<string, VariableOption>();
     units.forEach(unit => {
       unit.variables.forEach(variable => {
-        [variable.alias, variable.id]
+        [variable.alias || variable.id]
           .map(value => String(value || '').trim())
           .filter(Boolean)
           .forEach(value => {

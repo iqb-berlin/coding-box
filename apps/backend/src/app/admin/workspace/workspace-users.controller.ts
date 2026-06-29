@@ -2,7 +2,8 @@ import {
   BadRequestException,
   Body,
   Controller,
-  Get, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards
+  DefaultValuePipe,
+  Get, InternalServerErrorException, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -16,8 +17,11 @@ import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { WorkspaceUsersService } from '../../database/services/workspace/workspace-users.service';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-
-const MAX_TOKEN_DURATION_DAYS = 90;
+import {
+  WORKSPACE_TOKEN_SCOPES,
+  WorkspaceTokenPolicy,
+  WorkspaceTokenScope
+} from '../../auth/workspace-token';
 
 interface RequestWithUser {
   user: {
@@ -35,6 +39,19 @@ export class WorkspaceUsersController {
     private authService: AuthService
   ) {}
 
+  @Get('token-policy')
+  @ApiBearerAuth()
+  @ApiTags('admin workspace')
+  @ApiOperation({
+    summary: 'Get workspace token policy',
+    description: 'Returns the maximum token duration per workspace API token scope'
+  })
+  @ApiOkResponse({ description: 'Workspace token policy returned successfully' })
+  @UseGuards(JwtAuthGuard)
+  getWorkspaceTokenPolicy(): WorkspaceTokenPolicy {
+    return this.authService.getWorkspaceTokenPolicy();
+  }
+
   @Get(':workspace_id/token/:duration')
   @ApiBearerAuth()
   @ApiTags('admin workspace')
@@ -46,7 +63,7 @@ export class WorkspaceUsersController {
   @ApiParam({
     name: 'duration',
     required: true,
-    description: `Duration of the token in days. Must be between 1 and ${MAX_TOKEN_DURATION_DAYS}.`
+    description: 'Duration of the token in days. The maximum depends on the requested scopes.'
   })
   @ApiOkResponse({ description: 'Token created successfully', type: String })
   @ApiBadRequestResponse({ description: 'Invalid input parameters' })
@@ -54,18 +71,21 @@ export class WorkspaceUsersController {
   async createOwnToken(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('duration') duration: string,
+      @Query('scopes') scopes: string | string[] | undefined,
       @Req() request: RequestWithUser
   ): Promise<string> {
     if (!workspaceId || !duration) {
       throw new BadRequestException('Invalid input parameters');
     }
     const durationDays = this.parseTokenDurationDays(duration);
+    const tokenScopes = this.parseTokenScopes(scopes);
     this.logger.log(`Generating token for user ${request.user.id} in workspace ${workspaceId} with duration ${durationDays}d`);
 
     return this.authService.createTokenForUserId(
       Number(request.user.id),
       workspaceId,
-      durationDays
+      durationDays,
+      tokenScopes
     );
   }
 
@@ -78,7 +98,7 @@ export class WorkspaceUsersController {
   @ApiParam({
     name: 'duration',
     required: true,
-    description: `Duration of the token in days. Must be between 1 and ${MAX_TOKEN_DURATION_DAYS}.`
+    description: 'Duration of the token in days. The maximum depends on the requested scopes.'
   })
   @ApiOkResponse({ description: 'Token created successfully', type: String })
   @ApiBadRequestResponse({ description: 'Invalid input parameters' })
@@ -88,31 +108,53 @@ export class WorkspaceUsersController {
     @Param('identity') identity: string,
       @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('duration') duration: string,
+      @Query('scopes') scopes: string | string[] | undefined,
       @Req() request: RequestWithUser
   ): Promise<string> {
     if (!identity || !workspaceId || !duration) {
       throw new BadRequestException('Invalid input parameters');
     }
     const durationDays = this.parseTokenDurationDays(duration);
+    const tokenScopes = this.parseTokenScopes(scopes);
     this.logger.log(`Generating token for user ${identity} in workspace ${workspaceId} with duration ${durationDays}d`);
 
     return this.authService.createToken(
       identity,
       workspaceId,
       durationDays,
+      tokenScopes,
       Number(request.user.id)
     );
+  }
+
+  private parseTokenScopes(scopes: string | string[] | undefined): WorkspaceTokenScope[] {
+    const rawScopes = (Array.isArray(scopes) ? scopes : [scopes])
+      .filter((scope): scope is string => typeof scope === 'string')
+      .flatMap(scope => scope.split(','))
+      .map(scope => scope.trim())
+      .filter(Boolean);
+
+    if (rawScopes.length === 0) {
+      throw new BadRequestException('At least one token scope is required');
+    }
+
+    const allowedScopes = new Set<string>(WORKSPACE_TOKEN_SCOPES);
+    const invalidScope = rawScopes.find(scope => !allowedScopes.has(scope));
+    if (invalidScope) {
+      throw new BadRequestException(`Unsupported token scope: ${invalidScope}`);
+    }
+
+    return Array.from(new Set(rawScopes)) as WorkspaceTokenScope[];
   }
 
   private parseTokenDurationDays(duration: string): number {
     const durationDays = Number(duration);
     if (
       !Number.isInteger(durationDays) ||
-      durationDays < 1 ||
-      durationDays > MAX_TOKEN_DURATION_DAYS
+      durationDays < 1
     ) {
       throw new BadRequestException(
-        `Token duration must be a whole number between 1 and ${MAX_TOKEN_DURATION_DAYS} days`
+        'Token duration must be a whole number greater than or equal to 1 day'
       );
     }
     return durationDays;
@@ -156,9 +198,9 @@ export class WorkspaceUsersController {
   })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findUsers(
-    @Param('workspace_id') workspaceId: number,
-                           @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 20
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<{ data: WorkspaceUser[]; total: number; page: number; limit: number }> {
     try {
       const [users, total] = await this.workspaceUsersService.findUsers(workspaceId, { page, limit });
@@ -169,21 +211,16 @@ export class WorkspaceUsersController {
         limit
       };
     } catch (error) {
-      this.logger.error(`Error retrieving users for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
+      this.logger.error(`Error retrieving users for workspace ${workspaceId}`, error);
+      throw new InternalServerErrorException('Could not retrieve workspace users');
     }
   }
 
-  @Post(':workspaceId/users')
+  @Post(':workspace_id/users')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiOperation({ summary: 'Set workspace users', description: 'Assigns users to a workspace' })
-  @ApiParam({ name: 'workspaceId', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiBody({
     schema: {
       type: 'array',
@@ -200,7 +237,7 @@ export class WorkspaceUsersController {
   @ApiBadRequestResponse({ description: 'Invalid user IDs or workspace ID' })
   @ApiTags('admin users')
   async setWorkspaceUsers(@Body() userIds: number[],
-    @Param('workspaceId') workspaceId: number) {
+    @Param('workspace_id', ParseIntPipe) workspaceId: number) {
     return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
   }
 
@@ -228,7 +265,7 @@ export class WorkspaceUsersController {
   })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findCoders(
-    @Param('workspace_id') workspaceId: number
+    @Param('workspace_id', ParseIntPipe) workspaceId: number
   ): Promise<{ data: WorkspaceUser[]; total: number }> {
     try {
       const [coders, total] = await this.workspaceUsersService.findCoders(workspaceId);
@@ -276,7 +313,7 @@ export class WorkspaceUsersController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findCodersByCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: number
+      @Param('job_id', ParseIntPipe) jobId: number
   ): Promise<{ data: WorkspaceUser[]; total: number }> {
     try {
       // In a real implementation, this would filter coders by the specific job ID

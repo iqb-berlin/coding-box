@@ -14,6 +14,8 @@ export interface ImportOptionsDto {
   metadata: string;
 }
 
+export type TestResultsOverwriteMode = 'skip' | 'merge' | 'replace';
+
 export interface ImportResultDto {
   success: boolean;
   testFiles: number;

@@ -45,6 +45,7 @@ interface CoderResult {
   jobId: number;
   jobName: string;
   code: number | null;
+  codingIssueOption?: number | null;
   score: number | null;
   notes: string | null;
   supervisorComment: string | null;
@@ -186,6 +187,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private replayDecisionByResponseId = new Map<number, ReplayDecisionResult>();
   private replayWindowByResponseId = new Map<number, MessageEventSource>();
   private readonly replayDecisionPrefix = 'replay:';
+  private readonly standaloneCodingIssueOptionIds = new Set([-3, -4]);
 
   ngOnInit(): void {
     this.initializeForm();
@@ -795,21 +797,38 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     const coderNamesByCode = new Map<number, string[]>();
 
     item.coderResults.forEach(result => {
-      if (result.code === null || result.code === undefined) {
-        return;
-      }
-
-      const coderNames = coderNamesByCode.get(result.code) || [];
       const coderName = this.getCoderDisplayName(result);
-      if (!coderNames.includes(coderName)) {
-        coderNames.push(coderName);
-      }
-      coderNamesByCode.set(result.code, coderNames);
+      this.getReviewSelectionCodes(result).forEach(code => {
+        const coderNames = coderNamesByCode.get(code) || [];
+        if (!coderNames.includes(coderName)) {
+          coderNames.push(coderName);
+        }
+        coderNamesByCode.set(code, coderNames);
+      });
     });
 
     return Array.from(coderNamesByCode.entries())
       .sort(([codeA], [codeB]) => codeA - codeB)
       .map(([code, coderNames]) => ({ code, coderNames }));
+  }
+
+  private getReviewSelectionCodes(result: CoderResult): number[] {
+    if (
+      result.codingIssueOption !== null &&
+      result.codingIssueOption !== undefined &&
+      this.standaloneCodingIssueOptionIds.has(result.codingIssueOption)
+    ) {
+      return [result.codingIssueOption];
+    }
+
+    const codes = new Set<number>();
+    if (result.code !== null && result.code !== undefined) {
+      codes.add(result.code);
+    }
+    if (result.codingIssueOption !== null && result.codingIssueOption !== undefined) {
+      codes.add(result.codingIssueOption);
+    }
+    return Array.from(codes);
   }
 
   private handleReplayCodeSelected(

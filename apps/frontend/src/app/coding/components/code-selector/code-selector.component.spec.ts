@@ -323,6 +323,7 @@ describe('CodeSelectorComponent', () => {
     component.reviewCodeSelections = [
       { code: 1, coderNames: ['Coder A', 'Coder B'] },
       { code: 2, coderNames: ['Coder C'] },
+      { code: -3, coderNames: ['Coder F', 'Coder G'] },
       { code: -2, coderNames: ['Coder D', 'Coder E'] }
     ];
 
@@ -342,12 +343,16 @@ describe('CodeSelectorComponent', () => {
     expect(component.hasReviewCodeSelection(1)).toBe(true);
     expect(component.getReviewCodeSelectionCount(1)).toBe(2);
     expect(component.hasReviewCodeSelection(2)).toBe(true);
+    expect(component.hasReviewCodeSelection(-3)).toBe(true);
     expect(component.getReviewCodeSelectionCount(-2)).toBe(2);
     expect(component.getReviewCodeSelectionCount(99)).toBe(0);
     expect(badge.textContent).toContain('2');
     expect(codeRow).toBeTruthy();
     expect(issueBadge.textContent).toContain('2');
-    expect(issueRows).toHaveLength(1);
+    expect(issueRows).toHaveLength(2);
+    expect(component.getCodingIssueOptionRowTooltip(
+      component.codingIssueOptionCodes.find(item => item.id === -3)!
+    )).toContain('Coder F, Coder G');
     expect(component.getCodingIssueOptionRowTooltip(
       component.codingIssueOptionCodes.find(item => item.id === -2)!
     )).toContain('Coder D, Coder E');
@@ -823,5 +828,311 @@ describe('CodeSelectorComponent', () => {
     expect(chips[1].classList.contains('auto-coded')).toBe(true);
     expect(chips[1].disabled).toBe(true);
     expect(fixture.nativeElement.querySelector('.variable-trigger-btn')).toBeNull();
+  });
+
+  it('keeps the navigation dropdown visible for bundle jobs and lists one entry per bundle', () => {
+    component.showProgress = true;
+    component.codingService = {
+      isUnitCoded: jest.fn().mockReturnValue(false)
+    } as never;
+    const bundleContext = {
+      bundleId: 9,
+      bundleName: 'Bundle A',
+      caseKey: 'case-1',
+      caseOrderingMode: 'alternating' as const,
+      variables: [
+        {
+          responseId: 1,
+          unitName: 'UNIT_1',
+          variableId: 'VAR1',
+          variableAnchor: 'VAR1',
+          variablePage: '0',
+          status: 'manual-open' as const,
+          code: null,
+          score: null,
+          source: 'manual' as const
+        },
+        {
+          responseId: 2,
+          unitName: 'UNIT_1',
+          variableId: 'VAR2',
+          variableAnchor: 'VAR2',
+          variablePage: '0',
+          status: 'manual-open' as const,
+          code: null,
+          score: null,
+          source: 'manual' as const
+        }
+      ]
+    };
+    component.unitsData = {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_1',
+          alias: 'UNIT_1',
+          bookletId: 0,
+          variableId: 'VAR1',
+          variableBundleId: 9,
+          bundleContext
+        },
+        {
+          id: 2,
+          name: 'UNIT_1',
+          alias: 'UNIT_1',
+          bookletId: 0,
+          variableId: 'VAR2',
+          variableBundleId: 9,
+          bundleContext
+        },
+        {
+          id: 3,
+          name: 'UNIT_2',
+          alias: 'UNIT_2',
+          bookletId: 0,
+          variableId: 'VAR3'
+        }
+      ]
+    };
+
+    fixture.detectChanges();
+
+    const trigger = fixture.nativeElement.querySelector('.variable-trigger-btn') as HTMLButtonElement;
+    expect(trigger).toBeTruthy();
+    expect(trigger.textContent).toContain('Bundle A');
+    expect(fixture.nativeElement.querySelectorAll('.bundle-variable-chip')).toHaveLength(2);
+
+    component.toggleVariablePanel();
+    fixture.detectChanges();
+
+    const panelItems = fixture.nativeElement.querySelectorAll('.variable-panel-item') as NodeListOf<HTMLElement>;
+    expect(component.navigationItems.map(item => item.label)).toEqual(['Bundle A', 'UNIT_2 / VAR3']);
+    expect(panelItems).toHaveLength(2);
+    expect(panelItems[0].textContent).toContain('Bundle A');
+    expect(panelItems[0].textContent).toContain('code-selector.variable-bundle');
+    expect(panelItems[1].textContent).toContain('UNIT_2 / VAR3');
+  });
+
+  it('renders continuous bundle variables up to eight as chips', () => {
+    component.showProgress = true;
+    component.codingService = {
+      isUnitCoded: jest.fn().mockReturnValue(false)
+    } as never;
+    const variables = ['VAR1', 'VAR2', 'VAR3', 'VAR4', 'VAR5', 'VAR6', 'VAR7', 'VAR8'].map((variableId, index) => ({
+      responseId: index + 1,
+      unitName: 'UNIT_1',
+      variableId,
+      variableAnchor: variableId,
+      variablePage: '0',
+      status: 'manual-open' as const,
+      code: null,
+      score: null,
+      source: 'manual' as const
+    }));
+    const bundleContext = {
+      bundleId: 9,
+      bundleName: 'Bundle A',
+      caseKey: 'case-1',
+      caseOrderingMode: 'continuous' as const,
+      variables
+    };
+    component.unitsData = {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: variables.map((variable, index) => ({
+        id: index + 1,
+        name: 'UNIT_1',
+        alias: 'UNIT_1',
+        bookletId: 0,
+        variableId: variable.variableId,
+        variableBundleId: 9,
+        bundleContext
+      }))
+    };
+
+    fixture.detectChanges();
+
+    expect(component.shouldShowBundleVariableChips).toBe(true);
+    expect(component.shouldShowBundleVariableDropdown).toBe(false);
+    expect(fixture.nativeElement.querySelectorAll('.bundle-variable-chip')).toHaveLength(8);
+    expect(fixture.nativeElement.querySelector('.bundle-variable-dropdown-wrapper .variable-trigger-btn')).toBeNull();
+  });
+
+  it('shows a bundle variable dropdown above eight variables', () => {
+    component.showProgress = true;
+    component.codingService = {
+      isUnitCoded: jest.fn().mockReturnValue(false)
+    } as never;
+    const variables = ['VAR1', 'VAR2', 'VAR3', 'VAR4', 'VAR5', 'VAR6', 'VAR7', 'VAR8', 'VAR9'].map((variableId, index) => ({
+      responseId: index + 1,
+      unitName: 'UNIT_1',
+      variableId,
+      variableAnchor: variableId,
+      variablePage: '0',
+      status: 'manual-open' as const,
+      code: null,
+      score: null,
+      source: 'manual' as const
+    }));
+    const bundleContext = {
+      bundleId: 9,
+      bundleName: 'Bundle A',
+      caseKey: 'case-1',
+      caseOrderingMode: 'continuous' as const,
+      variables
+    };
+    component.unitsData = {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: variables.map((variable, index) => ({
+        id: index + 1,
+        name: 'UNIT_1',
+        alias: 'UNIT_1',
+        bookletId: 0,
+        variableId: variable.variableId,
+        variableBundleId: 9,
+        bundleContext
+      }))
+    };
+
+    fixture.detectChanges();
+
+    const trigger = fixture.nativeElement.querySelector(
+      '.bundle-variable-dropdown-wrapper .variable-trigger-btn'
+    ) as HTMLButtonElement;
+    expect(component.navigationItems.map(item => item.label)).toEqual(['Bundle A']);
+    expect(component.shouldShowBundleVariableChips).toBe(false);
+    expect(component.shouldShowBundleVariableDropdown).toBe(true);
+    expect(trigger).toBeTruthy();
+    expect(trigger.textContent).toContain('UNIT_1 / VAR1');
+    expect(fixture.nativeElement.querySelectorAll('.bundle-variable-chip')).toHaveLength(0);
+
+    component.toggleBundleVariablePanel();
+    fixture.detectChanges();
+
+    const panelItems = fixture.nativeElement.querySelectorAll(
+      '.bundle-variable-dropdown-wrapper .variable-panel-item'
+    ) as NodeListOf<HTMLElement>;
+    expect(panelItems).toHaveLength(9);
+    expect(panelItems[8].textContent).toContain('UNIT_1 / VAR9');
+
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+    component.selectBundleVariable('UNIT_1::VAR9', false);
+
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[8]);
+  });
+
+  it('keeps bundle variable navigation within the current bundle case', () => {
+    component.showProgress = true;
+    component.codingService = {
+      isUnitCoded: jest.fn().mockReturnValue(false)
+    } as never;
+    const variables = ['VAR1', 'VAR2', 'VAR3', 'VAR4', 'VAR5'].map((variableId, index) => ({
+      responseId: index + 1,
+      unitName: 'UNIT_1',
+      variableId,
+      variableAnchor: variableId,
+      variablePage: '0',
+      status: 'manual-open' as const,
+      code: null,
+      score: null,
+      source: 'manual' as const
+    }));
+    const firstCaseContext = {
+      bundleId: 9,
+      bundleName: 'Bundle A',
+      caseKey: 'case-1',
+      caseOrderingMode: 'continuous' as const,
+      variables
+    };
+    const secondCaseContext = {
+      ...firstCaseContext,
+      caseKey: 'case-2',
+      variables: variables.map((variable, index) => ({
+        ...variable,
+        responseId: index + 6
+      }))
+    };
+    const createCaseUnits = (testPerson: string, bundleContext: typeof firstCaseContext, idOffset: number) => (
+      bundleContext.variables.map((variable, index) => ({
+        id: idOffset + index,
+        name: 'UNIT_1',
+        alias: 'UNIT_1',
+        bookletId: 0,
+        testPerson,
+        variableId: variable.variableId,
+        variableBundleId: 9,
+        bundleContext
+      }))
+    );
+    component.unitsData = {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 5,
+      units: [
+        ...createCaseUnits('person-1@code@group@booklet', firstCaseContext, 1),
+        ...createCaseUnits('person-2@code@group@booklet', secondCaseContext, 6)
+      ]
+    };
+
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+
+    component.selectBundleVariable('UNIT_1::VAR5', false);
+
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[9]);
+    expect(emitSpy).not.toHaveBeenCalledWith(component.unitsData.units[4]);
+  });
+
+  it('navigates to the first uncoded unit of a selected bundle navigation item', () => {
+    component.codingService = {
+      isUnitCoded: jest.fn((unit: { variableId?: string }) => unit.variableId === 'VAR1')
+    } as never;
+    component.unitsData = {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_1',
+          alias: 'UNIT_1',
+          bookletId: 0,
+          variableId: 'VAR1',
+          variableBundleId: 9,
+          bundleContext: {
+            bundleId: 9,
+            bundleName: 'Bundle A',
+            caseKey: 'case-1',
+            caseOrderingMode: 'continuous',
+            variables: []
+          }
+        },
+        {
+          id: 2,
+          name: 'UNIT_1',
+          alias: 'UNIT_1',
+          bookletId: 0,
+          variableId: 'VAR2',
+          variableBundleId: 9
+        },
+        {
+          id: 3,
+          name: 'UNIT_2',
+          alias: 'UNIT_2',
+          bookletId: 0,
+          variableId: 'VAR3'
+        }
+      ]
+    };
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+
+    component.jumpToNavigationItem('bundle:9');
+
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
   });
 });

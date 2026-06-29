@@ -5,8 +5,11 @@ import {
 import { Job } from 'bull';
 import * as path from 'path';
 import * as fs from 'fs';
+import { pipeline } from 'stream/promises';
 import {
   ExportJobData,
+  ExportJobProgress,
+  ExportJobProgressPhase,
   ExportJobResult,
   JobQueueService
 } from '../job-queue.service';
@@ -101,44 +104,123 @@ export class ExportJobProcessor {
       (await this.jobQueueService.isExportJobCancelled(job.id.toString()))
     ) {
       this.logger.log(`Export job ${job.id} cancellation detected`);
-      // Clean up partial file if it exists
-      if (filePath && fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-          this.logger.log(`Cleaned up partial export file: ${filePath}`);
-        } catch (cleanupError) {
-          this.logger.warn(
-            `Failed to clean up partial file ${filePath}: ${cleanupError.message}`
-          );
-        }
-      }
+      this.cleanupPartialExportFile(filePath);
       throw new ExportJobCancelledException(job.id);
     }
   }
 
-  private writeStreamToFile(
+  private cleanupPartialExportFile(filePath?: string): void {
+    if (!filePath || !fs.existsSync(filePath)) {
+      return;
+    }
+
+    try {
+      fs.unlinkSync(filePath);
+      this.logger.log(`Cleaned up partial export file: ${filePath}`);
+    } catch (cleanupError) {
+      this.logger.warn(
+        `Failed to clean up partial file ${filePath}: ${cleanupError.message}`
+      );
+    }
+  }
+
+  private createCancelledResult(
+    job: Job<ExportJobData>
+  ): ExportJobResult {
+    return {
+      fileId: job.id.toString(),
+      fileName: '',
+      filePath: '',
+      fileSize: 0,
+      workspaceId: job.data.workspaceId,
+      userId: job.data.userId,
+      exportType: job.data.exportType,
+      createdAt: Date.now()
+    };
+  }
+
+  private clampProgress(percentage: number): number {
+    return Math.max(0, Math.min(100, Math.round(percentage)));
+  }
+
+  private async updateJobProgress(
+    job: Job<ExportJobData>,
+    percentage: number,
+    details: {
+      phase?: ExportJobProgressPhase;
+      processedRows?: number;
+      totalRows?: number;
+      message?: string;
+    } = {}
+  ): Promise<void> {
+    const progress: ExportJobProgress = {
+      percentage: this.clampProgress(percentage)
+    };
+
+    if (details.phase) {
+      progress.phase = details.phase;
+    }
+    if (typeof details.processedRows === 'number') {
+      progress.processedRows = Math.max(0, Math.round(details.processedRows));
+    }
+    if (typeof details.totalRows === 'number') {
+      progress.totalRows = Math.max(0, Math.round(details.totalRows));
+    }
+    if (details.message) {
+      progress.message = details.message;
+    }
+
+    await job.progress(progress);
+  }
+
+  private async writeStreamToFile(
     stream: NodeJS.ReadableStream,
     filePath: string,
-    options: { prependUtf8Bom?: boolean } = {}
+    options: {
+      prependUtf8Bom?: boolean;
+      checkCancellation?: () => Promise<void>;
+      cancellationSignal?: AbortSignal;
+    } = {}
   ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const writeStream = fs.createWriteStream(filePath);
-      writeStream.on('finish', resolve);
-      writeStream.on('error', reject);
-      stream.on('error', reject);
+    const writeStream = fs.createWriteStream(filePath);
+    let cancellationTimer: ReturnType<typeof setInterval> | undefined;
 
+    try {
       if (options.prependUtf8Bom) {
         writeStream.write('\uFEFF');
       }
-      stream.pipe(writeStream);
-    });
+
+      if (options.checkCancellation) {
+        cancellationTimer = setInterval(() => {
+          options.checkCancellation?.().catch(error => {
+            (stream as NodeJS.ReadableStream & { destroy?: (error?: Error) => void }).destroy?.(error);
+            writeStream.destroy(error);
+          });
+        }, 1000);
+      }
+
+      await pipeline(stream, writeStream, {
+        signal: options.cancellationSignal
+      });
+    } catch (error) {
+      if (options.cancellationSignal?.aborted && options.checkCancellation) {
+        await options.checkCancellation();
+      }
+
+      throw error;
+    } finally {
+      if (cancellationTimer) {
+        clearInterval(cancellationTimer);
+      }
+    }
   }
 
-  @Process()
+  @Process({ concurrency: 1 })
   async process(job: Job<ExportJobData>): Promise<ExportJobResult> {
     this.logger.log(
       `Processing export job ${job.id} for workspace ${job.data.workspaceId}, type: ${job.data.exportType}`
     );
+    const startedAt = Date.now();
 
     const validExportTypes = [
       'aggregated',
@@ -163,11 +245,13 @@ export class ExportJobProcessor {
 
     this.validateExportJobData(job);
 
+    const jobId = job.id.toString();
+    const cancellationSignal = this.jobQueueService.createExportJobCancellationSignal(jobId);
     let filePath: string | undefined;
 
     try {
       await this.checkCancellation(job);
-      await job.progress(10);
+      await this.updateJobProgress(job, 10, { phase: 'preparing' });
       const tempDir = path.join(process.cwd(), 'temp');
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
@@ -198,26 +282,37 @@ export class ExportJobProcessor {
       this.logger.log(`Generating export file: ${filePath}`);
       await this.checkCancellation(job, filePath);
 
-      await job.progress(20);
+      await this.updateJobProgress(job, 20, { phase: 'preparing' });
       const checkCancellation = async (): Promise<void> => {
         await this.checkCancellation(job, filePath);
       };
 
-      let buffer: Buffer | undefined;
+      const generationStartedAt = Date.now();
 
       // eslint-disable-next-line default-case
       switch (job.data.exportType) {
         case 'results-by-version': {
           const version = job.data.version || 'v2';
-          const onProgress = async (percentage: number) => {
+          const onProgress = async (
+            percentage: number,
+            details?: {
+              phase?: ExportJobProgressPhase;
+              processedRows?: number;
+              totalRows?: number;
+            }
+          ) => {
             // Map 0-100% of sub-task to 20-90% of overall job
             const jobProgress = 20 + Math.round((percentage / 100) * 70);
-            await job.progress(jobProgress);
+            await this.updateJobProgress(job, jobProgress, {
+              phase: details?.phase || 'writing',
+              processedRows: details?.processedRows,
+              totalRows: details?.totalRows
+            });
             await checkCancellation();
           };
 
           if (job.data.format === 'excel') {
-            buffer = await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
+            const excelOptions = {
               workspaceId: job.data.workspaceId,
               version,
               authToken: job.data.authToken || '',
@@ -226,8 +321,13 @@ export class ExportJobProcessor {
               onProgress,
               includeResponseValues: job.data.includeResponseValues !== false,
               includeGeoGebraResponseValues: job.data.includeGeoGebraResponseValues === true,
-              includeGeoGebraFiles: job.data.includeGeoGebraFiles === true
-            });
+              includeGeoGebraFiles: job.data.includeGeoGebraFiles === true,
+              checkCancellation
+            };
+            await this.codingExportOrchestratorService.exportResultsByVersionAsExcelToFile(
+              filePath,
+              excelOptions
+            );
           } else {
             // CSV Stream
             const stream = await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
@@ -238,11 +338,14 @@ export class ExportJobProcessor {
               includeReplayUrl: job.data.includeReplayUrl || false,
               onProgress,
               includeResponseValues: job.data.includeResponseValues !== false,
-              includeGeoGebraResponseValues: job.data.includeGeoGebraResponseValues === true
+              includeGeoGebraResponseValues: job.data.includeGeoGebraResponseValues === true,
+              checkCancellation
             });
 
             await this.writeStreamToFile(stream, filePath, {
-              prependUtf8Bom: true
+              prependUtf8Bom: true,
+              checkCancellation,
+              cancellationSignal
             });
           }
           break;
@@ -251,17 +354,19 @@ export class ExportJobProcessor {
         case 'coding-list': {
           const onProgress = async (percentage: number) => {
             const jobProgress = 20 + Math.round((percentage / 100) * 70);
-            await job.progress(jobProgress);
+            await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
             await checkCancellation();
           };
 
           if (job.data.format === 'excel') {
-            buffer = await this.codingExportService.exportCodingListForJobAsExcel(
+            await this.codingExportService.exportCodingListForJobAsExcelToFile(
+              filePath,
               job.data.workspaceId,
               job.data.authToken || '',
               job.data.serverUrl || '',
               onProgress,
-              job.data.trainingRequired
+              job.data.trainingRequired,
+              checkCancellation
             );
           } else if (job.data.format === 'json') {
             const stream = await this.codingExportService.exportCodingListForJobAsJson(
@@ -269,10 +374,11 @@ export class ExportJobProcessor {
               job.data.authToken || '',
               job.data.serverUrl || '',
               onProgress,
-              job.data.trainingRequired
+              job.data.trainingRequired,
+              checkCancellation
             );
 
-            await this.writeStreamToFile(stream, filePath);
+            await this.writeStreamToFile(stream, filePath, { checkCancellation, cancellationSignal });
           } else {
             // CSV
             const stream = await this.codingExportService.exportCodingListForJobAsCsv(
@@ -280,11 +386,14 @@ export class ExportJobProcessor {
               job.data.authToken || '',
               job.data.serverUrl || '',
               onProgress,
-              job.data.trainingRequired
+              job.data.trainingRequired,
+              checkCancellation
             );
 
             await this.writeStreamToFile(stream, filePath, {
-              prependUtf8Bom: true
+              prependUtf8Bom: true,
+              checkCancellation,
+              cancellationSignal
             });
           }
           break;
@@ -293,18 +402,21 @@ export class ExportJobProcessor {
         case 'item-matrix': {
           const onProgress = async (percentage: number) => {
             const jobProgress = 20 + Math.round((percentage / 100) * 70);
-            await job.progress(jobProgress);
+            await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
             await checkCancellation();
           };
 
           if (job.data.format === 'excel') {
-            buffer = await this.codingExportOrchestratorService.exportItemMatrixAsExcel({
-              workspaceId: job.data.workspaceId,
-              matrixValue: job.data.matrixValue || 'score',
-              version: job.data.version || 'v2',
-              onProgress,
-              checkCancellation
-            });
+            await this.codingExportOrchestratorService.exportItemMatrixAsExcelToFile(
+              filePath,
+              {
+                workspaceId: job.data.workspaceId,
+                matrixValue: job.data.matrixValue || 'score',
+                version: job.data.version || 'v2',
+                onProgress,
+                checkCancellation
+              }
+            );
           } else {
             const stream = await this.codingExportOrchestratorService.exportItemMatrixAsCsv({
               workspaceId: job.data.workspaceId,
@@ -315,14 +427,17 @@ export class ExportJobProcessor {
             });
 
             await this.writeStreamToFile(stream, filePath, {
-              prependUtf8Bom: true
+              prependUtf8Bom: true,
+              checkCancellation,
+              cancellationSignal
             });
           }
           break;
         }
 
         case 'aggregated':
-          buffer = await this.codingExportService.exportCodingResultsAggregated(
+          await this.codingExportService.exportCodingResultsAggregatedToFile(
+            filePath,
             job.data.workspaceId,
             job.data.outputCommentsInsteadOfCodes || false,
             job.data.includeReplayUrl || false,
@@ -343,7 +458,8 @@ export class ExportJobProcessor {
           break;
 
         case 'by-coder':
-          buffer = await this.codingExportService.exportCodingResultsByCoder(
+          await this.codingExportService.exportCodingResultsByCoderToFile(
+            filePath,
             job.data.workspaceId,
             job.data.outputCommentsInsteadOfCodes || false,
             job.data.includeReplayUrl || false,
@@ -361,7 +477,8 @@ export class ExportJobProcessor {
           break;
 
         case 'by-variable':
-          buffer = await this.codingExportService.exportCodingResultsByVariable(
+          await this.codingExportService.exportCodingResultsByVariableToFile(
+            filePath,
             job.data.workspaceId,
             job.data.includeModalValue || false,
             job.data.includeDoubleCoded || false,
@@ -402,29 +519,37 @@ export class ExportJobProcessor {
               job.data.serverUrl || ''
             ),
             filePath,
-            { prependUtf8Bom: true }
+            {
+              prependUtf8Bom: true,
+              checkCancellation,
+              cancellationSignal
+            }
           );
           break;
 
         case 'detailed':
-          buffer = await this.codingExportOrchestratorService.exportDetailed({
-            workspaceId: job.data.workspaceId,
-            outputCommentsInsteadOfCodes: job.data.outputCommentsInsteadOfCodes || false,
-            includeReplayUrl: job.data.includeReplayUrl || false,
-            anonymizeCoders: job.data.anonymizeCoders || false,
-            usePseudoCoders: job.data.usePseudoCoders || false,
-            authToken: job.data.authToken || '',
-            excludeAutoCoded: job.data.excludeAutoCoded || false,
-            checkCancellation,
-            jobDefinitionIds: job.data.jobDefinitionIds,
-            coderTrainingIds: job.data.coderTrainingIds,
-            coderIds: job.data.coderIds,
-            serverUrl: job.data.serverUrl || ''
-          });
+          await this.codingExportOrchestratorService.exportDetailedToFile(
+            filePath,
+            {
+              workspaceId: job.data.workspaceId,
+              outputCommentsInsteadOfCodes: job.data.outputCommentsInsteadOfCodes || false,
+              includeReplayUrl: job.data.includeReplayUrl || false,
+              anonymizeCoders: job.data.anonymizeCoders || false,
+              usePseudoCoders: job.data.usePseudoCoders || false,
+              authToken: job.data.authToken || '',
+              excludeAutoCoded: job.data.excludeAutoCoded || false,
+              checkCancellation,
+              jobDefinitionIds: job.data.jobDefinitionIds,
+              coderTrainingIds: job.data.coderTrainingIds,
+              coderIds: job.data.coderIds,
+              serverUrl: job.data.serverUrl || ''
+            }
+          );
           break;
 
         case 'coding-times':
-          buffer = await this.codingExportService.exportCodingTimesReport(
+          await this.codingExportService.exportCodingTimesReportToFile(
+            filePath,
             job.data.workspaceId,
             job.data.anonymizeCoders || false,
             job.data.usePseudoCoders || false,
@@ -444,7 +569,7 @@ export class ExportJobProcessor {
             job.data.testResultFilters,
             async progress => {
               const jobProgress = 20 + Math.round((progress / 100) * 70);
-              await job.progress(jobProgress);
+              await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
               await this.checkCancellation(job, filePath);
             }
           );
@@ -458,7 +583,7 @@ export class ExportJobProcessor {
             job.data.testResultFilters,
             async progress => {
               const jobProgress = 20 + Math.round((progress / 100) * 70);
-              await job.progress(jobProgress);
+              await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
               await this.checkCancellation(job, filePath);
             }
           );
@@ -468,12 +593,11 @@ export class ExportJobProcessor {
       }
 
       await this.checkCancellation(job, filePath);
+      const generationFinishedAt = Date.now();
 
-      await job.progress(90);
+      await this.updateJobProgress(job, 90, { phase: 'finalizing' });
 
-      if (buffer) {
-        fs.writeFileSync(filePath, buffer);
-      }
+      const fileWriteFinishedAt = Date.now();
 
       await this.checkCancellation(job, filePath);
 
@@ -482,7 +606,10 @@ export class ExportJobProcessor {
       const finalFileName = path.basename(filePath);
 
       this.logger.log(
-        `Export file generated successfully: ${finalFileName} (${fileSize} bytes)`
+        `Export file generated successfully: ${finalFileName} (${fileSize} bytes) ` +
+        `in ${fileWriteFinishedAt - startedAt}ms ` +
+        `(generation: ${generationFinishedAt - generationStartedAt}ms, ` +
+        `file write: ${fileWriteFinishedAt - generationFinishedAt}ms)`
       );
 
       // Cache file metadata in Redis with 1 hour TTL
@@ -503,20 +630,24 @@ export class ExportJobProcessor {
         3600 // 1 hour TTL
       );
 
-      await job.progress(100);
+      await this.updateJobProgress(job, 100, { phase: 'completed' });
 
-      this.logger.log(`Job ${job.id} completed successfully`);
+      this.logger.log(`Job ${job.id} completed successfully in ${Date.now() - startedAt}ms`);
       return metadata;
     } catch (error) {
       if (error instanceof ExportJobCancelledException) {
-        this.logger.log(`Export job ${job.id} was cancelled`);
-        throw error;
+        this.logger.log(`Export job ${job.id} was cancelled after ${Date.now() - startedAt}ms`);
+        this.cleanupPartialExportFile(filePath);
+        return this.createCancelledResult(job);
       }
       this.logger.error(
         `Error processing export job ${job.id}: ${error.message}`,
         error.stack
       );
+      this.cleanupPartialExportFile(filePath);
       throw error;
+    } finally {
+      this.jobQueueService.clearExportJobCancellationSignal(jobId);
     }
   }
 }

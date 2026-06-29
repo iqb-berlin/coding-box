@@ -21,6 +21,7 @@ import {
 } from '../workspace/workspace-exclusion.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { isExportWorkerProcess } from '../../../export-worker/export-worker-role';
 import {
   CODING_STATISTICS_CACHE_VERSIONS,
   getCodingStatisticsCacheKey,
@@ -68,6 +69,11 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   ) { }
 
   async onApplicationBootstrap(): Promise<void> {
+    if (isExportWorkerProcess()) {
+      this.logger.log('Skipping coding statistics preload in export worker');
+      return;
+    }
+
     this.logger.log('Application bootstrap: Loading coding statistics for all workspaces...');
     try {
       const workspaceIds = await this.getWorkspaceIdsWithResponses();

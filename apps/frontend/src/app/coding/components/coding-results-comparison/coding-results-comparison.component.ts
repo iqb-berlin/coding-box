@@ -37,6 +37,7 @@ import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import type { ReviewCodeSelection } from '../../../replay/services/units-replay.service';
 import {
   hasInvalidRegexFilter,
   matchesTextFilter
@@ -58,6 +59,14 @@ interface ReplayCodeSelectedMessage extends PostMessage {
   variableId: string;
   code: string;
   score?: number | null;
+  notes?: string | null;
+  responseId?: number;
+}
+
+interface ReplayNotesCommittedMessage extends PostMessage {
+  testPerson: string;
+  unitId: string;
+  variableId: string;
   notes?: string | null;
   responseId?: number;
 }
@@ -129,6 +138,7 @@ interface ReplayDisplayOptions {
   showScore?: boolean;
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
+  reviewCodeSelections?: string;
 }
 
 interface ComparisonFilters {
@@ -313,6 +323,8 @@ export class CodingResultsComparisonComponent implements OnInit {
     [-4]: 'Technisch'
   };
 
+  private readonly standaloneCodingIssueOptionIds = new Set([-3, -4]);
+
   tableFilters: ComparisonFilters = {
     unitName: '',
     variableId: '',
@@ -331,6 +343,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   discussionNotesByResponseId: Record<number, string> = {};
   discussionErrorByResponseId: Record<number, string> = {};
   isSavingDiscussionByResponseId: Record<number, boolean> = {};
+  private pendingDiscussionNotesByResponseId: Record<number, string> = {};
   readonly emptyModalValueDisplay: ModalValueDisplay = {
     valueText: '-',
     deviationText: '-',
@@ -382,6 +395,12 @@ export class CodingResultsComparisonComponent implements OnInit {
       .pipe(takeUntil(this.ngUnsubscribe))
       .subscribe(msg => {
         this.handleReplayCodeSelected(msg.message);
+      });
+
+    this.postMessageService.getMessages<ReplayNotesCommittedMessage>('replayNotesCommitted')
+      .pipe(takeUntil(this.ngUnsubscribe))
+      .subscribe(msg => {
+        this.handleReplayNotesCommitted(msg.message);
       });
   }
 
@@ -1031,9 +1050,17 @@ export class CodingResultsComparisonComponent implements OnInit {
       notes
     ).subscribe({
       next: result => {
+        const hasPendingNotes = Object.prototype.hasOwnProperty.call(
+          this.pendingDiscussionNotesByResponseId,
+          responseId
+        );
+        const pendingNotes = hasPendingNotes ?
+          this.pendingDiscussionNotesByResponseId[responseId] :
+          '';
+
         this.discussionCodeByResponseId[responseId] = result.code !== null ? result.code.toString() : '';
         this.discussionScoreByResponseId[responseId] = result.score;
-        this.discussionNotesByResponseId[responseId] = result.notes || '';
+        this.discussionNotesByResponseId[responseId] = hasPendingNotes ? pendingNotes : result.notes || '';
         withinComparison.discussionCode = result.code;
         withinComparison.discussionScore = result.score;
         withinComparison.discussionNotes = result.notes;
@@ -1045,9 +1072,19 @@ export class CodingResultsComparisonComponent implements OnInit {
           this.discussionManagerLabel = result.managerName;
         }
         this.isSavingDiscussionByResponseId[responseId] = false;
+
+        if (hasPendingNotes) {
+          delete this.pendingDiscussionNotesByResponseId[responseId];
+          const normalizedPendingNotes = pendingNotes.trim() || null;
+          const normalizedSavedNotes = (result.notes || '').trim() || null;
+          if (normalizedPendingNotes !== normalizedSavedNotes) {
+            this.onDiscussionCodeBlur(withinComparison, result.score);
+          }
+        }
       },
       error: error => {
         this.isSavingDiscussionByResponseId[responseId] = false;
+        delete this.pendingDiscussionNotesByResponseId[responseId];
         const message = this.getDiscussionSaveErrorMessage(error);
         this.discussionErrorByResponseId[responseId] = message;
         this.snackBar.open(message, this.translate.instant('common.close'), { duration: 4000 });
@@ -1235,6 +1272,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.discussionNotesByResponseId = {};
     this.discussionErrorByResponseId = {};
     this.isSavingDiscussionByResponseId = {};
+    this.pendingDiscussionNotesByResponseId = {};
 
     const persistedManager = data.find(item => !!item.discussionManagerName)?.discussionManagerName;
     if (persistedManager) {
@@ -1268,7 +1306,7 @@ export class CodingResultsComparisonComponent implements OnInit {
           window.open(this.buildReplayUrl(
             result.replayUrl,
             responseId,
-            this.getReplayDisplayOptions()
+            this.getReplayDisplayOptions(comparison)
           ), '_blank');
         } else {
           this.snackBar.open('Replay-URL konnte nicht erzeugt werden.', this.translate.instant('common.close'), { duration: 3000 });
@@ -1280,21 +1318,77 @@ export class CodingResultsComparisonComponent implements OnInit {
     });
   }
 
-  private getReplayDisplayOptions(): ReplayDisplayOptions {
+  private getReplayDisplayOptions(comparison?: TrainingComparison | WithinTrainingComparison): ReplayDisplayOptions {
+    const reviewCodeSelections = comparison ? this.serializeReviewCodeSelections(comparison) : undefined;
     if (this.comparisonMode !== 'within-training') {
-      return {};
+      return { reviewCodeSelections };
     }
 
     const selectedTraining = this.getSelectedWithinTraining();
     if (!selectedTraining) {
-      return {};
+      return { reviewCodeSelections };
     }
 
     return {
       showScore: selectedTraining.show_score ?? false,
       allowComments: selectedTraining.allow_comments ?? true,
-      suppressGeneralInstructions: selectedTraining.suppress_general_instructions ?? false
+      suppressGeneralInstructions: selectedTraining.suppress_general_instructions ?? false,
+      reviewCodeSelections
     };
+  }
+
+  private serializeReviewCodeSelections(comparison: TrainingComparison | WithinTrainingComparison): string | undefined {
+    const selections = this.getReviewCodeSelections(comparison);
+    return selections.length > 0 ? JSON.stringify(selections) : undefined;
+  }
+
+  private getReviewCodeSelections(comparison: TrainingComparison | WithinTrainingComparison): ReviewCodeSelection[] {
+    const coderNamesByCode = new Map<number, string[]>();
+
+    comparison.coders.forEach(coder => {
+      const coderName = this.getCoderSourceLabel(coder);
+      this.getReviewSelectionCodes(coder).forEach(code => {
+        const coderNames = coderNamesByCode.get(code) || [];
+        if (!coderNames.includes(coderName)) {
+          coderNames.push(coderName);
+        }
+        coderNamesByCode.set(code, coderNames);
+      });
+    });
+
+    return Array.from(coderNamesByCode.entries())
+      .sort(([codeA], [codeB]) => codeA - codeB)
+      .map(([code, coderNames]) => ({ code, coderNames }));
+  }
+
+  private getReviewSelectionCodes(coder: ComparisonCoderResult): number[] {
+    if (
+      coder.codingIssueOption !== null &&
+      coder.codingIssueOption !== undefined &&
+      this.standaloneCodingIssueOptionIds.has(coder.codingIssueOption)
+    ) {
+      return [coder.codingIssueOption];
+    }
+
+    const codes = new Set<number>();
+    const code = this.parseReviewCode(coder.code);
+    if (code !== null) {
+      codes.add(code);
+    }
+    if (coder.codingIssueOption !== null && coder.codingIssueOption !== undefined) {
+      codes.add(coder.codingIssueOption);
+    }
+    return Array.from(codes);
+  }
+
+  private parseReviewCode(code: string | null): number | null {
+    const trimmedCode = code?.trim();
+    if (!trimmedCode) {
+      return null;
+    }
+
+    const parsedCode = Number(trimmedCode);
+    return Number.isFinite(parsedCode) ? parsedCode : null;
   }
 
   private buildReplayUrl(
@@ -1316,6 +1410,9 @@ export class CodingResultsComparisonComponent implements OnInit {
       }
       if (displayOptions.suppressGeneralInstructions !== undefined) {
         params.set('suppressGeneralInstructions', String(displayOptions.suppressGeneralInstructions));
+      }
+      if (displayOptions.reviewCodeSelections) {
+        params.set('reviewCodeSelections', displayOptions.reviewCodeSelections);
       }
       const serializedParams = params.toString();
       return serializedParams ? `${path}?${serializedParams}` : path;
@@ -1944,9 +2041,9 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.loadKappaStatistics();
   }
 
-  private handleReplayCodeSelected(data: ReplayCodeSelectedMessage): void {
-    if (this.comparisonMode !== 'within-training') return;
-
+  private findWithinTrainingReplayRow(
+    data: Pick<ReplayCodeSelectedMessage, 'testPerson' | 'unitId' | 'variableId' | 'responseId'>
+  ): WithinTrainingComparison | null {
     const targetVarId = (data.variableId || '').toLowerCase();
     const targetUnitId = (data.unitId || '').toLowerCase();
     const normalizedMsgTP = normalizeTestperson(data.testPerson || '').toLowerCase();
@@ -1966,11 +2063,27 @@ export class CodingResultsComparisonComponent implements OnInit {
       });
     }
 
+    return row || null;
+  }
+
+  private getDiscussionScoreOverride(responseId: number): number | null | undefined {
+    return Object.prototype.hasOwnProperty.call(this.discussionScoreByResponseId, responseId) ?
+      this.discussionScoreByResponseId[responseId] :
+      undefined;
+  }
+
+  private handleReplayCodeSelected(data: ReplayCodeSelectedMessage): void {
+    if (this.comparisonMode !== 'within-training') return;
+
+    const row = this.findWithinTrainingReplayRow(data);
+
     if (row) {
       this.discussionCodeByResponseId[row.responseId] = this.mapCodeForDisplay(data.code);
       this.discussionScoreByResponseId[row.responseId] =
         data.score !== undefined ? data.score : this.getDiscussionScoreFromKnownCodes(row, parseInt(data.code, 10));
-      this.discussionNotesByResponseId[row.responseId] = data.notes || '';
+      if (Object.prototype.hasOwnProperty.call(data, 'notes')) {
+        this.discussionNotesByResponseId[row.responseId] = data.notes || '';
+      }
       this.onDiscussionCodeBlur(row, data.score);
 
       this.snackBar.open(
@@ -1979,5 +2092,33 @@ export class CodingResultsComparisonComponent implements OnInit {
         { duration: 3000 }
       );
     }
+  }
+
+  private handleReplayNotesCommitted(data: ReplayNotesCommittedMessage): void {
+    if (this.comparisonMode !== 'within-training') return;
+
+    const row = this.findWithinTrainingReplayRow(data);
+    if (!row) {
+      return;
+    }
+
+    const responseId = row.responseId;
+    const notes = data.notes || '';
+    this.discussionNotesByResponseId[responseId] = notes;
+    this.discussionErrorByResponseId[responseId] = '';
+
+    const currentCode = (this.discussionCodeByResponseId[responseId] || '').trim() ||
+      (row.discussionCode !== null && row.discussionCode !== undefined ? row.discussionCode.toString() : '');
+    if (!currentCode) {
+      return;
+    }
+
+    this.discussionCodeByResponseId[responseId] = currentCode;
+    if (this.isSavingDiscussionByResponseId[responseId]) {
+      this.pendingDiscussionNotesByResponseId[responseId] = notes;
+      return;
+    }
+
+    this.onDiscussionCodeBlur(row, this.getDiscussionScoreOverride(responseId));
   }
 }

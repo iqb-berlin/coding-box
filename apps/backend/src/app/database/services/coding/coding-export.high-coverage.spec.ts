@@ -12,6 +12,7 @@ const row = {
   variableId: 'VAR',
   responseId: '1',
   trainingId: '1',
+  userId: '2',
   username: 'Coder A',
   jobId: '1',
   cju_code: '1',
@@ -67,9 +68,12 @@ const readableItems = (...items: unknown[]) => Readable.from(items, { objectMode
 const codingListService = () => ({
   getCodingListCsvStream: jest.fn().mockResolvedValue(Readable.from(['csv'])),
   getCodingListAsExcel: jest.fn().mockResolvedValue(Buffer.from('excel')),
+  writeCodingListExcelToFile: jest.fn().mockResolvedValue(undefined),
   getCodingListJsonStream: jest.fn(() => readableItems({ id: 1, unitName: 'UNIT' })),
   getCodingResultsByVersionCsvStream: jest.fn().mockResolvedValue(Readable.from(['version-csv'])),
   getCodingResultsByVersionAsExcel: jest.fn().mockResolvedValue(Buffer.from('version-excel')),
+  writeCodingResultsByVersionExcelToFile: jest.fn().mockResolvedValue(undefined),
+  writeCodingResultsByVersionGeoGebraZipToFile: jest.fn().mockResolvedValue(undefined),
   getVariablePageMap: jest.fn().mockResolvedValue(new Map([['VAR', '2']])),
   getCodingListVariables: jest.fn().mockResolvedValue([{ unitName: 'UNIT', variableId: 'VAR' }])
 });

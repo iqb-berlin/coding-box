@@ -534,7 +534,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.codingJobBackendService.getJobDefinitions(workspaceId).subscribe({
+    this.codingJobBackendService.getJobDefinitions(
+      workspaceId,
+      { includePlannedUsage: true }
+    ).subscribe({
       next: definitions => {
         // When editing an existing job definition, exclude the current job definition
         // from the list to prevent its variables from being incorrectly disabled

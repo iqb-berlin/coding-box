@@ -11,16 +11,22 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import {
+  AllowWorkspaceTokenScopes,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_READ
+} from '../../auth/workspace-token';
+import { WorkspaceGuard } from './workspace.guard';
 import { BookletInfoService } from '../../database/services/workspace';
 import { BookletInfoDto } from '../../../../../../api-dto/booklet-info/booklet-info.dto';
 
 @ApiTags('Booklet Info')
 @Controller('admin/workspace/:workspaceId/booklet')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, WorkspaceGuard)
 export class BookletInfoController {
   constructor(private readonly bookletInfoService: BookletInfoService) {}
 
   @Get(':bookletId/info')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
   @ApiOperation({ summary: 'Get booklet info from XML' })
   @ApiParam({ name: 'workspaceId', type: Number })
   @ApiParam({ name: 'bookletId', type: String })

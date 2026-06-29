@@ -53,6 +53,36 @@ describe('UserBackendService', () => {
     });
   });
 
+  describe('getWorkspacesByUserList', () => {
+    it('should fall back to an empty list on loading errors', () => {
+      service.getWorkspacesByUserList(5).subscribe(res => {
+        expect(res).toEqual([]);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/users/5/workspaces`);
+      expect(req.request.method).toBe('GET');
+      req.flush('failed', { status: 500, statusText: 'Server Error' });
+    });
+  });
+
+  describe('getWorkspacesByUserListOrFail', () => {
+    it('should propagate loading errors', done => {
+      service.getWorkspacesByUserListOrFail(5).subscribe({
+        next: () => {
+          done.fail('Expected getWorkspacesByUserListOrFail to propagate the error');
+        },
+        error: error => {
+          expect(error.status).toBe(500);
+          done();
+        }
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/users/5/workspaces`);
+      expect(req.request.method).toBe('GET');
+      req.flush('failed', { status: 500, statusText: 'Server Error' });
+    });
+  });
+
   describe('addUser', () => {
     it('should add user', () => {
       service.addUser(({}) as CreateUserDto).subscribe(res => {

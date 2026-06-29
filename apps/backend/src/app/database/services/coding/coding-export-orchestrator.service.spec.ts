@@ -2,50 +2,50 @@ import { Readable } from 'stream';
 import type { CodingExportService } from './coding-export.service';
 import { CodingExportOrchestratorService } from './coding-export-orchestrator.service';
 import type { CodingItemMatrixExportService } from './coding-item-matrix-export.service';
-import type { CodingResultsExportService } from './coding-results-export.service';
+import type { CodingListService } from './coding-list.service';
 
 jest.mock('./coding-export.service', () => ({
   CodingExportService: jest.fn()
-}));
-jest.mock('./coding-results-export.service', () => ({
-  CodingResultsExportService: jest.fn()
 }));
 
 describe('CodingExportOrchestratorService', () => {
   const createService = () => {
     const codingExportService = {
-      exportCodingResultsDetailed: jest.fn()
+      exportCodingResultsDetailed: jest.fn(),
+      exportCodingResultsDetailedToFile: jest.fn().mockResolvedValue(undefined)
     };
-    const codingResultsExportService = {
-      exportCodingResultsByVersionAsCsv: jest.fn(),
-      exportCodingResultsByVersionAsExcel: jest.fn(),
-      exportCodingResultsByVersionAsGeoGebraZip: jest.fn(),
-      exportCodingResultsDetailed: jest.fn()
+    const codingListService = {
+      getCodingResultsByVersionCsvStream: jest.fn(),
+      getCodingResultsByVersionAsExcel: jest.fn(),
+      writeCodingResultsByVersionExcelToFile: jest.fn().mockResolvedValue(undefined),
+      getCodingResultsByVersionAsGeoGebraZip: jest.fn(),
+      writeCodingResultsByVersionGeoGebraZipToFile: jest.fn().mockResolvedValue(undefined)
     };
     const codingItemMatrixExportService = {
       exportItemMatrixAsCsvStream: jest.fn(),
-      exportItemMatrixAsExcel: jest.fn()
+      exportItemMatrixAsExcel: jest.fn(),
+      writeItemMatrixExcelToFile: jest.fn().mockResolvedValue(undefined)
     };
 
     const service = new CodingExportOrchestratorService(
       codingExportService as unknown as CodingExportService,
-      codingResultsExportService as unknown as CodingResultsExportService,
+      codingListService as unknown as CodingListService,
       codingItemMatrixExportService as unknown as CodingItemMatrixExportService
     );
 
     return {
       service,
       codingExportService,
-      codingResultsExportService,
+      codingListService,
       codingItemMatrixExportService
     };
   };
 
-  it('routes versioned CSV exports to the specialized results export service', async () => {
-    const { service, codingResultsExportService } = createService();
+  it('routes versioned CSV exports directly to the streaming coding-list service', async () => {
+    const { service, codingListService } = createService();
     const csvStream = Readable.from(['csv']);
     const onProgress = jest.fn();
-    codingResultsExportService.exportCodingResultsByVersionAsCsv.mockResolvedValue(csvStream);
+    codingListService.getCodingResultsByVersionCsvStream.mockResolvedValue(csvStream);
 
     await expect(service.exportResultsByVersionAsCsv({
       workspaceId: 7,
@@ -57,7 +57,7 @@ describe('CodingExportOrchestratorService', () => {
       onProgress
     })).resolves.toBe(csvStream);
 
-    expect(codingResultsExportService.exportCodingResultsByVersionAsCsv).toHaveBeenCalledWith(
+    expect(codingListService.getCodingResultsByVersionCsvStream).toHaveBeenCalledWith(
       7,
       'v3',
       'token',
@@ -65,14 +65,15 @@ describe('CodingExportOrchestratorService', () => {
       true,
       onProgress,
       false,
-      false
+      false,
+      undefined
     );
   });
 
   it('passes raw GeoGebra response value option to versioned exports', async () => {
-    const { service, codingResultsExportService } = createService();
+    const { service, codingListService } = createService();
     const buffer = Buffer.from('xlsx');
-    codingResultsExportService.exportCodingResultsByVersionAsExcel.mockResolvedValue(buffer);
+    codingListService.getCodingResultsByVersionAsExcel.mockResolvedValue(buffer);
 
     await expect(service.exportResultsByVersionAsExcel({
       workspaceId: 7,
@@ -81,7 +82,7 @@ describe('CodingExportOrchestratorService', () => {
       includeGeoGebraResponseValues: true
     })).resolves.toBe(buffer);
 
-    expect(codingResultsExportService.exportCodingResultsByVersionAsExcel).toHaveBeenCalledWith(
+    expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(
       7,
       'v2',
       '',
@@ -89,15 +90,16 @@ describe('CodingExportOrchestratorService', () => {
       false,
       undefined,
       true,
-      true
+      true,
+      undefined
     );
   });
 
   it('routes versioned Excel GeoGebra packages to the ZIP export service', async () => {
-    const { service, codingResultsExportService } = createService();
+    const { service, codingListService } = createService();
     const buffer = Buffer.from('zip');
     const onProgress = jest.fn();
-    codingResultsExportService.exportCodingResultsByVersionAsGeoGebraZip.mockResolvedValue(buffer);
+    codingListService.getCodingResultsByVersionAsGeoGebraZip.mockResolvedValue(buffer);
 
     await expect(service.exportResultsByVersionAsExcel({
       workspaceId: 7,
@@ -109,15 +111,76 @@ describe('CodingExportOrchestratorService', () => {
       onProgress
     })).resolves.toBe(buffer);
 
-    expect(codingResultsExportService.exportCodingResultsByVersionAsGeoGebraZip).toHaveBeenCalledWith(
+    expect(codingListService.getCodingResultsByVersionAsGeoGebraZip).toHaveBeenCalledWith(
       7,
       'v2',
       'token',
       'http://app.example',
       true,
-      onProgress
+      onProgress,
+      undefined
     );
-    expect(codingResultsExportService.exportCodingResultsByVersionAsExcel).not.toHaveBeenCalled();
+    expect(codingListService.getCodingResultsByVersionAsExcel).not.toHaveBeenCalled();
+  });
+
+  it('routes versioned Excel file exports directly to the streaming coding-list service', async () => {
+    const { service, codingListService } = createService();
+    const onProgress = jest.fn();
+    const checkCancellation = jest.fn();
+
+    await expect(service.exportResultsByVersionAsExcelToFile('/tmp/export.xlsx', {
+      workspaceId: 7,
+      version: 'v3',
+      authToken: 'token',
+      serverUrl: 'http://app.example',
+      includeReplayUrl: true,
+      includeResponseValues: false,
+      includeGeoGebraResponseValues: true,
+      onProgress,
+      checkCancellation
+    })).resolves.toBeUndefined();
+
+    expect(codingListService.writeCodingResultsByVersionExcelToFile).toHaveBeenCalledWith(
+      '/tmp/export.xlsx',
+      7,
+      'v3',
+      'token',
+      'http://app.example',
+      true,
+      onProgress,
+      false,
+      true,
+      checkCancellation
+    );
+  });
+
+  it('routes versioned GeoGebra ZIP file exports to the specialized ZIP file export service', async () => {
+    const { service, codingListService } = createService();
+    const onProgress = jest.fn();
+    const checkCancellation = jest.fn();
+
+    await expect(service.exportResultsByVersionAsExcelToFile('/tmp/export.zip', {
+      workspaceId: 7,
+      version: 'v2',
+      authToken: 'token',
+      serverUrl: 'http://app.example',
+      includeReplayUrl: true,
+      includeGeoGebraFiles: true,
+      onProgress,
+      checkCancellation
+    })).resolves.toBeUndefined();
+
+    expect(codingListService.writeCodingResultsByVersionGeoGebraZipToFile).toHaveBeenCalledWith(
+      '/tmp/export.zip',
+      7,
+      'v2',
+      'token',
+      'http://app.example',
+      true,
+      onProgress,
+      checkCancellation
+    );
+    expect(codingListService.writeCodingResultsByVersionExcelToFile).not.toHaveBeenCalled();
   });
 
   it('routes item matrix CSV exports to the item matrix export service', async () => {
@@ -164,12 +227,35 @@ describe('CodingExportOrchestratorService', () => {
     );
   });
 
-  it('routes unscoped detailed exports to the specialized batched results export service', async () => {
-    const { service, codingExportService, codingResultsExportService } = createService();
+  it('routes item matrix Excel file exports to the item matrix export service', async () => {
+    const { service, codingItemMatrixExportService } = createService();
+    const onProgress = jest.fn();
+    const checkCancellation = jest.fn();
+
+    await expect(service.exportItemMatrixAsExcelToFile('/tmp/matrix.xlsx', {
+      workspaceId: 7,
+      matrixValue: 'score',
+      version: 'v2',
+      onProgress,
+      checkCancellation
+    })).resolves.toBeUndefined();
+
+    expect(codingItemMatrixExportService.writeItemMatrixExcelToFile).toHaveBeenCalledWith(
+      '/tmp/matrix.xlsx',
+      7,
+      'score',
+      'v2',
+      onProgress,
+      checkCancellation
+    );
+  });
+
+  it('routes unscoped detailed exports to the cancellable export service', async () => {
+    const { service, codingExportService } = createService();
     const buffer = Buffer.from('csv');
     const checkCancellation = jest.fn();
     const req = {} as never;
-    codingResultsExportService.exportCodingResultsDetailed.mockResolvedValue(buffer);
+    codingExportService.exportCodingResultsDetailed.mockResolvedValue(buffer);
 
     await expect(service.exportDetailed({
       workspaceId: 5,
@@ -183,7 +269,7 @@ describe('CodingExportOrchestratorService', () => {
       checkCancellation
     })).resolves.toBe(buffer);
 
-    expect(codingResultsExportService.exportCodingResultsDetailed).toHaveBeenCalledWith(
+    expect(codingExportService.exportCodingResultsDetailed).toHaveBeenCalledWith(
       5,
       true,
       true,
@@ -192,13 +278,16 @@ describe('CodingExportOrchestratorService', () => {
       'token',
       req,
       true,
-      checkCancellation
+      checkCancellation,
+      undefined,
+      undefined,
+      undefined,
+      ''
     );
-    expect(codingExportService.exportCodingResultsDetailed).not.toHaveBeenCalled();
   });
 
   it('keeps scoped detailed exports on the monolithic path to preserve job filters', async () => {
-    const { service, codingExportService, codingResultsExportService } = createService();
+    const { service, codingExportService } = createService();
     const buffer = Buffer.from('csv');
     const checkCancellation = jest.fn();
     codingExportService.exportCodingResultsDetailed.mockResolvedValue(buffer);
@@ -233,11 +322,10 @@ describe('CodingExportOrchestratorService', () => {
       [3],
       'http://app.example'
     );
-    expect(codingResultsExportService.exportCodingResultsDetailed).not.toHaveBeenCalled();
   });
 
   it('keeps background detailed replay URL exports on the monolithic path', async () => {
-    const { service, codingExportService, codingResultsExportService } = createService();
+    const { service, codingExportService } = createService();
     const buffer = Buffer.from('csv');
     codingExportService.exportCodingResultsDetailed.mockResolvedValue(buffer);
 
@@ -262,6 +350,42 @@ describe('CodingExportOrchestratorService', () => {
       undefined,
       'http://app.example'
     );
-    expect(codingResultsExportService.exportCodingResultsDetailed).not.toHaveBeenCalled();
+  });
+
+  it('routes detailed file exports to the monolithic file export path', async () => {
+    const { service, codingExportService } = createService();
+    const checkCancellation = jest.fn();
+
+    await expect(service.exportDetailedToFile('/tmp/detailed.csv', {
+      workspaceId: 5,
+      outputCommentsInsteadOfCodes: true,
+      includeReplayUrl: true,
+      anonymizeCoders: true,
+      usePseudoCoders: false,
+      authToken: 'token',
+      excludeAutoCoded: true,
+      checkCancellation,
+      jobDefinitionIds: [1],
+      coderTrainingIds: [2],
+      coderIds: [3],
+      serverUrl: 'http://app.example'
+    })).resolves.toBeUndefined();
+
+    expect(codingExportService.exportCodingResultsDetailedToFile).toHaveBeenCalledWith(
+      '/tmp/detailed.csv',
+      5,
+      true,
+      true,
+      true,
+      false,
+      'token',
+      undefined,
+      true,
+      checkCancellation,
+      [1],
+      [2],
+      [3],
+      'http://app.example'
+    );
   });
 });

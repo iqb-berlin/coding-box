@@ -45,6 +45,39 @@ export interface FilterParams {
   regexSearch?: boolean;
 }
 
+type DownloadOperationKind = 'coding-results' | 'coding-list';
+
+type ActiveDownloadOperation = {
+  workspaceId: number;
+  jobId: string;
+  progressSubject: BehaviorSubject<number | null>;
+  resolve: (value: Blob | PromiseLike<Blob>) => void;
+  reject: (reason?: unknown) => void;
+  pollingSubscription?: Subscription;
+  fileSubscription?: Subscription;
+  cancelSubscription?: Subscription;
+  cancelInProgress?: boolean;
+  completedWhileCancelPending?: boolean;
+};
+
+const DOWNLOAD_CANCELLED_ERROR_CODE = 'download-cancelled';
+
+type DownloadCancelledError = Error & {
+  code: typeof DOWNLOAD_CANCELLED_ERROR_CODE;
+};
+
+function createDownloadCancelledError(): DownloadCancelledError {
+  const error = new Error('Download cancelled') as DownloadCancelledError;
+  error.name = 'DownloadCancelledError';
+  error.code = DOWNLOAD_CANCELLED_ERROR_CODE;
+  return error;
+}
+
+function isDownloadCancelledError(error: unknown): error is DownloadCancelledError {
+  return error instanceof Error &&
+    (error as Partial<DownloadCancelledError>).code === DOWNLOAD_CANCELLED_ERROR_CODE;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -80,6 +113,7 @@ export class CodingManagementService {
   resetJobId$ = this._resetJobId.asObservable();
 
   private resetPollingSubscription: Subscription | null = null;
+  private activeDownloads = new Map<DownloadOperationKind, ActiveDownloadOperation>();
 
   fetchCodingStatistics(version: StatisticsVersion): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -419,18 +453,23 @@ export class CodingManagementService {
       const { jobId } = jobStartResult;
 
       // Poll for status
-      const blob = await this.pollJobAndProgress(workspaceId, jobId, this.downloadProgress$);
+      const blob = await this.pollJobAndProgress('coding-results', workspaceId, jobId, this.downloadProgress$);
 
       // Handle file download
       const ext = this.getCodingResultsDownloadExtension(format, includeGeoGebraFiles);
       this.saveBlob(blob, `coding-results-${version}-${this.getDateString()}.${ext}`);
       this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
     } catch (error) {
+      if (isDownloadCancelledError(error)) {
+        this.showInfoSnackbar(this.translateService.instant('coding-management.download-dialog.download-cancelled'));
+        return;
+      }
       this.showErrorSnackbar(
         this.translateService.instant('coding-management.download-dialog.download-failed', { error: (error as Error).message || error }),
         false
       );
     } finally {
+      this.clearActiveDownload('coding-results');
       this.downloadProgress$.next(null);
     }
   }
@@ -474,28 +513,42 @@ export class CodingManagementService {
       }
       const { jobId } = jobStartResult;
 
-      const blob = await this.pollJobAndProgress(workspaceId, jobId, this.codingListDownloadProgress$);
+      const blob = await this.pollJobAndProgress('coding-list', workspaceId, jobId, this.codingListDownloadProgress$);
 
       const ext = format === 'excel' ? 'xlsx' : format;
       this.saveBlob(blob, `coding-list-${this.getDateString()}.${ext}`);
 
       this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
     } catch (error) {
+      if (isDownloadCancelledError(error)) {
+        this.showInfoSnackbar(this.translateService.instant('coding-management.download-dialog.download-cancelled'));
+        return;
+      }
       this.showErrorSnackbar(
         this.translateService.instant('coding-management.download-dialog.download-failed', { error: (error as Error).message || error }),
         false
       );
     } finally {
+      this.clearActiveDownload('coding-list');
       this.codingListDownloadProgress$.next(null);
     }
   }
 
   private pollJobAndProgress(
+    kind: DownloadOperationKind,
     workspaceId: number,
     jobId: string,
     progressSubject: BehaviorSubject<number | null>
   ): Promise<Blob> {
     return new Promise<Blob>((resolve, reject) => {
+      const operation: ActiveDownloadOperation = {
+        workspaceId,
+        jobId,
+        progressSubject,
+        resolve,
+        reject
+      };
+
       const subscription = timer(0, 2000).pipe(
         switchMap(() => this.exportService.getExportJobStatus(workspaceId, jobId)),
         takeWhile(status => ['pending', 'processing'].includes(status.status), true)
@@ -503,15 +556,20 @@ export class CodingManagementService {
         next: status => {
           if (status.status === 'completed') {
             subscription.unsubscribe();
+            operation.pollingSubscription = undefined;
             progressSubject.next(100);
-            this.exportService.downloadExportFile(workspaceId, jobId).subscribe({
-              next: fileBlob => resolve(fileBlob),
-              error: reject
-            });
+            if (operation.cancelInProgress) {
+              operation.completedWhileCancelPending = true;
+              return;
+            }
+            this.startDownloadForCompletedExport(kind, operation);
           } else if (status.status === 'failed' || status.status === 'cancelled') {
             subscription.unsubscribe();
-            const errorMsg = status.error || 'Job failed';
-            reject(new Error(errorMsg));
+            operation.pollingSubscription = undefined;
+            this.activeDownloads.delete(kind);
+            reject(status.status === 'cancelled' ?
+              createDownloadCancelledError() :
+              new Error(status.error || 'Job failed'));
           } else {
             const progress = Math.round(status.progress || 0);
             progressSubject.next(progress);
@@ -519,10 +577,109 @@ export class CodingManagementService {
         },
         error: err => {
           subscription.unsubscribe();
+          operation.pollingSubscription = undefined;
+          this.activeDownloads.delete(kind);
           reject(err);
         }
       });
+
+      operation.pollingSubscription = subscription;
+      this.activeDownloads.set(kind, operation);
     });
+  }
+
+  cancelCodingResultsDownload(): void {
+    this.cancelActiveDownload('coding-results');
+  }
+
+  cancelCodingListDownload(): void {
+    this.cancelActiveDownload('coding-list');
+  }
+
+  private cancelActiveDownload(kind: DownloadOperationKind): void {
+    const operation = this.activeDownloads.get(kind);
+    if (!operation) {
+      return;
+    }
+
+    if (operation.cancelInProgress) {
+      return;
+    }
+
+    if (operation.fileSubscription && !operation.pollingSubscription) {
+      operation.fileSubscription.unsubscribe();
+      this.activeDownloads.delete(kind);
+      operation.progressSubject.next(null);
+      operation.reject(createDownloadCancelledError());
+      return;
+    }
+
+    operation.cancelInProgress = true;
+    operation.cancelSubscription = this.exportService.cancelExportJob(operation.workspaceId, operation.jobId)
+      .subscribe({
+        next: response => {
+          operation.cancelInProgress = false;
+          if (!response.success) {
+            this.handleCancelFailure(kind, operation, response.message);
+            return;
+          }
+
+          operation.pollingSubscription?.unsubscribe();
+          operation.fileSubscription?.unsubscribe();
+          this.activeDownloads.delete(kind);
+          operation.progressSubject.next(null);
+          operation.reject(createDownloadCancelledError());
+        },
+        error: () => {
+          this.handleCancelFailure(kind, operation);
+        }
+      });
+  }
+
+  private handleCancelFailure(
+    kind: DownloadOperationKind,
+    operation: ActiveDownloadOperation,
+    message?: string
+  ): void {
+    operation.cancelInProgress = false;
+    operation.cancelSubscription = undefined;
+    this.showErrorSnackbar(
+      message ||
+      this.translateService.instant('coding-management.download-dialog.cancel-failed'),
+      false
+    );
+
+    if (operation.completedWhileCancelPending) {
+      this.startDownloadForCompletedExport(kind, operation);
+    }
+  }
+
+  private startDownloadForCompletedExport(
+    kind: DownloadOperationKind,
+    operation: ActiveDownloadOperation
+  ): void {
+    operation.completedWhileCancelPending = false;
+    operation.fileSubscription = this.exportService.downloadExportFile(operation.workspaceId, operation.jobId).subscribe({
+      next: fileBlob => {
+        this.activeDownloads.delete(kind);
+        operation.resolve(fileBlob);
+      },
+      error: error => {
+        this.activeDownloads.delete(kind);
+        operation.reject(error);
+      }
+    });
+  }
+
+  private clearActiveDownload(kind: DownloadOperationKind): void {
+    const operation = this.activeDownloads.get(kind);
+    if (!operation) {
+      return;
+    }
+    operation.pollingSubscription?.unsubscribe();
+    operation.fileSubscription?.unsubscribe();
+    operation.cancelSubscription?.unsubscribe();
+    this.activeDownloads.delete(kind);
   }
 
   // --- Private Helpers ---

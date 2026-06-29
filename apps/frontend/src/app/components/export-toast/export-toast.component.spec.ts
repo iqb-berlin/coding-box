@@ -20,6 +20,8 @@ describe('ExportToastComponent', () => {
       jobId: 'waiting',
       workspaceId: 1,
       exportType: 'aggregated',
+      displayLabelKey: 'export-toast.types.manual-review-most-frequent',
+      downloadFilePrefix: 'manual-review-most-frequent',
       status: 'waiting',
       result: { fileName: 'export.csv', fileSize: 100 }
     },
@@ -61,6 +63,7 @@ describe('ExportToastComponent', () => {
           'by-variable-compact': 'Nach Variable, kompakt',
           detailed: 'Detailliertes Kodierprotokoll',
           'coding-times': 'Kodierzeiten-Bericht',
+          'manual-review-most-frequent': 'Kodierer: häufigster Code',
           'results-by-version': 'Finale Ergebnisdaten',
           'item-matrix': 'Itemmatrix'
         },
@@ -68,6 +71,16 @@ describe('ExportToastComponent', () => {
           'too-many-worksheets-title': 'Export zu groß',
           'too-many-worksheets-message': 'Dieser Export würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}.',
           'generic-title': 'Export fehlgeschlagen'
+        },
+        progress: {
+          waiting: 'Wartet auf den Export-Worker',
+          active: 'Export wird verarbeitet',
+          preparing: 'Export wird vorbereitet',
+          counting: 'Datensätze werden gezählt',
+          writing: 'Datensätze werden geschrieben',
+          'writing-rows': '{{processed}}/{{total}} Zeilen geschrieben',
+          finalizing: 'Datei wird finalisiert',
+          downloading: 'Datei wird heruntergeladen'
         }
       }
     });
@@ -86,12 +99,14 @@ describe('ExportToastComponent', () => {
     expect(component.failedJobCount).toBe(1);
     expect(component.getStatusIcon('waiting')).toBe('hourglass_empty');
     expect(component.getStatusIcon('active')).toBe('sync');
+    expect(component.getStatusIcon('downloading')).toBe('file_download');
     expect(component.getStatusIcon('completed')).toBe('check_circle');
     expect(component.getStatusIcon('failed')).toBe('error');
     expect(component.getStatusIcon('cancelled')).toBe('cancel');
     expect(component.getStatusIcon('unknown' as never)).toBe('help');
     expect(component.getStatusClass('failed')).toBe('status-failed');
     expect(component.getExportTypeLabel('aggregated')).toBe('Aggregierte Ansicht');
+    expect(component.getExportTypeLabel(jobs[0])).toBe('Kodierer: häufigster Code');
     expect(component.getExportTypeLabel('detailed')).toBe('Detailliertes Kodierprotokoll');
     expect(component.getExportTypeLabel('results-by-version')).toBe('Finale Ergebnisdaten');
     expect(component.getExportTypeLabel('item-matrix')).toBe('Itemmatrix');
@@ -106,7 +121,8 @@ describe('ExportToastComponent', () => {
     component.cancelJob(jobs[1]);
     component.clearCompleted();
 
-    expect(exportJobService.downloadFile).toHaveBeenCalledWith(1, 'waiting', 'aggregated', 'export.csv');
+    expect(exportJobService.downloadFile)
+      .toHaveBeenCalledWith(1, 'waiting', 'aggregated', 'export.csv', 'manual-review-most-frequent');
     expect(exportJobService.removeJob).toHaveBeenCalledWith('waiting');
     expect(exportJobService.cancelJob).toHaveBeenCalledWith(jobs[1]);
     expect(exportJobService.removeJob).toHaveBeenCalledWith('done');
@@ -142,6 +158,26 @@ describe('ExportToastComponent', () => {
       'Dieser Export würde 2578 Tabellenblätter erzeugen. Erlaubt sind aktuell 1000.'
     );
     expect(component.hasTechnicalDetails(job)).toBe(true);
+  });
+
+  it('formats structured progress details', () => {
+    const writingJob = {
+      ...jobs[1],
+      progress: 55,
+      progressPhase: 'writing',
+      processedRows: 1000,
+      totalRows: 2000
+    } as ExportJob;
+    const countingJob = {
+      ...jobs[1],
+      progress: 20,
+      progressPhase: 'counting'
+    } as ExportJob;
+
+    expect(component.getProgressMode(writingJob)).toBe('determinate');
+    expect(component.getProgressDescription(writingJob)).toBe('1.000/2.000 Zeilen geschrieben');
+    expect(component.getProgressMode(countingJob)).toBe('indeterminate');
+    expect(component.getProgressDescription(countingJob)).toBe('Datensätze werden gezählt');
   });
 
   it('keeps a fallback for legacy worksheet limit messages', () => {

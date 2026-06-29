@@ -1,6 +1,6 @@
 {
   "name": "coding-box",
-  "version": "1.16.2",
+  "version": "1.16.3",
   "author": "IQB - Institut zur Qualitätsentwicklung im Bildungswesen",
   "license": "MIT",
   "scripts": {
@@ -66,11 +66,13 @@
     "@ngx-translate/http-loader": "^8.0.0",
     "@swimlane/ngx-charts": "23.1.0",
     "@types/adm-zip": "^0.5.0",
+    "@types/archiver": "^5.3.4",
     "@types/file-saver-es": "^2.0.1",
     "adm-zip": "^0.5.9",
     "ajv": "^8.18.0",
     "ajv-formats": "^2.1.1",
     "ajv-keywords": "^5.1.0",
+    "archiver": "^5.3.2",
     "axios": "^1.15.0",
     "bull": "^4.16.5",
     "cheerio": "^1.1.0",

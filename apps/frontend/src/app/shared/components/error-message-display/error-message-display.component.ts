@@ -28,6 +28,12 @@ export class ErrorMessageDisplayComponent {
     return this.appService.needsReAuthentication && !this.isHomeRoute();
   }
 
+  get showSessionExpiryWarning(): boolean {
+    return this.appService.sessionExpiryWarning &&
+      !this.appService.needsReAuthentication &&
+      !this.isHomeRoute();
+  }
+
   dismissError(errorId: number): void {
     this.appService.errorMessages = this.appService.errorMessages.filter((e: AppHttpError) => e.id !== errorId);
     this.expandedErrorIds.delete(errorId);
@@ -39,6 +45,19 @@ export class ErrorMessageDisplayComponent {
 
   handleLogin(): void {
     this.authService.login(this.appService.reAuthenticationReturnUrl);
+  }
+
+  async handleExtendSession(): Promise<void> {
+    try {
+      const token = await this.authService.getValidToken(-1);
+      if (!token) {
+        this.appService.requireReAuthentication(this.router.url);
+        return;
+      }
+      this.appService.setSessionExpiryWarning(false);
+    } catch {
+      this.appService.requireReAuthentication(this.router.url);
+    }
   }
 
   toggleErrorDetails(errorId: number): void {

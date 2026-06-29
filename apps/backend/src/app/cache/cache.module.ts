@@ -1,9 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { RedisModule } from '@nestjs-modules/ioredis';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CacheService } from './cache.service';
+import { CacheClientModule } from './cache-client.module';
 import { ResponseCacheSchedulerService } from './response-cache-scheduler.service';
 import { CodingIncompleteCacheSchedulerService } from './coding-incomplete-cache-scheduler.service';
 import { CodingStatisticsCacheSchedulerService } from './coding-statistics-cache-scheduler.service';
@@ -16,24 +14,13 @@ import { CodingModule } from '../coding/coding.module';
 
 @Module({
   imports: [
-    RedisModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'single',
-        options: {
-          host: configService.get('REDIS_HOST', 'redis'),
-          port: parseInt(configService.get('REDIS_PORT', '6379'), 10),
-          keyPrefix: `${configService.get('REDIS_PREFIX', 'coding-box')}:cache:`
-        }
-      })
-    }),
+    CacheClientModule,
     ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([Persons, Unit]),
     forwardRef(() => WorkspaceModule),
     forwardRef(() => CodingModule)
   ],
-  providers: [CacheService, ResponseCacheSchedulerService, CodingIncompleteCacheSchedulerService, CodingStatisticsCacheSchedulerService],
-  exports: [CacheService]
+  providers: [ResponseCacheSchedulerService, CodingIncompleteCacheSchedulerService, CodingStatisticsCacheSchedulerService],
+  exports: [CacheClientModule]
 })
 export class CacheModule { }

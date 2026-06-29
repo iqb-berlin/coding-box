@@ -65,6 +65,7 @@ describe('CodingReviewService', () => {
     variable_id: 'VAR_1',
     coding_job_id: 100,
     code: 1,
+    coding_issue_option: null,
     score: 1,
     notes: null,
     supervisor_comment: null,
@@ -207,6 +208,7 @@ describe('CodingReviewService', () => {
     codingJobUnitRepository.find.mockResolvedValueOnce([
       makeCodingJobUnit({
         code: 1,
+        coding_issue_option: -3,
         score: 0
       }),
       makeCodingJobUnit({
@@ -309,7 +311,9 @@ describe('CodingReviewService', () => {
         responseId: 10,
         variableId: 'VAR_1',
         coderResults: [
-          { coderId: 1, jobId: 100, code: 1 },
+          {
+            coderId: 1, jobId: 100, code: 1, codingIssueOption: -3
+          },
           {
             coderId: 2, jobId: 101, code: 1, score: 1
           }
@@ -1583,6 +1587,7 @@ describe('CodingReviewService', () => {
                 trainingId: null,
                 trainingLabel: null,
                 code: 1,
+                codingIssueOption: null,
                 score: 1,
                 notes: null,
                 supervisorComment: null,
@@ -1597,6 +1602,7 @@ describe('CodingReviewService', () => {
                 trainingId: null,
                 trainingLabel: null,
                 code: 1,
+                codingIssueOption: null,
                 score: 1,
                 notes: null,
                 supervisorComment: null,
@@ -1611,6 +1617,7 @@ describe('CodingReviewService', () => {
                 trainingId: null,
                 trainingLabel: null,
                 code: 2,
+                codingIssueOption: null,
                 score: 1,
                 notes: null,
                 supervisorComment: null,

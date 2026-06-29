@@ -15,7 +15,10 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule } from '@ngx-translate/core';
 import { NgxChartsModule } from '@swimlane/ngx-charts';
-import { ReplayBackendService } from '../../../replay/services/replay-backend.service';
+import {
+  ReplayBackendService,
+  ReplaySourceSummaryResponse
+} from '../../../replay/services/replay-backend.service';
 
 interface ReplayFrequencyData {
   name: string;
@@ -44,6 +47,27 @@ interface ReplayFrequencyData {
       </div>
 
       <div *ngIf="!loading" class="dialog-body">
+        <div class="stats-container source-summary">
+          <mat-card>
+            <mat-card-content>
+              <div class="source-summary-grid">
+                <div class="source-summary-item">
+                  <span class="stat-label">{{ 'workspace.total-replays' | translate }}</span>
+                  <span class="stat-value">{{ sourceSummary.total }}</span>
+                </div>
+                <div class="source-summary-item">
+                  <span class="stat-label">{{ 'workspace.internal-replays' | translate }}</span>
+                  <span class="stat-value">{{ sourceSummary.internal }}</span>
+                </div>
+                <div class="source-summary-item">
+                  <span class="stat-label">{{ 'workspace.external-token-replays' | translate }}</span>
+                  <span class="stat-value">{{ sourceSummary.external }}</span>
+                </div>
+              </div>
+            </mat-card-content>
+          </mat-card>
+        </div>
+
         <mat-tab-group
           class="tabs"
           dynamicHeight="false"
@@ -425,6 +449,23 @@ interface ReplayFrequencyData {
         margin: 20px 0;
       }
 
+      .source-summary {
+        margin: 0 0 12px;
+      }
+
+      .source-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .source-summary-item {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+
       .stat-item {
         display: flex;
         justify-content: space-between;
@@ -452,6 +493,12 @@ interface ReplayFrequencyData {
       .error-message {
         flex: 1;
         word-break: break-word;
+      }
+
+      @media (max-width: 720px) {
+        .source-summary-grid {
+          grid-template-columns: 1fr;
+        }
       }
     `
   ]
@@ -496,6 +543,12 @@ implements OnInit, AfterViewInit, OnDestroy {
     successfulReplays: 0,
     failedReplays: 0,
     commonErrors: [] as Array<{ message: string; count: number }>
+  };
+
+  sourceSummary: ReplaySourceSummaryResponse = {
+    internal: 0,
+    external: 0,
+    total: 0
   };
 
   // Duration statistics
@@ -609,7 +662,20 @@ implements OnInit, AfterViewInit, OnDestroy {
       limit: this.topUnitsCount
     };
 
-    // Load replay frequency data
+    this.replayBackendService
+      .getReplaySourceSummary(this.workspaceId, options)
+      .subscribe({
+        next: data => {
+          this.sourceSummary = data;
+          this.loadReplayFrequency(options);
+        },
+        error: () => {
+          this.loadReplayFrequency(options);
+        }
+      });
+  }
+
+  private loadReplayFrequency(options: { lastDays: number; limit: number }): void {
     this.replayBackendService
       .getReplayFrequencyByUnit(this.workspaceId, options)
       .subscribe({

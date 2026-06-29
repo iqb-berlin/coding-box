@@ -23,13 +23,27 @@ export class WorkspaceAccessRightsDialogComponent {
 
   private userBackendService = inject(UserBackendService);
 
-  selectedWorkspacesIds!: number[];
+  selectedWorkspacesIds: number[] = [];
+  isLoadingUserWorkspaces = false;
+  userWorkspacesLoadingFailed = false;
   result: number[] = [];
   constructor() {
     if (this.data && this.data.selectedUser && Array.isArray(this.data.selectedUser) && this.data.selectedUser.length > 0) {
-      this.userBackendService.getWorkspacesByUserList(this.data.selectedUser[0].id).subscribe(workspaces => {
-        this.selectedWorkspacesIds = workspaces || [];
-      });
+      this.isLoadingUserWorkspaces = true;
+      this.userBackendService.getWorkspacesByUserListOrFail(this.data.selectedUser[0].id)
+        .subscribe({
+          next: workspaces => {
+            this.selectedWorkspacesIds = workspaces || [];
+            this.result = [...this.selectedWorkspacesIds];
+            this.isLoadingUserWorkspaces = false;
+          },
+          error: () => {
+            this.selectedWorkspacesIds = [];
+            this.result = [];
+            this.userWorkspacesLoadingFailed = true;
+            this.isLoadingUserWorkspaces = false;
+          }
+        });
     }
   }
 

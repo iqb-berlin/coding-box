@@ -57,4 +57,13 @@ describe('TestResultBackendService', () => {
       req.flush({});
     });
   });
+
+  describe('cancelTestResultExportJob', () => {
+    it('should post to the cancel endpoint', () => {
+      service.cancelTestResultExportJob(1, 'job-1').subscribe();
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/results/export/jobs/job-1/cancel`);
+      expect(req.request.method).toBe('POST');
+      req.flush({ success: true, message: 'cancelled' });
+    });
+  });
 });

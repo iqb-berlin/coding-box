@@ -3,7 +3,10 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { ReplayBackendService } from './replay-backend.service';
 import { SERVER_URL } from '../../injection-tokens';
-import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../../core/interceptors/http-error-context';
+import {
+  SUPPRESS_AUTH_ERROR_REDIRECT,
+  SUPPRESS_GLOBAL_HTTP_ERROR
+} from '../../core/interceptors/http-error-context';
 
 describe('ReplayBackendService', () => {
   let service: ReplayBackendService;
@@ -63,8 +66,9 @@ describe('ReplayBackendService', () => {
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-statistics`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(data);
-      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
+      expect(req.request.headers.get('Authorization')).toBeNull();
       expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+      expect(req.request.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)).toBe(true);
       req.flush({});
     });
 
@@ -79,6 +83,7 @@ describe('ReplayBackendService', () => {
       expect(req.request.method).toBe('POST');
       expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
       expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+      expect(req.request.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)).toBe(true);
       req.flush({});
     });
   });
@@ -135,7 +140,7 @@ describe('ReplayBackendService', () => {
   });
 
   describe('getReplayAssets', () => {
-    it('should fetch assets with the stored auth token when no URL token is supplied', () => {
+    it('should fetch assets without a service-owned auth token when no URL token is supplied', () => {
       service.getReplayAssets(1, 'unit-1').subscribe();
 
       const req = httpMock.expectOne(request => {
@@ -146,7 +151,7 @@ describe('ReplayBackendService', () => {
       expect(req.request.urlWithParams).toBe(
         `${mockServerUrl}admin/workspace/1/replay-assets/unit-1?replayPart=assets`
       );
-      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
+      expect(req.request.headers.get('Authorization')).toBeNull();
       req.flush({ unitDef: [], player: [], vocs: [] });
     });
   });
@@ -159,6 +164,22 @@ describe('ReplayBackendService', () => {
       );
       expect(req.request.method).toBe('GET');
       req.flush({});
+    });
+  });
+
+  describe('getReplaySourceSummary', () => {
+    it('should fetch source summary with time params', () => {
+      service.getReplaySourceSummary(1, { lastDays: 30 }).subscribe();
+
+      const req = httpMock.expectOne(r => r.url === `${mockServerUrl}admin/workspace/1/replay-statistics/sources` &&
+        r.params.get('lastDays') === '30'
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush({
+        internal: 3,
+        external: 2,
+        total: 5
+      });
     });
   });
 });

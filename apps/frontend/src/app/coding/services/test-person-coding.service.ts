@@ -7,6 +7,7 @@ import {
   of,
   throwError
 } from 'rxjs';
+import Keycloak from 'keycloak-js';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
@@ -232,6 +233,7 @@ export interface AppliedResultsOverview {
 export class TestPersonCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private keycloak = inject(Keycloak, { optional: true });
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
   private pendingStatisticsVersions = new Map<number, CodingStatisticsVersion>();
@@ -239,7 +241,16 @@ export class TestPersonCodingService {
   testResultsChanged$ = this.testResultsChangedSubject.asObservable();
 
   get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+    return {};
+  }
+
+  private async getValidKeycloakToken(): Promise<string | undefined> {
+    if (!this.keycloak?.authenticated) {
+      return undefined;
+    }
+
+    await this.keycloak.updateToken(30);
+    return this.keycloak.token;
   }
 
   private hasJobId(jobId: string | null | undefined): jobId is string {
@@ -642,13 +653,14 @@ export class TestPersonCodingService {
     onError: (error: string) => void
   ): Promise<void> {
     try {
+      const token = await this.getValidKeycloakToken();
       const response = await fetch(
         `${this.serverUrl}admin/workspace/${workspaceId}/coding/external-coding-import/stream`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...this.authHeader
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
           body: JSON.stringify(data)
         }
@@ -1104,6 +1116,7 @@ export class TestPersonCodingService {
           jobId: number;
           jobName: string;
           code: number | null;
+          codingIssueOption: number | null;
           score: number | null;
           notes: string | null;
           supervisorComment: string | null;
@@ -1168,6 +1181,7 @@ export class TestPersonCodingService {
           jobId: number;
           jobName: string;
           code: number | null;
+          codingIssueOption: number | null;
           score: number | null;
           notes: string | null;
           supervisorComment: string | null;

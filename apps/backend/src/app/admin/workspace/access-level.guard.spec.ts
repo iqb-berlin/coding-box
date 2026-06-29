@@ -3,6 +3,10 @@ import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { UsersService } from '../../database/services/users';
+import {
+  WORKSPACE_API_TOKEN_TYPE,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_READ
+} from '../../auth/workspace-token';
 
 describe('AccessLevelGuard (Backend)', () => {
   let guard: AccessLevelGuard;
@@ -43,12 +47,13 @@ describe('AccessLevelGuard (Backend)', () => {
   const createMockExecutionContext = (
     userId: number,
     workspaceId: string,
-    requiredLevel?: number
+    requiredLevel?: number,
+    userOverrides: Record<string, unknown> = {}
   ): ExecutionContext => {
     const context = {
       switchToHttp: () => ({
         getRequest: () => ({
-          user: { id: userId },
+          user: { id: userId, ...userOverrides },
           params: { workspace_id: workspaceId }
         })
       }),
@@ -184,6 +189,25 @@ describe('AccessLevelGuard (Backend)', () => {
       const result = await guard.canActivate(context);
 
       expect(result).toBe(true);
+    });
+
+    it('should reject workspace API tokens without endpoint scope metadata', async () => {
+      reflector.get.mockImplementation(metadataKey => (
+        metadataKey === 'accessLevel' ? 3 : undefined
+      ));
+      const context = createMockExecutionContext(
+        42,
+        '123',
+        3,
+        {
+          tokenType: WORKSPACE_API_TOKEN_TYPE,
+          scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+        }
+      );
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(usersService.getUserIsAdmin).not.toHaveBeenCalled();
+      expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
     });
 
     it('should validate access level 4 (Admin)', async () => {

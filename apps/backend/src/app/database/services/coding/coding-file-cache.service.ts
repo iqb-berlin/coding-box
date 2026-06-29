@@ -84,7 +84,8 @@ export class CodingFileCacheService {
     unitName: string,
     workspaceId: number
   ): Promise<Map<string, string>> {
-    const pageOverrides = new Map<string, string>();
+    const idPageOverrides = new Map<string, string>();
+    const aliasPageOverrides = new Map<string, string>();
 
     const vocsFile = await this.fileUploadRepository.findOne({
       where: {
@@ -95,7 +96,7 @@ export class CodingFileCacheService {
     });
 
     if (!vocsFile) {
-      return pageOverrides;
+      return new Map<string, string>();
     }
 
     try {
@@ -110,8 +111,12 @@ export class CodingFileCacheService {
           continue;
         }
 
-        this.addPageOverride(pageOverrides, variableCoding?.id, normalizedPage);
-        this.addPageOverride(pageOverrides, variableCoding?.alias, normalizedPage);
+        this.addPageOverride(idPageOverrides, variableCoding?.id, normalizedPage);
+        this.addPageOverride(
+          aliasPageOverrides,
+          variableCoding?.alias,
+          normalizedPage
+        );
       }
     } catch (error) {
       this.logger.debug(
@@ -119,7 +124,10 @@ export class CodingFileCacheService {
       );
     }
 
-    return pageOverrides;
+    return new Map<string, string>([
+      ...idPageOverrides.entries(),
+      ...aliasPageOverrides.entries()
+    ]);
   }
 
   private parseVocsScheme(data: unknown): VocsScheme {

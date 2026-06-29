@@ -14,7 +14,14 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { ReviewCodeSelection, UnitsReplay, UnitsReplayUnit } from '../../../replay/services/units-replay.service';
+import {
+  BundleContext,
+  BundleVariableContext,
+  BundleVariableStatus,
+  ReviewCodeSelection,
+  UnitsReplay,
+  UnitsReplayUnit
+} from '../../../replay/services/units-replay.service';
 import { ReplayCodingService } from '../../../replay/services/replay-coding.service';
 import {
   Code,
@@ -25,6 +32,28 @@ import {
   VariableCoding
 } from '../../../models/coding-interfaces';
 import { hasManualInstruction } from '../../utils/manual-coding.util';
+
+interface NavigationItem {
+  key: string;
+  type: 'variable' | 'bundle';
+  label: string;
+  variableId?: string;
+  unitName?: string;
+  bundleId?: number;
+}
+
+interface BundleVariableNavigationItem {
+  key: string;
+  label: string;
+  variableId: string;
+  unitName: string;
+  targetUnit?: UnitsReplayUnit;
+  status: BundleVariableStatus;
+  active: boolean;
+  disabled: boolean;
+  tooltip: string;
+  progress: { coded: number; total: number; percentage: number };
+}
 
 @Component({
   selector: 'app-code-selector',
@@ -62,12 +91,14 @@ export class CodeSelectorComponent implements OnChanges {
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() notesChanged = new EventEmitter<string>();
+  @Output() notesCommitted = new EventEmitter<string>();
   @Output() openNavigateDialog = new EventEmitter<void>();
   @Output() openCommentDialog = new EventEmitter<void>();
   @Output() openCodingJobs = new EventEmitter<void>();
   @Output() pauseCodingJob = new EventEmitter<void>();
   @Output() unitChanged = new EventEmitter<UnitsReplayUnit>();
   @ViewChild('variablePanel') variablePanel?: ElementRef<HTMLElement>;
+  @ViewChild('bundleVariablePanel') bundleVariablePanel?: ElementRef<HTMLElement>;
   @ViewChild('notesTextarea') notesTextarea?: ElementRef<HTMLTextAreaElement>;
 
   selectableItems: SelectableItem[] = [];
@@ -96,8 +127,11 @@ export class CodeSelectorComponent implements OnChanges {
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
-    if (this.isVariablePanelOpen && !this.elementRef.nativeElement.contains(event.target as Node | null)) {
-      this.isVariablePanelOpen = false;
+    if (
+      (this.isVariablePanelOpen || this.isBundleVariablePanelOpen) &&
+      !this.elementRef.nativeElement.contains(event.target as Node | null)
+    ) {
+      this.closeVariablePanel();
     }
   }
 
@@ -421,6 +455,11 @@ export class CodeSelectorComponent implements OnChanges {
     this.notesChanged.emit(this.coderNotes);
   }
 
+  onNotesCommitted(): void {
+    if (this.isReadOnly) return;
+    this.notesCommitted.emit(this.coderNotes);
+  }
+
   canLeaveCurrentUnit(showValidationMessage = true): boolean {
     if (!this.requiresNewCodeComment() || this.hasNewCodeComment()) {
       this.newCodeCommentValidationError = false;
@@ -600,27 +639,46 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   isVariablePanelOpen = false;
+  isBundleVariablePanelOpen = false;
 
   toggleVariablePanel(): void {
     if (this.isNavigationDisabled) return;
     this.isVariablePanelOpen = !this.isVariablePanelOpen;
     if (this.isVariablePanelOpen) {
-      setTimeout(() => this.focusCurrentVariableInPanel(), 0);
+      this.isBundleVariablePanelOpen = false;
+    }
+    if (this.isVariablePanelOpen) {
+      setTimeout(() => this.focusCurrentVariableInPanel(this.variablePanel?.nativeElement), 0);
+    }
+  }
+
+  toggleBundleVariablePanel(): void {
+    if (this.isNavigationDisabled) return;
+    this.isBundleVariablePanelOpen = !this.isBundleVariablePanelOpen;
+    if (this.isBundleVariablePanelOpen) {
+      this.isVariablePanelOpen = false;
+      setTimeout(() => this.focusCurrentVariableInPanel(this.bundleVariablePanel?.nativeElement), 0);
     }
   }
 
   closeVariablePanel(): void {
     this.isVariablePanelOpen = false;
+    this.isBundleVariablePanelOpen = false;
   }
 
   selectVariable(key: string): void {
     if (this.isNavigationDisabled) return;
-    this.isVariablePanelOpen = false;
+    this.closeVariablePanel();
     this.jumpToVariable(key);
   }
 
-  private focusCurrentVariableInPanel(): void {
-    const panel = this.variablePanel?.nativeElement;
+  selectNavigationItem(key: string): void {
+    if (this.isNavigationDisabled) return;
+    this.closeVariablePanel();
+    this.jumpToNavigationItem(key);
+  }
+
+  private focusCurrentVariableInPanel(panel?: HTMLElement): void {
     if (!panel) return;
 
     const activeItem = panel.querySelector<HTMLElement>('.variable-panel-item.active');
@@ -638,10 +696,64 @@ export class CodeSelectorComponent implements OnChanges {
     const units = this.unitsData.units.filter(
       u => (u.alias || u.name) === unitName && u.variableId === variableId
     );
+    return this.getProgressForUnits(units);
+  }
+
+  getProgressForNavigationItem(item: NavigationItem): { coded: number; total: number; percentage: number } {
+    if (!this.unitsData?.units || !this.codingService) return { coded: 0, total: 0, percentage: 0 };
+    if (item.type === 'bundle') {
+      const units = this.unitsData.units.filter(unit => unit.variableBundleId === item.bundleId);
+      return this.getProgressForUnits(units);
+    }
+
+    return this.getProgressForKey(`${item.unitName}::${item.variableId}`);
+  }
+
+  private getProgressForUnits(units: UnitsReplayUnit[]): { coded: number; total: number; percentage: number } {
     const total = units.length;
     const coded = units.filter(u => this.codingService.isUnitCoded(u)).length;
     const percentage = total > 0 ? Math.round((coded / total) * 100) : 0;
     return { coded, total, percentage };
+  }
+
+  get navigationItems(): NavigationItem[] {
+    if (!this.unitsData?.units) return [];
+    const seen = new Set<string>();
+    const result: NavigationItem[] = [];
+
+    for (const unit of this.unitsData.units) {
+      if (unit.variableBundleId !== null && unit.variableBundleId !== undefined) {
+        const key = this.getBundleNavigationKey(unit.variableBundleId);
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push({
+            key,
+            type: 'bundle',
+            label: unit.bundleContext?.bundleName ||
+              `${this.translateService.instant('code-selector.variable-bundle')} ${unit.variableBundleId}`,
+            bundleId: unit.variableBundleId
+          });
+        }
+        continue;
+      }
+
+      if (unit.variableId) {
+        const unitName = unit.alias || unit.name;
+        const key = this.getVariableNavigationKey(unitName, unit.variableId);
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push({
+            key,
+            type: 'variable',
+            label: `${unitName} / ${unit.variableId}`,
+            variableId: unit.variableId,
+            unitName
+          });
+        }
+      }
+    }
+
+    return result;
   }
 
   /** Unique unit+variable combinations available in the current coding job, preserving order of first appearance. */
@@ -664,43 +776,45 @@ export class CodeSelectorComponent implements OnChanges {
   get shouldShowBundleVariableChips(): boolean {
     const context = this.currentBundleContext;
     return !!context &&
-      context.caseOrderingMode === 'alternating' &&
       context.variables.length > 1 &&
-      context.variables.length < 5;
+      context.variables.length <= 8;
   }
 
-  get bundleVariableChips(): Array<{
-    key: string;
-    variableId: string;
-    unitName: string;
-    status: string;
-    active: boolean;
-    disabled: boolean;
-    tooltip: string;
-    progress: { coded: number; total: number; percentage: number };
-  }> {
+  get shouldShowBundleVariableDropdown(): boolean {
+    return !this.shouldShowBundleVariableChips && this.bundleVariableNavigationItems.length > 1;
+  }
+
+  get shouldShowVariableSelectorSection(): boolean {
+    return this.navigationItems.length > 1 ||
+      this.shouldShowBundleVariableChips ||
+      this.shouldShowBundleVariableDropdown;
+  }
+
+  get bundleVariableChips(): BundleVariableNavigationItem[] {
+    return this.bundleVariableNavigationItems;
+  }
+
+  get bundleVariableNavigationItems(): BundleVariableNavigationItem[] {
     const context = this.currentBundleContext;
     if (!context) return [];
 
     return context.variables.map(variable => {
-      const matchingUnit = this.unitsData?.units.find(unit => (
-        unit.variableId === variable.variableId &&
-        unit.name === variable.unitName
-      ));
-      const unitName = matchingUnit?.alias || matchingUnit?.name || variable.unitName;
+      const targetUnit = this.getCurrentBundleVariableUnit(context, variable);
+      const unitName = targetUnit?.alias || targetUnit?.name || variable.unitName;
       const key = `${unitName}::${variable.variableId}`;
-      const hasManualUnit = this.availableVariables.some(available => available.key === key);
       const progress = this.getProgressForKey(key);
       const disabled =
         this.isNavigationDisabled ||
-        !hasManualUnit ||
+        !targetUnit ||
         variable.status === 'auto-coded' ||
         variable.status === 'not-available';
 
       return {
         key,
+        label: `${unitName} / ${variable.variableId}`,
         variableId: variable.variableId,
         unitName,
+        targetUnit,
         status: variable.status,
         active: key === this.activeVariableKey,
         disabled,
@@ -710,9 +824,53 @@ export class CodeSelectorComponent implements OnChanges {
     });
   }
 
+  private getCurrentBundleVariableUnit(
+    context: BundleContext,
+    variable: BundleVariableContext
+  ): UnitsReplayUnit | undefined {
+    if (!this.unitsData?.units) return undefined;
+    const currentUnit = this.unitsData.units[this.unitsData.currentUnitIndex];
+
+    return this.unitsData.units.find(unit => (
+      this.isUnitInBundle(unit, context.bundleId) &&
+      unit.variableId === variable.variableId &&
+      unit.name === variable.unitName &&
+      this.isUnitInCurrentBundleCase(unit, currentUnit, context)
+    ));
+  }
+
+  private isUnitInBundle(unit: UnitsReplayUnit, bundleId: number): boolean {
+    return unit.variableBundleId === bundleId || unit.bundleContext?.bundleId === bundleId;
+  }
+
+  private isUnitInCurrentBundleCase(
+    unit: UnitsReplayUnit,
+    currentUnit: UnitsReplayUnit | undefined,
+    context: BundleContext
+  ): boolean {
+    if (unit.bundleContext?.caseKey && context.caseKey) {
+      return unit.bundleContext.caseKey === context.caseKey;
+    }
+
+    if (currentUnit?.testPerson || unit.testPerson) {
+      return unit.testPerson === currentUnit?.testPerson;
+    }
+
+    return unit === currentUnit;
+  }
+
+  get activeBundleVariableNavigationItem(): BundleVariableNavigationItem | null {
+    return this.bundleVariableNavigationItems.find(item => item.active) || null;
+  }
+
   private get currentBundleContext() {
     const currentUnit = this.unitsData?.units[this.unitsData.currentUnitIndex];
-    return currentUnit?.bundleContext || null;
+    if (currentUnit?.bundleContext) return currentUnit.bundleContext;
+    if (currentUnit?.variableBundleId === null || currentUnit?.variableBundleId === undefined) return null;
+
+    return this.unitsData?.units.find(unit => (
+      unit.variableBundleId === currentUnit.variableBundleId && !!unit.bundleContext
+    ))?.bundleContext || null;
   }
 
   getBundleVariableTooltip(status: string): string {
@@ -734,6 +892,23 @@ export class CodeSelectorComponent implements OnChanges {
     const unit = this.unitsData.units[this.unitsData.currentUnitIndex];
     if (!unit?.variableId) return '';
     return `${unit.alias || unit.name}::${unit.variableId}`;
+  }
+
+  get activeNavigationKey(): string {
+    if (!this.unitsData?.units) return '';
+    const unit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    if (!unit) return '';
+    if (unit.variableBundleId !== null && unit.variableBundleId !== undefined) {
+      return this.getBundleNavigationKey(unit.variableBundleId);
+    }
+    if (unit.variableId) {
+      return this.getVariableNavigationKey(unit.alias || unit.name, unit.variableId);
+    }
+    return '';
+  }
+
+  get activeNavigationItem(): NavigationItem | null {
+    return this.navigationItems.find(item => item.key === this.activeNavigationKey) || null;
   }
 
   /** Progress (coded / total) for the unit+variable of the current unit. */
@@ -774,8 +949,43 @@ export class CodeSelectorComponent implements OnChanges {
     this.unitChanged.emit(target.unit);
   }
 
+  jumpToNavigationItem(key: string): void {
+    if (this.isNavigationDisabled) return;
+    const item = this.navigationItems.find(navItem => navItem.key === key);
+    if (!item) return;
+
+    if (item.type === 'variable' && item.unitName && item.variableId) {
+      this.jumpToVariable(`${item.unitName}::${item.variableId}`);
+      return;
+    }
+
+    if (!this.unitsData?.units || item.bundleId === undefined) return;
+    const bundleUnits = this.unitsData.units.filter(unit => unit.variableBundleId === item.bundleId);
+    if (bundleUnits.length === 0) return;
+
+    const firstUncoded = bundleUnits.find(unit => !this.codingService.isUnitCoded(unit));
+    const target = firstUncoded ?? bundleUnits[0];
+    this.unitChanged.emit(target);
+  }
+
   selectBundleVariable(key: string, disabled: boolean): void {
     if (disabled) return;
-    this.jumpToVariable(key);
+    this.closeVariablePanel();
+    this.jumpToBundleVariable(key);
+  }
+
+  private jumpToBundleVariable(key: string): void {
+    if (this.isNavigationDisabled) return;
+    const target = this.bundleVariableNavigationItems.find(item => item.key === key)?.targetUnit;
+    if (!target) return;
+    this.unitChanged.emit(target);
+  }
+
+  private getVariableNavigationKey(unitName: string, variableId: string): string {
+    return `variable:${unitName}::${variableId}`;
+  }
+
+  private getBundleNavigationKey(bundleId: number): string {
+    return `bundle:${bundleId}`;
   }
 }

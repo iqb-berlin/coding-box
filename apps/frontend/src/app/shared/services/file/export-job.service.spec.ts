@@ -1,5 +1,5 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import {
   ExportJobService,
   REPLAY_AUTH_TOKEN_ERROR_CODE,
@@ -60,6 +60,55 @@ describe('ExportJobService', () => {
       service.ngOnDestroy(); // cleanup
     }));
 
+    it('should keep structured progress details from polling', fakeAsync(() => {
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
+        status: 'active',
+        progress: 55,
+        progressPhase: 'writing',
+        processedRows: 100,
+        totalRows: 200,
+        progressMessage: '100/200 rows'
+      }));
+
+      service.startJob(1, { exportType: 'results-by-version', userId: 1 }).subscribe();
+
+      tick(2000);
+
+      expect(service.activeJobs[0]).toEqual(expect.objectContaining({
+        progress: 55,
+        progressPhase: 'writing',
+        processedRows: 100,
+        totalRows: 200,
+        progressMessage: '100/200 rows'
+      }));
+
+      service.ngOnDestroy();
+    }));
+
+    it('should keep display metadata on the local job', () => {
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+
+      service.startJob(1, {
+        exportType: 'aggregated',
+        userId: 1,
+        displayLabelKey: 'export-toast.types.manual-review-most-frequent',
+        downloadFilePrefix: 'manual-review-most-frequent'
+      }).subscribe();
+
+      expect(service.activeJobs[0]).toEqual(expect.objectContaining({
+        displayLabelKey: 'export-toast.types.manual-review-most-frequent',
+        downloadFilePrefix: 'manual-review-most-frequent'
+      }));
+      const requestConfig = codingJobBackendServiceMock.startExportJob.mock.calls[0][1];
+      expect(requestConfig).not.toEqual(expect.objectContaining({
+        displayLabelKey: expect.any(String)
+      }));
+      expect(requestConfig).not.toEqual(expect.objectContaining({
+        downloadFilePrefix: expect.any(String)
+      }));
+    });
+
     it('should surface start errors without adding a job', () => {
       codingJobBackendServiceMock.startExportJob.mockReturnValue(
         throwError(() => new Error('start failed'))
@@ -82,7 +131,11 @@ describe('ExportJobService', () => {
         includeReplayUrl: true
       }).subscribe();
 
-      expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(1, 60);
+      expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+        1,
+        1,
+        ['replay:read', 'replay-statistics:write']
+      );
       expect(codingJobBackendServiceMock.startExportJob).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
@@ -147,6 +200,59 @@ describe('ExportJobService', () => {
 
       expect(codingJobBackendServiceMock.startExportJob).not.toHaveBeenCalled();
       expect(service.activeJobs.length).toBe(0);
+    });
+  });
+
+  describe('downloadFile', () => {
+    it('should use the display file prefix when present', () => {
+      const blob = new Blob(['xlsx'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const anchor = document.createElement('a');
+      const clickSpy = jest.spyOn(anchor, 'click').mockImplementation();
+      const createElementSpy = jest.spyOn(document, 'createElement').mockReturnValue(anchor);
+
+      Object.defineProperty(window.URL, 'createObjectURL', {
+        value: jest.fn().mockReturnValue('blob:url'),
+        configurable: true
+      });
+      Object.defineProperty(window.URL, 'revokeObjectURL', {
+        value: jest.fn(),
+        configurable: true
+      });
+      codingJobBackendServiceMock.downloadExportFile.mockReturnValue(of(blob));
+      const date = new Date().toISOString().slice(0, 10);
+
+      service.downloadFile(
+        1,
+        'j1',
+        'aggregated',
+        'export.xlsx',
+        'manual-review-most-frequent'
+      );
+
+      expect(anchor.download).toBe(`export-manual-review-most-frequent-${date}.xlsx`);
+      expect(clickSpy).toHaveBeenCalled();
+
+      createElementSpy.mockRestore();
+    });
+
+    it('should allow cancelling an in-flight file download without cancelling the completed job', () => {
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+      const fileDownload$ = new Subject<Blob>();
+      codingJobBackendServiceMock.downloadExportFile.mockReturnValue(fileDownload$);
+
+      service.startJob(1, { exportType: 'aggregated', userId: 1 }).subscribe();
+      service.downloadFile(1, 'j1', 'aggregated', 'export.xlsx');
+
+      expect(service.activeJobs[0].status).toBe('downloading');
+      expect(fileDownload$.observers.length).toBe(1);
+
+      service.cancelJob(service.activeJobs[0]);
+
+      expect(fileDownload$.observers.length).toBe(0);
+      expect(codingJobBackendServiceMock.cancelExportJob).not.toHaveBeenCalled();
+      expect(service.completedJobs[0].status).toBe('completed');
     });
   });
 });

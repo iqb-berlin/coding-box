@@ -47,9 +47,9 @@
     </mat-tab>
 
     <mat-tab label="Fehlgeschlagen ({{ failedCount }})">
-      <cdk-virtual-scroll-viewport itemSize="68" class="viewport">
+      <div class="viewport failed-viewport">
         <div
-          *cdkVirtualFor="let f of filteredFailedFiles; trackBy: trackByFailed"
+          *ngFor="let f of filteredFailedFiles; trackBy: trackByFailed"
           class="row"
         >
           <div class="main">
@@ -57,9 +57,28 @@
             @if (f.reason) {
             <div class="sub">{{ f.reason }}</div>
             }
+            @if (f.details && f.details.length > 0) {
+            <ul class="details">
+              @for (detail of f.details; track $index) {
+              <li>{{ detail }}</li>
+              }
+            </ul>
+            }
+            @if (getFailureSuggestions(f); as suggestions) {
+              @if (suggestions.length > 0) {
+              <div class="suggestions">
+                <div class="suggestions-title">{{ 'file-upload.failure-suggestions.title' | translate }}</div>
+                <ul>
+                  @for (suggestion of suggestions; track suggestion.key + (suggestion.params?.value || '')) {
+                  <li>{{ suggestion.key | translate: suggestion.params }}</li>
+                  }
+                </ul>
+              </div>
+              }
+            }
           </div>
         </div>
-      </cdk-virtual-scroll-viewport>
+      </div>
     </mat-tab>
 
     <mat-tab label="Nicht überschrieben ({{ remainingConflictsCount }})">

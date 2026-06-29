@@ -7,6 +7,7 @@ import {
   provideHttpClient,
   withInterceptorsFromDi
 } from '@angular/common/http';
+import Keycloak from 'keycloak-js';
 import { CodingJobBackendService } from './coding-job-backend.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { CodingJob } from '../models/coding-job.model';
@@ -16,12 +17,21 @@ describe('CodingJobBackendService', () => {
   let service: CodingJobBackendService;
   let httpMock: HttpTestingController;
   let validationTaskStateServiceMock: { invalidateWorkspace: jest.Mock };
+  let keycloak: { authenticated: boolean; token?: string; updateToken: jest.Mock };
+  let fetchMock: jest.Mock;
+  let originalFetch: typeof globalThis.fetch | undefined;
 
   const mockServerUrl = 'http://localhost/api/';
 
   beforeEach(() => {
     validationTaskStateServiceMock = {
       invalidateWorkspace: jest.fn()
+    };
+    originalFetch = globalThis.fetch;
+    keycloak = {
+      authenticated: true,
+      token: 'keycloak-token',
+      updateToken: jest.fn().mockResolvedValue(true)
     };
 
     Object.defineProperty(window, 'localStorage', {
@@ -40,6 +50,7 @@ describe('CodingJobBackendService', () => {
           provide: ValidationTaskStateService,
           useValue: validationTaskStateServiceMock
         },
+        { provide: Keycloak, useValue: keycloak },
         { provide: SERVER_URL, useValue: mockServerUrl }
       ]
     });
@@ -49,11 +60,107 @@ describe('CodingJobBackendService', () => {
   });
 
   afterEach(() => {
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      delete (globalThis as { fetch?: unknown }).fetch;
+    }
     httpMock.verify();
   });
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  describe('keepalive fetch authentication', () => {
+    beforeEach(() => {
+      fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 204
+      });
+      globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    });
+
+    it('attaches the current Keycloak token to keepalive job updates synchronously', () => {
+      service.updateCodingJobKeepalive(1, 2, { status: 'active' });
+
+      expect(keycloak.updateToken).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${mockServerUrl}wsg-admin/workspace/1/coding-job/2`,
+        expect.objectContaining({
+          method: 'PUT',
+          keepalive: true,
+          headers: {
+            Authorization: 'Bearer keycloak-token',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ status: 'active' })
+        })
+      );
+    });
+
+    it('preserves explicit scoped tokens for keepalive pause requests', () => {
+      service.pauseCodingJobKeepalive(1, 2, 'scoped-token');
+
+      expect(keycloak.updateToken).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${mockServerUrl}wsg-admin/workspace/1/coding-job/2/pause`,
+        expect.objectContaining({
+          method: 'POST',
+          keepalive: true,
+          headers: {
+            Authorization: 'Bearer scoped-token'
+          }
+        })
+      );
+    });
+  });
+
+  describe('getVariableBundles', () => {
+    it('loads all paginated variable bundles', done => {
+      service.getVariableBundles(1).subscribe(bundles => {
+        expect(bundles.map(bundle => bundle.id)).toEqual([1, 2]);
+        done();
+      });
+
+      const firstRequest = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/1/variable-bundle` &&
+        request.params.get('page') === '1' &&
+        request.params.get('limit') === '100'
+      ));
+      expect(firstRequest.request.method).toBe('GET');
+      firstRequest.flush({
+        data: [{
+          id: 1,
+          name: 'Bundle 1',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          variables: []
+        }],
+        total: 101,
+        page: 1,
+        limit: 100
+      });
+
+      const secondRequest = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/1/variable-bundle` &&
+        request.params.get('page') === '2' &&
+        request.params.get('limit') === '100'
+      ));
+      expect(secondRequest.request.method).toBe('GET');
+      secondRequest.flush({
+        data: [{
+          id: 2,
+          name: 'Bundle 2',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          variables: []
+        }],
+        total: 101,
+        page: 2,
+        limit: 100
+      });
+    });
   });
 
   describe('getCodingJobs', () => {
@@ -219,6 +326,16 @@ describe('CodingJobBackendService', () => {
       ]);
     });
 
+    it('should request planned usage when asked', () => {
+      service.getJobDefinitions(1, { includePlannedUsage: true }).subscribe();
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/1/coding/job-definitions?includePlannedUsage=true`
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush([]);
+    });
+
     it('should create coding jobs through the dedicated job definition endpoint', () => {
       service.createCodingJobFromDefinition(1, 42).subscribe(response => {
         expect(response.success).toBe(true);
@@ -230,9 +347,7 @@ describe('CodingJobBackendService', () => {
       );
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual({});
-      expect(req.request.headers.get('Authorization')).toBe(
-        'Bearer mock-token'
-      );
+      expect(req.request.headers.get('Authorization')).toBeNull();
       req.flush({
         success: true,
         jobsCreated: 3,
@@ -267,9 +382,7 @@ describe('CodingJobBackendService', () => {
         `${mockServerUrl}admin/workspace/1/coding/job-definitions/42/create-job-preview`
       );
       expect(req.request.method).toBe('GET');
-      expect(req.request.headers.get('Authorization')).toBe(
-        'Bearer mock-token'
-      );
+      expect(req.request.headers.get('Authorization')).toBeNull();
       req.flush({
         distribution: { 'Unit::Var': { Ada: 1 } },
         distributionByCoderId: { 'Unit::Var': { 1: 1 } },
@@ -311,9 +424,7 @@ describe('CodingJobBackendService', () => {
       );
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
-      expect(req.request.headers.get('Authorization')).toBe(
-        'Bearer mock-token'
-      );
+      expect(req.request.headers.get('Authorization')).toBeNull();
       req.flush(mockBlob);
     });
 

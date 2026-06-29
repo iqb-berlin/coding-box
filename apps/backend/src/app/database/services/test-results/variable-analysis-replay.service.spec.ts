@@ -378,7 +378,7 @@ describe('VariableAnalysisReplayService', () => {
       totalCount: 2,
       relativeOccurrence: 0.5
     });
-    expect(result.data[0].replayUrl).toContain('/MDB002/1/01?auth=token');
+    expect(result.data[0].replayUrl).toContain('/MDB002/1/01?auth=token&workspaceId=7');
     expect(result.data[0].replayUrl).toContain('login-code-0@person-0@group-0@booklet-0');
   });
 
@@ -415,7 +415,7 @@ describe('VariableAnalysisReplayService', () => {
       derivation: 'DERIVED',
       totalCount: 1
     });
-    expect(result.data[0].replayUrl).toContain('/MDB002/2/02?auth=token');
+    expect(result.data[0].replayUrl).toContain('/MDB002/2/02?auth=token&workspaceId=7');
   });
 
   it('uses a regex variable filter when requested', async () => {

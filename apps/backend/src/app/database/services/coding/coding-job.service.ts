@@ -49,7 +49,12 @@ import {
   isExcludedByResolvedExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-import { buildAggregationGroups } from './aggregation-metrics.util';
+import {
+  buildAggregationGroups,
+  deduplicateManualCodingResponses,
+  getManualCodingDeduplicationKey,
+  ManualCodingDeduplicationResponse
+} from './aggregation-metrics.util';
 import {
   formatCodingTestPersonFromUnit,
   generateCodingProgressKey,
@@ -1998,13 +2003,12 @@ export class CodingJobService {
     const repository = manager ?
       manager.getRepository(CodingJobUnit) :
       this.codingJobUnitRepository;
+    const itemKeyExpression =
+      "CASE WHEN cju.variable_bundle_id IS NOT NULL THEN CONCAT('bundle:', cju.variable_bundle_id) ELSE CONCAT(cju.unit_name, '::', cju.variable_id) END";
     const query = repository
       .createQueryBuilder('cju')
       .select('cju.response_id', 'responseId')
-      .addSelect(
-        "CASE WHEN cju.variable_bundle_id IS NOT NULL THEN CONCAT('bundle:', cju.variable_bundle_id) ELSE CONCAT(cju.unit_name, '::', cju.variable_id) END",
-        'itemKey'
-      )
+      .addSelect(itemKeyExpression, 'itemKey')
       .addSelect('coding_job_coder.user_id', 'coderId')
       .addSelect('COUNT(cju.id)', 'taskCount')
       .innerJoin('cju.coding_job', 'coding_job')
@@ -2015,7 +2019,7 @@ export class CodingJobService {
       })
       .andWhere('coding_job.training_id IS NULL')
       .groupBy('cju.response_id')
-      .addGroupBy('itemKey')
+      .addGroupBy(itemKeyExpression)
       .addGroupBy('coding_job_coder.user_id');
     this.applyNonCodingIssueReviewJobFilter(
       query,
@@ -5578,11 +5582,7 @@ export class CodingJobService {
     });
 
     return buildAggregationGroups(
-      responses.map(response => ({
-        ...response,
-        responseId: response.id,
-        variableId: response.variableid
-      })),
+      this.withManualCodingDeduplicationFields(responses),
       flags,
       threshold,
       derivedVariableMap
@@ -5593,6 +5593,47 @@ export class CodingJobService {
     }));
   }
 
+  private withManualCodingDeduplicationFields(
+    responses: SlimResponse[]
+  ): Array<SlimResponse & ManualCodingDeduplicationResponse> {
+    return responses.map(response => ({
+      ...response,
+      responseId: response.id,
+      variableId: response.variableid
+    }));
+  }
+
+  private deduplicateSlimResponsesForManualCoding(
+    responses: SlimResponse[],
+    assignedResponseIds: Set<number>
+  ): {
+      responses: SlimResponse[];
+      assignedResponseIds: Set<number>;
+    } {
+    const responsesWithCaseFields =
+      this.withManualCodingDeduplicationFields(responses);
+    const assignedDeduplicationKeys = new Set(
+      responsesWithCaseFields
+        .filter(response => assignedResponseIds.has(response.responseId))
+        .map(response => getManualCodingDeduplicationKey(response))
+    );
+    const dedupedResponses =
+      deduplicateManualCodingResponses(responsesWithCaseFields);
+    const assignedDedupedResponseIds = new Set(
+      dedupedResponses
+        .filter(response => (
+          assignedResponseIds.has(response.responseId) ||
+          assignedDeduplicationKeys.has(getManualCodingDeduplicationKey(response))
+        ))
+        .map(response => response.responseId)
+    );
+
+    return {
+      responses: dedupedResponses,
+      assignedResponseIds: assignedDedupedResponseIds
+    };
+  }
+
   private async filterSlimResponsesForAggregation(
     workspaceId: number,
     responses: SlimResponse[],
@@ -5601,12 +5642,12 @@ export class CodingJobService {
   ): Promise<SlimResponse[]> {
     const derivedVariableMap =
       await this.getDerivedVariableMapForAggregation(workspaceId);
+    const dedupedResponses = this.deduplicateSlimResponsesForManualCoding(
+      responses,
+      new Set()
+    ).responses;
     const groups = buildAggregationGroups(
-      responses.map(response => ({
-        ...response,
-        responseId: response.id,
-        variableId: response.variableid
-      })),
+      this.withManualCodingDeduplicationFields(dedupedResponses),
       matchingFlags,
       aggregationThreshold,
       derivedVariableMap
@@ -5825,6 +5866,13 @@ export class CodingJobService {
     aggregationThreshold: number | null,
     isDerivedResponse: (response: SlimResponse) => boolean
   ): DistributableResponses {
+    const {
+      responses,
+      assignedResponseIds: effectiveAssignedResponseIds
+    } = this.deduplicateSlimResponsesForManualCoding(
+      allItemResponses,
+      assignedResponseIds
+    );
     const filteredResponses: SlimResponse[] = [];
     const caseStatusesByResponseId = new Map<number, DistributionVariableUsageCaseStatus>();
     let uniqueCases = 0;
@@ -5832,7 +5880,7 @@ export class CodingJobService {
 
     if (aggregationThreshold !== null) {
       const aggregatedGroups = this.aggregateResponsesByVariableAndValue(
-        allItemResponses,
+        responses,
         matchingFlags,
         aggregationThreshold,
         isDerivedResponse
@@ -5840,7 +5888,7 @@ export class CodingJobService {
 
       aggregatedGroups.forEach(group => {
         if (group.responses.length >= aggregationThreshold) {
-          const groupAlreadyAssigned = group.responses.some(response => assignedResponseIds.has(response.id)
+          const groupAlreadyAssigned = group.responses.some(response => effectiveAssignedResponseIds.has(response.id)
           );
           if (!groupAlreadyAssigned) {
             group.responses.sort((a, b) => a.id - b.id);
@@ -5857,7 +5905,7 @@ export class CodingJobService {
         }
 
         const unassignedResponses = group.responses.filter(
-          response => !assignedResponseIds.has(response.id)
+          response => !effectiveAssignedResponseIds.has(response.id)
         );
         filteredResponses.push(...unassignedResponses);
         unassignedResponses.forEach(response => {
@@ -5878,8 +5926,8 @@ export class CodingJobService {
       };
     }
 
-    const unassignedResponses = allItemResponses.filter(
-      response => !assignedResponseIds.has(response.id)
+    const unassignedResponses = responses.filter(
+      response => !effectiveAssignedResponseIds.has(response.id)
     );
     unassignedResponses.forEach(response => {
       caseStatusesByResponseId.set(

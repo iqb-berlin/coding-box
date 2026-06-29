@@ -8,7 +8,10 @@ const contentSetting = {
   hasClosedVars: true,
   hasGeneralInstructions: true,
   codeLabelToUpper: false,
-  showScore: true
+  showScore: true,
+  hideItemVarRelation: false,
+  trainingRequirement: 'all',
+  jobDefinitionId: null
 };
 
 const manualCode = {
@@ -152,6 +155,45 @@ describe('CodebookGenerator', () => {
     }>;
 
     expect(codebook[0].variables[0].codes.map(code => code.id)).toEqual(['0', '1']);
+  });
+
+  it('filters variables by increased coder training requirement', async () => {
+    const codebookBuffer = await CodebookGenerator.generateCodebook(
+      [
+        {
+          id: 1,
+          key: 'UNIT.VOCS',
+          name: 'Unit',
+          scheme: JSON.stringify({
+            version: '3.0',
+            variableCodings: [
+              {
+                ...variableCoding,
+                id: 'VAR_REQUIRED',
+                alias: 'VAR_REQUIRED',
+                processing: ['CODER_TRAINING_REQUIRED']
+              },
+              {
+                ...variableCoding,
+                id: 'VAR_NORMAL',
+                alias: 'VAR_NORMAL',
+                processing: []
+              }
+            ]
+          })
+        }
+      ],
+      { ...contentSetting, trainingRequirement: 'required' } as never,
+      []
+    );
+
+    const codebook = JSON.parse(codebookBuffer.toString('utf-8')) as Array<{
+      variables: Array<{ id: string }>;
+    }>;
+
+    expect(codebook[0].variables.map(variable => variable.id)).toEqual([
+      'VAR_REQUIRED'
+    ]);
   });
 
   it('filters codes without manual instructions in manual codebooks without closed variables', () => {

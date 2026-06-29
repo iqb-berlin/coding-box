@@ -8,6 +8,8 @@ export interface ConfirmDialogData {
   message: string;
   confirmButtonText: string;
   cancelButtonText: string;
+  alternativeButtonText?: string;
+  alternativeButtonValue?: unknown;
 }
 
 @Component({
@@ -32,5 +34,9 @@ export class ConfirmDialogComponent {
 
   onConfirm(): void {
     this.dialogRef.close(true);
+  }
+
+  onAlternative(): void {
+    this.dialogRef.close(this.data.alternativeButtonValue ?? 'alternative');
   }
 }

@@ -65,6 +65,49 @@ describe('CodingItemBuilderService', () => {
     });
   });
 
+  it('builds versioned export items from raw rows', async () => {
+    await expect(
+      createService().buildCodingItemWithVersionRow(
+        {
+          id: 1,
+          unitKey: 'UNIT1',
+          unitAlias: 'Unit 1',
+          personLogin: 'login',
+          personCode: 'code',
+          personGroup: 'group',
+          bookletName: 'BOOKLET1',
+          variableId: 'VAR1',
+          value: 'Antwort',
+          statusV1: 8,
+          codeV1: 1,
+          scoreV1: 2,
+          statusV2: null,
+          codeV2: null,
+          scoreV2: null,
+          statusV3: null,
+          codeV3: null,
+          scoreV3: null
+        },
+        'v1',
+        'token',
+        'http://server',
+        1
+      )
+    ).resolves.toMatchObject({
+      unit_key: 'UNIT1',
+      unit_alias: 'Unit 1',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: 'group',
+      booklet_name: 'BOOKLET1',
+      variable_id: 'VAR1',
+      value: 'Antwort',
+      status_v1: 'CODING_INCOMPLETE',
+      code_v1: 1,
+      score_v1: 2
+    });
+  });
+
   it('encodes replay anchor overrides in replay URLs', async () => {
     await expect(
       createService('TEXT/Anchor 1').buildCodingItem(

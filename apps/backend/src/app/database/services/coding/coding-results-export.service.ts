@@ -214,7 +214,8 @@ export class CodingResultsExportService {
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
   ): Promise<Readable> {
     return this.codingListService.getCodingResultsByVersionCsvStream(
       workspaceId,
@@ -224,7 +225,8 @@ export class CodingResultsExportService {
       includeReplayUrls,
       progressCallback,
       includeResponseValues,
-      includeGeoGebraResponseValues
+      includeGeoGebraResponseValues,
+      checkCancellation
     );
   }
 
@@ -236,7 +238,8 @@ export class CodingResultsExportService {
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     return this.codingListService.getCodingResultsByVersionAsExcel(
       workspaceId,
@@ -246,7 +249,34 @@ export class CodingResultsExportService {
       includeReplayUrls,
       progressCallback,
       includeResponseValues,
-      includeGeoGebraResponseValues
+      includeGeoGebraResponseValues,
+      checkCancellation
+    );
+  }
+
+  async exportCodingResultsByVersionAsExcelToFile(
+    filePath: string,
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken: string,
+    serverUrl: string,
+    includeReplayUrls: boolean,
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true,
+    includeGeoGebraResponseValues: boolean = false,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    return this.codingListService.writeCodingResultsByVersionExcelToFile(
+      filePath,
+      workspaceId,
+      version,
+      authToken || '',
+      serverUrl || '',
+      includeReplayUrls,
+      progressCallback,
+      includeResponseValues,
+      includeGeoGebraResponseValues,
+      checkCancellation
     );
   }
 
@@ -256,7 +286,8 @@ export class CodingResultsExportService {
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     return this.codingListService.getCodingResultsByVersionAsGeoGebraZip(
       workspaceId,
@@ -264,7 +295,30 @@ export class CodingResultsExportService {
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
-      progressCallback
+      progressCallback,
+      checkCancellation
+    );
+  }
+
+  async exportCodingResultsByVersionAsGeoGebraZipToFile(
+    filePath: string,
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken: string,
+    serverUrl: string,
+    includeReplayUrls: boolean,
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    return this.codingListService.writeCodingResultsByVersionGeoGebraZipToFile(
+      filePath,
+      workspaceId,
+      version,
+      authToken || '',
+      serverUrl || '',
+      includeReplayUrls,
+      progressCallback,
+      checkCancellation
     );
   }
 
@@ -1619,7 +1673,7 @@ export class CodingResultsExportService {
       throw new Error(
         `Der Export enthaelt ${filteredUnitVariableResults.length} Unit-Variable-Kombinationen ` +
         `und ueberschreitet das konfigurierte Limit von ${MAX_WORKSHEETS} Tabellenblaettern. ` +
-        'Bitte EXPORT_MAX_WORKSHEETS erhoehen, damit der Export vollstaendig erzeugt wird.'
+        'Bitte die Auswahl einschraenken oder den kompakten Nach-Variable-Export verwenden.'
       );
     }
 

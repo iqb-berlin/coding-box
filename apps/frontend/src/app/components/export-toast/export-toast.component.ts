@@ -63,7 +63,7 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   get activeJobCount(): number {
-    return this.jobs.filter(j => j.status === 'waiting' || j.status === 'active').length;
+    return this.jobs.filter(j => j.status === 'waiting' || j.status === 'active' || j.status === 'downloading').length;
   }
 
   get completedJobCount(): number {
@@ -84,6 +84,8 @@ export class ExportToastComponent implements OnInit, OnDestroy {
         return 'hourglass_empty';
       case 'active':
         return 'sync';
+      case 'downloading':
+        return 'file_download';
       case 'completed':
         return 'check_circle';
       case 'failed':
@@ -99,9 +101,56 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     return `status-${status}`;
   }
 
-  getExportTypeLabel(exportType: string): string {
-    const translationKey = this.exportTypeLabelKeys[exportType];
+  getExportTypeLabel(jobOrExportType: ExportJob | string): string {
+    const exportType = typeof jobOrExportType === 'string' ? jobOrExportType : jobOrExportType.exportType;
+    const displayLabelKey = typeof jobOrExportType === 'string' ? undefined : jobOrExportType.displayLabelKey;
+    const translationKey = displayLabelKey || this.exportTypeLabelKeys[exportType];
     return translationKey ? this.translateService.instant(translationKey) : exportType;
+  }
+
+  getProgressMode(job: ExportJob): 'determinate' | 'indeterminate' {
+    if (job.status === 'downloading' || job.progressPhase === 'counting') {
+      return 'indeterminate';
+    }
+
+    if (job.progressPhase === 'writing' && !job.totalRows) {
+      return 'indeterminate';
+    }
+
+    return 'determinate';
+  }
+
+  getProgressDescription(job: ExportJob): string {
+    if (job.progressMessage) {
+      return job.progressMessage;
+    }
+
+    if (job.status === 'waiting') {
+      return this.translateService.instant('export-toast.progress.waiting');
+    }
+
+    if (job.status === 'downloading') {
+      return this.translateService.instant('export-toast.progress.downloading');
+    }
+
+    if (
+      job.progressPhase === 'writing' &&
+      typeof job.processedRows === 'number' &&
+      typeof job.totalRows === 'number' &&
+      job.totalRows > 0
+    ) {
+      return this.translateService.instant('export-toast.progress.writing-rows', {
+        processed: this.formatNumber(job.processedRows),
+        total: this.formatNumber(job.totalRows)
+      });
+    }
+
+    const phaseKey = job.progressPhase || 'active';
+    return this.translateService.instant(`export-toast.progress.${phaseKey}`);
+  }
+
+  private formatNumber(value: number): string {
+    return value.toLocaleString(this.translateService.currentLang || undefined);
   }
 
   getErrorTitle(job: ExportJob): string {
@@ -124,7 +173,13 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   downloadFile(job: ExportJob): void {
-    this.exportJobService.downloadFile(job.workspaceId, job.jobId, job.exportType, job.result?.fileName);
+    this.exportJobService.downloadFile(
+      job.workspaceId,
+      job.jobId,
+      job.exportType,
+      job.result?.fileName,
+      job.downloadFilePrefix
+    );
   }
 
   removeJob(job: ExportJob): void {
