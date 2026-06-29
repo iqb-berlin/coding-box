@@ -263,10 +263,19 @@ describe('SysAdminSettingsComponent', () => {
       expect(snackBar.open).toHaveBeenCalledWith('Export failed', 'Schließen', { duration: 5000 });
     }));
 
-    it('shows an error when no token is available', () => {
+    it('starts export without a local token because auth is handled by the interceptor', () => {
       jest.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
 
       component.exportDatabase();
+
+      const startRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job');
+      expect(startRequest.request.method).toBe('POST');
+      expect(startRequest.request.headers.get('Authorization')).toBeNull();
+      expect(startRequest.request.headers.get('Accept')).toBe('application/json');
+      startRequest.flush(
+        { message: 'Unauthorized' },
+        { status: 401, statusText: 'Unauthorized' }
+      );
 
       expect(snackBar.open).toHaveBeenCalled();
       expect(component.isExporting).toBe(false);

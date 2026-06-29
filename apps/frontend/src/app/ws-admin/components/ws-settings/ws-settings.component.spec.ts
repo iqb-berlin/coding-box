@@ -143,7 +143,11 @@ describe('WsSettingsComponent', () => {
   describe('createToken', () => {
     it('should call appService.createOwnToken and show snackbar', () => {
       component.createToken();
-      expect(mockAppService.createOwnToken).toHaveBeenCalledWith(1, component.duration);
+      expect(mockAppService.createOwnToken).toHaveBeenCalledWith(
+        1,
+        component.duration,
+        ['replay:read', 'replay-statistics:write']
+      );
       expect(component.authToken).toBe('test-token');
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
@@ -339,9 +343,20 @@ describe('WsSettingsComponent', () => {
       createElementSpy.mockRestore();
     }));
 
-    it('should show error if no token found', () => {
+    it('should start export without a local token because auth is handled by the interceptor', () => {
       jest.spyOn(localStorage, 'getItem').mockReturnValue(null);
+
       component.exportWorkspaceDatabase();
+
+      const startRequest = httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job');
+      expect(startRequest.request.method).toBe('POST');
+      expect(startRequest.request.headers.get('Authorization')).toBeNull();
+      expect(startRequest.request.headers.get('Accept')).toBe('application/json');
+      startRequest.flush(
+        { message: 'Unauthorized' },
+        { status: 401, statusText: 'Unauthorized' }
+      );
+
       expect(mockSnackBar.open).toHaveBeenCalled();
       expect(component.isExporting).toBe(false);
     });

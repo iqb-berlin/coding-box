@@ -43,6 +43,11 @@ import { ReplayCodingService } from '../../services/replay-coding.service';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { hasManualInstruction } from '../../../coding/utils/manual-coding.util';
+import {
+  CODING_JOB_WORKSPACE_TOKEN_SCOPES,
+  REPLAY_WORKSPACE_TOKEN_SCOPES,
+  WorkspaceTokenScope
+} from '../../../core/services/auth-session.config';
 
 interface ReplayUnitPayload {
   unitDef: FilesDto[];
@@ -288,7 +293,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
     this.replayTokenRefreshRunning = true;
     try {
-      const token = await firstValueFrom(this.appService.createOwnToken(workspaceId, 1));
+      const token = await firstValueFrom(this.appService.createOwnToken(
+        workspaceId,
+        1,
+        this.getReplayTokenScopes()
+      ));
       if (!token) {
         return false;
       }
@@ -303,6 +312,22 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     } finally {
       this.replayTokenRefreshRunning = false;
     }
+  }
+
+  private getReplayTokenScopes(): WorkspaceTokenScope[] {
+    return this.isCodingTokenContext() ?
+      CODING_JOB_WORKSPACE_TOKEN_SCOPES :
+      REPLAY_WORKSPACE_TOKEN_SCOPES;
+  }
+
+  private isCodingTokenContext(): boolean {
+    const [, hashQuery = ''] = window.location.hash.split('?');
+    const queryParams = new URLSearchParams(hashQuery);
+    const mode = queryParams.get('mode') || '';
+    return this.isCodingMode ||
+      !!this.codingService.codingJobId ||
+      !!queryParams.get('codingJobId') ||
+      mode.startsWith('coding');
   }
 
   private removeReplayAuthTokenFromUrl(authToken: string): void {
@@ -911,7 +936,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getWorkspaceIdFromToken(): number | null {
-    const candidateTokens = [this.authToken, localStorage.getItem('id_token')]
+    const candidateTokens = [this.authToken]
       .filter((token): token is string => !!token);
 
     for (const token of candidateTokens) {

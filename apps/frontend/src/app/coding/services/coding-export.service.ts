@@ -6,6 +6,10 @@ import {
 import { SERVER_URL } from '../../injection-tokens';
 import { AppService } from '../../core/services/app.service';
 import { CodeBookContentSetting } from '../../../../../../api-dto/coding/codebook-content-setting';
+import {
+  API_SPECIAL_TOKEN_DURATION_DAYS,
+  REPLAY_WORKSPACE_TOKEN_SCOPES
+} from '../../core/services/auth-session.config';
 
 @Injectable({
   providedIn: 'root'
@@ -16,7 +20,11 @@ export class CodingExportService {
   private appService = inject(AppService);
 
   getCodingListAsCsv(workspace_id: number, trainingRequired?: boolean): Observable<Blob> {
-    return this.appService.createOwnToken(workspace_id, 60).pipe(
+    return this.appService.createOwnToken(
+      workspace_id,
+      API_SPECIAL_TOKEN_DURATION_DAYS,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    ).pipe(
       catchError(() => of('')),
       switchMap(token => {
         let params = new HttpParams()
@@ -37,7 +45,11 @@ export class CodingExportService {
   }
 
   getCodingListAsExcel(workspace_id: number, trainingRequired?: boolean): Observable<Blob> {
-    return this.appService.createOwnToken(workspace_id, 60).pipe(
+    return this.appService.createOwnToken(
+      workspace_id,
+      API_SPECIAL_TOKEN_DURATION_DAYS,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    ).pipe(
       catchError(() => of('')),
       switchMap(token => {
         let params = new HttpParams()
@@ -64,7 +76,11 @@ export class CodingExportService {
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
-    return this.appService.createOwnToken(workspace_id, 60).pipe(
+    return this.appService.createOwnToken(
+      workspace_id,
+      API_SPECIAL_TOKEN_DURATION_DAYS,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    ).pipe(
       catchError(() => of('')),
       switchMap(token => {
         const params = new HttpParams()
@@ -93,7 +109,11 @@ export class CodingExportService {
     includeGeoGebraFiles: boolean = false,
     includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
-    return this.appService.createOwnToken(workspace_id, 60).pipe(
+    return this.appService.createOwnToken(
+      workspace_id,
+      API_SPECIAL_TOKEN_DURATION_DAYS,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    ).pipe(
       catchError(() => of('')),
       switchMap(token => {
         const params = new HttpParams()
@@ -219,7 +239,11 @@ export class CodingExportService {
     includeGeoGebraFiles: boolean = false,
     includeGeoGebraResponseValues: boolean = false
   ): Observable<{ jobId: string; message: string }> {
-    return this.appService.createOwnToken(workspaceId, 60).pipe(
+    return this.appService.createOwnToken(
+      workspaceId,
+      API_SPECIAL_TOKEN_DURATION_DAYS,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    ).pipe(
       catchError(() => of('')),
       switchMap(token => {
         const payload = {

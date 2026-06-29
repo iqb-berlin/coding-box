@@ -5,6 +5,10 @@ import {
   ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import {
+  AllowWorkspaceTokenScopes,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_READ
+} from '../../auth/workspace-token';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
@@ -21,6 +25,7 @@ export class WorkspacePlayerController {
   constructor(private workspacePlayerService: WorkspacePlayerService) {}
 
   @Get(':workspace_id/player/:playerName')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
   @ApiParam({ name: 'workspace_id', type: Number })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findPlayer(
@@ -48,6 +53,7 @@ export class WorkspacePlayerController {
   }
 
   @Get(':workspace_id/:unit/unitDef')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnitDef(
@@ -62,6 +68,7 @@ export class WorkspacePlayerController {
   }
 
   @Get(':workspace_id/unit/:unitId')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnit(
@@ -73,6 +80,7 @@ export class WorkspacePlayerController {
   }
 
   @Get(':workspace_id/booklet/:bookletId/units')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'bookletId', type: String })

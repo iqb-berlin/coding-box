@@ -75,18 +75,31 @@ describe('WorkspaceUsersController', () => {
       authService.createTokenForUserId.mockResolvedValue('"token"');
 
       await expect(
-        controller.createOwnToken(7, '30', { user: { id: 12 } })
+        controller.createOwnToken(7, '1', ['replay:read', 'replay-statistics:write'], { user: { id: 12 } })
       ).resolves.toBe('"token"');
 
-      expect(authService.createTokenForUserId).toHaveBeenCalledWith(12, 7, 30);
+      expect(authService.createTokenForUserId).toHaveBeenCalledWith(
+        12,
+        7,
+        1,
+        ['replay:read', 'replay-statistics:write']
+      );
       expect(authService.createToken).not.toHaveBeenCalled();
     });
 
-    it.each(['0', '-1', '1.5', '91', 'abc'])(
+    it('rejects self-service tokens without explicit scopes', async () => {
+      await expect(
+        controller.createOwnToken(7, '1', undefined, { user: { id: 12 } })
+      ).rejects.toThrow(BadRequestException);
+
+      expect(authService.createTokenForUserId).not.toHaveBeenCalled();
+    });
+
+    it.each(['0', '-1', '1.5', '2', 'abc'])(
       'rejects invalid self-service token duration %s',
       async duration => {
         await expect(
-          controller.createOwnToken(7, duration, { user: { id: 12 } })
+          controller.createOwnToken(7, duration, ['replay:read'], { user: { id: 12 } })
         ).rejects.toThrow(BadRequestException);
 
         expect(authService.createTokenForUserId).not.toHaveBeenCalled();
@@ -109,17 +122,31 @@ describe('WorkspaceUsersController', () => {
       authService.createToken.mockResolvedValue('"token"');
 
       await expect(
-        controller.createToken('identity-1', 7, '30', { user: { id: 12 } })
+        controller.createToken('identity-1', 7, '1', ['coding-job:operate'], { user: { id: 12 } })
       ).resolves.toBe('"token"');
 
-      expect(authService.createToken).toHaveBeenCalledWith('identity-1', 7, 30, 12);
+      expect(authService.createToken).toHaveBeenCalledWith(
+        'identity-1',
+        7,
+        1,
+        ['coding-job:operate'],
+        12
+      );
     });
 
-    it.each(['0', '-1', '1.5', '91', 'abc'])(
+    it('rejects admin-created tokens with unsupported scopes', async () => {
+      await expect(
+        controller.createToken('identity-1', 7, '1', ['replay:read', 'admin:all'], { user: { id: 12 } })
+      ).rejects.toThrow(BadRequestException);
+
+      expect(authService.createToken).not.toHaveBeenCalled();
+    });
+
+    it.each(['0', '-1', '1.5', '2', 'abc'])(
       'rejects invalid token duration %s',
       async duration => {
         await expect(
-          controller.createToken('identity-1', 7, duration, { user: { id: 12 } })
+          controller.createToken('identity-1', 7, duration, ['replay:read'], { user: { id: 12 } })
         ).rejects.toThrow(BadRequestException);
 
         expect(authService.createToken).not.toHaveBeenCalled();

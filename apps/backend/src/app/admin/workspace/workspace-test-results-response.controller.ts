@@ -24,6 +24,10 @@ import {
 } from '@nestjs/swagger';
 import { Repository } from 'typeorm';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import {
+  AllowWorkspaceTokenScopes,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_READ
+} from '../../auth/workspace-token';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -183,6 +187,7 @@ export class WorkspaceTestResultsResponseController {
   }
 
   @Get(':workspace_id/responses/:testPerson/:unitId')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findResponse(

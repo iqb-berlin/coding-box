@@ -36,6 +36,12 @@
     color: #721c24;
   }
 
+  &.session-expiry-warning {
+    background-color: #fff3cd;
+    border-left: 4px solid #ff9800;
+    color: #856404;
+  }
+
   &.other-error {
     background-color: #f8d7da;
     border-left: 4px solid #dc3545;

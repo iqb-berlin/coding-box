@@ -12,13 +12,15 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
-import { AuthService } from '../../auth/service/auth.service';
+import { AuthService, MAX_WORKSPACE_TOKEN_DURATION_DAYS } from '../../auth/service/auth.service';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { WorkspaceUsersService } from '../../database/services/workspace/workspace-users.service';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-
-const MAX_TOKEN_DURATION_DAYS = 90;
+import {
+  WORKSPACE_TOKEN_SCOPES,
+  WorkspaceTokenScope
+} from '../../auth/workspace-token';
 
 interface RequestWithUser {
   user: {
@@ -47,7 +49,7 @@ export class WorkspaceUsersController {
   @ApiParam({
     name: 'duration',
     required: true,
-    description: `Duration of the token in days. Must be between 1 and ${MAX_TOKEN_DURATION_DAYS}.`
+    description: `Duration of the token in days. Must be between 1 and ${MAX_WORKSPACE_TOKEN_DURATION_DAYS}.`
   })
   @ApiOkResponse({ description: 'Token created successfully', type: String })
   @ApiBadRequestResponse({ description: 'Invalid input parameters' })
@@ -55,6 +57,7 @@ export class WorkspaceUsersController {
   async createOwnToken(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('duration') duration: string,
+      @Query('scopes') scopes: string | string[] | undefined,
       @Req() request: RequestWithUser
   ): Promise<string> {
     if (!workspaceId || !duration) {
@@ -66,7 +69,8 @@ export class WorkspaceUsersController {
     return this.authService.createTokenForUserId(
       Number(request.user.id),
       workspaceId,
-      durationDays
+      durationDays,
+      this.parseTokenScopes(scopes)
     );
   }
 
@@ -79,7 +83,7 @@ export class WorkspaceUsersController {
   @ApiParam({
     name: 'duration',
     required: true,
-    description: `Duration of the token in days. Must be between 1 and ${MAX_TOKEN_DURATION_DAYS}.`
+    description: `Duration of the token in days. Must be between 1 and ${MAX_WORKSPACE_TOKEN_DURATION_DAYS}.`
   })
   @ApiOkResponse({ description: 'Token created successfully', type: String })
   @ApiBadRequestResponse({ description: 'Invalid input parameters' })
@@ -89,6 +93,7 @@ export class WorkspaceUsersController {
     @Param('identity') identity: string,
       @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('duration') duration: string,
+      @Query('scopes') scopes: string | string[] | undefined,
       @Req() request: RequestWithUser
   ): Promise<string> {
     if (!identity || !workspaceId || !duration) {
@@ -101,8 +106,29 @@ export class WorkspaceUsersController {
       identity,
       workspaceId,
       durationDays,
+      this.parseTokenScopes(scopes),
       Number(request.user.id)
     );
+  }
+
+  private parseTokenScopes(scopes: string | string[] | undefined): WorkspaceTokenScope[] {
+    const rawScopes = (Array.isArray(scopes) ? scopes : [scopes])
+      .filter((scope): scope is string => typeof scope === 'string')
+      .flatMap(scope => scope.split(','))
+      .map(scope => scope.trim())
+      .filter(Boolean);
+
+    if (rawScopes.length === 0) {
+      throw new BadRequestException('At least one token scope is required');
+    }
+
+    const allowedScopes = new Set<string>(WORKSPACE_TOKEN_SCOPES);
+    const invalidScope = rawScopes.find(scope => !allowedScopes.has(scope));
+    if (invalidScope) {
+      throw new BadRequestException(`Unsupported token scope: ${invalidScope}`);
+    }
+
+    return Array.from(new Set(rawScopes)) as WorkspaceTokenScope[];
   }
 
   private parseTokenDurationDays(duration: string): number {
@@ -110,10 +136,10 @@ export class WorkspaceUsersController {
     if (
       !Number.isInteger(durationDays) ||
       durationDays < 1 ||
-      durationDays > MAX_TOKEN_DURATION_DAYS
+      durationDays > MAX_WORKSPACE_TOKEN_DURATION_DAYS
     ) {
       throw new BadRequestException(
-        `Token duration must be a whole number between 1 and ${MAX_TOKEN_DURATION_DAYS} days`
+        `Token duration must be a whole number between 1 and ${MAX_WORKSPACE_TOKEN_DURATION_DAYS} days`
       );
     }
     return durationDays;

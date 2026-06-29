@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuthService } from './service/auth.service';
 import { UserModule } from '../user/user.module';
 import { JwtStrategy } from './jwt.strategy';
+import { KeycloakJwksService } from './keycloak-jwks.service';
 
 @Module({
   imports: [
@@ -15,12 +16,12 @@ import { JwtStrategy } from './jwt.strategy';
     JwtModule.registerAsync({
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get('JWT_SECRET'),
-        signOptions: { expiresIn: '365d' }
+        signOptions: { expiresIn: '30m' }
       }),
       inject: [ConfigService]
     })
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, KeycloakJwksService],
   exports: [AuthService, UserModule]
 })
 export class AuthModule { }
