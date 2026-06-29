@@ -9,14 +9,9 @@ import { ResponseEntity } from '../../entities/response.entity';
 import {
   ResponseAnalysisDto,
   EmptyResponseDto,
-  DuplicateValueGroupDto,
-  EmptyResponseAnalysisDto,
-  DuplicateValueAnalysisDto
+  DuplicateValueGroupDto
 } from '../../../../../../../api-dto/coding/response-analysis.dto';
-import {
-  CodingJobService,
-  ResponseMatchingFlag
-} from './coding-job.service';
+import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingValidationService } from './coding-validation.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CacheService } from '../../../cache/cache.service';
@@ -27,6 +22,28 @@ import {
   getCodingAnalysisCacheKey,
   getCodingAnalysisRunMarkerKey
 } from './coding-analysis-cache-key.util';
+import {
+  createDuplicateValuePageCache,
+  createEmptyResponsePageCache,
+  createDuplicateValuePageCacheFromChunks,
+  createDuplicateValueChunkCaches,
+  createEmptyResponseChunkCaches,
+  createEmptyResponsePageCacheFromChunks,
+  createResponseAnalysisFromCachedParts,
+  createResponseAnalysisSummaryCache,
+  DuplicateValueChunkCache,
+  DuplicateValuePageCache,
+  EmptyResponseChunkCache,
+  EmptyResponsePageCache,
+  getRequiredResponseAnalysisChunkIndexes,
+  getResponseAnalysisDuplicateChunkCacheKey,
+  getResponseAnalysisDerivedCachePattern,
+  getResponseAnalysisDuplicatePageCacheKey,
+  getResponseAnalysisEmptyChunkCacheKey,
+  getResponseAnalysisEmptyPageCacheKey,
+  getResponseAnalysisSummaryCacheKey,
+  ResponseAnalysisSummaryCache
+} from './response-analysis-page-cache.util';
 
 export interface AggregationSettingsResult {
   success: boolean;
@@ -40,6 +57,7 @@ export interface AggregationSettingsResult {
 @Injectable()
 export class CodingAnalysisService {
   private readonly logger = new Logger(CodingAnalysisService.name);
+  private readonly slowResponseAnalysisThresholdMs = 3000;
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -55,7 +73,7 @@ export class CodingAnalysisService {
     private codingStatisticsService: CodingStatisticsService,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService
-  ) { }
+  ) {}
 
   /**
    * Analyzes responses for a workspace to identify:
@@ -71,41 +89,157 @@ export class CodingAnalysisService {
     emptyLimit = 50,
     duplicatePage = 1,
     duplicateLimit = 50
-  ): Promise<ResponseAnalysisDto & { isCalculating?: boolean; progress?: number }> {
+  ): Promise<
+    ResponseAnalysisDto & { isCalculating?: boolean; progress?: number }
+    > {
+    const startedAt = Date.now();
+    let timingStatus = 'failed';
     try {
       const requestedThreshold = this.normalizeThreshold(threshold);
       this.logger.log(
         `Getting response analysis for workspace ${workspaceId} with threshold ${requestedThreshold}`
       );
 
-      const matchingFlags = await this.codingJobService.getResponseMatchingMode(
-        workspaceId
-      );
+      const [matchingFlags, currentSourceRevision] = await Promise.all([
+        this.codingJobService.getResponseMatchingMode(workspaceId),
+        this.getWorkspaceResultsRevision(workspaceId)
+      ]);
 
       // If NO_AGGREGATION is set, we want to see all duplicates regardless of the requested threshold
-      const effectiveThreshold = matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION) ?
+      const effectiveThreshold = matchingFlags.includes(
+        ResponseMatchingFlag.NO_AGGREGATION
+      ) ?
         2 :
         requestedThreshold;
 
       // Check cache for the FULL analysis for this threshold
-      const cacheKey = this.getCacheKey(workspaceId, matchingFlags, effectiveThreshold);
-      const fullAnalysis = await this.cacheService.get<ResponseAnalysisDto>(cacheKey);
+      const cacheKey = this.getCacheKey(
+        workspaceId,
+        matchingFlags,
+        effectiveThreshold
+      );
+      const summaryCache =
+        await this.cacheService.get<ResponseAnalysisSummaryCache>(
+          getResponseAnalysisSummaryCacheKey(cacheKey)
+        );
 
       // Check if a job is currently running
-      const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);
+      const activeJob =
+        await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);
       const isCalculating = !!activeJob;
       let progress = 0;
       if (activeJob) {
         progress = await activeJob.progress();
       }
 
+      const chunkedPageCaches = summaryCache ?
+        await this.getResponseAnalysisPageCachesFromChunks(
+          cacheKey,
+          emptyPage,
+          emptyLimit,
+          duplicatePage,
+          duplicateLimit,
+          summaryCache
+        ) :
+        null;
+
+      if (
+        summaryCache &&
+        chunkedPageCaches?.emptyPageCache &&
+        chunkedPageCaches?.duplicatePageCache
+      ) {
+        const analysisIsStale = this.isAnalysisSourceRevisionStale(
+          summaryCache,
+          currentSourceRevision
+        );
+        if (analysisIsStale && !isCalculating) {
+          await this.startAnalysis(
+            workspaceId,
+            matchingFlags,
+            effectiveThreshold,
+            {
+              sourceRevision: currentSourceRevision
+            }
+          );
+        }
+        timingStatus = analysisIsStale ? 'stale-chunk-cache' : 'chunk-cache-hit';
+        return createResponseAnalysisFromCachedParts(
+          summaryCache,
+          chunkedPageCaches.emptyPageCache,
+          chunkedPageCaches.duplicatePageCache,
+          currentSourceRevision,
+          isCalculating || analysisIsStale,
+          progress
+        );
+      }
+
+      const [emptyPageCache, duplicatePageCache] = summaryCache ?
+        await Promise.all([
+          this.cacheService.get<EmptyResponsePageCache>(
+            getResponseAnalysisEmptyPageCacheKey(
+              cacheKey,
+              emptyPage,
+              emptyLimit
+            )
+          ),
+          this.cacheService.get<DuplicateValuePageCache>(
+            getResponseAnalysisDuplicatePageCacheKey(
+              cacheKey,
+              duplicatePage,
+              duplicateLimit
+            )
+          )
+        ]) :
+        [null, null];
+
+      if (summaryCache && emptyPageCache && duplicatePageCache) {
+        const analysisIsStale = this.isAnalysisSourceRevisionStale(
+          summaryCache,
+          currentSourceRevision
+        );
+        if (analysisIsStale && !isCalculating) {
+          await this.startAnalysis(
+            workspaceId,
+            matchingFlags,
+            effectiveThreshold,
+            {
+              sourceRevision: currentSourceRevision
+            }
+          );
+        }
+        timingStatus = analysisIsStale ? 'stale-page-cache' : 'page-cache-hit';
+        return createResponseAnalysisFromCachedParts(
+          summaryCache,
+          emptyPageCache,
+          duplicatePageCache,
+          currentSourceRevision,
+          isCalculating || analysisIsStale,
+          progress
+        );
+      }
+
+      const fullAnalysis =
+        await this.cacheService.get<ResponseAnalysisDto>(cacheKey);
+
       if (fullAnalysis && !fullAnalysis.aggregationSummary) {
         await this.invalidateCache(workspaceId);
         if (!isCalculating) {
-          await this.startAnalysis(workspaceId, matchingFlags, effectiveThreshold);
+          await this.startAnalysis(
+            workspaceId,
+            matchingFlags,
+            effectiveThreshold,
+            {
+              sourceRevision: currentSourceRevision
+            }
+          );
         }
+        timingStatus = 'legacy-cache-missing-summary';
         return {
-          ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
+          ...this.createEmptyAnalysisResult(
+            matchingFlags,
+            effectiveThreshold,
+            currentSourceRevision
+          ),
           isCalculating: true,
           progress
         };
@@ -115,56 +249,86 @@ export class CodingAnalysisService {
         if (!isCalculating) {
           // If no analysis and no job running, trigger one (or return empty with isCalculating=false and let frontend trigger)
           // For better UX, let's trigger it automatically if missing
-          await this.startAnalysis(workspaceId, matchingFlags, effectiveThreshold);
+          await this.startAnalysis(
+            workspaceId,
+            matchingFlags,
+            effectiveThreshold,
+            {
+              sourceRevision: currentSourceRevision
+            }
+          );
+          timingStatus = 'cache-miss-started';
           return {
-            ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
+            ...this.createEmptyAnalysisResult(
+              matchingFlags,
+              effectiveThreshold,
+              currentSourceRevision
+            ),
             isCalculating: true,
             progress
           };
         }
+        timingStatus = 'cache-miss-existing-job';
         return {
-          ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
+          ...this.createEmptyAnalysisResult(
+            matchingFlags,
+            effectiveThreshold,
+            currentSourceRevision
+          ),
           isCalculating: true,
           progress
         };
       }
 
-      // Slice the results for pagination
-      const emptyStart = (emptyPage - 1) * emptyLimit;
-      const emptyItems = fullAnalysis.emptyResponses.items.slice(
-        emptyStart,
-        emptyStart + emptyLimit
+      const analysisIsStale = this.isAnalysisSourceRevisionStale(
+        fullAnalysis,
+        currentSourceRevision
+      );
+      if (analysisIsStale && !isCalculating) {
+        await this.startAnalysis(
+          workspaceId,
+          matchingFlags,
+          effectiveThreshold,
+          {
+            sourceRevision: currentSourceRevision
+          }
+        );
+      }
+      timingStatus = analysisIsStale ? 'stale-cache' : 'cache-hit';
+      await this.writeResponseAnalysisDerivedCaches(
+        cacheKey,
+        fullAnalysis,
+        emptyPage,
+        emptyLimit,
+        duplicatePage,
+        duplicateLimit
       );
 
-      const duplicateStart = (duplicatePage - 1) * duplicateLimit;
-      const duplicateGroups = fullAnalysis.duplicateValues.groups.slice(
-        duplicateStart,
-        duplicateStart + duplicateLimit
-      );
-
-      return {
-        ...fullAnalysis,
-        emptyResponses: {
-          ...fullAnalysis.emptyResponses,
-          items: emptyItems,
-          page: emptyPage,
-          pageSize: emptyLimit
-        } as EmptyResponseAnalysisDto,
-        duplicateValues: {
-          ...fullAnalysis.duplicateValues,
-          groups: duplicateGroups,
-          page: duplicatePage,
-          pageSize: duplicateLimit
-        } as DuplicateValueAnalysisDto,
-        isCalculating,
+      return createResponseAnalysisFromCachedParts(
+        createResponseAnalysisSummaryCache(fullAnalysis),
+        createEmptyResponsePageCache(fullAnalysis, emptyPage, emptyLimit),
+        createDuplicateValuePageCache(
+          fullAnalysis,
+          duplicatePage,
+          duplicateLimit
+        ),
+        currentSourceRevision,
+        isCalculating || analysisIsStale,
         progress
-      };
+      );
     } catch (error) {
       this.logger.error(
         `Error analyzing responses for workspace ${workspaceId}: ${error.message}`,
         error.stack
       );
       throw new Error(`Failed to analyze responses: ${error.message}`);
+    } finally {
+      this.logResponseAnalysisTiming(
+        'getResponseAnalysis',
+        workspaceId,
+        startedAt,
+        timingStatus
+      );
     }
   }
 
@@ -172,31 +336,64 @@ export class CodingAnalysisService {
     workspaceId: number,
     matchingFlags?: ResponseMatchingFlag[],
     threshold?: number,
-    options: { forceRefresh?: boolean } = {}
+    options: { forceRefresh?: boolean; sourceRevision?: number } = {}
   ): Promise<void> {
-    const activeMatchingFlags = matchingFlags ||
-      await this.codingJobService.getResponseMatchingMode(workspaceId);
-    const savedThreshold = threshold === undefined ?
-      await this.codingJobService.getAggregationThreshold(workspaceId) :
-      threshold;
+    const activeMatchingFlags =
+      matchingFlags ||
+      (await this.codingJobService.getResponseMatchingMode(workspaceId));
+    const savedThreshold =
+      threshold === undefined ?
+        await this.codingJobService.getAggregationThreshold(workspaceId) :
+        threshold;
     const activeThreshold = this.normalizeThreshold(savedThreshold ?? 2);
 
     // If NO_AGGREGATION is set, we want to see all duplicates regardless of the requested threshold
-    const effectiveThreshold = activeMatchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION) ?
+    const effectiveThreshold = activeMatchingFlags.includes(
+      ResponseMatchingFlag.NO_AGGREGATION
+    ) ?
       2 :
       activeThreshold;
 
-    const cacheKey = this.getCacheKey(workspaceId, activeMatchingFlags, effectiveThreshold);
+    const cacheKey = this.getCacheKey(
+      workspaceId,
+      activeMatchingFlags,
+      effectiveThreshold
+    );
+    const sourceRevision =
+      options.sourceRevision ??
+      (await this.getWorkspaceResultsRevision(workspaceId));
 
     if (options.forceRefresh) {
-      await this.cacheService.delete(cacheKey);
-      this.logger.log(`Invalidated response analysis cache before restart for workspace ${workspaceId}`);
+      await Promise.all([
+        this.cacheService.delete(cacheKey),
+        this.cacheService.deleteByPattern(
+          getResponseAnalysisDerivedCachePattern(cacheKey)
+        )
+      ]);
+      this.logger.log(
+        `Invalidated response analysis cache before restart for workspace ${workspaceId}`
+      );
     }
 
-    // Check if job already running
-    const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);
+    const reusableJob =
+      await this.jobQueueService.getCodingAnalysisJobForCacheKey(
+        workspaceId,
+        cacheKey
+      );
+    if (reusableJob && !options.forceRefresh) {
+      this.logger.log(
+        `Reusing queued response analysis for workspace ${workspaceId} (Job ID: ${reusableJob.id})`
+      );
+      return;
+    }
+
+    // Check if another analysis for this workspace is already running.
+    const activeJob =
+      await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);
     if (activeJob && !options.forceRefresh) {
-      this.logger.log(`Analysis job already running for workspace ${workspaceId} (Job ID: ${activeJob.id})`);
+      this.logger.log(
+        `Analysis job already running for workspace ${workspaceId} (Job ID: ${activeJob.id})`
+      );
       return;
     }
 
@@ -207,16 +404,38 @@ export class CodingAnalysisService {
     }
 
     const runId = randomUUID();
-    await this.cacheService.set(getCodingAnalysisRunMarkerKey(cacheKey), runId, 0);
+    await this.cacheService.set(
+      getCodingAnalysisRunMarkerKey(cacheKey),
+      runId,
+      0
+    );
 
     await this.jobQueueService.addCodingAnalysisJob({
       workspaceId,
       matchingFlags: activeMatchingFlags as unknown as string[],
       threshold: effectiveThreshold,
       cacheKey,
-      runId
+      runId,
+      sourceRevision
     });
-    this.logger.log(`Triggered background response analysis for workspace ${workspaceId}`);
+    this.logger.log(
+      `Triggered background response analysis for workspace ${workspaceId}`
+    );
+  }
+
+  private logResponseAnalysisTiming(
+    operation: string,
+    workspaceId: number,
+    startedAt: number,
+    status: string
+  ): void {
+    const durationMs = Date.now() - startedAt;
+    const message = `${operation} for workspace ${workspaceId} finished in ${durationMs}ms (${status})`;
+    if (durationMs >= this.slowResponseAnalysisThresholdMs) {
+      this.logger.warn(message);
+      return;
+    }
+    this.logger.debug(message);
   }
 
   private analyzeBatch(
@@ -304,19 +523,24 @@ export class CodingAnalysisService {
     }
   }
 
-  async getAggregationSettings(workspaceId: number): Promise<AggregationSettingsResult> {
+  async getAggregationSettings(
+    workspaceId: number
+  ): Promise<AggregationSettingsResult> {
     const [threshold, flags] = await Promise.all([
       this.codingJobService.getAggregationThreshold(workspaceId),
       this.codingJobService.getResponseMatchingMode(workspaceId)
     ]);
     const normalizedThreshold = this.normalizeThreshold(threshold ?? 2);
-    const normalizedFlags = this.codingJobService.normalizeResponseMatchingFlags(flags);
+    const normalizedFlags =
+      this.codingJobService.normalizeResponseMatchingFlags(flags);
 
     return {
       success: true,
       threshold: normalizedThreshold,
       flags: normalizedFlags,
-      aggregationActive: !normalizedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
+      aggregationActive: !normalizedFlags.includes(
+        ResponseMatchingFlag.NO_AGGREGATION
+      ),
       revertedResponses: 0,
       message: 'Aggregation settings loaded.'
     };
@@ -328,24 +552,37 @@ export class CodingAnalysisService {
     flags?: ResponseMatchingFlag[]
   ): Promise<AggregationSettingsResult> {
     const validThreshold = this.normalizeThreshold(threshold);
-    const currentFlags = flags ?? await this.codingJobService.getResponseMatchingMode(workspaceId);
-    const normalizedFlags = this.codingJobService.normalizeResponseMatchingFlags(currentFlags);
+    const currentFlags =
+      flags ??
+      (await this.codingJobService.getResponseMatchingMode(workspaceId));
+    const normalizedFlags =
+      this.codingJobService.normalizeResponseMatchingFlags(currentFlags);
 
     try {
-      await this.codingJobService.setAggregationThreshold(workspaceId, validThreshold);
-      const savedFlags = await this.codingJobService.setResponseMatchingMode(workspaceId, normalizedFlags);
-      const revertedCount = await this.revertMaterializedDuplicateAggregation(workspaceId);
+      await this.codingJobService.setAggregationThreshold(
+        workspaceId,
+        validThreshold
+      );
+      const savedFlags = await this.codingJobService.setResponseMatchingMode(
+        workspaceId,
+        normalizedFlags
+      );
+      const revertedCount =
+        await this.revertMaterializedDuplicateAggregation(workspaceId);
       await this.invalidateAggregationDependentCaches(workspaceId);
 
       return {
         success: true,
         threshold: validThreshold,
         flags: savedFlags,
-        aggregationActive: !savedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
+        aggregationActive: !savedFlags.includes(
+          ResponseMatchingFlag.NO_AGGREGATION
+        ),
         revertedResponses: revertedCount,
-        message: revertedCount > 0 ?
-          `Aggregation settings saved. Reverted ${revertedCount} materialized duplicate responses.` :
-          'Aggregation settings saved.'
+        message:
+          revertedCount > 0 ?
+            `Aggregation settings saved. Reverted ${revertedCount} materialized duplicate responses.` :
+            'Aggregation settings saved.'
       };
     } catch (error) {
       this.logger.error(
@@ -357,7 +594,9 @@ export class CodingAnalysisService {
         success: false,
         threshold: validThreshold,
         flags: normalizedFlags,
-        aggregationActive: !normalizedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
+        aggregationActive: !normalizedFlags.includes(
+          ResponseMatchingFlag.NO_AGGREGATION
+        ),
         revertedResponses: 0,
         message: `Error saving aggregation settings: ${error.message}`
       };
@@ -379,11 +618,18 @@ export class CodingAnalysisService {
       uniqueCodingCases: number;
       message: string;
     }> {
-    const currentFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+    const currentFlags =
+      await this.codingJobService.getResponseMatchingMode(workspaceId);
     const nextFlags = aggregateMode ?
-      currentFlags.filter(flag => flag !== ResponseMatchingFlag.NO_AGGREGATION) :
+      currentFlags.filter(
+        flag => flag !== ResponseMatchingFlag.NO_AGGREGATION
+      ) :
       [ResponseMatchingFlag.NO_AGGREGATION];
-    const result = await this.saveAggregationSettings(workspaceId, threshold, nextFlags);
+    const result = await this.saveAggregationSettings(
+      workspaceId,
+      threshold,
+      nextFlags
+    );
 
     return {
       success: result.success,
@@ -396,7 +642,8 @@ export class CodingAnalysisService {
 
   private createEmptyAnalysisResult(
     matchingFlags: ResponseMatchingFlag[],
-    threshold: number | null = null
+    threshold: number | null = null,
+    sourceRevision?: number
   ): ResponseAnalysisDto {
     const result: ResponseAnalysisDto = {
       emptyResponses: {
@@ -418,26 +665,210 @@ export class CodingAnalysisService {
         matchingFlags
       ),
       matchingFlags: matchingFlags as unknown as string[],
-      analysisTimestamp: new Date().toISOString()
+      analysisTimestamp: new Date().toISOString(),
+      sourceRevision,
+      currentSourceRevision: sourceRevision
     };
 
     return result;
+  }
+
+  private isAnalysisSourceRevisionStale(
+    analysis: Pick<ResponseAnalysisDto, 'sourceRevision'>,
+    currentSourceRevision: number
+  ): boolean {
+    return (
+      analysis.sourceRevision !== undefined &&
+      analysis.sourceRevision !== currentSourceRevision
+    );
+  }
+
+  private async getWorkspaceResultsRevision(
+    workspaceId: number
+  ): Promise<number> {
+    try {
+      const rows = (await this.responseRepository.query(
+        'SELECT revision FROM workspace_test_results_revision WHERE workspace_id = $1',
+        [workspaceId]
+      )) as Array<{ revision: number | string }>;
+      return Number(rows[0]?.revision || 0);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Could not resolve test result revision for response analysis: ${message}`
+      );
+      return 0;
+    }
   }
 
   /**
    * Invalidates all cached analysis results for a given workspace
    */
   async invalidateCache(workspaceId: number): Promise<void> {
-    this.logger.log(`Invalidating response analysis cache for workspace ${workspaceId}`);
+    this.logger.log(
+      `Invalidating response analysis cache for workspace ${workspaceId}`
+    );
     // "response-analysis:1_*" matches all variations (flags, thresholds) for workspace 1
     const pattern = `${CODING_ANALYSIS_CACHE_KEY_PREFIX}:${workspaceId}_*`;
     await this.cacheService.deleteByPattern(pattern);
   }
 
-  private async invalidateAggregationDependentCaches(workspaceId: number): Promise<void> {
+  private async invalidateAggregationDependentCaches(
+    workspaceId: number
+  ): Promise<void> {
     await this.invalidateCache(workspaceId);
-    await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
+    await this.codingValidationService.invalidateIncompleteVariablesCache(
+      workspaceId
+    );
     await this.codingStatisticsService.invalidateCache(workspaceId);
+  }
+
+  private async writeResponseAnalysisDerivedCaches(
+    cacheKey: string,
+    analysis: ResponseAnalysisDto,
+    emptyPage: number,
+    emptyLimit: number,
+    duplicatePage: number,
+    duplicateLimit: number
+  ): Promise<void> {
+    const writes: Promise<boolean>[] = [
+      this.cacheService.set(
+        getResponseAnalysisSummaryCacheKey(cacheKey),
+        createResponseAnalysisSummaryCache(analysis)
+      ),
+      this.cacheService.set(
+        getResponseAnalysisEmptyPageCacheKey(cacheKey, emptyPage, emptyLimit),
+        createEmptyResponsePageCache(analysis, emptyPage, emptyLimit)
+      ),
+      this.cacheService.set(
+        getResponseAnalysisDuplicatePageCacheKey(
+          cacheKey,
+          duplicatePage,
+          duplicateLimit
+        ),
+        createDuplicateValuePageCache(analysis, duplicatePage, duplicateLimit)
+      )
+    ];
+
+    for (const chunk of createEmptyResponseChunkCaches(analysis)) {
+      writes.push(
+        this.cacheService.set(
+          getResponseAnalysisEmptyChunkCacheKey(cacheKey, chunk.chunkIndex),
+          chunk
+        )
+      );
+    }
+
+    for (const chunk of createDuplicateValueChunkCaches(analysis)) {
+      writes.push(
+        this.cacheService.set(
+          getResponseAnalysisDuplicateChunkCacheKey(cacheKey, chunk.chunkIndex),
+          chunk
+        )
+      );
+    }
+
+    await Promise.all(writes);
+  }
+
+  private async getResponseAnalysisPageCachesFromChunks(
+    cacheKey: string,
+    emptyPage: number,
+    emptyLimit: number,
+    duplicatePage: number,
+    duplicateLimit: number,
+    summaryCache: ResponseAnalysisSummaryCache
+  ): Promise<{
+      emptyPageCache: EmptyResponsePageCache | null;
+      duplicatePageCache: DuplicateValuePageCache | null;
+    }> {
+    const emptyOutOfRangePageCache =
+      this.createOutOfRangeEmptyResponsePageCache(
+        summaryCache.emptyResponses.total,
+        emptyPage,
+        emptyLimit
+      );
+    const duplicateOutOfRangePageCache =
+      this.createOutOfRangeDuplicateValuePageCache(
+        summaryCache.duplicateValues.total,
+        duplicatePage,
+        duplicateLimit
+      );
+    const emptyChunkIndexes = emptyOutOfRangePageCache ?
+      [] :
+      getRequiredResponseAnalysisChunkIndexes(emptyPage, emptyLimit);
+    const duplicateChunkIndexes = duplicateOutOfRangePageCache ?
+      [] :
+      getRequiredResponseAnalysisChunkIndexes(duplicatePage, duplicateLimit);
+    const emptyChunkReads: Promise<EmptyResponseChunkCache | null>[] = [];
+    for (const chunkIndex of emptyChunkIndexes) {
+      emptyChunkReads.push(
+        this.cacheService.get<EmptyResponseChunkCache>(
+          getResponseAnalysisEmptyChunkCacheKey(cacheKey, chunkIndex)
+        )
+      );
+    }
+
+    const duplicateChunkReads: Promise<DuplicateValueChunkCache | null>[] = [];
+    for (const chunkIndex of duplicateChunkIndexes) {
+      duplicateChunkReads.push(
+        this.cacheService.get<DuplicateValueChunkCache>(
+          getResponseAnalysisDuplicateChunkCacheKey(cacheKey, chunkIndex)
+        )
+      );
+    }
+
+    const [emptyChunks, duplicateChunks] = await Promise.all([
+      Promise.all(emptyChunkReads),
+      Promise.all(duplicateChunkReads)
+    ]);
+
+    if (
+      emptyChunks.some(chunk => chunk === null) ||
+      duplicateChunks.some(chunk => chunk === null)
+    ) {
+      return {
+        emptyPageCache: null,
+        duplicatePageCache: null
+      };
+    }
+
+    return {
+      emptyPageCache:
+        emptyOutOfRangePageCache ??
+        createEmptyResponsePageCacheFromChunks(
+          emptyChunks as EmptyResponseChunkCache[],
+          emptyPage,
+          emptyLimit
+        ),
+      duplicatePageCache:
+        duplicateOutOfRangePageCache ??
+        createDuplicateValuePageCacheFromChunks(
+          duplicateChunks as DuplicateValueChunkCache[],
+          duplicatePage,
+          duplicateLimit
+        )
+    };
+  }
+
+  private createOutOfRangeEmptyResponsePageCache(
+    total: number,
+    page: number,
+    pageSize: number
+  ): EmptyResponsePageCache | null {
+    return (page - 1) * pageSize >= total ?
+      { items: [], page, pageSize } :
+      null;
+  }
+
+  private createOutOfRangeDuplicateValuePageCache(
+    total: number,
+    page: number,
+    pageSize: number
+  ): DuplicateValuePageCache | null {
+    return (page - 1) * pageSize >= total ?
+      { groups: [], page, pageSize } :
+      null;
   }
 
   private getCacheKey(
@@ -456,7 +887,9 @@ export class CodingAnalysisService {
     return Math.min(100, Math.max(2, Math.round(parsed)));
   }
 
-  private async revertMaterializedDuplicateAggregation(workspaceId: number): Promise<number> {
+  private async revertMaterializedDuplicateAggregation(
+    workspaceId: number
+  ): Promise<number> {
     const aggregatedResponses = await this.responseRepository
       .createQueryBuilder('response')
       .select('response.id', 'id')

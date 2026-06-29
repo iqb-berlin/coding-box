@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  ConflictException
-} from '@nestjs/common';
+import { Injectable, Logger, ConflictException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -17,7 +13,13 @@ import {
 
 type ProcessOverviewValidationTask = Pick<
 ValidationTask,
-'id' | 'workspace_id' | 'validation_type' | 'status' | 'progress' | 'progress_message' | 'error'
+| 'id'
+| 'workspace_id'
+| 'validation_type'
+| 'status'
+| 'progress'
+| 'progress_message'
+| 'error'
 >;
 
 export interface TestResultsUploadJobData {
@@ -28,7 +30,13 @@ export interface TestResultsUploadJobData {
   personMatchMode?: 'strict' | 'loose';
   overwriteMode?: 'skip' | 'merge' | 'replace';
   scope?: 'person' | 'workspace' | 'group' | 'booklet' | 'unit' | 'response';
-  scopeFilters?: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string };
+  scopeFilters?: {
+    groupName?: string;
+    bookletName?: string;
+    unitNameOrAlias?: string;
+    variableId?: string;
+    subform?: string;
+  };
 }
 
 export interface TestPersonCodingJobData {
@@ -97,6 +105,7 @@ export interface CodingAnalysisJobData {
   threshold: number;
   cacheKey: string;
   runId?: string;
+  sourceRevision?: number;
 }
 
 export interface VariableAnalysisJobData {
@@ -168,9 +177,7 @@ export interface ExportJobData {
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   doubleCodingMethod?:
-  | 'new-row-per-variable'
-  | 'new-column-per-coder'
-  | 'most-frequent';
+  'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent';
   includeComments?: boolean;
   includeModalValue?: boolean;
   includeDoubleCoded?: boolean;
@@ -192,11 +199,7 @@ export interface ExportJobData {
 }
 
 export type ExportJobProgressPhase =
-  | 'preparing'
-  | 'counting'
-  | 'writing'
-  | 'finalizing'
-  | 'completed';
+  'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
 
 export interface ExportJobProgress {
   percentage: number;
@@ -241,31 +244,106 @@ export interface RedisConnectionStatus {
 export class JobQueueService {
   private readonly logger = new Logger(JobQueueService.name);
 
-  private readonly exportCancellationControllers = new Map<string, AbortController>();
+  private readonly exportCancellationControllers = new Map<
+  string,
+  AbortController
+  >();
 
   private readonly DEPENDENCY_RULES: ReadonlyArray<{
     target: string;
     blockedBy: string;
     label: string;
   }> = [
-      { target: 'test-results-upload', blockedBy: 'validation-task', label: 'validation' },
-      { target: 'test-results-upload', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'test-results-upload', blockedBy: 'reset-coding-version', label: 'reset coding version' },
-      { target: 'test-results-upload', blockedBy: 'external-coding-import', label: 'external coding import' },
-      { target: 'test-person-coding', blockedBy: 'test-results-upload', label: 'test results upload' },
-      { target: 'test-person-coding', blockedBy: 'reset-coding-version', label: 'reset coding version' },
-      { target: 'test-person-coding', blockedBy: 'external-coding-import', label: 'external coding import' },
-      { target: 'validation-task', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'validation-task', blockedBy: 'test-results-upload', label: 'test results upload' },
-      { target: 'validation-task', blockedBy: 'reset-coding-version', label: 'reset coding version' },
-      { target: 'coding-statistics', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'coding-statistics', blockedBy: 'external-coding-import', label: 'external coding import' },
-      { target: 'data-export', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'reset-coding-version', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'reset-coding-version', blockedBy: 'external-coding-import', label: 'external coding import' },
-      { target: 'external-coding-import', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'external-coding-import', blockedBy: 'test-results-upload', label: 'test results upload' },
-      { target: 'external-coding-import', blockedBy: 'reset-coding-version', label: 'reset coding version' }
+      {
+        target: 'test-results-upload',
+        blockedBy: 'validation-task',
+        label: 'validation'
+      },
+      {
+        target: 'test-results-upload',
+        blockedBy: 'test-person-coding',
+        label: 'auto-coding'
+      },
+      {
+        target: 'test-results-upload',
+        blockedBy: 'reset-coding-version',
+        label: 'reset coding version'
+      },
+      {
+        target: 'test-results-upload',
+        blockedBy: 'external-coding-import',
+        label: 'external coding import'
+      },
+      {
+        target: 'test-person-coding',
+        blockedBy: 'test-results-upload',
+        label: 'test results upload'
+      },
+      {
+        target: 'test-person-coding',
+        blockedBy: 'reset-coding-version',
+        label: 'reset coding version'
+      },
+      {
+        target: 'test-person-coding',
+        blockedBy: 'external-coding-import',
+        label: 'external coding import'
+      },
+      {
+        target: 'validation-task',
+        blockedBy: 'test-person-coding',
+        label: 'auto-coding'
+      },
+      {
+        target: 'validation-task',
+        blockedBy: 'test-results-upload',
+        label: 'test results upload'
+      },
+      {
+        target: 'validation-task',
+        blockedBy: 'reset-coding-version',
+        label: 'reset coding version'
+      },
+      {
+        target: 'coding-statistics',
+        blockedBy: 'test-person-coding',
+        label: 'auto-coding'
+      },
+      {
+        target: 'coding-statistics',
+        blockedBy: 'external-coding-import',
+        label: 'external coding import'
+      },
+      {
+        target: 'data-export',
+        blockedBy: 'test-person-coding',
+        label: 'auto-coding'
+      },
+      {
+        target: 'reset-coding-version',
+        blockedBy: 'test-person-coding',
+        label: 'auto-coding'
+      },
+      {
+        target: 'reset-coding-version',
+        blockedBy: 'external-coding-import',
+        label: 'external coding import'
+      },
+      {
+        target: 'external-coding-import',
+        blockedBy: 'test-person-coding',
+        label: 'auto-coding'
+      },
+      {
+        target: 'external-coding-import',
+        blockedBy: 'test-results-upload',
+        label: 'test results upload'
+      },
+      {
+        target: 'external-coding-import',
+        blockedBy: 'reset-coding-version',
+        label: 'reset coding version'
+      }
     ];
 
   constructor(
@@ -280,11 +358,13 @@ export class JobQueueService {
     @InjectQueue('validation-task') private validationTaskQueue: Queue,
     @InjectQueue('response-analysis') private responseAnalysisQueue: Queue,
     @InjectQueue('variable-analysis') private variableAnalysisQueue: Queue,
-    @InjectQueue('external-coding-import') private externalCodingImportQueue: Queue,
-    @InjectQueue('database-export') private databaseExportQueue: Queue<DatabaseExportJobData>,
+    @InjectQueue('external-coding-import')
+    private externalCodingImportQueue: Queue,
+    @InjectQueue('database-export')
+    private databaseExportQueue: Queue<DatabaseExportJobData>,
     @InjectRepository(ValidationTask)
     private readonly validationTaskRepository: Repository<ValidationTask>
-  ) { }
+  ) {}
 
   private getQueue(name: string): Queue {
     return this.getAllQueues().get(name);
@@ -376,24 +456,37 @@ export class JobQueueService {
     workspaceId: number
   ): Promise<boolean> {
     if (queueName === 'validation-task') {
-      const taskId = Number((job.data as ValidationTaskJobData | undefined)?.taskId);
+      const taskId = Number(
+        (job.data as ValidationTaskJobData | undefined)?.taskId
+      );
       if (!taskId) return false;
 
       const tasks = await this.validationTaskRepository.find({
         where: { id: In([taskId]) },
         select: ['id', 'workspace_id']
       });
-      return tasks.some(task => Number(task.workspace_id) === Number(workspaceId));
+      return tasks.some(
+        task => Number(task.workspace_id) === Number(workspaceId)
+      );
     }
 
-    const jobWorkspaceId = Number((job.data as { workspaceId?: number } | undefined)?.workspaceId);
+    const jobWorkspaceId = Number(
+      (job.data as { workspaceId?: number } | undefined)?.workspaceId
+    );
     return Boolean(jobWorkspaceId) && jobWorkspaceId === Number(workspaceId);
   }
 
   private async cancelKnownJob(queueName: string, job: Job): Promise<boolean> {
     try {
       const state = await job.getState();
-      const removableStates = ['waiting', 'delayed', 'paused', 'completed', 'failed', 'cancelled'];
+      const removableStates = [
+        'waiting',
+        'delayed',
+        'paused',
+        'completed',
+        'failed',
+        'cancelled'
+      ];
       if (removableStates.includes(state)) {
         await job.remove();
         return true;
@@ -433,13 +526,21 @@ export class JobQueueService {
     return this.cancelKnownJob(queueName, job);
   }
 
-  async cancelWorkspaceJob(workspaceId: number, queueName: string, jobId: string): Promise<boolean> {
+  async cancelWorkspaceJob(
+    workspaceId: number,
+    queueName: string,
+    jobId: string
+  ): Promise<boolean> {
     const queue = this.getQueue(queueName);
     if (!queue) return false;
     const job = await queue.getJob(jobId);
     if (!job) return false;
 
-    const belongsToWorkspace = await this.jobBelongsToWorkspace(queueName, job, workspaceId);
+    const belongsToWorkspace = await this.jobBelongsToWorkspace(
+      queueName,
+      job,
+      workspaceId
+    );
     if (!belongsToWorkspace) return false;
 
     return this.cancelKnownJob(queueName, job);
@@ -465,75 +566,99 @@ export class JobQueueService {
 
     for (const [queueName, queue] of queues.entries()) {
       processPromises.push(
-        queue.getJobs(['active', 'waiting', 'delayed', 'completed', 'failed', 'paused']).then(async jobs => {
-          const existingJobs = jobs.filter(Boolean);
-          let matchedJobs = existingJobs;
-          let validationTaskMap = new Map<number, ProcessOverviewValidationTask>();
-          if (queueName === 'validation-task') {
-            const taskIds = existingJobs.map(j => j.data?.taskId as number).filter(Boolean);
-            if (taskIds.length === 0) return [];
-            const tasks = await this.validationTaskRepository.find({
-              where: { id: In(taskIds) },
-              select: [
-                'id',
-                'workspace_id',
-                'validation_type',
-                'status',
-                'progress',
-                'progress_message',
-                'error'
-              ]
-            }) as ProcessOverviewValidationTask[];
-            validationTaskMap = new Map(tasks.map(t => [Number(t.id), t]));
-            matchedJobs = existingJobs.filter(j => (
-              Number(validationTaskMap.get(Number(j.data?.taskId))?.workspace_id) === Number(workspaceId)
-            ));
-          } else {
-            matchedJobs = existingJobs.filter(j => j.data && j.data.workspaceId === workspaceId);
-          }
-
-          const mappedPromises = matchedJobs.map(async job => {
-            const bullState = await job.getState();
-            const validationTask = queueName === 'validation-task' ?
-              validationTaskMap.get(Number(job.data?.taskId)) :
-              undefined;
-            const status = this.getProcessOverviewStatus(
-              queueName,
-              bullState,
-              job.data,
-              validationTask
-            );
-            let progress: unknown = typeof validationTask?.progress === 'number' ?
-              validationTask.progress :
-              job.progress();
-
-            // For completed jobs, ensure progress shows as 100% if it's numeric/empty
-            if (status === 'completed') {
-              if (typeof progress !== 'object' || progress === null) {
-                progress = 100;
-              }
-            } else if (progress === undefined || progress === null) {
-              progress = 0;
+        queue
+          .getJobs([
+            'active',
+            'waiting',
+            'delayed',
+            'completed',
+            'failed',
+            'paused'
+          ])
+          .then(async jobs => {
+            const existingJobs = jobs.filter(Boolean);
+            let matchedJobs = existingJobs;
+            let validationTaskMap = new Map<
+            number,
+            ProcessOverviewValidationTask
+            >();
+            if (queueName === 'validation-task') {
+              const taskIds = existingJobs
+                .map(j => j.data?.taskId as number)
+                .filter(Boolean);
+              if (taskIds.length === 0) return [];
+              const tasks = (await this.validationTaskRepository.find({
+                where: { id: In(taskIds) },
+                select: [
+                  'id',
+                  'workspace_id',
+                  'validation_type',
+                  'status',
+                  'progress',
+                  'progress_message',
+                  'error'
+                ]
+              })) as ProcessOverviewValidationTask[];
+              validationTaskMap = new Map(tasks.map(t => [Number(t.id), t]));
+              matchedJobs = existingJobs.filter(
+                j => Number(
+                  validationTaskMap.get(Number(j.data?.taskId))?.workspace_id
+                ) === Number(workspaceId)
+              );
+            } else {
+              matchedJobs = existingJobs.filter(
+                j => j.data && j.data.workspaceId === workspaceId
+              );
             }
 
-            return {
-              id: job.id,
-              queueName: queueName,
-              status: status,
-              progress: progress,
-              data: this.sanitizeJobData({
-                ...job.data,
-                validationType: validationTask?.validation_type,
-                progressMessage: validationTask?.progress_message
-              }),
-              failedReason: this.getProcessFailedReason(status, job, validationTask),
-              timestamp: job.timestamp,
-              processedOn: job.processedOn,
-              finishedOn: job.finishedOn
-            } as ProcessDto;
-          });
-          return Promise.all(mappedPromises);
-        })
+            const mappedPromises = matchedJobs.map(async job => {
+              const bullState = await job.getState();
+              const validationTask =
+                queueName === 'validation-task' ?
+                  validationTaskMap.get(Number(job.data?.taskId)) :
+                  undefined;
+              const status = this.getProcessOverviewStatus(
+                queueName,
+                bullState,
+                job.data,
+                validationTask
+              );
+              let progress: unknown =
+                typeof validationTask?.progress === 'number' ?
+                  validationTask.progress :
+                  job.progress();
+
+              // For completed jobs, ensure progress shows as 100% if it's numeric/empty
+              if (status === 'completed') {
+                if (typeof progress !== 'object' || progress === null) {
+                  progress = 100;
+                }
+              } else if (progress === undefined || progress === null) {
+                progress = 0;
+              }
+
+              return {
+                id: job.id,
+                queueName: queueName,
+                status: status,
+                progress: progress,
+                data: this.sanitizeJobData({
+                  ...job.data,
+                  validationType: validationTask?.validation_type,
+                  progressMessage: validationTask?.progress_message
+                }),
+                failedReason: this.getProcessFailedReason(
+                  status,
+                  job,
+                  validationTask
+                ),
+                timestamp: job.timestamp,
+                processedOn: job.processedOn,
+                finishedOn: job.finishedOn
+              } as ProcessDto;
+            });
+            return Promise.all(mappedPromises);
+          })
       );
     }
 
@@ -614,7 +739,9 @@ export class JobQueueService {
     workspaceId: number
   ): Promise<Job | undefined> {
     const queue = this.getQueue(queueName);
-    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(Boolean);
+    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(
+      Boolean
+    );
 
     if (queueName === 'validation-task') {
       const taskIds = jobs.map(j => j.data?.taskId as number).filter(Boolean);
@@ -623,8 +750,12 @@ export class JobQueueService {
         where: { id: In(taskIds) },
         select: ['id', 'workspace_id']
       });
-      const taskWorkspaceMap = new Map(tasks.map(t => [t.id, t.workspace_id]));
-      return jobs.find(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);
+      const taskWorkspaceMap = new Map(
+        tasks.map(t => [t.id, t.workspace_id])
+      );
+      return jobs.find(
+        j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId
+      );
     }
 
     return jobs.find(j => j.data?.workspaceId === workspaceId);
@@ -636,7 +767,10 @@ export class JobQueueService {
   ): Promise<void> {
     const rules = this.DEPENDENCY_RULES.filter(r => r.target === targetQueue);
     for (const rule of rules) {
-      const blockingJob = await this.hasActiveJobForWorkspace(rule.blockedBy, workspaceId);
+      const blockingJob = await this.hasActiveJobForWorkspace(
+        rule.blockedBy,
+        workspaceId
+      );
       if (blockingJob) {
         throw new ConflictException(
           `Cannot start: a ${rule.label} job is still active for this workspace (job ${blockingJob.id}). Please wait until it completes.`
@@ -649,7 +783,9 @@ export class JobQueueService {
     queue: Queue,
     matchFn: (data: T) => boolean
   ): Promise<Job<T> | undefined> {
-    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(Boolean);
+    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(
+      Boolean
+    );
     return jobs.find(job => matchFn(job.data));
   }
 
@@ -866,7 +1002,7 @@ export class JobQueueService {
       'delayed'
     ]);
     this.logger.log(`Found ${jobs.length} export jobs in total`);
-    return jobs.filter(job => job.data.workspaceId === workspaceId);
+    return jobs.filter(job => job?.data?.workspaceId === workspaceId);
   }
 
   createExportJobCancellationSignal(jobId: string): AbortSignal {
@@ -1017,7 +1153,9 @@ export class JobQueueService {
     return this.codebookGenerationQueue.add(data, options);
   }
 
-  async getCodebookGenerationJob(jobId: string): Promise<Job<CodebookGenerationJobData>> {
+  async getCodebookGenerationJob(
+    jobId: string
+  ): Promise<Job<CodebookGenerationJobData>> {
     return this.codebookGenerationQueue.getJob(jobId);
   }
 
@@ -1075,8 +1213,14 @@ export class JobQueueService {
     data: CodingAnalysisJobData,
     options?: JobOptions
   ): Promise<Job<CodingAnalysisJobData>> {
-    this.logger.log(`Adding coding analysis job for workspace ${data.workspaceId}`);
-    return this.responseAnalysisQueue.add(data, options);
+    this.logger.log(
+      `Adding coding analysis job for workspace ${data.workspaceId}`
+    );
+    return this.responseAnalysisQueue.add(data, {
+      removeOnComplete: { age: 3600, count: 10 },
+      removeOnFail: { age: 86400, count: 50 },
+      ...options
+    });
   }
 
   async getCodingAnalysisJob(
@@ -1088,19 +1232,38 @@ export class JobQueueService {
   async getActiveCodingAnalysisJob(
     workspaceId: number
   ): Promise<Job<CodingAnalysisJobData> | null> {
+    return this.findCodingAnalysisJob(
+      job => job.data.workspaceId === workspaceId
+    );
+  }
+
+  async getCodingAnalysisJobForCacheKey(
+    workspaceId: number,
+    cacheKey: string
+  ): Promise<Job<CodingAnalysisJobData> | null> {
+    return this.findCodingAnalysisJob(
+      job => job.data.workspaceId === workspaceId && job.data.cacheKey === cacheKey
+    );
+  }
+
+  private async findCodingAnalysisJob(
+    predicate: (job: Job<CodingAnalysisJobData>) => boolean
+  ): Promise<Job<CodingAnalysisJobData> | null> {
     const jobs = await this.responseAnalysisQueue.getJobs([
       'active',
       'waiting',
       'delayed'
     ]);
-    return jobs.find(job => job.data.workspaceId === workspaceId) || null;
+    return jobs.find(predicate) || null;
   }
 
   async addVariableAnalysisJob(
     data: VariableAnalysisJobData,
     options?: JobOptions
   ): Promise<Job<VariableAnalysisJobData>> {
-    this.logger.log(`Adding variable analysis job for workspace ${data.workspaceId}`);
+    this.logger.log(
+      `Adding variable analysis job for workspace ${data.workspaceId}`
+    );
     return this.variableAnalysisQueue.add(data, {
       removeOnComplete: { age: 86400 },
       removeOnFail: { age: 604800 },
@@ -1117,7 +1280,9 @@ export class JobQueueService {
   async getVariableAnalysisJobs(
     workspaceId: number
   ): Promise<Job<VariableAnalysisJobData>[]> {
-    this.logger.log(`Fetching all variable analysis jobs for workspace ${workspaceId}`);
+    this.logger.log(
+      `Fetching all variable analysis jobs for workspace ${workspaceId}`
+    );
     const jobs = await this.variableAnalysisQueue.getJobs([
       'completed',
       'failed',
@@ -1139,14 +1304,19 @@ export class JobQueueService {
       this.logger.log(`Variable analysis job ${jobId} has been deleted`);
       return true;
     } catch (error) {
-      this.logger.error(`Error deleting variable analysis job: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error deleting variable analysis job: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
 
   async deleteVariableAnalysisJobs(workspaceId: number): Promise<void> {
     const jobs = await this.getVariableAnalysisJobs(workspaceId);
-    this.logger.log(`Deleting all ${jobs.length} variable analysis jobs for workspace ${workspaceId}`);
+    this.logger.log(
+      `Deleting all ${jobs.length} variable analysis jobs for workspace ${workspaceId}`
+    );
 
     for (const job of jobs) {
       try {
@@ -1154,12 +1324,14 @@ export class JobQueueService {
         if (state === 'active') {
           await job.discard();
           // If removal fails for an active job, we at least discarded it to prevent retries
-          await job.remove().catch(() => { });
+          await job.remove().catch(() => {});
         } else {
           await job.remove();
         }
       } catch (error) {
-        this.logger.warn(`Failed to remove variable analysis job ${job.id}: ${error.message}`);
+        this.logger.warn(
+          `Failed to remove variable analysis job ${job.id}: ${error.message}`
+        );
       }
     }
   }
@@ -1176,19 +1348,26 @@ export class JobQueueService {
 
       if (state === 'waiting' || state === 'delayed') {
         await job.remove();
-        this.logger.log(`Variable analysis job ${jobId} has been cancelled and removed from queue`);
+        this.logger.log(
+          `Variable analysis job ${jobId} has been cancelled and removed from queue`
+        );
         return true;
       }
 
       if (state === 'active') {
         await job.discard();
-        this.logger.log(`Variable analysis job ${jobId} is active, marked for discard`);
+        this.logger.log(
+          `Variable analysis job ${jobId} is active, marked for discard`
+        );
         return true;
       }
 
       return true; // Already finished or failed
     } catch (error) {
-      this.logger.error(`Error cancelling variable analysis job: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error cancelling variable analysis job: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
