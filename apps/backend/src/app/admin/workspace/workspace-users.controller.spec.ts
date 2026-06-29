@@ -18,7 +18,7 @@ type WorkspaceUsersServiceMock = jest.Mocked<Pick<WorkspaceUsersService, 'findUs
 describe('WorkspaceUsersController', () => {
   let controller: WorkspaceUsersController;
   let workspaceUsersService: WorkspaceUsersServiceMock;
-  let authService: jest.Mocked<Pick<AuthService, 'createToken' | 'createTokenForUserId'>>;
+  let authService: jest.Mocked<Pick<AuthService, 'createToken' | 'createTokenForUserId' | 'getWorkspaceTokenPolicy'>>;
 
   beforeEach(() => {
     workspaceUsersService = {
@@ -28,7 +28,14 @@ describe('WorkspaceUsersController', () => {
     };
     authService = {
       createToken: jest.fn(),
-      createTokenForUserId: jest.fn()
+      createTokenForUserId: jest.fn(),
+      getWorkspaceTokenPolicy: jest.fn().mockReturnValue({
+        scopes: {
+          'replay:read': { maxDurationDays: 90 },
+          'replay-statistics:write': { maxDurationDays: 1 },
+          'coding-job:operate': { maxDurationDays: 1 }
+        }
+      })
     };
 
     controller = new WorkspaceUsersController(
@@ -81,18 +88,29 @@ describe('WorkspaceUsersController', () => {
       expect(Reflect.getMetadata('accessLevel', WorkspaceUsersController.prototype.createOwnToken)).toBeUndefined();
     });
 
+    it('returns the workspace token policy', () => {
+      expect(controller.getWorkspaceTokenPolicy()).toEqual({
+        scopes: {
+          'replay:read': { maxDurationDays: 90 },
+          'replay-statistics:write': { maxDurationDays: 1 },
+          'coding-job:operate': { maxDurationDays: 1 }
+        }
+      });
+      expect(authService.getWorkspaceTokenPolicy).toHaveBeenCalled();
+    });
+
     it('creates a token for the authenticated user with validated duration', async () => {
       authService.createTokenForUserId.mockResolvedValue('"token"');
 
       await expect(
-        controller.createOwnToken(7, '1', ['replay:read', 'replay-statistics:write'], { user: { id: 12 } })
+        controller.createOwnToken(7, '90', ['replay:read'], { user: { id: 12 } })
       ).resolves.toBe('"token"');
 
       expect(authService.createTokenForUserId).toHaveBeenCalledWith(
         12,
         7,
-        1,
-        ['replay:read', 'replay-statistics:write']
+        90,
+        ['replay:read']
       );
       expect(authService.createToken).not.toHaveBeenCalled();
     });
@@ -105,7 +123,7 @@ describe('WorkspaceUsersController', () => {
       expect(authService.createTokenForUserId).not.toHaveBeenCalled();
     });
 
-    it.each(['0', '-1', '1.5', '2', 'abc'])(
+    it.each(['0', '-1', '1.5', 'abc'])(
       'rejects invalid self-service token duration %s',
       async duration => {
         await expect(
@@ -116,7 +134,7 @@ describe('WorkspaceUsersController', () => {
       }
     );
 
-    it('creates a self-service token over HTTP with repeated scope query params', async () => {
+    it('creates a long-lived read-only self-service token over HTTP', async () => {
       authService.createTokenForUserId.mockResolvedValue('"token"');
       let app: INestApplication | undefined;
 
@@ -124,7 +142,7 @@ describe('WorkspaceUsersController', () => {
         app = await createTestApp();
 
         const response = await fetch(
-          `${await app.getUrl()}/admin/workspace/7/token/1?scopes=replay:read&scopes=replay-statistics:write`
+          `${await app.getUrl()}/admin/workspace/7/token/90?scopes=replay:read`
         );
 
         expect(response.status).toBe(200);
@@ -132,8 +150,8 @@ describe('WorkspaceUsersController', () => {
         expect(authService.createTokenForUserId).toHaveBeenCalledWith(
           12,
           7,
-          1,
-          ['replay:read', 'replay-statistics:write']
+          90,
+          ['replay:read']
         );
       } finally {
         await app?.close();
@@ -191,7 +209,7 @@ describe('WorkspaceUsersController', () => {
       expect(authService.createToken).not.toHaveBeenCalled();
     });
 
-    it.each(['0', '-1', '1.5', '2', 'abc'])(
+    it.each(['0', '-1', '1.5', 'abc'])(
       'rejects invalid token duration %s',
       async duration => {
         await expect(

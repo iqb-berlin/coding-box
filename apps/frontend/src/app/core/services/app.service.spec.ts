@@ -89,6 +89,26 @@ describe('AppService', () => {
     });
   });
 
+  describe('getWorkspaceTokenPolicy', () => {
+    it('should request the workspace token policy', () => {
+      const policy = {
+        scopes: {
+          'replay:read': { maxDurationDays: 90 },
+          'replay-statistics:write': { maxDurationDays: 1 },
+          'coding-job:operate': { maxDurationDays: 1 }
+        }
+      };
+
+      service.getWorkspaceTokenPolicy().subscribe(result => {
+        expect(result).toEqual(policy);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/token-policy`);
+      expect(req.request.method).toBe('GET');
+      req.flush(policy);
+    });
+  });
+
   describe('loadAuthenticatedUser', () => {
     it('should fetch auth data on success', () => {
       const mockAuthData = { userId: 1, userName: 'user' } as unknown as AuthDataDto;

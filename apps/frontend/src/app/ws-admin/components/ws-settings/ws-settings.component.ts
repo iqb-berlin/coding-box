@@ -19,12 +19,16 @@ import { Clipboard } from '@angular/cdk/clipboard';
 import { Subscription, timer } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
-import { AppService } from '../../../core/services/app.service';
+import { AppService, WorkspaceTokenPolicy } from '../../../core/services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 import { JournalComponent } from '../journal/journal.component';
 import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';
 import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/replay-statistics-dialog.component';
-import { REPLAY_WORKSPACE_TOKEN_SCOPES } from '../../../core/services/auth-session.config';
+import {
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+  EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES,
+  WorkspaceTokenScope
+} from '../../../core/services/auth-session.config';
 import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
 import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 import { ProcessOverviewComponent } from '../process-overview/process-overview.component';
@@ -85,9 +89,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   private exportPollingSubscription: Subscription | null = null;
 
   authToken: string | null = null;
-  duration = 60;
+  duration = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
   readonly minTokenDurationDays = 1;
-  readonly maxTokenDurationDays = 90;
+  maxTokenDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
+  readonly externalReplayTokenScopes = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES;
   autoFetchCodingStatistics = true;
   autoRefreshManualCodingJobs = true;
   includeDeriveErrorInManualCoding = false;
@@ -100,6 +105,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
+    this.loadWorkspaceTokenPolicy();
     if (workspaceId) {
       this.workspaceSettingsService
         .getAutoFetchCodingStatistics(workspaceId)
@@ -172,7 +178,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       .createOwnToken(
         this.appService.selectedWorkspaceId,
         Number(this.duration),
-        REPLAY_WORKSPACE_TOKEN_SCOPES
+        this.externalReplayTokenScopes
       )
       .subscribe({
         next: (authToken: string) => {
@@ -200,6 +206,31 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     return Number.isInteger(duration) &&
       duration >= this.minTokenDurationDays &&
       duration <= this.maxTokenDurationDays;
+  }
+
+  private loadWorkspaceTokenPolicy(): void {
+    this.appService.getWorkspaceTokenPolicy().subscribe({
+      next: policy => {
+        this.maxTokenDurationDays = this.getMaxTokenDurationDaysForScopes(
+          policy,
+          this.externalReplayTokenScopes
+        );
+        if (Number(this.duration) > this.maxTokenDurationDays) {
+          this.duration = this.maxTokenDurationDays;
+        }
+      }
+    });
+  }
+
+  private getMaxTokenDurationDaysForScopes(
+    policy: WorkspaceTokenPolicy,
+    scopes: WorkspaceTokenScope[]
+  ): number {
+    const maxDurations = scopes
+      .map(scope => policy.scopes[scope]?.maxDurationDays)
+      .filter((duration): duration is number => Number.isInteger(duration) && duration >= this.minTokenDurationDays);
+
+    return maxDurations.length ? Math.min(...maxDurations) : this.maxTokenDurationDays;
   }
 
   copyToken(): void {

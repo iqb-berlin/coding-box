@@ -2,11 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsersService } from '../../database/services/users';
 import {
   WORKSPACE_API_TOKEN_TYPE,
+  WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS_ENV,
+  WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE,
   WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
   WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
 } from '../workspace-token';
@@ -15,6 +18,7 @@ describe('AuthService', () => {
   let service: AuthService;
   let usersService: jest.Mocked<UsersService>;
   let jwtService: jest.Mocked<JwtService>;
+  let configService: jest.Mocked<ConfigService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -31,6 +35,10 @@ describe('AuthService', () => {
         {
           provide: JwtService,
           useValue: createMock<JwtService>()
+        },
+        {
+          provide: ConfigService,
+          useValue: createMock<ConfigService>()
         }
       ]
     }).compile();
@@ -38,6 +46,8 @@ describe('AuthService', () => {
     service = module.get<AuthService>(AuthService);
     usersService = module.get(UsersService);
     jwtService = module.get(JwtService);
+    configService = module.get(ConfigService);
+    configService.get.mockReturnValue(undefined);
   });
 
   it('should be defined', () => {
@@ -146,16 +156,82 @@ describe('AuthService', () => {
       expect(jwtService.sign).not.toHaveBeenCalled();
     });
 
-    it('rejects workspace tokens with too long duration', async () => {
+    it('allows longer read-only replay workspace tokens', async () => {
       await expect(service.createToken(
         'identity-1',
         7,
-        2,
+        90,
+        [WORKSPACE_TOKEN_SCOPE_REPLAY_READ],
+        5
+      )).resolves.toBe('"signed-token"');
+
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+        }),
+        { expiresIn: '90d' }
+      );
+    });
+
+    it('rejects read-only replay workspace tokens above the configured maximum duration', async () => {
+      await expect(service.createToken(
+        'identity-1',
+        7,
+        91,
         [WORKSPACE_TOKEN_SCOPE_REPLAY_READ],
         5
       )).rejects.toThrow(BadRequestException);
 
       expect(jwtService.sign).not.toHaveBeenCalled();
+    });
+
+    it('rejects longer workspace tokens with write scopes', async () => {
+      await expect(service.createToken(
+        'identity-1',
+        7,
+        90,
+        [
+          WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
+          WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
+        ],
+        5
+      )).rejects.toThrow(BadRequestException);
+
+      expect(jwtService.sign).not.toHaveBeenCalled();
+    });
+
+    it('rejects longer workspace tokens with coding operate scopes', async () => {
+      await expect(service.createToken(
+        'identity-1',
+        7,
+        2,
+        [WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE],
+        5
+      )).rejects.toThrow(BadRequestException);
+
+      expect(jwtService.sign).not.toHaveBeenCalled();
+    });
+
+    it('uses the configured read-only replay maximum duration', async () => {
+      configService.get.mockImplementation(key => (
+        key === WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS_ENV ? '60' : undefined
+      ));
+
+      await expect(service.createToken(
+        'identity-1',
+        7,
+        61,
+        [WORKSPACE_TOKEN_SCOPE_REPLAY_READ],
+        5
+      )).rejects.toThrow(BadRequestException);
+
+      await expect(service.createToken(
+        'identity-1',
+        7,
+        60,
+        [WORKSPACE_TOKEN_SCOPE_REPLAY_READ],
+        5
+      )).resolves.toBe('"signed-token"');
     });
 
     it('rejects workspace tokens without explicit scopes', async () => {

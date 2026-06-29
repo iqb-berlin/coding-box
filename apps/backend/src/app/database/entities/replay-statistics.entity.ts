@@ -5,6 +5,11 @@ import {
   PrimaryGeneratedColumn
 } from 'typeorm';
 
+export type ReplayStatisticsSource = 'internal' | 'external';
+
+export const REPLAY_STATISTICS_SOURCE_INTERNAL: ReplayStatisticsSource = 'internal';
+export const REPLAY_STATISTICS_SOURCE_EXTERNAL: ReplayStatisticsSource = 'external';
+
 /**
  * Entity for storing replay statistics
  * Records information about each replay session including timestamp, duration, and unit information
@@ -37,6 +42,14 @@ export class ReplayStatistics {
 
   @Column({ type: 'varchar', length: 2000, nullable: true })
     replay_url: string;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: false,
+    default: REPLAY_STATISTICS_SOURCE_INTERNAL
+  })
+    replay_source: ReplayStatisticsSource;
 
   @Column({ type: 'boolean', default: true })
     success: boolean;

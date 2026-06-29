@@ -4,9 +4,11 @@ import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import {
+  AllowAnyWorkspaceTokenScopes,
   AllowWorkspaceTokenScopes,
   WORKSPACE_API_TOKEN_TYPE,
-  WORKSPACE_TOKEN_SCOPE_REPLAY_READ
+  WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
 } from './workspace-token';
 
 describe('JwtAuthGuard (Backend)', () => {
@@ -109,6 +111,20 @@ describe('JwtAuthGuard (Backend)', () => {
         id: 1,
         tokenType: WORKSPACE_API_TOKEN_TYPE,
         scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+      }, handler))).resolves.toBe(true);
+    });
+
+    it('should allow workspace API tokens when the endpoint allows any matching token scope', async () => {
+      const handler = jest.fn();
+      AllowAnyWorkspaceTokenScopes(
+        WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
+        WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
+      )(handler);
+
+      await expect(guard.canActivate(createContext({
+        id: 1,
+        tokenType: WORKSPACE_API_TOKEN_TYPE,
+        scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE]
       }, handler))).resolves.toBe(true);
     });
   });

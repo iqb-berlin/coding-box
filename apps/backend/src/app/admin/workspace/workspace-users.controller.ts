@@ -12,13 +12,14 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
-import { AuthService, MAX_WORKSPACE_TOKEN_DURATION_DAYS } from '../../auth/service/auth.service';
+import { AuthService } from '../../auth/service/auth.service';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { WorkspaceUsersService } from '../../database/services/workspace/workspace-users.service';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   WORKSPACE_TOKEN_SCOPES,
+  WorkspaceTokenPolicy,
   WorkspaceTokenScope
 } from '../../auth/workspace-token';
 
@@ -38,6 +39,19 @@ export class WorkspaceUsersController {
     private authService: AuthService
   ) {}
 
+  @Get('token-policy')
+  @ApiBearerAuth()
+  @ApiTags('admin workspace')
+  @ApiOperation({
+    summary: 'Get workspace token policy',
+    description: 'Returns the maximum token duration per workspace API token scope'
+  })
+  @ApiOkResponse({ description: 'Workspace token policy returned successfully' })
+  @UseGuards(JwtAuthGuard)
+  getWorkspaceTokenPolicy(): WorkspaceTokenPolicy {
+    return this.authService.getWorkspaceTokenPolicy();
+  }
+
   @Get(':workspace_id/token/:duration')
   @ApiBearerAuth()
   @ApiTags('admin workspace')
@@ -49,7 +63,7 @@ export class WorkspaceUsersController {
   @ApiParam({
     name: 'duration',
     required: true,
-    description: `Duration of the token in days. Must be between 1 and ${MAX_WORKSPACE_TOKEN_DURATION_DAYS}.`
+    description: 'Duration of the token in days. The maximum depends on the requested scopes.'
   })
   @ApiOkResponse({ description: 'Token created successfully', type: String })
   @ApiBadRequestResponse({ description: 'Invalid input parameters' })
@@ -64,13 +78,14 @@ export class WorkspaceUsersController {
       throw new BadRequestException('Invalid input parameters');
     }
     const durationDays = this.parseTokenDurationDays(duration);
+    const tokenScopes = this.parseTokenScopes(scopes);
     this.logger.log(`Generating token for user ${request.user.id} in workspace ${workspaceId} with duration ${durationDays}d`);
 
     return this.authService.createTokenForUserId(
       Number(request.user.id),
       workspaceId,
       durationDays,
-      this.parseTokenScopes(scopes)
+      tokenScopes
     );
   }
 
@@ -83,7 +98,7 @@ export class WorkspaceUsersController {
   @ApiParam({
     name: 'duration',
     required: true,
-    description: `Duration of the token in days. Must be between 1 and ${MAX_WORKSPACE_TOKEN_DURATION_DAYS}.`
+    description: 'Duration of the token in days. The maximum depends on the requested scopes.'
   })
   @ApiOkResponse({ description: 'Token created successfully', type: String })
   @ApiBadRequestResponse({ description: 'Invalid input parameters' })
@@ -100,13 +115,14 @@ export class WorkspaceUsersController {
       throw new BadRequestException('Invalid input parameters');
     }
     const durationDays = this.parseTokenDurationDays(duration);
+    const tokenScopes = this.parseTokenScopes(scopes);
     this.logger.log(`Generating token for user ${identity} in workspace ${workspaceId} with duration ${durationDays}d`);
 
     return this.authService.createToken(
       identity,
       workspaceId,
       durationDays,
-      this.parseTokenScopes(scopes),
+      tokenScopes,
       Number(request.user.id)
     );
   }
@@ -135,11 +151,10 @@ export class WorkspaceUsersController {
     const durationDays = Number(duration);
     if (
       !Number.isInteger(durationDays) ||
-      durationDays < 1 ||
-      durationDays > MAX_WORKSPACE_TOKEN_DURATION_DAYS
+      durationDays < 1
     ) {
       throw new BadRequestException(
-        `Token duration must be a whole number between 1 and ${MAX_WORKSPACE_TOKEN_DURATION_DAYS} days`
+        'Token duration must be a whole number greater than or equal to 1 day'
       );
     }
     return durationDays;

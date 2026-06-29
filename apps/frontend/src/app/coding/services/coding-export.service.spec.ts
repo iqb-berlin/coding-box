@@ -1,22 +1,36 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { CodingExportService } from './coding-export.service';
-import { AppService } from '../../core/services/app.service';
+import { AppService, WorkspaceTokenPolicy } from '../../core/services/app.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { CodeBookContentSetting } from '../../../../../../api-dto/coding/codebook-content-setting';
+import {
+  API_SPECIAL_TOKEN_DURATION_DAYS,
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+  EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES,
+  REPLAY_WORKSPACE_TOKEN_SCOPES
+} from '../../core/services/auth-session.config';
 
 describe('CodingExportService', () => {
   let service: CodingExportService;
   let httpMock: HttpTestingController;
   let appServiceMock: jest.Mocked<AppService>;
   const mockServerUrl = 'http://localhost/api/';
+  const workspaceTokenPolicy: WorkspaceTokenPolicy = {
+    scopes: {
+      'replay:read': { maxDurationDays: DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS },
+      'replay-statistics:write': { maxDurationDays: API_SPECIAL_TOKEN_DURATION_DAYS },
+      'coding-job:operate': { maxDurationDays: API_SPECIAL_TOKEN_DURATION_DAYS }
+    }
+  };
 
   beforeEach(() => {
     appServiceMock = {
       loggedUser: { sub: 'user' },
-      createOwnToken: jest.fn().mockReturnValue(of('auth-token'))
+      createOwnToken: jest.fn().mockReturnValue(of('auth-token')),
+      getWorkspaceTokenPolicy: jest.fn().mockReturnValue(of(workspaceTokenPolicy))
     } as unknown as jest.Mocked<AppService>;
 
     TestBed.configureTestingModule({
@@ -46,6 +60,12 @@ describe('CodingExportService', () => {
       expect(res).toBeDefined();
     });
 
+    expect(appServiceMock.getWorkspaceTokenPolicy).toHaveBeenCalled();
+    expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+      1,
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+      EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
     const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/1/coding/coding-list` &&
       request.params.get('authToken') === 'auth-token'
     );
@@ -53,11 +73,59 @@ describe('CodingExportService', () => {
     req.flush(new Blob());
   });
 
+  it('should use the backend policy duration for coding list CSV tokens', () => {
+    appServiceMock.getWorkspaceTokenPolicy.mockReturnValueOnce(of({
+      scopes: {
+        'replay:read': { maxDurationDays: 60 },
+        'replay-statistics:write': { maxDurationDays: 1 },
+        'coding-job:operate': { maxDurationDays: 1 }
+      }
+    }));
+
+    service.getCodingListAsCsv(1).subscribe(res => {
+      expect(res).toBeDefined();
+    });
+
+    expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+      1,
+      60,
+      EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
+    const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/1/coding/coding-list` &&
+      request.params.get('authToken') === 'auth-token'
+    );
+    expect(req.request.params.get('authToken')).toBe('auth-token');
+    req.flush(new Blob());
+  });
+
+  it('should not export coding list CSV with an empty token when token creation fails', () => {
+    appServiceMock.createOwnToken.mockReturnValueOnce(
+      throwError(() => new Error('token failed'))
+    );
+    const nextSpy = jest.fn();
+
+    service.getCodingListAsCsv(1).subscribe({
+      next: nextSpy,
+      error: error => {
+        expect(error).toBeInstanceOf(Error);
+      }
+    });
+
+    expect(nextSpy).not.toHaveBeenCalled();
+    httpMock.expectNone(`${mockServerUrl}admin/workspace/1/coding/coding-list`);
+  });
+
   it('should get coding list as Excel', () => {
     service.getCodingListAsExcel(1).subscribe(res => {
       expect(res).toBeDefined();
     });
 
+    expect(appServiceMock.getWorkspaceTokenPolicy).toHaveBeenCalled();
+    expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+      1,
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+      EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
     const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/1/coding/coding-list/excel` &&
       request.params.get('authToken') === 'auth-token'
     );
@@ -98,6 +166,11 @@ describe('CodingExportService', () => {
       expect(res).toBeDefined();
     });
 
+    expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+      1,
+      API_SPECIAL_TOKEN_DURATION_DAYS,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
     const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/export/start`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toMatchObject({
@@ -166,6 +239,12 @@ describe('CodingExportService', () => {
       expect(res).toBeDefined();
     });
 
+    expect(appServiceMock.getWorkspaceTokenPolicy).toHaveBeenCalled();
+    expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+      1,
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+      EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
     const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/export/start`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toMatchObject({
@@ -174,6 +253,33 @@ describe('CodingExportService', () => {
       includeReplayUrl: false,
       includeResponseValues: true,
       trainingRequired: true,
+      authToken: 'auth-token'
+    });
+    req.flush({ jobId: 'job-1', message: 'started' });
+  });
+
+  it('should use the backend policy duration for coding-list export jobs', () => {
+    appServiceMock.getWorkspaceTokenPolicy.mockReturnValueOnce(of({
+      scopes: {
+        'replay:read': { maxDurationDays: 60 },
+        'replay-statistics:write': { maxDurationDays: 1 },
+        'coding-job:operate': { maxDurationDays: 1 }
+      }
+    }));
+
+    service.startExportJob(1, 'coding-list', undefined, 'csv').subscribe(res => {
+      expect(res).toBeDefined();
+    });
+
+    expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+      1,
+      60,
+      EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/export/start`);
+    expect(req.request.body).toMatchObject({
+      exportType: 'coding-list',
+      format: 'csv',
       authToken: 'auth-token'
     });
     req.flush({ jobId: 'job-1', message: 'started' });

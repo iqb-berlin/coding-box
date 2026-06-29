@@ -18,7 +18,7 @@
             [max]="maxTokenDurationDays"
             step="1"
             placeholder="Laufzeit in Tagen"/>
-          <mat-hint>{{ 'ws-settings.enter-validity-days' | translate }}</mat-hint>
+          <mat-hint>{{ 'ws-settings.enter-validity-days' | translate:{ max: maxTokenDurationDays } }}</mat-hint>
         </mat-form-field>
 
         <div class="token-actions">

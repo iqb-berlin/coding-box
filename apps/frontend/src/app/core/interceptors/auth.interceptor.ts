@@ -18,7 +18,10 @@ import {
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppHttpError } from './app-http-error.class';
-import { SUPPRESS_GLOBAL_HTTP_ERROR } from './http-error-context';
+import {
+  SUPPRESS_AUTH_ERROR_REDIRECT,
+  SUPPRESS_GLOBAL_HTTP_ERROR
+} from './http-error-context';
 import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
 import { SERVER_URL } from '../../injection-tokens';
@@ -53,7 +56,10 @@ export const authInterceptor: HttpInterceptorFn = (
                 return;
               }
 
-              if (error.status === 401 || error.status === 403) {
+              if (
+                (error.status === 401 || error.status === 403) &&
+                !req.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)
+              ) {
                 suppressGlobalErrorMessage = true;
                 const errorMessage = error.error?.message || error.message || '';
 

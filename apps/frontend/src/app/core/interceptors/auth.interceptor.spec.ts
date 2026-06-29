@@ -10,7 +10,10 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { authInterceptor } from './auth.interceptor';
-import { SUPPRESS_GLOBAL_HTTP_ERROR } from './http-error-context';
+import {
+  SUPPRESS_AUTH_ERROR_REDIRECT,
+  SUPPRESS_GLOBAL_HTTP_ERROR
+} from './http-error-context';
 import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
 import { SERVER_URL } from '../../injection-tokens';
@@ -180,6 +183,27 @@ describe('authInterceptor', () => {
     req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
 
     expect(appService.requireReAuthentication).toHaveBeenCalledWith('/home');
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+    expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
+  it('should not treat explicitly suppressed auth errors as expired sessions', async () => {
+    const context = new HttpContext()
+      .set(SUPPRESS_GLOBAL_HTTP_ERROR, true)
+      .set(SUPPRESS_AUTH_ERROR_REDIRECT, true);
+
+    http.post('/api/admin/workspace/5/replay-statistics', {}, {
+      context,
+      headers: new HttpHeaders({ Authorization: 'Bearer replay-read-token' })
+    }).subscribe({
+      error: () => {
+      }
+    });
+
+    const req = httpMock.expectOne('/api/admin/workspace/5/replay-statistics');
+    req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
     expect(appService.addErrorMessage).not.toHaveBeenCalled();
     expect(snackBar.open).not.toHaveBeenCalled();
   });
