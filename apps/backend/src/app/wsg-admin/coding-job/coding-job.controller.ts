@@ -30,6 +30,10 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import {
+  AllowWorkspaceTokenScopes,
+  WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE
+} from '../../auth/workspace-token';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WorkspaceId } from '../../admin/workspace/workspace.decorator';
 import {
@@ -445,6 +449,7 @@ export class WsgCodingJobController {
   }
 
   @Get(':id')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -542,6 +547,7 @@ export class WsgCodingJobController {
   }
 
   @Put(':id')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiBearerAuth()
@@ -679,6 +685,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/pause')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -715,6 +722,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/resume')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -751,6 +759,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/submit')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -868,6 +877,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/progress')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -925,6 +935,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/notes')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -1025,6 +1036,7 @@ export class WsgCodingJobController {
   }
 
   @Get(':id/progress')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -1122,6 +1134,7 @@ export class WsgCodingJobController {
   }
 
   @Get(':id/units')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({

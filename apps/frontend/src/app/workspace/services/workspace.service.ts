@@ -25,7 +25,7 @@ export class WorkspaceService {
   private accessRightsMatrixCache$ = new BehaviorSubject<AccessRightsMatrixDto | null>(null);
 
   get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+    return {};
   }
 
   markTestTakersAsExcluded(workspaceId: number, logins: string[]): Observable<boolean> {

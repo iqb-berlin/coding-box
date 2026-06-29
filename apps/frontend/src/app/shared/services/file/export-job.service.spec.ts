@@ -131,7 +131,11 @@ describe('ExportJobService', () => {
         includeReplayUrl: true
       }).subscribe();
 
-      expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(1, 60);
+      expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+        1,
+        1,
+        ['replay:read', 'replay-statistics:write']
+      );
       expect(codingJobBackendServiceMock.startExportJob).toHaveBeenCalledWith(
         1,
         expect.objectContaining({

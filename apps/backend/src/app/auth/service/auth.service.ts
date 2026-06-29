@@ -1,47 +1,33 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
-  Logger,
   NotFoundException
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../../database/services/users';
-import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
+import {
+  WORKSPACE_API_TOKEN_TYPE,
+  WORKSPACE_TOKEN_SCOPES,
+  WorkspaceTokenScope
+} from '../workspace-token';
+
+export const MAX_WORKSPACE_TOKEN_DURATION_DAYS = 1;
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService
   ) {
   }
 
-  async keycloakLogin(user: CreateUserDto) {
-    const {
-      username, lastName, firstName, email, identity, issuer, isAdmin
-    } = user;
-    const userId = await this.usersService.createKeycloakUser({
-      identity: identity,
-      username: username,
-      email: email,
-      lastName: lastName,
-      firstName: firstName,
-      issuer: issuer,
-      isAdmin: isAdmin
-    });
-    this.logger.log(`Keycloak User with id '${userId}' is logging in.`);
-    const payload = {
-      userId: userId, username: username, sub: user
-    };
-    return this.jwtService.sign(payload);
-  }
-
   async createToken(
     identity: string,
     workspaceId: number,
     duration: number,
+    scopes: WorkspaceTokenScope[],
     requesterUserId?: number
   ): Promise<string> {
     const user = await this.usersService.findUserByIdentity(identity);
@@ -57,48 +43,65 @@ export class AuthService {
         throw new ForbiddenException('Users need workspace admin access to create tokens for another identity');
       }
     }
-    return this.signWorkspaceToken(user, workspaceId, duration);
+    return this.signWorkspaceToken(user, workspaceId, duration, scopes);
   }
 
   async createTokenForUserId(
     userId: number,
     workspaceId: number,
-    duration: number
+    duration: number,
+    scopes: WorkspaceTokenScope[]
   ): Promise<string> {
     const user = await this.usersService.findUserById(userId);
     if (!user) {
       throw new NotFoundException(`User with id ${userId} not found`);
     }
 
-    return this.signWorkspaceToken(user, workspaceId, duration);
+    return this.signWorkspaceToken(user, workspaceId, duration, scopes);
   }
 
-  private signWorkspaceToken(user: UserFullDto, workspaceId: number, duration: number): string {
+  private signWorkspaceToken(
+    user: UserFullDto,
+    workspaceId: number,
+    duration: number,
+    scopes: WorkspaceTokenScope[]
+  ): string {
+    this.validateWorkspaceTokenDuration(duration);
+    this.validateWorkspaceTokenScopes(scopes);
     const payload = {
-      userId: user.id, username: user.username, sub: user, workspace: workspaceId
+      userId: user.id,
+      username: user.username,
+      sub: user,
+      workspace: workspaceId,
+      tokenType: WORKSPACE_API_TOKEN_TYPE,
+      scopes: Array.from(new Set(scopes))
     };
     const token = this.jwtService.sign(payload, { expiresIn: `${duration}d` });
     return JSON.stringify(token);
   }
 
-  async login(user: CreateUserDto) {
-    const {
-      identity, username, email, lastName, firstName, issuer
-    } = user;
-    const userId = await this.usersService.createUser({
-      identity: identity,
-      username: username,
-      email: email,
-      lastName: lastName,
-      firstName: firstName,
-      issuer: issuer,
-      isAdmin: false
-    });
-    this.logger.log(`User with id '${userId}' is logging in.`);
-    const payload = {
-      userId: userId, username: username, sub: userId
-    };
-    return this.jwtService.sign(payload);
+  private validateWorkspaceTokenDuration(duration: number): void {
+    if (
+      !Number.isInteger(duration) ||
+      duration < 1 ||
+      duration > MAX_WORKSPACE_TOKEN_DURATION_DAYS
+    ) {
+      throw new BadRequestException(
+        `Token duration must be a whole number between 1 and ${MAX_WORKSPACE_TOKEN_DURATION_DAYS} days`
+      );
+    }
+  }
+
+  private validateWorkspaceTokenScopes(scopes: WorkspaceTokenScope[]): void {
+    if (!Array.isArray(scopes) || scopes.length === 0) {
+      throw new BadRequestException('At least one token scope is required');
+    }
+
+    const allowedScopes = new Set<string>(WORKSPACE_TOKEN_SCOPES);
+    const invalidScope = scopes.find(scope => !allowedScopes.has(scope));
+    if (invalidScope) {
+      throw new BadRequestException(`Unsupported token scope: ${invalidScope}`);
+    }
   }
 
   async isAdminUser(userId: number): Promise<boolean> {

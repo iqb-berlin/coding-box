@@ -24,6 +24,7 @@ import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.co
 import { JournalComponent } from '../journal/journal.component';
 import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';
 import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/replay-statistics-dialog.component';
+import { REPLAY_WORKSPACE_TOKEN_SCOPES } from '../../../core/services/auth-session.config';
 import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
 import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 import { ProcessOverviewComponent } from '../process-overview/process-overview.component';
@@ -170,7 +171,8 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     this.appService
       .createOwnToken(
         this.appService.selectedWorkspaceId,
-        Number(this.duration)
+        Number(this.duration),
+        REPLAY_WORKSPACE_TOKEN_SCOPES
       )
       .subscribe({
         next: (authToken: string) => {
@@ -438,15 +440,6 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     }
 
     const authHeaders = this.getAuthHeaders();
-    if (!authHeaders) {
-      this.snackBar.open(
-        this.translateService.instant('ws-settings.authentication-required'),
-        this.translateService.instant('close'),
-        { duration: 5000 }
-      );
-      return;
-    }
-
     this.isExporting = true;
     this.databaseExportProgress = 0;
     this.databaseExportStatus = 'queued';
@@ -596,14 +589,8 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     }
   }
 
-  private getAuthHeaders(): HttpHeaders | null {
-    const token = localStorage.getItem('id_token');
-    if (!token) {
-      return null;
-    }
-
+  private getAuthHeaders(): HttpHeaders {
     return new HttpHeaders({
-      Authorization: `Bearer ${token}`,
       Accept: 'application/json'
     });
   }

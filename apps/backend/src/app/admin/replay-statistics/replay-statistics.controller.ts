@@ -18,6 +18,10 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import {
+  AllowWorkspaceTokenScopes,
+  WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
+} from '../../auth/workspace-token';
+import {
   AccessLevelGuard,
   RequireAccessLevel
 } from '../workspace/access-level.guard';
@@ -47,6 +51,7 @@ export class ReplayStatisticsController {
   })
   @ApiBody({ type: StoreReplayStatisticsDto })
   @Post()
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async storeReplayStatistics(
     @Param('workspace_id') workspaceId: string,
