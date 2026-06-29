@@ -1,5 +1,5 @@
 import {
-  Inject, Injectable, Logger, OnApplicationBootstrap, forwardRef
+  Inject, Injectable, Logger, forwardRef
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -28,6 +28,10 @@ import {
   type CodingStatisticsVersion
 } from './coding-statistics-cache-key.util';
 import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import {
+  getCodingAppliedResultsOverviewCachePattern,
+  getCodingAppliedResultsOverviewVersionKey
+} from './coding-applied-results-overview-cache-key.util';
 import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 
 export interface KappaCalculationResult {
@@ -52,7 +56,7 @@ export interface KappaVariableSummary {
 }
 
 @Injectable()
-export class CodingStatisticsService implements OnApplicationBootstrap {
+export class CodingStatisticsService {
   private readonly logger = new Logger(CodingStatisticsService.name);
   private readonly CACHE_TTL_SECONDS = 0; // No expiration (TTL=0 means no EX flag in Redis) - persist until explicitly invalidated
 
@@ -74,21 +78,9 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       return;
     }
 
-    this.logger.log('Application bootstrap: Loading coding statistics for all workspaces...');
-    try {
-      const workspaceIds = await this.getWorkspaceIdsWithResponses();
-      this.logger.log(`Found ${workspaceIds.length} workspaces with responses, preloading statistics...`);
-
-      const preloadPromises = workspaceIds.map(workspaceId => this.getCodingStatistics(workspaceId).catch(error => {
-        this.logger.error(`Failed to preload statistics for workspace ${workspaceId}: ${error.message}`);
-      })
-      );
-
-      await Promise.allSettled(preloadPromises);
-      this.logger.log('Finished preloading coding statistics for all workspaces');
-    } catch (error) {
-      this.logger.error(`Error during application bootstrap: ${error.message}`);
-    }
+    this.logger.log(
+      'Skipping coding statistics service preload; cache scheduler handles warmup sequentially.'
+    );
   }
 
   private async getWorkspaceIdsWithResponses(): Promise<number[]> {
@@ -305,8 +297,16 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
   async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {
     const cacheKey = getCodingIncompleteVariablesCacheKey(workspace_id);
-    await this.cacheService.delete(cacheKey);
-    this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
+    await Promise.all([
+      this.cacheService.delete(cacheKey),
+      this.cacheService.incr(
+        getCodingAppliedResultsOverviewVersionKey(workspace_id)
+      ),
+      this.cacheService.deleteByPattern(
+        getCodingAppliedResultsOverviewCachePattern(workspace_id)
+      )
+    ]);
+    this.logger.log(`Invalidated incomplete variables and applied results overview cache for workspace ${workspace_id}`);
   }
 
   async refreshStatistics(workspace_id: number, version: CodingStatisticsVersion = 'v1'): Promise<CodingStatistics> {

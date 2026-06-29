@@ -36,7 +36,9 @@ describe('CodingStatisticsService', () => {
     mockCacheService = {
       get: jest.fn(),
       set: jest.fn(),
-      delete: jest.fn()
+      delete: jest.fn(),
+      incr: jest.fn(),
+      deleteByPattern: jest.fn()
     } as unknown as jest.Mocked<CacheService>;
 
     mockJobQueueService = {
@@ -334,11 +336,19 @@ describe('CodingStatisticsService', () => {
 
     it('should invalidate incomplete variables cache', async () => {
       mockCacheService.delete.mockResolvedValue(true);
+      mockCacheService.incr.mockResolvedValue(1);
+      mockCacheService.deleteByPattern.mockResolvedValue(undefined);
 
       await service.invalidateIncompleteVariablesCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
         'coding_incomplete_variables_v8:1'
+      );
+      expect(mockCacheService.incr).toHaveBeenCalledWith(
+        'coding_applied_results_overview:version:1'
+      );
+      expect(mockCacheService.deleteByPattern).toHaveBeenCalledWith(
+        'coding_applied_results_overview:1:*'
       );
     });
 
@@ -786,21 +796,10 @@ describe('CodingStatisticsService', () => {
   });
 
   describe('Application bootstrap', () => {
-    it('should preload statistics for all workspaces on bootstrap', async () => {
-      mockResponseRepository.query.mockResolvedValue([
-        { workspace_id: '1' },
-        { workspace_id: '2' }
-      ]);
-      mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
-      mockFileUploadRepository.find.mockResolvedValue([]);
-      mockResponseRepository.query.mockResolvedValue([]);
-
+    it('should leave workspace preload to the sequential cache scheduler', async () => {
       await service.onApplicationBootstrap();
 
-      expect(mockResponseRepository.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT DISTINCT person.workspace_id'),
-        expect.any(Array)
-      );
+      expect(mockResponseRepository.query).not.toHaveBeenCalled();
     });
   });
 

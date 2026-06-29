@@ -45,6 +45,10 @@ import {
   applyNonCodingIssueReviewJobFilter,
   getNonCodingIssueReviewJobSqlCondition
 } from './coding-job-type.util';
+import {
+  getCodingAppliedResultsOverviewCachePattern,
+  getCodingAppliedResultsOverviewVersionKey
+} from './coding-applied-results-overview-cache-key.util';
 
 interface NormalizedExpectedCombination {
   unitKey: string;
@@ -115,6 +119,25 @@ type ManualCodingVariableWithCaseInfo = {
 export class CodingValidationService {
   private readonly logger = new Logger(CodingValidationService.name);
 
+  private readonly manualCodingCacheTtlSeconds = 300;
+
+  private readonly slowManualCodingQueryThresholdMs = 3000;
+
+  private readonly manualCodingVariablesInFlight = new Map<
+  string,
+  Promise<ManualCodingVariableWithCaseInfo[]>
+  >();
+
+  private readonly manualCodingScopeSummaryInFlight = new Map<
+  string,
+  Promise<ManualCodingScopeSummary>
+  >();
+
+  private readonly manualCodingCacheGenerationByWorkspace = new Map<
+  number,
+  number
+  >();
+
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
@@ -126,7 +149,7 @@ export class CodingValidationService {
     @Inject(forwardRef(() => CodingJobService))
     private codingJobService: CodingJobService,
     private workspacePlayerService: WorkspacePlayerService
-  ) { }
+  ) {}
 
   async validateCodingCompleteness(
     workspaceId: number,
@@ -140,7 +163,8 @@ export class CodingValidationService {
       );
       const startTime = Date.now();
 
-      const combinationsHash = generateExpectedCombinationsHash(expectedCombinations);
+      const combinationsHash =
+        generateExpectedCombinationsHash(expectedCombinations);
       const cacheKey = this.cacheService.generateValidationCacheKey(
         workspaceId,
         combinationsHash
@@ -173,7 +197,10 @@ export class CodingValidationService {
       const allResults: ValidationResultDto[] = [];
       let totalMissingCount = 0;
       const replayAssetIssueCache = new Map<string, Promise<string[]>>();
-      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      const exclusions =
+        await this.workspaceExclusionService.resolveExclusionsForQueries(
+          workspaceId
+        );
 
       const batchSize = 100;
       for (let i = 0; i < expectedCombinations.length; i += batchSize) {
@@ -185,13 +212,12 @@ export class CodingValidationService {
         );
 
         for (const expected of batch) {
-          const normalizedExpected = this.normalizeExpectedCombination(expected);
-          const safeCombination = this.buildSafeExpectedCombination(
-            normalizedExpected
-          );
-          const inputIssues = this.getExpectedCombinationInputIssues(
-            normalizedExpected
-          );
+          const normalizedExpected =
+            this.normalizeExpectedCombination(expected);
+          const safeCombination =
+            this.buildSafeExpectedCombination(normalizedExpected);
+          const inputIssues =
+            this.getExpectedCombinationInputIssues(normalizedExpected);
 
           if (inputIssues.length > 0) {
             totalMissingCount += 1;
@@ -215,7 +241,10 @@ export class CodingValidationService {
             .andWhere('response.value IS NOT NULL')
             .andWhere('response.value != :empty', { empty: '' });
 
-          this.applyExpectedCombinationFilters(queryBuilder, normalizedExpected);
+          this.applyExpectedCombinationFilters(
+            queryBuilder,
+            normalizedExpected
+          );
           applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
           const response = await queryBuilder.getOne();
@@ -224,15 +253,16 @@ export class CodingValidationService {
           if (!response) {
             issues.push('Keine passende Antwort gefunden.');
           } else {
-            const unitName = response.unit?.name ||
+            const unitName =
+              response.unit?.name ||
               normalizedExpected.unitKey ||
               normalizedExpected.unitAlias;
             issues.push(
-              ...await this.getReplayAssetIssues(
+              ...(await this.getReplayAssetIssues(
                 workspaceId,
                 unitName,
                 replayAssetIssueCache
-              )
+              ))
             );
           }
 
@@ -280,7 +310,8 @@ export class CodingValidationService {
 
       const endTime = Date.now();
       this.logger.log(
-        `Validation completed in ${endTime - startTime}ms. Processed all ${expectedCombinations.length
+        `Validation completed in ${endTime - startTime}ms. Processed all ${
+          expectedCombinations.length
         } combinations with ${totalMissingCount} missing responses.`
       );
 
@@ -374,8 +405,12 @@ export class CodingValidationService {
       ...(expected.personGroup ? { person_group: expected.personGroup } : {}),
       booklet_id: expected.bookletId,
       variable_id: expected.variableId,
-      ...(expected.variablePage ? { variable_page: expected.variablePage } : {}),
-      ...(expected.variableAnchor ? { variable_anchor: expected.variableAnchor } : {})
+      ...(expected.variablePage ?
+        { variable_page: expected.variablePage } :
+        {}),
+      ...(expected.variableAnchor ?
+        { variable_anchor: expected.variableAnchor } :
+        {})
     };
   }
 
@@ -388,17 +423,19 @@ export class CodingValidationService {
     ) as string[];
 
     queryBuilder
-      .andWhere(new Brackets(qb => {
-        unitCandidates.forEach((unitCandidate, index) => {
-          const parameterName = `unitCandidate${index}`;
-          const condition = `(unit.name = :${parameterName} OR unit.alias = :${parameterName})`;
-          if (index === 0) {
-            qb.where(condition, { [parameterName]: unitCandidate });
-          } else {
-            qb.orWhere(condition, { [parameterName]: unitCandidate });
-          }
-        });
-      }))
+      .andWhere(
+        new Brackets(qb => {
+          unitCandidates.forEach((unitCandidate, index) => {
+            const parameterName = `unitCandidate${index}`;
+            const condition = `(unit.name = :${parameterName} OR unit.alias = :${parameterName})`;
+            if (index === 0) {
+              qb.where(condition, { [parameterName]: unitCandidate });
+            } else {
+              qb.orWhere(condition, { [parameterName]: unitCandidate });
+            }
+          });
+        })
+      )
       .andWhere('person.login = :loginName', {
         loginName: expected.loginName
       })
@@ -447,7 +484,10 @@ export class CodingValidationService {
 
     try {
       const [unitDef, unitFile] = await Promise.all([
-        this.workspacePlayerService.findUnitDef(workspaceId, normalizedUnitName),
+        this.workspacePlayerService.findUnitDef(
+          workspaceId,
+          normalizedUnitName
+        ),
         this.workspacePlayerService.findUnit(workspaceId, normalizedUnitName)
       ]);
 
@@ -500,8 +540,14 @@ export class CodingValidationService {
 
     const module = matches[1] || '';
     const major = parseInt(matches[3], 10) || 0;
-    const minor = typeof matches[4] === 'string' ? parseInt(matches[4].substring(1), 10) : 0;
-    const patch = typeof matches[5] === 'string' ? parseInt(matches[5].substring(1), 10) : 0;
+    const minor =
+      typeof matches[4] === 'string' ?
+        parseInt(matches[4].substring(1), 10) :
+        0;
+    const patch =
+      typeof matches[5] === 'string' ?
+        parseInt(matches[5].substring(1), 10) :
+        0;
     return `${module}-${major}.${minor}.${patch}`.toUpperCase();
   }
 
@@ -526,6 +572,7 @@ export class CodingValidationService {
       coderTrainingRequired: boolean;
     }[]
     > {
+    const startedAt = Date.now();
     try {
       if (
         unitName ||
@@ -535,8 +582,12 @@ export class CodingValidationService {
       ) {
         const queryDetails = [
           unitName ? ` and unit ${unitName}` : '',
-          trainingRequired !== undefined ? ` (trainingRequired: ${trainingRequired})` : '',
-          excludeJobDefinitionId !== undefined ? ` excluding job definition ${excludeJobDefinitionId}` : ''
+          trainingRequired !== undefined ?
+            ` (trainingRequired: ${trainingRequired})` :
+            '',
+          excludeJobDefinitionId !== undefined ?
+            ` excluding job definition ${excludeJobDefinitionId}` :
+            ''
         ].join('');
         this.logger.log(
           `Querying manual coding variables for workspace ${workspaceId}${queryDetails} (not cached)`
@@ -576,31 +627,32 @@ export class CodingValidationService {
         );
         return cachedResult;
       }
+      const inFlightResult = this.manualCodingVariablesInFlight.get(cacheKey);
+      if (inFlightResult) {
+        this.logger.log(
+          `Reusing in-flight manual coding variables query for workspace ${workspaceId}`
+        );
+        return await inFlightResult;
+      }
+
       this.logger.log(
         `Cache miss: Querying manual coding variables for workspace ${workspaceId}`
       );
-      const variables = await this.fetchCodingIncompleteVariablesFromDb(
+      const cacheGeneration =
+        this.getManualCodingCacheGeneration(workspaceId);
+      const queryPromise = this.fetchAndCacheCodingIncompleteVariables(
         workspaceId,
-        undefined,
-        undefined,
-        includeDeriveErrorOnly
+        cacheKey,
+        cacheGeneration
       );
-      const result = await this.enrichVariablesWithCaseInfo(
-        workspaceId,
-        variables
-      );
-
-      const cacheSet = await this.cacheService.set(cacheKey, result, 300); // Cache for 5 minutes
-      if (cacheSet) {
-        this.logger.log(
-          `Cached ${result.length} manual coding variables for workspace ${workspaceId}`
-        );
-      } else {
-        this.logger.warn(
-          `Failed to cache manual coding variables for workspace ${workspaceId}`
-        );
+      this.manualCodingVariablesInFlight.set(cacheKey, queryPromise);
+      try {
+        return await queryPromise;
+      } finally {
+        if (this.manualCodingVariablesInFlight.get(cacheKey) === queryPromise) {
+          this.manualCodingVariablesInFlight.delete(cacheKey);
+        }
       }
-      return result;
     } catch (error) {
       this.logger.error(
         `Error getting manual coding variables: ${error.message}`,
@@ -608,6 +660,12 @@ export class CodingValidationService {
       );
       throw new Error(
         'Could not get manual coding variables. Please check the database connection.'
+      );
+    } finally {
+      this.logSlowManualCodingQuery(
+        'getCodingIncompleteVariables',
+        workspaceId,
+        startedAt
       );
     }
   }
@@ -617,21 +675,60 @@ export class CodingValidationService {
     unitName?: string,
     trainingRequired?: boolean
   ): Promise<ManualCodingScopeSummary> {
+    const startedAt = Date.now();
     try {
+      const canUseCache = !unitName && trainingRequired === undefined;
+      const cacheKey =
+        this.generateManualCodingScopeSummaryCacheKey(workspaceId);
+
+      if (canUseCache) {
+        const cachedSummary =
+          await this.cacheService.get<ManualCodingScopeSummary>(cacheKey);
+        if (cachedSummary) {
+          this.logger.log(
+            `Retrieved manual coding scope summary from cache for workspace ${workspaceId}`
+          );
+          return cachedSummary;
+        }
+      }
+
+      if (canUseCache) {
+        const inFlightSummary =
+          this.manualCodingScopeSummaryInFlight.get(cacheKey);
+        if (inFlightSummary) {
+          this.logger.log(
+            `Reusing in-flight manual coding scope summary query for workspace ${workspaceId}`
+          );
+          return await inFlightSummary;
+        }
+
+        const cacheGeneration =
+          this.getManualCodingCacheGeneration(workspaceId);
+        const summaryPromise = this.fetchAndCacheManualCodingScopeSummary(
+          workspaceId,
+          cacheKey,
+          cacheGeneration
+        );
+        this.manualCodingScopeSummaryInFlight.set(cacheKey, summaryPromise);
+        try {
+          return await summaryPromise;
+        } finally {
+          if (
+            this.manualCodingScopeSummaryInFlight.get(cacheKey) ===
+            summaryPromise
+          ) {
+            this.manualCodingScopeSummaryInFlight.delete(cacheKey);
+          }
+        }
+      }
+
       const scope = await this.fetchManualCodingScopeFromDb(
         workspaceId,
         unitName,
         trainingRequired
       );
 
-      return {
-        manualVariableCount: scope.variables.length,
-        manualResponseCount: scope.variables.reduce(
-          (sum, variable) => sum + variable.responseCount,
-          0
-        ),
-        ...scope.excludedSourceSummary
-      };
+      return this.createManualCodingScopeSummary(scope);
     } catch (error) {
       this.logger.error(
         `Error getting manual coding scope summary: ${error.message}`,
@@ -639,6 +736,12 @@ export class CodingValidationService {
       );
       throw new Error(
         'Could not get manual coding scope summary. Please check the database connection.'
+      );
+    } finally {
+      this.logSlowManualCodingQuery(
+        'getManualCodingScopeSummary',
+        workspaceId,
+        startedAt
       );
     }
   }
@@ -648,6 +751,7 @@ export class CodingValidationService {
     unitName?: string,
     trainingRequired?: boolean
   ): Promise<ManualCodeAvailabilityValidationDto> {
+    const startedAt = Date.now();
     try {
       const [variables, variableDetailsByKey] = await Promise.all([
         this.getCodingIncompleteVariables(
@@ -678,8 +782,7 @@ export class CodingValidationService {
             responseCount: variable.responseCount,
             casesInJobs: variable.casesInJobs,
             availableCases: variable.availableCases,
-            uniqueCasesAfterAggregation:
-              variable.uniqueCasesAfterAggregation,
+            uniqueCasesAfterAggregation: variable.uniqueCasesAfterAggregation,
             regularCodeCount: counts.regularCodeCount,
             selectableRegularCodeCount: counts.selectableRegularCodeCount,
             onlySpecialOptionsAvailable: true,
@@ -704,12 +807,18 @@ export class CodingValidationService {
       throw new Error(
         'Could not validate manual code availability. Please check the coding schemes.'
       );
+    } finally {
+      this.logSlowManualCodingQuery(
+        'validateManualCodeAvailability',
+        workspaceId,
+        startedAt
+      );
     }
   }
 
   /**
-     * Enrich variables with case information (cases in jobs, available cases, and unique cases after aggregation)
-     */
+   * Enrich variables with case information (cases in jobs, available cases, and unique cases after aggregation)
+   */
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
     variables: ManualCodingVariableCaseCounts[],
@@ -755,9 +864,11 @@ export class CodingValidationService {
       return result;
     }
 
-    const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
+    const aggregationThreshold =
+      await this.codingJobService.getAggregationThreshold(workspaceId);
 
-    const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+    const matchingFlags =
+      await this.codingJobService.getResponseMatchingMode(workspaceId);
     const variableReferences = variables.map(v => ({
       unitName: v.unitName,
       variableId: v.variableId,
@@ -782,17 +893,24 @@ export class CodingValidationService {
       .filter(variable => variable.isDerived)
       .forEach(variable => {
         const unitKey = variable.unitName.toUpperCase();
-        const derivedVariables = derivedVariableMap.get(unitKey) || new Set<string>();
+        const derivedVariables =
+          derivedVariableMap.get(unitKey) || new Set<string>();
         derivedVariables.add(variable.variableId);
         derivedVariableMap.set(unitKey, derivedVariables);
       });
+    const responsesByVariable = new Map<string, SlimCodingResponse[]>();
+    slimResponses.forEach(response => {
+      const key = `${response.unitName}::${response.variableid}`;
+      const responses = responsesByVariable.get(key) || [];
+      responses.push(response);
+      responsesByVariable.set(key, responses);
+    });
 
     for (const variable of variables) {
       const key = `${variable.unitName}::${variable.variableId}`;
 
-      const varResponsesWithRequestedStatuses = slimResponses.filter(
-        r => r.unitName === variable.unitName && r.variableid === variable.variableId
-      );
+      const varResponsesWithRequestedStatuses =
+        responsesByVariable.get(key) || [];
 
       const countAggregatedCases = (responses: SlimCodingResponse[]) => {
         const responsesWithCaseFields: ManualCodingDeduplicationResponse[] =
@@ -801,7 +919,8 @@ export class CodingValidationService {
             responseId: response.id,
             variableId: response.variableid
           }));
-        const assignedResponseIds = assignedResponseIdsByVariable.get(key) || new Set<number>();
+        const assignedResponseIds =
+          assignedResponseIdsByVariable.get(key) || new Set<number>();
 
         return countEffectiveManualCodingCases(
           responsesWithCaseFields,
@@ -812,10 +931,12 @@ export class CodingValidationService {
         );
       };
 
-      const includeDeriveErrorForVariable = includeDeriveErrorInCaseInfo &&
-        variable.deriveErrorResponseCount > 0;
+      const includeDeriveErrorForVariable =
+        includeDeriveErrorInCaseInfo && variable.deriveErrorResponseCount > 0;
       const regularVarResponses = includeDeriveErrorForVariable ?
-        varResponsesWithRequestedStatuses.filter(response => response.statusV1 !== DERIVE_ERROR_STATUS) :
+        varResponsesWithRequestedStatuses.filter(
+          response => response.statusV1 !== DERIVE_ERROR_STATUS
+        ) :
         varResponsesWithRequestedStatuses;
       const regularCaseInfo = countAggregatedCases(regularVarResponses);
       const deriveErrorCaseInfo = includeDeriveErrorForVariable ?
@@ -824,15 +945,22 @@ export class CodingValidationService {
 
       result.set(key, {
         casesInJobs: regularCaseInfo.casesInJobs,
-        availableCases: Math.max(0, regularCaseInfo.uniqueCases - regularCaseInfo.casesInJobs),
+        availableCases: Math.max(
+          0,
+          regularCaseInfo.uniqueCases - regularCaseInfo.casesInJobs
+        ),
         uniqueCasesAfterAggregation: regularCaseInfo.uniqueCases,
-        ...(deriveErrorCaseInfo ? {
-          availableCasesWithDeriveError: Math.max(
-            0,
-            deriveErrorCaseInfo.uniqueCases - deriveErrorCaseInfo.casesInJobs
-          ),
-          uniqueCasesAfterAggregationWithDeriveError: deriveErrorCaseInfo.uniqueCases
-        } : {})
+        ...(deriveErrorCaseInfo ?
+          {
+            availableCasesWithDeriveError: Math.max(
+              0,
+              deriveErrorCaseInfo.uniqueCases -
+                  deriveErrorCaseInfo.casesInJobs
+            ),
+            uniqueCasesAfterAggregationWithDeriveError:
+                deriveErrorCaseInfo.uniqueCases
+          } :
+          {})
       });
     }
 
@@ -851,22 +979,16 @@ export class CodingValidationService {
     const variableDetailsByKey = new Map<string, VariableDetailDto>();
 
     unitVariableDetails.forEach(unitDetails => {
-      const unitKeys = [
-        unitDetails.unitName,
-        unitDetails.unitId
-      ].filter(Boolean);
+      const unitKeys = [unitDetails.unitName, unitDetails.unitId].filter(
+        Boolean
+      );
 
       unitDetails.variables.forEach(variable => {
-        const variableIds = [
-          variable.alias || variable.id
-        ].filter(Boolean);
+        const variableIds = [variable.alias || variable.id].filter(Boolean);
 
         unitKeys.forEach(unitKey => {
           variableIds.forEach(variableId => {
-            const key = this.getManualCodeAvailabilityKey(
-              unitKey,
-              variableId
-            );
+            const key = this.getManualCodeAvailabilityKey(unitKey, variableId);
             if (!variableDetailsByKey.has(key)) {
               variableDetailsByKey.set(key, variable);
             }
@@ -887,15 +1009,14 @@ export class CodingValidationService {
 
     return {
       regularCodeCount: regularCodes.length,
-      selectableRegularCodeCount: regularCodes.filter(
-        code => this.hasManualInstruction(code)
+      selectableRegularCodeCount: regularCodes.filter(code => this.hasManualInstruction(code)
       ).length
     };
   }
 
-  private hasManualInstruction(
-    code: { manualInstruction?: string | null }
-  ): boolean {
+  private hasManualInstruction(code: {
+    manualInstruction?: string | null;
+  }): boolean {
     return hasVisibleManualInstruction(code);
   }
 
@@ -903,7 +1024,9 @@ export class CodingValidationService {
     unitName: string | null | undefined,
     variableId: string | null | undefined
   ): string {
-    return `${String(unitName || '').trim().toUpperCase()}::${String(variableId || '').trim()}`;
+    return `${String(unitName || '')
+      .trim()
+      .toUpperCase()}::${String(variableId || '').trim()}`;
   }
 
   private async getAssignedResponseIdsByVariable(
@@ -917,7 +1040,10 @@ export class CodingValidationService {
       return result;
     }
 
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
     const query = this.codingJobUnitRepository
       .createQueryBuilder('cju')
       .select('cju.unit_name', 'unitName')
@@ -937,18 +1063,7 @@ export class CodingValidationService {
       );
     }
 
-    const conditions: string[] = [];
-    const parameters: Record<string, string> = {};
-
-    variables.forEach((variable, index) => {
-      const unitParam = `assignedUnitName${index}`;
-      const variableParam = `assignedVariableId${index}`;
-      conditions.push(`(cju.unit_name = :${unitParam} AND cju.variable_id = :${variableParam})`);
-      parameters[unitParam] = variable.unitName;
-      parameters[variableParam] = variable.variableId;
-    });
-
-    query.andWhere(`(${conditions.join(' OR ')})`, parameters);
+    this.applyAssignedVariablePairFilter(query, variables);
     applyNonCodingIssueReviewJobFilter(
       query,
       'coding_job',
@@ -983,7 +1098,14 @@ export class CodingValidationService {
     trainingRequired?: boolean,
     includeDeriveErrorOnly = false
   ): Promise<
-    { unitName: string; variableId: string; responseCount: number; deriveErrorResponseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
+    {
+      unitName: string;
+      variableId: string;
+      responseCount: number;
+      deriveErrorResponseCount: number;
+      isDerived: boolean;
+      coderTrainingRequired: boolean;
+    }[]
     > {
     const scope = await this.fetchManualCodingScopeFromDb(
       workspaceId,
@@ -994,13 +1116,54 @@ export class CodingValidationService {
     return scope.variables;
   }
 
+  private applyAssignedVariablePairFilter(
+    query: SelectQueryBuilder<CodingJobUnit>,
+    variables: { unitName: string; variableId: string }[]
+  ): void {
+    const parameters: Record<string, string> = {};
+    const pairs = variables.map((variable, index) => {
+      const unitParam = `assignedUnitName${index}`;
+      const variableParam = `assignedVariableId${index}`;
+      parameters[unitParam] = variable.unitName;
+      parameters[variableParam] = variable.variableId;
+      return `(:${unitParam}, :${variableParam})`;
+    });
+
+    query.andWhere(
+      `(cju.unit_name, cju.variable_id) IN (${pairs.join(', ')})`,
+      parameters
+    );
+  }
+
+  private createResponseVariablePairCondition(
+    variables: { unitName: string; variableId: string }[],
+    parameterPrefix: string
+  ): { condition: string; parameters: Record<string, string> } {
+    const parameters: Record<string, string> = {};
+    const pairs = variables.map((variable, index) => {
+      const unitParam = `${parameterPrefix}UnitName${index}`;
+      const variableParam = `${parameterPrefix}VariableId${index}`;
+      parameters[unitParam] = variable.unitName;
+      parameters[variableParam] = variable.variableId;
+      return `(:${unitParam}, :${variableParam})`;
+    });
+
+    return {
+      condition: `(unit.name, response.variableid) IN (${pairs.join(', ')})`,
+      parameters
+    };
+  }
+
   private async fetchManualCodingScopeFromDb(
     workspaceId: number,
     unitName?: string,
     trainingRequired?: boolean,
     includeDeriveErrorOnly = false
   ): Promise<ManualCodingScopeFromDb> {
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
     // Helper to build the base query for a given status
     const buildQuery = (status: number) => {
       const qb = this.responseRepository
@@ -1013,7 +1176,9 @@ export class CodingValidationService {
         .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .leftJoin('booklet.person', 'person')
         .where('response.status_v1 = :status', { status })
-        .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
+        .andWhere('person.workspace_id = :workspace_id', {
+          workspace_id: workspaceId
+        })
         .andWhere('person.consider = :consider', { consider: true })
         // Exclude special/auto codes represented as negative code_v2 values.
         .andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)')
@@ -1028,19 +1193,34 @@ export class CodingValidationService {
     };
 
     // Run both queries in parallel
-    const [codingIncompleteRaw, intendedIncompleteRaw, deriveErrorCountsByKey] = await Promise.all([
-      buildQuery(statusStringToNumber('CODING_INCOMPLETE')).getRawMany(),
-      buildQuery(statusStringToNumber('INTENDED_INCOMPLETE')).getRawMany(),
-      this.getDeriveErrorResponseCountsByVariable(workspaceId, unitName)
-    ]);
+    const [codingIncompleteRaw, intendedIncompleteRaw, deriveErrorCountsByKey] =
+      await Promise.all([
+        buildQuery(statusStringToNumber('CODING_INCOMPLETE')).getRawMany(),
+        buildQuery(statusStringToNumber('INTENDED_INCOMPLETE')).getRawMany(),
+        this.getDeriveErrorResponseCountsByVariable(workspaceId, unitName)
+      ]);
 
     this.logger.debug(
-      `[DEBUG] CODING_INCOMPLETE raw results (${codingIncompleteRaw.length}): ${
-        codingIncompleteRaw.map((r: { unitName: string; variableId: string; responseCount: string }) => `${r.unitName}::${r.variableId}(${r.responseCount})`).join(', ')}`
+      `[DEBUG] CODING_INCOMPLETE raw results (${codingIncompleteRaw.length}): ${codingIncompleteRaw
+        .map(
+          (r: {
+            unitName: string;
+            variableId: string;
+            responseCount: string;
+          }) => `${r.unitName}::${r.variableId}(${r.responseCount})`
+        )
+        .join(', ')}`
     );
     this.logger.debug(
-      `[DEBUG] INTENDED_INCOMPLETE raw results (${intendedIncompleteRaw.length}): ${
-        intendedIncompleteRaw.map((r: { unitName: string; variableId: string; responseCount: string }) => `${r.unitName}::${r.variableId}(${r.responseCount})`).join(', ')}`
+      `[DEBUG] INTENDED_INCOMPLETE raw results (${intendedIncompleteRaw.length}): ${intendedIncompleteRaw
+        .map(
+          (r: {
+            unitName: string;
+            variableId: string;
+            responseCount: string;
+          }) => `${r.unitName}::${r.variableId}(${r.responseCount})`
+        )
+        .join(', ')}`
     );
 
     // Load both lookup maps from the file service
@@ -1053,7 +1233,9 @@ export class CodingValidationService {
     ] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
       this.workspaceFilesService.getDerivedVariableMap(workspaceId),
-      this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId),
+      this.workspaceFilesService.getCoderTrainingRequiredVariableMap(
+        workspaceId
+      ),
       this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId),
       this.workspaceFilesService.getManualInstructionVariableMap(workspaceId)
     ]);
@@ -1065,25 +1247,35 @@ export class CodingValidationService {
     });
 
     const derivedVariableSets = new Map<string, Set<string>>();
-    derivedVariableMap.forEach((variables: Set<string>, unitNameKey: string) => {
-      derivedVariableSets.set(unitNameKey.toUpperCase(), variables);
-    });
+    derivedVariableMap.forEach(
+      (variables: Set<string>, unitNameKey: string) => {
+        derivedVariableSets.set(unitNameKey.toUpperCase(), variables);
+      }
+    );
 
     const trainingRequiredSets = new Map<string, Set<string>>();
-    trainingRequiredMap.forEach((variables: Set<string>, unitNameKey: string) => {
-      trainingRequiredSets.set(unitNameKey.toUpperCase(), variables);
-    });
+    trainingRequiredMap.forEach(
+      (variables: Set<string>, unitNameKey: string) => {
+        trainingRequiredSets.set(unitNameKey.toUpperCase(), variables);
+      }
+    );
 
     const manualInstructionSets = new Map<string, Set<string>>();
-    manualInstructionMap.forEach((variables: Set<string>, unitNameKey: string) => {
-      manualInstructionSets.set(unitNameKey.toUpperCase(), variables);
-    });
+    manualInstructionMap.forEach(
+      (variables: Set<string>, unitNameKey: string) => {
+        manualInstructionSets.set(unitNameKey.toUpperCase(), variables);
+      }
+    );
 
     this.logger.debug(
       `[DEBUG] unitVariableMap units: [${Array.from(validVariableSets.keys()).join(', ')}]`
     );
     // Filter results, applying trainingRequired filter if provided
-    const filterFn = (row: { unitName: string; variableId: string; responseCount: string }) => {
+    const filterFn = (row: {
+      unitName: string;
+      variableId: string;
+      responseCount: string;
+    }) => {
       const unitKey = row.unitName?.toUpperCase();
       const variableId = row.variableId;
 
@@ -1092,7 +1284,8 @@ export class CodingValidationService {
       if (!validVars?.has(variableId)) return false;
 
       // Filter by trainingRequired
-      const isRequired = trainingRequiredSets.get(unitKey)?.has(variableId) || false;
+      const isRequired =
+        trainingRequiredSets.get(unitKey)?.has(variableId) || false;
       if (trainingRequired !== undefined) {
         if (isRequired !== trainingRequired) {
           return false;
@@ -1126,49 +1319,62 @@ export class CodingValidationService {
     );
     const deriveErrorCoveredSourceKeys = includeDeriveErrorOnly ?
       getCoveredSourceKeysForManualDerivedVariables(
-        Array.from(manualInstructionSets.entries()).flatMap(([manualUnitName, variables]) => (
-          Array.from(variables)
+        Array.from(manualInstructionSets.entries()).flatMap(
+          ([manualUnitName, variables]) => Array.from(variables)
             .map(variableId => ({ unitName: manualUnitName, variableId }))
             .filter(row => filterFn({
               unitName: row.unitName,
               variableId: row.variableId,
               responseCount: '0'
-            }))
-        )),
+            })
+            )
+        ),
         derivedVariablesBySourceMap
       ) :
       new Set<string>();
     const getScopedDeriveErrorResponseCount = (
       responseUnitName: string,
       variableId: string
-    ): number => (
-      includeDeriveErrorOnly &&
+    ): number => (includeDeriveErrorOnly &&
       isCoveredSourceVariable(
         { unitName: responseUnitName, variableId },
         deriveErrorCoveredSourceKeys
       ) ?
-        0 :
-        deriveErrorCountsByKey.get(`${responseUnitName}::${variableId}`) || 0
-    );
+      0 :
+      deriveErrorCountsByKey.get(`${responseUnitName}::${variableId}`) || 0);
 
     // Merge results, summing response counts for variables that appear in both
-    const mergedMap = new Map<string, {
+    const mergedMap = new Map<
+    string,
+    {
       unitName: string;
       variableId: string;
       responseCount: number;
       deriveErrorResponseCount: number;
       isDerived: boolean;
       coderTrainingRequired: boolean;
-    }>();
+    }
+    >();
 
-    for (const row of [...filteredCodingIncomplete, ...filteredIntendedIncomplete]) {
+    for (const row of [
+      ...filteredCodingIncomplete,
+      ...filteredIntendedIncomplete
+    ]) {
       const key = `${row.unitName}::${row.variableId}`;
       const existing = mergedMap.get(key);
       const count = parseInt(row.responseCount, 10);
-      const deriveErrorResponseCount =
-        getScopedDeriveErrorResponseCount(row.unitName, row.variableId);
-      const isDerived = derivedVariableSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
-      const coderTrainingRequired = trainingRequiredSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
+      const deriveErrorResponseCount = getScopedDeriveErrorResponseCount(
+        row.unitName,
+        row.variableId
+      );
+      const isDerived =
+        derivedVariableSets
+          .get(row.unitName?.toUpperCase())
+          ?.has(row.variableId) ?? false;
+      const coderTrainingRequired =
+        trainingRequiredSets
+          .get(row.unitName?.toUpperCase())
+          ?.has(row.variableId) ?? false;
 
       if (existing) {
         existing.responseCount += count;
@@ -1199,11 +1405,13 @@ export class CodingValidationService {
         ) {
           return;
         }
-        if (!filterFn({
-          unitName: deriveUnitName,
-          variableId,
-          responseCount: String(deriveErrorResponseCount)
-        })) {
+        if (
+          !filterFn({
+            unitName: deriveUnitName,
+            variableId,
+            responseCount: String(deriveErrorResponseCount)
+          })
+        ) {
           return;
         }
 
@@ -1212,8 +1420,14 @@ export class CodingValidationService {
           variableId,
           responseCount: 0,
           deriveErrorResponseCount,
-          isDerived: derivedVariableSets.get(deriveUnitName?.toUpperCase())?.has(variableId) ?? false,
-          coderTrainingRequired: trainingRequiredSets.get(deriveUnitName?.toUpperCase())?.has(variableId) ?? false
+          isDerived:
+            derivedVariableSets
+              .get(deriveUnitName?.toUpperCase())
+              ?.has(variableId) ?? false,
+          coderTrainingRequired:
+            trainingRequiredSets
+              .get(deriveUnitName?.toUpperCase())
+              ?.has(variableId) ?? false
         });
       });
     }
@@ -1222,7 +1436,7 @@ export class CodingValidationService {
 
     this.logger.log(
       `Found ${codingIncompleteRaw.length} CODING_INCOMPLETE + ${intendedIncompleteRaw.length} INTENDED_INCOMPLETE variable groups, ` +
-      `filtered to ${result.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`
+        `filtered to ${result.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`
     );
 
     return {
@@ -1235,7 +1449,10 @@ export class CodingValidationService {
     workspaceId: number,
     unitName?: string
   ): Promise<Map<string, number>> {
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
     const query = this.responseRepository
       .createQueryBuilder('response')
       .select('unit.name', 'unitName')
@@ -1248,7 +1465,9 @@ export class CodingValidationService {
       .where('response.status_v1 = :status', {
         status: statusStringToNumber('DERIVE_ERROR')
       })
-      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
+      .andWhere('person.workspace_id = :workspace_id', {
+        workspace_id: workspaceId
+      })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)')
       .groupBy('unit.name')
@@ -1270,7 +1489,10 @@ export class CodingValidationService {
 
     return rawResults.reduce((counts, row) => {
       if (row.unitName && row.variableId) {
-        counts.set(`${row.unitName}::${row.variableId}`, parseInt(row.responseCount, 10) || 0);
+        counts.set(
+          `${row.unitName}::${row.variableId}`,
+          parseInt(row.responseCount, 10) || 0
+        );
       }
       return counts;
     }, new Map<string, number>());
@@ -1281,21 +1503,146 @@ export class CodingValidationService {
   }
 
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
+    this.bumpManualCodingCacheGeneration(workspaceId);
     const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
-    await this.cacheService.delete(cacheKey);
+    const scopeSummaryCacheKey =
+      this.generateManualCodingScopeSummaryCacheKey(workspaceId);
+    this.manualCodingVariablesInFlight.delete(cacheKey);
+    this.manualCodingScopeSummaryInFlight.delete(scopeSummaryCacheKey);
+    await Promise.all([
+      this.cacheService.delete(cacheKey),
+      this.cacheService.delete(scopeSummaryCacheKey),
+      this.cacheService.incr(
+        getCodingAppliedResultsOverviewVersionKey(workspaceId)
+      ),
+      this.cacheService.deleteByPattern(
+        getCodingAppliedResultsOverviewCachePattern(workspaceId)
+      )
+    ]);
     this.logger.log(
-      `Invalidated manual coding variables cache for workspace ${workspaceId}`
+      `Invalidated manual coding variables and applied results overview cache for workspace ${workspaceId}`
+    );
+  }
+
+  private async fetchAndCacheCodingIncompleteVariables(
+    workspaceId: number,
+    cacheKey: string,
+    cacheGeneration: number
+  ): Promise<ManualCodingVariableWithCaseInfo[]> {
+    const variables = await this.fetchCodingIncompleteVariablesFromDb(
+      workspaceId,
+      undefined,
+      undefined,
+      false
+    );
+    const result = await this.enrichVariablesWithCaseInfo(
+      workspaceId,
+      variables
+    );
+
+    if (this.getManualCodingCacheGeneration(workspaceId) !== cacheGeneration) {
+      this.logger.log(
+        `Skipped caching stale manual coding variables for workspace ${workspaceId}`
+      );
+      return result;
+    }
+
+    const cacheSet = await this.cacheService.set(
+      cacheKey,
+      result,
+      this.manualCodingCacheTtlSeconds
+    );
+    if (cacheSet) {
+      this.logger.log(
+        `Cached ${result.length} manual coding variables for workspace ${workspaceId}`
+      );
+    } else {
+      this.logger.warn(
+        `Failed to cache manual coding variables for workspace ${workspaceId}`
+      );
+    }
+    return result;
+  }
+
+  private async fetchAndCacheManualCodingScopeSummary(
+    workspaceId: number,
+    cacheKey: string,
+    cacheGeneration: number
+  ): Promise<ManualCodingScopeSummary> {
+    const scope = await this.fetchManualCodingScopeFromDb(workspaceId);
+    const summary = this.createManualCodingScopeSummary(scope);
+
+    if (this.getManualCodingCacheGeneration(workspaceId) !== cacheGeneration) {
+      this.logger.log(
+        `Skipped caching stale manual coding scope summary for workspace ${workspaceId}`
+      );
+      return summary;
+    }
+
+    await this.cacheService.set(
+      cacheKey,
+      summary,
+      this.manualCodingCacheTtlSeconds
+    );
+    return summary;
+  }
+
+  private createManualCodingScopeSummary(
+    scope: ManualCodingScopeFromDb
+  ): ManualCodingScopeSummary {
+    return {
+      manualVariableCount: scope.variables.length,
+      manualResponseCount: scope.variables.reduce(
+        (sum, variable) => sum + variable.responseCount,
+        0
+      ),
+      ...scope.excludedSourceSummary
+    };
+  }
+
+  private getManualCodingCacheGeneration(workspaceId: number): number {
+    return this.manualCodingCacheGenerationByWorkspace.get(workspaceId) || 0;
+  }
+
+  private bumpManualCodingCacheGeneration(workspaceId: number): void {
+    this.manualCodingCacheGenerationByWorkspace.set(
+      workspaceId,
+      this.getManualCodingCacheGeneration(workspaceId) + 1
+    );
+  }
+
+  private generateManualCodingScopeSummaryCacheKey(
+    workspaceId: number
+  ): string {
+    return `${this.generateIncompleteVariablesCacheKey(workspaceId)}:scope-summary`;
+  }
+
+  private logSlowManualCodingQuery(
+    operation: string,
+    workspaceId: number,
+    startedAt: number
+  ): void {
+    const durationMs = Date.now() - startedAt;
+    if (durationMs < this.slowManualCodingQueryThresholdMs) {
+      return;
+    }
+
+    this.logger.warn(
+      `${operation} for workspace ${workspaceId} took ${durationMs} ms`
     );
   }
 
   /**
-     * Get the number of unique cases (response_ids) already assigned to coding jobs for each variable
-     * This counts distinct response_ids to properly handle double-coding scenarios
-     */
+   * Get the number of unique cases (response_ids) already assigned to coding jobs for each variable
+   * This counts distinct response_ids to properly handle double-coding scenarios
+   */
   async getVariableCasesInJobs(
     workspaceId: number
   ): Promise<Map<string, number>> {
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
     const query = this.codingJobUnitRepository
       .createQueryBuilder('cju')
       .select('cju.unit_name', 'unitName')
@@ -1335,7 +1682,10 @@ export class CodingValidationService {
   private async getDeriveErrorManualJobVariables(
     workspaceId: number
   ): Promise<Array<{ unitName: string; variableId: string }>> {
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
     const query = this.codingJobUnitRepository
       .createQueryBuilder('cju')
       .select('cju.unit_name', 'unitName')
@@ -1360,7 +1710,10 @@ export class CodingValidationService {
       parameterPrefix: 'appliedResultsDeriveErrorVariables'
     });
 
-    const rawResults = await query.getRawMany<{ unitName: string; variableId: string }>();
+    const rawResults = await query.getRawMany<{
+      unitName: string;
+      variableId: string;
+    }>();
     return rawResults.filter(row => row.unitName && row.variableId);
   }
 
@@ -1371,7 +1724,8 @@ export class CodingValidationService {
     const providedVariables = Array.isArray(incompleteVariables) ?
       incompleteVariables :
       [];
-    const deriveErrorManualVariables = await this.getDeriveErrorManualJobVariables(workspaceId);
+    const deriveErrorManualVariables =
+      await this.getDeriveErrorManualJobVariables(workspaceId);
     return createManualCodingVariableReferences([
       ...providedVariables,
       ...deriveErrorManualVariables
@@ -1400,11 +1754,18 @@ export class CodingValidationService {
       }
 
       let totalAppliedCount = 0;
-      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      const exclusions =
+        await this.workspaceExclusionService.resolveExclusionsForQueries(
+          workspaceId
+        );
       const batchSize = 50;
       for (let i = 0; i < appliedResultsVariables.length; i += batchSize) {
         const batch = appliedResultsVariables.slice(i, i + batchSize);
 
+        const variablePairCondition = this.createResponseVariablePairCondition(
+          batch,
+          `appliedResults${i}`
+        );
         const query = this.responseRepository
           .createQueryBuilder('response')
           .innerJoin('response.unit', 'unit')
@@ -1413,14 +1774,15 @@ export class CodingValidationService {
           .innerJoin('booklet.person', 'person')
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('person.consider = :consider', { consider: true })
-          .andWhere(new Brackets(qb => {
-            qb.where('response.status_v1 IN (:...sourceStatuses)', {
-              sourceStatuses: [
-                statusStringToNumber('CODING_INCOMPLETE'),
-                statusStringToNumber('INTENDED_INCOMPLETE')
-              ]
-            }).orWhere(
-              `response.status_v1 = :deriveErrorStatus
+          .andWhere(
+            new Brackets(qb => {
+              qb.where('response.status_v1 IN (:...sourceStatuses)', {
+                sourceStatuses: [
+                  statusStringToNumber('CODING_INCOMPLETE'),
+                  statusStringToNumber('INTENDED_INCOMPLETE')
+                ]
+              }).orWhere(
+                `response.status_v1 = :deriveErrorStatus
                 AND EXISTS (
                   SELECT 1
                   FROM coding_job_unit manual_derive_cju
@@ -1430,9 +1792,10 @@ export class CodingValidationService {
                     AND manual_derive_cj.training_id IS NULL
                     AND ${getNonCodingIssueReviewJobSqlCondition('manual_derive_cj')}
                 )`,
-              { deriveErrorStatus: statusStringToNumber('DERIVE_ERROR') }
-            );
-          }))
+                { deriveErrorStatus: statusStringToNumber('DERIVE_ERROR') }
+              );
+            })
+          )
           .andWhere('response.status_v2 IN (:...targetStatuses)', {
             targetStatuses: [
               statusStringToNumber('CODING_COMPLETE'),
@@ -1441,28 +1804,21 @@ export class CodingValidationService {
             ]
           })
           .andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)')
-          .andWhere(new Brackets(qb => {
-            batch.forEach((variable, index) => {
-              const parameters = {
-                [`appliedUnitName${index}`]: variable.unitName,
-                [`appliedVariableId${index}`]: variable.variableId
-              };
-              const condition = `(unit.name = :appliedUnitName${index} AND response.variableid = :appliedVariableId${index})`;
-              if (index === 0) {
-                qb.where(condition, parameters);
-              } else {
-                qb.orWhere(condition, parameters);
-              }
-            });
-          }));
+          .andWhere(
+            variablePairCondition.condition,
+            variablePairCondition.parameters
+          );
 
-        applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: `appliedResults${i}` });
+        applyResolvedExclusionsToQuery(query, exclusions, {
+          parameterPrefix: `appliedResults${i}`
+        });
 
         const batchCount = await query.getCount();
         totalAppliedCount += batchCount;
 
         this.logger.debug(
-          `Batch ${Math.floor(i / batchSize) + 1
+          `Batch ${
+            Math.floor(i / batchSize) + 1
           }: ${batchCount} applied results`
         );
       }

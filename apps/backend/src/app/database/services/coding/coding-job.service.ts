@@ -69,6 +69,10 @@ import {
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import {
+  getCodingAppliedResultsOverviewCachePattern,
+  getCodingAppliedResultsOverviewVersionKey
+} from './coding-applied-results-overview-cache-key.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 import {
@@ -2940,9 +2944,17 @@ export class CodingJobService {
     workspaceId: number
   ): Promise<void> {
     const cacheKey = getCodingIncompleteVariablesCacheKey(workspaceId);
-    await this.cacheService.delete(cacheKey);
+    await Promise.all([
+      this.cacheService.delete(cacheKey),
+      this.cacheService.incr(
+        getCodingAppliedResultsOverviewVersionKey(workspaceId)
+      ),
+      this.cacheService.deleteByPattern(
+        getCodingAppliedResultsOverviewCachePattern(workspaceId)
+      )
+    ]);
     this.logger.log(
-      `Invalidated manual coding variables cache for workspace ${workspaceId}`
+      `Invalidated manual coding variables and applied results overview cache for workspace ${workspaceId}`
     );
   }
 
@@ -3267,22 +3279,16 @@ export class CodingJobService {
       })
       .andWhere('person.consider = :consider', { consider: true });
 
-    const conditions: string[] = [];
-    const parameters: Record<string, string> = {};
-
-    allVariables.forEach((variable, index) => {
-      const unitParam = `unitName${index}`;
-      const variableParam = `variableId${index}`;
-      conditions.push(
-        `(unit.name = :${unitParam} AND response.variableid = :${variableParam})`
-      );
-      parameters[unitParam] = variable.unit_name;
-      parameters[variableParam] = variable.variable_id;
-    });
-
-    if (conditions.length > 0) {
-      queryBuilder.andWhere(`(${conditions.join(' OR ')})`, parameters);
-    }
+    this.applyVariablePairFilter(
+      queryBuilder,
+      allVariables.map(variable => ({
+        unitName: variable.unit_name,
+        variableId: variable.variable_id
+      })),
+      'unit.name',
+      'response.variableid',
+      'codingJobResponses'
+    );
 
     // Exclude aggregated duplicates (marked with code_v2 = -111)
     queryBuilder.andWhere(
@@ -4906,20 +4912,16 @@ export class CodingJobService {
       .andWhere('person.consider = :consider', { consider: true });
     this.applyManualCodingCandidateStatusFilter(queryBuilder);
 
-    const conditions: string[] = [];
-    const parameters: Record<string, string> = {};
-
-    allVariables.forEach((variable, index) => {
-      const unitParam = `cjUnitName${index}`;
-      const variableParam = `cjVariableId${index}`;
-      conditions.push(
-        `(unit.name = :${unitParam} AND response.variableid = :${variableParam})`
-      );
-      parameters[unitParam] = variable.unit_name;
-      parameters[variableParam] = variable.variable_id;
-    });
-
-    queryBuilder.andWhere(`(${conditions.join(' OR ')})`, parameters);
+    this.applyVariablePairFilter(
+      queryBuilder,
+      allVariables.map(variable => ({
+        unitName: variable.unit_name,
+        variableId: variable.variable_id
+      })),
+      'unit.name',
+      'response.variableid',
+      'codingJobSlimResponses'
+    );
     queryBuilder.andWhere(
       '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
       {
@@ -5693,22 +5695,13 @@ export class CodingJobService {
       );
     applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
-    const conditions: string[] = [];
-    const parameters: Record<string, string> = {};
-
-    variables.forEach((variable, index) => {
-      const unitParam = `unitName${index}`;
-      const variableParam = `variableId${index}`;
-      conditions.push(
-        `(unit.name = :${unitParam} AND response.variableid = :${variableParam})`
-      );
-      parameters[unitParam] = variable.unitName;
-      parameters[variableParam] = variable.variableId;
-    });
-
-    if (conditions.length > 0) {
-      queryBuilder.andWhere(`(${conditions.join(' OR ')})`, parameters);
-    }
+    this.applyVariablePairFilter(
+      queryBuilder,
+      variables,
+      'unit.name',
+      'response.variableid',
+      'responsesForVariables'
+    );
 
     return queryBuilder.orderBy('response.id', 'ASC').getMany();
   }
@@ -5760,22 +5753,13 @@ export class CodingJobService {
       );
     applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
-    const conditions: string[] = [];
-    const parameters: Record<string, string> = {};
-
-    variables.forEach((variable, index) => {
-      const unitParam = `slimUnitName${index}`;
-      const variableParam = `slimVariableId${index}`;
-      conditions.push(
-        `(unit.name = :${unitParam} AND response.variableid = :${variableParam})`
-      );
-      parameters[unitParam] = variable.unitName;
-      parameters[variableParam] = variable.variableId;
-    });
-
-    if (conditions.length > 0) {
-      queryBuilder.andWhere(`(${conditions.join(' OR ')})`, parameters);
-    }
+    this.applyVariablePairFilter(
+      queryBuilder,
+      variables,
+      'unit.name',
+      'response.variableid',
+      'slimResponsesForVariables'
+    );
 
     const raw = await queryBuilder.orderBy('response.id', 'ASC').getRawMany();
 
@@ -5831,20 +5815,11 @@ export class CodingJobService {
       );
     }
 
-    const conditions: string[] = [];
-    const parameters: Record<string, string> = {};
-
-    variables.forEach((variable, index) => {
-      const unitParam = `assignedUnitName${index}`;
-      const variableParam = `assignedVariableId${index}`;
-      conditions.push(
-        `(cju.unit_name = :${unitParam} AND cju.variable_id = :${variableParam})`
-      );
-      parameters[unitParam] = variable.unitName;
-      parameters[variableParam] = variable.variableId;
-    });
-
-    query.andWhere(`(${conditions.join(' OR ')})`, parameters);
+    this.applyCodingJobUnitVariablePairFilter(
+      query,
+      variables,
+      'assignedResponseIdsForVariables'
+    );
     await this.applyCodingJobUnitExclusions(
       query,
       workspaceId,
@@ -5856,6 +5831,56 @@ export class CodingJobService {
       rawResults
         .map(row => Number(row.responseId))
         .filter(responseId => Number.isFinite(responseId))
+    );
+  }
+
+  private applyVariablePairFilter(
+    queryBuilder: SelectQueryBuilder<ResponseEntity>,
+    variables: VariableReference[],
+    unitColumn: string,
+    variableColumn: string,
+    parameterPrefix: string
+  ): void {
+    if (variables.length === 0) {
+      return;
+    }
+
+    const parameters: Record<string, string> = {};
+    const pairs = variables.map((variable, index) => {
+      const unitParam = `${parameterPrefix}UnitName${index}`;
+      const variableParam = `${parameterPrefix}VariableId${index}`;
+      parameters[unitParam] = variable.unitName;
+      parameters[variableParam] = variable.variableId;
+      return `(:${unitParam}, :${variableParam})`;
+    });
+
+    queryBuilder.andWhere(
+      `(${unitColumn}, ${variableColumn}) IN (${pairs.join(', ')})`,
+      parameters
+    );
+  }
+
+  private applyCodingJobUnitVariablePairFilter(
+    queryBuilder: SelectQueryBuilder<CodingJobUnit>,
+    variables: VariableReference[],
+    parameterPrefix: string
+  ): void {
+    if (variables.length === 0) {
+      return;
+    }
+
+    const parameters: Record<string, string> = {};
+    const pairs = variables.map((variable, index) => {
+      const unitParam = `${parameterPrefix}UnitName${index}`;
+      const variableParam = `${parameterPrefix}VariableId${index}`;
+      parameters[unitParam] = variable.unitName;
+      parameters[variableParam] = variable.variableId;
+      return `(:${unitParam}, :${variableParam})`;
+    });
+
+    queryBuilder.andWhere(
+      `(cju.unit_name, cju.variable_id) IN (${pairs.join(', ')})`,
+      parameters
     );
   }
 
