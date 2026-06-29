@@ -16,6 +16,7 @@ describe('handleKeycloakSessionEvent', () => {
       requireReAuthentication: jest.fn(),
       clearAuthState: jest.fn(),
       setNeedsReAuthentication: jest.fn(),
+      setSessionExpiryWarning: jest.fn(),
       consumeExplicitLogoutInProgress: jest.fn(),
       normalizeInternalRoute: jest.fn((returnUrl?: string) => (
         returnUrl && returnUrl.startsWith('/home') ? undefined : returnUrl
@@ -78,13 +79,25 @@ describe('handleKeycloakSessionEvent', () => {
     expect(appService.requireReAuthentication).toHaveBeenCalledWith('/workspace-admin/1');
   });
 
-  it('should clear reauthentication state after successful authentication events', () => {
+  it('should clear reauthentication state after successful authentication', () => {
+    handleKeycloakSessionEvent(
+      { type: KeycloakEventType.AuthSuccess } as KeycloakEvent,
+      appService,
+      router
+    );
+
+    expect(appService.setNeedsReAuthentication).toHaveBeenCalledWith(false);
+    expect(appService.setSessionExpiryWarning).toHaveBeenCalledWith(false);
+  });
+
+  it('should keep reauthentication state after token refresh success', () => {
     handleKeycloakSessionEvent(
       { type: KeycloakEventType.AuthRefreshSuccess } as KeycloakEvent,
       appService,
       router
     );
 
-    expect(appService.setNeedsReAuthentication).toHaveBeenCalledWith(false);
+    expect(appService.setNeedsReAuthentication).not.toHaveBeenCalled();
+    expect(appService.setSessionExpiryWarning).toHaveBeenCalledWith(false);
   });
 });

@@ -1,11 +1,17 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
-  Observable, catchError, of, switchMap
+  Observable, catchError, map, of, switchMap
 } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
-import { AppService } from '../../core/services/app.service';
+import { AppService, WorkspaceTokenPolicy } from '../../core/services/app.service';
 import { CodeBookContentSetting } from '../../../../../../api-dto/coding/codebook-content-setting';
+import {
+  API_SPECIAL_TOKEN_DURATION_DAYS,
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+  EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES,
+  REPLAY_WORKSPACE_TOKEN_SCOPES
+} from '../../core/services/auth-session.config';
 
 @Injectable({
   providedIn: 'root'
@@ -16,8 +22,7 @@ export class CodingExportService {
   private appService = inject(AppService);
 
   getCodingListAsCsv(workspace_id: number, trainingRequired?: boolean): Observable<Blob> {
-    return this.appService.createOwnToken(workspace_id, 60).pipe(
-      catchError(() => of('')),
+    return this.createExternalReplayToken(workspace_id).pipe(
       switchMap(token => {
         let params = new HttpParams()
           .set('authToken', token)
@@ -37,8 +42,7 @@ export class CodingExportService {
   }
 
   getCodingListAsExcel(workspace_id: number, trainingRequired?: boolean): Observable<Blob> {
-    return this.appService.createOwnToken(workspace_id, 60).pipe(
-      catchError(() => of('')),
+    return this.createExternalReplayToken(workspace_id).pipe(
       switchMap(token => {
         let params = new HttpParams()
           .set('authToken', token)
@@ -64,7 +68,11 @@ export class CodingExportService {
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
-    return this.appService.createOwnToken(workspace_id, 60).pipe(
+    return this.appService.createOwnToken(
+      workspace_id,
+      API_SPECIAL_TOKEN_DURATION_DAYS,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    ).pipe(
       catchError(() => of('')),
       switchMap(token => {
         const params = new HttpParams()
@@ -93,7 +101,11 @@ export class CodingExportService {
     includeGeoGebraFiles: boolean = false,
     includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
-    return this.appService.createOwnToken(workspace_id, 60).pipe(
+    return this.appService.createOwnToken(
+      workspace_id,
+      API_SPECIAL_TOKEN_DURATION_DAYS,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    ).pipe(
       catchError(() => of('')),
       switchMap(token => {
         const params = new HttpParams()
@@ -219,8 +231,15 @@ export class CodingExportService {
     includeGeoGebraFiles: boolean = false,
     includeGeoGebraResponseValues: boolean = false
   ): Observable<{ jobId: string; message: string }> {
-    return this.appService.createOwnToken(workspaceId, 60).pipe(
-      catchError(() => of('')),
+    const authToken$ = exportType === 'coding-list' ?
+      this.createExternalReplayToken(workspaceId) :
+      this.appService.createOwnToken(
+        workspaceId,
+        API_SPECIAL_TOKEN_DURATION_DAYS,
+        REPLAY_WORKSPACE_TOKEN_SCOPES
+      ).pipe(catchError(() => of('')));
+
+    return authToken$.pipe(
       switchMap(token => {
         const payload = {
           exportType,
@@ -241,6 +260,27 @@ export class CodingExportService {
         );
       })
     );
+  }
+
+  private createExternalReplayToken(workspaceId: number): Observable<string> {
+    return this.appService.getWorkspaceTokenPolicy().pipe(
+      map(policy => this.getExternalReplayTokenDurationDays(policy)),
+      switchMap(durationDays => this.appService.createOwnToken(
+        workspaceId,
+        durationDays,
+        EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+      ))
+    );
+  }
+
+  private getExternalReplayTokenDurationDays(policy: WorkspaceTokenPolicy): number {
+    const maxDurations = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+      .map(scope => policy.scopes[scope]?.maxDurationDays)
+      .filter((duration): duration is number => Number.isInteger(duration) && duration >= 1);
+
+    return maxDurations.length ?
+      Math.min(...maxDurations) :
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
   }
 
   getExportJobStatus(

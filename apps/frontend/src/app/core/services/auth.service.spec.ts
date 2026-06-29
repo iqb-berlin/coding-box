@@ -7,9 +7,11 @@ describe('AuthService', () => {
   let service: AuthService;
   let keycloak: {
     authenticated?: boolean;
+    tokenParsed?: { sub?: string };
     idTokenParsed?: unknown;
     token?: string;
     realmAccess?: { roles: string[] };
+    updateToken: jest.Mock;
     login: jest.Mock;
     logout: jest.Mock;
     loadUserProfile: jest.Mock;
@@ -20,9 +22,11 @@ describe('AuthService', () => {
   beforeEach(() => {
     keycloak = {
       authenticated: false,
+      tokenParsed: { sub: 'token-user' },
       idTokenParsed: { sub: 'user-1' },
       token: 'keycloak-token',
       realmAccess: { roles: ['user'] },
+      updateToken: jest.fn().mockResolvedValue(true),
       login: jest.fn().mockResolvedValue(undefined),
       logout: jest.fn().mockResolvedValue(undefined),
       loadUserProfile: jest.fn().mockResolvedValue({ username: 'test' }),
@@ -49,6 +53,24 @@ describe('AuthService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  it('should refresh and return the current Keycloak token for authenticated users', async () => {
+    keycloak.authenticated = true;
+
+    await expect(service.getValidToken()).resolves.toBe('keycloak-token');
+
+    expect(keycloak.updateToken).toHaveBeenCalledWith(30);
+  });
+
+  it('should not return a token when Keycloak is not authenticated', async () => {
+    await expect(service.getValidToken()).resolves.toBeUndefined();
+
+    expect(keycloak.updateToken).not.toHaveBeenCalled();
+  });
+
+  it('should read the stable identity from the access token first', () => {
+    expect(service.getIdentity()).toBe('token-user');
   });
 
   it('should pass a sanitized return URL as Keycloak redirect URI', async () => {

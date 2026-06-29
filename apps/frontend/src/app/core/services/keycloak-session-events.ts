@@ -35,8 +35,11 @@ export function handleKeycloakSessionEvent(
       appService.requireReAuthentication(getReturnUrl(router, appService));
       break;
     case KeycloakEventType.AuthSuccess:
-    case KeycloakEventType.AuthRefreshSuccess:
+      appService.setSessionExpiryWarning(false);
       appService.setNeedsReAuthentication(false);
+      break;
+    case KeycloakEventType.AuthRefreshSuccess:
+      appService.setSessionExpiryWarning(false);
       break;
     default:
       break;

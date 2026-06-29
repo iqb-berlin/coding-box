@@ -911,7 +911,11 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
-    expect(appService.createOwnToken).toHaveBeenCalledWith(47, 1);
+    expect(appService.createOwnToken).toHaveBeenCalledWith(
+      47,
+      1,
+      ['replay:read', 'replay-statistics:write', 'coding-job:operate']
+    );
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'fresh-workspace-token', false);
     expect(window.location.href).toContain('workspaceId=47');
     expect(window.location.href).not.toContain('auth=');
@@ -1073,7 +1077,11 @@ describe('ReplayComponent', () => {
     appService.emitAuthBootstrapStatus('ready');
     await Promise.resolve();
 
-    expect(appService.createOwnToken).toHaveBeenCalledWith(47, 1);
+    expect(appService.createOwnToken).toHaveBeenCalledWith(
+      47,
+      1,
+      ['replay:read', 'replay-statistics:write', 'coding-job:operate']
+    );
     expect(privateComponent.authToken).toBe('fresh-token-after-login');
     expect(window.location.href).toContain('workspaceId=47');
     expect(window.location.href).not.toContain('auth=');

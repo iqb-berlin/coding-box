@@ -524,11 +524,6 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     }
 
     const authHeaders = this.getAuthHeaders();
-    if (!authHeaders) {
-      this.snackBar.open('Nicht authentifiziert. Bitte melden Sie sich erneut an.', 'Schließen', { duration: 5000 });
-      return;
-    }
-
     this.isExporting = true;
     this.databaseExportProgress = 0;
     this.databaseExportStatus = 'queued';
@@ -634,14 +629,8 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     }
   }
 
-  private getAuthHeaders(): HttpHeaders | null {
-    const token = localStorage.getItem('id_token');
-    if (!token) {
-      return null;
-    }
-
+  private getAuthHeaders(): HttpHeaders {
     return new HttpHeaders({
-      Authorization: `Bearer ${token}`,
       Accept: 'application/json'
     });
   }

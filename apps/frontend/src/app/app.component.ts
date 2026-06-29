@@ -16,7 +16,6 @@ import { Subscription, filter, firstValueFrom } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
-import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
 
 import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';
 import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.component';
@@ -25,6 +24,7 @@ import { ExportToastComponent } from './components/export-toast/export-toast.com
 import { ErrorMessageDisplayComponent } from './shared/components/error-message-display/error-message-display.component';
 import { handleKeycloakSessionEvent } from './core/services/keycloak-session-events';
 import { hasAdminBypass } from './core/guards/admin-access';
+import { AuthSessionActivityService } from './core/services/auth-session-activity.service';
 
 @Component({
   selector: 'app-root',
@@ -41,6 +41,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private keycloakEvent = inject(KEYCLOAK_EVENT_SIGNAL);
   private snackBar = inject(MatSnackBar);
+  private authSessionActivity = inject(AuthSessionActivityService);
 
   title = 'IQB-Kodierbox';
   loggedInKeycloak: boolean = false;
@@ -52,6 +53,11 @@ export class AppComponent implements OnInit, OnDestroy {
   constructor() {
     effect(() => {
       handleKeycloakSessionEvent(this.keycloakEvent(), this.appService, this.router);
+      if (this.authService.isLoggedIn() && !this.appService.needsReAuthentication) {
+        this.authSessionActivity.start();
+      } else {
+        this.authSessionActivity.restart();
+      }
     });
 
     this.appService.authData$.subscribe(authData => {
@@ -84,14 +90,15 @@ export class AppComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
+    this.authSessionActivity.stop();
   }
 
-  async keycloakLogin(user: CreateUserDto): Promise<boolean> {
+  async loadAuthData(identity: string): Promise<boolean> {
     this.errorMessage = '';
     this.appService.errorMessagesDisabled = true;
 
     try {
-      const success = await firstValueFrom(this.appService.keycloakLogin(user));
+      const success = await firstValueFrom(this.appService.loadAuthenticatedUser(identity));
       if (success) {
         this.snackBar.dismiss();
       } else {
@@ -116,12 +123,12 @@ export class AppComponent implements OnInit, OnDestroy {
 
       try {
         const keycloakUserProfile = await this.authService.loadUserProfile();
-        const isAdmin = hasAdminBypass(this.authService.getRoles());
+        this.appService.userProfile = keycloakUserProfile;
+        const identity = this.authService.getIdentity();
 
-        if (this.isValidUserProfile(keycloakUserProfile)) {
-          const keycloakUser = this.createKeycloakUser(keycloakUserProfile, isAdmin);
-          this.appService.kcUser = keycloakUser;
-          await this.keycloakLogin(keycloakUser);
+        if (this.isValidUserProfile(keycloakUserProfile) && identity) {
+          this.appService.keycloakIdentity = identity;
+          await this.loadAuthData(identity);
         } else {
           this.appService.markAuthDataFailed();
         }
@@ -145,18 +152,6 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private isValidUserProfile(userProfile: KeycloakProfile): boolean {
     return !!userProfile?.id && !!userProfile?.username;
-  }
-
-  private createKeycloakUser(userProfile: KeycloakProfile, isAdmin: boolean): CreateUserDto {
-    return {
-      issuer: this.appService.loggedUser?.iss || '',
-      identity: userProfile.id,
-      username: userProfile.username || '',
-      lastName: userProfile.lastName || '',
-      firstName: userProfile.firstName || '',
-      email: userProfile.email || '',
-      isAdmin: isAdmin
-    };
   }
 
   isAdminUser(): boolean {

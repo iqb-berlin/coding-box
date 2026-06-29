@@ -7,6 +7,10 @@ import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statis
 import { SERVER_URL } from '../../injection-tokens';
 import { AppService } from '../../core/services/app.service';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
+import {
+  API_SPECIAL_TOKEN_DURATION_DAYS,
+  REPLAY_WORKSPACE_TOKEN_SCOPES
+} from '../../core/services/auth-session.config';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ResponseEntity } from '../../shared/models/response-entity.model';
 import { CodingFreshnessSummaryDto } from '../../../../../../api-dto/coding/coding-freshness.dto';
@@ -118,7 +122,11 @@ export class CodingStatisticsService {
     derivation?: string,
     regexSearch?: boolean
   ): Observable<PaginatedResponse<VariableAnalysisItemDto>> {
-    return this.appService.createOwnToken(workspace_id, 60).pipe(
+    return this.appService.createOwnToken(
+      workspace_id,
+      API_SPECIAL_TOKEN_DURATION_DAYS,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    ).pipe(
       catchError(() => of('')),
       switchMap(token => {
         let params = new HttpParams()
