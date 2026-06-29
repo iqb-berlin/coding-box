@@ -1158,8 +1158,8 @@
     "coding": "Kodierung",
     "auto-fetch-coding-statistics": "Automatisches Laden der Kodierstatistiken",
     "auto-fetch-coding-statistics-description": "Wenn aktiviert, werden die Kodierstatistiken automatisch beim Öffnen der Kodierungsverwaltung geladen. Wenn deaktiviert, müssen die Statistiken manuell über einen Button geladen werden.",
-    "auto-refresh-manual-coding-jobs": "Automatisches Aktualisieren der Kodierjob-Tabellen",
-    "auto-refresh-manual-coding-jobs-description": "Wenn aktiviert, werden die Kodierjob-Tabellen in Schulung und Durchführung automatisch aktualisiert, wenn das Browserfenster wieder aktiv wird. Wenn deaktiviert, aktualisieren Sie die Tabellen per Button.",
+    "auto-refresh-manual-coding-jobs": "Automatisches Aktualisieren von Kodierstatus und Kodierjobs",
+    "auto-refresh-manual-coding-jobs-description": "Wenn aktiviert, werden Kodierstatus und manuelle Kodieransichten automatisch beim Öffnen oder nach relevanten Fokuswechseln aktualisiert. Wenn deaktiviert, aktualisieren Sie diese Ansichten per Button.",
     "include-derive-error-in-manual-coding": "DERIVE_ERROR in manueller Kodierung zulassen",
     "include-derive-error-in-manual-coding-description": "Wenn aktiviert, können DERIVE_ERROR-Fälle bei Kodierjobdefinitionen gezielt in die manuelle Kodierung aufgenommen werden. Standardmäßig ist diese Funktion deaktiviert.",
     "include-derive-error-in-manual-coding-enabled": "DERIVE_ERROR-Fälle können in die manuelle Kodierung aufgenommen werden",
@@ -1191,8 +1191,8 @@
     "token-copied-to-clipboard": "Token in die Zwischenablage kopiert",
     "auto-fetch-coding-statistics-enabled": "Automatisches Laden der Kodierstatistiken aktiviert",
     "auto-fetch-coding-statistics-disabled": "Automatisches Laden der Kodierstatistiken deaktiviert",
-    "auto-refresh-manual-coding-jobs-enabled": "Automatisches Aktualisieren der Kodierjob-Tabellen aktiviert",
-    "auto-refresh-manual-coding-jobs-disabled": "Automatisches Aktualisieren der Kodierjob-Tabellen deaktiviert",
+    "auto-refresh-manual-coding-jobs-enabled": "Automatisches Aktualisieren von Kodierstatus und Kodierjobs aktiviert",
+    "auto-refresh-manual-coding-jobs-disabled": "Automatisches Aktualisieren von Kodierstatus und Kodierjobs deaktiviert",
     "show-test-results-log-anomalies-enabled": "Log-Auffälligkeiten in Testergebnissen aktiviert",
     "show-test-results-log-anomalies-disabled": "Log-Auffälligkeiten in Testergebnissen deaktiviert",
     "error-saving-setting": "Fehler beim Speichern der Einstellung",
@@ -1381,10 +1381,15 @@
     "readiness": {
       "title-load-failed": "Auto-Coding-Prüfung nicht verfügbar",
       "title-blocked": "Auto-Coding 1 nicht möglich",
+      "title-diagnostics-pending": "Auto-Coding-Basisprüfung abgeschlossen",
+      "title-not-checked": "Kodierstatus nicht geprüft",
       "title-not-started": "Kodierung noch nicht gestartet",
       "title-manual-coding-open": "Manuelle Kodierung abschließen",
       "checking": "Zustand wird geprüft...",
+      "not-checked": "Aktualisieren Sie den Kodierstatus, um den aktuellen Stand zu prüfen.",
       "summary": "{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus, aber {{codeableResponses}} kodierbare Antworten.",
+      "summary-pending-diagnostics": "{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus und {{potentialCodeableResponses}} potenziell kodierbare Antworten.",
+      "pending-diagnostics-help": "Für Unit-Dateien und Kodierschemata liegt noch keine Detailprüfung vor.",
       "details-result-units": "{{count}} Ergebnis-Units",
       "details-unit-files": "{{count}} passende Unit-Dateien",
       "details-coding-schemes": "{{count}} passende Kodierschemata",
@@ -1407,6 +1412,8 @@
       "starting-freshness-coding": "Auto-Coding wird gestartet...",
       "update-running": "Aktualisierung läuft: {{progress}}%",
       "retry": "Erneut prüfen",
+      "check-details": "Details prüfen",
+      "refresh-status": "Aktualisieren",
       "check-test-files": "Testdateien prüfen",
       "open-manual-review": "Manuelle Kodierung öffnen"
     },
@@ -1563,6 +1570,13 @@
     },
     "aria": {
       "select-page": "Seiten auswählen"
+    }
+  },
+  "test-results-page": {
+    "coding-status": {
+      "manual-title": "Kodierstatus wird manuell aktualisiert",
+      "manual-text": "Automatische Statusprüfungen sind für diesen Arbeitsbereich deaktiviert. Aktualisieren Sie den Kodierstatus nur bei Bedarf.",
+      "refresh": "Kodierstatus aktualisieren"
     }
   },
   "test-results-search": {

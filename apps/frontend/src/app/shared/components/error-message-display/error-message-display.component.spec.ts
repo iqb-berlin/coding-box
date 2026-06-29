@@ -139,6 +139,23 @@ describe('ErrorMessageDisplayComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('request-b');
   });
 
+  it('should render ordinary HTTP errors in the transient error layer', () => {
+    appService.errorMessages = [{
+      id: 3,
+      status: 504,
+      message: 'Der Server antwortet gerade nicht.',
+      method: 'GET',
+      urlWithParams: '/api/admin/workspace/5/coding/incomplete-variables',
+      requestCount: 1,
+      isBackendConnectivityError: true
+    } as AppHttpError];
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.transient-errors .other-error')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.priority-errors .other-error')).toBeNull();
+  });
+
   it('should keep technical server messages hidden until details are expanded', () => {
     appService.errorMessages = [{
       id: 2,

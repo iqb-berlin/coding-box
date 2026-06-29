@@ -19,10 +19,7 @@ import {
   Subscription
 } from 'rxjs';
 import { MatSortModule, Sort } from '@angular/material/sort';
-import {
-  MatPaginatorModule,
-  PageEvent
-} from '@angular/material/paginator';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import {
   MatFormField,
   MatLabel,
@@ -96,10 +93,7 @@ interface BulkApplyResultItem {
   jobName: string;
   hasIssues: boolean;
   skipped: boolean;
-  skippedReason?:
-  | 'training-job'
-  | 'not-completed'
-  | 'freshness-stale';
+  skippedReason?: 'training-job' | 'not-completed' | 'freshness-stale';
   result?: {
     success: boolean;
     updatedResponsesCount: number;
@@ -111,11 +105,7 @@ interface BulkApplyResultItem {
 }
 
 type JobPrimaryAction =
-  | 'start'
-  | 'review'
-  | 'results'
-  | 'apply'
-  | 'notAssigned';
+  'start' | 'review' | 'results' | 'apply' | 'notAssigned';
 type CodingJobScope = 'all' | 'training' | 'productive';
 
 @Component({
@@ -198,6 +188,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
+  private isLoadingCoderTrainings = false;
 
   coderTrainings: CoderTraining[] = [];
   selectedTrainingId: number | string | null = null;
@@ -227,6 +218,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   @Input() showApplyActions = true;
   @Input() showBulkDeleteAction = true;
   @Input() autoReloadOnFocus = true;
+  @Input() showRefreshAction = true;
 
   private handleWindowFocus = () => {
     if (!this.autoReloadOnFocus || this.isLoading) {
@@ -254,7 +246,6 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       });
 
     this.updateCodingJobPermissions();
-    this.loadCoderTrainings();
     this.loadCodingJobs();
     window.addEventListener('focus', this.handleWindowFocus);
   }
@@ -332,9 +323,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       jobName: this.normalizeJobNameFilter(),
       trainingId: this.showTrainingFilter ?
         ((this.selectedTrainingId ?? undefined) as
-            | number
-            | 'none'
-            | undefined) :
+            number | 'none' | undefined) :
         undefined,
       includeIssueSummary: true,
       sortBy: this.sortBy,
@@ -445,13 +434,9 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   private isSupportedServerSort(
     sortBy: string
   ): sortBy is 'name' | 'description' | 'status' | 'createdAt' | 'updatedAt' {
-    return [
-      'name',
-      'description',
-      'status',
-      'createdAt',
-      'updatedAt'
-    ].includes(sortBy);
+    return ['name', 'description', 'status', 'createdAt', 'updatedAt'].includes(
+      sortBy
+    );
   }
 
   private reloadCurrentOrPreviousPageAfterDelete(deletedCount: number): void {
@@ -1093,16 +1078,19 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   loadCoderTrainings(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
+    if (!workspaceId || this.isLoadingCoderTrainings) {
       return;
     }
 
+    this.isLoadingCoderTrainings = true;
     this.codingTrainingBackendService.getCoderTrainings(workspaceId).subscribe({
       next: trainings => {
         this.coderTrainings = trainings;
+        this.isLoadingCoderTrainings = false;
       },
       error: () => {
         this.coderTrainings = [];
+        this.isLoadingCoderTrainings = false;
       }
     });
   }
@@ -1169,7 +1157,9 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
                     }
 
                     const replayUrl = appendReplayUrlParams(
-                      normalizeReplayUrlToCurrentOrigin(restartResult.firstReplayUrl),
+                      normalizeReplayUrlToCurrentOrigin(
+                        restartResult.firstReplayUrl
+                      ),
                       {
                         mode: 'coding',
                         codingJobId: restartedJob.id,
@@ -1233,7 +1223,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       dialogRef.componentInstance.closeDialog();
     });
 
-    dialogRef.keydownEvents()
+    dialogRef
+      .keydownEvents()
       .pipe(filter(event => event.key === 'Escape'))
       .subscribe(() => {
         dialogRef.componentInstance.closeDialog();

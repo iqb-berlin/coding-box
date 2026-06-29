@@ -118,9 +118,10 @@
                   ? ('coding-management-manual.buttons.show-fewer-manual-code-warnings'
                     | translate)
                   : ('coding-management-manual.buttons.show-more-manual-code-warnings'
-                    | translate: {
-                      count: hiddenManualCodeAvailabilityWarningCount
-                    })
+                    | translate
+                      : {
+                          count: hiddenManualCodeAvailabilityWarningCount
+                        })
               }}
             </button>
           </div>
@@ -245,9 +246,7 @@
           <h3
             class="subsection-title"
             [matTooltip]="
-              responseAnalysis?.isCalculating
-                ? 'Analyse läuft'
-                : ''
+              responseAnalysis?.isCalculating ? 'Analyse läuft' : ''
             "
           >
             <mat-icon>settings</mat-icon>
@@ -406,7 +405,9 @@
                       <div class="matching-actions">
                         <span
                           class="matching-state"
-                          *ngIf="hasPendingAggregationOptionsWithoutAggregation()"
+                          *ngIf="
+                            hasPendingAggregationOptionsWithoutAggregation()
+                          "
                         >
                           <mat-icon>pending_actions</mat-icon>
                           {{
@@ -500,7 +501,9 @@
                 *ngIf="responseAnalysis?.aggregationSummary as aggregation"
               >
                 <mat-icon>warning</mat-icon>
-                <span *ngIf="isResponseAnalysisOutdated(); else restScopeDifference">
+                <span
+                  *ngIf="isResponseAnalysisOutdated(); else restScopeDifference"
+                >
                   {{
                     'coding-management-manual.response-analysis.outdated-note'
                       | translate
@@ -854,7 +857,7 @@
                       }}"</span
                     >
                     <span class="occurrence-count"
-                      >({{ group.occurrences.length }}x)</span
+                      >({{ group.occurrenceCount || group.occurrences.length }}x)</span
                     >
                   </div>
                   <ul class="occurrence-list">
@@ -866,10 +869,14 @@
                       - {{ occ.bookletName }}
                     </li>
                     <li
-                      *ngIf="group.occurrences.length > 5"
+                      *ngIf="
+                        (group.occurrenceCount || group.occurrences.length) > 5
+                      "
                       class="more-occurrences"
                     >
-                      +{{ group.occurrences.length - 5 }}
+                      +{{
+                        (group.occurrenceCount || group.occurrences.length) - 5
+                      }}
                       {{
                         'coding-management-manual.response-analysis.more'
                           | translate
@@ -1146,11 +1153,15 @@
         </div>
 
         <div
-          *ngIf="isManualTab('planning')"
+          *ngIf="shouldRenderManualTabContent('planning')"
+          [hidden]="!isManualTab('planning')"
           id="manual-planning"
           class="job-definitions-container"
         >
-          <div class="manual-tab-actions">
+          <div
+            *ngIf="shouldShowManualRefreshControls()"
+            class="manual-tab-actions"
+          >
             <button
               mat-stroked-button
               color="primary"
@@ -1176,227 +1187,230 @@
             [class.blurred-content]="isLoadingVariableCoverage"
           >
             <div class="statistics-card">
-            <h2 class="section-title section-title-with-action">
-              Variablenabdeckung
-              <button
-                mat-icon-button
-                (click)="showVariableCoverageInfo = !showVariableCoverageInfo"
-                [matTooltip]="
-                  'coding-management-manual.variable-coverage.info-tooltip'
-                    | translate
-                "
-                [attr.aria-label]="
-                  'coding-management-manual.variable-coverage.info-tooltip'
-                    | translate
-                "
-                class="section-info-button"
-              >
-                <mat-icon class="section-info-icon">info</mat-icon>
-              </button>
-              <button
-                mat-icon-button
-                (click)="refreshAllStatistics()"
-                matTooltip="Statistiken manuell aktualisieren"
-                aria-label="Statistiken manuell aktualisieren"
-              >
-                <mat-icon>refresh</mat-icon>
-              </button>
-              <span
-                *ngIf="variableCoverageOverview.conflictedVariables > 0"
-                class="conflict-badge"
-                matTooltip="Es gibt Konflikte bei der Variablenzuordnung"
-              >
-                <mat-icon>warning</mat-icon>
-                {{ variableCoverageOverview.conflictedVariables }} Konflikte
-              </span>
-            </h2>
-
-            <div
-              *ngIf="showVariableCoverageInfo"
-              class="info-alert variable-coverage-info"
-            >
-              <mat-icon class="info-alert-icon">help_outline</mat-icon>
-              <div class="info-alert-content">
-                <strong>{{
-                  'coding-management-manual.variable-coverage.info-total-title'
-                    | translate
-                }}</strong>
-                <span class="info-alert-text-spaced">{{
-                  'coding-management-manual.variable-coverage.info-total-desc'
-                    | translate
-                }}</span>
-                <strong>{{
-                  'coding-management-manual.variable-coverage.info-covered-title'
-                    | translate
-                }}</strong>
-                <span class="info-alert-text-spaced">{{
-                  'coding-management-manual.variable-coverage.info-covered-desc'
-                    | translate
-                }}</span>
-                <strong>{{
-                  'coding-management-manual.variable-coverage.info-completeness-title'
-                    | translate
-                }}</strong>
-                <span>{{
-                  'coding-management-manual.variable-coverage.info-completeness-desc'
-                    | translate
-                }}</span>
-              </div>
-            </div>
-
-            <!-- Overall Coverage Stats -->
-            <div class="coverage-stats">
-              <div class="stat-item">
-                <span class="stat-label">Gesamt Variablen:</span>
-                <span class="stat-value">{{
-                  variableCoverageOverview.totalVariables
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Abgedeckte Variablen:</span>
-                <span class="stat-value covered">{{
-                  variableCoverageOverview.coveredVariables
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Fehlende Variablen:</span>
-                <span class="stat-value missing">{{
-                  variableCoverageOverview.missingVariables
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Vollständig abgedeckt:</span>
-                <span class="stat-value covered">{{
-                  variableCoverageOverview.fullyAbgedeckteVariablen
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Partiell abgedeckt:</span>
-                <span class="stat-value partial">{{
-                  variableCoverageOverview.partiallyAbgedeckteVariablen
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Abdeckungsrate:</span>
-                <span class="stat-value percentage"
-                  >{{
-                    variableCoverageOverview.coveragePercentage
-                      | number: '1.1-1'
-                  }}%</span
-                >
-              </div>
-            </div>
-
-            <!-- Status Breakdown -->
-            <div class="status-breakdown">
-              <h3 class="breakdown-title">Abdeckung nach Status</h3>
-              <div class="status-stats">
-                <div class="status-item draft">
-                  <mat-icon class="status-icon">edit</mat-icon>
-                  <div class="status-content">
-                    <span class="status-label">Entwurf:</span>
-                    <span class="status-value">{{
-                      variableCoverageOverview.coveredByDraft
-                    }}</span>
-                  </div>
-                </div>
-                <div class="status-item pending">
-                  <mat-icon class="status-icon">schedule</mat-icon>
-                  <div class="status-content">
-                    <span class="status-label">Warten auf Genehmigung:</span>
-                    <span class="status-value">{{
-                      variableCoverageOverview.coveredByPendingReview
-                    }}</span>
-                  </div>
-                </div>
-                <div class="status-item approved">
-                  <mat-icon class="status-icon">check_circle</mat-icon>
-                  <div class="status-content">
-                    <span class="status-label">Genehmigt:</span>
-                    <span class="status-value">{{
-                      variableCoverageOverview.coveredByApproved
-                    }}</span>
-                  </div>
-                </div>
-                <div
-                  class="status-item conflict"
-                  *ngIf="variableCoverageOverview.conflictedVariables > 0"
-                >
-                  <mat-icon class="status-icon">error</mat-icon>
-                  <div class="status-content">
-                    <span class="status-label">Konflikte:</span>
-                    <span class="status-value">{{
-                      variableCoverageOverview.conflictedVariables
-                    }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Conflicts Details -->
-            <div
-              class="conflicts-section"
-              *ngIf="
-                variableCoverageOverview.coverageByStatus.conflicted.length > 0
-              "
-            >
-              <h3 class="conflicts-title">
-                <mat-icon>warning</mat-icon>
-                Variablenkonflikte
-              </h3>
-              <div class="conflicts-list">
-                <div
-                  *ngFor="
-                    let conflict of variableCoverageOverview.coverageByStatus
-                      .conflicted
+              <h2 class="section-title section-title-with-action">
+                Variablenabdeckung
+                <button
+                  mat-icon-button
+                  (click)="showVariableCoverageInfo = !showVariableCoverageInfo"
+                  [matTooltip]="
+                    'coding-management-manual.variable-coverage.info-tooltip'
+                      | translate
                   "
-                  class="conflict-item"
+                  [attr.aria-label]="
+                    'coding-management-manual.variable-coverage.info-tooltip'
+                      | translate
+                  "
+                  class="section-info-button"
                 >
-                  <div class="conflict-variable">
-                    <mat-icon>code</mat-icon>
-                    <span>{{ conflict.variableKey }}</span>
+                  <mat-icon class="section-info-icon">info</mat-icon>
+                </button>
+                <button
+                  *ngIf="shouldShowManualRefreshControls()"
+                  mat-icon-button
+                  (click)="refreshAllStatistics()"
+                  matTooltip="Statistiken manuell aktualisieren"
+                  aria-label="Statistiken manuell aktualisieren"
+                >
+                  <mat-icon>refresh</mat-icon>
+                </button>
+                <span
+                  *ngIf="variableCoverageOverview.conflictedVariables > 0"
+                  class="conflict-badge"
+                  matTooltip="Es gibt Konflikte bei der Variablenzuordnung"
+                >
+                  <mat-icon>warning</mat-icon>
+                  {{ variableCoverageOverview.conflictedVariables }} Konflikte
+                </span>
+              </h2>
+
+              <div
+                *ngIf="showVariableCoverageInfo"
+                class="info-alert variable-coverage-info"
+              >
+                <mat-icon class="info-alert-icon">help_outline</mat-icon>
+                <div class="info-alert-content">
+                  <strong>{{
+                    'coding-management-manual.variable-coverage.info-total-title'
+                      | translate
+                  }}</strong>
+                  <span class="info-alert-text-spaced">{{
+                    'coding-management-manual.variable-coverage.info-total-desc'
+                      | translate
+                  }}</span>
+                  <strong>{{
+                    'coding-management-manual.variable-coverage.info-covered-title'
+                      | translate
+                  }}</strong>
+                  <span class="info-alert-text-spaced">{{
+                    'coding-management-manual.variable-coverage.info-covered-desc'
+                      | translate
+                  }}</span>
+                  <strong>{{
+                    'coding-management-manual.variable-coverage.info-completeness-title'
+                      | translate
+                  }}</strong>
+                  <span>{{
+                    'coding-management-manual.variable-coverage.info-completeness-desc'
+                      | translate
+                  }}</span>
+                </div>
+              </div>
+
+              <!-- Overall Coverage Stats -->
+              <div class="coverage-stats">
+                <div class="stat-item">
+                  <span class="stat-label">Gesamt Variablen:</span>
+                  <span class="stat-value">{{
+                    variableCoverageOverview.totalVariables
+                  }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Abgedeckte Variablen:</span>
+                  <span class="stat-value covered">{{
+                    variableCoverageOverview.coveredVariables
+                  }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Fehlende Variablen:</span>
+                  <span class="stat-value missing">{{
+                    variableCoverageOverview.missingVariables
+                  }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Vollständig abgedeckt:</span>
+                  <span class="stat-value covered">{{
+                    variableCoverageOverview.fullyAbgedeckteVariablen
+                  }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Partiell abgedeckt:</span>
+                  <span class="stat-value partial">{{
+                    variableCoverageOverview.partiallyAbgedeckteVariablen
+                  }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Abdeckungsrate:</span>
+                  <span class="stat-value percentage"
+                    >{{
+                      variableCoverageOverview.coveragePercentage
+                        | number: '1.1-1'
+                    }}%</span
+                  >
+                </div>
+              </div>
+
+              <!-- Status Breakdown -->
+              <div class="status-breakdown">
+                <h3 class="breakdown-title">Abdeckung nach Status</h3>
+                <div class="status-stats">
+                  <div class="status-item draft">
+                    <mat-icon class="status-icon">edit</mat-icon>
+                    <div class="status-content">
+                      <span class="status-label">Entwurf:</span>
+                      <span class="status-value">{{
+                        variableCoverageOverview.coveredByDraft
+                      }}</span>
+                    </div>
                   </div>
-                  <div class="conflict-definitions">
-                    <span class="conflict-label">Zugeordnet zu:</span>
-                    <span
-                      *ngFor="
-                        let def of conflict.conflictingDefinitions;
-                        let last = last
-                      "
-                      class="conflict-definition"
-                    >
-                      Definition #{{ def.id }} ({{
-                        getStatusLabel(def.status)
-                      }}){{ !last ? ', ' : '' }}
-                    </span>
+                  <div class="status-item pending">
+                    <mat-icon class="status-icon">schedule</mat-icon>
+                    <div class="status-content">
+                      <span class="status-label">Warten auf Genehmigung:</span>
+                      <span class="status-value">{{
+                        variableCoverageOverview.coveredByPendingReview
+                      }}</span>
+                    </div>
+                  </div>
+                  <div class="status-item approved">
+                    <mat-icon class="status-icon">check_circle</mat-icon>
+                    <div class="status-content">
+                      <span class="status-label">Genehmigt:</span>
+                      <span class="status-value">{{
+                        variableCoverageOverview.coveredByApproved
+                      }}</span>
+                    </div>
+                  </div>
+                  <div
+                    class="status-item conflict"
+                    *ngIf="variableCoverageOverview.conflictedVariables > 0"
+                  >
+                    <mat-icon class="status-icon">error</mat-icon>
+                    <div class="status-content">
+                      <span class="status-label">Konflikte:</span>
+                      <span class="status-value">{{
+                        variableCoverageOverview.conflictedVariables
+                      }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div class="coverage-bar">
+              <!-- Conflicts Details -->
               <div
-                class="coverage-fill"
-                [style.width.%]="variableCoverageOverview.coveragePercentage"
-              ></div>
-            </div>
-          </div>
-          <div *ngIf="isLoadingVariableCoverage" class="loading-overlay">
-            <div class="loading-content">
-              <mat-spinner diameter="40"></mat-spinner>
-              <div class="loading-text">
-                {{
-                  'coding-management-manual.loading.variable-coverage'
-                    | translate
-                }}
+                class="conflicts-section"
+                *ngIf="
+                  variableCoverageOverview.coverageByStatus.conflicted.length >
+                  0
+                "
+              >
+                <h3 class="conflicts-title">
+                  <mat-icon>warning</mat-icon>
+                  Variablenkonflikte
+                </h3>
+                <div class="conflicts-list">
+                  <div
+                    *ngFor="
+                      let conflict of variableCoverageOverview.coverageByStatus
+                        .conflicted
+                    "
+                    class="conflict-item"
+                  >
+                    <div class="conflict-variable">
+                      <mat-icon>code</mat-icon>
+                      <span>{{ conflict.variableKey }}</span>
+                    </div>
+                    <div class="conflict-definitions">
+                      <span class="conflict-label">Zugeordnet zu:</span>
+                      <span
+                        *ngFor="
+                          let def of conflict.conflictingDefinitions;
+                          let last = last
+                        "
+                        class="conflict-definition"
+                      >
+                        Definition #{{ def.id }} ({{
+                          getStatusLabel(def.status)
+                        }}){{ !last ? ', ' : '' }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="coverage-bar">
+                <div
+                  class="coverage-fill"
+                  [style.width.%]="variableCoverageOverview.coveragePercentage"
+                ></div>
               </div>
             </div>
-          </div>
+            <div *ngIf="isLoadingVariableCoverage" class="loading-overlay">
+              <div class="loading-content">
+                <mat-spinner diameter="40"></mat-spinner>
+                <div class="loading-text">
+                  {{
+                    'coding-management-manual.loading.variable-coverage'
+                      | translate
+                  }}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         <div
-          *ngIf="isManualTab('execution')"
+          *ngIf="shouldRenderManualTabContent('execution')"
+          [hidden]="!isManualTab('execution')"
           id="manual-execution"
           class="coding-jobs-container manual-section-block"
         >
@@ -1471,12 +1485,14 @@
           </div>
 
           <coding-box-coding-jobs
+            #productiveCodingJobs
             [jobScope]="'productive'"
             [showTrainingFilter]="false"
             [showComparisonActions]="false"
             [showTransferAction]="false"
             [showApplyActions]="false"
             [autoReloadOnFocus]="autoRefreshManualCodingJobs"
+            [showRefreshAction]="shouldShowManualRefreshControls()"
             (jobsChanged)="onJobDefinitionChanged()"
           ></coding-box-coding-jobs>
         </div>
@@ -1881,7 +1897,8 @@
         </div>
 
         <div
-          *ngIf="isManualTab('training')"
+          *ngIf="shouldRenderManualTabContent('training')"
+          [hidden]="!isManualTab('training')"
           id="manual-support"
           class="coder-training-list-container manual-section-block"
         >
@@ -1977,12 +1994,14 @@
           <div class="coding-jobs-container manual-section-block">
             <h3 class="manual-section-title">Kodierjobs</h3>
             <coding-box-coding-jobs
+              #trainingCodingJobs
               [jobScope]="'training'"
               [showTrainingFilter]="true"
               [showComparisonActions]="false"
               [showTransferAction]="false"
               [showApplyActions]="false"
               [autoReloadOnFocus]="autoRefreshManualCodingJobs"
+              [showRefreshAction]="shouldShowManualRefreshControls()"
               (jobsChanged)="onJobDefinitionChanged()"
             ></coding-box-coding-jobs>
           </div>
