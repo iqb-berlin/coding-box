@@ -20,6 +20,7 @@ x-env-keycloak: &env-keycloak
 
 x-env-auth-policy: &env-auth-policy
   WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS: ${WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS:-90}
+  ALLOW_LEGACY_WORKSPACE_REPLAY_TOKENS: ${ALLOW_LEGACY_WORKSPACE_REPLAY_TOKENS:-true}
 
 services:
   redis:
