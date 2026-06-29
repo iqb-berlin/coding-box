@@ -101,6 +101,10 @@ export interface BulkApplyCodingResultsResponse {
 export interface ExportJobStatus {
   status: string;
   progress: number;
+  progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+  processedRows?: number;
+  totalRows?: number;
+  progressMessage?: string;
   result?: {
     fileId: string;
     fileName: string;

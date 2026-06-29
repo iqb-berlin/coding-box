@@ -1140,6 +1140,10 @@ export class CodingJobBackendService {
   ): Observable<{
       status: string;
       progress: number;
+      progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+      processedRows?: number;
+      totalRows?: number;
+      progressMessage?: string;
       result?: {
         fileId: string;
         fileName: string;
@@ -1157,6 +1161,10 @@ export class CodingJobBackendService {
     return this.http.get<{
       status: string;
       progress: number;
+      progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+      processedRows?: number;
+      totalRows?: number;
+      progressMessage?: string;
       result?: {
         fileId: string;
         fileName: string;
@@ -1167,6 +1175,8 @@ export class CodingJobBackendService {
         createdAt: number;
       };
       error?: string;
+      errorCode?: string;
+      errorDetails?: Record<string, number | string | boolean>;
     }>(url, {
       headers: this.authHeader
     });

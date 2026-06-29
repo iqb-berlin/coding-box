@@ -31,7 +31,11 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
-import { JobQueueService } from '../../job-queue/job-queue.service';
+import {
+  ExportJobData,
+  ExportJobProgress,
+  JobQueueService
+} from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
 import { JournalService } from '../../database/services/shared';
 import {
@@ -66,6 +70,52 @@ export class WorkspaceTestResultsExportController {
     @InjectQueue('database-export')
     private readonly databaseExportQueue: Queue<DatabaseExportJobData>
   ) { }
+
+  private mapDataExportJobState(
+    state: string,
+    job: Job<ExportJobData>
+  ): string {
+    const failedReason = job.failedReason;
+    const failedBecauseCancelled = typeof failedReason === 'string' &&
+      (
+        failedReason.includes('ExportJobCancelledException') ||
+        /^Export job .* was cancelled$/.test(failedReason)
+      );
+
+    if (
+      job.data?.isCancelled === true &&
+      (
+        state === 'waiting' ||
+        state === 'delayed' ||
+        state === 'active' ||
+        state === 'completed' ||
+        state === 'failed'
+      )
+    ) {
+      return 'cancelled';
+    }
+
+    if (state === 'failed' && failedBecauseCancelled) {
+      return 'cancelled';
+    }
+
+    return state;
+  }
+
+  private toPublicProgress(progress: unknown): number {
+    if (typeof progress === 'number') {
+      return Math.max(0, Math.min(100, Math.round(progress)));
+    }
+
+    if (!progress || typeof progress !== 'object') {
+      return 0;
+    }
+
+    const percentage = Number((progress as Partial<ExportJobProgress>).percentage);
+    return Number.isFinite(percentage) ?
+      Math.max(0, Math.min(100, Math.round(percentage))) :
+      0;
+  }
 
   @Post(':workspace_id/export/sqlite/job')
   @ApiOperation({
@@ -449,10 +499,10 @@ export class WorkspaceTestResultsExportController {
     const result: ExportJobStatus[] = [];
     for (const job of jobs) {
       const state = await job.getState();
-      const progress = await job.progress();
+      const progress = this.toPublicProgress(await job.progress());
       result.push({
         jobId: job.id.toString(),
-        status: state,
+        status: this.mapDataExportJobState(state, job),
         progress: progress,
         exportType: job.data.exportType,
         createdAt: new Date(job.timestamp),
@@ -524,6 +574,74 @@ export class WorkspaceTestResultsExportController {
       throw new BadRequestException('Failed to delete job');
     }
     return { success: true, message: 'Job deleted successfully' };
+  }
+
+  @Post(':workspace_id/results/export/jobs/:jobId/cancel')
+  @ApiOperation({
+    summary: 'Cancel export job',
+    description: 'Cancels an active or queued test results/logs export job'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the job' })
+  @ApiOkResponse({
+    description: 'Job cancellation requested successfully.'
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async cancelExportJob(
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
+      @Param('jobId') jobId: string
+  ): Promise<{ success: boolean; message: string }> {
+    const job = await this.jobQueueService.getExportJob(jobId);
+    if (!job) {
+      return { success: false, message: 'Export job not found' };
+    }
+
+    if (
+      job.data.workspaceId !== Number(workspace_id) ||
+      (job.data.exportType !== 'test-results' && job.data.exportType !== 'test-logs')
+    ) {
+      throw new BadRequestException('Invalid export job for this workspace.');
+    }
+
+    const state = await job.getState();
+    if (state === 'completed') {
+      return { success: false, message: 'Job already completed' };
+    }
+    if (state === 'failed' && !job.data.isCancelled) {
+      return { success: false, message: 'Job already failed' };
+    }
+
+    const marked = await this.jobQueueService.markExportJobCancelled(jobId);
+    const cancelled = await this.jobQueueService.cancelExportJob(jobId);
+
+    const stateAfterCancellationRequest = await job.getState();
+    if (stateAfterCancellationRequest === 'completed') {
+      if (marked || job.data.isCancelled) {
+        return {
+          success: true,
+          message: 'Export job cancellation requested'
+        };
+      }
+      return { success: false, message: 'Job already completed' };
+    }
+
+    if (!marked && !cancelled) {
+      return {
+        success: false,
+        message: 'Export job cancellation could not be requested'
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Export job cancellation requested'
+    };
   }
 
   private async getWorkspaceDatabaseExportJob(

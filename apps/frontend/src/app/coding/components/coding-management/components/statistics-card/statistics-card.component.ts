@@ -58,6 +58,7 @@ export class StatisticsCardComponent {
   @Output() versionChange = new EventEmitter<'v1' | 'v2' | 'v3'>();
   @Output() loadStatistics = new EventEmitter<void>();
   @Output() downloadResults = new EventEmitter<void>();
+  @Output() cancelDownloadResults = new EventEmitter<void>();
   @Output() resetVersion = new EventEmitter<void>();
   @Output() statusClick = new EventEmitter<string>();
   @Output() derivedClick = new EventEmitter<void>();
@@ -195,6 +196,10 @@ export class StatisticsCardComponent {
 
   onDownloadResults(): void {
     this.downloadResults.emit();
+  }
+
+  onCancelDownloadResults(): void {
+    this.cancelDownloadResults.emit();
   }
 
   onResetVersion(): void {

@@ -56,7 +56,19 @@
     "remove": "Entfernen",
     "clear-all": "Alle löschen",
     "cancel": "Abbrechen",
+    "collapse": "Datenexport einklappen",
+    "expand": "Datenexport ausklappen",
     "error-details": "Technische Details",
+    "progress": {
+      "waiting": "Wartet auf den Export-Worker",
+      "active": "Export wird verarbeitet",
+      "preparing": "Export wird vorbereitet",
+      "counting": "Datensätze werden gezählt",
+      "writing": "Datensätze werden geschrieben",
+      "writing-rows": "{{processed}}/{{total}} Zeilen geschrieben",
+      "finalizing": "Datei wird finalisiert",
+      "downloading": "Datei wird heruntergeladen"
+    },
     "errors": {
       "too-many-worksheets-title": "Export zu groß",
       "too-many-worksheets-message": "Dieser Export würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}. Wählen Sie „Nach Variable, kompakt“ oder schränken Sie die Auswahl ein.",
@@ -90,7 +102,12 @@
     "job-definition-filter": "Jobdefinitionen filtern",
     "training-filter": "Schulungen filtern",
     "coder-filter": "Kodierer filtern",
-    "start": "Exportjob starten"
+    "start": "Exportjob starten",
+    "too-many-worksheets-title": "Export zu groß",
+    "too-many-worksheets-message": "Dieser Export würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}. Das ist in Excel sehr schwer nutzbar und kann lange dauern. Wählen Sie den kompakten Export oder schränken Sie die Auswahl ein.",
+    "too-many-worksheets-compact": "Kompakten Export starten",
+    "too-many-worksheets-continue": "Trotzdem starten",
+    "worksheet-estimate-failed": "Exportgröße konnte nicht geprüft werden. Exportjob wurde nicht gestartet."
   },
   "process-overview": {
     "title": "Zentrale Prozess-Übersicht",
@@ -1534,7 +1551,10 @@
       "download-started": "Download gestartet...",
       "download-failed": "Download fehlgeschlagen",
       "download-complete": "Download abgeschlossen",
-      "download-tooltip": "Ergebnisse herunterladen"
+      "download-cancelled": "Download abgebrochen",
+      "cancel-failed": "Download konnte nicht abgebrochen werden",
+      "download-tooltip": "Ergebnisse herunterladen",
+      "cancel-tooltip": "Download abbrechen"
     },
     "aria": {
       "select-page": "Seiten auswählen"

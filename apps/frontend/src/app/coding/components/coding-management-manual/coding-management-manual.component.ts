@@ -1227,6 +1227,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         undefined
     };
 
+    if (this.requiresByVariableWorksheetEstimate(result)) {
+      this.estimateManualByVariableExport(workspaceId, exportConfig);
+      return;
+    }
+
+    this.startManualCodingExportJob(workspaceId, exportConfig);
+  }
+
+  private startManualCodingExportJob(
+    workspaceId: number,
+    exportConfig: ExportJobConfig
+  ): void {
     this.isStartingManualExport = true;
     this.exportJobService.startJob(workspaceId, exportConfig)
       .pipe(finalize(() => {
@@ -1246,6 +1258,98 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.showError('Exportjob konnte nicht gestartet werden.');
         }
       });
+  }
+
+  private requiresByVariableWorksheetEstimate(result: ManualCodingExportDialogResult): boolean {
+    return result.exportType === 'aggregated' &&
+      result.doubleCodingMethod === 'new-row-per-variable';
+  }
+
+  private estimateManualByVariableExport(
+    workspaceId: number,
+    exportConfig: ExportJobConfig
+  ): void {
+    const estimateConfig: ExportJobConfig = {
+      ...exportConfig,
+      exportType: 'by-variable',
+      doubleCodingMethod: undefined
+    };
+
+    this.isStartingManualExport = true;
+    this.exportJobService.estimateJob(workspaceId, estimateConfig)
+      .pipe(
+        takeUntil(this.destroy$)
+      )
+      .subscribe({
+        next: estimate => {
+          this.isStartingManualExport = false;
+          if (!estimate.exceedsWorksheetLimit || !estimate.worksheetLimit) {
+            this.startManualCodingExportJob(workspaceId, exportConfig);
+            return;
+          }
+
+          this.openLargeByVariableExportDialog(
+            workspaceId,
+            exportConfig,
+            estimate.unitVariableCount,
+            estimate.worksheetLimit
+          );
+        },
+        error: () => {
+          this.isStartingManualExport = false;
+          this.showError(
+            this.translateService.instant('manual-coding-export.worksheet-estimate-failed')
+          );
+        }
+      });
+  }
+
+  private openLargeByVariableExportDialog(
+    workspaceId: number,
+    exportConfig: ExportJobConfig,
+    actualWorksheetCount: number,
+    worksheetLimit: number
+  ): void {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '560px',
+      data: {
+        title: this.translateService.instant('manual-coding-export.too-many-worksheets-title'),
+        message: this.translateService.instant(
+          'manual-coding-export.too-many-worksheets-message',
+          { actual: actualWorksheetCount, max: worksheetLimit }
+        ),
+        confirmButtonText: this.translateService.instant('manual-coding-export.too-many-worksheets-continue'),
+        alternativeButtonText: this.translateService.instant('manual-coding-export.too-many-worksheets-compact'),
+        alternativeButtonValue: 'compact',
+        cancelButtonText: this.translateService.instant('cancel')
+      }
+    });
+
+    dialogRef.afterClosed()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(decision => {
+        if (decision === true) {
+          this.startManualCodingExportJob(workspaceId, exportConfig);
+          return;
+        }
+
+        if (decision === 'compact') {
+          this.startManualCodingExportJob(
+            workspaceId,
+            this.createCompactByVariableExportConfig(exportConfig)
+          );
+        }
+      });
+  }
+
+  private createCompactByVariableExportConfig(exportConfig: ExportJobConfig): ExportJobConfig {
+    return {
+      ...exportConfig,
+      exportType: 'by-variable-compact',
+      doubleCodingMethod: undefined,
+      displayLabelKey: 'export-toast.types.by-variable-compact',
+      downloadFilePrefix: 'manual-review-by-variable-compact'
+    };
   }
 
   private getManualCodingExportDisplayMetadata(

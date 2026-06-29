@@ -67,6 +67,7 @@ function chainableQueryBuilder(overrides: Partial<QueryBuilderMock> = {}): Query
     'leftJoin',
     'leftJoinAndSelect',
     'select',
+    'addSelect',
     'where',
     'andWhere',
     'groupBy',
@@ -82,6 +83,51 @@ function chainableQueryBuilder(overrides: Partial<QueryBuilderMock> = {}): Query
   return queryBuilder;
 }
 
+function toDetailedRawRow(codingJobUnit: Record<string, unknown>): Record<string, unknown> {
+  const codingJob = codingJobUnit.coding_job as {
+    training_id?: number | null;
+    missings_profile_id?: number | null;
+    codingJobCoders?: Array<{ user?: { username?: string } }>;
+  } | undefined;
+  const response = codingJobUnit.response as {
+    status_v1?: number | null;
+    unit?: {
+      name?: string;
+      booklet?: {
+        person?: {
+          login?: string;
+          code?: string;
+          group?: string;
+        };
+        bookletinfo?: {
+          name?: string;
+        };
+      };
+    };
+  } | undefined;
+
+  return {
+    id: codingJobUnit.id ?? null,
+    createdAt: codingJobUnit.created_at ?? null,
+    trainingId: codingJob?.training_id ?? null,
+    missingsProfileId: codingJob?.missings_profile_id ?? null,
+    responseId: codingJobUnit.response_id ?? null,
+    unitName: codingJobUnit.unit_name ?? null,
+    responseUnitName: response?.unit?.name ?? null,
+    variableId: codingJobUnit.variable_id ?? '',
+    code: codingJobUnit.code ?? null,
+    notes: codingJobUnit.notes ?? null,
+    codingIssueOption: codingJobUnit.coding_issue_option ?? null,
+    updatedAt: codingJobUnit.updated_at ?? null,
+    coderName: codingJob?.codingJobCoders?.[0]?.user?.username ?? null,
+    statusV1: response?.status_v1 ?? null,
+    bookletName: response?.unit?.booklet?.bookletinfo?.name ?? null,
+    personLogin: response?.unit?.booklet?.person?.login ?? null,
+    personCode: response?.unit?.booklet?.person?.code ?? null,
+    personGroup: response?.unit?.booklet?.person?.group ?? null
+  };
+}
+
 function createCodingJobUnitRepository(
   codingJobUnit: Record<string, unknown>
 ): Repository<CodingJobUnit> {
@@ -89,7 +135,8 @@ function createCodingJobUnitRepository(
     getCount: jest.fn().mockResolvedValue(1)
   });
   const unitsBatchQueryBuilder = chainableQueryBuilder({
-    getMany: jest.fn().mockResolvedValue([codingJobUnit])
+    getMany: jest.fn().mockResolvedValue([codingJobUnit]),
+    getRawMany: jest.fn().mockResolvedValue([toDetailedRawRow(codingJobUnit)])
   });
 
   return {

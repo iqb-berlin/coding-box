@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
+import * as fs from 'fs';
 import { PassThrough } from 'stream';
 import { Repository } from 'typeorm';
 import { Booklet } from '../../entities/booklet.entity';
@@ -43,6 +44,20 @@ interface RawMatrixRow {
   personGroup: string;
 }
 
+interface RawResponseValueRow {
+  id: number;
+  bookletId: number | string;
+  bookletName: string;
+  unitName: string;
+  variableId: string;
+  codeV1: number | string | null;
+  scoreV1: number | string | null;
+  codeV2: number | string | null;
+  scoreV2: number | string | null;
+  codeV3: number | string | null;
+  scoreV3: number | string | null;
+}
+
 interface ResponseValue {
   code: number | null;
   score: number | null;
@@ -51,6 +66,7 @@ interface ResponseValue {
 @Injectable()
 export class CodingItemMatrixExportService {
   private readonly logger = new Logger(CodingItemMatrixExportService.name);
+  private static readonly exportYieldEveryItems = 50;
 
   private readonly missingValueCache = new Map<string, ResolvedMissingValue>();
 
@@ -67,6 +83,26 @@ export class CodingItemMatrixExportService {
     private readonly missingsProfilesService?: MissingsProfilesService
   ) {}
 
+  private async yieldToEventLoop(): Promise<void> {
+    await new Promise<void>(resolve => {
+      setImmediate(resolve);
+    });
+  }
+
+  private shouldYieldExportItem(index: number): boolean {
+    return index > 0 &&
+      index % CodingItemMatrixExportService.exportYieldEveryItems === 0;
+  }
+
+  private toNullableNumber(value: number | string | null | undefined): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const parsedValue = Number(value);
+    return Number.isFinite(parsedValue) ? parsedValue : null;
+  }
+
   exportItemMatrixAsCsvStream(
     workspaceId: number,
     value: ItemMatrixValue,
@@ -78,7 +114,7 @@ export class CodingItemMatrixExportService {
 
     (async () => {
       try {
-        const context = await this.buildMatrixContext(workspaceId);
+        const context = await this.buildMatrixContext(workspaceId, checkCancellation);
         const headers = this.getHeaders(context.columns);
         const matrixStream = fastCsv.format({
           headers,
@@ -100,12 +136,14 @@ export class CodingItemMatrixExportService {
               await new Promise(resolve => {
                 matrixStream.once('drain', resolve);
               });
+              await checkCancellation?.();
             }
           },
           progressCallback,
           checkCancellation
         );
 
+        await checkCancellation?.();
         matrixStream.end();
       } catch (error) {
         this.logger.error(`Error streaming item matrix export: ${error.message}`, error.stack);
@@ -123,7 +161,7 @@ export class CodingItemMatrixExportService {
     progressCallback?: (percentage: number) => Promise<void>,
     checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
-    const context = await this.buildMatrixContext(workspaceId);
+    const context = await this.buildMatrixContext(workspaceId, checkCancellation);
     const chunks: Buffer[] = [];
     const stream = new PassThrough();
 
@@ -161,22 +199,84 @@ export class CodingItemMatrixExportService {
       checkCancellation
     );
 
+    await checkCancellation?.();
     await worksheet.commit();
     await workbook.commit();
     await streamComplete;
+    await checkCancellation?.();
 
     return Buffer.concat(chunks);
   }
 
-  private async buildMatrixContext(workspaceId: number): Promise<{
-    rows: MatrixRow[];
-    columns: MatrixColumn[];
-  }> {
+  async writeItemMatrixExcelToFile(
+    filePath: string,
+    workspaceId: number,
+    value: ItemMatrixValue,
+    version: ItemMatrixVersion = 'v2',
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
+  ): Promise<void> {
+    const context = await this.buildMatrixContext(workspaceId, checkCancellation);
+    const outputStream = fs.createWriteStream(filePath);
+    const streamComplete = new Promise<void>((resolve, reject) => {
+      outputStream.on('finish', resolve);
+      outputStream.on('error', reject);
+    });
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: outputStream,
+      useStyles: false,
+      useSharedStrings: false
+    });
+    const worksheet = workbook.addWorksheet('Itemmatrix');
+    worksheet.columns = this.getHeaders(context.columns).map(header => ({
+      header,
+      key: header,
+      width: header.length > 24 ? 28 : 18
+    }));
+
+    try {
+      await this.writeRows(
+        workspaceId,
+        context.rows,
+        context.columns,
+        value,
+        version,
+        async row => {
+          worksheet.addRow(row).commit();
+        },
+        progressCallback,
+        checkCancellation
+      );
+
+      await checkCancellation?.();
+      await worksheet.commit();
+      await workbook.commit();
+      await streamComplete;
+      await checkCancellation?.();
+    } catch (error) {
+      outputStream.destroy(error);
+      await streamComplete.catch(() => undefined);
+      if (this.isExportCancellationError(error)) {
+        this.logger.log(`Item matrix Excel export cancelled: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  private async buildMatrixContext(
+    workspaceId: number,
+    checkCancellation?: () => Promise<void>
+  ): Promise<{
+      rows: MatrixRow[];
+      columns: MatrixColumn[];
+    }> {
     this.missingValueCache.clear();
+    await checkCancellation?.();
     const [rows, columns] = await Promise.all([
-      this.getRows(workspaceId),
-      this.getColumns(workspaceId)
+      this.getRows(workspaceId, checkCancellation),
+      this.getColumns(workspaceId, checkCancellation)
     ]);
+    await checkCancellation?.();
 
     this.logger.log(
       `Prepared item matrix context for workspace ${workspaceId}: ${rows.length} rows, ${columns.length} columns`
@@ -195,8 +295,13 @@ export class CodingItemMatrixExportService {
     ];
   }
 
-  private async getRows(workspaceId: number): Promise<MatrixRow[]> {
+  private async getRows(
+    workspaceId: number,
+    checkCancellation?: () => Promise<void>
+  ): Promise<MatrixRow[]> {
+    await checkCancellation?.();
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    await checkCancellation?.();
     const rows = await this.bookletRepository
       .createQueryBuilder('booklet')
       .innerJoin('booklet.person', 'person')
@@ -213,6 +318,7 @@ export class CodingItemMatrixExportService {
       .addOrderBy('person.code', 'ASC')
       .addOrderBy('bookletinfo.name', 'ASC')
       .getRawMany<RawMatrixRow>();
+    await checkCancellation?.();
 
     return rows
       .filter(row => !isExcludedByResolvedExclusions(exclusions, row.bookletName, ''))
@@ -225,41 +331,51 @@ export class CodingItemMatrixExportService {
       }));
   }
 
-  private async getColumns(workspaceId: number): Promise<MatrixColumn[]> {
+  private async getColumns(
+    workspaceId: number,
+    checkCancellation?: () => Promise<void>
+  ): Promise<MatrixColumn[]> {
+    await checkCancellation?.();
     const [unitVariableMap, unitAliases, exclusions] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
-      this.getUnitAliases(workspaceId),
+      this.getUnitAliases(workspaceId, checkCancellation),
       this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId)
     ]);
+    await checkCancellation?.();
 
     const preferredHeaders = new Map<string, number>();
     const columns: MatrixColumn[] = [];
 
-    Array.from(unitVariableMap.entries())
-      .sort(([unitA], [unitB]) => unitA.localeCompare(unitB))
-      .forEach(([unitName, variables]) => {
-        if (isExcludedByResolvedExclusions(exclusions, '', unitName)) {
-          return;
+    for (const [unitName, variables] of Array.from(unitVariableMap.entries())
+      .sort(([unitA], [unitB]) => unitA.localeCompare(unitB))) {
+      await checkCancellation?.();
+      if (isExcludedByResolvedExclusions(exclusions, '', unitName)) {
+        continue;
+      }
+
+      const sortedVariables = Array.from(variables).sort((a, b) => a.localeCompare(b));
+      for (let variableIndex = 0; variableIndex < sortedVariables.length; variableIndex += 1) {
+        if (this.shouldYieldExportItem(variableIndex)) {
+          await checkCancellation?.();
+          await this.yieldToEventLoop();
         }
 
-        Array.from(variables)
-          .sort((a, b) => a.localeCompare(b))
-          .forEach(variableId => {
-            const alias = unitAliases.get(normalizeExclusionUnitId(unitName));
-            const preferredHeader = `${alias || unitName}__${variableId}`;
-            const header = this.createUniqueHeader(
-              preferredHeader,
-              `${unitName}__${variableId}`,
-              preferredHeaders
-            );
-            columns.push({
-              key: `${normalizeExclusionUnitId(unitName)}\u001F${variableId}`,
-              header,
-              unitName,
-              variableId
-            });
-          });
-      });
+        const variableId = sortedVariables[variableIndex];
+        const alias = unitAliases.get(normalizeExclusionUnitId(unitName));
+        const preferredHeader = `${alias || unitName}__${variableId}`;
+        const header = this.createUniqueHeader(
+          preferredHeader,
+          `${unitName}__${variableId}`,
+          preferredHeaders
+        );
+        columns.push({
+          key: `${normalizeExclusionUnitId(unitName)}\u001F${variableId}`,
+          header,
+          unitName,
+          variableId
+        });
+      }
+    }
 
     return columns;
   }
@@ -284,7 +400,11 @@ export class CodingItemMatrixExportService {
     return `${fallbackHeader}__${nextCount}`;
   }
 
-  private async getUnitAliases(workspaceId: number): Promise<Map<string, string>> {
+  private async getUnitAliases(
+    workspaceId: number,
+    checkCancellation?: () => Promise<void>
+  ): Promise<Map<string, string>> {
+    await checkCancellation?.();
     const rows = await this.unitRepository
       .createQueryBuilder('unit')
       .innerJoin('unit.booklet', 'booklet')
@@ -296,18 +416,19 @@ export class CodingItemMatrixExportService {
       .andWhere("unit.alias != ''")
       .distinct(true)
       .getRawMany<{ unitName: string; unitAlias: string }>();
+    await checkCancellation?.();
 
     const aliasesByUnit = new Map<string, Set<string>>();
-    rows.forEach(row => {
+    for (const row of rows) {
       const normalizedUnit = normalizeExclusionUnitId(row.unitName);
       const alias = String(row.unitAlias || '').trim();
       if (!normalizedUnit || !alias) {
-        return;
+        continue;
       }
       const aliases = aliasesByUnit.get(normalizedUnit) || new Set<string>();
       aliases.add(alias);
       aliasesByUnit.set(normalizedUnit, aliases);
-    });
+    }
 
     const stableAliases = new Map<string, string>();
     aliasesByUnit.forEach((aliases, unitName) => {
@@ -337,10 +458,19 @@ export class CodingItemMatrixExportService {
       const responseValues = await this.getResponseValuesForRows(
         workspaceId,
         batchRows,
-        version
+        version,
+        checkCancellation
       );
+      await checkCancellation?.();
 
-      for (const row of batchRows) {
+      for (let rowIndex = 0; rowIndex < batchRows.length; rowIndex += 1) {
+        if (this.shouldYieldExportItem(rowIndex)) {
+          await checkCancellation?.();
+          await this.yieldToEventLoop();
+        }
+
+        const row = batchRows[rowIndex];
+        await checkCancellation?.();
         const exportRow: Record<string, string | number> = {
           person_login: row.personLogin,
           person_code: row.personCode,
@@ -349,7 +479,13 @@ export class CodingItemMatrixExportService {
         };
         const rowValues = responseValues.get(row.bookletId) || new Map<string, ResponseValue>();
 
-        for (const column of columns) {
+        for (let columnIndex = 0; columnIndex < columns.length; columnIndex += 1) {
+          if (this.shouldYieldExportItem(columnIndex)) {
+            await checkCancellation?.();
+            await this.yieldToEventLoop();
+          }
+
+          const column = columns[columnIndex];
           const cellValue = rowValues.get(column.key);
           exportRow[column.header] = cellValue ?
             await this.resolveExportCellValue(workspaceId, cellValue, value) :
@@ -364,23 +500,25 @@ export class CodingItemMatrixExportService {
         await progressCallback(Math.min(100, Math.round((written / rows.length) * 100)));
       }
 
-      await new Promise(resolve => {
-        setImmediate(resolve);
-      });
+      await this.yieldToEventLoop();
     }
   }
 
   private async getResponseValuesForRows(
     workspaceId: number,
     rows: MatrixRow[],
-    version: ItemMatrixVersion
+    version: ItemMatrixVersion,
+    checkCancellation?: () => Promise<void>
   ): Promise<Map<number, Map<string, ResponseValue>>> {
     if (rows.length === 0) {
       return new Map();
     }
 
+    await checkCancellation?.();
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    await checkCancellation?.();
     const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    await checkCancellation?.();
     const validPairs = new Set(
       Array.from(unitVariableMap.entries()).flatMap(([unitName, variables]) => (
         Array.from(variables).map(variableId => `${normalizeExclusionUnitId(unitName)}\u001F${variableId}`)
@@ -389,50 +527,86 @@ export class CodingItemMatrixExportService {
     const bookletIds = rows.map(row => row.bookletId);
     const responses = await this.responseRepository
       .createQueryBuilder('response')
-      .innerJoinAndSelect('response.unit', 'unit')
-      .innerJoinAndSelect('unit.booklet', 'booklet')
-      .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .select('response.id', 'id')
+      .addSelect('booklet.id', 'bookletId')
+      .addSelect('bookletinfo.name', 'bookletName')
+      .addSelect('unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .addSelect('response.code_v1', 'codeV1')
+      .addSelect('response.score_v1', 'scoreV1')
+      .addSelect('response.code_v2', 'codeV2')
+      .addSelect('response.score_v2', 'scoreV2')
+      .addSelect('response.code_v3', 'codeV3')
+      .addSelect('response.score_v3', 'scoreV3')
       .where('booklet.id IN (:...bookletIds)', { bookletIds })
       .orderBy('response.id', 'ASC')
-      .getMany();
+      .getRawMany<RawResponseValueRow>();
+    await checkCancellation?.();
     const result = new Map<number, Map<string, ResponseValue>>();
 
-    for (const response of responses) {
-      const unitName = response.unit?.name || '';
-      const bookletName = response.unit?.booklet?.bookletinfo?.name || '';
+    for (let index = 0; index < responses.length; index += 1) {
+      if (index % 500 === 0) {
+        await checkCancellation?.();
+      }
+      const response = responses[index];
+      const unitName = response.unitName || '';
+      const bookletName = response.bookletName || '';
       if (isExcludedByResolvedExclusions(exclusions, bookletName, unitName)) {
         continue;
       }
 
-      const key = `${normalizeExclusionUnitId(unitName)}\u001F${response.variableid}`;
-      if (!validPairs.has(key)) {
+      const variableId = response.variableId || '';
+      const responseKey = `${normalizeExclusionUnitId(unitName)}\u001F${variableId}`;
+      if (!validPairs.has(responseKey)) {
         continue;
       }
 
-      const bookletId = response.unit.bookletid;
+      const bookletId = Number(response.bookletId);
       if (!result.has(bookletId)) {
         result.set(bookletId, new Map());
       }
-      result.get(bookletId)!.set(key, this.getVersionedValue(response, version));
+      result.get(bookletId)!.set(responseKey, this.getVersionedValue(response, version));
     }
 
     return result;
   }
 
   private getVersionedValue(
-    response: ResponseEntity,
+    response: ResponseEntity | RawResponseValueRow,
     version: ItemMatrixVersion
   ): ResponseValue {
     switch (version) {
       case 'v1':
-        return { code: response.code_v1, score: response.score_v1 };
+        return 'code_v1' in response ?
+          { code: response.code_v1, score: response.score_v1 } :
+          {
+            code: this.toNullableNumber(response.codeV1),
+            score: this.toNullableNumber(response.scoreV1)
+          };
       case 'v2':
-        return { code: response.code_v2, score: response.score_v2 };
+        return 'code_v2' in response ?
+          { code: response.code_v2, score: response.score_v2 } :
+          {
+            code: this.toNullableNumber(response.codeV2),
+            score: this.toNullableNumber(response.scoreV2)
+          };
       case 'v3':
-        return { code: response.code_v3, score: response.score_v3 };
+        return 'code_v3' in response ?
+          { code: response.code_v3, score: response.score_v3 } :
+          {
+            code: this.toNullableNumber(response.codeV3),
+            score: this.toNullableNumber(response.scoreV3)
+          };
       default:
         throw new Error(`Unsupported item-matrix version: ${version}`);
     }
+  }
+
+  private isExportCancellationError(error: Error): boolean {
+    return /^Export job .* was cancelled$/.test(error.message);
   }
 
   private async resolveExportCellValue(

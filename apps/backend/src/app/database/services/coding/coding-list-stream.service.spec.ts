@@ -1,10 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import * as ExcelJS from 'exceljs';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import AdmZip = require('adm-zip');
 import { CodingListStreamService } from './coding-list-stream.service';
 import { CodingResponseFilterService } from './coding-response-filter.service';
-import { CodingItemBuilderService } from './coding-item-builder.service';
+import { CodingItemBuilderService, CodingItemVersionRow } from './coding-item-builder.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -69,15 +72,38 @@ describe('CodingListStreamService', () => {
     }
   }) as unknown as ResponseEntity;
 
+  const createMockVersionRow = (id: number): CodingItemVersionRow => ({
+    id,
+    unitKey: 'unit1',
+    unitAlias: 'Unit 1',
+    personLogin: 'user1',
+    personCode: 'code1',
+    personGroup: 'group1',
+    bookletName: 'booklet1',
+    variableId: `var${id}`,
+    value: 'test',
+    statusV1: null,
+    codeV1: null,
+    scoreV1: null,
+    statusV2: null,
+    codeV2: null,
+    scoreV2: null,
+    statusV3: null,
+    codeV3: null,
+    scoreV3: null
+  });
+
   beforeEach(async () => {
     mockResponseFilterService = {
       getResponsesBatch: jest.fn(),
+      getVersionedResponsesBatchRaw: jest.fn(),
       countResponses: jest.fn().mockResolvedValue(0)
     } as unknown as jest.Mocked<CodingResponseFilterService>;
 
     mockItemBuilderService = {
       buildCodingItem: jest.fn(),
       buildCodingItemWithVersions: jest.fn(),
+      buildCodingItemWithVersionRow: jest.fn(),
       getHeadersForVersion: jest.fn().mockReturnValue([
         'unit_key',
         'unit_alias',
@@ -162,7 +188,7 @@ describe('CodingListStreamService', () => {
     });
 
     it('should create versioned CSV stream', async () => {
-      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
+      mockResponseFilterService.getVersionedResponsesBatchRaw.mockResolvedValueOnce([]);
 
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
@@ -175,8 +201,39 @@ describe('CodingListStreamService', () => {
       expect(mockFileCacheService.clearCaches).toHaveBeenCalled();
     });
 
+    it('should emit cancellation before reading versioned CSV batches', async () => {
+      const cancellationError = new Error('cancelled');
+      const checkCancellation = jest.fn(async () => {
+        await new Promise(resolve => {
+          setImmediate(resolve);
+        });
+        throw cancellationError;
+      });
+
+      const stream = await service.getCodingResultsByVersionCsvStream(
+        1,
+        'v1',
+        'token',
+        'http://server',
+        false,
+        undefined,
+        true,
+        false,
+        checkCancellation
+      );
+
+      await expect(new Promise((resolve, reject) => {
+        stream.on('end', resolve);
+        stream.on('error', reject);
+      })).rejects.toThrow('cancelled');
+
+      expect(mockResponseFilterService.countResponses).not.toHaveBeenCalled();
+      expect(mockResponseFilterService.getResponsesBatch).not.toHaveBeenCalled();
+      expect(mockResponseFilterService.getVersionedResponsesBatchRaw).not.toHaveBeenCalled();
+    });
+
     it('should write headers for empty versioned CSV exports', async () => {
-      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
+      mockResponseFilterService.getVersionedResponsesBatchRaw.mockResolvedValueOnce([]);
 
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
@@ -210,11 +267,11 @@ describe('CodingListStreamService', () => {
     });
 
     it('should include replay URL column in versioned CSV exports when requested', async () => {
-      const response = createMockResponse(1);
-      mockResponseFilterService.getResponsesBatch
-        .mockResolvedValueOnce([response])
+      const versionRow = createMockVersionRow(1);
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce([versionRow])
         .mockResolvedValueOnce([]);
-      mockItemBuilderService.buildCodingItemWithVersions.mockResolvedValue({
+      mockItemBuilderService.buildCodingItemWithVersionRow.mockResolvedValue({
         unit_key: 'unit1',
         unit_alias: 'Unit 1',
         person_login: 'user1',
@@ -251,8 +308,8 @@ describe('CodingListStreamService', () => {
       expect(row).toContain(
         'http://server/#/replay/user1@code1@group1@booklet1/unit1/1/var1?auth=token'
       );
-      expect(mockItemBuilderService.buildCodingItemWithVersions).toHaveBeenCalledWith(
-        response,
+      expect(mockItemBuilderService.buildCodingItemWithVersionRow).toHaveBeenCalledWith(
+        versionRow,
         'v1',
         'token',
         'http://server',
@@ -265,11 +322,11 @@ describe('CodingListStreamService', () => {
     });
 
     it('should pass response value option to versioned CSV item builder', async () => {
-      const response = createMockResponse(1);
-      mockResponseFilterService.getResponsesBatch
-        .mockResolvedValueOnce([response])
+      const row = createMockVersionRow(1);
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce([row])
         .mockResolvedValueOnce([]);
-      mockItemBuilderService.buildCodingItemWithVersions.mockResolvedValue({
+      mockItemBuilderService.buildCodingItemWithVersionRow.mockResolvedValue({
         unit_key: 'unit1',
         unit_alias: 'Unit 1',
         person_login: 'user1',
@@ -303,15 +360,18 @@ describe('CodingListStreamService', () => {
         validCodingVariablesOnly: true,
         givenResponsesOnly: true
       };
-      expect(mockResponseFilterService.countResponses).toHaveBeenCalledWith(1, versionExportOptions);
-      expect(mockResponseFilterService.getResponsesBatch).toHaveBeenCalledWith(
+      expect(mockResponseFilterService.countResponses).toHaveBeenCalledWith(
         1,
-        0,
-        500,
         versionExportOptions
       );
-      expect(mockItemBuilderService.buildCodingItemWithVersions).toHaveBeenCalledWith(
-        response,
+      expect(mockResponseFilterService.getVersionedResponsesBatchRaw).toHaveBeenCalledWith(
+        1,
+        0,
+        250,
+        versionExportOptions
+      );
+      expect(mockItemBuilderService.buildCodingItemWithVersionRow).toHaveBeenCalledWith(
+        row,
         'v1',
         'token',
         'http://server',
@@ -321,6 +381,69 @@ describe('CodingListStreamService', () => {
         false,
         expect.any(Map)
       );
+    });
+
+    it('reports versioned CSV progress based on counted rows', async () => {
+      const rows = [
+        createMockVersionRow(1),
+        createMockVersionRow(2),
+        createMockVersionRow(3),
+        createMockVersionRow(4)
+      ];
+      const progressCallback = jest.fn().mockResolvedValue(undefined);
+      mockResponseFilterService.countResponses.mockResolvedValueOnce(rows.length);
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce(rows.slice(0, 2))
+        .mockResolvedValueOnce(rows.slice(2))
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.buildCodingItemWithVersionRow.mockImplementation(async row => ({
+        unit_key: row.unitKey,
+        unit_alias: row.unitAlias,
+        person_login: row.personLogin,
+        person_code: row.personCode,
+        person_group: row.personGroup,
+        booklet_name: row.bookletName,
+        variable_id: row.variableId,
+        value: row.value,
+        status_v1: 'VALUE_CHANGED',
+        code_v1: '',
+        score_v1: ''
+      } as never));
+
+      const stream = await service.getCodingResultsByVersionCsvStream(
+        1,
+        'v1',
+        'token',
+        'http://server',
+        false,
+        progressCallback
+      );
+      stream.on('data', () => {});
+      await new Promise(resolve => {
+        stream.on('end', resolve);
+      });
+
+      expect(progressCallback).toHaveBeenNthCalledWith(1, 0, { phase: 'counting' });
+      expect(progressCallback).toHaveBeenNthCalledWith(2, 1, {
+        phase: 'writing',
+        processedRows: 0,
+        totalRows: 4
+      });
+      expect(progressCallback).toHaveBeenNthCalledWith(3, 50, {
+        phase: 'writing',
+        processedRows: 2,
+        totalRows: 4
+      });
+      expect(progressCallback).toHaveBeenNthCalledWith(4, 99, {
+        phase: 'writing',
+        processedRows: 4,
+        totalRows: 4
+      });
+      expect(progressCallback).toHaveBeenLastCalledWith(100, {
+        phase: 'finalizing',
+        processedRows: 4,
+        totalRows: 4
+      });
     });
   });
 
@@ -416,8 +539,65 @@ describe('CodingListStreamService', () => {
       expect(mockFileCacheService.clearCaches).toHaveBeenCalled();
     });
 
-    it('should handle versioned Excel export', async () => {
+    it('uses the configured batch size for coding-list Excel exports', async () => {
+      mockConfigService.get.mockImplementation((key: string) => (
+        key === 'EXPORT_CODING_LIST_BATCH_SIZE' ? '37' : undefined
+      ));
       mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
+
+      await service.getCodingListAsExcel(1, 'token', 'http://server');
+
+      expect(mockResponseFilterService.getResponsesBatch).toHaveBeenCalledWith(
+        1,
+        0,
+        37,
+        {
+          manualCodingCandidatesOnly: true
+        }
+      );
+    });
+
+    it('checks cancellation during large coding-list Excel batches', async () => {
+      const responses = Array(51)
+        .fill(null)
+        .map((_, index) => createMockResponse(index + 1));
+      const cancellationError = new Error('cancelled');
+      let cancellationChecks = 0;
+      const checkCancellation = jest.fn(async () => {
+        cancellationChecks += 1;
+        if (cancellationChecks >= 10) {
+          throw cancellationError;
+        }
+      });
+      mockResponseFilterService.countResponses.mockResolvedValueOnce(responses.length);
+      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce(responses);
+      mockItemBuilderService.buildCodingItem.mockResolvedValue({
+        unit_key: 'unit1',
+        unit_alias: 'Unit 1',
+        person_login: 'user1',
+        person_code: 'code1',
+        person_group: 'group1',
+        booklet_name: 'booklet1',
+        variable_id: 'var1',
+        variable_page: '1',
+        variable_anchor: 'var1',
+        url: 'http://test'
+      });
+
+      await expect(service.getCodingListAsExcel(
+        1,
+        'token',
+        'http://server',
+        undefined,
+        undefined,
+        checkCancellation
+      )).rejects.toThrow('cancelled');
+
+      expect(mockItemBuilderService.buildCodingItem).toHaveBeenCalledTimes(50);
+    });
+
+    it('should handle versioned Excel export', async () => {
+      mockResponseFilterService.getVersionedResponsesBatchRaw.mockResolvedValueOnce([]);
       mockItemBuilderService.getHeadersForVersion.mockReturnValue([
         'unit_key',
         'status_v1'
@@ -433,8 +613,174 @@ describe('CodingListStreamService', () => {
       expect(result).toBeInstanceOf(Buffer);
     });
 
+    it('should write versioned Excel exports directly to a file', async () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-export-'));
+      const filePath = path.join(tempDir, 'results.xlsx');
+      const row = createMockVersionRow(1);
+      mockResponseFilterService.countResponses.mockResolvedValueOnce(1);
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce([row])
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'status_v1'
+      ]);
+      mockItemBuilderService.buildCodingItemWithVersionRow.mockResolvedValue({
+        unit_key: 'unit1',
+        unit_alias: 'Unit 1',
+        person_login: 'user1',
+        person_code: 'code1',
+        person_group: 'group1',
+        booklet_name: 'booklet1',
+        variable_id: 'var1',
+        variable_page: '1',
+        variable_anchor: 'var1',
+        value: 'answer',
+        status_v1: 'VALUE_CHANGED'
+      });
+
+      try {
+        await service.writeCodingResultsByVersionExcelToFile(
+          filePath,
+          1,
+          'v1',
+          'token',
+          'http://server'
+        );
+
+        expect(fs.statSync(filePath).size).toBeGreaterThan(0);
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(filePath);
+        const worksheet = workbook.getWorksheet('Coding Results');
+        expect(worksheet?.getRow(2).getCell(1).value).toBe('unit1');
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it('reports direct-to-file versioned Excel row progress', async () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-export-'));
+      const filePath = path.join(tempDir, 'results.xlsx');
+      const rows = [
+        createMockVersionRow(1),
+        createMockVersionRow(2)
+      ];
+      const progressCallback = jest.fn().mockResolvedValue(undefined);
+      mockResponseFilterService.countResponses.mockResolvedValueOnce(rows.length);
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce(rows)
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'status_v1'
+      ]);
+      mockItemBuilderService.buildCodingItemWithVersionRow.mockImplementation(async row => ({
+        unit_key: row.unitKey,
+        unit_alias: row.unitAlias,
+        person_login: row.personLogin,
+        person_code: row.personCode,
+        person_group: row.personGroup,
+        booklet_name: row.bookletName,
+        variable_id: row.variableId,
+        status_v1: 'VALUE_CHANGED'
+      } as never));
+
+      try {
+        await service.writeCodingResultsByVersionExcelToFile(
+          filePath,
+          1,
+          'v1',
+          'token',
+          'http://server',
+          false,
+          progressCallback
+        );
+
+        expect(progressCallback).toHaveBeenCalledWith(1, {
+          phase: 'writing',
+          processedRows: 0,
+          totalRows: 2
+        });
+        expect(progressCallback).toHaveBeenCalledWith(99, {
+          phase: 'writing',
+          processedRows: 2,
+          totalRows: 2
+        });
+        expect(progressCallback).toHaveBeenLastCalledWith(100, {
+          phase: 'finalizing',
+          processedRows: 2,
+          totalRows: 2
+        });
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it('does not leave an unhandled stream rejection when cancelling direct-to-file versioned Excel exports', async () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-export-'));
+      const filePath = path.join(tempDir, 'results.xlsx');
+      const rows = Array(51)
+        .fill(null)
+        .map((_, index) => createMockVersionRow(index + 1));
+      const cancellationError = new Error('cancelled');
+      const unhandledRejections: unknown[] = [];
+      const unhandledRejectionHandler = (reason: unknown) => {
+        unhandledRejections.push(reason);
+      };
+      let cancellationChecks = 0;
+      const checkCancellation = jest.fn(async () => {
+        cancellationChecks += 1;
+        if (cancellationChecks >= 10) {
+          throw cancellationError;
+        }
+      });
+
+      mockResponseFilterService.countResponses.mockResolvedValueOnce(rows.length);
+      mockResponseFilterService.getVersionedResponsesBatchRaw.mockResolvedValueOnce(rows);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'status_v1'
+      ]);
+      mockItemBuilderService.buildCodingItemWithVersionRow.mockResolvedValue({
+        unit_key: 'unit1',
+        unit_alias: 'Unit 1',
+        person_login: 'user1',
+        person_code: 'code1',
+        person_group: 'group1',
+        booklet_name: 'booklet1',
+        variable_id: 'var1',
+        variable_page: '1',
+        variable_anchor: 'var1',
+        status_v1: 'VALUE_CHANGED'
+      });
+
+      process.on('unhandledRejection', unhandledRejectionHandler);
+      try {
+        await expect(service.writeCodingResultsByVersionExcelToFile(
+          filePath,
+          1,
+          'v1',
+          'token',
+          'http://server',
+          false,
+          undefined,
+          true,
+          false,
+          checkCancellation
+        )).rejects.toThrow('cancelled');
+
+        await new Promise(resolve => {
+          setImmediate(resolve);
+        });
+        expect(unhandledRejections).toEqual([]);
+      } finally {
+        process.off('unhandledRejection', unhandledRejectionHandler);
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it('should pass response value option to versioned Excel headers', async () => {
-      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
+      mockResponseFilterService.getVersionedResponsesBatchRaw.mockResolvedValueOnce([]);
       mockItemBuilderService.getHeadersForVersion.mockReturnValue([
         'unit_key',
         'status_v1'
@@ -451,19 +797,51 @@ describe('CodingListStreamService', () => {
       );
 
       expect(mockItemBuilderService.getHeadersForVersion).toHaveBeenCalledWith('v1', false);
-      expect(mockResponseFilterService.countResponses).toHaveBeenCalledWith(1, {
-        version: 'v1',
-        validCodingVariablesOnly: true,
-        givenResponsesOnly: true
-      });
+      expect(mockResponseFilterService.countResponses).toHaveBeenCalledWith(
+        1,
+        {
+          version: 'v1',
+          validCodingVariablesOnly: true,
+          givenResponsesOnly: true
+        }
+      );
+    });
+
+    it('uses the configured smaller batch size for versioned Excel exports', async () => {
+      mockConfigService.get.mockImplementation((key: string) => (
+        key === 'EXPORT_VERSIONED_BATCH_SIZE' ? '25' : undefined
+      ));
+      mockResponseFilterService.getVersionedResponsesBatchRaw.mockResolvedValueOnce([]);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'status_v1'
+      ]);
+
+      await service.getCodingResultsByVersionAsExcel(
+        1,
+        'v1',
+        'token',
+        'http://server'
+      );
+
+      expect(mockResponseFilterService.getVersionedResponsesBatchRaw).toHaveBeenCalledWith(
+        1,
+        0,
+        25,
+        {
+          version: 'v1',
+          validCodingVariablesOnly: true,
+          givenResponsesOnly: true
+        }
+      );
     });
 
     it('should export GeoGebra values as linked .ggb files in a ZIP package', async () => {
-      const geoGebraResponse = createMockResponse(1);
-      const plainResponse = createMockResponse(2);
+      const geoGebraRow = createMockVersionRow(1);
+      const plainRow = createMockVersionRow(2);
       mockResponseFilterService.countResponses.mockResolvedValue(2);
-      mockResponseFilterService.getResponsesBatch
-        .mockResolvedValueOnce([geoGebraResponse, plainResponse])
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce([geoGebraRow, plainRow])
         .mockResolvedValueOnce([]);
       mockItemBuilderService.getHeadersForVersion.mockReturnValue([
         'unit_key',
@@ -480,7 +858,7 @@ describe('CodingListStreamService', () => {
         'code_v1',
         'score_v1'
       ]);
-      mockItemBuilderService.buildCodingItemWithVersions
+      mockItemBuilderService.buildCodingItemWithVersionRow
         .mockResolvedValueOnce({
           unit_key: 'Unit/1',
           unit_alias: 'Unit 1',
@@ -534,14 +912,71 @@ describe('CodingListStreamService', () => {
       expect(worksheet.getCell('J3').value).toBe('plain answer');
     });
 
+    it('should write GeoGebra ZIP exports directly to a file', async () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'geogebra-export-'));
+      const filePath = path.join(tempDir, 'geogebra.zip');
+      mockResponseFilterService.countResponses.mockResolvedValue(1);
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce([createMockVersionRow(1)])
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'unit_alias',
+        'person_login',
+        'person_code',
+        'person_group',
+        'booklet_name',
+        'variable_id',
+        'variable_page',
+        'variable_anchor',
+        'value',
+        'status_v1',
+        'code_v1',
+        'score_v1'
+      ]);
+      mockItemBuilderService.buildCodingItemWithVersionRow.mockResolvedValue({
+        unit_key: 'Unit/1',
+        unit_alias: 'Unit 1',
+        person_login: 'login',
+        person_code: 'code',
+        person_group: 'group',
+        booklet_name: 'Booklet',
+        variable_id: 'Geo:Var',
+        variable_page: '1',
+        variable_anchor: 'Geo:Var',
+        value: 'UEsDBA==',
+        status_v1: 'VALUE_CHANGED',
+        code_v1: '',
+        score_v1: ''
+      } as never);
+
+      try {
+        await service.writeCodingResultsByVersionGeoGebraZipToFile(
+          filePath,
+          1,
+          'v1',
+          'token',
+          'http://server'
+        );
+
+        expect(fs.statSync(filePath).size).toBeGreaterThan(0);
+        const zip = new AdmZip(filePath);
+        const entries = zip.getEntries().map(entry => entry.entryName);
+        expect(entries).toContain('coding-results-v1.xlsx');
+        expect(entries).toContain('geogebra/login__code__Booklet__Unit_1__Geo_Var__response-1.ggb');
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it('should abort GeoGebra ZIP export when configured file count limit is exceeded', async () => {
       mockConfigService.get.mockImplementation((key: string) => {
         if (key === 'GEOGEBRA_EXPORT_MAX_FILES') return '1';
         return undefined;
       });
       mockResponseFilterService.countResponses.mockResolvedValue(2);
-      mockResponseFilterService.getResponsesBatch
-        .mockResolvedValueOnce([createMockResponse(1), createMockResponse(2)])
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce([createMockVersionRow(1), createMockVersionRow(2)])
         .mockResolvedValueOnce([]);
       mockItemBuilderService.getHeadersForVersion.mockReturnValue([
         'unit_key',
@@ -551,7 +986,7 @@ describe('CodingListStreamService', () => {
         'variable_id',
         'value'
       ]);
-      mockItemBuilderService.buildCodingItemWithVersions
+      mockItemBuilderService.buildCodingItemWithVersionRow
         .mockResolvedValueOnce({
           unit_key: 'Unit 1',
           person_login: 'login',
@@ -585,8 +1020,8 @@ describe('CodingListStreamService', () => {
         return undefined;
       });
       mockResponseFilterService.countResponses.mockResolvedValue(1);
-      mockResponseFilterService.getResponsesBatch
-        .mockResolvedValueOnce([createMockResponse(1)])
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce([createMockVersionRow(1)])
         .mockResolvedValueOnce([]);
       mockItemBuilderService.getHeadersForVersion.mockReturnValue([
         'unit_key',
@@ -596,7 +1031,7 @@ describe('CodingListStreamService', () => {
         'variable_id',
         'value'
       ]);
-      mockItemBuilderService.buildCodingItemWithVersions.mockResolvedValue({
+      mockItemBuilderService.buildCodingItemWithVersionRow.mockResolvedValue({
         unit_key: 'Unit 1',
         person_login: 'login',
         person_code: 'code',
@@ -805,6 +1240,33 @@ describe('CodingListStreamService', () => {
   });
 
   describe('JSON stream', () => {
+    it('uses the configured batch size for coding-list JSON exports', async () => {
+      mockConfigService.get.mockImplementation((key: string) => (
+        key === 'EXPORT_CODING_LIST_BATCH_SIZE' ? '41' : undefined
+      ));
+      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
+
+      const stream = service.getCodingListJsonStream(
+        1,
+        'token',
+        'http://server'
+      );
+
+      await new Promise<void>(resolve => {
+        stream.on('end', resolve);
+        stream.on('data', () => {});
+      });
+
+      expect(mockResponseFilterService.getResponsesBatch).toHaveBeenCalledWith(
+        1,
+        0,
+        41,
+        {
+          manualCodingCandidatesOnly: true
+        }
+      );
+    });
+
     it('should emit data events', async () => {
       const mockItem = {
         unit_key: 'unit1',

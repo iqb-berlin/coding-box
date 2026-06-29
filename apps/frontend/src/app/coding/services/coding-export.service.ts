@@ -164,6 +164,10 @@ export class CodingExportService {
   ): Observable<{
       status: string;
       progress: number;
+      progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+      processedRows?: number;
+      totalRows?: number;
+      progressMessage?: string;
       result?: {
         fileId: string;
         fileName: string;
@@ -177,6 +181,10 @@ export class CodingExportService {
     return this.http.get<{
       status: string;
       progress: number;
+      progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+      processedRows?: number;
+      totalRows?: number;
+      progressMessage?: string;
       result?: {
         fileId: string;
         fileName: string;
@@ -276,6 +284,16 @@ export class CodingExportService {
       {
         responseType: 'blob'
       }
+    );
+  }
+
+  cancelExportJob(
+    workspaceId: number,
+    jobId: string
+  ): Observable<{ success: boolean; message: string }> {
+    return this.http.post<{ success: boolean; message: string }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/cancel`,
+      {}
     );
   }
 }

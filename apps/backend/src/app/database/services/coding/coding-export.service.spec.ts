@@ -1,6 +1,9 @@
 import { Repository } from 'typeorm';
 import { Readable } from 'stream';
 import * as ExcelJS from 'exceljs';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { CodingExportService } from './coding-export.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -81,15 +84,66 @@ function createServiceWithDetailedMocks(
     }
   };
 
+  const toDetailedRawRow = (unit: Record<string, unknown>) => {
+    const codingJob = unit.coding_job as {
+      training_id?: number | null;
+      missings_profile_id?: number | null;
+      codingJobCoders?: Array<{ user?: { username?: string } }>;
+    } | undefined;
+    const response = unit.response as {
+      status_v1?: number | null;
+      unit?: {
+        name?: string;
+        booklet?: {
+          person?: {
+            login?: string;
+            code?: string;
+            group?: string;
+          };
+          bookletinfo?: {
+            name?: string;
+          };
+        };
+      };
+    } | undefined;
+    return {
+      id: unit.id ?? 1,
+      createdAt: unit.created_at ?? new Date('2026-04-14T09:00:00.000Z'),
+      trainingId: codingJob?.training_id ?? null,
+      missingsProfileId: codingJob?.missings_profile_id ?? null,
+      responseId: unit.response_id ?? null,
+      unitName: unit.unit_name ?? null,
+      responseUnitName: response?.unit?.name ?? null,
+      variableId: unit.variable_id ?? '',
+      code: unit.code ?? null,
+      notes: unit.notes ?? null,
+      codingIssueOption: unit.coding_issue_option ?? null,
+      updatedAt: unit.updated_at ?? null,
+      coderName: codingJob?.codingJobCoders?.[0]?.user?.username ?? null,
+      statusV1: response?.status_v1 ?? null,
+      bookletName: response?.unit?.booklet?.bookletinfo?.name ?? null,
+      personLogin: response?.unit?.booklet?.person?.login ?? null,
+      personCode: response?.unit?.booklet?.person?.code ?? null,
+      personGroup: response?.unit?.booklet?.person?.group ?? null
+    };
+  };
+
   const unitsBatchQueryBuilder = {
+    innerJoin: jest.fn().mockReturnThis(),
     innerJoinAndSelect: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
     leftJoinAndSelect: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
-    getMany: jest.fn().mockResolvedValue([overrides.unit || defaultUnit])
+    getMany: jest.fn().mockResolvedValue([overrides.unit || defaultUnit]),
+    getRawMany: jest.fn().mockResolvedValue([
+      toDetailedRawRow(overrides.unit || defaultUnit)
+    ])
   };
 
   const codingJobUnitRepository: MockedRepo<CodingJobUnit> = {
@@ -441,6 +495,26 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       undefined,
       [123]
     )).rejects.toThrow('Keine Kodierergebnisse für den gewählten Job-/Training-/Kodierer-Filter');
+  });
+
+  it('checks cancellation throughout detailed coding result batches', async () => {
+    const { service, unitsBatchQueryBuilder } = createServiceWithDetailedMocks(1);
+    const checkCancellation = jest.fn().mockResolvedValue(undefined);
+
+    await service.exportCodingResultsDetailed(
+      1,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      false,
+      checkCancellation
+    );
+
+    expect(unitsBatchQueryBuilder.getRawMany).toHaveBeenCalled();
+    expect(checkCancellation.mock.calls.length).toBeGreaterThan(3);
   });
 
   it('ignores invalid job/training/coder filter ids', () => {
@@ -1116,6 +1190,67 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     expect(dataQuery.andWhere).toHaveBeenCalledWith('cj.workspace_id = :workspaceId', { workspaceId: 7 });
   });
 
+  it('rejects oversized by-variable exports with a compact-export recommendation', async () => {
+    const originalLimit = process.env.EXPORT_MAX_WORKSHEETS;
+    process.env.EXPORT_MAX_WORKSHEETS = '2';
+    const combinationsQuery = {
+      innerJoin: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      addGroupBy: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([
+        { unitName: 'UNIT_1', variableId: 'VAR_1' },
+        { unitName: 'UNIT_2', variableId: 'VAR_2' },
+        { unitName: 'UNIT_3', variableId: 'VAR_3' }
+      ])
+    };
+    const responseRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(combinationsQuery)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+
+    const service = new CodingExportService(
+      responseRepository as unknown as Repository<ResponseEntity>,
+      {} as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      {} as Repository<CodingJobUnit>,
+      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn() } as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService
+    );
+
+    try {
+      await service.exportCodingResultsByVariable(7);
+      throw new Error('Expected oversized by-variable export to fail.');
+    } catch (error) {
+      expect((error as Error).message).toContain(
+        'Bitte die Auswahl einschraenken oder den kompakten Nach-Variable-Export verwenden.'
+      );
+      expect((error as Error).message).not.toContain('EXPORT_MAX_WORKSHEETS');
+    } finally {
+      if (originalLimit === undefined) {
+        delete process.env.EXPORT_MAX_WORKSHEETS;
+      } else {
+        process.env.EXPORT_MAX_WORKSHEETS = originalLimit;
+      }
+    }
+  });
+
   it('streams compact by-variable export rows from batched coding-unit queries', async () => {
     const createQueryBuilder = (rawRows: unknown[] = []) => {
       const qb = {
@@ -1474,12 +1609,16 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
 
   it('rejects coding-times export when scoped filters match no coded units', async () => {
     const codingTimesQueryBuilder = {
-      innerJoinAndSelect: jest.fn().mockReturnThis(),
-      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
-      getMany: jest.fn().mockResolvedValue([])
+      addOrderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([])
     };
     const codingJobUnitRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(codingTimesQueryBuilder)
@@ -1513,5 +1652,124 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       [123]
     )).rejects.toThrow('Keine Kodierergebnisse für den gewählten Job-/Training-/Kodierer-Filter');
     expect(codingTimesQueryBuilder.andWhere).toHaveBeenCalledWith('cj.training_id IS NULL');
+  });
+
+  it('writes coding-times reports through the streaming file path', async () => {
+    const codingTimesQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([
+        {
+          id: 1,
+          variableId: 'VAR',
+          updatedAt: new Date('2026-04-14T10:00:00.000Z'),
+          unitName: 'UNIT',
+          bookletName: 'BOOKLET-A',
+          coderAssignmentId: 100,
+          coderName: 'Coder A'
+        }
+      ])
+    };
+    const codingJobUnitRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(codingTimesQueryBuilder)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+    const service = new CodingExportService(
+      {} as Repository<ResponseEntity>,
+      {} as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
+      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn() } as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService
+    );
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-times-export-'));
+    const filePath = path.join(tempDir, 'coding-times.xlsx');
+
+    try {
+      await service.exportCodingTimesReportToFile(filePath, 1);
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(filePath);
+      const worksheet = workbook.getWorksheet('Kodierzeiten-Bericht');
+
+      expect(worksheet?.getRow(1).getCell(1).font?.bold).toBe(true);
+      expect(worksheet?.getRow(2).getCell(1).value).toBe('UNIT');
+      expect(worksheet?.getRow(2).getCell(2).value).toBe('VAR');
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('checks cancellation throughout coding-times raw batch export', async () => {
+    const firstBatch = Array.from({ length: 501 }, (_, index) => ({
+      id: index + 1,
+      variableId: 'VAR',
+      updatedAt: new Date(`2026-04-14T10:${String(index % 60).padStart(2, '0')}:00.000Z`),
+      unitName: `UNIT_${index}`,
+      bookletName: 'BOOKLET-A',
+      coderAssignmentId: 100,
+      coderName: 'Coder A'
+    }));
+    const codingTimesQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue(firstBatch)
+    };
+    const codingJobUnitRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(codingTimesQueryBuilder)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+    const service = new CodingExportService(
+      {} as Repository<ResponseEntity>,
+      {} as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
+      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn() } as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService
+    );
+    const checkCancellation = jest.fn().mockResolvedValue(undefined);
+
+    await service.exportCodingTimesReport(
+      1,
+      false,
+      false,
+      false,
+      checkCancellation
+    );
+
+    expect(codingTimesQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
+    expect(checkCancellation.mock.calls.length).toBeGreaterThan(4);
   });
 });
