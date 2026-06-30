@@ -66,11 +66,19 @@ export class WorkspaceSettingsService {
       `${this.serverUrl}/workspace/${workspaceId}/settings/${key}`,
       suppressGlobalError ? { context: suppressGlobalHttpErrorContext() } : {}
     ).pipe(
-      tap(setting => this.settingsCache.set(cacheKey, {
-        expiresAt: Date.now() + this.settingsCacheTtlMs,
-        value: setting
-      })),
-      finalize(() => this.settingsInFlight.delete(cacheKey)),
+      tap(setting => {
+        if (this.settingsInFlight.get(cacheKey) === request$) {
+          this.settingsCache.set(cacheKey, {
+            expiresAt: Date.now() + this.settingsCacheTtlMs,
+            value: setting
+          });
+        }
+      }),
+      finalize(() => {
+        if (this.settingsInFlight.get(cacheKey) === request$) {
+          this.settingsInFlight.delete(cacheKey);
+        }
+      }),
       shareReplay({ bufferSize: 1, refCount: false })
     );
     this.settingsInFlight.set(cacheKey, request$);

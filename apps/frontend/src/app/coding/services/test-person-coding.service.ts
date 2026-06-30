@@ -565,7 +565,10 @@ export class TestPersonCodingService {
     )
       .pipe(
         tap(readiness => {
-          if (!forceRefresh) {
+          if (
+            !forceRefresh &&
+            this.autocodingReadinessInFlight.get(cacheKey) === request$
+          ) {
             this.autocodingReadinessCache.set(cacheKey, {
               expiresAt: Date.now() + this.autocodingReadinessCacheTtlMs,
               readiness
@@ -573,7 +576,12 @@ export class TestPersonCodingService {
           }
         }),
         finalize(() => {
-          this.autocodingReadinessInFlight.delete(cacheKey);
+          if (
+            !forceRefresh &&
+            this.autocodingReadinessInFlight.get(cacheKey) === request$
+          ) {
+            this.autocodingReadinessInFlight.delete(cacheKey);
+          }
         }),
         shareReplay({ bufferSize: 1, refCount: false }),
         catchError(error => throwError(() => error))
