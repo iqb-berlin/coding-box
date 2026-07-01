@@ -26,6 +26,11 @@ export interface ManualCodingDeduplicationResponse extends AggregationSourceResp
   bookletName?: string | null;
 }
 
+export interface EffectiveManualCodingCaseCounts {
+  uniqueCases: number;
+  casesInJobs: number;
+}
+
 export function normalizeAggregationValue(
   value: string | null,
   flags: readonly AggregationMatchingFlag[]
@@ -89,6 +94,54 @@ export function deduplicateManualCodingResponses<T extends ManualCodingDeduplica
   }
 
   return Array.from(dedupedByPersonValue.values());
+}
+
+export function countEffectiveManualCodingCases<T extends ManualCodingDeduplicationResponse>(
+  responses: T[],
+  assignedResponseIds: ReadonlySet<number>,
+  matchingFlags: readonly AggregationMatchingFlag[],
+  threshold: number | null,
+  derivedVariableMap: Map<string, Set<string>>
+): EffectiveManualCodingCaseCounts {
+  const assignedDeduplicationKeys = new Set(
+    responses
+      .filter(response => assignedResponseIds.has(response.responseId))
+      .map(response => getManualCodingDeduplicationKey(response))
+  );
+  const dedupedResponses = deduplicateManualCodingResponses(responses);
+  const assignedDedupedResponseIds = new Set(
+    dedupedResponses
+      .filter(response => (
+        assignedResponseIds.has(response.responseId) ||
+        assignedDeduplicationKeys.has(getManualCodingDeduplicationKey(response))
+      ))
+      .map(response => response.responseId)
+  );
+  const aggregatedGroups = buildAggregationGroups(
+    dedupedResponses,
+    matchingFlags,
+    threshold,
+    derivedVariableMap
+  );
+  let uniqueCases = 0;
+  let casesInJobs = 0;
+
+  for (const group of aggregatedGroups) {
+    if (threshold !== null && group.responses.length >= threshold) {
+      uniqueCases += 1;
+      if (group.responses.some(response => assignedDedupedResponseIds.has(response.responseId))) {
+        casesInJobs += 1;
+      }
+      continue;
+    }
+
+    uniqueCases += group.responses.length;
+    casesInJobs += group.responses
+      .filter(response => assignedDedupedResponseIds.has(response.responseId))
+      .length;
+  }
+
+  return { uniqueCases, casesInJobs };
 }
 
 export function buildAggregationGroups<T extends AggregationSourceResponse>(
