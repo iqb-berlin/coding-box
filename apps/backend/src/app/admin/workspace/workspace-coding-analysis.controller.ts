@@ -21,7 +21,11 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-import { CodingValidationService, CodingAnalysisService, MissingsProfilesService } from '../../database/services/coding';
+import {
+  CodingValidationService,
+  CodingAnalysisService,
+  MissingsProfilesService
+} from '../../database/services/coding';
 import { VariableAnalysisReplayService } from '../../database/services/test-results';
 import { ExportValidationResultsService } from '../../database/services/validation';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
@@ -44,7 +48,7 @@ export class WorkspaceCodingAnalysisController {
     private missingsProfilesService: MissingsProfilesService,
     @InjectRepository(Setting)
     private readonly settingRepository: Repository<Setting>
-  ) { }
+  ) {}
 
   @Get(':workspace_id/coding/variable-analysis')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
@@ -96,7 +100,8 @@ export class WorkspaceCodingAnalysisController {
   @ApiQuery({
     name: 'regexSearch',
     required: false,
-    description: 'Interpret variable ID filter as a case-sensitive regular expression',
+    description:
+      'Interpret variable ID filter as a case-sensitive regular expression',
     type: Boolean
   })
   async getVariableAnalysis(
@@ -117,8 +122,12 @@ export class WorkspaceCodingAnalysisController {
       }> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
-    const effectiveRegexSearch = regexSearch === 'true' &&
-      await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
+    const effectiveRegexSearch =
+      regexSearch === 'true' &&
+      (await getWorkspaceRegexSearchEnabled(
+        this.settingRepository,
+        workspace_id
+      ));
 
     return this.variableAnalysisReplayService.getVariableAnalysis(
       workspace_id,
@@ -224,13 +233,15 @@ export class WorkspaceCodingAnalysisController {
   @ApiQuery({
     name: 'includeDeriveErrorOnly',
     required: false,
-    description: 'Also include variables that only have DERIVE_ERROR responses and expose DERIVE_ERROR-aware case counts',
+    description:
+      'Also include variables that only have DERIVE_ERROR responses and expose DERIVE_ERROR-aware case counts',
     type: Boolean
   })
   @ApiQuery({
     name: 'excludeJobDefinitionId',
     required: false,
-    description: 'Ignore coding jobs from this job definition when calculating remaining cases',
+    description:
+      'Ignore coding jobs from this job definition when calculating remaining cases',
     type: Number
   })
   @ApiOkResponse({
@@ -261,19 +272,23 @@ export class WorkspaceCodingAnalysisController {
           },
           uniqueCasesAfterAggregation: {
             type: 'number',
-            description: 'Number of unique coding cases after applying aggregation grouping (1 per duplicate group)'
+            description:
+              'Number of unique coding cases after applying aggregation grouping (1 per duplicate group)'
           },
           availableCasesWithDeriveError: {
             type: 'number',
-            description: 'Number of available cases when DERIVE_ERROR is included'
+            description:
+              'Number of available cases when DERIVE_ERROR is included'
           },
           uniqueCasesAfterAggregationWithDeriveError: {
             type: 'number',
-            description: 'Number of unique coding cases after aggregation when DERIVE_ERROR is included'
+            description:
+              'Number of unique coding cases after aggregation when DERIVE_ERROR is included'
           },
           isDerived: {
             type: 'boolean',
-            description: 'Whether this is a derived variable (computed from other variables)'
+            description:
+              'Whether this is a derived variable (computed from other variables)'
           }
         }
       }
@@ -368,7 +383,9 @@ export class WorkspaceCodingAnalysisController {
     @WorkspaceId() workspace_id: number,
       @Query('unitName') unitName?: string,
       @Query('trainingRequired') trainingRequired?: string
-  ): Promise<Awaited<ReturnType<CodingValidationService['getManualCodingScopeSummary']>>> {
+  ): Promise<
+      Awaited<ReturnType<CodingValidationService['getManualCodingScopeSummary']>>
+      > {
     let trainingRequiredParam: boolean | undefined;
     if (trainingRequired === 'true') {
       trainingRequiredParam = true;
@@ -453,8 +470,7 @@ export class WorkspaceCodingAnalysisController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
-    description:
-      'List of manual coding variables to check for applied results',
+    description: 'List of manual coding variables to check for applied results',
     schema: {
       type: 'object',
       properties: {
@@ -601,7 +617,8 @@ export class WorkspaceCodingAnalysisController {
             },
             duplicateResponses: {
               type: 'number',
-              description: 'Number of responses in aggregatable duplicate groups'
+              description:
+                'Number of responses in aggregatable duplicate groups'
             },
             collapsedCases: {
               type: 'number',
@@ -635,9 +652,21 @@ export class WorkspaceCodingAnalysisController {
           type: 'string',
           description: 'ISO timestamp of when the analysis was performed'
         },
+        sourceRevision: {
+          type: 'number',
+          nullable: true,
+          description:
+            'Test result revision the cached analysis was calculated from'
+        },
+        currentSourceRevision: {
+          type: 'number',
+          nullable: true,
+          description: 'Current test result revision for the workspace'
+        },
         isCalculating: {
           type: 'boolean',
-          description: 'Whether the analysis is currently being calculated in the background'
+          description:
+            'Whether the analysis is currently being calculated in the background'
         }
       }
     }
@@ -652,9 +681,14 @@ export class WorkspaceCodingAnalysisController {
   ) {
     const validThreshold = this.normalizeIntegerParam(threshold, 2, 2, 100);
     const vEmptyPage = this.normalizeIntegerParam(emptyPage, 1, 1);
-    const vEmptyLimit = this.normalizeIntegerParam(emptyLimit, 50, 1);
+    const vEmptyLimit = this.normalizeIntegerParam(emptyLimit, 50, 1, 500);
     const vDuplicatePage = this.normalizeIntegerParam(duplicatePage, 1, 1);
-    const vDuplicateLimit = this.normalizeIntegerParam(duplicateLimit, 50, 1);
+    const vDuplicateLimit = this.normalizeIntegerParam(
+      duplicateLimit,
+      50,
+      1,
+      500
+    );
 
     return this.codingAnalysisService.getResponseAnalysis(
       workspace_id,
@@ -674,9 +708,7 @@ export class WorkspaceCodingAnalysisController {
   @ApiOkResponse({
     description: 'Current response aggregation settings.'
   })
-  async getAggregationSettings(
-  @WorkspaceId() workspace_id: number
-  ) {
+  async getAggregationSettings(@WorkspaceId() workspace_id: number) {
     return this.codingAnalysisService.getAggregationSettings(workspace_id);
   }
 
@@ -692,7 +724,8 @@ export class WorkspaceCodingAnalysisController {
       properties: {
         threshold: {
           type: 'number',
-          description: 'Minimum number of duplicate occurrences to trigger aggregation',
+          description:
+            'Minimum number of duplicate occurrences to trigger aggregation',
           example: 2,
           minimum: 2,
           maximum: 100
@@ -735,7 +768,8 @@ export class WorkspaceCodingAnalysisController {
       properties: {
         threshold: {
           type: 'number',
-          description: 'Minimum number of duplicate occurrences to trigger aggregation',
+          description:
+            'Minimum number of duplicate occurrences to trigger aggregation',
           example: 2,
           minimum: 2
         },
@@ -764,7 +798,8 @@ export class WorkspaceCodingAnalysisController {
         },
         uniqueCodingCases: {
           type: 'number',
-          description: 'New total count of unique coding cases after aggregation'
+          description:
+            'New total count of unique coding cases after aggregation'
         },
         message: { type: 'string' }
       }
@@ -799,9 +834,10 @@ export class WorkspaceCodingAnalysisController {
     @WorkspaceId() workspace_id: number,
                    @Body() body: { threshold?: number } = {}
   ): Promise<void> {
-    const threshold = body.threshold === undefined ?
-      undefined :
-      this.normalizeIntegerParam(body.threshold, 2, 2, 100);
+    const threshold =
+      body.threshold === undefined ?
+        undefined :
+        this.normalizeIntegerParam(body.threshold, 2, 2, 100);
 
     await this.codingAnalysisService.startAnalysis(
       workspace_id,

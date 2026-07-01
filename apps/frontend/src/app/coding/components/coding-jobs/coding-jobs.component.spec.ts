@@ -10,7 +10,7 @@ import { ActivatedRoute } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { CodingJobsComponent } from './coding-jobs.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -240,6 +240,25 @@ describe('CodingJobsComponent', () => {
     expect(component.dataSource.data.length).toBe(2);
     expect(component.allCoders.length).toBe(2);
     expect(component.jobsTotal).toBe(2);
+  });
+
+  it('should load coder trainings only once during initial job load', () => {
+    expect(codingTrainingBackendServiceMock.getCoderTrainings).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not start duplicate coder training loads while one is in flight', () => {
+    const trainings$ = new Subject<never[]>();
+    (codingTrainingBackendServiceMock.getCoderTrainings as jest.Mock)
+      .mockClear()
+      .mockReturnValue(trainings$.asObservable());
+
+    component.loadCoderTrainings();
+    component.loadCoderTrainings();
+
+    expect(codingTrainingBackendServiceMock.getCoderTrainings).toHaveBeenCalledTimes(1);
+
+    trainings$.next([]);
+    trainings$.complete();
   });
 
   it('should not emit jobsChanged for a plain reload', fakeAsync(() => {

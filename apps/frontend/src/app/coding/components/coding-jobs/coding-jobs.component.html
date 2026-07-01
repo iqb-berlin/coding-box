@@ -100,10 +100,12 @@
         </div>
 
         <div class="actions-group utility-actions">
-          <button mat-button (click)="loadCodingJobs()">
-            <mat-icon>refresh</mat-icon>
-            Aktualisieren
-          </button>
+          @if (showRefreshAction) {
+            <button mat-button (click)="loadCodingJobs()">
+              <mat-icon>refresh</mat-icon>
+              Aktualisieren
+            </button>
+          }
           @if (canManageCodingJobs && showBulkDeleteAction) {
             <button
               mat-raised-button
@@ -368,7 +370,9 @@
       </ng-container>
 
       <ng-container matColumnDef="assignedCoders">
-        <mat-header-cell *matHeaderCellDef>Zugewiesene Kodierer</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef
+          >Zugewiesene Kodierer</mat-header-cell
+        >
         <mat-cell
           *matCellDef="let element"
           class="assigned-coders-cell"

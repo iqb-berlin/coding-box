@@ -4,7 +4,10 @@ import {
   Observable,
   Subject,
   catchError,
+  finalize,
   of,
+  shareReplay,
+  tap,
   throwError
 } from 'rxjs';
 import Keycloak from 'keycloak-js';
@@ -27,7 +30,10 @@ import {
   CodingFreshnessVersion,
   StartCodingFreshnessJobDto
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
-import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
+import {
+  AutocodingReadinessDetailLevel,
+  AutocodingReadinessDto
+} from '../../../../../../api-dto/coding/autocoding-readiness.dto';
 import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings.service';
 
 interface ExternalCodingImportWithPreviewDto {
@@ -39,6 +45,11 @@ interface ExternalCodingImportWithPreviewDto {
   scoreMode?: 'import' | 'derive';
   existingCodingMode?: 'skip-conflicts' | 'fill-empty' | 'overwrite';
 }
+
+type AutocodingReadinessCacheEntry = {
+  expiresAt: number;
+  readiness: AutocodingReadinessDto;
+};
 
 export interface CodingStatistics {
   totalResponses: number;
@@ -240,7 +251,21 @@ export class TestPersonCodingService {
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
   private pendingStatisticsVersions = new Map<number, CodingStatisticsVersion>();
+
+  private readonly autocodingReadinessCacheTtlMs = 60_000;
+
+  private readonly autocodingReadinessCache = new Map<
+  string,
+  AutocodingReadinessCacheEntry
+  >();
+
+  private readonly autocodingReadinessInFlight = new Map<
+  string,
+  Observable<AutocodingReadinessDto>
+  >();
+
   autoCodingCompleted$ = this.autoCodingCompletedSubject.asObservable();
+
   testResultsChanged$ = this.testResultsChangedSubject.asObservable();
 
   get authHeader() {
@@ -261,10 +286,12 @@ export class TestPersonCodingService {
   }
 
   notifyAutoCodingCompleted(jobId?: string): void {
+    this.invalidateAutocodingReadinessCache();
     this.autoCodingCompletedSubject.next({ jobId });
   }
 
   notifyTestResultsChanged(event: TestResultsChangedEvent = {}): void {
+    this.invalidateAutocodingReadinessCache(event.workspaceId);
     if (event.workspaceId && event.statisticsVersion) {
       this.pendingStatisticsVersions.set(event.workspaceId, event.statisticsVersion);
     }
@@ -494,14 +521,43 @@ export class TestPersonCodingService {
   getAutocodingReadiness(
     workspaceId: number,
     autoCoderRun: 1 | 2 = 1,
-    forceRefresh = false
+    forceRefresh = false,
+    detailLevel: AutocodingReadinessDetailLevel = 'full'
   ): Observable<AutocodingReadinessDto> {
-    let params = new HttpParams().set('autoCoderRun', autoCoderRun.toString());
+    const cacheKey = this.getAutocodingReadinessCacheKey(
+      workspaceId,
+      autoCoderRun,
+      detailLevel
+    );
+    if (forceRefresh) {
+      this.autocodingReadinessCache.delete(cacheKey);
+      this.autocodingReadinessInFlight.delete(cacheKey);
+    } else {
+      const cached = this.autocodingReadinessCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        return of({
+          ...cached.readiness,
+          fromCache: true
+        });
+      }
+      if (cached) {
+        this.autocodingReadinessCache.delete(cacheKey);
+      }
+
+      const inFlight = this.autocodingReadinessInFlight.get(cacheKey);
+      if (inFlight) {
+        return inFlight;
+      }
+    }
+
+    let params = new HttpParams()
+      .set('autoCoderRun', autoCoderRun.toString())
+      .set('detailLevel', detailLevel);
     if (forceRefresh) {
       params = params.set('forceRefresh', 'true');
     }
 
-    return this.http
+    const request$ = this.http
       .get<AutocodingReadinessDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/readiness`,
       {
@@ -511,8 +567,58 @@ export class TestPersonCodingService {
       }
     )
       .pipe(
+        tap(readiness => {
+          if (
+            !forceRefresh &&
+            this.autocodingReadinessInFlight.get(cacheKey) === request$
+          ) {
+            this.autocodingReadinessCache.set(cacheKey, {
+              expiresAt: Date.now() + this.autocodingReadinessCacheTtlMs,
+              readiness
+            });
+          }
+        }),
+        finalize(() => {
+          if (
+            !forceRefresh &&
+            this.autocodingReadinessInFlight.get(cacheKey) === request$
+          ) {
+            this.autocodingReadinessInFlight.delete(cacheKey);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: false }),
         catchError(error => throwError(() => error))
       );
+
+    if (!forceRefresh) {
+      this.autocodingReadinessInFlight.set(cacheKey, request$);
+    }
+
+    return request$;
+  }
+
+  private getAutocodingReadinessCacheKey(
+    workspaceId: number,
+    autoCoderRun: 1 | 2,
+    detailLevel: AutocodingReadinessDetailLevel
+  ): string {
+    return `${workspaceId}:${autoCoderRun}:${detailLevel}`;
+  }
+
+  private invalidateAutocodingReadinessCache(workspaceId?: number): void {
+    if (!workspaceId) {
+      this.autocodingReadinessCache.clear();
+      this.autocodingReadinessInFlight.clear();
+      return;
+    }
+
+    const prefix = `${workspaceId}:`;
+    Array.from(this.autocodingReadinessCache.keys())
+      .filter(cacheKey => cacheKey.startsWith(prefix))
+      .forEach(cacheKey => this.autocodingReadinessCache.delete(cacheKey));
+    Array.from(this.autocodingReadinessInFlight.keys())
+      .filter(cacheKey => cacheKey.startsWith(prefix))
+      .forEach(cacheKey => this.autocodingReadinessInFlight.delete(cacheKey));
   }
 
   getCodingFreshnessScope(

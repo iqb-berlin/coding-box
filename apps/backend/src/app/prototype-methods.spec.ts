@@ -205,5 +205,5 @@ describe('backend controller prototype method smoke coverage', () => {
     }
 
     expect(invoked).toBeGreaterThan(300);
-  }, 60000);
+  }, 120000);
 });

@@ -14,6 +14,7 @@ import {
 import { Response } from 'express';
 import * as csv from 'fast-csv';
 import * as fs from 'fs';
+import { createHash } from 'node:crypto';
 import { Writable } from 'stream';
 import { ResponseValueType } from '@iqbspecs/response/response.interface';
 import Persons from '../../entities/persons.entity';
@@ -294,6 +295,26 @@ interface LogDeleteCounts {
 @Injectable()
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
+  private readonly workspaceOverviewStatsInFlight = new Map<
+  string,
+  Promise<WorkspaceOverviewStats>
+  >();
+
+  private readonly workspaceOverviewCacheGenerationByWorkspace = new Map<
+  number,
+  number
+  >();
+
+  private readonly workspaceOverviewPrewarmTimers = new Map<
+  number,
+  ReturnType<typeof setTimeout>
+  >();
+
+  private readonly geoGebraExistenceInFlight = new Map<string, Promise<boolean>>();
+
+  private readonly slowWorkspaceOverviewThresholdMs = 1000;
+  private readonly slowGeoGebraExistenceThresholdMs = 1000;
+  private readonly workspaceOverviewPrewarmDelayMs = 500;
   private static readonly codingResponseStatuses = [
     statusStringToNumber('NOT_REACHED') || 1,
     statusStringToNumber('DISPLAYED') || 2,
@@ -1628,12 +1649,17 @@ export class WorkspaceTestResultsService {
   }
 
   async invalidateWorkspaceStatsCache(workspaceId: number): Promise<void> {
+    this.bumpWorkspaceOverviewCacheGeneration(workspaceId);
+    this.dropWorkspaceOverviewInFlight(workspaceId);
     await Promise.all([
       this.cacheService.delete(`${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}`),
+      this.cacheService.deleteByPattern(`${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}:*`),
+      this.cacheService.deleteByPattern(`geogebra-existence:${workspaceId}:*`),
       this.cacheService.deleteByPattern(`${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-*`),
       this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
       this.cacheService.deleteByPattern(`flat_response_filter_options:${workspaceId}:*`)
     ]);
+    this.scheduleWorkspaceOverviewPrewarm(workspaceId);
   }
 
   async invalidateCodingStatisticsCache(workspaceId: number): Promise<void> {
@@ -1657,12 +1683,49 @@ export class WorkspaceTestResultsService {
       throw new Error('Invalid workspaceId provided');
     }
 
-    const cacheKey = `${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}`;
+    const revision = await this.resolveTestResultsRevision(workspaceId);
+    const cacheKey = this.getWorkspaceOverviewStatsCacheKey(
+      workspaceId,
+      revision
+    );
     const cachedOverview = await this.cacheService.get<WorkspaceOverviewStats>(cacheKey);
     if (cachedOverview) {
       return cachedOverview;
     }
 
+    const inFlightOverview = this.workspaceOverviewStatsInFlight.get(cacheKey);
+    if (inFlightOverview) {
+      this.logger.log(
+        `Reusing in-flight workspace overview query for workspace ${workspaceId} (revision ${revision})`
+      );
+      return inFlightOverview;
+    }
+
+    const cacheGeneration =
+      this.getWorkspaceOverviewCacheGeneration(workspaceId);
+    const overviewPromise = this.computeAndCacheWorkspaceTestResultsOverview(
+      workspaceId,
+      revision,
+      cacheKey,
+      cacheGeneration
+    );
+    this.workspaceOverviewStatsInFlight.set(cacheKey, overviewPromise);
+    try {
+      return await overviewPromise;
+    } finally {
+      if (this.workspaceOverviewStatsInFlight.get(cacheKey) === overviewPromise) {
+        this.workspaceOverviewStatsInFlight.delete(cacheKey);
+      }
+    }
+  }
+
+  private async computeAndCacheWorkspaceTestResultsOverview(
+    workspaceId: number,
+    revision: number,
+    cacheKey: string,
+    cacheGeneration: number
+  ): Promise<WorkspaceOverviewStats> {
+    const startedAt = Date.now();
     const testPersonsPromise = this.personsRepository.count({
       where: { workspace_id: workspaceId, consider: true }
     });
@@ -1704,19 +1767,6 @@ export class WorkspaceTestResultsService {
       .getRawOne()
       .then(res => Number(res?.count || 0));
 
-    const uniqueResponsesQuery = this.responseRepository
-      .createQueryBuilder('response')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true });
-
-    this.applyExclusionsToQuery(uniqueResponsesQuery, exclusions);
-    this.excludeAutocoderGeneratedResponses(uniqueResponsesQuery);
-    const uniqueResponsesPromise = uniqueResponsesQuery.getCount();
-
     const statusRowsQuery = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
@@ -1738,7 +1788,6 @@ export class WorkspaceTestResultsService {
       testGroups,
       uniqueBooklets,
       uniqueUnits,
-      uniqueResponses,
       statusRows,
       browserRows,
       osRows,
@@ -1748,7 +1797,6 @@ export class WorkspaceTestResultsService {
       testGroupsPromise,
       uniqueBookletsPromise,
       uniqueUnitsPromise,
-      uniqueResponsesPromise,
       statusRowsPromise,
       this.sessionRepository
         .createQueryBuilder('session')
@@ -1795,10 +1843,13 @@ export class WorkspaceTestResultsService {
     ]);
 
     const responseStatusCounts: Record<string, number> = {};
+    let uniqueResponses = 0;
     (statusRows || []).forEach(r => {
       const num = Number(r.status);
       const label = statusNumberToString(num) || String(num);
-      responseStatusCounts[label] = Number(r.count) || 0;
+      const count = Number(r.count) || 0;
+      responseStatusCounts[label] = count;
+      uniqueResponses += count;
     });
 
     const mapSessionCounts = (
@@ -1828,7 +1879,18 @@ export class WorkspaceTestResultsService {
       sessionScreenCounts
     };
 
-    await this.cacheService.set(cacheKey, result, 60); // Cache for 1 minute
+    const currentRevision = await this.resolveTestResultsRevision(workspaceId);
+    if (
+      currentRevision === revision &&
+      this.getWorkspaceOverviewCacheGeneration(workspaceId) === cacheGeneration
+    ) {
+      await this.cacheService.set(cacheKey, result, 0);
+    } else {
+      this.logger.log(
+        `Skipped caching stale workspace overview for workspace ${workspaceId} (planned revision ${revision}, current revision ${currentRevision})`
+      );
+    }
+    this.logWorkspaceOverviewTiming(workspaceId, revision, startedAt);
     return result;
   }
 
@@ -2431,6 +2493,131 @@ export class WorkspaceTestResultsService {
     );
   }
 
+  private async findTagsByUnitId(unitIds: number[]): Promise<Map<number, string[]>> {
+    const uniqueUnitIds = Array.from(
+      new Set(unitIds.filter(unitId => Number.isFinite(unitId) && unitId > 0))
+    );
+    if (uniqueUnitIds.length === 0) {
+      return new Map();
+    }
+
+    const tags = await this.unitTagService.findAllByUnitIds(uniqueUnitIds);
+    const tagsByUnitId = new Map<number, string[]>();
+
+    tags.forEach(tag => {
+      if (!tagsByUnitId.has(tag.unitId)) {
+        tagsByUnitId.set(tag.unitId, []);
+      }
+      tagsByUnitId.get(tag.unitId)!.push(tag.tag);
+    });
+
+    return tagsByUnitId;
+  }
+
+  private async createFlatResponseCountCacheKey(
+    workspaceId: number,
+    signature: Record<string, unknown>
+  ): Promise<string> {
+    const revision = await this.resolveTestResultsRevision(workspaceId);
+    const hash = createHash('sha256')
+      .update(JSON.stringify(signature))
+      .digest('hex')
+      .slice(0, 32);
+
+    return `flat_responses_count:${workspaceId}:v${revision}:${hash}`;
+  }
+
+  private getWorkspaceOverviewStatsCacheKey(
+    workspaceId: number,
+    revision: number
+  ): string {
+    return `${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}:v${revision}`;
+  }
+
+  private getGeoGebraExistenceCacheKey(
+    workspaceId: number,
+    revision: number
+  ): string {
+    return `geogebra-existence:${workspaceId}:v${revision}`;
+  }
+
+  private getWorkspaceOverviewCacheGeneration(workspaceId: number): number {
+    return this.workspaceOverviewCacheGenerationByWorkspace.get(workspaceId) ?? 0;
+  }
+
+  private bumpWorkspaceOverviewCacheGeneration(workspaceId: number): void {
+    this.workspaceOverviewCacheGenerationByWorkspace.set(
+      workspaceId,
+      this.getWorkspaceOverviewCacheGeneration(workspaceId) + 1
+    );
+  }
+
+  private dropWorkspaceOverviewInFlight(workspaceId: number): void {
+    const baseKey = `${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}`;
+    Array.from(this.workspaceOverviewStatsInFlight.keys())
+      .filter(key => key === baseKey || key.startsWith(`${baseKey}:`))
+      .forEach(key => this.workspaceOverviewStatsInFlight.delete(key));
+  }
+
+  private scheduleWorkspaceOverviewPrewarm(workspaceId: number): void {
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+    const existingTimer = this.workspaceOverviewPrewarmTimers.get(workspaceId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    const timer = setTimeout(() => {
+      this.workspaceOverviewPrewarmTimers.delete(workspaceId);
+      this.getWorkspaceTestResultsOverview(workspaceId)
+        .then(() => {
+          this.logger.debug(
+            `Prewarmed workspace overview cache for workspace ${workspaceId}`
+          );
+        })
+        .catch(error => {
+          const message = error instanceof Error ? error.message : String(error);
+          this.logger.warn(
+            `Workspace overview cache prewarm failed for workspace ${workspaceId}: ${message}`
+          );
+        });
+    }, this.workspaceOverviewPrewarmDelayMs);
+    timer.unref?.();
+    this.workspaceOverviewPrewarmTimers.set(workspaceId, timer);
+  }
+
+  private logWorkspaceOverviewTiming(
+    workspaceId: number,
+    revision: number,
+    startedAt: number
+  ): void {
+    const durationMs = Date.now() - startedAt;
+    const message =
+      `Workspace test results overview for workspace ${workspaceId} ` +
+      `(revision ${revision}) computed in ${durationMs}ms.`;
+    if (durationMs >= this.slowWorkspaceOverviewThresholdMs) {
+      this.logger.warn(message);
+      return;
+    }
+    this.logger.debug(message);
+  }
+
+  private async resolveTestResultsRevision(workspaceId: number): Promise<number> {
+    try {
+      const rows = (await this.connection.query(
+        'SELECT revision FROM workspace_test_results_revision WHERE workspace_id = $1',
+        [workspaceId]
+      )) as Array<{ revision: number | string }>;
+      return Number(rows[0]?.revision || 0);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Could not resolve test result revision for flat response count cache: ${message}`
+      );
+      return 0;
+    }
+  }
+
   async findFlatResponses(
     workspaceId: number,
     options: {
@@ -2665,7 +2852,6 @@ export class WorkspaceTestResultsService {
       .innerJoin('unit.booklet', 'bookletEntity')
       .innerJoin('bookletEntity.person', 'person')
       .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
-      .leftJoin('unit.tags', 'unitTag')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
 
@@ -2712,7 +2898,14 @@ export class WorkspaceTestResultsService {
       });
     }
     if (tags) {
-      qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM unit_tag unit_tag_filter
+          WHERE unit_tag_filter."unitId" = unit.id
+            AND unit_tag_filter.tag ILIKE :tags
+        )`,
+        { tags: `%${tags}%` }
+      );
     }
 
     if (geogebraOnly) {
@@ -2963,8 +3156,14 @@ export class WorkspaceTestResultsService {
       });
     }
     if (tags) {
-      countQb.leftJoin('unit.tags', 'unitTag');
-      countQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
+      countQb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM unit_tag unit_tag_filter
+          WHERE unit_tag_filter."unitId" = unit.id
+            AND unit_tag_filter.tag ILIKE :tags
+        )`,
+        { tags: `%${tags}%` }
+      );
     }
 
     if (geogebraOnly) {
@@ -3128,10 +3327,49 @@ export class WorkspaceTestResultsService {
 
     // Note: Session filters above are applied as separate EXISTS per dimension.
 
-    const total = await countQb
-      .select('COUNT(DISTINCT response.id)', 'cnt')
-      .getRawOne()
-      .then(r => Number(r?.cnt || 0));
+    const countCacheKey = await this.createFlatResponseCountCacheKey(
+      workspaceId,
+      {
+        code,
+        group,
+        login,
+        booklet,
+        unit,
+        response,
+        responseStatus,
+        responseValue,
+        tags,
+        geogebraOnly,
+        audioLowOnly,
+        hasValueOnly,
+        audioLowThreshold,
+        shortProcessingOnly,
+        shortProcessingThresholdMs,
+        longLoadingOnly,
+        longLoadingThresholdMs,
+        processingDurations,
+        processingDurationThresholdMs,
+        processingDurationMinMs,
+        processingDurationMaxMs,
+        unitProgress,
+        sessionBrowsers,
+        sessionOs,
+        sessionScreens,
+        sessionIds,
+        logAnomalyCodes,
+        logAnomalyThresholds,
+        exclusions
+      }
+    );
+    const cachedTotal = await this.cacheService.get<number>(countCacheKey);
+    let total = cachedTotal;
+    if (total === null) {
+      total = await countQb
+        .select('COUNT(response.id)', 'cnt')
+        .getRawOne()
+        .then(r => Number(r?.cnt || 0));
+      await this.cacheService.set(countCacheKey, total, 3600);
+    }
 
     const raw = await qb
       .select([
@@ -3146,22 +3384,9 @@ export class WorkspaceTestResultsService {
         'COALESCE(unit.alias, unit.name) AS "unit"',
         'response.variableid AS "response"',
         'response.status AS "responseStatus"',
-        'SUBSTRING(response.value, 1, :maxResponseValueLen) AS "responseValue"',
-        "COALESCE(string_agg(DISTINCT unitTag.tag, ','), '') AS \"tags\""
+        'SUBSTRING(response.value, 1, :maxResponseValueLen) AS "responseValue"'
       ])
       .setParameter('maxResponseValueLen', MAX_RESPONSE_VALUE_LEN)
-      .groupBy('response.id')
-      .addGroupBy('unit.id')
-      .addGroupBy('bookletEntity.id')
-      .addGroupBy('person.id')
-      .addGroupBy('bookletinfo.name')
-      .addGroupBy('unit.alias')
-      .addGroupBy('unit.name')
-      .addGroupBy('person.code')
-      .addGroupBy('person.group')
-      .addGroupBy('person.login')
-      .addGroupBy('response.variableid')
-      .addGroupBy('response.status')
       .orderBy('person.code', 'ASC')
       .addOrderBy('bookletinfo.name', 'ASC')
       .addOrderBy('unit.alias', 'ASC')
@@ -3170,21 +3395,18 @@ export class WorkspaceTestResultsService {
       .limit(validLimit)
       .getRawMany();
 
-    const mapped = (raw || []).map(r => {
-      const tagsStr = String(r.tags || '');
-      const tagList = tagsStr ?
-        tagsStr
-          .split(',')
-          .map(t => t.trim())
-          .filter(Boolean) :
-        [];
+    const tagsByUnitId = await this.findTagsByUnitId(
+      raw.map(r => Number(r.unitId))
+    );
 
+    const mapped = (raw || []).map(r => {
       const statusNum = Number(r.responseStatus);
       const statusLabel = statusNumberToString(statusNum);
+      const unitId = Number(r.unitId);
       return {
         bookletId: Number(r.bookletId),
         responseId: Number(r.responseId),
-        unitId: Number(r.unitId),
+        unitId,
         personId: Number(r.personId),
         code: String(r.code || ''),
         group: String(r.group || ''),
@@ -3194,7 +3416,7 @@ export class WorkspaceTestResultsService {
         response: String(r.response || ''),
         responseStatus: statusLabel || String(r.responseStatus ?? ''),
         responseValue: String(r.responseValue ?? ''),
-        tags: tagList,
+        tags: tagsByUnitId.get(unitId) || [],
         logAnomalies: []
       };
     });
@@ -7967,12 +8189,54 @@ export class WorkspaceTestResultsService {
   }
 
   async hasGeogebraResponses(workspaceId: number): Promise<boolean> {
+    const revision = await this.resolveTestResultsRevision(workspaceId);
+    const cacheKey = this.getGeoGebraExistenceCacheKey(workspaceId, revision);
+    const cached = await this.cacheService.get<boolean>(cacheKey);
+    if (cached !== null && cached !== undefined) {
+      return cached;
+    }
+
+    const inFlight = this.geoGebraExistenceInFlight.get(cacheKey);
+    if (inFlight) {
+      this.logger.log(
+        `Reusing in-flight GeoGebra existence query for workspace ${workspaceId} (revision ${revision})`
+      );
+      return inFlight;
+    }
+
+    const promise = this.computeAndCacheGeoGebraExistence(
+      workspaceId,
+      revision,
+      cacheKey
+    );
+    this.geoGebraExistenceInFlight.set(cacheKey, promise);
+    try {
+      return await promise;
+    } finally {
+      if (this.geoGebraExistenceInFlight.get(cacheKey) === promise) {
+        this.geoGebraExistenceInFlight.delete(cacheKey);
+      }
+    }
+  }
+
+  private async computeAndCacheGeoGebraExistence(
+    workspaceId: number,
+    revision: number,
+    cacheKey: string
+  ): Promise<boolean> {
+    const startedAt = Date.now();
+    const exclusionsStartedAt = Date.now();
+
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const exclusionsDurationMs = Date.now() - exclusionsStartedAt;
+    const queryStartedAt = Date.now();
+    const needsBookletInfoForExclusions =
+      exclusions.ignoredBooklets.length > 0 ||
+      exclusions.testletIgnoredUnits.length > 0;
     const query = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
@@ -7980,10 +8244,51 @@ export class WorkspaceTestResultsService {
         WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
         WorkspaceTestResultsService.geoGebraValueParams
       );
-    this.applyExclusionsToQuery(query, exclusions);
-    const count = await query
-      .getCount();
+    if (needsBookletInfoForExclusions) {
+      query.innerJoin('booklet.bookletinfo', 'bookletinfo');
+    }
+    this.applyExclusionsToQuery(query, exclusions, {
+      bookletInfoAlias: needsBookletInfoForExclusions ? 'bookletinfo' : null
+    });
+    const row = await query
+      .select('1', 'exists')
+      .limit(1)
+      .getRawOne();
+    const queryDurationMs = Date.now() - queryStartedAt;
+    const result = Boolean(row);
+    const currentRevision = await this.resolveTestResultsRevision(workspaceId);
+    if (currentRevision === revision) {
+      await this.cacheService.set(cacheKey, result, 0);
+    }
+    this.logGeoGebraExistenceTiming(
+      workspaceId,
+      revision,
+      result,
+      startedAt,
+      exclusionsDurationMs,
+      queryDurationMs
+    );
 
-    return count > 0;
+    return result;
+  }
+
+  private logGeoGebraExistenceTiming(
+    workspaceId: number,
+    revision: number,
+    result: boolean,
+    startedAt: number,
+    exclusionsDurationMs: number,
+    queryDurationMs: number
+  ): void {
+    const durationMs = Date.now() - startedAt;
+    const message =
+      `GeoGebra existence for workspace ${workspaceId} ` +
+      `(revision ${revision}, result ${result}) computed in ${durationMs}ms ` +
+      `(exclusions ${exclusionsDurationMs}ms, query ${queryDurationMs}ms).`;
+    if (durationMs >= this.slowGeoGebraExistenceThresholdMs) {
+      this.logger.warn(message);
+      return;
+    }
+    this.logger.debug(message);
   }
 }

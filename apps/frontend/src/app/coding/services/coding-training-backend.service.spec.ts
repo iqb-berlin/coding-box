@@ -39,6 +39,79 @@ describe('CodingTrainingBackendService', () => {
     expect(service).toBeTruthy();
   });
 
+  describe('getCoderTrainings', () => {
+    const coderTrainings = [{
+      id: 10,
+      workspace_id: 1,
+      label: 'Training A',
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+      updated_at: new Date('2026-01-01T00:00:00.000Z'),
+      jobsCount: 2
+    }];
+
+    it('should share an in-flight coder training request', () => {
+      const received: unknown[] = [];
+
+      service.getCoderTrainings(1).subscribe(trainings => received.push(trainings));
+      service.getCoderTrainings(1).subscribe(trainings => received.push(trainings));
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`);
+      expect(req.request.method).toBe('GET');
+      req.flush(coderTrainings);
+
+      expect(received).toEqual([coderTrainings, coderTrainings]);
+      httpMock.expectNone(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`);
+    });
+
+    it('should reuse cached coder trainings after the first request', () => {
+      const received: unknown[] = [];
+
+      service.getCoderTrainings(1).subscribe(trainings => received.push(trainings));
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`);
+      req.flush(coderTrainings);
+
+      service.getCoderTrainings(1).subscribe(trainings => received.push(trainings));
+
+      expect(received).toEqual([coderTrainings, coderTrainings]);
+      httpMock.expectNone(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`);
+    });
+
+    it('should invalidate cached coder trainings after a training mutation', () => {
+      service.getCoderTrainings(1).subscribe();
+      httpMock
+        .expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`)
+        .flush(coderTrainings);
+
+      service.updateCoderTrainingLabel(1, 10, 'Training B').subscribe();
+      const updateReq = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/10/label`);
+      expect(updateReq.request.method).toBe('PUT');
+      updateReq.flush({});
+
+      service.getCoderTrainings(1).subscribe();
+      httpMock
+        .expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`)
+        .flush([{ ...coderTrainings[0], label: 'Training B' }]);
+    });
+
+    it('should not cache a stale in-flight response after invalidation', () => {
+      service.getCoderTrainings(1).subscribe();
+      const staleListReq = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`);
+
+      service.updateCoderTrainingLabel(1, 10, 'Training B').subscribe();
+      httpMock
+        .expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/10/label`)
+        .flush({});
+
+      staleListReq.flush(coderTrainings);
+
+      service.getCoderTrainings(1).subscribe();
+      httpMock
+        .expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`)
+        .flush([{ ...coderTrainings[0], label: 'Training B' }]);
+    });
+  });
+
   describe('createCoderTrainingJobs', () => {
     it('should create jobs', () => {
       service.createCoderTrainingJobs(1, [], [], 'Label').subscribe();

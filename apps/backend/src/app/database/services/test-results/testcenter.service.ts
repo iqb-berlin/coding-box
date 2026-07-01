@@ -29,6 +29,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
+import { CodingProgressService } from '../coding/coding-progress.service';
 import { TestResultsMutationSummary } from './person-persistence.service';
 import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
@@ -73,7 +74,9 @@ export class TestcenterService {
     @Optional()
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
-    private readonly codingAnalysisService?: CodingAnalysisService
+    private readonly codingAnalysisService?: CodingAnalysisService,
+    @Optional()
+    private readonly codingProgressService?: CodingProgressService
   ) {}
 
   persons: Person[] = [];
@@ -1169,7 +1172,11 @@ export class TestcenterService {
       await Promise.all([
         this.codingAnalysisService?.invalidateCache(workspaceId),
         this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId),
-        this.workspaceTestResultsService.invalidateCodingAvailabilityCache(workspaceId)
+        this.workspaceTestResultsService.invalidateCodingAvailabilityCache(workspaceId),
+        this.codingProgressService?.invalidateAppliedResultsOverviewCache(
+          workspaceId,
+          { prewarm: true }
+        )
       ]);
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown error';

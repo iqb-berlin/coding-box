@@ -1,17 +1,17 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  ActivatedRoute, convertToParamMap, ParamMap, Router
+  ActivatedRoute,
+  convertToParamMap,
+  ParamMap,
+  Router
 } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import {
-  BehaviorSubject,
-  of,
-  Subject,
-  throwError
+  BehaviorSubject, of, Subject, throwError
 } from 'rxjs';
 import { PageEvent } from '@angular/material/paginator';
 import { CodingManagementComponent } from './coding-management.component';
@@ -31,12 +31,18 @@ import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/te
 describe('CodingManagementComponent', () => {
   let component: CodingManagementComponent;
   let fixture: ComponentFixture<CodingManagementComponent>;
-  let mockCodingManagementService: jest.Mocked<Partial<CodingManagementService>>;
+  let mockCodingManagementService: jest.Mocked<
+  Partial<CodingManagementService>
+  >;
   let mockUiService: jest.Mocked<Partial<CodingManagementUiService>>;
   let mockDialog: jest.Mocked<Partial<MatDialog>>;
   let mockAppService: jest.Mocked<Partial<AppService>>;
-  let mockWorkspaceSettingsService: jest.Mocked<Partial<WorkspaceSettingsService>>;
-  let mockTestPersonCodingService: jest.Mocked<Partial<TestPersonCodingService>>;
+  let mockWorkspaceSettingsService: jest.Mocked<
+  Partial<WorkspaceSettingsService>
+  >;
+  let mockTestPersonCodingService: jest.Mocked<
+  Partial<TestPersonCodingService>
+  >;
   let mockRouter: jest.Mocked<Partial<Router>>;
   let mockSnackBar: jest.Mocked<Partial<MatSnackBar>>;
   let autoCodingCompletedSubject: Subject<{ jobId?: string }>;
@@ -50,7 +56,10 @@ describe('CodingManagementComponent', () => {
 
     // Create mocks
     mockCodingManagementService = {
-      codingStatistics$: of({ totalResponses: 100, statusCounts: { 200: 50, 300: 50 } }),
+      codingStatistics$: of({
+        totalResponses: 100,
+        statusCounts: { 200: 50, 300: 50 }
+      }),
       referenceStatistics$: of(null),
       referenceVersion$: of(null),
       isLoadingStatistics$: of(false),
@@ -58,7 +67,9 @@ describe('CodingManagementComponent', () => {
       downloadProgress$: new BehaviorSubject<number | null>(null),
       codingListDownloadProgress$: new BehaviorSubject<number | null>(null),
       fetchCodingStatistics: jest.fn(),
-      fetchResponsesByStatus: jest.fn().mockReturnValue(of({ data: [], total: 0 })),
+      fetchResponsesByStatus: jest
+        .fn()
+        .mockReturnValue(of({ data: [], total: 0 })),
       searchResponses: jest.fn().mockReturnValue(of({ data: [], total: 0 })),
       resetCodingVersion: jest.fn().mockReturnValue(of({ message: 'Success' })),
       downloadCodingResults: jest.fn().mockReturnValue(Promise.resolve()),
@@ -93,7 +104,8 @@ describe('CodingManagementComponent', () => {
 
     mockWorkspaceSettingsService = {
       getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(false)),
-      getEnableRegexSearch: jest.fn().mockReturnValue(of(false))
+      getEnableRegexSearch: jest.fn().mockReturnValue(of(false)),
+      getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true))
     };
     autoCodingCompletedSubject = new Subject<{ jobId?: string }>();
     testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
@@ -110,63 +122,73 @@ describe('CodingManagementComponent', () => {
       autoCodingCompleted$: autoCodingCompletedSubject.asObservable(),
       testResultsChanged$: testResultsChangedSubject.asObservable(),
       consumePendingStatisticsVersion: jest.fn().mockReturnValue(null),
-      getCodingFreshness: jest.fn().mockReturnValue(of({
-        workspaceId: 1,
-        currentRevision: 0,
-        items: []
-      })),
-      getAutocodingReadiness: jest.fn().mockReturnValue(of({
-        workspaceId: 1,
-        autoCoderRun: 1,
-        readiness: 'READY',
-        blockers: [],
-        rawResponsesTotal: 0,
-        rawResponsesWithRelevantStatus: 0,
-        resultUnitsTotal: 0,
-        resultUnitKeysTotal: 0,
-        matchedUnitFiles: 0,
-        missingUnitFiles: [],
-        matchedCodingSchemes: 0,
-        missingCodingSchemes: [],
-        invalidCodingSchemes: [],
-        validVariablePairs: 0,
-        validResponses: 0,
-        codeableResponses: 0,
-        invalidVariableSamples: []
-      })),
-      getCodingFreshnessScope: jest.fn().mockReturnValue(of({
-        workspaceId: 1,
-        currentRevision: 0,
-        versions: ['v1', 'v2', 'v3'],
-        states: ['PENDING', 'STALE', 'MANUAL_REVIEW_REQUIRED'],
-        unitCount: 0,
-        personCount: 0,
-        groupCount: 0,
-        affectedResponseCount: 0,
-        unitIds: [],
-        personIds: [],
-        groupNames: [],
-        groups: []
-      })),
-      getAppliedResultsOverview: jest.fn().mockReturnValue(of({
-        totalIncompleteResponses: 0,
-        appliedResponses: 0,
-        remainingResponses: 0,
-        completionPercentage: 0,
-        rawTotalIncompleteResponses: 0,
-        rawAppliedResponses: 0,
-        rawCompletionPercentage: 0,
-        aggregationActive: false,
-        aggregationThreshold: null,
-        aggregatedDuplicateCases: 0
-      })),
-      startFreshnessCoding: jest.fn().mockReturnValue(of({
-        totalResponses: 0,
-        statusCounts: {},
-        unitCount: 0,
-        personCount: 0,
-        groupNames: []
-      })),
+      getCodingFreshness: jest.fn().mockReturnValue(
+        of({
+          workspaceId: 1,
+          currentRevision: 0,
+          items: []
+        })
+      ),
+      getAutocodingReadiness: jest.fn().mockReturnValue(
+        of({
+          workspaceId: 1,
+          autoCoderRun: 1,
+          readiness: 'READY',
+          blockers: [],
+          rawResponsesTotal: 0,
+          rawResponsesWithRelevantStatus: 0,
+          resultUnitsTotal: 0,
+          resultUnitKeysTotal: 0,
+          matchedUnitFiles: 0,
+          missingUnitFiles: [],
+          matchedCodingSchemes: 0,
+          missingCodingSchemes: [],
+          invalidCodingSchemes: [],
+          validVariablePairs: 0,
+          validResponses: 0,
+          codeableResponses: 0,
+          invalidVariableSamples: []
+        })
+      ),
+      getCodingFreshnessScope: jest.fn().mockReturnValue(
+        of({
+          workspaceId: 1,
+          currentRevision: 0,
+          versions: ['v1', 'v2', 'v3'],
+          states: ['PENDING', 'STALE', 'MANUAL_REVIEW_REQUIRED'],
+          unitCount: 0,
+          personCount: 0,
+          groupCount: 0,
+          affectedResponseCount: 0,
+          unitIds: [],
+          personIds: [],
+          groupNames: [],
+          groups: []
+        })
+      ),
+      getAppliedResultsOverview: jest.fn().mockReturnValue(
+        of({
+          totalIncompleteResponses: 0,
+          appliedResponses: 0,
+          remainingResponses: 0,
+          completionPercentage: 0,
+          rawTotalIncompleteResponses: 0,
+          rawAppliedResponses: 0,
+          rawCompletionPercentage: 0,
+          aggregationActive: false,
+          aggregationThreshold: null,
+          aggregatedDuplicateCases: 0
+        })
+      ),
+      startFreshnessCoding: jest.fn().mockReturnValue(
+        of({
+          totalResponses: 0,
+          statusCounts: {},
+          unitCount: 0,
+          personCount: 0,
+          groupNames: []
+        })
+      ),
       getJobStatus: jest.fn(),
       notifyAutoCodingCompleted: jest.fn()
     };
@@ -244,22 +266,36 @@ describe('CodingManagementComponent', () => {
           'uncoded-responses-title': 'Unkodierte Antworten'
         },
         readiness: {
+          'title-not-checked': 'Kodierstatus nicht geprüft',
           'title-load-failed': 'Auto-Coding-Prüfung nicht verfügbar',
           'title-blocked': 'Auto-Coding 1 nicht möglich',
+          'title-diagnostics-pending':
+            'Auto-Coding-Basisprüfung abgeschlossen',
           'title-not-started': 'Kodierung noch nicht gestartet',
           'title-manual-coding-open': 'Manuelle Kodierung abschließen',
-          summary: '{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus, aber {{codeableResponses}} kodierbare Antworten.',
+          summary:
+            '{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus, aber {{codeableResponses}} kodierbare Antworten.',
+          'summary-pending-diagnostics':
+            '{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus und {{potentialCodeableResponses}} potenziell kodierbare Antworten.',
+          'pending-diagnostics-help':
+            'Für Unit-Dateien und Kodierschemata liegt noch keine Detailprüfung vor.',
           'details-result-units': '{{count}} Ergebnis-Units',
           'details-unit-files': '{{count}} passende Unit-Dateien',
           'details-coding-schemes': '{{count}} passende Kodierschemata',
-          'details-valid-responses': '{{count}} Antworten mit passender Kodier-Variable',
+          'details-valid-responses':
+            '{{count}} Antworten mit passender Kodier-Variable',
           'additional-items': '+{{count}} weitere',
-          'second-autocoding-waits-summary': 'Auto-Coding 2 ist der nächste Schritt, sobald die manuelle Kodierung abgeschlossen ist. Schließen Sie zuerst die offenen manuellen Kodierfälle ab und übernehmen Sie die Ergebnisse.{{remaining}}',
-          'second-autocoding-waits-remaining': ' Es sind noch {{count}} manuelle Kodierergebnisse offen.',
-          'manual-results-overview-load-failed': 'Der Stand der manuellen Kodierung konnte nicht geprüft werden. Auto-Coding 2 bleibt gesperrt, bis die Prüfung erfolgreich aktualisiert wurde.',
-          'second-autocoding-waits-help': 'Der Start von Auto-Coding 2 bleibt bis dahin gesperrt. {{taskResultHelp}}',
+          'second-autocoding-waits-summary':
+            'Auto-Coding 2 ist der nächste Schritt, sobald die manuelle Kodierung abgeschlossen ist. Schließen Sie zuerst die offenen manuellen Kodierfälle ab und übernehmen Sie die Ergebnisse.{{remaining}}',
+          'second-autocoding-waits-remaining':
+            ' Es sind noch {{count}} manuelle Kodierergebnisse offen.',
+          'manual-results-overview-load-failed':
+            'Der Stand der manuellen Kodierung konnte nicht geprüft werden. Auto-Coding 2 bleibt gesperrt, bis die Prüfung erfolgreich aktualisiert wurde.',
+          'second-autocoding-waits-help':
+            'Der Start von Auto-Coding 2 bleibt bis dahin gesperrt. {{taskResultHelp}}',
           'second-autocoding-waits-chip': '{{version}}: {{count}} wartet',
-          'second-autocoding-waits-snackbar': 'Schließen Sie zuerst die manuelle Kodierung ab und übernehmen Sie die Ergebnisse.',
+          'second-autocoding-waits-snackbar':
+            'Schließen Sie zuerst die manuelle Kodierung ab und übernehmen Sie die Ergebnisse.',
           'starting-freshness-coding': 'Auto-Coding wird gestartet...',
           'open-manual-review': 'Manuelle Kodierung öffnen'
         }
@@ -270,6 +306,11 @@ describe('CodingManagementComponent', () => {
     fixture = TestBed.createComponent(CodingManagementComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    fixture.destroy();
+    jest.useRealTimers();
   });
 
   it('should create', () => {
@@ -286,32 +327,101 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should check auto-fetch setting on init', () => {
-      expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
+      expect(
+        mockWorkspaceSettingsService.getAutoFetchCodingStatistics
+      ).toHaveBeenCalledWith(1);
     });
 
     it('should check regex search setting on init', () => {
-      expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledWith(1);
+      expect(
+        mockWorkspaceSettingsService.getEnableRegexSearch
+      ).toHaveBeenCalledWith(1);
     });
 
-    it('should load autocoding readiness for the first autocoder run', () => {
-      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
-      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
+    it('should check manual coding auto-refresh setting on init', () => {
+      expect(
+        mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs
+      ).toHaveBeenCalledWith(1);
+    });
+
+    it('should defer autocoding readiness on automatic status overview loads', () => {
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).not.toHaveBeenCalled();
+      expect(component.isLoadingAutocodingReadiness).toBe(false);
+    });
+
+    it('should load deferred autocoding readiness after the idle delay', () => {
+      jest.useFakeTimers();
+      (
+        mockTestPersonCodingService.getAutocodingReadiness as jest.Mock
+      ).mockClear();
+
+      component.loadCodingStatusOverview();
+
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(249);
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(1);
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).toHaveBeenCalledWith(1, 1, false, 'summary');
+    });
+
+    it('should cancel a deferred readiness load when readiness is refreshed explicitly', () => {
+      jest.useFakeTimers();
+      (
+        mockTestPersonCodingService.getAutocodingReadiness as jest.Mock
+      ).mockClear();
+
+      component.loadCodingStatusOverview();
+      component.refreshAutocodingReadiness();
+      jest.advanceTimersByTime(250);
+
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).toHaveBeenCalledWith(1, 1, true, 'full');
     });
 
     it('should refresh coding status overview when requested by query param', () => {
-      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (
+        mockCodingManagementService.fetchCodingStatistics as jest.Mock
+      ).mockClear();
       (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
-      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
-      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+      (
+        mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock
+      ).mockClear();
+      (
+        mockTestPersonCodingService.getAutocodingReadiness as jest.Mock
+      ).mockClear();
 
-      queryParamMapSubject.next(convertToParamMap({
-        refreshCodingFreshness: '1'
-      }));
+      queryParamMapSubject.next(
+        convertToParamMap({
+          refreshCodingFreshness: '1'
+        })
+      );
 
-      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalled();
-      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
-      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
-      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, true);
+      expect(
+        mockCodingManagementService.fetchCodingStatistics
+      ).toHaveBeenCalled();
+      expect(
+        mockTestPersonCodingService.getCodingFreshness
+      ).toHaveBeenCalledWith(1);
+      expect(
+        mockTestPersonCodingService.getAppliedResultsOverview
+      ).toHaveBeenCalledWith(1);
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).toHaveBeenCalledWith(1, 1, true, 'full');
     });
   });
 
@@ -327,49 +437,196 @@ describe('CodingManagementComponent', () => {
         resultUnitsTotal: 33,
         resultUnitKeysTotal: 33,
         matchedUnitFiles: 6,
-        missingUnitFiles: ['UNIT_A', 'UNIT_B', 'UNIT_C', 'UNIT_D', 'UNIT_E', 'UNIT_F'],
+        missingUnitFiles: [
+          'UNIT_A',
+          'UNIT_B',
+          'UNIT_C',
+          'UNIT_D',
+          'UNIT_E',
+          'UNIT_F'
+        ],
         matchedCodingSchemes: 2,
         missingCodingSchemes: ['SCHEME_A'],
         invalidCodingSchemes: ['SCHEME_B'],
         validVariablePairs: 0,
         validResponses: 0,
         codeableResponses: 0,
-        invalidVariableSamples: [{
-          unitName: 'UNIT_A',
-          responseCount: 12,
-          sampleVariableIds: ['VAR_A', 'VAR_B', 'VAR_C', 'VAR_D', 'VAR_E'],
-          knownVariableIds: ['KNOWN_A']
-        }]
+        invalidVariableSamples: [
+          {
+            unitName: 'UNIT_A',
+            responseCount: 12,
+            sampleVariableIds: ['VAR_A', 'VAR_B', 'VAR_C', 'VAR_D', 'VAR_E'],
+            knownVariableIds: ['KNOWN_A']
+          }
+        ]
       };
 
       expect(component.hasCodingFreshnessAttention).toBe(true);
-      expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding 1 nicht möglich');
-      expect(component.autocodingReadinessSummaryText).toContain('18787 Rohantworten vorhanden');
-      expect(component.autocodingReadinessDetailsText).toContain('0 Antworten mit passender Kodier-Variable');
-      expect(component.autocodingReadinessMissingUnitPreview).toBe('UNIT_A, UNIT_B, UNIT_C, UNIT_D, UNIT_E +1');
-      expect(component.autocodingReadinessInvalidCodingSchemePreview).toBe('SCHEME_B');
-      expect(component.autocodingReadinessInvalidVariablePreview).toBe('UNIT_A: VAR_A, VAR_B, VAR_C, VAR_D +1');
+      expect(component.codingFreshnessPanelTitle).toBe(
+        'Auto-Coding 1 nicht möglich'
+      );
+      expect(component.autocodingReadinessSummaryText).toContain(
+        '18787 Rohantworten vorhanden'
+      );
+      expect(component.autocodingReadinessDetailsText).toContain(
+        '0 Antworten mit passender Kodier-Variable'
+      );
+      expect(component.autocodingReadinessMissingUnitPreview).toBe(
+        'UNIT_A, UNIT_B, UNIT_C, UNIT_D, UNIT_E +1'
+      );
+      expect(component.autocodingReadinessInvalidCodingSchemePreview).toBe(
+        'SCHEME_B'
+      );
+      expect(component.autocodingReadinessInvalidVariablePreview).toBe(
+        'UNIT_A: VAR_A, VAR_B, VAR_C, VAR_D +1'
+      );
     });
 
     it('should expose readiness load failures as attention', () => {
-      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock)
-        .mockReturnValueOnce(throwError(() => new Error('readiness failed')));
+      (
+        mockTestPersonCodingService.getAutocodingReadiness as jest.Mock
+      ).mockReturnValueOnce(throwError(() => new Error('readiness failed')));
 
       component.loadAutocodingReadiness();
 
       expect(component.hasAutocodingReadinessLoadFailed).toBe(true);
       expect(component.hasCodingFreshnessAttention).toBe(true);
-      expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding-Prüfung nicht verfügbar');
+      expect(component.codingFreshnessPanelTitle).toBe(
+        'Auto-Coding-Prüfung nicht verfügbar'
+      );
+    });
+
+    it('should expose summary readiness as pending diagnostics', () => {
+      component.autocodingReadiness = {
+        workspaceId: 1,
+        autoCoderRun: 1,
+        detailLevel: 'summary',
+        detailsComplete: false,
+        readiness: 'DIAGNOSTICS_PENDING',
+        blockers: [],
+        rawResponsesTotal: 100,
+        rawResponsesWithRelevantStatus: 80,
+        resultUnitsTotal: 12,
+        resultUnitKeysTotal: 10,
+        matchedUnitFiles: 0,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 0,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 6,
+        validResponses: 70,
+        potentialCodeableResponses: 70,
+        codeableResponses: 70,
+        invalidVariableSamples: []
+      };
+
+      expect(component.isAutocodingReadinessDiagnosticsPending).toBe(true);
+      expect(component.hasCodingFreshnessAttention).toBe(true);
+      expect(component.codingFreshnessPanelTitle).toBe(
+        'Auto-Coding-Basisprüfung abgeschlossen'
+      );
+      expect(component.autocodingReadinessSummaryPendingText).toContain(
+        '70 potenziell kodierbare Antworten'
+      );
+    });
+
+    it('should load full diagnostics without bypassing the cache when details are requested', () => {
+      component.loadAutocodingReadinessDetails();
+
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).toHaveBeenLastCalledWith(1, 1, false, 'full');
+    });
+
+    it('should retry autocoding readiness with the lightweight summary check', () => {
+      component.retryAutocodingReadiness();
+
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).toHaveBeenLastCalledWith(1, 1, true, 'summary');
     });
 
     it('should force-refresh autocoding readiness when requested', () => {
       component.refreshAutocodingReadiness();
 
-      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenLastCalledWith(1, 1, true);
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).toHaveBeenLastCalledWith(1, 1, true, 'full');
     });
   });
 
   describe('Coding Freshness', () => {
+    it('should ignore stale coding freshness responses when a newer request supersedes them', () => {
+      const firstFreshness$ = new Subject<{
+        workspaceId: number;
+        currentRevision: number;
+        items: {
+          version: 'v1';
+          state: 'PENDING';
+          unitCount: number;
+          affectedResponseCount: number;
+        }[];
+      }>();
+      const secondFreshness$ = new Subject<{
+        workspaceId: number;
+        currentRevision: number;
+        items: [];
+      }>();
+      (
+        mockTestPersonCodingService.getCodingFreshness as jest.Mock
+      ).mockReturnValueOnce(firstFreshness$.asObservable())
+        .mockReturnValueOnce(secondFreshness$.asObservable());
+      component.codingFreshnessSummary = null;
+
+      component.loadCodingFreshness();
+      component.loadCodingFreshness();
+
+      firstFreshness$.next({
+        workspaceId: 1,
+        currentRevision: 1,
+        items: [
+          {
+            version: 'v1',
+            state: 'PENDING',
+            unitCount: 99,
+            affectedResponseCount: 99
+          }
+        ]
+      });
+      firstFreshness$.complete();
+
+      expect(component.codingFreshnessSummary).toBeNull();
+      expect(component.isLoadingCodingFreshness).toBe(true);
+
+      secondFreshness$.next({
+        workspaceId: 1,
+        currentRevision: 2,
+        items: []
+      });
+      secondFreshness$.complete();
+
+      expect(component.codingFreshnessSummary).toEqual({
+        workspaceId: 1,
+        currentRevision: 2,
+        items: []
+      });
+      expect(component.isLoadingCodingFreshness).toBe(false);
+    });
+
+    it('should show a neutral coding status title while the status overview is loading', () => {
+      component.hasRequestedCodingStatusOverview = true;
+      component.codingFreshnessSummary = {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: []
+      };
+      component.isLoadingCodingFreshness = true;
+
+      expect(component.codingFreshnessPanelTitle).toBe(
+        'Kodierstatus nicht geprüft'
+      );
+    });
+
     it('should keep second auto-coding waiting while manual coding results are still open', () => {
       component.codingFreshnessSummary = {
         workspaceId: 1,
@@ -397,20 +654,32 @@ describe('CodingManagementComponent', () => {
       };
 
       expect(component.hasCodingFreshnessWarnings).toBe(true);
-      expect(component.codingFreshnessPanelTitle).toBe('Manuelle Kodierung abschließen');
-      expect(component.codingFreshnessSummaryText).toContain('Auto-Coding 2 ist der nächste Schritt');
-      expect(component.codingFreshnessSummaryText).toContain('461 manuelle Kodierergebnisse offen');
+      expect(component.codingFreshnessPanelTitle).toBe(
+        'Manuelle Kodierung abschließen'
+      );
+      expect(component.codingFreshnessSummaryText).toContain(
+        'Auto-Coding 2 ist der nächste Schritt'
+      );
+      expect(component.codingFreshnessSummaryText).toContain(
+        '461 manuelle Kodierergebnisse offen'
+      );
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
       expect(component.hasManualCodingFreshnessAction).toBe(true);
       expect(component.codingFreshnessChipWarnings).toHaveLength(1);
-      expect(component.getFreshnessChipLabel(component.codingFreshnessChipWarnings[0])).toBe(
-        'Auto-Coding 2: 671 Aufgabenbearbeitungen wartet'
-      );
+      expect(
+        component.getFreshnessChipLabel(
+          component.codingFreshnessChipWarnings[0]
+        )
+      ).toBe('Auto-Coding 2: 671 Aufgabenbearbeitungen wartet');
 
       fixture.detectChanges();
-      const actionPanel = fixture.nativeElement.querySelector('.coding-freshness-actions') as HTMLElement | null;
-      const manualActionButton = Array.from(actionPanel?.querySelectorAll('button') || [])
-        .find(button => button.textContent?.includes('Manuelle Kodierung öffnen')) as HTMLButtonElement | undefined;
+      const actionPanel = fixture.nativeElement.querySelector(
+        '.coding-freshness-actions'
+      ) as HTMLElement | null;
+      const manualActionButton = Array.from(
+        actionPanel?.querySelectorAll('button') || []
+      ).find(button => button.textContent?.includes('Manuelle Kodierung öffnen')
+      ) as HTMLButtonElement | undefined;
       expect(manualActionButton).toBeTruthy();
 
       manualActionButton?.click();
@@ -456,7 +725,7 @@ describe('CodingManagementComponent', () => {
       expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding starten');
       expect(component.codingFreshnessSummaryText).toBe(
         '10 Aufgabenbearbeitungen benötigen Auto-Coding 1. ' +
-        'Dabei werden 50 Antwortwerte berücksichtigt.'
+          'Dabei werden 50 Antwortwerte berücksichtigt.'
       );
       expect(component.hasFreshnessAutoCodingWork('v1')).toBe(true);
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
@@ -495,7 +764,7 @@ describe('CodingManagementComponent', () => {
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(true);
       expect(component.codingFreshnessSummaryText).toBe(
         '671 Aufgabenbearbeitungen benötigen Auto-Coding 2. ' +
-        'Dabei werden 5098 Antwortwerte berücksichtigt.'
+          'Dabei werden 5098 Antwortwerte berücksichtigt.'
       );
     });
 
@@ -512,14 +781,18 @@ describe('CodingManagementComponent', () => {
           }
         ]
       };
-      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockReturnValueOnce(of(null));
+      (
+        mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock
+      ).mockReturnValueOnce(of(null));
 
       component.loadManualAppliedResultsOverview();
 
       expect(component.manualAppliedResultsOverview).toBeNull();
       expect(component.manualAppliedResultsOverviewLoadFailed).toBe(true);
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
-      expect(component.codingFreshnessSummaryText).toContain('konnte nicht geprüft werden');
+      expect(component.codingFreshnessSummaryText).toContain(
+        'konnte nicht geprüft werden'
+      );
     });
 
     it('should not start second auto-coding while manual coding results are still open', () => {
@@ -547,11 +820,15 @@ describe('CodingManagementComponent', () => {
         aggregationThreshold: null,
         aggregatedDuplicateCases: 0
       };
-      (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockClear();
+      (
+        mockTestPersonCodingService.startFreshnessCoding as jest.Mock
+      ).mockClear();
 
       component.startFreshnessCoding('v3');
 
-      expect(mockTestPersonCodingService.startFreshnessCoding).not.toHaveBeenCalled();
+      expect(
+        mockTestPersonCodingService.startFreshnessCoding
+      ).not.toHaveBeenCalled();
       expect(mockSnackBar.open).toHaveBeenCalledWith(
         'Schließen Sie zuerst die manuelle Kodierung ab und übernehmen Sie die Ergebnisse.',
         'Schließen',
@@ -561,7 +838,9 @@ describe('CodingManagementComponent', () => {
 
     it('should show a start indicator while the freshness coding request is pending', () => {
       const startRequest$ = new Subject<never>();
-      (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(startRequest$);
+      (
+        mockTestPersonCodingService.startFreshnessCoding as jest.Mock
+      ).mockReturnValueOnce(startRequest$);
       component.codingFreshnessSummary = {
         workspaceId: 1,
         currentRevision: 2,
@@ -578,24 +857,32 @@ describe('CodingManagementComponent', () => {
       component.startFreshnessCoding('v1');
       fixture.detectChanges();
 
-      const status = fixture.nativeElement.querySelector('.coding-freshness-job') as HTMLElement | null;
+      const status = fixture.nativeElement.querySelector(
+        '.coding-freshness-job'
+      ) as HTMLElement | null;
       expect(status?.textContent).toContain('Auto-Coding wird gestartet...');
       expect(status?.querySelector('mat-spinner')).toBeTruthy();
-      expect(fixture.nativeElement.querySelector('.coding-freshness-actions')).toBeNull();
+      expect(
+        fixture.nativeElement.querySelector('.coding-freshness-actions')
+      ).toBeNull();
     });
 
     it('should open the test person coding dialog with the started freshness job', () => {
       jest.useFakeTimers();
       try {
-        (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
-          totalResponses: 42,
-          statusCounts: {},
-          jobId: 'freshness-job-1',
-          message: 'Processing in background',
-          unitCount: 7,
-          personCount: 3,
-          groupNames: ['TG1']
-        }));
+        (
+          mockTestPersonCodingService.startFreshnessCoding as jest.Mock
+        ).mockReturnValueOnce(
+          of({
+            totalResponses: 42,
+            statusCounts: {},
+            jobId: 'freshness-job-1',
+            message: 'Processing in background',
+            unitCount: 7,
+            personCount: 3,
+            groupNames: ['TG1']
+          })
+        );
 
         component.startFreshnessCoding('v1');
 
@@ -627,15 +914,19 @@ describe('CodingManagementComponent', () => {
 
       try {
         (mockDialog.open as jest.Mock).mockReturnValueOnce(dialogRef);
-        (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
-          totalResponses: 42,
-          statusCounts: {},
-          jobId: 'freshness-job-1',
-          message: 'Processing in background',
-          unitCount: 7,
-          personCount: 3,
-          groupNames: ['TG1']
-        }));
+        (
+          mockTestPersonCodingService.startFreshnessCoding as jest.Mock
+        ).mockReturnValueOnce(
+          of({
+            totalResponses: 42,
+            statusCounts: {},
+            jobId: 'freshness-job-1',
+            message: 'Processing in background',
+            unitCount: 7,
+            personCount: 3,
+            groupNames: ['TG1']
+          })
+        );
 
         component.startFreshnessCoding('v1');
 
@@ -653,7 +944,11 @@ describe('CodingManagementComponent', () => {
 
     it('should not resume parent freshness polling when the dialog reports a terminal status for the started job', () => {
       jest.useFakeTimers();
-      const afterClosed$ = new Subject<{ initialJobId: string; jobId: string; jobStatus: 'failed' }>();
+      const afterClosed$ = new Subject<{
+        initialJobId: string;
+        jobId: string;
+        jobStatus: 'failed';
+      }>();
       const dialogRef = {
         afterClosed: jest.fn().mockReturnValue(afterClosed$),
         close: jest.fn()
@@ -661,15 +956,19 @@ describe('CodingManagementComponent', () => {
 
       try {
         (mockDialog.open as jest.Mock).mockReturnValueOnce(dialogRef);
-        (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
-          totalResponses: 42,
-          statusCounts: {},
-          jobId: 'freshness-job-1',
-          message: 'Processing in background',
-          unitCount: 7,
-          personCount: 3,
-          groupNames: ['TG1']
-        }));
+        (
+          mockTestPersonCodingService.startFreshnessCoding as jest.Mock
+        ).mockReturnValueOnce(
+          of({
+            totalResponses: 42,
+            statusCounts: {},
+            jobId: 'freshness-job-1',
+            message: 'Processing in background',
+            unitCount: 7,
+            personCount: 3,
+            groupNames: ['TG1']
+          })
+        );
 
         component.startFreshnessCoding('v1');
         afterClosed$.next({
@@ -689,7 +988,11 @@ describe('CodingManagementComponent', () => {
 
     it('should resume parent freshness polling when the dialog reports a status for another job', () => {
       jest.useFakeTimers();
-      const afterClosed$ = new Subject<{ initialJobId: string; jobId: string; jobStatus: 'failed' }>();
+      const afterClosed$ = new Subject<{
+        initialJobId: string;
+        jobId: string;
+        jobStatus: 'failed';
+      }>();
       const dialogRef = {
         afterClosed: jest.fn().mockReturnValue(afterClosed$),
         close: jest.fn()
@@ -697,15 +1000,19 @@ describe('CodingManagementComponent', () => {
 
       try {
         (mockDialog.open as jest.Mock).mockReturnValueOnce(dialogRef);
-        (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
-          totalResponses: 42,
-          statusCounts: {},
-          jobId: 'freshness-job-1',
-          message: 'Processing in background',
-          unitCount: 7,
-          personCount: 3,
-          groupNames: ['TG1']
-        }));
+        (
+          mockTestPersonCodingService.startFreshnessCoding as jest.Mock
+        ).mockReturnValueOnce(
+          of({
+            totalResponses: 42,
+            statusCounts: {},
+            jobId: 'freshness-job-1',
+            message: 'Processing in background',
+            unitCount: 7,
+            personCount: 3,
+            groupNames: ['TG1']
+          })
+        );
 
         component.startFreshnessCoding('v1');
         afterClosed$.next({
@@ -736,6 +1043,35 @@ describe('CodingManagementComponent', () => {
       expect(component.activeFreshnessJobId).toBeNull();
       expect(component.activeFreshnessJobProgress).toBeNull();
     });
+
+    it('should not refresh status overview after auto-coding completes when automatic refresh is disabled', () => {
+      component.autoRefreshManualCodingJobs = false;
+      (
+        mockCodingManagementService.fetchCodingStatistics as jest.Mock
+      ).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (
+        mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock
+      ).mockClear();
+      (
+        mockTestPersonCodingService.getAutocodingReadiness as jest.Mock
+      ).mockClear();
+
+      autoCodingCompletedSubject.next({ jobId: 'other-job' });
+
+      expect(
+        mockCodingManagementService.fetchCodingStatistics
+      ).not.toHaveBeenCalled();
+      expect(
+        mockTestPersonCodingService.getCodingFreshness
+      ).not.toHaveBeenCalled();
+      expect(
+        mockTestPersonCodingService.getAppliedResultsOverview
+      ).not.toHaveBeenCalled();
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).not.toHaveBeenCalled();
+    });
   });
 
   describe('Statistics Card Integration', () => {
@@ -752,35 +1088,119 @@ describe('CodingManagementComponent', () => {
     it('should fetch statistics when statistics card emits loadStatistics', () => {
       component.fetchCodingStatistics();
 
-      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v1');
+      expect(
+        mockCodingManagementService.fetchCodingStatistics
+      ).toHaveBeenCalledWith('v1');
     });
 
     it('should switch to changed statistics version when test results change', () => {
-      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (
+        mockCodingManagementService.fetchCodingStatistics as jest.Mock
+      ).mockClear();
 
-      testResultsChangedSubject.next({ workspaceId: 1, statisticsVersion: 'v2' });
+      testResultsChangedSubject.next({
+        workspaceId: 1,
+        statisticsVersion: 'v2'
+      });
 
       expect(component.selectedStatisticsVersion).toBe('v2');
       expect(component.filterParams.version).toBe('v2');
-      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
+      expect(
+        mockCodingManagementService.fetchCodingStatistics
+      ).toHaveBeenCalledWith('v2');
+    });
+
+    it('should not refresh status overview after test results changed when automatic refresh is disabled', () => {
+      component.autoRefreshManualCodingJobs = false;
+      (
+        mockCodingManagementService.fetchCodingStatistics as jest.Mock
+      ).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (
+        mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock
+      ).mockClear();
+      (
+        mockTestPersonCodingService.getAutocodingReadiness as jest.Mock
+      ).mockClear();
+
+      testResultsChangedSubject.next({
+        workspaceId: 1,
+        statisticsVersion: 'v2'
+      });
+
+      expect(component.selectedStatisticsVersion).toBe('v2');
+      expect(component.filterParams.version).toBe('v2');
+      expect(
+        mockCodingManagementService.fetchCodingStatistics
+      ).not.toHaveBeenCalled();
+      expect(
+        mockTestPersonCodingService.getCodingFreshness
+      ).not.toHaveBeenCalled();
+      expect(
+        mockTestPersonCodingService.getAppliedResultsOverview
+      ).not.toHaveBeenCalled();
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should keep manual status refresh button loading data when automatic refresh is disabled', () => {
+      component.autoRefreshManualCodingJobs = false;
+      (
+        mockCodingManagementService.fetchCodingStatistics as jest.Mock
+      ).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (
+        mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock
+      ).mockClear();
+      (
+        mockTestPersonCodingService.getAutocodingReadiness as jest.Mock
+      ).mockClear();
+
+      component.refreshCodingStatusOverview();
+
+      expect(
+        mockCodingManagementService.fetchCodingStatistics
+      ).toHaveBeenCalledWith('v1');
+      expect(
+        mockTestPersonCodingService.getCodingFreshness
+      ).toHaveBeenCalledWith(1);
+      expect(
+        mockTestPersonCodingService.getAppliedResultsOverview
+      ).toHaveBeenCalledWith(1);
+      expect(
+        mockTestPersonCodingService.getAutocodingReadiness
+      ).toHaveBeenCalledWith(1, 1, true, 'full');
     });
 
     it('should ignore changed test results from a different workspace', () => {
-      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (
+        mockCodingManagementService.fetchCodingStatistics as jest.Mock
+      ).mockClear();
 
-      testResultsChangedSubject.next({ workspaceId: 2, statisticsVersion: 'v2' });
+      testResultsChangedSubject.next({
+        workspaceId: 2,
+        statisticsVersion: 'v2'
+      });
 
       expect(component.selectedStatisticsVersion).toBe('v1');
       expect(component.filterParams.version).toBe('v1');
-      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+      expect(
+        mockCodingManagementService.fetchCodingStatistics
+      ).not.toHaveBeenCalled();
     });
 
     it('should consume a pending statistics version when opened after results changed', () => {
       fixture.destroy();
-      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
-      (mockTestPersonCodingService.consumePendingStatisticsVersion as jest.Mock).mockClear();
-      (mockTestPersonCodingService.consumePendingStatisticsVersion as jest.Mock)
-        .mockReturnValueOnce('v2');
+      (
+        mockCodingManagementService.fetchCodingStatistics as jest.Mock
+      ).mockClear();
+      (
+        mockTestPersonCodingService.consumePendingStatisticsVersion as jest.Mock
+      ).mockClear();
+      (
+        mockTestPersonCodingService.consumePendingStatisticsVersion as jest.Mock
+      ).mockReturnValueOnce('v2');
 
       fixture = TestBed.createComponent(CodingManagementComponent);
       component = fixture.componentInstance;
@@ -788,8 +1208,12 @@ describe('CodingManagementComponent', () => {
 
       expect(component.selectedStatisticsVersion).toBe('v2');
       expect(component.filterParams.version).toBe('v2');
-      expect(mockTestPersonCodingService.consumePendingStatisticsVersion).toHaveBeenCalledWith(1);
-      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
+      expect(
+        mockTestPersonCodingService.consumePendingStatisticsVersion
+      ).toHaveBeenCalledWith(1);
+      expect(
+        mockCodingManagementService.fetchCodingStatistics
+      ).toHaveBeenCalledWith('v2');
     });
 
     it('should handle status click from statistics card through the normal table filter', () => {
@@ -798,14 +1222,19 @@ describe('CodingManagementComponent', () => {
       component.onStatusClick('200');
 
       expect(component.currentStatusFilter).toBeNull();
-      expect(component.filterParams).toEqual(expect.objectContaining({
-        codedStatus: '200',
-        group: 'ID26010601',
-        responseSource: 'all',
-        version: 'v1'
-      }));
+      expect(component.filterParams).toEqual(
+        expect.objectContaining({
+          codedStatus: '200',
+          group: 'ID26010601',
+          responseSource: 'all',
+          version: 'v1'
+        })
+      );
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({
+          ...component.filterParams,
+          regexSearch: false
+        }),
         1,
         100,
         undefined,
@@ -852,7 +1281,10 @@ describe('CodingManagementComponent', () => {
 
       expect(component.filterParams.version).toBe('v2');
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({
+          ...component.filterParams,
+          regexSearch: false
+        }),
         1,
         100,
         undefined,
@@ -876,7 +1308,10 @@ describe('CodingManagementComponent', () => {
 
       expect(component.filterParams.responseSource).toBe('base');
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({
+          ...component.filterParams,
+          regexSearch: false
+        }),
         1,
         100,
         undefined,
@@ -906,7 +1341,9 @@ describe('CodingManagementComponent', () => {
       expect(component.data).toEqual([]);
       expect(component.totalRecords).toBe(0);
       expect(component.currentStatusFilter).toBeNull();
-      expect(mockCodingManagementService.searchResponses).not.toHaveBeenCalled();
+      expect(
+        mockCodingManagementService.searchResponses
+      ).not.toHaveBeenCalled();
     });
 
     it('should apply derived response source when derived statistics are clicked', () => {
@@ -932,7 +1369,10 @@ describe('CodingManagementComponent', () => {
       expect(component.currentStatusFilter).toBeNull();
       expect(component.pageIndex).toBe(0);
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({
+          ...component.filterParams,
+          regexSearch: false
+        }),
         1,
         100,
         undefined,
@@ -968,7 +1408,9 @@ describe('CodingManagementComponent', () => {
 
       expect(component.pageSize).toBe(200);
       expect(component.pageIndex).toBe(1);
-      expect(mockCodingManagementService.fetchResponsesByStatus).toHaveBeenCalledWith(
+      expect(
+        mockCodingManagementService.fetchResponsesByStatus
+      ).toHaveBeenCalledWith(
         '200',
         'v1',
         2, // pageIndex + 1
@@ -991,7 +1433,10 @@ describe('CodingManagementComponent', () => {
       expect(component.sortDirection).toBe('desc');
       expect(component.pageIndex).toBe(0);
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({
+          ...component.filterParams,
+          regexSearch: false
+        }),
         1,
         100,
         'score',
@@ -1004,7 +1449,9 @@ describe('CodingManagementComponent', () => {
 
       component.onReplayClick(response);
 
-      expect(mockUiService.openReplayForResponse).toHaveBeenCalledWith(response);
+      expect(mockUiService.openReplayForResponse).toHaveBeenCalledWith(
+        response
+      );
     });
 
     it('should handle show coding scheme from table component', () => {
@@ -1027,46 +1474,51 @@ describe('CodingManagementComponent', () => {
       };
       component.data = [{ id: 1 } as Success];
       component.totalRecords = 2;
-      mockCodingManagementService.searchResponses = jest.fn().mockReturnValue(of({
-        total: 2,
-        data: [
-          {
-            responseId: 1,
-            unitId: 10,
-            variableId: 'v1',
-            value: 'UEsD',
-            status: 'VALUE_CHANGED',
-            unitName: 'Unit1',
-            unitAlias: null,
-            bookletId: 20,
-            bookletName: 'Booklet1',
-            personId: 30,
-            personLogin: 'login1',
-            personCode: 'code1',
-            personGroup: 'group1'
-          },
-          {
-            responseId: 2,
-            unitId: 11,
-            variableId: 'v2',
-            value: 'UEsD',
-            status: 'VALUE_CHANGED',
-            unitName: 'Unit2',
-            unitAlias: null,
-            bookletId: 21,
-            bookletName: 'Booklet2',
-            personId: 31,
-            personLogin: 'login2',
-            personCode: 'code2',
-            personGroup: 'group2'
-          }
-        ]
-      }));
+      mockCodingManagementService.searchResponses = jest.fn().mockReturnValue(
+        of({
+          total: 2,
+          data: [
+            {
+              responseId: 1,
+              unitId: 10,
+              variableId: 'v1',
+              value: 'UEsD',
+              status: 'VALUE_CHANGED',
+              unitName: 'Unit1',
+              unitAlias: null,
+              bookletId: 20,
+              bookletName: 'Booklet1',
+              personId: 30,
+              personLogin: 'login1',
+              personCode: 'code1',
+              personGroup: 'group1'
+            },
+            {
+              responseId: 2,
+              unitId: 11,
+              variableId: 'v2',
+              value: 'UEsD',
+              status: 'VALUE_CHANGED',
+              unitName: 'Unit2',
+              unitAlias: null,
+              bookletId: 21,
+              bookletName: 'Booklet2',
+              personId: 31,
+              personLogin: 'login2',
+              personCode: 'code2',
+              personGroup: 'group2'
+            }
+          ]
+        })
+      );
 
       component.onReviewClick();
 
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({
+          ...component.filterParams,
+          regexSearch: false
+        }),
         1,
         2,
         undefined,
@@ -1093,31 +1545,38 @@ describe('CodingManagementComponent', () => {
       };
       component.data = [{ id: 1 } as Success];
       component.totalRecords = 1200;
-      mockCodingManagementService.searchResponses = jest.fn().mockImplementation(
-        (_params, page: number) => of({
+      mockCodingManagementService.searchResponses = jest
+        .fn()
+        .mockImplementation((_params, page: number) => of({
           total: 1200,
-          data: [{
-            responseId: page,
-            unitId: page,
-            variableId: `v${page}`,
-            value: 'UEsD',
-            status: 'VALUE_CHANGED',
-            unitName: `Unit${page}`,
-            unitAlias: null,
-            bookletId: page,
-            bookletName: `Booklet${page}`,
-            personId: page,
-            personLogin: `login${page}`,
-            personCode: `code${page}`,
-            personGroup: `group${page}`
-          }]
+          data: [
+            {
+              responseId: page,
+              unitId: page,
+              variableId: `v${page}`,
+              value: 'UEsD',
+              status: 'VALUE_CHANGED',
+              unitName: `Unit${page}`,
+              unitAlias: null,
+              bookletId: page,
+              bookletName: `Booklet${page}`,
+              personId: page,
+              personLogin: `login${page}`,
+              personCode: `code${page}`,
+              personGroup: `group${page}`
+            }
+          ]
         })
-      );
+        );
 
       component.onReviewClick();
 
-      expect(mockCodingManagementService.searchResponses).toHaveBeenCalledTimes(3);
-      expect(mockCodingManagementService.searchResponses).toHaveBeenNthCalledWith(
+      expect(mockCodingManagementService.searchResponses).toHaveBeenCalledTimes(
+        3
+      );
+      expect(
+        mockCodingManagementService.searchResponses
+      ).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({ geogebra: true }),
         1,
@@ -1125,7 +1584,9 @@ describe('CodingManagementComponent', () => {
         undefined,
         undefined
       );
-      expect(mockCodingManagementService.searchResponses).toHaveBeenNthCalledWith(
+      expect(
+        mockCodingManagementService.searchResponses
+      ).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({ geogebra: true }),
         2,
@@ -1133,7 +1594,9 @@ describe('CodingManagementComponent', () => {
         undefined,
         undefined
       );
-      expect(mockCodingManagementService.searchResponses).toHaveBeenNthCalledWith(
+      expect(
+        mockCodingManagementService.searchResponses
+      ).toHaveBeenNthCalledWith(
         3,
         expect.objectContaining({ geogebra: true }),
         3,
@@ -1168,7 +1631,9 @@ describe('CodingManagementComponent', () => {
 
       component.onReviewClick();
 
-      expect(mockCodingManagementService.searchResponses).not.toHaveBeenCalled();
+      expect(
+        mockCodingManagementService.searchResponses
+      ).not.toHaveBeenCalled();
       expect(mockDialog.open).not.toHaveBeenCalled();
       expect(mockSnackBar.open).toHaveBeenCalledWith(
         'coding-management.messages.review-too-many-results',
@@ -1239,7 +1704,9 @@ describe('CodingManagementComponent', () => {
 
   describe('Component Cleanup', () => {
     it('should unsubscribe on destroy', () => {
-      const componentWithPrivate = component as unknown as { destroy$: Subject<void> };
+      const componentWithPrivate = component as unknown as {
+        destroy$: Subject<void>;
+      };
       const destroySpy = jest.spyOn(componentWithPrivate.destroy$, 'next');
       const completeSpy = jest.spyOn(componentWithPrivate.destroy$, 'complete');
 

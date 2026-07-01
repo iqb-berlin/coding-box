@@ -91,6 +91,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
   duplicateTrainingLabels = new Set<string>();
   selectedTrainingName: string | null = null;
   isLoading = false;
+  private loadCoderTrainingsPromise?: Promise<void>;
   displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'selectionStrategy', 'created_at'];
 
   ngOnInit(): void {
@@ -103,9 +104,16 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
   }
 
   loadCoderTrainings(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    if (this.isLoading && this.loadCoderTrainingsPromise) {
+      return this.loadCoderTrainingsPromise;
+    }
+
+    this.isLoading = true;
+    this.loadCoderTrainingsPromise = new Promise((resolve, reject) => {
       const workspaceId = this.appService.selectedWorkspaceId;
       if (!workspaceId) {
+        this.isLoading = false;
+        this.loadCoderTrainingsPromise = undefined;
         reject();
         return;
       }
@@ -118,6 +126,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
             this.rebuildTrainingNameFilterOptions();
             this.applyAllFilters();
             this.isLoading = false;
+            this.loadCoderTrainingsPromise = undefined;
             resolve();
           },
           error: () => {
@@ -126,10 +135,13 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
             this.trainingNameFilterOptions = [];
             this.duplicateTrainingLabels.clear();
             this.isLoading = false;
+            this.loadCoderTrainingsPromise = undefined;
             reject();
           }
         });
     });
+
+    return this.loadCoderTrainingsPromise;
   }
 
   requestFullEdit(training: CoderTraining): void {

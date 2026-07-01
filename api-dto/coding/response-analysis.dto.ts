@@ -23,6 +23,7 @@ export interface DuplicateValueGroupDto {
   variableId: string;
   normalizedValue: string;
   originalValue: string;
+  occurrenceCount?: number;
   occurrences: {
     personLogin: string;
     personCode: string;
@@ -65,6 +66,8 @@ export interface ResponseAnalysisDto {
   aggregationSummary: AggregationSummaryDto;
   matchingFlags: string[];
   analysisTimestamp: string;
+  sourceRevision?: number;
+  currentSourceRevision?: number;
   isCalculating?: boolean;
   progress?: number;
 }

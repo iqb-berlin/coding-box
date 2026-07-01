@@ -99,7 +99,11 @@ describe('CodingJobService', () => {
   let fileUploadRepository: ReturnType<typeof createRepo>;
   let settingRepository: ReturnType<typeof createRepo>;
   let connection: { transaction: jest.Mock };
-  let cacheService: { delete: jest.Mock };
+  let cacheService: {
+    delete: jest.Mock;
+    incr: jest.Mock;
+    deleteByPattern: jest.Mock;
+  };
   let codingFreshnessService: { reconcileAppliedManualCodingJobs: jest.Mock };
   let codingFileCacheService: { getVariablePageMap: jest.Mock };
   let missingsProfilesService: {
@@ -198,7 +202,11 @@ describe('CodingJobService', () => {
       })
       )
     };
-    cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1),
+      deleteByPattern: jest.fn().mockResolvedValue(undefined)
+    };
     jobDefinitionRepository.createQueryBuilder.mockReturnValue({
       setLock: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
@@ -1756,6 +1764,12 @@ describe('CodingJobService', () => {
     );
     expect(cacheService.delete).toHaveBeenCalledWith(
       'coding_incomplete_variables_v8:7'
+    );
+    expect(cacheService.incr).toHaveBeenCalledWith(
+      'coding_applied_results_overview:version:7'
+    );
+    expect(cacheService.deleteByPattern).toHaveBeenCalledWith(
+      'coding_applied_results_overview:7:*'
     );
   });
 

@@ -148,11 +148,12 @@ describe('WorkspaceCodingStatisticsController', () => {
   });
 
   it('delegates autocoding readiness requests with parsed options', async () => {
-    await controller.getAutocodingReadiness(5, '2', 'true');
+    await controller.getAutocodingReadiness(5, '2', 'true', 'summary');
 
     expect(codingReadinessService.getReadiness).toHaveBeenCalledWith(5, {
       autoCoderRun: 2,
-      forceRefresh: true
+      forceRefresh: true,
+      detailLevel: 'summary'
     });
   });
 
