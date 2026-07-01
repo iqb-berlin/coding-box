@@ -54,6 +54,7 @@ TAG := dev
 				--target=prod\
 				--build-arg PROJECT=frontend\
 				--build-arg BASE_IMAGE_NAME=coding-box-base:$(TAG)\
+				--build-arg APP_VERSION=$(TAG)\
 				--file $(CODING_BOX_BASE_DIR)/apps/frontend/Dockerfile\
 				--tag iqbberlin/coding-box-frontend:$(TAG)\
 				--tag scm.cms.hu-berlin.de:4567/iqb/coding-box/iqbberlin/coding-box-frontend:$(TAG)\

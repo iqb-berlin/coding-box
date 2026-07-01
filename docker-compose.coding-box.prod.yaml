@@ -86,6 +86,7 @@ services:
       - KEYCLOAK_URL=${KEYCLOAK_URL:-https://keycloak.kodierbox.iqb.hu-berlin.de/}
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-coding-box}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-coding-box}
+      - APP_VERSION=${APP_VERSION:-${TAG}}
       - BACKEND_URL=${BACKEND_URL:-api/}
     volumes:
       - "./config/frontend/default.conf.template:/etc/nginx/templates/default.conf.template:ro"
