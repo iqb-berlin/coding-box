@@ -16,6 +16,8 @@ import {
 } from '../workspace/workspace-exclusion.service';
 import {
   buildAggregationGroups,
+  countEffectiveManualCodingCases,
+  ManualCodingDeduplicationResponse,
   summarizeAggregationGroups
 } from './aggregation-metrics.util';
 import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
@@ -44,6 +46,10 @@ interface CoverageResponse {
   codeV2: number | null;
   statusV2: number | null;
   statusV1: number | null;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  bookletName: string;
 }
 
 interface CoverageResponseScope {
@@ -67,6 +73,11 @@ interface EffectiveCaseProgress {
   aggregationActive: boolean;
   aggregationThreshold: number | null;
   aggregatedDuplicateCases: number;
+}
+
+interface EffectiveVariableCaseCoverage {
+  effectiveTotalCasesToCode: number;
+  effectiveCasesInJobs: number;
 }
 
 interface DeriveErrorManualProgress {
@@ -540,6 +551,10 @@ export class CodingProgressService {
       .addSelect('response.status_v1', 'statusV1')
       .addSelect('response.variableid', 'variableId')
       .addSelect('unit.name', 'unitName')
+      .addSelect("COALESCE(bookletinfo.name, '')", 'bookletName')
+      .addSelect("COALESCE(person.login, '')", 'personLogin')
+      .addSelect("COALESCE(person.code, '')", 'personCode')
+      .addSelect("COALESCE(person.group, '')", 'personGroup')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
@@ -590,7 +605,11 @@ export class CodingProgressService {
       statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
       statusV1: row.statusV1 === null || row.statusV1 === undefined ? null : Number(row.statusV1),
       variableId: row.variableId,
-      unitName: row.unitName
+      unitName: row.unitName,
+      bookletName: row.bookletName ?? '',
+      personLogin: row.personLogin ?? '',
+      personCode: row.personCode ?? '',
+      personGroup: row.personGroup ?? ''
     }));
   }
 
@@ -858,6 +877,9 @@ export class CodingProgressService {
         })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)', {
+          completedV2Status: statusStringToNumber('CODING_COMPLETE')
+        })
         // Exclude pre-processed responses (not in manual coding pool)
         .andWhere(new Brackets(qb => {
           qb.where('response.code_v2 IS NULL')
@@ -1019,8 +1041,8 @@ export class CodingProgressService {
         });
       }
 
-      // Get cases in jobs map for conflict detection
-      const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
+      const effectiveVariableCaseCoverageMap =
+        await this.getEffectiveVariableCasesInJobs(workspaceId, variableCaseCounts);
 
       const crossDefinitionCaseConflicts = await this.getCrossDefinitionCaseConflicts(workspaceId);
       const conflictedVariables = new Map<string, VariableDefinitionReference[]>();
@@ -1045,20 +1067,25 @@ export class CodingProgressService {
           return;
         }
 
-        // Check if variable is fully or partially covered based on cases in jobs
+        // Check if variable is fully or partially covered on the effective case level.
         const variableCaseInfo = variableCaseCounts.find(
           v => `${v.unitName}:${v.variableId}` === variableKey
         );
 
         if (variableCaseInfo) {
-          const casesInJobs =
-            casesInJobsMap.get(
-              `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
-            ) || 0;
+          const effectiveCoverage = effectiveVariableCaseCoverageMap.get(
+            `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
+          ) || {
+            effectiveTotalCasesToCode: variableCaseInfo.caseCount,
+            effectiveCasesInJobs: 0
+          };
 
-          if (casesInJobs >= variableCaseInfo.caseCount) {
+          if (
+            effectiveCoverage.effectiveTotalCasesToCode > 0 &&
+            effectiveCoverage.effectiveCasesInJobs >= effectiveCoverage.effectiveTotalCasesToCode
+          ) {
             fullyAbgedeckteVariablen.add(variableKey);
-          } else if (casesInJobs > 0) {
+          } else if (effectiveCoverage.effectiveCasesInJobs > 0) {
             partiallyAbgedeckteVariablen.add(variableKey);
           }
         }
@@ -1134,8 +1161,12 @@ export class CodingProgressService {
       .addSelect('cju.variable_id', 'variableId')
       .addSelect('COUNT(DISTINCT cju.response_id)', 'casesInJobs')
       .leftJoin('cju.coding_job', 'coding_job')
+      .innerJoin('cju.response', 'response')
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL')
+      .andWhere('(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)', {
+        completedV2Status: statusStringToNumber('CODING_COMPLETE')
+      })
       .groupBy('cju.unit_name')
       .addGroupBy('cju.variable_id');
     applyNonCodingIssueReviewJobFilter(
@@ -1158,6 +1189,95 @@ export class CodingProgressService {
     });
 
     return casesInJobsMap;
+  }
+
+  private async getEffectiveVariableCasesInJobs(
+    workspaceId: number,
+    variables: Array<{
+      unitName: string;
+      variableId: string;
+      caseCount: number;
+    }>
+  ): Promise<Map<string, EffectiveVariableCaseCoverage>> {
+    const result = new Map<string, EffectiveVariableCaseCoverage>();
+
+    if (variables.length === 0) {
+      return result;
+    }
+
+    const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+    const matchingFlags = await this.getResponseMatchingMode(workspaceId);
+    const aggregationActive =
+      aggregationThreshold !== null && !matchingFlags.includes('NO_AGGREGATION');
+
+    if (!aggregationActive) {
+      const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
+      variables.forEach(variable => {
+        const key = `${variable.unitName}::${variable.variableId}`;
+        result.set(key, {
+          effectiveTotalCasesToCode: variable.caseCount,
+          effectiveCasesInJobs: casesInJobsMap.get(key) || 0
+        });
+      });
+      return result;
+    }
+
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+    const codingCompleteStatus = statusStringToNumber('CODING_COMPLETE');
+    const variableKeys = new Set(
+      variables.map(variable => `${variable.unitName}:${variable.variableId}`)
+    );
+    const [responseScope, assignedResponseIds, derivedVariableMap] = await Promise.all([
+      this.getCoverageResponseScope(workspaceId),
+      this.getAssignedCoverageResponseIds(workspaceId),
+      this.getDerivedVariableMap(workspaceId)
+    ]);
+    const responsesByVariable = new Map<string, CoverageResponse[]>();
+
+    responseScope.manualResponses
+      .filter(response => (
+        response.statusV1 === codingIncompleteStatus ||
+        response.statusV1 === intendedIncompleteStatus
+      ))
+      .filter(response => response.statusV2 !== codingCompleteStatus)
+      .filter(response => variableKeys.has(`${response.unitName}:${response.variableId}`))
+      .forEach(response => {
+        const key = `${response.unitName}::${response.variableId}`;
+        const responses = responsesByVariable.get(key) || [];
+        responses.push(response);
+        responsesByVariable.set(key, responses);
+      });
+
+    variables.forEach(variable => {
+      const key = `${variable.unitName}::${variable.variableId}`;
+      const responses = responsesByVariable.get(key) || [];
+      const responsesWithCaseFields: ManualCodingDeduplicationResponse[] =
+        responses.map(response => ({
+          responseId: response.responseId,
+          unitName: response.unitName,
+          variableId: response.variableId,
+          value: response.value,
+          personLogin: response.personLogin,
+          personCode: response.personCode,
+          personGroup: response.personGroup,
+          bookletName: response.bookletName
+        }));
+      const effectiveCaseCounts = countEffectiveManualCodingCases(
+        responsesWithCaseFields,
+        assignedResponseIds,
+        matchingFlags,
+        aggregationThreshold,
+        derivedVariableMap
+      );
+
+      result.set(key, {
+        effectiveTotalCasesToCode: effectiveCaseCounts.uniqueCases,
+        effectiveCasesInJobs: effectiveCaseCounts.casesInJobs
+      });
+    });
+
+    return result;
   }
 
   private async getCrossDefinitionCaseConflicts(

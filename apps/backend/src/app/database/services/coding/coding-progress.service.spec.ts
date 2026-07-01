@@ -109,6 +109,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
     jobDefinitionRepository = createRepository();
     variableBundleRepository = createRepository();
     settingRepository = createRepository();
+    settingRepository.findOne.mockResolvedValue({ content: 'disabled' });
 
     workspaceFilesService = {
       getUnitVariableMap: jest.fn().mockResolvedValue(new Map()),
@@ -702,6 +703,163 @@ describe('CodingProgressService variable coverage conflicts', () => {
     expect(result.coverageByStatus.approved).toEqual(['FULL_UNIT:01']);
     expect(result.coverageByStatus.pending_review).toEqual(['PARTIAL_UNIT:01']);
     expect(result.coverageByStatus.conflicted).toEqual([]);
+  });
+
+  it('classifies duplicate-aggregated variable coverage on effective cases', async () => {
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    const codingCompleteStatus = statusStringToNumber('CODING_COMPLETE');
+
+    settingRepository.findOne.mockImplementation(async ({ where }: { where: { key: string } }) => {
+      if (where.key === 'workspace-5-duplicate-aggregation-threshold') {
+        return { content: '2' };
+      }
+
+      if (where.key === 'workspace-5-response-matching-mode') {
+        return { content: JSON.stringify({ flags: ['IGNORE_CASE', 'IGNORE_WHITESPACE'] }) };
+      }
+
+      return null;
+    });
+    responseRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder([
+        {
+          unitName: 'AGG_UNIT',
+          variableId: '01',
+          statusV1: String(codingIncompleteStatus),
+          caseCount: '3'
+        }
+      ]))
+      .mockReturnValueOnce(createQueryBuilder([
+        {
+          responseId: '100',
+          unitName: 'AGG_UNIT',
+          variableId: '01',
+          value: 'Same answer',
+          codeV2: null,
+          statusV2: null,
+          statusV1: String(codingIncompleteStatus),
+          bookletName: 'BookletA',
+          personLogin: 'login-1',
+          personCode: 'code-1',
+          personGroup: 'group-1'
+        },
+        {
+          responseId: '101',
+          unitName: 'AGG_UNIT',
+          variableId: '01',
+          value: 'sameanswer',
+          codeV2: null,
+          statusV2: null,
+          statusV1: String(codingIncompleteStatus),
+          bookletName: 'BookletA',
+          personLogin: 'login-2',
+          personCode: 'code-2',
+          personGroup: 'group-1'
+        },
+        {
+          responseId: '102',
+          unitName: 'AGG_UNIT',
+          variableId: '01',
+          value: ' SAME ANSWER ',
+          codeV2: null,
+          statusV2: null,
+          statusV1: String(codingIncompleteStatus),
+          bookletName: 'BookletA',
+          personLogin: 'login-3',
+          personCode: 'code-3',
+          personGroup: 'group-1'
+        },
+        {
+          responseId: '103',
+          unitName: 'AGG_UNIT',
+          variableId: '01',
+          value: 'already applied answer',
+          codeV2: null,
+          statusV2: String(codingCompleteStatus),
+          statusV1: String(codingIncompleteStatus),
+          bookletName: 'BookletA',
+          personLogin: 'login-4',
+          personCode: 'code-4',
+          personGroup: 'group-1'
+        }
+      ]))
+      .mockReturnValueOnce(createQueryBuilder([
+        {
+          responseId: '100',
+          unitName: 'AGG_UNIT',
+          variableId: '01',
+          value: 'Same answer',
+          codeV2: null,
+          statusV2: null,
+          statusV1: String(codingIncompleteStatus),
+          bookletName: 'BookletA',
+          personLogin: 'login-1',
+          personCode: 'code-1',
+          personGroup: 'group-1'
+        },
+        {
+          responseId: '101',
+          unitName: 'AGG_UNIT',
+          variableId: '01',
+          value: 'sameanswer',
+          codeV2: null,
+          statusV2: null,
+          statusV1: String(codingIncompleteStatus),
+          bookletName: 'BookletA',
+          personLogin: 'login-2',
+          personCode: 'code-2',
+          personGroup: 'group-1'
+        },
+        {
+          responseId: '102',
+          unitName: 'AGG_UNIT',
+          variableId: '01',
+          value: ' SAME ANSWER ',
+          codeV2: null,
+          statusV2: null,
+          statusV1: String(codingIncompleteStatus),
+          bookletName: 'BookletA',
+          personLogin: 'login-3',
+          personCode: 'code-3',
+          personGroup: 'group-1'
+        },
+        {
+          responseId: '103',
+          unitName: 'AGG_UNIT',
+          variableId: '01',
+          value: 'already applied answer',
+          codeV2: null,
+          statusV2: String(codingCompleteStatus),
+          statusV1: String(codingIncompleteStatus),
+          bookletName: 'BookletA',
+          personLogin: 'login-4',
+          personCode: 'code-4',
+          personGroup: 'group-1'
+        }
+      ]));
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['AGG_UNIT', new Set(['01'])]
+    ]));
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 40,
+        status: 'approved',
+        assigned_variables: [{ unitName: 'AGG_UNIT', variableId: '01' }]
+      }
+    ]);
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder([{ responseId: '100' }]))
+      .mockReturnValueOnce(createQueryBuilder([]));
+
+    const result = await service.getVariableCoverageOverview(5);
+
+    expect(result.totalVariables).toBe(1);
+    expect(result.coveredVariables).toBe(1);
+    expect(result.fullyAbgedeckteVariablen).toBe(1);
+    expect(result.partiallyAbgedeckteVariablen).toBe(0);
+    expect(result.variableCaseCounts).toEqual([
+      { unitName: 'AGG_UNIT', variableId: '01', caseCount: 3 }
+    ]);
   });
 
   it('flags variables when the same response is assigned through multiple job definitions', async () => {

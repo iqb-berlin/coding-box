@@ -26,9 +26,7 @@ import {
 } from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
 import {
-  buildAggregationGroups,
-  deduplicateManualCodingResponses,
-  getManualCodingDeduplicationKey,
+  countEffectiveManualCodingCases,
   ManualCodingDeduplicationResponse
 } from './aggregation-metrics.util';
 import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
@@ -804,45 +802,14 @@ export class CodingValidationService {
             variableId: response.variableid
           }));
         const assignedResponseIds = assignedResponseIdsByVariable.get(key) || new Set<number>();
-        const assignedDeduplicationKeys = new Set(
-          responsesWithCaseFields
-            .filter(response => assignedResponseIds.has(response.responseId))
-            .map(response => getManualCodingDeduplicationKey(response))
-        );
-        const dedupedResponses = deduplicateManualCodingResponses(responsesWithCaseFields);
-        const assignedDedupedResponseIds = new Set(
-          dedupedResponses
-            .filter(response => (
-              assignedResponseIds.has(response.responseId) ||
-              assignedDeduplicationKeys.has(getManualCodingDeduplicationKey(response))
-            ))
-            .map(response => response.responseId)
-        );
-        const aggregatedGroups = buildAggregationGroups(
-          dedupedResponses,
+
+        return countEffectiveManualCodingCases(
+          responsesWithCaseFields,
+          assignedResponseIds,
           matchingFlags,
           aggregationThreshold,
           derivedVariableMap
         );
-
-        let uniqueCases = 0;
-        let casesInJobs = 0;
-
-        for (const group of aggregatedGroups) {
-          if (aggregationThreshold !== null && group.responses.length >= aggregationThreshold) {
-            uniqueCases += 1;
-            if (group.responses.some(response => assignedDedupedResponseIds.has(response.responseId))) {
-              casesInJobs += 1;
-            }
-          } else {
-            uniqueCases += group.responses.length;
-            casesInJobs += group.responses
-              .filter(response => assignedDedupedResponseIds.has(response.responseId))
-              .length;
-          }
-        }
-
-        return { uniqueCases, casesInJobs };
       };
 
       const includeDeriveErrorForVariable = includeDeriveErrorInCaseInfo &&
