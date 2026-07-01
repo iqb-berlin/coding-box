@@ -1717,7 +1717,7 @@ export class CodingResultsComparisonComponent implements OnInit {
       this.codersFormControl.setValue([]);
       this.selectedCoderIds.clear();
       this.dataSource.data = [];
-      this.codingTrainingBackendService.compareWithinTrainingCodingResults(this.data.workspaceId, trainingId)
+      this.codingTrainingBackendService.getCachedWithinTrainingCodingResults(this.data.workspaceId, trainingId)
         .pipe(takeUntil(this.ngUnsubscribe))
         .subscribe({
           next: data => {

@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import {
+  Observable, catchError, of, switchMap, tap
+} from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { CoderTraining } from '../models/coder-training.model';
 import {
@@ -9,6 +11,7 @@ import {
   TrainingDiscussionApplyPreviewDto,
   TrainingDiscussionApplySource
 } from '../../../../../../api-dto/coding/training-discussion-apply.dto';
+import { TrainingComparisonFreshnessDto } from '../../../../../../api-dto/coding/training-comparison-freshness.dto';
 
 export interface CoderTrainingJob {
   coderId: number;
@@ -87,15 +90,38 @@ export interface CodingJobForTraining {
   unitsCount: number;
 }
 
+interface WithinTrainingComparisonCacheEntry {
+  freshness: TrainingComparisonFreshnessDto;
+  data: WithinTrainingCodingResult[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class CodingTrainingBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private readonly withinTrainingComparisonCache = new Map<string, WithinTrainingComparisonCacheEntry>();
 
   private get authHeader() {
     return {};
+  }
+
+  private getWithinTrainingComparisonCacheKey(workspaceId: number, trainingId: number): string {
+    return `${workspaceId}:${trainingId}`;
+  }
+
+  invalidateWithinTrainingComparisonCache(workspaceId: number, trainingId?: number): void {
+    if (trainingId !== undefined) {
+      this.withinTrainingComparisonCache.delete(
+        this.getWithinTrainingComparisonCacheKey(workspaceId, trainingId)
+      );
+      return;
+    }
+
+    Array.from(this.withinTrainingComparisonCache.keys())
+      .filter(key => key.startsWith(`${workspaceId}:`))
+      .forEach(key => this.withinTrainingComparisonCache.delete(key));
   }
 
   createCoderTrainingJobs(
@@ -140,7 +166,15 @@ export class CodingTrainingBackendService {
       showScore,
       allowComments,
       suppressGeneralInstructions
-    }, { headers: this.authHeader });
+    }, { headers: this.authHeader }).pipe(
+      tap(response => {
+        if (response.trainingId) {
+          this.invalidateWithinTrainingComparisonCache(workspaceId, response.trainingId);
+        } else {
+          this.invalidateWithinTrainingComparisonCache(workspaceId);
+        }
+      })
+    );
   }
 
   getCoderTrainings(workspaceId: number): Observable<CoderTraining[]> {
@@ -186,7 +220,9 @@ export class CodingTrainingBackendService {
       showScore,
       allowComments,
       suppressGeneralInstructions
-    }, { headers: this.authHeader });
+    }, { headers: this.authHeader }).pipe(
+      tap(() => this.invalidateWithinTrainingComparisonCache(workspaceId, trainingId))
+    );
   }
 
   deleteCoderTraining(
@@ -194,7 +230,9 @@ export class CodingTrainingBackendService {
     trainingId: number
   ): Observable<{ success: boolean; message: string }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
-    return this.http.delete<{ success: boolean; message: string }>(url, { headers: this.authHeader });
+    return this.http.delete<{ success: boolean; message: string }>(url, { headers: this.authHeader }).pipe(
+      tap(() => this.invalidateWithinTrainingComparisonCache(workspaceId, trainingId))
+    );
   }
 
   updateCoderTrainingLabel(
@@ -205,7 +243,9 @@ export class CodingTrainingBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/label`;
     return this.http.put<{ success: boolean; message: string }>(url, {
       label: newLabel
-    }, { headers: this.authHeader });
+    }, { headers: this.authHeader }).pipe(
+      tap(() => this.invalidateWithinTrainingComparisonCache(workspaceId, trainingId))
+    );
   }
 
   compareTrainingCodingResults(
@@ -225,6 +265,44 @@ export class CodingTrainingBackendService {
   ): Observable<WithinTrainingCodingResult[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/compare-within-training?trainingId=${trainingId}`;
     return this.http.get<WithinTrainingCodingResult[]>(url, { headers: this.authHeader });
+  }
+
+  getTrainingComparisonFreshness(
+    workspaceId: number,
+    trainingId: number
+  ): Observable<TrainingComparisonFreshnessDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/comparison-freshness`;
+    return this.http.get<TrainingComparisonFreshnessDto>(url, { headers: this.authHeader });
+  }
+
+  getCachedWithinTrainingCodingResults(
+    workspaceId: number,
+    trainingId: number
+  ): Observable<WithinTrainingCodingResult[]> {
+    const cacheKey = this.getWithinTrainingComparisonCacheKey(workspaceId, trainingId);
+
+    return this.getTrainingComparisonFreshness(workspaceId, trainingId).pipe(
+      catchError(() => of(null)),
+      switchMap(freshness => {
+        if (!freshness) {
+          return this.compareWithinTrainingCodingResults(workspaceId, trainingId);
+        }
+
+        const cached = this.withinTrainingComparisonCache.get(cacheKey);
+        if (cached && cached.freshness.version === freshness.version) {
+          return of(cached.data);
+        }
+
+        return this.compareWithinTrainingCodingResults(workspaceId, trainingId).pipe(
+          tap(data => {
+            this.withinTrainingComparisonCache.set(cacheKey, {
+              freshness,
+              data
+            });
+          })
+        );
+      })
+    );
   }
 
   saveDiscussionResult(
@@ -258,6 +336,8 @@ export class CodingTrainingBackendService {
         responseId, code, score, notes
       },
       { headers: this.authHeader }
+    ).pipe(
+      tap(() => this.invalidateWithinTrainingComparisonCache(workspaceId, trainingId))
     );
   }
 
@@ -284,6 +364,8 @@ export class CodingTrainingBackendService {
       url,
       request,
       { headers: this.authHeader }
+    ).pipe(
+      tap(() => this.invalidateWithinTrainingComparisonCache(workspaceId, trainingId))
     );
   }
 

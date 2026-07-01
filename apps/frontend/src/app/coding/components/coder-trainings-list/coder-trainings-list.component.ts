@@ -1,11 +1,13 @@
 import {
   Component,
   OnDestroy,
+  OnChanges,
   OnInit,
   inject,
   Input,
   Output,
-  EventEmitter
+  EventEmitter,
+  SimpleChanges
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -72,7 +74,7 @@ interface TrainingNameFilterOption {
   templateUrl: './coder-trainings-list.component.html',
   styleUrls: ['./coder-trainings-list.component.scss']
 })
-export class CoderTrainingsListComponent implements OnInit, OnDestroy {
+export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy {
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
@@ -80,8 +82,10 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
   private translate = inject(TranslateService);
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
   private destroy$ = new Subject<void>();
+  private loadRequestId = 0;
 
   @Input() showCreateButton = true;
+  @Input() workspaceId?: number;
   @Output() onCreateTraining = new EventEmitter<void>();
   @Output() onEditTraining = new EventEmitter<CoderTraining>(); // New
 
@@ -97,34 +101,82 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
     this.loadCoderTrainings();
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.workspaceId && !changes.workspaceId.firstChange) {
+      this.loadRequestId += 1;
+      this.clearTrainingState({ resetFilters: true });
+      this.loadCoderTrainings({ resetFilters: true });
+    }
+  }
+
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
   }
 
-  loadCoderTrainings(): Promise<void> {
+  private getCurrentWorkspaceId(): number {
+    return this.workspaceId || this.appService.selectedWorkspaceId;
+  }
+
+  private clearTrainingState(options: { resetFilters?: boolean } = {}): void {
+    this.coderTrainings = [];
+    this.originalData = [];
+    this.trainingNameFilterOptions = [];
+    this.duplicateTrainingLabels.clear();
+    if (options.resetFilters) {
+      this.selectedTrainingName = null;
+    }
+  }
+
+  private clearUnavailableTrainingNameFilter(): void {
+    if (!this.selectedTrainingName) {
+      return;
+    }
+
+    const selectedOptionExists = this.trainingNameFilterOptions
+      .some(option => option.label === this.selectedTrainingName);
+    if (!selectedOptionExists) {
+      this.selectedTrainingName = null;
+    }
+  }
+
+  loadCoderTrainings(options: { resetFilters?: boolean } = {}): Promise<void> {
     return new Promise((resolve, reject) => {
-      const workspaceId = this.appService.selectedWorkspaceId;
+      const workspaceId = this.getCurrentWorkspaceId();
       if (!workspaceId) {
+        this.clearTrainingState({ resetFilters: true });
         reject();
         return;
       }
+
+      this.loadRequestId += 1;
+      const requestId = this.loadRequestId;
+      this.isLoading = true;
+      this.clearTrainingState({ resetFilters: options.resetFilters });
 
       this.codingTrainingBackendService.getCoderTrainings(workspaceId)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: (trainings: CoderTraining[]) => {
+            if (requestId !== this.loadRequestId || this.getCurrentWorkspaceId() !== workspaceId) {
+              resolve();
+              return;
+            }
+
             this.originalData = trainings;
             this.rebuildTrainingNameFilterOptions();
+            this.clearUnavailableTrainingNameFilter();
             this.applyAllFilters();
             this.isLoading = false;
             resolve();
           },
           error: () => {
-            this.coderTrainings = [];
-            this.originalData = [];
-            this.trainingNameFilterOptions = [];
-            this.duplicateTrainingLabels.clear();
+            if (requestId !== this.loadRequestId || this.getCurrentWorkspaceId() !== workspaceId) {
+              resolve();
+              return;
+            }
+
+            this.clearTrainingState({ resetFilters: options.resetFilters });
             this.isLoading = false;
             reject();
           }

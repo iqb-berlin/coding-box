@@ -3,7 +3,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { CoderTrainingsListComponent } from './coder-trainings-list.component';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { AppService } from '../../../core/services/app.service';
@@ -14,6 +14,11 @@ describe('CoderTrainingsListComponent', () => {
   let fixture: ComponentFixture<CoderTrainingsListComponent>;
   let component: CoderTrainingsListComponent;
   let matDialogMock: { open: jest.Mock };
+  let codingTrainingBackendServiceMock: {
+    getCoderTrainings: jest.Mock;
+    getCodingJobsForTraining: jest.Mock;
+    deleteCoderTraining: jest.Mock;
+  };
 
   const trainings: CoderTraining[] = [
     {
@@ -44,6 +49,11 @@ describe('CoderTrainingsListComponent', () => {
 
   beforeEach(async () => {
     matDialogMock = { open: jest.fn(() => ({ afterClosed: () => of(null) })) };
+    codingTrainingBackendServiceMock = {
+      getCoderTrainings: jest.fn().mockReturnValue(of(trainings)),
+      getCodingJobsForTraining: jest.fn().mockReturnValue(of([])),
+      deleteCoderTraining: jest.fn().mockReturnValue(of({ success: true }))
+    };
 
     await TestBed.configureTestingModule({
       imports: [
@@ -54,11 +64,7 @@ describe('CoderTrainingsListComponent', () => {
       providers: [
         {
           provide: CodingTrainingBackendService,
-          useValue: {
-            getCoderTrainings: jest.fn().mockReturnValue(of(trainings)),
-            getCodingJobsForTraining: jest.fn().mockReturnValue(of([])),
-            deleteCoderTraining: jest.fn().mockReturnValue(of({ success: true }))
-          }
+          useValue: codingTrainingBackendServiceMock
         },
         { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
         { provide: BackendMessageTranslatorService, useValue: { translateMessage: jest.fn((message: string) => message) } },
@@ -91,6 +97,16 @@ describe('CoderTrainingsListComponent', () => {
     component.selectedTrainingName = 'Duplicate Label';
     component.onTrainingNameFilterChange();
 
+    expect(component.coderTrainings.map(training => training.id)).toEqual([10, 11]);
+  });
+
+  it('keeps the selected training name filter across normal reloads', async () => {
+    component.selectedTrainingName = 'Duplicate Label';
+    codingTrainingBackendServiceMock.getCoderTrainings.mockReturnValue(of(trainings));
+
+    await component.loadCoderTrainings();
+
+    expect(component.selectedTrainingName).toBe('Duplicate Label');
     expect(component.coderTrainings.map(training => training.id)).toEqual([10, 11]);
   });
 
@@ -134,5 +150,38 @@ describe('CoderTrainingsListComponent', () => {
         }
       })
     );
+  });
+
+  it('reloads trainings for a changed workspace and ignores stale responses', () => {
+    const workspace1$ = new Subject<CoderTraining[]>();
+    const workspace2Trainings: CoderTraining[] = [{
+      id: 20,
+      workspace_id: 2,
+      label: 'Workspace 2 Training',
+      created_at: new Date('2026-05-14T10:00:00'),
+      updated_at: new Date('2026-05-14T10:00:00'),
+      jobsCount: 1
+    }];
+    codingTrainingBackendServiceMock.getCoderTrainings.mockImplementation((workspaceId: number) => (
+      workspaceId === 1 ? workspace1$.asObservable() : of(workspace2Trainings)
+    ));
+
+    component.workspaceId = 1;
+    component.ngOnInit();
+    component.workspaceId = 2;
+    component.ngOnChanges({
+      workspaceId: {
+        currentValue: 2,
+        previousValue: 1,
+        firstChange: false,
+        isFirstChange: () => false
+      }
+    });
+
+    workspace1$.next(trainings);
+
+    expect(codingTrainingBackendServiceMock.getCoderTrainings).toHaveBeenCalledWith(1);
+    expect(codingTrainingBackendServiceMock.getCoderTrainings).toHaveBeenCalledWith(2);
+    expect(component.coderTrainings).toEqual(workspace2Trainings);
   });
 });

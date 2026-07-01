@@ -9,6 +9,7 @@ describe('WorkspaceCoderTrainingController', () => {
   let controller: WorkspaceCoderTrainingController;
   let coderTrainingService: {
     getWithinTrainingCodingComparison: jest.Mock;
+    getWithinTrainingComparisonFreshness: jest.Mock;
     transformToCoderPairs: jest.Mock;
     saveDiscussionResult: jest.Mock;
   };
@@ -24,6 +25,7 @@ describe('WorkspaceCoderTrainingController', () => {
   beforeEach(() => {
     coderTrainingService = {
       getWithinTrainingCodingComparison: jest.fn(),
+      getWithinTrainingComparisonFreshness: jest.fn(),
       transformToCoderPairs: jest.fn(),
       saveDiscussionResult: jest.fn()
     };
@@ -174,6 +176,28 @@ describe('WorkspaceCoderTrainingController', () => {
     expect(result.workspaceSummary.weightingMethod).toBe('unweighted');
     expect(result.workspaceSummary.calculationLevel).toBe('code');
     expect(result.workspaceSummary.totalDoubleCodedResponses).toBe(2);
+  });
+
+  it('forwards comparison freshness requests to the service', async () => {
+    coderTrainingService.getWithinTrainingComparisonFreshness.mockResolvedValue({
+      workspaceId: 12,
+      trainingId: 5,
+      version: 'fresh-1',
+      jobCount: 2,
+      unitCount: 4,
+      responseCount: 3,
+      discussionResultCount: 1,
+      latestTrainingChange: '2026-07-01T10:00:00.000Z',
+      latestJobChange: '2026-07-01T10:01:00.000Z',
+      latestUnitChange: '2026-07-01T10:02:00.000Z',
+      latestDiscussionChange: '2026-07-01T10:03:00.000Z'
+    });
+
+    const result = await controller.getTrainingComparisonFreshness(12, 5);
+
+    expect(coderTrainingService.getWithinTrainingComparisonFreshness)
+      .toHaveBeenCalledWith(12, 5);
+    expect(result.version).toBe('fresh-1');
   });
 
   it('forwards discussion result notes to the service', async () => {

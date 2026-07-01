@@ -543,6 +543,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.visibleManualCodingTabs[this.selectedManualTabIndex] || 'preparation';
   }
 
+  get workspaceId(): number {
+    return this.appService.selectedWorkspaceId;
+  }
+
   get visibleManualCodingTabs(): ManualCodingTab[] {
     if (this.canShowManualCompletionTab()) {
       return this.manualCodingTabs;
