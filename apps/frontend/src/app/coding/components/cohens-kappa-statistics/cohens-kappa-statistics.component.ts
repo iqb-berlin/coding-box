@@ -16,6 +16,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { finalize } from 'rxjs';
 import {
+  CohensKappaCalculationLevel,
   CohensKappaScope,
   CohensKappaCoderPair,
   CohensKappaStatisticsResponse,
@@ -79,10 +80,13 @@ export class CohensKappaStatisticsComponent implements OnInit {
   kappaStatistics: CohensKappaVariableSummary[] = [];
   showInterpretationScale = false;
   useWeightedMean = true; // Default to weighted mean (matching R reference implementation)
+  useCodeLevel = true;
   excludeTrainings = true; // Default: exclude trainings
   excludeTrainingsLocked = false;
   availableCoderTrainings: CoderTraining[] = [];
   selectedCoderTrainingId: number | null = null;
+  availableCoders: Array<{ id: number; name: string }> = [];
+  selectedCoderIds: number[] = [];
   exportInProgress: 'summary' | 'details' | 'xlsx' | null = null;
 
   workspaceKappaSummary: {
@@ -98,7 +102,25 @@ export class CohensKappaStatisticsComponent implements OnInit {
   }
 
   get canLoadKappaStatistics(): boolean {
-    return !this.hasCoderTrainingSelection || this.selectedCoderTrainingId !== null;
+    if (this.hasCoderTrainingSelection && this.selectedCoderTrainingId === null) {
+      return false;
+    }
+
+    return this.availableCoders.length === 0 || this.selectedCoderIds.length >= 2;
+  }
+
+  get noDataTranslationKey(): string {
+    if (this.canLoadKappaStatistics) {
+      return 'cohens-kappa-statistics.no-data';
+    }
+
+    return this.hasCoderTrainingSelection && this.selectedCoderTrainingId === null ?
+      'cohens-kappa-statistics.select-training-hint' :
+      'cohens-kappa-statistics.select-coders-hint';
+  }
+
+  get calculationLevel(): CohensKappaCalculationLevel {
+    return this.useCodeLevel ? 'code' : 'score';
   }
 
   getSelectedCoderTraining(): CoderTraining | undefined {
@@ -114,7 +136,23 @@ export class CohensKappaStatisticsComponent implements OnInit {
   }
 
   onCoderTrainingSelectionChange(): void {
+    this.resetCoderSelection();
     this.loadKappaStatistics();
+  }
+
+  onCoderSelectionChange(): void {
+    this.loadKappaStatistics();
+  }
+
+  selectAllCoders(): void {
+    this.selectedCoderIds = this.availableCoders.map(coder => coder.id);
+    this.loadKappaStatistics();
+  }
+
+  clearCoderSelection(): void {
+    this.selectedCoderIds = [];
+    this.kappaStatistics = [];
+    this.workspaceKappaSummary = null;
   }
 
   private loadKappaStatistics(): void {
@@ -139,7 +177,8 @@ export class CohensKappaStatisticsComponent implements OnInit {
         this.excludeTrainings,
         undefined,
         undefined,
-        kappaScope
+        kappaScope,
+        this.calculationLevel
       )
       .subscribe({
         next: response => {
@@ -150,6 +189,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
           this.workspaceKappaSummary = {
             workspaceSummary: response.workspaceSummary
           };
+          this.syncAvailableCoders(response);
           this.isLoading = false;
         },
         error: () => {
@@ -167,7 +207,13 @@ export class CohensKappaStatisticsComponent implements OnInit {
     this.loadKappaStatistics();
   }
 
+  toggleCalculationLevel(): void {
+    this.resetCoderSelection();
+    this.loadKappaStatistics();
+  }
+
   toggleExcludeTrainings(): void {
+    this.resetCoderSelection();
     this.loadKappaStatistics();
   }
 
@@ -186,7 +232,8 @@ export class CohensKappaStatisticsComponent implements OnInit {
         this.excludeTrainings,
         undefined,
         undefined,
-        kappaScope
+        kappaScope,
+        this.calculationLevel
       )
       .pipe(finalize(() => {
         this.exportInProgress = null;
@@ -220,7 +267,8 @@ export class CohensKappaStatisticsComponent implements OnInit {
         this.excludeTrainings,
         undefined,
         undefined,
-        kappaScope
+        kappaScope,
+        this.calculationLevel
       )
       .pipe(finalize(() => {
         this.exportInProgress = null;
@@ -254,7 +302,8 @@ export class CohensKappaStatisticsComponent implements OnInit {
         this.excludeTrainings,
         undefined,
         undefined,
-        kappaScope
+        kappaScope,
+        this.calculationLevel
       )
       .pipe(finalize(() => {
         this.exportInProgress = null;
@@ -295,8 +344,13 @@ export class CohensKappaStatisticsComponent implements OnInit {
   }
 
   private getEffectiveKappaScope(): CohensKappaScope | undefined {
+    const selectedCoderIds = this.availableCoders.length > 0 ? this.selectedCoderIds : [];
+
     if (!this.hasCoderTrainingSelection) {
-      return this.dialogData?.scope;
+      return {
+        ...this.dialogData?.scope,
+        ...(selectedCoderIds.length ? { coderIds: selectedCoderIds } : {})
+      };
     }
 
     if (this.selectedCoderTrainingId === null) {
@@ -305,8 +359,44 @@ export class CohensKappaStatisticsComponent implements OnInit {
 
     return {
       ...this.dialogData?.scope,
-      coderTrainingIds: [this.selectedCoderTrainingId]
+      coderTrainingIds: [this.selectedCoderTrainingId],
+      ...(selectedCoderIds.length ? { coderIds: selectedCoderIds } : {})
     };
+  }
+
+  private resetCoderSelection(): void {
+    this.availableCoders = [];
+    this.selectedCoderIds = [];
+  }
+
+  private syncAvailableCoders(response: CohensKappaStatisticsResponse): void {
+    const codersById = new Map<number, string>();
+    response.variables.forEach(variable => {
+      variable.coderPairs.forEach(pair => {
+        codersById.set(pair.coder1Id, pair.coder1Name);
+        codersById.set(pair.coder2Id, pair.coder2Name);
+      });
+    });
+
+    if (codersById.size === 0) {
+      return;
+    }
+
+    const previousSelectedIds = new Set(this.selectedCoderIds);
+    const wasInitialized = this.availableCoders.length > 0;
+    if (wasInitialized) {
+      this.availableCoders.forEach(coder => codersById.set(coder.id, coder.name));
+    }
+
+    this.availableCoders = Array.from(codersById.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
+
+    this.selectedCoderIds = wasInitialized ?
+      this.availableCoders
+        .map(coder => coder.id)
+        .filter(coderId => previousSelectedIds.has(coderId)) :
+      this.availableCoders.map(coder => coder.id);
   }
 
   private saveBlob(blob: Blob, filename: string): void {
