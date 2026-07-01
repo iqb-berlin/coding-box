@@ -1,9 +1,4 @@
-import * as packageInfo from '../../../../package.json';
-
-const packageVersion = (
-  (packageInfo as unknown as { default?: { version: string } }).default ||
-  (packageInfo as unknown as { version: string })
-).version;
+import { appVersion } from './app-version';
 
 declare global {
   interface Window {
@@ -22,7 +17,7 @@ declare global {
 // Standardkonfiguration, die durch Laufzeitkonfiguration überschrieben werden kann
 const defaultConfig = {
   production: false,
-  appVersion: packageVersion,
+  appVersion,
   backendUrl: 'api/',
   keycloak: {
     url: 'https://keycloak.kodierbox.iqb.hu-berlin.de/',
