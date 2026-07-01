@@ -19,7 +19,7 @@ ENTRYPOINT ["npx", "nx"]
 
 FROM ${REGISTRY_PATH}nginxinc/nginx-unprivileged:stable AS prod
 ARG PROJECT
-ARG APP_VERSION=1.16.3
+ARG APP_VERSION=local
 ENV APP_VERSION=$APP_VERSION
 
 USER root

@@ -17,7 +17,7 @@ json_string() {
 KEYCLOAK_URL_VALUE=${KEYCLOAK_URL:-https://keycloak.kodierbox.iqb.hu-berlin.de/}
 KEYCLOAK_REALM_VALUE=${KEYCLOAK_REALM:-coding-box}
 KEYCLOAK_CLIENT_ID_VALUE=${KEYCLOAK_CLIENT_ID:-coding-box}
-APP_VERSION_VALUE=${APP_VERSION:-1.16.3}
+APP_VERSION_VALUE=${APP_VERSION:-local}
 BACKEND_URL_VALUE=${BACKEND_URL:-api/}
 
 # Generieren der Konfigurationsdatei mit Umgebungsvariablen

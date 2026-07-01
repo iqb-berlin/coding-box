@@ -4,6 +4,5 @@ window.RUNTIME_CONFIG = {
     realm: 'coding-box',
     clientId: 'coding-box'
   },
-  appVersion: '1.16.3',
   backendUrl: 'api/'
 };

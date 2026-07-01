@@ -1,3 +1,10 @@
+import * as packageInfo from '../../../../package.json';
+
+const packageVersion = (
+  (packageInfo as unknown as { default?: { version: string } }).default ||
+  (packageInfo as unknown as { version: string })
+).version;
+
 declare global {
   interface Window {
     RUNTIME_CONFIG?: {
@@ -15,7 +22,7 @@ declare global {
 // Standardkonfiguration, die durch Laufzeitkonfiguration überschrieben werden kann
 const defaultConfig = {
   production: false,
-  appVersion: '1.16.3',
+  appVersion: packageVersion,
   backendUrl: 'api/',
   keycloak: {
     url: 'https://keycloak.kodierbox.iqb.hu-berlin.de/',
