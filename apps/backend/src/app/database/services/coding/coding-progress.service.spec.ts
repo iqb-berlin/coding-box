@@ -720,123 +720,71 @@ describe('CodingProgressService variable coverage conflicts', () => {
 
       return null;
     });
+    const incompleteVariablesQuery = createQueryBuilder([
+      {
+        unitName: 'AGG_UNIT',
+        variableId: '01',
+        statusV1: String(codingIncompleteStatus),
+        caseCount: '3'
+      }
+    ]);
+    const variableResponsesQuery = createQueryBuilder([
+      {
+        responseId: '100',
+        unitName: 'AGG_UNIT',
+        variableId: '01',
+        value: 'Same answer',
+        codeV2: null,
+        statusV2: null,
+        statusV1: String(codingIncompleteStatus),
+        bookletName: 'BookletA',
+        personLogin: 'login-1',
+        personCode: 'code-1',
+        personGroup: 'group-1'
+      },
+      {
+        responseId: '101',
+        unitName: 'AGG_UNIT',
+        variableId: '01',
+        value: 'sameanswer',
+        codeV2: null,
+        statusV2: null,
+        statusV1: String(codingIncompleteStatus),
+        bookletName: 'BookletA',
+        personLogin: 'login-2',
+        personCode: 'code-2',
+        personGroup: 'group-1'
+      },
+      {
+        responseId: '102',
+        unitName: 'AGG_UNIT',
+        variableId: '01',
+        value: ' SAME ANSWER ',
+        codeV2: null,
+        statusV2: null,
+        statusV1: String(codingIncompleteStatus),
+        bookletName: 'BookletA',
+        personLogin: 'login-3',
+        personCode: 'code-3',
+        personGroup: 'group-1'
+      },
+      {
+        responseId: '103',
+        unitName: 'AGG_UNIT',
+        variableId: '01',
+        value: 'already applied answer',
+        codeV2: null,
+        statusV2: String(codingCompleteStatus),
+        statusV1: String(codingIncompleteStatus),
+        bookletName: 'BookletA',
+        personLogin: 'login-4',
+        personCode: 'code-4',
+        personGroup: 'group-1'
+      }
+    ]);
     responseRepository.createQueryBuilder
-      .mockReturnValueOnce(createQueryBuilder([
-        {
-          unitName: 'AGG_UNIT',
-          variableId: '01',
-          statusV1: String(codingIncompleteStatus),
-          caseCount: '3'
-        }
-      ]))
-      .mockReturnValueOnce(createQueryBuilder([
-        {
-          responseId: '100',
-          unitName: 'AGG_UNIT',
-          variableId: '01',
-          value: 'Same answer',
-          codeV2: null,
-          statusV2: null,
-          statusV1: String(codingIncompleteStatus),
-          bookletName: 'BookletA',
-          personLogin: 'login-1',
-          personCode: 'code-1',
-          personGroup: 'group-1'
-        },
-        {
-          responseId: '101',
-          unitName: 'AGG_UNIT',
-          variableId: '01',
-          value: 'sameanswer',
-          codeV2: null,
-          statusV2: null,
-          statusV1: String(codingIncompleteStatus),
-          bookletName: 'BookletA',
-          personLogin: 'login-2',
-          personCode: 'code-2',
-          personGroup: 'group-1'
-        },
-        {
-          responseId: '102',
-          unitName: 'AGG_UNIT',
-          variableId: '01',
-          value: ' SAME ANSWER ',
-          codeV2: null,
-          statusV2: null,
-          statusV1: String(codingIncompleteStatus),
-          bookletName: 'BookletA',
-          personLogin: 'login-3',
-          personCode: 'code-3',
-          personGroup: 'group-1'
-        },
-        {
-          responseId: '103',
-          unitName: 'AGG_UNIT',
-          variableId: '01',
-          value: 'already applied answer',
-          codeV2: null,
-          statusV2: String(codingCompleteStatus),
-          statusV1: String(codingIncompleteStatus),
-          bookletName: 'BookletA',
-          personLogin: 'login-4',
-          personCode: 'code-4',
-          personGroup: 'group-1'
-        }
-      ]))
-      .mockReturnValueOnce(createQueryBuilder([
-        {
-          responseId: '100',
-          unitName: 'AGG_UNIT',
-          variableId: '01',
-          value: 'Same answer',
-          codeV2: null,
-          statusV2: null,
-          statusV1: String(codingIncompleteStatus),
-          bookletName: 'BookletA',
-          personLogin: 'login-1',
-          personCode: 'code-1',
-          personGroup: 'group-1'
-        },
-        {
-          responseId: '101',
-          unitName: 'AGG_UNIT',
-          variableId: '01',
-          value: 'sameanswer',
-          codeV2: null,
-          statusV2: null,
-          statusV1: String(codingIncompleteStatus),
-          bookletName: 'BookletA',
-          personLogin: 'login-2',
-          personCode: 'code-2',
-          personGroup: 'group-1'
-        },
-        {
-          responseId: '102',
-          unitName: 'AGG_UNIT',
-          variableId: '01',
-          value: ' SAME ANSWER ',
-          codeV2: null,
-          statusV2: null,
-          statusV1: String(codingIncompleteStatus),
-          bookletName: 'BookletA',
-          personLogin: 'login-3',
-          personCode: 'code-3',
-          personGroup: 'group-1'
-        },
-        {
-          responseId: '103',
-          unitName: 'AGG_UNIT',
-          variableId: '01',
-          value: 'already applied answer',
-          codeV2: null,
-          statusV2: String(codingCompleteStatus),
-          statusV1: String(codingIncompleteStatus),
-          bookletName: 'BookletA',
-          personLogin: 'login-4',
-          personCode: 'code-4',
-          personGroup: 'group-1'
-        }
-      ]));
+      .mockReturnValueOnce(incompleteVariablesQuery)
+      .mockReturnValueOnce(variableResponsesQuery);
     workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
       ['AGG_UNIT', new Set(['01'])]
     ]));
@@ -847,8 +795,9 @@ describe('CodingProgressService variable coverage conflicts', () => {
         assigned_variables: [{ unitName: 'AGG_UNIT', variableId: '01' }]
       }
     ]);
+    const assignedResponseIdsQuery = createQueryBuilder([{ responseId: '100' }]);
     codingJobUnitRepository.createQueryBuilder
-      .mockReturnValueOnce(createQueryBuilder([{ responseId: '100' }]))
+      .mockReturnValueOnce(assignedResponseIdsQuery)
       .mockReturnValueOnce(createQueryBuilder([]));
 
     const result = await service.getVariableCoverageOverview(5);
@@ -860,6 +809,20 @@ describe('CodingProgressService variable coverage conflicts', () => {
     expect(result.variableCaseCounts).toEqual([
       { unitName: 'AGG_UNIT', variableId: '01', caseCount: 3 }
     ]);
+    expect(variableResponsesQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('unit.name = :variableCoverageResponsesUnitName0'),
+      expect.objectContaining({
+        variableCoverageResponsesUnitName0: 'AGG_UNIT',
+        variableCoverageResponsesVariableId0: '01'
+      })
+    );
+    expect(assignedResponseIdsQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('cju.unit_name = :assignedVariableCoverageUnitName0'),
+      expect.objectContaining({
+        assignedVariableCoverageUnitName0: 'AGG_UNIT',
+        assignedVariableCoverageVariableId0: '01'
+      })
+    );
   });
 
   it('flags variables when the same response is assigned through multiple job definitions', async () => {
