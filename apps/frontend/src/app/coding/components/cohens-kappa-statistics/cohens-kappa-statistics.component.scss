@@ -1,4 +1,29 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+
+  > div {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  h1[mat-dialog-title] {
+    flex: 0 0 auto;
+  }
+
+  mat-dialog-actions {
+    flex: 0 0 auto;
+  }
+}
+
 .cohens-kappa-container {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
   padding: 20px;
 
   .content-section {
