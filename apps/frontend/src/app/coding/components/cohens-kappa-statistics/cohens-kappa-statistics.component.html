@@ -48,7 +48,7 @@
         <p>{{ 'cohens-kappa-statistics.loading' | translate }}</p>
       </div>
       } @else {
-      <mat-card class="workspace-kappa-card" *ngIf="workspaceKappaSummary">
+      <mat-card class="workspace-kappa-card" *ngIf="workspaceKappaSummary || availableCoders.length > 0">
         <mat-card-header>
           <mat-card-title>
             <mat-icon>analytics</mat-icon>
@@ -81,57 +81,103 @@
                 info
               </mat-icon>
               <span class="weighting-method-label">
-                ({{ (workspaceKappaSummary.workspaceSummary.weightingMethod === 'weighted' ?
+                ({{ (useWeightedMean ?
                   'cohens-kappa-statistics.weighted' :
                   'cohens-kappa-statistics.unweighted') | translate }})
               </span>
             </div>
+
+            <div class="toggle-item">
+              <mat-slide-toggle [(ngModel)]="useCodeLevel" (change)="toggleCalculationLevel()" color="primary">
+                {{ 'cohens-kappa-statistics.code-level' | translate }}
+              </mat-slide-toggle>
+              <mat-icon class="info-icon"
+                [matTooltip]="'cohens-kappa-statistics.code-level-tooltip' | translate"
+                matTooltipPosition="right">
+                info
+              </mat-icon>
+              <span class="weighting-method-label">
+                ({{ (useCodeLevel ?
+                  'cohens-kappa-statistics.code-level-short' :
+                  'cohens-kappa-statistics.score-level-short') | translate }})
+              </span>
+            </div>
+
+            <div class="coder-selection" *ngIf="availableCoders.length > 0">
+              <mat-form-field appearance="outline">
+                <mat-label>{{ 'cohens-kappa-statistics.coder-select-label' | translate }}</mat-label>
+                <mat-select
+                  multiple
+                  [(ngModel)]="selectedCoderIds"
+                  (selectionChange)="onCoderSelectionChange()"
+                >
+                  <mat-select-trigger>
+                    {{ 'cohens-kappa-statistics.coder-select-count' | translate:{count: selectedCoderIds.length} }}
+                  </mat-select-trigger>
+                  <mat-option *ngFor="let coder of availableCoders" [value]="coder.id">
+                    {{ coder.name }}
+                  </mat-option>
+                </mat-select>
+              </mat-form-field>
+              <div class="coder-selection-actions">
+                <button mat-button type="button" (click)="selectAllCoders()">
+                  <mat-icon>done_all</mat-icon>
+                  {{ 'cohens-kappa-statistics.select-all-coders' | translate }}
+                </button>
+                <button mat-button type="button" (click)="clearCoderSelection()">
+                  <mat-icon>clear</mat-icon>
+                  {{ 'cohens-kappa-statistics.clear-coder-selection' | translate }}
+                </button>
+              </div>
+            </div>
           </div>
 
+          <ng-container *ngIf="workspaceKappaSummary as summary">
           <div class="kappa-stats">
             <div class="stat-item">
               <span class="stat-label">{{ 'cohens-kappa-statistics.average-kappa' | translate }}</span>
-              <span class="stat-value kappa" [ngClass]="getKappaClass(workspaceKappaSummary.workspaceSummary.averageKappa)">
-                {{ workspaceKappaSummary.workspaceSummary.averageKappa !== null ?
-                  (workspaceKappaSummary.workspaceSummary.averageKappa | number:'1.3-3') : 'N/A' }}
+              <span class="stat-value kappa" [ngClass]="getKappaClass(summary.workspaceSummary.averageKappa)">
+                {{ summary.workspaceSummary.averageKappa !== null ?
+                  (summary.workspaceSummary.averageKappa | number:'1.3-3') : 'N/A' }}
               </span>
             </div>
             <div class="stat-item">
               <span class="stat-label">{{ 'cohens-kappa-statistics.coder-pairs-analyzed' | translate }}</span>
-              <span class="stat-value">{{ workspaceKappaSummary.workspaceSummary.totalCoderPairs }}</span>
+              <span class="stat-value">{{ summary.workspaceSummary.totalCoderPairs }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">{{ 'cohens-kappa-statistics.average-agreement' | translate }}</span>
               <span class="stat-value">
-                {{ workspaceKappaSummary.workspaceSummary.meanAgreement !== null ?
-                  (workspaceKappaSummary.workspaceSummary.meanAgreement | percent:'1.1-1') : 'N/A' }}
+                {{ summary.workspaceSummary.meanAgreement !== null ?
+                  (summary.workspaceSummary.meanAgreement | percent:'1.1-1') : 'N/A' }}
               </span>
             </div>
             <div class="stat-item">
               <span class="stat-label">{{ 'cohens-kappa-statistics.total-coded-responses' | translate }}</span>
-              <span class="stat-value">{{ workspaceKappaSummary.workspaceSummary.totalCodedResponses }}</span>
+              <span class="stat-value">{{ summary.workspaceSummary.totalCodedResponses }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">{{ 'cohens-kappa-statistics.double-coded-responses' | translate }}</span>
-              <span class="stat-value">{{ workspaceKappaSummary.workspaceSummary.totalDoubleCodedResponses }}</span>
+              <span class="stat-value">{{ summary.workspaceSummary.totalDoubleCodedResponses }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">{{ 'cohens-kappa-statistics.coders-included' | translate }}</span>
-              <span class="stat-value">{{ workspaceKappaSummary.workspaceSummary.codersIncluded }}</span>
+              <span class="stat-value">{{ summary.workspaceSummary.codersIncluded }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">{{ 'cohens-kappa-statistics.variables-included' | translate }}</span>
-              <span class="stat-value">{{ workspaceKappaSummary.workspaceSummary.variablesIncluded }}</span>
+              <span class="stat-value">{{ summary.workspaceSummary.variablesIncluded }}</span>
             </div>
           </div>
-          <div class="kappa-interpretation" *ngIf="workspaceKappaSummary.workspaceSummary.averageKappa !== null">
+          <div class="kappa-interpretation" *ngIf="summary.workspaceSummary.averageKappa !== null">
             <div class="interpretation-text">
               <strong>{{ 'cohens-kappa-statistics.interpretation' | translate }}</strong>
-              <span [class]="getKappaInterpretationClass(workspaceKappaSummary.workspaceSummary.averageKappa)">
-                {{ getKappaInterpretationText(workspaceKappaSummary.workspaceSummary.averageKappa) }}
+              <span [class]="getKappaInterpretationClass(summary.workspaceSummary.averageKappa)">
+                {{ getKappaInterpretationText(summary.workspaceSummary.averageKappa) }}
               </span>
             </div>
           </div>
+          </ng-container>
         </mat-card-content>
       </mat-card>
 
@@ -219,11 +265,7 @@
           @if (kappaStatistics.length === 0) {
           <div class="no-kappa-data">
             <mat-icon>info</mat-icon>
-            <p>{{
-              (canLoadKappaStatistics ?
-                'cohens-kappa-statistics.no-data' :
-                'cohens-kappa-statistics.select-training-hint') | translate
-            }}</p>
+            <p>{{ noDataTranslationKey | translate }}</p>
           </div>
           } @else {
           <section class="kappa-table-section">

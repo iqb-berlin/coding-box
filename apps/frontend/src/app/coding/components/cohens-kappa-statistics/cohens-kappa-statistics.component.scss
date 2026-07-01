@@ -80,6 +80,25 @@
             font-style: italic;
           }
         }
+
+        .coder-selection {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 8px 12px;
+          padding-top: 4px;
+
+          mat-form-field {
+            flex: 1 1 320px;
+            max-width: 520px;
+          }
+
+          .coder-selection-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+          }
+        }
       }
 
       .kappa-stats {

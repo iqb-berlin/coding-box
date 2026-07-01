@@ -14,8 +14,13 @@ describe('WorkspaceCodingStatisticsController', () => {
     getDoubleCodedVariablesForReview: jest.Mock;
     getCodedVariablesForKappa: jest.Mock;
   };
+  let codingReplayService: { generateReplayUrlsForItemsBulk: jest.Mock };
   let codingReadinessService: { getReadiness: jest.Mock };
   let controller: WorkspaceCodingStatisticsController;
+  const request = {
+    protocol: 'http',
+    get: jest.fn().mockReturnValue('localhost')
+  };
 
   beforeEach(() => {
     codingStatisticsService = {
@@ -34,6 +39,18 @@ describe('WorkspaceCodingStatisticsController', () => {
     codingReviewService = {
       getDoubleCodedVariablesForReview: jest.fn(),
       getCodedVariablesForKappa: jest.fn().mockResolvedValue([])
+    };
+    codingReplayService = {
+      generateReplayUrlsForItemsBulk: jest.fn().mockImplementation(async (
+        _workspaceId: number,
+        items: Array<{ responseId: number }>,
+        serverUrl: string
+      ) => (
+        items.map((item: { responseId: number }) => ({
+          ...item,
+          replayUrl: `${serverUrl}/#/replay/${item.responseId}`
+        }))
+      ))
     };
     codingReadinessService = {
       getReadiness: jest.fn().mockResolvedValue({
@@ -66,8 +83,15 @@ describe('WorkspaceCodingStatisticsController', () => {
       {} as never,
       {} as never,
       codingReadinessService as never,
+      codingReplayService as never,
       {} as never
     );
+    request.get.mockImplementation((name: string) => {
+      if (name === 'host') {
+        return 'localhost';
+      }
+      return undefined;
+    });
   });
 
   it('requires coding-manager access for applied results overview', () => {
@@ -135,6 +159,7 @@ describe('WorkspaceCodingStatisticsController', () => {
   it('adds weighted mean kappa per variable to detailed kappa statistics', async () => {
     codingReviewService.getCodedVariablesForKappa.mockResolvedValue([
       {
+        responseId: 101,
         unitName: 'UNIT',
         variableId: 'VAR',
         personLogin: 'p1',
@@ -170,6 +195,7 @@ describe('WorkspaceCodingStatisticsController', () => {
         ]
       },
       {
+        responseId: 102,
         unitName: 'UNIT',
         variableId: 'VAR',
         personLogin: 'p2',
@@ -247,7 +273,130 @@ describe('WorkspaceCodingStatisticsController', () => {
     expect(result.workspaceSummary.totalDoubleCodedResponses).toBe(1);
     expect(
       codingReviewService.getCodedVariablesForKappa
-    ).toHaveBeenCalledWith(5, false, [11, 12], [21], [31, 32]);
+    ).toHaveBeenCalledWith(5, false, [11, 12], [21], [31, 32], 'code');
+  });
+
+  it('calculates detailed kappa statistics on score level when requested', async () => {
+    codingReviewService.getCodedVariablesForKappa.mockResolvedValue([
+      {
+        responseId: 101,
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        personLogin: 'p1',
+        personCode: 'P1',
+        personGroup: 'G1',
+        bookletName: 'BOOKLET',
+        coderResults: [
+          {
+            coderId: 1,
+            coderName: 'Coder 1',
+            jobId: 11,
+            code: 1,
+            score: 1,
+            notes: null,
+            codedAt: new Date()
+          },
+          {
+            coderId: 2,
+            coderName: 'Coder 2',
+            jobId: 12,
+            code: 2,
+            score: 1,
+            notes: null,
+            codedAt: new Date()
+          }
+        ]
+      },
+      {
+        responseId: 102,
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        personLogin: 'p2',
+        personCode: 'P2',
+        personGroup: 'G1',
+        bookletName: 'BOOKLET',
+        coderResults: [
+          {
+            coderId: 1,
+            coderName: 'Coder 1',
+            jobId: 13,
+            code: 1,
+            score: 1,
+            notes: null,
+            codedAt: new Date()
+          },
+          {
+            coderId: 2,
+            coderName: 'Coder 2',
+            jobId: 14,
+            code: 1,
+            score: null,
+            notes: null,
+            codedAt: new Date()
+          }
+        ]
+      }
+    ]);
+    codingStatisticsService.calculateCohensKappa.mockReturnValue([
+      {
+        coder1Id: 1,
+        coder1Name: 'Coder 1',
+        coder2Id: 2,
+        coder2Name: 'Coder 2',
+        kappa: 1,
+        agreement: 1,
+        totalItems: 1,
+        validPairs: 1,
+        interpretation: 'kappa.almost_perfect'
+      }
+    ]);
+
+    const result = await controller.getCohensKappaStatistics(
+      5,
+      'true',
+      undefined,
+      undefined,
+      'false',
+      undefined,
+      undefined,
+      undefined,
+      'score'
+    );
+
+    expect(codingStatisticsService.calculateCohensKappa).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          coder1Id: 1,
+          coder2Id: 2,
+          codes: [{ code1: 1, code2: 2 }],
+          scores: [{ score1: 1, score2: 1 }]
+        })
+      ],
+      'score'
+    );
+    expect(codingReviewService.getCodedVariablesForKappa)
+      .toHaveBeenCalledWith(5, false, [], [], [], 'score');
+    expect(result.variables[0].doubleCodedCount).toBe(1);
+    expect(result.workspaceSummary.calculationLevel).toBe('score');
+  });
+
+  it.each([
+    ['score,code' as string | string[]],
+    [['score', 'code'] as string | string[]]
+  ])('rejects ambiguous kappa calculation levels', async level => {
+    await expect(controller.getCohensKappaStatistics(
+      5,
+      'true',
+      undefined,
+      undefined,
+      'false',
+      undefined,
+      undefined,
+      undefined,
+      level
+    )).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(codingReviewService.getCodedVariablesForKappa).not.toHaveBeenCalled();
   });
 
   it('adds unweighted mean kappa per variable to detailed kappa statistics', async () => {
@@ -392,11 +541,12 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       response as never
     );
 
     expect(codingReviewService.getCodedVariablesForKappa)
-      .toHaveBeenCalledWith(5, false, [], [], []);
+      .toHaveBeenCalledWith(5, false, [], [], [], 'code');
     expect(response.setHeader).toHaveBeenCalledWith(
       'Content-Type',
       'text/csv; charset=utf-8'
@@ -473,6 +623,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       '=UNIT',
       '+VAR',
       'true',
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -568,6 +719,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       response as never
     );
 
@@ -583,8 +735,10 @@ describe('WorkspaceCodingStatisticsController', () => {
   it('exports kappa workbook with summary, pairwise and coding result sheets', async () => {
     codingReviewService.getCodedVariablesForKappa.mockResolvedValue([
       {
+        responseId: 101,
         unitName: 'UNIT',
         variableId: 'VAR',
+        variableAnchor: 'ANCHOR_VAR',
         personLogin: 'p1',
         personCode: 'P1',
         personGroup: 'G1',
@@ -612,6 +766,7 @@ describe('WorkspaceCodingStatisticsController', () => {
         ]
       },
       {
+        responseId: 102,
         unitName: 'UNIT',
         variableId: 'VAR',
         personLogin: 'p2',
@@ -658,12 +813,25 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      request as never,
       response as never
     );
 
     expect(response.setHeader).toHaveBeenCalledWith(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    expect(codingReplayService.generateReplayUrlsForItemsBulk).toHaveBeenCalledWith(
+      5,
+      expect.arrayContaining([
+        expect.objectContaining({
+          responseId: 101,
+          variableId: 'VAR',
+          variableAnchor: 'ANCHOR_VAR'
+        })
+      ]),
+      'http://localhost'
     );
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(response.send.mock.calls[0][0] as Buffer);
@@ -688,17 +856,103 @@ describe('WorkspaceCodingStatisticsController', () => {
     expect(pairwiseSheet?.getRow(1).getCell(1).value).toBe('subunit');
     expect(pairwiseSheet?.getRow(2).getCell(5).value).toBe('Coder 1');
     expect(codingResultsSheet?.getRow(1).getCell(1).value).toBe('Test.Person.Login');
+    expect(codingResultsSheet?.getRow(1).getCell(6).value).toBe('Replay URL');
     expect(codingResultsSheet?.actualRowCount).toBe(3);
     expect(codingResultsSheet?.getRow(2).getCell(2).value).toBe('G1');
-    expect(codingResultsSheet?.getRow(2).getCell(6).value).toBe(1);
-    expect(codingResultsSheet?.getRow(2).getCell(8).value).toBe(2);
-    expect(codingResultsSheet?.getRow(2).getCell(10).value).toBe('Coder 1: ok');
+    expect(codingResultsSheet?.getRow(2).getCell(6).value).toBe('http://localhost/#/replay/101');
+    expect(codingResultsSheet?.getRow(2).getCell(7).value).toBe(1);
+    expect(codingResultsSheet?.getRow(2).getCell(9).value).toBe(2);
+    expect(codingResultsSheet?.getRow(2).getCell(11).value).toBe('Coder 1: ok');
     expect(codingResultsSheet?.getRow(3).getCell(1).value).toBe('p2');
+  });
+
+  it('uses forwarded protocol for kappa workbook replay URLs', async () => {
+    request.get.mockImplementation((name: string) => {
+      if (name === 'x-forwarded-proto') {
+        return 'https';
+      }
+      if (name === 'host') {
+        return 'localhost';
+      }
+      return undefined;
+    });
+    codingReviewService.getCodedVariablesForKappa.mockResolvedValue([
+      {
+        responseId: 101,
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        variableAnchor: 'ANCHOR_VAR',
+        personLogin: 'p1',
+        personCode: 'P1',
+        personGroup: 'G1',
+        bookletName: 'BOOKLET',
+        coderResults: [
+          {
+            coderId: 1,
+            coderName: 'Coder 1',
+            jobId: 11,
+            jobName: 'Coding Job A',
+            code: 1,
+            score: 1,
+            notes: null,
+            codedAt: new Date()
+          },
+          {
+            coderId: 2,
+            coderName: 'Coder 2',
+            jobId: 12,
+            jobName: 'Coding Job B',
+            code: 1,
+            score: 1,
+            notes: null,
+            codedAt: new Date()
+          }
+        ]
+      }
+    ]);
+    codingStatisticsService.calculateCohensKappa.mockReturnValue([
+      {
+        coder1Id: 1,
+        coder1Name: 'Coder 1',
+        coder2Id: 2,
+        coder2Name: 'Coder 2',
+        kappa: 1,
+        agreement: 1,
+        totalItems: 1,
+        validPairs: 1,
+        interpretation: 'kappa.almost_perfect'
+      }
+    ]);
+    const response = {
+      setHeader: jest.fn(),
+      send: jest.fn()
+    };
+
+    await controller.exportCohensKappaStatisticsAsXlsx(
+      5,
+      'true',
+      undefined,
+      undefined,
+      'true',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      request as never,
+      response as never
+    );
+
+    expect(codingReplayService.generateReplayUrlsForItemsBulk).toHaveBeenCalledWith(
+      5,
+      expect.any(Array),
+      'https://localhost'
+    );
   });
 
   it('keeps workbook coding result columns distinct for coders with the same name', async () => {
     codingReviewService.getCodedVariablesForKappa.mockResolvedValue([
       {
+        responseId: 101,
         unitName: 'UNIT',
         variableId: 'VAR',
         personLogin: 'p1',
@@ -755,6 +1009,8 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      request as never,
       response as never
     );
 
@@ -763,16 +1019,17 @@ describe('WorkspaceCodingStatisticsController', () => {
 
     const codingResultsSheet = workbook.getWorksheet('Kodierergebnisse');
 
-    expect(codingResultsSheet?.getRow(1).getCell(6).value).toBe('Coder (1).Code');
-    expect(codingResultsSheet?.getRow(1).getCell(8).value).toBe('Coder (2).Code');
-    expect(codingResultsSheet?.getRow(2).getCell(6).value).toBe(1);
-    expect(codingResultsSheet?.getRow(2).getCell(8).value).toBe(2);
-    expect(codingResultsSheet?.getRow(2).getCell(10).value).toBe('Coder (1): first | Coder (2): second');
+    expect(codingResultsSheet?.getRow(1).getCell(7).value).toBe('Coder (1).Code');
+    expect(codingResultsSheet?.getRow(1).getCell(9).value).toBe('Coder (2).Code');
+    expect(codingResultsSheet?.getRow(2).getCell(7).value).toBe(1);
+    expect(codingResultsSheet?.getRow(2).getCell(9).value).toBe(2);
+    expect(codingResultsSheet?.getRow(2).getCell(11).value).toBe('Coder (1): first | Coder (2): second');
   });
 
   it('keeps workbook coding result columns distinct when disambiguated labels collide with real names', async () => {
     codingReviewService.getCodedVariablesForKappa.mockResolvedValue([
       {
+        responseId: 101,
         unitName: 'UNIT',
         variableId: 'VAR',
         personLogin: 'p1',
@@ -861,6 +1118,8 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      request as never,
       response as never
     );
 
@@ -869,11 +1128,11 @@ describe('WorkspaceCodingStatisticsController', () => {
 
     const codingResultsSheet = workbook.getWorksheet('Kodierergebnisse');
 
-    expect(codingResultsSheet?.getRow(1).getCell(6).value).toBe('Coder (1).Code');
-    expect(codingResultsSheet?.getRow(1).getCell(8).value).toBe('Coder (2).Code');
-    expect(codingResultsSheet?.getRow(1).getCell(10).value).toBe('Coder (2) [3].Code');
-    expect(codingResultsSheet?.getRow(2).getCell(6).value).toBe(1);
-    expect(codingResultsSheet?.getRow(2).getCell(8).value).toBe(2);
-    expect(codingResultsSheet?.getRow(2).getCell(10).value).toBe(3);
+    expect(codingResultsSheet?.getRow(1).getCell(7).value).toBe('Coder (1).Code');
+    expect(codingResultsSheet?.getRow(1).getCell(9).value).toBe('Coder (2).Code');
+    expect(codingResultsSheet?.getRow(1).getCell(11).value).toBe('Coder (2) [3].Code');
+    expect(codingResultsSheet?.getRow(2).getCell(7).value).toBe(1);
+    expect(codingResultsSheet?.getRow(2).getCell(9).value).toBe(2);
+    expect(codingResultsSheet?.getRow(2).getCell(11).value).toBe(3);
   });
 });
