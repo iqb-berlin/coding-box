@@ -2113,6 +2113,186 @@ describe('CoderTrainingService', () => {
   });
 
   describe('getWithinTrainingCodingComparison', () => {
+    const createFreshnessQueryBuilder = (
+      row: Record<string, unknown> = {},
+      rows: Record<string, unknown>[] = []
+    ) => ({
+      innerJoin: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      addGroupBy: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue(rows),
+      getRawOne: jest.fn().mockResolvedValue(row)
+    });
+
+    it('builds a within-training comparison freshness token from aggregate changes', async () => {
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        workspace_id: 1,
+        updated_at: new Date('2026-06-01T10:00:00Z')
+      });
+      (codingJobRepository.find as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 11,
+          workspace_id: 1,
+          training_id: 5,
+          missings_profile_id: null,
+          updated_at: new Date('2026-06-01T10:05:00Z')
+        },
+        {
+          id: 12,
+          workspace_id: 1,
+          training_id: 5,
+          missings_profile_id: 7,
+          updated_at: new Date('2026-06-01T10:10:00Z')
+        }
+      ]);
+
+      const unitQb = createFreshnessQueryBuilder({
+        unitCount: '4',
+        responseCount: '2',
+        latestUnitChange: '2026-06-01T10:20:00.000Z'
+      });
+      const responseQb = createFreshnessQueryBuilder({}, [
+        { responseId: '101', responseHash: 'response-hash-101' },
+        { responseId: '102', responseHash: 'response-hash-102' }
+      ]);
+      const discussionQb = createFreshnessQueryBuilder({
+        discussionResultCount: '1',
+        latestDiscussionChange: '2026-06-01T10:30:00.000Z'
+      });
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(unitQb)
+        .mockReturnValueOnce(responseQb)
+        .mockReturnValueOnce(discussionQb);
+
+      const result = await service.getWithinTrainingComparisonFreshness(1, 5);
+
+      expect(result).toMatchObject({
+        workspaceId: 1,
+        trainingId: 5,
+        jobCount: 2,
+        unitCount: 4,
+        responseCount: 2,
+        discussionResultCount: 1,
+        latestTrainingChange: '2026-06-01T10:00:00.000Z',
+        latestJobChange: '2026-06-01T10:10:00.000Z',
+        latestUnitChange: '2026-06-01T10:20:00.000Z',
+        latestDiscussionChange: '2026-06-01T10:30:00.000Z'
+      });
+      expect(result.version).toHaveLength(16);
+      expect(unitQb.innerJoin).toHaveBeenCalledWith('cju.coding_job', 'cj');
+      expect(unitQb.leftJoin).not.toHaveBeenCalledWith('cju.response', 'resp');
+      expect(responseQb.leftJoin).toHaveBeenCalledWith('cju.response', 'resp');
+      expect(responseQb.addSelect).toHaveBeenCalledWith(
+        expect.stringContaining('resp.value'),
+        'responseHash'
+      );
+      expect(responseQb.groupBy).toHaveBeenCalledWith('cju.response_id');
+      expect(discussionQb.where).toHaveBeenCalledWith('ctdr.workspace_id = :workspaceId', { workspaceId: 1 });
+    });
+
+    it('changes the within-training freshness token when discussion results change', async () => {
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValue({
+        id: 5,
+        workspace_id: 1,
+        updated_at: new Date('2026-06-01T10:00:00Z')
+      });
+      (codingJobRepository.find as jest.Mock).mockResolvedValue([
+        {
+          id: 11,
+          workspace_id: 1,
+          training_id: 5,
+          missings_profile_id: null,
+          updated_at: new Date('2026-06-01T10:05:00Z')
+        }
+      ]);
+
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          unitCount: '2',
+          responseCount: '1',
+          latestUnitChange: '2026-06-01T10:20:00.000Z'
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({}, [
+          { responseId: '101', responseHash: 'response-hash' }
+        ]))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          discussionResultCount: '0',
+          latestDiscussionChange: null
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          unitCount: '2',
+          responseCount: '1',
+          latestUnitChange: '2026-06-01T10:20:00.000Z'
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({}, [
+          { responseId: '101', responseHash: 'response-hash' }
+        ]))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          discussionResultCount: '1',
+          latestDiscussionChange: '2026-06-01T10:35:00.000Z'
+        }));
+
+      const before = await service.getWithinTrainingComparisonFreshness(1, 5);
+      const after = await service.getWithinTrainingComparisonFreshness(1, 5);
+
+      expect(before.version).not.toBe(after.version);
+    });
+
+    it('changes the within-training freshness token when response data changes', async () => {
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValue({
+        id: 5,
+        workspace_id: 1,
+        updated_at: new Date('2026-06-01T10:00:00Z')
+      });
+      (codingJobRepository.find as jest.Mock).mockResolvedValue([
+        {
+          id: 11,
+          workspace_id: 1,
+          training_id: 5,
+          missings_profile_id: null,
+          updated_at: new Date('2026-06-01T10:05:00Z')
+        }
+      ]);
+
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          unitCount: '2',
+          responseCount: '1',
+          latestUnitChange: '2026-06-01T10:20:00.000Z'
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({}, [
+          { responseId: '101', responseHash: 'response-hash-before' }
+        ]))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          discussionResultCount: '0',
+          latestDiscussionChange: null
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          unitCount: '2',
+          responseCount: '1',
+          latestUnitChange: '2026-06-01T10:20:00.000Z'
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({}, [
+          { responseId: '101', responseHash: 'response-hash-after' }
+        ]))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          discussionResultCount: '0',
+          latestDiscussionChange: null
+        }));
+
+      const before = await service.getWithinTrainingComparisonFreshness(1, 5);
+      const after = await service.getWithinTrainingComparisonFreshness(1, 5);
+
+      expect(before.version).not.toBe(after.version);
+    });
+
     it('groups raw coding rows by response and keeps manual discussion results authoritative', async () => {
       (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
         id: 5,

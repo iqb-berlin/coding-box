@@ -34,6 +34,7 @@ import {
   TrainingDiscussionApplyPreviewDto,
   TrainingDiscussionApplySource
 } from '../../../../../../api-dto/coding/training-discussion-apply.dto';
+import { TrainingComparisonFreshnessDto } from '../../../../../../api-dto/coding/training-comparison-freshness.dto';
 
 @ApiTags('Admin Workspace Coder Training')
 @Controller('admin/workspace')
@@ -1054,6 +1055,48 @@ export class WorkspaceCoderTrainingController {
       workspace_id,
       trainingId,
       body.label.trim()
+    );
+  }
+
+  @Get(':workspace_id/coding/coder-trainings/:trainingId/comparison-freshness')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'trainingId',
+    type: Number,
+    description: 'ID of the coder training'
+  })
+  @ApiOkResponse({
+    description: 'Freshness token for cached within-training comparison data',
+    schema: {
+      type: 'object',
+      properties: {
+        workspaceId: { type: 'number' },
+        trainingId: { type: 'number' },
+        version: { type: 'string' },
+        jobCount: { type: 'number' },
+        unitCount: { type: 'number' },
+        responseCount: { type: 'number' },
+        discussionResultCount: { type: 'number' },
+        latestTrainingChange: { type: 'string', nullable: true },
+        latestJobChange: { type: 'string', nullable: true },
+        latestUnitChange: { type: 'string', nullable: true },
+        latestDiscussionChange: { type: 'string', nullable: true }
+      }
+    }
+  })
+  async getTrainingComparisonFreshness(
+    @WorkspaceId() workspace_id: number,
+      @Param('trainingId') trainingId: number
+  ): Promise<TrainingComparisonFreshnessDto> {
+    if (!trainingId || trainingId <= 0) {
+      throw new Error('Valid training ID must be provided');
+    }
+
+    return this.coderTrainingService.getWithinTrainingComparisonFreshness(
+      workspace_id,
+      trainingId
     );
   }
 
