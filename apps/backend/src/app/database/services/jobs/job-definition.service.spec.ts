@@ -305,14 +305,20 @@ describe('JobDefinitionService', () => {
     }, 7);
 
     expect(result.distribution_seed).toMatch(/^job-definition:7:/);
-    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
       expect.objectContaining({
         key: 'requested',
         selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
         maxCodingCases: 2,
         distributionSeed: result.distribution_seed
+      }),
+      expect.objectContaining({
+        key: 'available',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        maxCodingCases: null,
+        distributionSeed: result.distribution_seed
       })
-    ]);
+    ]));
   });
 
   it('uses a provided distribution seed when creating a definition', async () => {
@@ -324,12 +330,17 @@ describe('JobDefinitionService', () => {
     }, 7);
 
     expect(result.distribution_seed).toBe('frontend-seed');
-    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
       expect.objectContaining({
         key: 'requested',
         distributionSeed: 'frontend-seed'
+      }),
+      expect.objectContaining({
+        key: 'available',
+        maxCodingCases: null,
+        distributionSeed: 'frontend-seed'
       })
-    ]);
+    ]));
   });
 
   it('merges DERIVE_ERROR opt-in into bundled variables when planning usage', async () => {
@@ -351,7 +362,7 @@ describe('JobDefinitionService', () => {
       max_coding_cases: 2
     });
 
-    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
       expect.objectContaining({
         key: 'requested',
         selectedVariables: [],
@@ -360,7 +371,7 @@ describe('JobDefinitionService', () => {
           variables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }]
         })]
       })
-    ]);
+    ]));
   });
 
   it('preserves DERIVE_ERROR opt-in from duplicate assigned variables when planning usage', async () => {
@@ -382,7 +393,7 @@ describe('JobDefinitionService', () => {
       maxCodingCases: 2
     }, 7);
 
-    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
       expect.objectContaining({
         key: 'requested',
         selectedVariables: [],
@@ -391,7 +402,7 @@ describe('JobDefinitionService', () => {
           variables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }]
         })]
       })
-    ]);
+    ]));
   });
 
   it('deduplicates duplicate unbundled variables when planning usage', async () => {
@@ -405,13 +416,13 @@ describe('JobDefinitionService', () => {
       maxCodingCases: 2
     }, 7);
 
-    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
       expect.objectContaining({
         key: 'requested',
         selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
         selectedVariableBundles: []
       })
-    ]);
+    ]));
   });
 
   it('uses DERIVE_ERROR-aware availability when checking opt-in definitions', async () => {
@@ -425,7 +436,8 @@ describe('JobDefinitionService', () => {
     ]);
     codingJobService.calculateDistributionVariableUsageByStatusBatch.mockResolvedValueOnce(
       new Map<string | number, Map<string, DistributionVariableUsageByStatus>>([
-        ['requested', new Map([['Unit 1::Var 1', { regular: 0, deriveError: 3, total: 3 }]])]
+        ['requested', new Map([['Unit 1::Var 1', { regular: 0, deriveError: 3, total: 3 }]])],
+        ['available', new Map([['Unit 1::Var 1', { regular: 0, deriveError: 3, total: 3 }]])]
       ])
     );
 
@@ -445,6 +457,79 @@ describe('JobDefinitionService', () => {
       true,
       undefined
     );
+  });
+
+  it('allows uncapped planner-selected cases when availability undercounts without competing reservations', async () => {
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'MMB022', variableId: '01b', availableCases: 271 }
+    ]);
+    codingJobService.calculateDistributionVariableUsageByStatusBatch.mockResolvedValueOnce(
+      new Map<string | number, Map<string, DistributionVariableUsageByStatus>>([
+        ['requested', new Map([['MMB022::01b', { regular: 279, deriveError: 0, total: 279 }]])]
+      ])
+    );
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'MMB022', variableId: '01b' }],
+      assignedCoders: [1],
+      maxCodingCases: null
+    }, 7)).resolves.toMatchObject({
+      workspace_id: 7,
+      max_coding_cases: null
+    });
+  });
+
+  it('checks capped requests against uncapped planner capacity when availability undercounts', async () => {
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'MMB022', variableId: '01b', availableCases: 6 }
+    ]);
+    codingJobService.calculateDistributionVariableUsageByStatusBatch.mockResolvedValueOnce(
+      new Map<string | number, Map<string, DistributionVariableUsageByStatus>>([
+        ['requested', new Map([['MMB022::01b', { regular: 7, deriveError: 0, total: 7 }]])],
+        ['available', new Map([['MMB022::01b', { regular: 10, deriveError: 0, total: 10 }]])]
+      ])
+    );
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'MMB022', variableId: '01b' }],
+      assignedCoders: [1],
+      maxCodingCases: 7
+    }, 7)).resolves.toMatchObject({
+      workspace_id: 7,
+      max_coding_cases: 7
+    });
+
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch)
+      .toHaveBeenCalledWith(7, [
+        expect.objectContaining({
+          key: 'requested',
+          maxCodingCases: 7,
+          selectedVariables: [{ unitName: 'MMB022', variableId: '01b' }]
+        }),
+        expect.objectContaining({
+          key: 'available',
+          maxCodingCases: null,
+          selectedVariables: [{ unitName: 'MMB022', variableId: '01b' }]
+        })
+      ]);
+  });
+
+  it('rejects capped requests when planner capacity is still insufficient', async () => {
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'MMB022', variableId: '01b', availableCases: 10 }
+    ]);
+    codingJobService.calculateDistributionVariableUsageByStatusBatch.mockResolvedValueOnce(
+      new Map<string | number, Map<string, DistributionVariableUsageByStatus>>([
+        ['requested', new Map([['MMB022::01b', { regular: 7, deriveError: 0, total: 7 }]])],
+        ['available', new Map([['MMB022::01b', { regular: 6, deriveError: 0, total: 6 }]])]
+      ])
+    );
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'MMB022', variableId: '01b' }],
+      assignedCoders: [1],
+      maxCodingCases: 7
+    }, 7)).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('does not use existing DERIVE_ERROR opt-ins as availability basis for regular requests', async () => {
@@ -506,7 +591,8 @@ describe('JobDefinitionService', () => {
     codingJobService.calculateDistributionVariableUsageByStatusBatch.mockResolvedValueOnce(
       new Map<string | number, Map<string, DistributionVariableUsageByStatus>>([
         ['requested', new Map([['Unit 1::Var 1', { regular: 5, deriveError: 0, total: 5 }]])],
-        [1, new Map([['Unit 1::Var 1', { regular: 0, deriveError: 3, total: 3 }]])]
+        [1, new Map([['Unit 1::Var 1', { regular: 0, deriveError: 3, total: 3 }]])],
+        ['available', new Map([['Unit 1::Var 1', { regular: 5, deriveError: 0, total: 5 }]])]
       ])
     );
 
@@ -572,6 +658,11 @@ describe('JobDefinitionService', () => {
         maxCodingCases: 1,
         jobDefinitionId: 2,
         distributionSeed: 'seed-2'
+      }),
+      expect.objectContaining({
+        key: 'available',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        maxCodingCases: null
       })
     ]);
   });
@@ -782,7 +873,7 @@ describe('JobDefinitionService', () => {
       maxCodingCases: 6
     }, 7)).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
       expect.objectContaining({
         key: 'requested',
         selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
@@ -798,7 +889,7 @@ describe('JobDefinitionService', () => {
         })],
         jobDefinitionId: 1
       })
-    ]);
+    ]));
   });
 
   it('allows split definitions on the same variable when the requested cap fits the remaining cases', async () => {
@@ -861,13 +952,13 @@ describe('JobDefinitionService', () => {
       false,
       74
     );
-    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
       expect.objectContaining({
         key: 'requested',
         excludeJobDefinitionId: 74,
         selectedVariables: [retainedVariable, addedVariable]
       })
-    ]);
+    ]));
     expect(jobDefinitionRepository.save).toHaveBeenCalled();
   });
 
@@ -911,7 +1002,7 @@ describe('JobDefinitionService', () => {
       caseOrderingMode: 'continuous'
     })).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
       expect.objectContaining({
         key: 'requested',
         excludeJobDefinitionId: 74,
@@ -924,7 +1015,7 @@ describe('JobDefinitionService', () => {
         selectedVariables: [selectedVariable],
         maxCodingCases: 2
       })
-    ]);
+    ]));
     expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
   });
 
@@ -1313,7 +1404,7 @@ describe('JobDefinitionService', () => {
     });
 
     expect(codingJobService.assertCodersCanCodeInWorkspace).not.toHaveBeenCalled();
-    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, [
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
       expect.objectContaining({
         key: 'requested',
         selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
@@ -1322,7 +1413,7 @@ describe('JobDefinitionService', () => {
         jobDefinitionId: 2,
         distributionSeed: 'seed-2'
       })
-    ]);
+    ]));
   });
 
   it('rejects invalid coder capacity configs', async () => {
