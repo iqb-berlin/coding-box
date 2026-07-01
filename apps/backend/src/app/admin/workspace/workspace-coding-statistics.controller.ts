@@ -4,6 +4,7 @@ import {
   Param,
   Post,
   Query,
+  Req,
   UseGuards,
   Body,
   Logger,
@@ -17,7 +18,7 @@ import {
   ApiTags,
   ApiBody
 } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -31,7 +32,8 @@ import {
   CodingReviewService,
   CodingFreshnessService,
   CodingProcessService,
-  CodingReadinessService
+  CodingReadinessService,
+  CodingReplayService
 } from '../../database/services/coding';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatistics } from '../../database/services/shared';
@@ -107,6 +109,8 @@ type KappaAgreementInput = {
   validPairs: number;
 };
 
+type KappaCalculationLevel = 'code' | 'score';
+
 type KappaPairMetadata = {
   jobNames: string[];
   jobDefinitionIds: number[];
@@ -146,6 +150,7 @@ type KappaStatisticsResponse = {
     variablesIncluded: number;
     codersIncluded: number;
     weightingMethod: 'weighted' | 'unweighted';
+    calculationLevel: KappaCalculationLevel;
   };
 };
 
@@ -161,14 +166,18 @@ type KappaStatisticsOptions = {
   jobDefinitionIds: number[];
   coderTrainingIds: number[];
   coderIds: number[];
+  calculationLevel: KappaCalculationLevel;
 };
 
 type KappaSourceItem = {
+  responseId: number;
   unitName: string;
   variableId: string;
+  variableAnchor: string;
   personLogin: string;
   personCode: string;
   personGroup: string;
+  bookletName: string;
   coderResults: Array<{
     coderId: number;
     coderName: string;
@@ -204,6 +213,7 @@ const COHENS_KAPPA_EXPORT_HEADERS = [
   'Interpretation',
   'Trainings ausgeschlossen',
   'Mittelwert-Methode',
+  'Berechnungsebene',
   'Unit-Filter',
   'Variablen-Filter',
   'Exportiert am'
@@ -246,6 +256,7 @@ export class WorkspaceCodingStatisticsController {
     private codingFreshnessService: CodingFreshnessService,
     private codingProcessService: CodingProcessService,
     private codingReadinessService: CodingReadinessService,
+    private codingReplayService: CodingReplayService,
     private jobQueueService: JobQueueService
   ) { }
 
@@ -348,8 +359,24 @@ export class WorkspaceCodingStatisticsController {
     };
   }
 
-  private getCompletedCodeCount(item: KappaSourceItem): number {
-    return item.coderResults.filter(result => result.code !== null).length;
+  private getCompletedValueCount(
+    item: KappaSourceItem,
+    calculationLevel: KappaCalculationLevel
+  ): number {
+    return item.coderResults.filter(result => (
+      calculationLevel === 'score' ?
+        result.score !== null && result.score !== undefined :
+        result.code !== null && result.code !== undefined
+    )).length;
+  }
+
+  private hasKappaValueForLevel(
+    result: KappaSourceItem['coderResults'][number],
+    calculationLevel: KappaCalculationLevel
+  ): boolean {
+    return calculationLevel === 'score' ?
+      result.score !== null && result.score !== undefined :
+      result.code !== null && result.code !== undefined;
   }
 
   private getCoderPairKey(coder1Id: number, coder2Id: number): string {
@@ -464,6 +491,7 @@ export class WorkspaceCodingStatisticsController {
       Interpretation: sanitizeCsvText(this.getKappaInterpretationLabel(pair.interpretation)),
       'Trainings ausgeschlossen': options.excludeTrainings ? 'ja' : 'nein',
       'Mittelwert-Methode': sanitizeCsvText(weightingMethod),
+      Berechnungsebene: sanitizeCsvText(statistics.workspaceSummary.calculationLevel === 'score' ? 'Scores' : 'Codes'),
       'Unit-Filter': sanitizeCsvText(options.unitName),
       'Variablen-Filter': sanitizeCsvText(options.variableId),
       'Exportiert am': exportedAt
@@ -503,7 +531,8 @@ export class WorkspaceCodingStatisticsController {
   }
 
   private createCohensKappaCodingResultRows(
-    sourceItems: KappaSourceItem[]
+    sourceItems: KappaSourceItem[],
+    replayUrlByItemKey: Map<string, string>
   ): {
       headers: string[];
       rows: Record<string, string | number>[];
@@ -551,6 +580,7 @@ export class WorkspaceCodingStatisticsController {
       'Unit',
       'Variable',
       'subunit',
+      'Replay URL',
       ...coderColumns.flatMap(column => [`${column.label}.Code`, `${column.label}.Score`]),
       'Kommentare',
       'Häuf.W',
@@ -562,7 +592,8 @@ export class WorkspaceCodingStatisticsController {
         'Test.Person.Group': sanitizeCsvText(item.personGroup),
         Unit: sanitizeCsvText(item.unitName),
         Variable: sanitizeCsvText(item.variableId),
-        subunit: sanitizeCsvText(this.getSubunit(item.unitName, item.variableId))
+        subunit: sanitizeCsvText(this.getSubunit(item.unitName, item.variableId)),
+        'Replay URL': replayUrlByItemKey.get(this.getKappaSourceItemKey(item)) ?? ''
       };
       const codeCounts = new Map<number, number>();
       const comments: string[] = [];
@@ -634,13 +665,71 @@ export class WorkspaceCodingStatisticsController {
     this.applyWorksheetHeaderStyle(worksheet);
   }
 
+  private getKappaSourceItemKey(
+    item: Pick<KappaSourceItem, 'responseId' | 'unitName' | 'variableId'>
+  ): string {
+    return JSON.stringify([item.responseId, item.unitName, item.variableId]);
+  }
+
+  private getServerUrlFromRequest(req?: Request): string {
+    if (!req) {
+      return '';
+    }
+
+    const forwardedProtocol = req.get?.('x-forwarded-proto')?.split(',')[0]?.trim();
+    const protocol = forwardedProtocol || req.protocol || (req.secure ? 'https' : 'http');
+    const headerHost = req.get?.('host') ?? req.headers.host;
+    const host = Array.isArray(headerHost) ? headerHost[0] : headerHost;
+    return host ? `${protocol}://${host}` : '';
+  }
+
+  private async createCohensKappaReplayUrlMap(
+    workspaceId: number,
+    sourceItems: KappaSourceItem[],
+    req?: Request
+  ): Promise<Map<string, string>> {
+    const serverUrl = this.getServerUrlFromRequest(req);
+    if (!serverUrl || sourceItems.length === 0) {
+      return new Map();
+    }
+
+    const replayItems = sourceItems.map(item => ({
+      responseId: item.responseId,
+      unitName: item.unitName,
+      unitAlias: null,
+      variableId: item.variableId,
+      variableAnchor: item.variableAnchor || item.variableId,
+      bookletName: item.bookletName,
+      personLogin: item.personLogin,
+      personCode: item.personCode,
+      personGroup: item.personGroup
+    }));
+    const replayRows = await this.codingReplayService.generateReplayUrlsForItemsBulk(
+      workspaceId,
+      replayItems,
+      serverUrl
+    );
+
+    return new Map(replayRows.map(row => [
+      this.getKappaSourceItemKey(row),
+      row.replayUrl
+    ]));
+  }
+
   private async createCohensKappaWorkbookBuffer(
+    workspaceId: number,
     statistics: KappaStatisticsResponse,
-    sourceItems: KappaSourceItem[]
+    sourceItems: KappaSourceItem[],
+    req?: Request
   ): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Kodierbox';
     workbook.created = new Date();
+    const replayUrlByItemKey = await this.createCohensKappaReplayUrlMap(
+      workspaceId,
+      sourceItems,
+      req
+    );
 
     this.addRowsWorksheet(
       workbook,
@@ -655,7 +744,7 @@ export class WorkspaceCodingStatisticsController {
       this.createCohensKappaPairwiseExportRows(statistics)
     );
 
-    const codingResults = this.createCohensKappaCodingResultRows(sourceItems);
+    const codingResults = this.createCohensKappaCodingResultRows(sourceItems, replayUrlByItemKey);
     this.addRowsWorksheet(
       workbook,
       'Kodierergebnisse',
@@ -681,13 +770,17 @@ export class WorkspaceCodingStatisticsController {
       options.excludeTrainings,
       options.jobDefinitionIds,
       options.coderTrainingIds,
-      options.coderIds
+      options.coderIds,
+      options.calculationLevel
     )).map(item => ({
+      responseId: item.responseId,
       unitName: item.unitName,
       variableId: item.variableId,
+      variableAnchor: item.variableAnchor || item.variableId,
       personLogin: item.personLogin,
       personCode: item.personCode,
       personGroup: item.personGroup,
+      bookletName: item.bookletName || '',
       coderResults: item.coderResults.map(result => ({
         coderId: result.coderId,
         coderName: result.coderName,
@@ -733,15 +826,19 @@ export class WorkspaceCodingStatisticsController {
 
     for (const [key, group] of groupedData.entries()) {
       const { unitName: unitNameKey, variableId: variableIdKey, items } = group;
-      const doubleCodedItems = items.filter(item => this.getCompletedCodeCount(item) >= 2);
+      const doubleCodedItems = items.filter(
+        item => this.getCompletedValueCount(item, options.calculationLevel) >= 2
+      );
 
       uniqueVariables.add(key);
 
       const allCoders = new Set<number>();
       doubleCodedItems.forEach(item => {
         item.coderResults.forEach(cr => {
-          allCoders.add(cr.coderId);
-          uniqueCoders.add(cr.coderId);
+          if (this.hasKappaValueForLevel(cr, options.calculationLevel)) {
+            allCoders.add(cr.coderId);
+            uniqueCoders.add(cr.coderId);
+          }
         });
       });
 
@@ -754,6 +851,7 @@ export class WorkspaceCodingStatisticsController {
         unitName: string;
         variableId: string;
         codes: Array<{ code1: number | null; code2: number | null }>;
+        scores: Array<{ score1: number | null; score2: number | null }>;
       }> = [];
       const pairMetadataByKey = new Map<string, KappaPairMetadata>();
 
@@ -772,6 +870,7 @@ export class WorkspaceCodingStatisticsController {
           });
 
           const codes: Array<{ code1: number | null; code2: number | null }> = [];
+          const scores: Array<{ score1: number | null; score2: number | null }> = [];
           const metadata = {
             jobNames: new Set<string>(),
             jobDefinitionIds: new Set<number>(),
@@ -792,6 +891,10 @@ export class WorkspaceCodingStatisticsController {
                 code1: coder1Result.code,
                 code2: coder2Result.code
               });
+              scores.push({
+                score1: coder1Result.score,
+                score2: coder2Result.score
+              });
               this.addCoderResultMetadata(metadata, coder1Result);
               this.addCoderResultMetadata(metadata, coder2Result);
             }
@@ -807,7 +910,8 @@ export class WorkspaceCodingStatisticsController {
               coder2Name,
               unitName: unitNameKey,
               variableId: variableIdKey,
-              codes
+              codes,
+              scores
             });
           }
         }
@@ -815,7 +919,7 @@ export class WorkspaceCodingStatisticsController {
 
       const kappaResults = coderPairs.length > 0 ?
         this.codingStatisticsService
-          .calculateCohensKappa(coderPairs)
+          .calculateCohensKappa(coderPairs, options.calculationLevel)
           .map(result => ({
             ...result,
             ...(pairMetadataByKey.get(
@@ -865,7 +969,8 @@ export class WorkspaceCodingStatisticsController {
       meanAgreement: this.calculateMeanAgreement(allKappaResults, options.weightedMean),
       variablesIncluded: uniqueVariables.size,
       codersIncluded: uniqueCoders.size,
-      weightingMethod: (options.weightedMean ? 'weighted' : 'unweighted') as 'weighted' | 'unweighted'
+      weightingMethod: (options.weightedMean ? 'weighted' : 'unweighted') as 'weighted' | 'unweighted',
+      calculationLevel: options.calculationLevel
     };
 
     this.logger.log(
@@ -1178,6 +1283,23 @@ export class WorkspaceCodingStatisticsController {
     });
   }
 
+  private parseKappaCalculationLevel(value?: string | string[]): KappaCalculationLevel {
+    const values = this.parseArrayQuery(value);
+    if (values.length === 0) {
+      return 'code';
+    }
+    if (values.length > 1) {
+      throw new BadRequestException('Kappa calculation level must be provided only once');
+    }
+
+    const level = values[0];
+    if (level === 'code' || level === 'score') {
+      return level;
+    }
+
+    throw new BadRequestException('Kappa calculation level must be code or score');
+  }
+
   private buildKappaOptionsFromQuery(query: {
     weightedMean?: string;
     excludeTrainings?: string;
@@ -1186,6 +1308,7 @@ export class WorkspaceCodingStatisticsController {
     jobDefinitionIds?: string | string[];
     coderTrainingIds?: string | string[];
     coderIds?: string | string[];
+    level?: string | string[];
   }): KappaStatisticsOptions {
     const coderTrainingIds = this.parseIdArrayQuery(query.coderTrainingIds);
 
@@ -1196,7 +1319,8 @@ export class WorkspaceCodingStatisticsController {
       variableId: query.variableId,
       jobDefinitionIds: this.parseIdArrayQuery(query.jobDefinitionIds),
       coderTrainingIds,
-      coderIds: this.parseIdArrayQuery(query.coderIds)
+      coderIds: this.parseIdArrayQuery(query.coderIds),
+      calculationLevel: this.parseKappaCalculationLevel(query.level)
     };
   }
 
@@ -1739,6 +1863,13 @@ export class WorkspaceCodingStatisticsController {
     type: Boolean
   })
   @ApiQuery({
+    name: 'level',
+    required: false,
+    enum: ['code', 'score'],
+    description: 'Calculation level: code for code-level kappa (default), score for score-level kappa',
+    type: String
+  })
+  @ApiQuery({
     name: 'unitName',
     required: false,
     description: 'Filter by unit name',
@@ -1868,6 +1999,11 @@ export class WorkspaceCodingStatisticsController {
               type: 'string',
               enum: ['weighted', 'unweighted'],
               description: 'Method used to calculate mean kappa'
+            },
+            calculationLevel: {
+              type: 'string',
+              enum: ['code', 'score'],
+              description: 'Level used to calculate kappa'
             }
           }
         }
@@ -1882,7 +2018,8 @@ export class WorkspaceCodingStatisticsController {
       @Query('excludeTrainings') excludeTrainings?: string,
       @Query('jobDefinitionIds') jobDefinitionIds?: string | string[],
       @Query('coderTrainingIds') coderTrainingIds?: string | string[],
-      @Query('coderIds') coderIds?: string | string[]
+      @Query('coderIds') coderIds?: string | string[],
+      @Query('level') level?: string | string[]
   ): Promise<KappaStatisticsResponse> {
     try {
       const options = this.buildKappaOptionsFromQuery({
@@ -1892,7 +2029,8 @@ export class WorkspaceCodingStatisticsController {
         variableId,
         jobDefinitionIds,
         coderTrainingIds,
-        coderIds
+        coderIds,
+        level
       });
       const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
       return this.toPublicCohensKappaStatistics(statistics);
@@ -1919,6 +2057,13 @@ export class WorkspaceCodingStatisticsController {
     required: false,
     description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
     type: Boolean
+  })
+  @ApiQuery({
+    name: 'level',
+    required: false,
+    enum: ['code', 'score'],
+    description: 'Calculation level: code for code-level kappa (default), score for score-level kappa',
+    type: String
   })
   @ApiQuery({
     name: 'unitName',
@@ -1976,6 +2121,7 @@ export class WorkspaceCodingStatisticsController {
       @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
       @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
       @Query('coderIds') coderIds: string | string[] | undefined,
+      @Query('level') level: string | string[] | undefined,
       @Res() res: Response
   ): Promise<void> {
     try {
@@ -1986,7 +2132,8 @@ export class WorkspaceCodingStatisticsController {
         variableId,
         jobDefinitionIds,
         coderTrainingIds,
-        coderIds
+        coderIds,
+        level
       });
       const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
       const rows = this.createCohensKappaExportRows(statistics, options);
@@ -2027,6 +2174,13 @@ export class WorkspaceCodingStatisticsController {
     required: false,
     description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
     type: Boolean
+  })
+  @ApiQuery({
+    name: 'level',
+    required: false,
+    enum: ['code', 'score'],
+    description: 'Calculation level: code for code-level kappa (default), score for score-level kappa',
+    type: String
   })
   @ApiQuery({
     name: 'unitName',
@@ -2084,6 +2238,7 @@ export class WorkspaceCodingStatisticsController {
       @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
       @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
       @Query('coderIds') coderIds: string | string[] | undefined,
+      @Query('level') level: string | string[] | undefined,
       @Res() res: Response
   ): Promise<void> {
     try {
@@ -2094,7 +2249,8 @@ export class WorkspaceCodingStatisticsController {
         variableId,
         jobDefinitionIds,
         coderTrainingIds,
-        coderIds
+        coderIds,
+        level
       });
       const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
       const csvContent = await fastCsv.writeToString(
@@ -2137,6 +2293,13 @@ export class WorkspaceCodingStatisticsController {
     required: false,
     description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
     type: Boolean
+  })
+  @ApiQuery({
+    name: 'level',
+    required: false,
+    enum: ['code', 'score'],
+    description: 'Calculation level: code for code-level kappa (default), score for score-level kappa',
+    type: String
   })
   @ApiQuery({
     name: 'unitName',
@@ -2195,6 +2358,8 @@ export class WorkspaceCodingStatisticsController {
       @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
       @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
       @Query('coderIds') coderIds: string | string[] | undefined,
+      @Query('level') level: string | string[] | undefined,
+      @Req() req: Request,
       @Res() res: Response
   ): Promise<void> {
     try {
@@ -2205,12 +2370,15 @@ export class WorkspaceCodingStatisticsController {
         variableId,
         jobDefinitionIds,
         coderTrainingIds,
-        coderIds
+        coderIds,
+        level
       });
       const statistics = await this.buildCohensKappaStatistics(workspace_id, options);
       const buffer = await this.createCohensKappaWorkbookBuffer(
+        workspace_id,
         statistics,
-        statistics.sourceItems
+        statistics.sourceItems,
+        req
       );
       const exportDate = new Date().toISOString().slice(0, 10);
 

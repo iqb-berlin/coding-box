@@ -96,8 +96,11 @@ export interface CohensKappaStatisticsResponse {
     variablesIncluded: number;
     codersIncluded: number;
     weightingMethod: 'weighted' | 'unweighted';
+    calculationLevel?: CohensKappaCalculationLevel;
   };
 }
+
+export type CohensKappaCalculationLevel = 'code' | 'score';
 
 export interface CohensKappaScope {
   jobDefinitionIds?: number[];
@@ -1236,12 +1239,14 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = true,
     unitName?: string,
     variableId?: string,
-    scope?: CohensKappaScope
+    scope?: CohensKappaScope,
+    calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<CohensKappaStatisticsResponse> {
     let params = new HttpParams();
 
     params = params.set('weightedMean', weightedMean.toString());
     params = params.set('excludeTrainings', excludeTrainings.toString());
+    params = params.set('level', calculationLevel);
 
     if (unitName) {
       params = params.set('unitName', unitName);
@@ -1267,7 +1272,8 @@ export class TestPersonCodingService {
             meanAgreement: null,
             variablesIncluded: 0,
             codersIncluded: 0,
-            weightingMethod: 'weighted' as 'weighted' | 'unweighted'
+            weightingMethod: 'weighted' as 'weighted' | 'unweighted',
+            calculationLevel
           }
         }))
       );
@@ -1279,14 +1285,16 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = true,
     unitName?: string,
     variableId?: string,
-    scope?: CohensKappaScope
+    scope?: CohensKappaScope,
+    calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<Blob> {
     const params = this.buildCohensKappaExportParams(
       weightedMean,
       excludeTrainings,
       unitName,
       variableId,
-      scope
+      scope,
+      calculationLevel
     );
 
     return this.http
@@ -1307,14 +1315,16 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = true,
     unitName?: string,
     variableId?: string,
-    scope?: CohensKappaScope
+    scope?: CohensKappaScope,
+    calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<Blob> {
     const params = this.buildCohensKappaExportParams(
       weightedMean,
       excludeTrainings,
       unitName,
       variableId,
-      scope
+      scope,
+      calculationLevel
     );
 
     return this.http
@@ -1335,14 +1345,16 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = true,
     unitName?: string,
     variableId?: string,
-    scope?: CohensKappaScope
+    scope?: CohensKappaScope,
+    calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<Blob> {
     const params = this.buildCohensKappaExportParams(
       weightedMean,
       excludeTrainings,
       unitName,
       variableId,
-      scope
+      scope,
+      calculationLevel
     );
 
     return this.http
@@ -1362,11 +1374,13 @@ export class TestPersonCodingService {
     excludeTrainings: boolean,
     unitName?: string,
     variableId?: string,
-    scope?: CohensKappaScope
+    scope?: CohensKappaScope,
+    calculationLevel: CohensKappaCalculationLevel = 'code'
   ): HttpParams {
     let params = new HttpParams()
       .set('weightedMean', weightedMean.toString())
-      .set('excludeTrainings', excludeTrainings.toString());
+      .set('excludeTrainings', excludeTrainings.toString())
+      .set('level', calculationLevel);
 
     if (unitName) {
       params = params.set('unitName', unitName);

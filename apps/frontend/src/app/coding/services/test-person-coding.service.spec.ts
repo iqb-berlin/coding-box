@@ -729,7 +729,7 @@ describe('TestPersonCodingService', () => {
           jobDefinitionIds: [11, 12],
           coderTrainingIds: [21],
           coderIds: [31, 32]
-        })
+        }, 'score')
         .subscribe(response => {
           expect(response).toEqual(mockResponse);
           expect(response.variables[0].meanKappa).toBe(0.667);
@@ -739,6 +739,7 @@ describe('TestPersonCodingService', () => {
         request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa` &&
         request.params.get('weightedMean') === 'true' &&
         request.params.get('excludeTrainings') === 'false' &&
+        request.params.get('level') === 'score' &&
         request.params.get('unitName') === 'UNIT' &&
         request.params.get('variableId') === 'VAR' &&
         request.params.get('jobDefinitionIds') === '11,12' &&
@@ -768,6 +769,7 @@ describe('TestPersonCodingService', () => {
         request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/summary/csv` &&
         request.params.get('weightedMean') === 'false' &&
         request.params.get('excludeTrainings') === 'false' &&
+        request.params.get('level') === 'code' &&
         request.params.get('unitName') === 'UNIT' &&
         request.params.get('variableId') === 'VAR' &&
         request.params.get('jobDefinitionIds') === '11' &&
@@ -788,7 +790,7 @@ describe('TestPersonCodingService', () => {
         .exportCohensKappaStatisticsAsXlsx(mockWorkspaceId, true, true, undefined, undefined, {
           jobDefinitionIds: [11, 12],
           coderIds: [31]
-        })
+        }, 'score')
         .subscribe(response => {
           expect(response).toEqual(mockBlob);
         });
@@ -797,6 +799,7 @@ describe('TestPersonCodingService', () => {
         request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/xlsx` &&
         request.params.get('weightedMean') === 'true' &&
         request.params.get('excludeTrainings') === 'true' &&
+        request.params.get('level') === 'score' &&
         request.params.get('jobDefinitionIds') === '11,12' &&
         request.params.get('coderIds') === '31'
       ));
@@ -820,6 +823,7 @@ describe('TestPersonCodingService', () => {
         request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/csv` &&
         request.params.get('weightedMean') === 'false' &&
         request.params.get('excludeTrainings') === 'false' &&
+        request.params.get('level') === 'code' &&
         request.params.get('unitName') === 'UNIT' &&
         request.params.get('variableId') === 'VAR' &&
         request.params.get('coderTrainingIds') === '21,22'
@@ -844,7 +848,8 @@ describe('TestPersonCodingService', () => {
       const req = httpMock.expectOne(request => (
         request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/csv` &&
         request.params.get('weightedMean') === 'true' &&
-        request.params.get('excludeTrainings') === 'true'
+        request.params.get('excludeTrainings') === 'true' &&
+        request.params.get('level') === 'code'
       ));
       req.error(new ProgressEvent('error'));
 
