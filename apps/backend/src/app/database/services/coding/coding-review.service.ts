@@ -48,6 +48,8 @@ type AppliedReviewResult = {
   appliedComment: string | null;
 };
 
+type KappaCalculationLevel = 'code' | 'score';
+
 type DoubleCodedResolutionDecision = {
   responseId: number;
   selectedJobId?: number | null;
@@ -67,9 +69,11 @@ type KappaCodedVariableRow = {
   responseId: number | string;
   unitName: string;
   variableId: string;
+  variableAnchor: string | null;
   personLogin: string;
   personCode: string;
   personGroup: string;
+  bookletName: string | null;
   coderId: number | string;
   coderName: string | null;
   jobId: number | string;
@@ -612,14 +616,17 @@ export class CodingReviewService {
     excludeTrainings: boolean = true,
     jobDefinitionIds: number[] = [],
     coderTrainingIds: number[] = [],
-    coderIds: number[] = []
+    coderIds: number[] = [],
+    calculationLevel: KappaCalculationLevel = 'code'
   ): Promise<Array<{
       responseId: number;
       unitName: string;
       variableId: string;
+      variableAnchor: string;
       personLogin: string;
       personCode: string;
       personGroup: string;
+      bookletName: string;
       coderResults: Array<{
         coderId: number;
         coderName: string;
@@ -656,9 +663,11 @@ export class CodingReviewService {
       .select('cju.response_id', 'responseId')
       .addSelect('cju.unit_name', 'unitName')
       .addSelect('cju.variable_id', 'variableId')
+      .addSelect('cju.variable_anchor', 'variableAnchor')
       .addSelect('cju.person_login', 'personLogin')
       .addSelect('cju.person_code', 'personCode')
       .addSelect('cju.person_group', 'personGroup')
+      .addSelect('cju.booklet_name', 'bookletName')
       .addSelect('cjc.user_id', 'coderId')
       .addSelect('coder_user.username', 'coderName')
       .addSelect('cju.coding_job_id', 'jobId')
@@ -672,7 +681,11 @@ export class CodingReviewService {
       .addSelect('cju.supervisor_comment', 'supervisorComment')
       .addSelect('COALESCE(cju.updated_at, cju.created_at)', 'codedAt')
       .where('cj.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('cju.code IS NOT NULL')
+      .andWhere(
+        calculationLevel === 'score' ?
+          'cju.score IS NOT NULL' :
+          'cju.code IS NOT NULL'
+      )
       .orderBy('cju.unit_name', 'ASC')
       .addOrderBy('cju.variable_id', 'ASC')
       .addOrderBy('cju.person_login', 'ASC')
@@ -729,9 +742,11 @@ export class CodingReviewService {
       responseId: number;
       unitName: string;
       variableId: string;
+      variableAnchor: string;
       personLogin: string;
       personCode: string;
       personGroup: string;
+      bookletName: string;
       coderResults: ReviewCoderResult[];
     }>();
     const coderResultIndexByItemKey = new Map<string, Map<number, number>>();
@@ -753,9 +768,11 @@ export class CodingReviewService {
             responseId,
             unitName: row.unitName,
             variableId: row.variableId,
+            variableAnchor: row.variableAnchor || row.variableId,
             personLogin: row.personLogin,
             personCode: row.personCode,
             personGroup: row.personGroup,
+            bookletName: row.bookletName || '',
             coderResults: []
           });
         }
@@ -784,7 +801,11 @@ export class CodingReviewService {
         if (existingResultIndex === undefined) {
           coderResultIndexByCoderId.set(coderId, group.coderResults.length);
           group.coderResults.push(coderResult);
-        } else if (this.shouldReplaceCoderResult(group.coderResults[existingResultIndex], coderResult)) {
+        } else if (this.shouldReplaceCoderResult(
+          group.coderResults[existingResultIndex],
+          coderResult,
+          calculationLevel
+        )) {
           group.coderResults[existingResultIndex] = coderResult;
         }
       });
@@ -1046,17 +1067,30 @@ export class CodingReviewService {
     return Array.from(coderById.values());
   }
 
-  private shouldReplaceCoderResult(existing: ReviewCoderResult, candidate: ReviewCoderResult): boolean {
+  private hasReviewResultValueForLevel(
+    result: ReviewCoderResult,
+    calculationLevel: KappaCalculationLevel
+  ): boolean {
+    return calculationLevel === 'score' ?
+      result.score !== null && result.score !== undefined :
+      result.code !== null && result.code !== undefined;
+  }
+
+  private shouldReplaceCoderResult(
+    existing: ReviewCoderResult,
+    candidate: ReviewCoderResult,
+    calculationLevel: KappaCalculationLevel = 'code'
+  ): boolean {
     const existingHasSupervisorComment = !!existing.supervisorComment;
     const candidateHasSupervisorComment = !!candidate.supervisorComment;
     if (candidateHasSupervisorComment !== existingHasSupervisorComment) {
       return candidateHasSupervisorComment;
     }
 
-    const existingHasCode = existing.code !== null && existing.code !== undefined;
-    const candidateHasCode = candidate.code !== null && candidate.code !== undefined;
-    if (candidateHasCode !== existingHasCode) {
-      return candidateHasCode;
+    const existingHasLevelValue = this.hasReviewResultValueForLevel(existing, calculationLevel);
+    const candidateHasLevelValue = this.hasReviewResultValueForLevel(candidate, calculationLevel);
+    if (candidateHasLevelValue !== existingHasLevelValue) {
+      return candidateHasLevelValue;
     }
 
     const existingIsTraining = existing.trainingId !== null && existing.trainingId !== undefined;
