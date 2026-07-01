@@ -26,6 +26,7 @@ describe('CodingResultsComparisonComponent', () => {
     getCoderTrainings: jest.Mock;
     compareTrainingCodingResults: jest.Mock;
     compareWithinTrainingCodingResults: jest.Mock;
+    getCachedWithinTrainingCodingResults: jest.Mock;
     saveDiscussionResult: jest.Mock;
     previewApplyDiscussionResults: jest.Mock;
     applyDiscussionResults: jest.Mock;
@@ -57,6 +58,7 @@ describe('CodingResultsComparisonComponent', () => {
       getCoderTrainings: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
       compareTrainingCodingResults: jest.fn(),
       compareWithinTrainingCodingResults: jest.fn(),
+      getCachedWithinTrainingCodingResults: jest.fn(),
       saveDiscussionResult: jest.fn().mockReturnValue(of({
         success: true,
         code: 7,
@@ -165,7 +167,7 @@ describe('CodingResultsComparisonComponent', () => {
   });
 
   it('should load within-training comparison without requesting kappa while kappa section is collapsed', () => {
-    codingTrainingBackendService.compareWithinTrainingCodingResults.mockReturnValue(of([
+    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockReturnValue(of([
       {
         responseId: 1,
         unitName: 'Unit1',
@@ -202,7 +204,7 @@ describe('CodingResultsComparisonComponent', () => {
 
     component.loadComparison();
 
-    expect(codingTrainingBackendService.compareWithinTrainingCodingResults).toHaveBeenCalledWith(1, 5);
+    expect(codingTrainingBackendService.getCachedWithinTrainingCodingResults).toHaveBeenCalledWith(1, 5);
     expect(codingTrainingBackendService.getTrainingCohensKappa).not.toHaveBeenCalled();
     expect(component.withinTrainingData).toHaveLength(1);
     expect(component.isLoading).toBe(false);
@@ -211,7 +213,7 @@ describe('CodingResultsComparisonComponent', () => {
   it('should ignore stale within-training comparison responses after a training switch', () => {
     const firstTrainingResponse$ = new Subject<unknown[]>();
     const secondTrainingResponse$ = new Subject<unknown[]>();
-    codingTrainingBackendService.compareWithinTrainingCodingResults.mockImplementation(
+    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockImplementation(
       (_workspaceId: number, trainingId: number) => (
         trainingId === 5 ? firstTrainingResponse$.asObservable() : secondTrainingResponse$.asObservable()
       )
