@@ -269,6 +269,8 @@ export class CodingResultsComparisonComponent implements OnInit {
   private dialog = inject(MatDialog);
   private testPersonCodingService = inject(TestPersonCodingService);
   private ngUnsubscribe = new Subject<void>();
+  private comparisonRequestId = 0;
+  private kappaRequestId = 0;
 
   isLoading = false;
   isLoadingKappa = false;
@@ -1460,6 +1462,8 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   onModeChange(): void {
+    this.comparisonRequestId += 1;
+    this.isLoading = false;
     this.resetKappaState();
     this.selectedTrainings.clear();
     this.filteredTrainings = [...this.availableTrainings];
@@ -1482,6 +1486,8 @@ export class CodingResultsComparisonComponent implements OnInit {
     if (this.comparisonMode === 'between-trainings' && this.selectedTrainings.selected.length >= 2) {
       this.loadComparison();
     } else {
+      this.comparisonRequestId += 1;
+      this.isLoading = false;
       this.comparisonData = [];
       this.availableCodersFromTrainings = [];
       this.codersFromTrainingsFormControl.setValue([]);
@@ -1497,6 +1503,8 @@ export class CodingResultsComparisonComponent implements OnInit {
     if (this.comparisonMode === 'within-training' && this.selectedTrainingForWithin) {
       this.loadComparison();
     } else {
+      this.comparisonRequestId += 1;
+      this.isLoading = false;
       this.withinTrainingData = [];
       this.availableCoders = [];
       this.codersFormControl.setValue([]);
@@ -1626,119 +1634,154 @@ export class CodingResultsComparisonComponent implements OnInit {
         return;
       }
 
+      this.comparisonRequestId += 1;
+      const requestId = this.comparisonRequestId;
       this.isLoading = true;
       this.resetKappaState();
       const trainingIds = this.selectedTrainings.selected.join(',');
-      this.codingTrainingBackendService.compareTrainingCodingResults(this.data.workspaceId, trainingIds).subscribe({
-        next: data => {
-          this.comparisonData = data;
+      this.codingTrainingBackendService.compareTrainingCodingResults(this.data.workspaceId, trainingIds)
+        .pipe(takeUntil(this.ngUnsubscribe))
+        .subscribe({
+          next: data => {
+            if (requestId !== this.comparisonRequestId ||
+              this.comparisonMode !== 'between-trainings' ||
+              this.selectedTrainings.selected.join(',') !== trainingIds) {
+              return;
+            }
+            this.comparisonData = data;
 
-          // Extract all unique coders available in the data
-          const codersMap = new Map<string, { trainingId: number; trainingLabel: string; coderId: number; coderName: string }>();
-          this.comparisonData.forEach(item => {
-            item.coders.forEach(c => {
-              const key = `${c.trainingId}_${c.coderId}`;
-              if (!codersMap.has(key)) {
-                codersMap.set(key, {
-                  trainingId: c.trainingId,
-                  trainingLabel: c.trainingLabel,
-                  coderId: c.coderId,
-                  coderName: c.coderName
-                });
-              }
+            // Extract all unique coders available in the data
+            const codersMap = new Map<string, { trainingId: number; trainingLabel: string; coderId: number; coderName: string }>();
+            this.comparisonData.forEach(item => {
+              item.coders.forEach(c => {
+                const key = `${c.trainingId}_${c.coderId}`;
+                if (!codersMap.has(key)) {
+                  codersMap.set(key, {
+                    trainingId: c.trainingId,
+                    trainingLabel: c.trainingLabel,
+                    coderId: c.coderId,
+                    coderName: c.coderName
+                  });
+                }
+              });
             });
-          });
 
-          this.availableCodersFromTrainings = Array.from(codersMap.values()).sort((a, b) => {
-            if (a.trainingId !== b.trainingId) return a.trainingId - b.trainingId;
-            return a.coderName.localeCompare(b.coderName);
-          });
-
-          const previousSelection = this.codersFromTrainingsFormControl.value || [];
-          const allKeys = this.availableCodersFromTrainings.map(c => `${c.trainingId}_${c.coderId}`);
-
-          let newSelection: string[];
-          if (previousSelection.length === 0) {
-            newSelection = allKeys;
-          } else {
-            const currentlySelectedTrainings = new Set(previousSelection.map(key => key.split('_')[0]));
-            newSelection = allKeys.filter(key => {
-              const [trainingId] = key.split('_');
-              return previousSelection.includes(key) || !currentlySelectedTrainings.has(trainingId);
+            this.availableCodersFromTrainings = Array.from(codersMap.values()).sort((a, b) => {
+              if (a.trainingId !== b.trainingId) return a.trainingId - b.trainingId;
+              return a.coderName.localeCompare(b.coderName);
             });
+
+            const previousSelection = this.codersFromTrainingsFormControl.value || [];
+            const allKeys = this.availableCodersFromTrainings.map(c => `${c.trainingId}_${c.coderId}`);
+
+            let newSelection: string[];
+            if (previousSelection.length === 0) {
+              newSelection = allKeys;
+            } else {
+              const currentlySelectedTrainings = new Set(previousSelection.map(key => key.split('_')[0]));
+              newSelection = allKeys.filter(key => {
+                const [trainingId] = key.split('_');
+                return previousSelection.includes(key) || !currentlySelectedTrainings.has(trainingId);
+              });
+            }
+
+            this.codersFromTrainingsFormControl.setValue(newSelection);
+            this.selectedCodersFromTrainings = new Set(newSelection);
+            this.updateDisplayedColumns();
+            this.refreshDisplayedRows();
+            this.isLoading = false;
+          },
+          error: () => {
+            if (requestId !== this.comparisonRequestId ||
+              this.comparisonMode !== 'between-trainings' ||
+              this.selectedTrainings.selected.join(',') !== trainingIds) {
+              return;
+            }
+            this.snackBar.open(this.translate.instant('variable-analysis.error-loading-results'), this.translate.instant('common.close'), { duration: 3000 });
+            this.isLoading = false;
           }
-
-          this.codersFromTrainingsFormControl.setValue(newSelection);
-          this.selectedCodersFromTrainings = new Set(newSelection);
-          this.updateDisplayedColumns();
-          this.refreshDisplayedRows();
-          this.isLoading = false;
-        },
-        error: () => {
-          this.snackBar.open(this.translate.instant('variable-analysis.error-loading-results'), this.translate.instant('common.close'), { duration: 3000 });
-          this.isLoading = false;
-        }
-      });
+        });
     } else if (this.comparisonMode === 'within-training') {
       if (!this.selectedTrainingForWithin) {
         this.snackBar.open(this.translate.instant('coding.trainings.select-training'), this.translate.instant('common.close'), { duration: 3000 });
         return;
       }
 
+      this.comparisonRequestId += 1;
+      const requestId = this.comparisonRequestId;
+      const trainingId = this.selectedTrainingForWithin;
       this.isLoading = true;
       this.resetKappaState();
-      this.codingTrainingBackendService.compareWithinTrainingCodingResults(this.data.workspaceId, this.selectedTrainingForWithin).subscribe({
-        next: data => {
-          const mappedData: WithinTrainingComparison[] = data.map(item => ({
-            responseId: item.responseId,
-            unitName: item.unitName,
-            variableId: item.variableId,
-            testperson: item.testPerson,
-            personLogin: item.personLogin,
-            personCode: item.personCode,
-            personGroup: item.personGroup,
-            bookletName: item.bookletName,
-            givenAnswer: item.givenAnswer,
-            replayCode: item.replayCode,
-            replayScore: item.replayScore,
-            discussionCode: item.discussionCode,
-            discussionScore: item.discussionScore,
-            discussionNotes: item.discussionNotes,
-            discussionManagerUserId: item.discussionManagerUserId,
-            discussionManagerName: item.discussionManagerName,
-            discussionSource: item.discussionSource,
-            coders: item.coders
-          }));
-
-          // Determine available coders from all data items
-          if (mappedData.length > 0) {
-            this.availableCoders = mappedData[0].coders.map(c => ({
-              jobId: c.jobId,
-              coderName: c.coderName
+      this.withinTrainingData = [];
+      this.availableCoders = [];
+      this.codersFormControl.setValue([]);
+      this.selectedCoderIds.clear();
+      this.dataSource.data = [];
+      this.codingTrainingBackendService.compareWithinTrainingCodingResults(this.data.workspaceId, trainingId)
+        .pipe(takeUntil(this.ngUnsubscribe))
+        .subscribe({
+          next: data => {
+            if (requestId !== this.comparisonRequestId ||
+              this.comparisonMode !== 'within-training' ||
+              this.selectedTrainingForWithin !== trainingId) {
+              return;
+            }
+            const mappedData: WithinTrainingComparison[] = data.map(item => ({
+              responseId: item.responseId,
+              unitName: item.unitName,
+              variableId: item.variableId,
+              testperson: item.testPerson,
+              personLogin: item.personLogin,
+              personCode: item.personCode,
+              personGroup: item.personGroup,
+              bookletName: item.bookletName,
+              givenAnswer: item.givenAnswer,
+              replayCode: item.replayCode,
+              replayScore: item.replayScore,
+              discussionCode: item.discussionCode,
+              discussionScore: item.discussionScore,
+              discussionNotes: item.discussionNotes,
+              discussionManagerUserId: item.discussionManagerUserId,
+              discussionManagerName: item.discussionManagerName,
+              discussionSource: item.discussionSource,
+              coders: item.coders
             }));
-            // Select all coders by default
-            const allCoderIds = this.availableCoders.map(c => c.jobId);
-            this.codersFormControl.setValue(allCoderIds);
-            this.selectedCoderIds.setSelection(...allCoderIds);
-          } else {
-            this.availableCoders = [];
-            this.codersFormControl.setValue([]);
-            this.selectedCoderIds.clear();
-          }
 
-          this.withinTrainingData = mappedData;
-          this.initDiscussionValues(mappedData);
-          this.updateDisplayedColumns();
-          this.refreshDisplayedRows();
-          // Automatically load Kappa statistics to show Mean Agreement in summary
-          this.loadKappaStatistics();
-          this.isLoading = false;
-        },
-        error: () => {
-          this.snackBar.open(this.translate.instant('variable-analysis.error-loading-results'), this.translate.instant('common.close'), { duration: 3000 });
-          this.isLoading = false;
-        }
-      });
+            // Determine available coders from all data items
+            if (mappedData.length > 0) {
+              this.availableCoders = mappedData[0].coders.map(c => ({
+                jobId: c.jobId,
+                coderName: c.coderName
+              }));
+              // Select all coders by default
+              const allCoderIds = this.availableCoders.map(c => c.jobId);
+              this.codersFormControl.setValue(allCoderIds);
+              this.selectedCoderIds.setSelection(...allCoderIds);
+            } else {
+              this.availableCoders = [];
+              this.codersFormControl.setValue([]);
+              this.selectedCoderIds.clear();
+            }
+
+            this.withinTrainingData = mappedData;
+            this.initDiscussionValues(mappedData);
+            this.updateDisplayedColumns();
+            this.refreshDisplayedRows();
+            if (this.showKappaStatistics) {
+              this.loadKappaStatistics();
+            }
+            this.isLoading = false;
+          },
+          error: () => {
+            if (requestId !== this.comparisonRequestId ||
+              this.comparisonMode !== 'within-training' ||
+              this.selectedTrainingForWithin !== trainingId) {
+              return;
+            }
+            this.snackBar.open(this.translate.instant('variable-analysis.error-loading-results'), this.translate.instant('common.close'), { duration: 3000 });
+            this.isLoading = false;
+          }
+        });
     }
   }
 
@@ -1794,22 +1837,36 @@ export class CodingResultsComparisonComponent implements OnInit {
     }
 
     this.resetKappaState();
+    this.kappaRequestId += 1;
+    const requestId = this.kappaRequestId;
+    const trainingId = this.selectedTrainingForWithin;
     this.isLoadingKappa = true;
     const level = this.useCodeLevel ? 'code' : 'score';
     this.codingTrainingBackendService
       .getTrainingCohensKappa(
         this.data.workspaceId,
-        this.selectedTrainingForWithin,
+        trainingId,
         this.useWeightedMean,
         level
       )
+      .pipe(takeUntil(this.ngUnsubscribe))
       .subscribe({
         next: stats => {
+          if (requestId !== this.kappaRequestId ||
+            this.comparisonMode !== 'within-training' ||
+            this.selectedTrainingForWithin !== trainingId) {
+            return;
+          }
           this.originalKappaStatistics = stats;
           this.filterKappaStatistics();
           this.isLoadingKappa = false;
         },
         error: () => {
+          if (requestId !== this.kappaRequestId ||
+            this.comparisonMode !== 'within-training' ||
+            this.selectedTrainingForWithin !== trainingId) {
+            return;
+          }
           this.isLoadingKappa = false;
           this.snackBar.open(
             this.translate.instant('coding.trainings.kappa.error'),
@@ -2020,6 +2077,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   private resetKappaState(): void {
+    this.kappaRequestId += 1;
     this.kappaStatistics = null;
     this.originalKappaStatistics = null;
     this.variableKappaSummaries = [];

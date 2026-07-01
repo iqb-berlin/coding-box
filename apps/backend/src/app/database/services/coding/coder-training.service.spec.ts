@@ -2112,6 +2112,282 @@ describe('CoderTrainingService', () => {
     });
   });
 
+  describe('getWithinTrainingCodingComparison', () => {
+    it('groups raw coding rows by response and keeps manual discussion results authoritative', async () => {
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        workspace_id: 1
+      });
+      mockRepository.find
+        .mockResolvedValueOnce([
+          {
+            id: 11,
+            name: 'job-a',
+            missings_profile_id: null,
+            codingJobCoders: [{ user: { username: 'Alice' } }]
+          },
+          {
+            id: 12,
+            name: 'job-b',
+            missings_profile_id: null,
+            codingJobCoders: [{ user: { username: 'Bob' } }]
+          }
+        ])
+        .mockResolvedValueOnce([
+          {
+            response_id: 102,
+            code: 99,
+            score: 4,
+            notes: 'manual note',
+            manager_user_id: 23,
+            manager_name: 'Old Manager'
+          }
+        ])
+        .mockResolvedValueOnce([
+          { id: 23, username: 'Manager' }
+        ]);
+
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([
+          {
+            jobId: 11,
+            unitRowId: 1,
+            responseId: 101,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P1',
+            personLogin: 'login-1',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 1',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: 7,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: 2,
+            code: 7,
+            score: 2,
+            notes: 'a',
+            codingIssueOption: null
+          },
+          {
+            jobId: 12,
+            unitRowId: 2,
+            responseId: 101,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P1',
+            personLogin: 'login-1',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 1',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: 7,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: 2,
+            code: 7,
+            score: 2,
+            notes: 'b',
+            codingIssueOption: null
+          },
+          {
+            jobId: 11,
+            unitRowId: 3,
+            responseId: 102,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P2',
+            personLogin: 'login-2',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 2',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: null,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: null,
+            code: 8,
+            score: 2,
+            notes: null,
+            codingIssueOption: null
+          },
+          {
+            jobId: 12,
+            unitRowId: 4,
+            responseId: 102,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P2',
+            personLogin: 'login-2',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 2',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: null,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: null,
+            code: 9,
+            score: 3,
+            notes: null,
+            codingIssueOption: null
+          }
+        ])
+      };
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn().mockReturnValue(qb);
+
+      const result = await service.getWithinTrainingCodingComparison(1, 5);
+
+      expect(coderTrainingRepository.findOne).toHaveBeenCalledWith({
+        where: { workspace_id: 1, id: 5 }
+      });
+      expect(codingJobRepository.find).toHaveBeenCalledWith({
+        where: { workspace_id: 1, training_id: 5 },
+        relations: ['codingJobCoders.user'],
+        order: { id: 'ASC' }
+      });
+      expect(qb.getRawMany).toHaveBeenCalled();
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        responseId: 101,
+        givenAnswer: 'answer 1',
+        replayCode: 7,
+        replayScore: 2,
+        discussionCode: 7,
+        discussionScore: 2,
+        discussionSource: 'auto_agreement',
+        coders: [
+          {
+            jobId: 11, coderName: 'Alice', code: '7', score: 2, notes: 'a'
+          },
+          {
+            jobId: 12, coderName: 'Bob', code: '7', score: 2, notes: 'b'
+          }
+        ]
+      });
+      expect(result[1]).toMatchObject({
+        responseId: 102,
+        discussionCode: 99,
+        discussionScore: 4,
+        discussionNotes: 'manual note',
+        discussionManagerUserId: 23,
+        discussionManagerName: 'Manager',
+        discussionSource: 'manual'
+      });
+    });
+
+    it('rejects automatic missing agreement when raw comparison jobs use different missing profiles', async () => {
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        workspace_id: 1
+      });
+      missingsProfilesService.getMissingsProfileDetails.mockResolvedValue({
+        parseMissings: () => [
+          {
+            id: 'mir', label: 'missing invalid response', code: -98, score: 0
+          },
+          {
+            id: 'mci', label: 'missing coding impossible', code: -97, score: 0
+          },
+          {
+            id: 'mbi_mbo', label: 'missing by omission', code: -99, score: 0
+          }
+        ]
+      });
+      mockRepository.find
+        .mockResolvedValueOnce([
+          {
+            id: 11,
+            name: 'job-a',
+            missings_profile_id: 77,
+            codingJobCoders: [{ user: { username: 'Alice' } }]
+          },
+          {
+            id: 12,
+            name: 'job-b',
+            missings_profile_id: 78,
+            codingJobCoders: [{ user: { username: 'Bob' } }]
+          }
+        ])
+        .mockResolvedValueOnce([]);
+
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([
+          {
+            jobId: 11,
+            unitRowId: 1,
+            responseId: 101,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P1',
+            personLogin: 'login-1',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 1',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: null,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: null,
+            code: -99,
+            score: null,
+            notes: null,
+            codingIssueOption: null
+          },
+          {
+            jobId: 12,
+            unitRowId: 2,
+            responseId: 101,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P1',
+            personLogin: 'login-1',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 1',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: null,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: null,
+            code: -99,
+            score: null,
+            notes: null,
+            codingIssueOption: null
+          }
+        ])
+      };
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn().mockReturnValue(qb);
+
+      await expect(service.getWithinTrainingCodingComparison(1, 5))
+        .rejects
+        .toThrow('Conflicting missing profiles for response 101 in training 5');
+    });
+  });
+
   describe('saveDiscussionResult', () => {
     const createTrainingWithUnit = (unitOverrides: Partial<CodingJobUnit> = {}) => {
       const unit = {

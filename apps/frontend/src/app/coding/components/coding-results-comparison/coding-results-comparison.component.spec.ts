@@ -164,6 +164,135 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.comparisonMode).toBe('within-training');
   });
 
+  it('should load within-training comparison without requesting kappa while kappa section is collapsed', () => {
+    codingTrainingBackendService.compareWithinTrainingCodingResults.mockReturnValue(of([
+      {
+        responseId: 1,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        testPerson: 'Test1',
+        personLogin: 'login',
+        personCode: 'code',
+        personGroup: 'group',
+        bookletName: 'booklet',
+        givenAnswer: 'answer',
+        replayCode: null,
+        replayScore: null,
+        discussionCode: null,
+        discussionScore: null,
+        discussionNotes: null,
+        discussionManagerUserId: null,
+        discussionManagerName: null,
+        discussionSource: null,
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder1',
+            code: '7',
+            score: 2,
+            notes: null,
+            codingIssueOption: null
+          }
+        ]
+      }
+    ]));
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.showKappaStatistics = false;
+
+    component.loadComparison();
+
+    expect(codingTrainingBackendService.compareWithinTrainingCodingResults).toHaveBeenCalledWith(1, 5);
+    expect(codingTrainingBackendService.getTrainingCohensKappa).not.toHaveBeenCalled();
+    expect(component.withinTrainingData).toHaveLength(1);
+    expect(component.isLoading).toBe(false);
+  });
+
+  it('should ignore stale within-training comparison responses after a training switch', () => {
+    const firstTrainingResponse$ = new Subject<unknown[]>();
+    const secondTrainingResponse$ = new Subject<unknown[]>();
+    codingTrainingBackendService.compareWithinTrainingCodingResults.mockImplementation(
+      (_workspaceId: number, trainingId: number) => (
+        trainingId === 5 ? firstTrainingResponse$.asObservable() : secondTrainingResponse$.asObservable()
+      )
+    );
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.loadComparison();
+
+    component.selectedTrainingForWithin = 6;
+    component.loadComparison();
+    secondTrainingResponse$.next([
+      {
+        responseId: 2,
+        unitName: 'Unit2',
+        variableId: 'Var2',
+        testPerson: 'Training 6',
+        personLogin: 'login-2',
+        personCode: 'code-2',
+        personGroup: 'group',
+        bookletName: 'booklet',
+        givenAnswer: 'answer 2',
+        replayCode: null,
+        replayScore: null,
+        discussionCode: null,
+        discussionScore: null,
+        discussionNotes: null,
+        discussionManagerUserId: null,
+        discussionManagerName: null,
+        discussionSource: null,
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder 1',
+            code: '7',
+            score: 2,
+            notes: null,
+            codingIssueOption: null
+          }
+        ]
+      }
+    ]);
+
+    firstTrainingResponse$.next([
+      {
+        responseId: 1,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        testPerson: 'Training 5',
+        personLogin: 'login-1',
+        personCode: 'code-1',
+        personGroup: 'group',
+        bookletName: 'booklet',
+        givenAnswer: 'answer 1',
+        replayCode: null,
+        replayScore: null,
+        discussionCode: null,
+        discussionScore: null,
+        discussionNotes: null,
+        discussionManagerUserId: null,
+        discussionManagerName: null,
+        discussionSource: null,
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder 1',
+            code: '8',
+            score: 3,
+            notes: null,
+            codingIssueOption: null
+          }
+        ]
+      }
+    ]);
+
+    expect(component.selectedTrainingForWithin).toBe(6);
+    expect(component.withinTrainingData).toHaveLength(1);
+    expect(component.withinTrainingData[0].responseId).toBe(2);
+    expect(component.dataSource.data[0].responseId).toBe(2);
+    expect(component.isLoading).toBe(false);
+  });
+
   it('should expose replay as its own table column', () => {
     expect(component.displayedColumns).toEqual([
       'index',

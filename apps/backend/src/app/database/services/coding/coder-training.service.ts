@@ -136,6 +136,29 @@ type TrainingResponseJobUnit = {
   unit: CodingJobUnit;
 };
 
+type WithinTrainingCodingRow = {
+  jobId: number | string;
+  unitRowId: number | string;
+  responseId: number | string;
+  unitName: string;
+  variableId: string;
+  personCode: string;
+  personLogin: string;
+  personGroup: string | null;
+  bookletName: string;
+  givenAnswer: string | null;
+  replayCodeV1: number | string | null;
+  replayCodeV2: number | string | null;
+  replayCodeV3: number | string | null;
+  replayScoreV1: number | string | null;
+  replayScoreV2: number | string | null;
+  replayScoreV3: number | string | null;
+  code: number | string | null;
+  score: number | string | null;
+  notes: string | null;
+  codingIssueOption: number | string | null;
+};
+
 type MissingCodePair = { mirCode: number; mciCode: number };
 type MissingCodeDisplayContext = MissingCodePair & {
   negativeCodes: Set<number>;
@@ -827,6 +850,38 @@ export class CoderTrainingService {
     };
   }
 
+  private async deriveAutomaticDiscussionResultForRawResponse(
+    workspaceId: number,
+    trainingId: number,
+    responseId: number,
+    jobs: Array<Pick<CodingJob, 'id' | 'missings_profile_id'>>,
+    unitsByJobId: Map<number, WithinTrainingCodingRow>,
+    coders: WithinTrainingCoderResult[]
+  ): Promise<{ code: number; score: number | null } | null> {
+    const result = this.deriveAutomaticDiscussionResult(coders);
+    if (!result || result.code >= 0) {
+      return result;
+    }
+
+    const responseJobs = jobs.filter(job => unitsByJobId.has(job.id));
+    const resolvedProfileIds = await Promise.all(responseJobs.map(job => (
+      this.missingsProfilesService.resolveMissingsProfileId(workspaceId, job.missings_profile_id)
+    )));
+    const profileKeys = new Set(resolvedProfileIds);
+    if (profileKeys.size > 1) {
+      throw new BadRequestException(`Conflicting missing profiles for response ${responseId} in training ${trainingId}`);
+    }
+
+    return {
+      code: result.code,
+      score: await this.getMissingScoreForProfile(
+        workspaceId,
+        resolvedProfileIds[0] ?? null,
+        result.code
+      )
+    };
+  }
+
   private findTrainingUnitForResponse(
     training: CoderTraining,
     responseId: number,
@@ -976,6 +1031,14 @@ export class CoderTrainingService {
       exclusions
     );
 
+    return this.getMissingScoreForProfile(workspaceId, profileId, code);
+  }
+
+  private async getMissingScoreForProfile(
+    workspaceId: number,
+    profileId: number | null,
+    code: number
+  ): Promise<number> {
     try {
       return (await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
         workspaceId,
@@ -2168,9 +2231,7 @@ export class CoderTrainingService {
     workspaceId: number,
     trainingId: number
   ): Promise<Array<{
-
       responseId: number;
-
       unitName: string;
       variableId: string;
       personCode: string;
@@ -2195,17 +2256,36 @@ export class CoderTrainingService {
       where: {
         workspace_id: workspaceId,
         id: trainingId
-      },
-      relations: ['codingJobs.codingJobCoders.user', 'codingJobs.codingJobUnits.response.unit.booklet.person']
+      }
     });
 
-    if (!training || !training.codingJobs) {
+    if (!training) {
+      return [];
+    }
+
+    const jobs = await this.codingJobRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        training_id: trainingId
+      },
+      relations: ['codingJobCoders.user'],
+      order: { id: 'ASC' }
+    });
+
+    if (jobs.length === 0) {
       return [];
     }
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, training.codingJobs);
+    const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, jobs);
     const defaultMissingCodeContext = await this.getDefaultMissingCodeDisplayContext(workspaceId);
+    const coderNameByJobId = new Map<number, string>();
+    jobs.forEach(job => {
+      const coderName = job.codingJobCoders?.[0]?.user?.username ?
+        `${job.codingJobCoders[0].user.username}` :
+        `Coder ${job.name}`;
+      coderNameByJobId.set(job.id, coderName);
+    });
 
     const unitVariableMap = new Map<string, {
       responseId: number;
@@ -2221,32 +2301,79 @@ export class CoderTrainingService {
       replayScore: number | null;
     }>();
 
-    training.codingJobs.forEach(job => {
-      job.codingJobUnits?.forEach(unit => {
-        if (isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)) {
-          return;
-        }
-        const unitVariableKey = unit.response_id.toString();
-        if (!unitVariableMap.has(unitVariableKey)) {
-          const givenAnswer = unit.response?.value || '';
-          const personGroup = unit.response?.unit?.booklet?.person?.group || '';
-          const testPerson = `${unit.person_login} (${personGroup}) - ${unit.booklet_name}`;
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .leftJoin('cju.response', 'resp')
+      .select('cj.id', 'jobId')
+      .addSelect('cju.id', 'unitRowId')
+      .addSelect('cju.response_id', 'responseId')
+      .addSelect('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect('cju.person_code', 'personCode')
+      .addSelect('cju.person_login', 'personLogin')
+      .addSelect('cju.person_group', 'personGroup')
+      .addSelect('cju.booklet_name', 'bookletName')
+      .addSelect('resp.value', 'givenAnswer')
+      .addSelect('resp.code_v1', 'replayCodeV1')
+      .addSelect('resp.code_v2', 'replayCodeV2')
+      .addSelect('resp.code_v3', 'replayCodeV3')
+      .addSelect('resp.score_v1', 'replayScoreV1')
+      .addSelect('resp.score_v2', 'replayScoreV2')
+      .addSelect('resp.score_v3', 'replayScoreV3')
+      .addSelect('cju.code', 'code')
+      .addSelect('cju.score', 'score')
+      .addSelect('cju.notes', 'notes')
+      .addSelect('cju.coding_issue_option', 'codingIssueOption')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cj.training_id = :trainingId', { trainingId })
+      .orderBy('cju.id', 'ASC')
+      .addOrderBy('cj.id', 'ASC');
 
-          unitVariableMap.set(unitVariableKey, {
-            responseId: unit.response_id,
-            unitName: unit.unit_name,
-            variableId: unit.variable_id,
-            personCode: unit.person_code,
-            personLogin: unit.person_login,
-            personGroup: personGroup,
-            bookletName: unit.booklet_name,
-            testPerson,
-            givenAnswer,
-            replayCode: unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null,
-            replayScore: unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null
-          });
-        }
-      });
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'withinTrainingComparison'
+    });
+
+    const rows = await query.getRawMany<WithinTrainingCodingRow>();
+    const unitsByResponseId = new Map<number, Map<number, WithinTrainingCodingRow>>();
+
+    rows.forEach(row => {
+      const responseId = this.toNullableScore(row.responseId);
+      const jobId = this.toNullableScore(row.jobId);
+      if (responseId === null || jobId === null) {
+        return;
+      }
+
+      const unitVariableKey = responseId.toString();
+      if (!unitVariableMap.has(unitVariableKey)) {
+        const personGroup = row.personGroup || '';
+        const testPerson = `${row.personLogin} (${personGroup}) - ${row.bookletName}`;
+
+        unitVariableMap.set(unitVariableKey, {
+          responseId,
+          unitName: row.unitName,
+          variableId: row.variableId,
+          personCode: row.personCode,
+          personLogin: row.personLogin,
+          personGroup,
+          bookletName: row.bookletName,
+          testPerson,
+          givenAnswer: row.givenAnswer || '',
+          replayCode: this.toNullableScore(row.replayCodeV3) ??
+            this.toNullableScore(row.replayCodeV2) ??
+            this.toNullableScore(row.replayCodeV1),
+          replayScore: this.toNullableScore(row.replayScoreV3) ??
+            this.toNullableScore(row.replayScoreV2) ??
+            this.toNullableScore(row.replayScoreV1)
+        });
+      }
+
+      if (!unitsByResponseId.has(responseId)) {
+        unitsByResponseId.set(responseId, new Map<number, WithinTrainingCodingRow>());
+      }
+      unitsByResponseId.get(responseId)!.set(jobId, row);
     });
 
     const comparisonData = [];
@@ -2279,31 +2406,12 @@ export class CoderTrainingService {
     }
 
     for (const [, unitVar] of unitVariableMap.entries()) {
-      const codersData: WithinTrainingCoderResult[] = [];
-
-      for (const job of training.codingJobs) {
-        let code: number | null = null;
-        let score: number | null = null;
-        let notes: string | null = null;
-        let codingIssueOption: number | null = null;
-
-        const coderName = job.codingJobCoders && job.codingJobCoders.length > 0 && job.codingJobCoders[0].user ?
-          `${job.codingJobCoders[0].user.username || 'Unknown'}` :
-          `Coder ${job.name}`;
-
-        job.codingJobUnits?.forEach(unit => {
-          if (
-            unit.response_id === unitVar.responseId &&
-            !isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)
-          ) {
-            code = unit.code;
-            if (unit.score !== null) {
-              score = unit.score;
-            }
-            notes = unit.notes;
-            codingIssueOption = unit.coding_issue_option;
-          }
-        });
+      const unitsByJobId = unitsByResponseId.get(unitVar.responseId) ?? new Map<number, WithinTrainingCodingRow>();
+      const codersData: WithinTrainingCoderResult[] = jobs.map(job => {
+        const unit = unitsByJobId.get(job.id);
+        const code = this.toNullableScore(unit?.code);
+        const score = this.toNullableScore(unit?.score);
+        const codingIssueOption = this.toNullableScore(unit?.codingIssueOption);
 
         const mappedDisplay = this.mapDisplayCodeAndScore(
           code,
@@ -2312,26 +2420,27 @@ export class CoderTrainingService {
           missingCodesByJobId.get(job.id) ?? defaultMissingCodeContext
         );
 
-        codersData.push({
+        return {
           jobId: job.id,
-          coderName,
+          coderName: coderNameByJobId.get(job.id) ?? `Coder ${job.name}`,
           code: mappedDisplay.code,
           score: mappedDisplay.score,
-          notes,
+          notes: unit?.notes ?? null,
           codingIssueOption
-        });
-      }
+        };
+      });
 
       const discussionResult = discussionByResponseId.get(unitVar.responseId);
       const hasManualDiscussionResult = discussionResult?.code !== null && discussionResult?.code !== undefined;
       const automaticDiscussionResult = hasManualDiscussionResult ?
         null :
-        await this.deriveAutomaticDiscussionResultForResponse(
+        await this.deriveAutomaticDiscussionResultForRawResponse(
           workspaceId,
-          training,
+          trainingId,
           unitVar.responseId,
-          codersData,
-          exclusions
+          jobs,
+          unitsByJobId,
+          codersData
         );
       let discussionCode = automaticDiscussionResult?.code ?? null;
       let discussionScore = automaticDiscussionResult?.score ?? null;
@@ -2373,7 +2482,7 @@ export class CoderTrainingService {
       });
     }
 
-    this.logger.log(`Generated within-training comparison data for ${comparisonData.length} unit/variable combinations across ${training.codingJobs.length} coders`);
+    this.logger.log(`Generated within-training comparison data for ${comparisonData.length} unit/variable combinations across ${jobs.length} coders`);
 
     return comparisonData;
   }
