@@ -3400,6 +3400,86 @@ describe('CodingJobService', () => {
     );
   });
 
+  it('prefers coding scheme aliases over colliding technical ids when saving progress', async () => {
+    const job = { id: 1, workspace_id: 3 };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'DHB003',
+      unit_alias: 'DHB003',
+      variable_id: '04',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    fileUploadRepository.find
+      .mockResolvedValueOnce([
+        {
+          file_id: 'DHB003',
+          data: '<Unit><CodingSchemeRef>DHB003</CodingSchemeRef></Unit>'
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          file_id: 'DHB003.VOCS',
+          data: {
+            variableCodings: [
+              {
+                id: '04',
+                alias: '02',
+                codes: [
+                  {
+                    id: 2,
+                    code: '2',
+                    label: 'Visible 02',
+                    score: 2,
+                    manualInstruction: '<p>Manual 02</p>'
+                  }
+                ]
+              },
+              {
+                id: '07',
+                alias: '04',
+                codes: [
+                  {
+                    id: 4,
+                    code: '4',
+                    label: 'Visible 04',
+                    score: 4,
+                    manualInstruction: '<p>Manual 04</p>'
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]);
+    (
+      service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }
+    ).checkAndUpdateCodingJobCompletion = jest.fn();
+
+    await service.saveCodingProgress(1, {
+      testPerson: 'login@code@booklet',
+      unitId: 'DHB003',
+      variableId: '04',
+      selectedCode: { id: 4, score: 999 }
+    } as never);
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 4,
+        score: 4,
+        is_open: false
+      })
+    );
+  });
+
   it('uses the group segment when saving grouped test person progress', async () => {
     const job = { id: 1, workspace_id: 3 };
     const unit = {

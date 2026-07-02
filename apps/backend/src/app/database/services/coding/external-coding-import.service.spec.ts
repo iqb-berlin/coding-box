@@ -264,6 +264,53 @@ describe('ExternalCodingImportService', () => {
     });
   });
 
+  it('prefers coding scheme aliases over colliding technical ids when validating imported codes', async () => {
+    const service = new ExternalCodingImportService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { delete: jest.fn().mockResolvedValue(undefined) } as never,
+      { markManualCodingCurrent: jest.fn().mockResolvedValue(undefined) } as never
+    );
+    jest.spyOn(service as unknown as {
+      getCodingSchemeForUnit: () => Promise<unknown>;
+    }, 'getCodingSchemeForUnit')
+      .mockResolvedValue({
+        variableCodings: [
+          {
+            id: '04',
+            alias: '02',
+            codes: [{ id: 4, score: 99 }]
+          },
+          {
+            id: '07',
+            alias: '04',
+            codes: [{ id: 4, score: 4 }]
+          }
+        ]
+      });
+
+    const result = await (service as unknown as {
+      validateCodeAgainstScheme: (
+        unit: unknown,
+        variableId: string,
+        code: number | null
+      ) => Promise<{ isValid: boolean; score: number | null; status: string }>;
+    }).validateCodeAgainstScheme(
+      { id: 1, name: 'DHB003', alias: 'DHB003' },
+      '04',
+      4
+    );
+
+    expect(result).toEqual({
+      isValid: true,
+      score: 4,
+      status: 'CODING_COMPLETE'
+    });
+  });
+
   it('rejects unchanged coding-list exports with status_v1 as coding lists, not coding-results', async () => {
     const service = new ExternalCodingImportService(
       {} as never,

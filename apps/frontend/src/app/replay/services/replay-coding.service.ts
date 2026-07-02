@@ -4,8 +4,9 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
 import {
-  Code, VariableCoding, CodingScheme, CodeSelectedEvent
+  Code, CodingScheme, CodeSelectedEvent
 } from '../../models/coding-interfaces';
+import { findVariableCodingByPublicId } from '../../coding/utils/coding-scheme.util';
 import { UnitsReplay, UnitsReplayUnit } from './units-replay.service';
 
 interface SavedCode {
@@ -205,8 +206,9 @@ export class ReplayCodingService {
       return null;
     }
 
-    const variableCoding = this.codingScheme.variableCodings?.find(
-      (v: VariableCoding) => v.alias === this.currentVariableId || v.id === this.currentVariableId
+    const variableCoding = findVariableCodingByPublicId(
+      this.codingScheme,
+      this.currentVariableId
     );
     if (variableCoding) {
       return variableCoding.codes?.find((c: Code) => c.id === codeId) || null;

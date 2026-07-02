@@ -28,10 +28,10 @@ import {
   CodeSelectedEvent,
   CodingScheme,
   SelectableItem,
-  CodingIssueDto,
-  VariableCoding
+  CodingIssueDto
 } from '../../../models/coding-interfaces';
 import { hasManualInstruction } from '../../utils/manual-coding.util';
+import { findVariableCodingByPublicId } from '../../utils/coding-scheme.util';
 
 interface NavigationItem {
   key: string;
@@ -171,9 +171,7 @@ export class CodeSelectorComponent implements OnChanges {
     }
     this.hasResolvedCodingScheme = true;
 
-    const variableCoding = scheme.variableCodings.find(
-      (v: VariableCoding) => v.alias === this.variableId || v.id === this.variableId
-    );
+    const variableCoding = findVariableCodingByPublicId(scheme, this.variableId);
     if (variableCoding) {
       this.variableManualInstruction = variableCoding.manualInstruction || null;
       this.allRegularCodeItems = variableCoding.codes

@@ -43,6 +43,7 @@ import { ReplayCodingService } from '../../services/replay-coding.service';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { hasManualInstruction } from '../../../coding/utils/manual-coding.util';
+import { findVariableCodingByPublicId } from '../../../coding/utils/coding-scheme.util';
 import {
   CODING_JOB_WORKSPACE_TOKEN_SCOPES,
   REPLAY_WORKSPACE_TOKEN_SCOPES,
@@ -1463,11 +1464,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         keyboardEvent.preventDefault();
         const codeId = parseInt(keyboardEvent.key, 10);
         if (this.codingService.codingScheme) {
-          const variableCoding = this.codingService.codingScheme.variableCodings.find(
-            (v: any) => v.alias === this.codingService.currentVariableId || v.id === this.codingService.currentVariableId
+          const variableCoding = findVariableCodingByPublicId(
+            this.codingService.codingScheme,
+            this.codingService.currentVariableId
           );
           if (variableCoding) {
-            const code = variableCoding.codes.find((c: any) => c.id === codeId && hasManualInstruction(c));
+            const code = variableCoding.codes.find(c => c.id === codeId && hasManualInstruction(c));
             if (code) {
               this.onCodeSelected({
                 variableId: this.codingService.currentVariableId,
