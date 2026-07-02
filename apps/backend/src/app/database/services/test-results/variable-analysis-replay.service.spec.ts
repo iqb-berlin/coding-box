@@ -418,6 +418,53 @@ describe('VariableAnalysisReplayService', () => {
     expect(result.data[0].replayUrl).toContain('/MDB002/2/02?auth=token&workspaceId=7');
   });
 
+  it('prefers coding scheme aliases over colliding technical ids for analysis metadata', async () => {
+    fileUploadRepository.find.mockResolvedValueOnce([
+      {
+        file_id: 'MDB002.VOCS',
+        data: JSON.stringify({
+          variableCodings: [
+            {
+              id: '02',
+              alias: '01',
+              sourceType: 'BASE',
+              label: 'Technische Variable 02'
+            },
+            {
+              id: '07',
+              alias: '02',
+              sourceType: 'DERIVED',
+              label: 'Sichtbare Variable 02'
+            }
+          ]
+        })
+      }
+    ]);
+    workspaceFilesService.getUnitVariableMap.mockResolvedValueOnce(new Map([
+      ['MDB002', new Set(['02'])]
+    ]));
+
+    const result = await service.getVariableAnalysis(
+      7,
+      'token',
+      'http://server',
+      1,
+      10,
+      undefined,
+      undefined,
+      'derived'
+    );
+
+    expect(result.total).toBe(1);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      unitId: 'MDB002',
+      variableId: '02',
+      derivation: 'DERIVED',
+      description: 'Sichtbare Variable 02'
+    });
+  });
+
   it('uses a regex variable filter when requested', async () => {
     const result = await service.getVariableAnalysis(
       7,

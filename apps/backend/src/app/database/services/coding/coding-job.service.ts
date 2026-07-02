@@ -3872,8 +3872,16 @@ export class CodingJobService {
     codingScheme: CodingScheme,
     variableId: string
   ): CodingSchemeVariableCoding | undefined {
-    return codingScheme.variableCodings?.find(
-      vc => vc.id === variableId || vc.alias === variableId
+    const normalizedVariableId = String(variableId || '').trim();
+    if (!normalizedVariableId) {
+      return undefined;
+    }
+
+    const variableCodings = codingScheme.variableCodings || [];
+    return variableCodings.find(
+      vc => String(vc.alias || '').trim() === normalizedVariableId
+    ) || variableCodings.find(
+      vc => String(vc.id || '').trim() === normalizedVariableId
     );
   }
 

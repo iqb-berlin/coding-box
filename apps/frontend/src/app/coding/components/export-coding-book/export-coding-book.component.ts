@@ -637,14 +637,14 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       const scheme = JSON.parse(unit.unitData) as {
         variableCodings?: Array<{ id?: string; alias?: string }>;
       };
-      const matchingVariableCoding = (scheme.variableCodings || [])
-        .find(variableCoding => (
-          variableCoding.id?.trim() === variableId ||
-          variableCoding.alias?.trim() === variableId
-        ));
+      const variableCodings = scheme.variableCodings || [];
+      const matchingVariableCoding = variableCodings
+        .find(variableCoding => variableCoding.alias?.trim() === variableId) ||
+        variableCodings
+          .find(variableCoding => variableCoding.id?.trim() === variableId);
 
-      return matchingVariableCoding?.id?.trim() ||
-        matchingVariableCoding?.alias?.trim() ||
+      return matchingVariableCoding?.alias?.trim() ||
+        matchingVariableCoding?.id?.trim() ||
         variableId;
     } catch {
       return variableId;
