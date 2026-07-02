@@ -829,7 +829,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   get hasCodingFreshnessAttention(): boolean {
-    return this.hasAutocodingReadinessLoadFailed ||
+    return this.isCodingStatusOverviewPendingManualRefresh ||
+      this.hasAutocodingReadinessLoadFailed ||
       this.isAutocodingReadinessBlocked ||
       this.hasCodingFreshnessWarnings ||
       this.hasImportedResultsWithoutCoding;

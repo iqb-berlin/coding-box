@@ -5,7 +5,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
-import { Observable, of, throwError } from 'rxjs';
+import {
+  Observable, of, Subject, throwError
+} from 'rxjs';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
@@ -1338,6 +1340,94 @@ describe('CodingManagementManualComponent', () => {
     expect(incompleteVariablesSpy).toHaveBeenCalled();
     expect(loadCodingFreshnessSpy).toHaveBeenCalled();
     expect(loadResponseAnalysisSpy).toHaveBeenCalled();
+  });
+
+  it('should wait for the auto-refresh setting before loading initial coding freshness', () => {
+    const manualRefreshSetting$ = new Subject<boolean>();
+    const isolatedFixture = TestBed.createComponent(CodingManagementManualComponent);
+    const isolatedComponent = isolatedFixture.componentInstance;
+    const componentInternals = isolatedComponent as unknown as {
+      appService: { selectedWorkspaceId: number };
+      workspaceSettingsService: {
+        getAutoRefreshManualCodingJobs: (workspaceId: number) => Observable<boolean>;
+      };
+      loadCodersForExport(): void;
+      loadJobDefinitionsForExport(): void;
+      loadInitialManualCodingState(): void;
+      loadManualCodingApplyPermission(): void;
+      loadCodingFreshness(): void;
+    };
+    const previousWorkspaceId = componentInternals.appService.selectedWorkspaceId;
+    const getSettingSpy = jest
+      .spyOn(componentInternals.workspaceSettingsService, 'getAutoRefreshManualCodingJobs')
+      .mockReturnValue(manualRefreshSetting$.asObservable());
+    jest.spyOn(componentInternals, 'loadCodersForExport').mockImplementation();
+    jest.spyOn(componentInternals, 'loadJobDefinitionsForExport').mockImplementation();
+    jest.spyOn(componentInternals, 'loadInitialManualCodingState').mockImplementation();
+    jest.spyOn(componentInternals, 'loadManualCodingApplyPermission').mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+
+    try {
+      componentInternals.appService.selectedWorkspaceId = 5;
+
+      isolatedComponent.ngOnInit();
+
+      expect(getSettingSpy).toHaveBeenCalledWith(5);
+      expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+
+      manualRefreshSetting$.next(true);
+
+      expect(loadCodingFreshnessSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      isolatedFixture.destroy();
+      componentInternals.appService.selectedWorkspaceId = previousWorkspaceId;
+      getSettingSpy.mockRestore();
+    }
+  });
+
+  it('should skip initial coding freshness when auto-refresh is disabled', () => {
+    const manualRefreshSetting$ = new Subject<boolean>();
+    const isolatedFixture = TestBed.createComponent(CodingManagementManualComponent);
+    const isolatedComponent = isolatedFixture.componentInstance;
+    const componentInternals = isolatedComponent as unknown as {
+      appService: { selectedWorkspaceId: number };
+      workspaceSettingsService: {
+        getAutoRefreshManualCodingJobs: (workspaceId: number) => Observable<boolean>;
+      };
+      loadCodersForExport(): void;
+      loadJobDefinitionsForExport(): void;
+      loadInitialManualCodingState(): void;
+      loadManualCodingApplyPermission(): void;
+      loadCodingFreshness(): void;
+    };
+    const previousWorkspaceId = componentInternals.appService.selectedWorkspaceId;
+    const getSettingSpy = jest
+      .spyOn(componentInternals.workspaceSettingsService, 'getAutoRefreshManualCodingJobs')
+      .mockReturnValue(manualRefreshSetting$.asObservable());
+    jest.spyOn(componentInternals, 'loadCodersForExport').mockImplementation();
+    jest.spyOn(componentInternals, 'loadJobDefinitionsForExport').mockImplementation();
+    jest.spyOn(componentInternals, 'loadInitialManualCodingState').mockImplementation();
+    jest.spyOn(componentInternals, 'loadManualCodingApplyPermission').mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+
+    try {
+      componentInternals.appService.selectedWorkspaceId = 5;
+
+      isolatedComponent.ngOnInit();
+      manualRefreshSetting$.next(false);
+
+      expect(getSettingSpy).toHaveBeenCalledWith(5);
+      expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+      expect(isolatedComponent.autoRefreshManualCodingJobs).toBe(false);
+    } finally {
+      isolatedFixture.destroy();
+      componentInternals.appService.selectedWorkspaceId = previousWorkspaceId;
+      getSettingSpy.mockRestore();
+    }
   });
 
   it('should ignore duplicate tab change events for the active manual tab', () => {
