@@ -93,7 +93,8 @@ describe('CodingManagementComponent', () => {
 
     mockWorkspaceSettingsService = {
       getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(false)),
-      getEnableRegexSearch: jest.fn().mockReturnValue(of(false))
+      getEnableRegexSearch: jest.fn().mockReturnValue(of(false)),
+      getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true))
     };
     autoCodingCompletedSubject = new Subject<{ jobId?: string }>();
     testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
@@ -248,6 +249,8 @@ describe('CodingManagementComponent', () => {
           'title-blocked': 'Auto-Coding 1 nicht möglich',
           'title-not-started': 'Kodierung noch nicht gestartet',
           'title-manual-coding-open': 'Manuelle Kodierung abschließen',
+          'title-not-checked': 'Kodierstand nicht automatisch geprüft',
+          'manual-refresh-required': 'Die automatische Aktualisierung ist deaktiviert. Aktualisieren Sie den Status bei Bedarf manuell.',
           summary: '{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus, aber {{codeableResponses}} kodierbare Antworten.',
           'details-result-units': '{{count}} Ergebnis-Units',
           'details-unit-files': '{{count}} passende Unit-Dateien',
@@ -261,6 +264,7 @@ describe('CodingManagementComponent', () => {
           'second-autocoding-waits-chip': '{{version}}: {{count}} wartet',
           'second-autocoding-waits-snackbar': 'Schließen Sie zuerst die manuelle Kodierung ab und übernehmen Sie die Ergebnisse.',
           'starting-freshness-coding': 'Auto-Coding wird gestartet...',
+          'refresh-status': 'Status aktualisieren',
           'open-manual-review': 'Manuelle Kodierung öffnen'
         }
       }
@@ -291,6 +295,10 @@ describe('CodingManagementComponent', () => {
 
     it('should check regex search setting on init', () => {
       expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledWith(1);
+    });
+
+    it('should check manual coding auto-refresh setting on init', () => {
+      expect(mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1);
     });
 
     it('should load autocoding readiness for the first autocoder run', () => {
@@ -370,6 +378,23 @@ describe('CodingManagementComponent', () => {
   });
 
   describe('Coding Freshness', () => {
+    it('should show pending manual status refresh as an attention state', () => {
+      component.autoRefreshManualCodingJobs = false;
+      component.hasRequestedCodingStatusOverview = false;
+
+      expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(true);
+      expect(component.hasCodingFreshnessAttention).toBe(true);
+      expect(component.codingFreshnessPanelTitle).toBe('Kodierstand nicht automatisch geprüft');
+
+      fixture.detectChanges();
+      const freshnessPanel = fixture.nativeElement.querySelector(
+        '.coding-freshness-panel'
+      ) as HTMLElement;
+      const stateIcon = freshnessPanel.querySelector('mat-icon') as HTMLElement;
+      expect(freshnessPanel.classList.contains('is-current')).toBe(false);
+      expect(stateIcon.textContent?.trim()).toBe('warning');
+    });
+
     it('should keep second auto-coding waiting while manual coding results are still open', () => {
       component.codingFreshnessSummary = {
         workspaceId: 1,
