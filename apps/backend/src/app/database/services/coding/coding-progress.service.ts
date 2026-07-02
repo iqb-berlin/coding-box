@@ -16,6 +16,8 @@ import {
 } from '../workspace/workspace-exclusion.service';
 import {
   buildAggregationGroups,
+  countEffectiveManualCodingCases,
+  ManualCodingDeduplicationResponse,
   summarizeAggregationGroups
 } from './aggregation-metrics.util';
 import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
@@ -44,6 +46,10 @@ interface CoverageResponse {
   codeV2: number | null;
   statusV2: number | null;
   statusV1: number | null;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  bookletName: string;
 }
 
 interface CoverageResponseScope {
@@ -69,6 +75,11 @@ interface EffectiveCaseProgress {
   aggregatedDuplicateCases: number;
 }
 
+interface EffectiveVariableCaseCoverage {
+  effectiveTotalCasesToCode: number;
+  effectiveCasesInJobs: number;
+}
+
 interface DeriveErrorManualProgress {
   deriveErrorTotalResponses: number;
   deriveErrorAppliedResponses: number;
@@ -82,9 +93,17 @@ interface ManualProgressStatusQuery {
   andWhere: (condition: string | Brackets, parameters?: Record<string, unknown>) => unknown;
 }
 
+interface VariableReferenceFilterQuery {
+  andWhere: (condition: string | Brackets, parameters?: Record<string, unknown>) => unknown;
+}
+
 interface VariableDefinitionReference {
   id: number;
   status: string;
+}
+
+interface VariableCaseCount extends UnitVariableReference {
+  caseCount: number;
 }
 
 interface CrossDefinitionCaseRow {
@@ -540,6 +559,10 @@ export class CodingProgressService {
       .addSelect('response.status_v1', 'statusV1')
       .addSelect('response.variableid', 'variableId')
       .addSelect('unit.name', 'unitName')
+      .addSelect("COALESCE(bookletinfo.name, '')", 'bookletName')
+      .addSelect("COALESCE(person.login, '')", 'personLogin')
+      .addSelect("COALESCE(person.code, '')", 'personCode')
+      .addSelect("COALESCE(person.group, '')", 'personGroup')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
@@ -590,7 +613,11 @@ export class CodingProgressService {
       statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
       statusV1: row.statusV1 === null || row.statusV1 === undefined ? null : Number(row.statusV1),
       variableId: row.variableId,
-      unitName: row.unitName
+      unitName: row.unitName,
+      bookletName: row.bookletName ?? '',
+      personLogin: row.personLogin ?? '',
+      personCode: row.personCode ?? '',
+      personGroup: row.personGroup ?? ''
     }));
   }
 
@@ -858,6 +885,9 @@ export class CodingProgressService {
         })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)', {
+          completedV2Status: statusStringToNumber('CODING_COMPLETE')
+        })
         // Exclude pre-processed responses (not in manual coding pool)
         .andWhere(new Brackets(qb => {
           qb.where('response.code_v2 IS NULL')
@@ -926,16 +956,8 @@ export class CodingProgressService {
       );
 
       const variablesNeedingCoding = new Set<string>();
-      const variableCaseCounts: {
-        unitName: string;
-        variableId: string;
-        caseCount: number;
-      }[] = [];
-      const variableCaseCountMap = new Map<string, {
-        unitName: string;
-        variableId: string;
-        caseCount: number;
-      }>();
+      const variableCaseCounts: VariableCaseCount[] = [];
+      const variableCaseCountMap = new Map<string, VariableCaseCount>();
 
       filteredIncompleteVariablesResult.forEach(row => {
         const variableKey = `${row.unitName}:${row.variableId}`;
@@ -1019,8 +1041,11 @@ export class CodingProgressService {
         });
       }
 
-      // Get cases in jobs map for conflict detection
-      const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
+      const coveredVariableCaseCounts = variableCaseCounts.filter(
+        variable => coveredVariables.has(`${variable.unitName}:${variable.variableId}`)
+      );
+      const effectiveVariableCaseCoverageMap =
+        await this.getEffectiveVariableCasesInJobs(workspaceId, coveredVariableCaseCounts);
 
       const crossDefinitionCaseConflicts = await this.getCrossDefinitionCaseConflicts(workspaceId);
       const conflictedVariables = new Map<string, VariableDefinitionReference[]>();
@@ -1045,20 +1070,25 @@ export class CodingProgressService {
           return;
         }
 
-        // Check if variable is fully or partially covered based on cases in jobs
+        // Check if variable is fully or partially covered on the effective case level.
         const variableCaseInfo = variableCaseCounts.find(
           v => `${v.unitName}:${v.variableId}` === variableKey
         );
 
         if (variableCaseInfo) {
-          const casesInJobs =
-            casesInJobsMap.get(
-              `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
-            ) || 0;
+          const effectiveCoverage = effectiveVariableCaseCoverageMap.get(
+            `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
+          ) || {
+            effectiveTotalCasesToCode: variableCaseInfo.caseCount,
+            effectiveCasesInJobs: 0
+          };
 
-          if (casesInJobs >= variableCaseInfo.caseCount) {
+          if (
+            effectiveCoverage.effectiveTotalCasesToCode > 0 &&
+            effectiveCoverage.effectiveCasesInJobs >= effectiveCoverage.effectiveTotalCasesToCode
+          ) {
             fullyAbgedeckteVariablen.add(variableKey);
-          } else if (casesInJobs > 0) {
+          } else if (effectiveCoverage.effectiveCasesInJobs > 0) {
             partiallyAbgedeckteVariablen.add(variableKey);
           }
         }
@@ -1125,8 +1155,13 @@ export class CodingProgressService {
   }
 
   private async getVariableCasesInJobs(
-    workspaceId: number
+    workspaceId: number,
+    variables: UnitVariableReference[]
   ): Promise<Map<string, number>> {
+    if (variables.length === 0) {
+      return new Map<string, number>();
+    }
+
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const query = this.codingJobUnitRepository
       .createQueryBuilder('cju')
@@ -1134,10 +1169,19 @@ export class CodingProgressService {
       .addSelect('cju.variable_id', 'variableId')
       .addSelect('COUNT(DISTINCT cju.response_id)', 'casesInJobs')
       .leftJoin('cju.coding_job', 'coding_job')
+      .innerJoin('cju.response', 'response')
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL')
+      .andWhere('(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)', {
+        completedV2Status: statusStringToNumber('CODING_COMPLETE')
+      })
       .groupBy('cju.unit_name')
       .addGroupBy('cju.variable_id');
+    this.applyVariableReferenceFilter(query, variables, {
+      unitNameExpression: 'cju.unit_name',
+      variableIdExpression: 'cju.variable_id',
+      parameterPrefix: 'variableCasesInJobs'
+    });
     applyNonCodingIssueReviewJobFilter(
       query,
       'coding_job',
@@ -1158,6 +1202,251 @@ export class CodingProgressService {
     });
 
     return casesInJobsMap;
+  }
+
+  private async getEffectiveVariableCasesInJobs(
+    workspaceId: number,
+    variables: VariableCaseCount[]
+  ): Promise<Map<string, EffectiveVariableCaseCoverage>> {
+    const result = new Map<string, EffectiveVariableCaseCoverage>();
+
+    if (variables.length === 0) {
+      return result;
+    }
+
+    const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+    const matchingFlags = await this.getResponseMatchingMode(workspaceId);
+    const aggregationActive =
+      aggregationThreshold !== null && !matchingFlags.includes('NO_AGGREGATION');
+
+    if (!aggregationActive) {
+      const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId, variables);
+      variables.forEach(variable => {
+        const key = `${variable.unitName}::${variable.variableId}`;
+        result.set(key, {
+          effectiveTotalCasesToCode: variable.caseCount,
+          effectiveCasesInJobs: casesInJobsMap.get(key) || 0
+        });
+      });
+      return result;
+    }
+
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+    const codingCompleteStatus = statusStringToNumber('CODING_COMPLETE');
+    const variableKeys = new Set(
+      variables.map(variable => `${variable.unitName}:${variable.variableId}`)
+    );
+    const [responses, assignedResponseIds, derivedVariableMap] = await Promise.all([
+      this.getCoverageResponsesForVariables(workspaceId, variables),
+      this.getAssignedCoverageResponseIdsForVariables(workspaceId, variables),
+      this.getDerivedVariableMap(workspaceId)
+    ]);
+    const responsesByVariable = new Map<string, CoverageResponse[]>();
+
+    responses
+      .filter(response => (
+        response.statusV1 === codingIncompleteStatus ||
+        response.statusV1 === intendedIncompleteStatus
+      ))
+      .filter(response => response.statusV2 !== codingCompleteStatus)
+      .filter(response => variableKeys.has(`${response.unitName}:${response.variableId}`))
+      .forEach(response => {
+        const key = `${response.unitName}::${response.variableId}`;
+        const variableResponses = responsesByVariable.get(key) || [];
+        variableResponses.push(response);
+        responsesByVariable.set(key, variableResponses);
+      });
+
+    variables.forEach(variable => {
+      const key = `${variable.unitName}::${variable.variableId}`;
+      const variableResponses = responsesByVariable.get(key) || [];
+      const responsesWithCaseFields: ManualCodingDeduplicationResponse[] =
+        variableResponses.map(response => ({
+          responseId: response.responseId,
+          unitName: response.unitName,
+          variableId: response.variableId,
+          value: response.value,
+          personLogin: response.personLogin,
+          personCode: response.personCode,
+          personGroup: response.personGroup,
+          bookletName: response.bookletName
+        }));
+      const effectiveCaseCounts = countEffectiveManualCodingCases(
+        responsesWithCaseFields,
+        assignedResponseIds,
+        matchingFlags,
+        aggregationThreshold,
+        derivedVariableMap
+      );
+
+      result.set(key, {
+        effectiveTotalCasesToCode: effectiveCaseCounts.uniqueCases,
+        effectiveCasesInJobs: effectiveCaseCounts.casesInJobs
+      });
+    });
+
+    return result;
+  }
+
+  private async getCoverageResponsesForVariables(
+    workspaceId: number,
+    variables: UnitVariableReference[]
+  ): Promise<CoverageResponse[]> {
+    if (variables.length === 0) {
+      return [];
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.responseRepository
+      .createQueryBuilder('response')
+      .select('response.id', 'responseId')
+      .addSelect('response.value', 'value')
+      .addSelect('response.code_v2', 'codeV2')
+      .addSelect('response.status_v2', 'statusV2')
+      .addSelect('response.status_v1', 'statusV1')
+      .addSelect('response.variableid', 'variableId')
+      .addSelect('unit.name', 'unitName')
+      .addSelect("COALESCE(bookletinfo.name, '')", 'bookletName')
+      .addSelect("COALESCE(person.login, '')", 'personLogin')
+      .addSelect("COALESCE(person.code, '')", 'personCode')
+      .addSelect("COALESCE(person.group, '')", 'personGroup')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      })
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)', {
+        completedV2Status: statusStringToNumber('CODING_COMPLETE')
+      })
+      .andWhere(new Brackets(qb => {
+        qb.where('response.code_v2 IS NULL')
+          .orWhere(subQuery => {
+            const exists = subQuery
+              .subQuery()
+              .select('1')
+              .from('coding_job_unit', 'manual_cju')
+              .innerJoin('coding_job', 'manual_cj', 'manual_cj.id = manual_cju.coding_job_id')
+              .where('manual_cju.response_id = response.id')
+              .andWhere('manual_cj.training_id IS NULL')
+              .andWhere(getNonCodingIssueReviewJobSqlCondition('manual_cj'))
+              .getQuery();
+            return `EXISTS (${exists})`;
+          });
+      }))
+      .orderBy('response.id', 'ASC');
+    this.applyVariableReferenceFilter(query, variables, {
+      unitNameExpression: 'unit.name',
+      variableIdExpression: 'response.variableid',
+      parameterPrefix: 'variableCoverageResponses'
+    });
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      parameterPrefix: 'variableCoverageResponses'
+    });
+    const raw = await query.getRawMany();
+
+    return raw.map(row => ({
+      responseId: Number(row.responseId),
+      value: row.value ?? null,
+      codeV2: row.codeV2 === null || row.codeV2 === undefined ? null : Number(row.codeV2),
+      statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
+      statusV1: row.statusV1 === null || row.statusV1 === undefined ? null : Number(row.statusV1),
+      variableId: row.variableId,
+      unitName: row.unitName,
+      bookletName: row.bookletName ?? '',
+      personLogin: row.personLogin ?? '',
+      personCode: row.personCode ?? '',
+      personGroup: row.personGroup ?? ''
+    }));
+  }
+
+  private async getAssignedCoverageResponseIdsForVariables(
+    workspaceId: number,
+    variables: UnitVariableReference[]
+  ): Promise<Set<number>> {
+    if (variables.length === 0) {
+      return new Set<number>();
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .select('DISTINCT cju.response_id', 'responseId')
+      .innerJoin('cju.response', 'response')
+      .leftJoin('cju.coding_job', 'coding_job')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .leftJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('coding_job.training_id IS NULL')
+      .andWhere('(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)', {
+        completedV2Status: statusStringToNumber('CODING_COMPLETE')
+      })
+      .andWhere(new Brackets(qb => {
+        qb.where('response.code_v2 IS NULL')
+          .orWhere(subQuery => {
+            const exists = subQuery
+              .subQuery()
+              .select('1')
+              .from('coding_job_unit', 'assigned_cju')
+              .where('assigned_cju.response_id = response.id')
+              .getQuery();
+            return `EXISTS (${exists})`;
+          });
+      }));
+    applyNonCodingIssueReviewJobFilter(
+      query,
+      'coding_job',
+      'assignedVariableCoverageReviewJobType'
+    );
+    this.applyManualProgressStatusFilter(query, 'andWhere');
+    this.applyVariableReferenceFilter(query, variables, {
+      unitNameExpression: 'cju.unit_name',
+      variableIdExpression: 'cju.variable_id',
+      parameterPrefix: 'assignedVariableCoverage'
+    });
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'assignedVariableCoverage'
+    });
+    const raw = await query.getRawMany();
+
+    return new Set(raw.map(row => Number(row.responseId)));
+  }
+
+  private applyVariableReferenceFilter(
+    query: VariableReferenceFilterQuery,
+    variables: UnitVariableReference[],
+    options: {
+      unitNameExpression: string;
+      variableIdExpression: string;
+      parameterPrefix: string;
+    }
+  ): void {
+    const conditions: string[] = [];
+    const parameters: Record<string, string> = {};
+
+    variables.forEach((variable, index) => {
+      const unitParam = `${options.parameterPrefix}UnitName${index}`;
+      const variableParam = `${options.parameterPrefix}VariableId${index}`;
+      conditions.push(
+        `(${options.unitNameExpression} = :${unitParam} AND ${options.variableIdExpression} = :${variableParam})`
+      );
+      parameters[unitParam] = variable.unitName;
+      parameters[variableParam] = variable.variableId;
+    });
+
+    query.andWhere(`(${conditions.join(' OR ')})`, parameters);
   }
 
   private async getCrossDefinitionCaseConflicts(
