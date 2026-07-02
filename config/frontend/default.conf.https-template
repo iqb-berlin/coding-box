@@ -37,7 +37,13 @@ server {
         add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
     }
 
-    location ^~ /assets/ {
+    location ~* "^/assets/i18n/[^/]+\.json$" {
+        root   /usr/share/nginx/html;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
+        try_files $uri =404;
+    }
+
+    location /assets/ {
         root   /usr/share/nginx/html;
         add_header Cache-Control "no-cache, must-revalidate, max-age=0" always;
         try_files $uri =404;
