@@ -382,6 +382,32 @@ describe('ReplayCodingService', () => {
     });
   });
 
+  describe('findCodeById', () => {
+    it('prefers variable aliases over colliding technical ids', () => {
+      service.currentVariableId = '04';
+      service.codingScheme = {
+        version: '1.0',
+        variableCodings: [
+          {
+            id: '04',
+            alias: '02',
+            codes: [{ id: 2, label: 'Code for visible 02', score: 2 }]
+          },
+          {
+            id: '07',
+            alias: '04',
+            codes: [{ id: 4, label: 'Code for visible 04', score: 4 }]
+          }
+        ]
+      } as never;
+
+      expect(service.findCodeById(4)).toEqual(
+        expect.objectContaining({ label: 'Code for visible 04' })
+      );
+      expect(service.findCodeById(2)).toBeNull();
+    });
+  });
+
   describe('handleCodeSelected', () => {
     it('persists deselection before clearing local progress', async () => {
       codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));

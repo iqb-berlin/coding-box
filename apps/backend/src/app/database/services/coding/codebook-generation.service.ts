@@ -385,9 +385,10 @@ export class CodebookGenerationService {
         return null;
       }
 
-      const variableCodings = scheme.variableCodings.filter(variableCoding => (
-        this.matchesAllowedVariable(variableCoding, allowedVariables)
-      ));
+      const variableCodings = this.filterVariableCodingsByAllowedVariables(
+        scheme.variableCodings,
+        allowedVariables
+      );
 
       if (variableCodings.length === 0) {
         return null;
@@ -408,13 +409,35 @@ export class CodebookGenerationService {
     }
   }
 
-  private matchesAllowedVariable(
-    variableCoding: { id?: string; alias?: string },
+  private filterVariableCodingsByAllowedVariables(
+    variableCodings: Array<{ id?: string; alias?: string }>,
     allowedVariables: Set<string>
-  ): boolean {
-    return [variableCoding.id, variableCoding.alias]
-      .map(value => this.normalizeVariableId(value))
-      .some(value => value !== '' && allowedVariables.has(value));
+  ): Array<{ id?: string; alias?: string }> {
+    const aliasesInScheme = new Set(
+      variableCodings
+        .map(variableCoding => this.normalizeVariableId(variableCoding.alias))
+        .filter(alias => alias !== '')
+    );
+    const allowedAliasVariables = new Set<string>();
+    const allowedIdVariables = new Set<string>();
+
+    allowedVariables.forEach(variableId => {
+      if (aliasesInScheme.has(variableId)) {
+        allowedAliasVariables.add(variableId);
+      } else {
+        allowedIdVariables.add(variableId);
+      }
+    });
+
+    return variableCodings.filter(variableCoding => {
+      const alias = this.normalizeVariableId(variableCoding.alias);
+      if (alias && allowedAliasVariables.has(alias)) {
+        return true;
+      }
+
+      const id = this.normalizeVariableId(variableCoding.id);
+      return id !== '' && allowedIdVariables.has(id);
+    });
   }
 
   private normalizeUnitKey(value: string | undefined): string {

@@ -175,6 +175,52 @@ describe('CodebookGenerationService', () => {
     ]);
   });
 
+  it('prefers public aliases over colliding technical ids when filtering codebook variables', async () => {
+    repository.find.mockResolvedValue([
+      {
+        id: 1,
+        file_id: 'DHB003.VOCS',
+        filename: 'DHB003.vocs',
+        data: JSON.stringify({
+          version: '3.0',
+          variableCodings: [
+            {
+              id: '04',
+              alias: '02',
+              sourceType: 'BASE',
+              codes: []
+            },
+            {
+              id: '07',
+              alias: '04',
+              sourceType: 'BASE',
+              codes: []
+            }
+          ]
+        }),
+        structured_data: null
+      }
+    ]);
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      assigned_variables: [
+        { unitName: 'DHB003', variableId: '04' }
+      ],
+      assigned_variable_bundles: []
+    });
+    variableBundleRepository.find.mockResolvedValue([]);
+
+    await service.generateCodebook(7, 0, {
+      ...contentOptions,
+      jobDefinitionId: 12
+    }, [1]);
+
+    const scopedUnits = (CodebookGenerator.generateCodebook as jest.Mock)
+      .mock.calls[0][0] as Array<{ key: string; scheme: string }>;
+    expect(JSON.parse(scopedUnits[0].scheme).variableCodings).toEqual([
+      expect.objectContaining({ id: '07', alias: '04' })
+    ]);
+  });
+
   it('limits generated codebook variables to selected variable bundles', async () => {
     repository.find.mockResolvedValue([
       {
