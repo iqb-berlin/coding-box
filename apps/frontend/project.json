@@ -5,8 +5,15 @@
   "sourceRoot": "apps/frontend/src",
   "prefix": "coding-box",
   "targets": {
+    "sync-version": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node scripts/sync-frontend-app-version.mjs"
+      }
+    },
     "build": {
       "executor": "@angular-devkit/build-angular:browser",
+      "dependsOn": ["sync-version"],
       "outputs": ["{options.outputPath}"],
       "options": {
         "allowedCommonJsDependencies": [
@@ -68,6 +75,7 @@
     },
     "serve": {
       "executor": "@angular-devkit/build-angular:dev-server",
+      "dependsOn": ["sync-version"],
       "configurations": {
         "production": {
           "buildTarget": "frontend:build:production"
@@ -84,12 +92,14 @@
     },
     "extract-i18n": {
       "executor": "@angular-devkit/build-angular:extract-i18n",
+      "dependsOn": ["sync-version"],
       "options": {
         "buildTarget": "frontend:build"
       }
     },
     "lint": {
       "executor": "@nx/eslint:lint",
+      "dependsOn": ["sync-version"],
       "options": {
         "lintFilePatterns": [
           "apps/frontend/src/**/*.ts",
@@ -99,6 +109,7 @@
     },
     "test": {
       "executor": "@nx/jest:jest",
+      "dependsOn": ["sync-version"],
       "outputs": ["{workspaceRoot}/coverage/apps/frontend"],
       "options": {
         "jestConfig": "apps/frontend/jest.config.ts",
@@ -107,6 +118,7 @@
     },
     "e2e": {
       "executor": "@nx/cypress:cypress",
+      "dependsOn": ["sync-version"],
       "options": {
         "cypressConfig": "cypress.config.ts",
         "testingType": "e2e",

@@ -27,6 +27,7 @@ import {
   getCurrentUserWorkspaceAccesses,
   hasOnlyPersonalCodingAccess
 } from '../../shared/utils/workspace-access';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'coding-box-home',
@@ -52,6 +53,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
 
   workspaces: WorkspaceFullDto[] = [];
+  appVersion = environment.appVersion;
   authData = AppService.defaultAuthData;
   authBootstrapStatus: AuthBootstrapStatus = 'checking';
   private isPersonalCodingJobsRedirectChecked = false;

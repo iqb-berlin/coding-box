@@ -1,9 +1,9 @@
 import {
-  ApplicationConfig, importProvidersFrom, LOCALE_ID,
+  ApplicationConfig, importProvidersFrom, inject, LOCALE_ID,
   provideAppInitializer
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
+import { TranslateLoader, TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   HttpClient,
   provideHttpClient,
@@ -11,7 +11,6 @@ import {
 } from '@angular/common/http';
 import { registerLocaleData, HashLocationStrategy, LocationStrategy } from '@angular/common';
 import localeDeAt from '@angular/common/locales/de-AT';
-import { TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import {
   AutoRefreshTokenService, createInterceptorCondition,
@@ -20,6 +19,9 @@ import {
   UserActivityService,
   withAutoRefreshToken
 } from 'keycloak-angular';
+import {
+  catchError, firstValueFrom, Observable, of
+} from 'rxjs';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
@@ -27,8 +29,28 @@ import { journalInterceptor } from './core/interceptors/journal-interceptor';
 import { SERVER_URL } from './injection-tokens';
 import { AUTH_SESSION_IDLE_TIMEOUT_MS } from './core/services/auth-session.config';
 
-export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
-  return new TranslateHttpLoader(http, './assets/i18n/', '.json');
+export class VersionedTranslateLoader implements TranslateLoader {
+  constructor(private http: HttpClient) {}
+
+  getTranslation(lang: string): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(
+      `./assets/i18n/${lang}.json?v=${encodeURIComponent(environment.appVersion)}`
+    );
+  }
+}
+
+export function createTranslateLoader(http: HttpClient): VersionedTranslateLoader {
+  return new VersionedTranslateLoader(http);
+}
+
+export function initializeTranslations(): Promise<Record<string, unknown>> {
+  const translateService = inject(TranslateService);
+  translateService.setDefaultLang('de');
+  return firstValueFrom(
+    translateService.use('de').pipe(
+      catchError(() => of({}))
+    )
+  );
 }
 
 const allUrlsCondition = createInterceptorCondition<IncludeBearerTokenCondition>({
@@ -90,7 +112,6 @@ export const appConfig: ApplicationConfig = {
       provide: LOCALE_ID,
       useValue: 'de-AT'
     },
-    provideAppInitializer(() => {
-    })
+    provideAppInitializer(initializeTranslations)
   ]
 };
