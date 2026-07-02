@@ -20,6 +20,7 @@ import { generateReplayUrl } from '../../../utils/replay-url.util';
 interface CodingScheme {
   variableCodings?: {
     id: string;
+    alias?: string;
     sourceType?: string;
     label?: string;
   }[];
@@ -447,13 +448,18 @@ export class VariableAnalysisReplayService {
     codingSchemeMap: Map<string, CodingScheme>,
     unitId: string,
     variableId: string
-  ): { id: string; sourceType?: string; label?: string } | undefined {
+  ): { id: string; alias?: string; sourceType?: string; label?: string } | undefined {
     const codingScheme = codingSchemeMap.get(unitId);
     if (!codingScheme?.variableCodings || !Array.isArray(codingScheme.variableCodings)) {
       return undefined;
     }
 
-    return codingScheme.variableCodings.find(vc => vc.id === variableId);
+    const normalizedVariableId = String(variableId || '').trim();
+    return codingScheme.variableCodings.find(vc => (
+      String(vc.alias || '').trim() === normalizedVariableId
+    )) || codingScheme.variableCodings.find(vc => (
+      String(vc.id || '').trim() === normalizedVariableId
+    ));
   }
 
   private toVariablePairKey(unitId: string, variableId: string): string {

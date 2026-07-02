@@ -308,6 +308,70 @@ describe('CodeSelectorComponent', () => {
     });
   });
 
+  it('prefers variable aliases over colliding technical ids when loading codes', () => {
+    const collisionCodingScheme: CodingScheme = {
+      version: '1.0',
+      variableCodings: [
+        {
+          id: '04',
+          alias: '02',
+          label: 'Visible 02',
+          sourceType: 'BASE',
+          processing: [],
+          codeModel: 'MANUAL_AND_RULES',
+          manualInstruction: '',
+          codes: [
+            {
+              id: 2,
+              type: 'FULL_CREDIT',
+              label: 'Code for visible 02',
+              score: 2,
+              ruleSetOperatorAnd: false,
+              ruleSets: [],
+              manualInstruction: '<p>Manual 02</p>'
+            }
+          ]
+        },
+        {
+          id: '07',
+          alias: '04',
+          label: 'Visible 04',
+          sourceType: 'BASE',
+          processing: [],
+          codeModel: 'MANUAL_AND_RULES',
+          manualInstruction: '',
+          codes: [
+            {
+              id: 4,
+              type: 'FULL_CREDIT',
+              label: 'Code for visible 04',
+              score: 4,
+              ruleSetOperatorAnd: false,
+              ruleSets: [],
+              manualInstruction: '<p>Manual 04</p>'
+            }
+          ]
+        }
+      ]
+    };
+    const emitSpy = jest.spyOn(component.codeSelected, 'emit');
+
+    component.codingScheme = collisionCodingScheme;
+    component.variableId = '04';
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, collisionCodingScheme, false),
+      variableId: new SimpleChange(null, '04', false)
+    });
+    component.onSelect(4);
+
+    expect(component.regularCodes.map(code => code.id)).toEqual([4]);
+    expect(emitSpy).toHaveBeenCalledWith({
+      variableId: '04',
+      code: collisionCodingScheme.variableCodings[1].codes[0],
+      codingIssueOption: null
+    });
+  });
+
   it('shows review coder badges for codes selected by previous coders', () => {
     const translateService = TestBed.inject(TranslateService);
     translateService.setTranslation('de', {
