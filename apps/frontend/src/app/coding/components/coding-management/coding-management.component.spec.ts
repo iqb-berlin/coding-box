@@ -378,6 +378,23 @@ describe('CodingManagementComponent', () => {
   });
 
   describe('Coding Freshness', () => {
+    it('should show pending manual status refresh as an attention state', () => {
+      component.autoRefreshManualCodingJobs = false;
+      component.hasRequestedCodingStatusOverview = false;
+
+      expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(true);
+      expect(component.hasCodingFreshnessAttention).toBe(true);
+      expect(component.codingFreshnessPanelTitle).toBe('Kodierstand nicht automatisch geprüft');
+
+      fixture.detectChanges();
+      const freshnessPanel = fixture.nativeElement.querySelector(
+        '.coding-freshness-panel'
+      ) as HTMLElement;
+      const stateIcon = freshnessPanel.querySelector('mat-icon') as HTMLElement;
+      expect(freshnessPanel.classList.contains('is-current')).toBe(false);
+      expect(stateIcon.textContent?.trim()).toBe('warning');
+    });
+
     it('should keep second auto-coding waiting while manual coding results are still open', () => {
       component.codingFreshnessSummary = {
         workspaceId: 1,

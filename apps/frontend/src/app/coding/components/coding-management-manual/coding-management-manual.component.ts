@@ -215,6 +215,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   validationProgress: ValidationProgress | null = null;
   isLoading = false;
   autoRefreshManualCodingJobs = true;
+  private hasLoadedManualCodingJobRefreshSetting = false;
   canApplyManualCodingResults = false;
   canManageManualCodingJobs = false;
   selectedManualTabIndex = 0;
@@ -526,7 +527,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadInitialManualCodingState();
     this.loadManualCodingJobRefreshSetting();
     this.loadManualCodingApplyPermission();
-    this.loadCodingFreshness();
     this.document.defaultView?.addEventListener('focus', this.handleWindowFocus);
   }
 
@@ -2674,6 +2674,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private loadManualCodingJobRefreshSetting(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      this.hasLoadedManualCodingJobRefreshSetting = true;
       this.autoRefreshManualCodingJobs = true;
       return;
     }
@@ -2681,8 +2682,19 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.workspaceSettingsService
       .getAutoRefreshManualCodingJobs(workspaceId)
       .pipe(takeUntil(this.destroy$))
-      .subscribe(enabled => {
-        this.autoRefreshManualCodingJobs = enabled;
+      .subscribe({
+        next: enabled => {
+          this.hasLoadedManualCodingJobRefreshSetting = true;
+          this.autoRefreshManualCodingJobs = enabled;
+          if (enabled) {
+            this.loadCodingFreshness();
+          }
+        },
+        error: () => {
+          this.hasLoadedManualCodingJobRefreshSetting = true;
+          this.autoRefreshManualCodingJobs = true;
+          this.loadCodingFreshness();
+        }
       });
   }
 
@@ -2974,6 +2986,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (!workspaceId) {
       this.codingFreshnessRequestGeneration += 1;
       this.codingFreshnessSummary = null;
+      this.isLoadingCodingFreshness = false;
+      return;
+    }
+
+    if (!options.force && !this.hasLoadedManualCodingJobRefreshSetting) {
+      this.codingFreshnessRequestGeneration += 1;
       this.isLoadingCodingFreshness = false;
       return;
     }
