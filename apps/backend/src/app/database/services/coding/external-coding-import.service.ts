@@ -1045,7 +1045,7 @@ export class ExternalCodingImportService {
       }
 
       const variableCoding = Array.isArray(codingScheme.variableCodings) ?
-        codingScheme.variableCodings.find(vc => vc.id === variableId) : null;
+        this.findVariableCoding(codingScheme.variableCodings, variableId) : null;
 
       if (!variableCoding) {
         // Variable not found in coding scheme, leave as CODING_INCOMPLETE
@@ -1102,6 +1102,22 @@ export class ExternalCodingImportService {
       .trim()
       .toLowerCase()
       .replace(/[\s-]+/g, '_');
+  }
+
+  private findVariableCoding<T extends { id?: string | number; alias?: string | number }>(
+    variableCodings: T[],
+    variableId: string
+  ): T | undefined {
+    const normalizedVariableId = String(variableId || '').trim();
+    if (!normalizedVariableId) {
+      return undefined;
+    }
+
+    return variableCodings.find(variableCoding => (
+      String(variableCoding.alias || '').trim() === normalizedVariableId
+    )) || variableCodings.find(variableCoding => (
+      String(variableCoding.id || '').trim() === normalizedVariableId
+    ));
   }
 
   private normalizeCellValue(value: unknown): string {
