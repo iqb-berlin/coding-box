@@ -1,7 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import {
-  Observable, catchError, of, switchMap, tap
+  Observable,
+  catchError,
+  finalize,
+  of,
+  shareReplay,
+  switchMap,
+  tap
 } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { CoderTraining } from '../models/coder-training.model';
@@ -102,6 +108,8 @@ export class CodingTrainingBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private readonly withinTrainingComparisonCache = new Map<string, WithinTrainingComparisonCacheEntry>();
+  private coderTrainingsCache = new Map<number, CoderTraining[]>();
+  private coderTrainingsInFlight = new Map<number, Observable<CoderTraining[]>>();
 
   private get authHeader() {
     return {};
@@ -168,6 +176,7 @@ export class CodingTrainingBackendService {
       suppressGeneralInstructions
     }, { headers: this.authHeader }).pipe(
       tap(response => {
+        this.invalidateCoderTrainings(workspaceId);
         if (response.trainingId) {
           this.invalidateWithinTrainingComparisonCache(workspaceId, response.trainingId);
         } else {
@@ -178,8 +187,45 @@ export class CodingTrainingBackendService {
   }
 
   getCoderTrainings(workspaceId: number): Observable<CoderTraining[]> {
+    const cachedTrainings = this.coderTrainingsCache.get(workspaceId);
+    if (cachedTrainings) {
+      return of([...cachedTrainings]);
+    }
+
+    const inFlightRequest = this.coderTrainingsInFlight.get(workspaceId);
+    if (inFlightRequest) {
+      return inFlightRequest;
+    }
+
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings`;
-    return this.http.get<CoderTraining[]>(url, { headers: this.authHeader });
+    const request$ = this.http.get<CoderTraining[]>(url, { headers: this.authHeader })
+      .pipe(
+        tap(trainings => {
+          if (this.coderTrainingsInFlight.get(workspaceId) === request$) {
+            this.coderTrainingsCache.set(workspaceId, [...trainings]);
+          }
+        }),
+        finalize(() => {
+          if (this.coderTrainingsInFlight.get(workspaceId) === request$) {
+            this.coderTrainingsInFlight.delete(workspaceId);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: false })
+      );
+
+    this.coderTrainingsInFlight.set(workspaceId, request$);
+    return request$;
+  }
+
+  invalidateCoderTrainings(workspaceId?: number): void {
+    if (workspaceId === undefined) {
+      this.coderTrainingsCache.clear();
+      this.coderTrainingsInFlight.clear();
+      return;
+    }
+
+    this.coderTrainingsCache.delete(workspaceId);
+    this.coderTrainingsInFlight.delete(workspaceId);
   }
 
   updateCoderTraining(
@@ -221,7 +267,10 @@ export class CodingTrainingBackendService {
       allowComments,
       suppressGeneralInstructions
     }, { headers: this.authHeader }).pipe(
-      tap(() => this.invalidateWithinTrainingComparisonCache(workspaceId, trainingId))
+      tap(() => {
+        this.invalidateCoderTrainings(workspaceId);
+        this.invalidateWithinTrainingComparisonCache(workspaceId, trainingId);
+      })
     );
   }
 
@@ -231,7 +280,10 @@ export class CodingTrainingBackendService {
   ): Observable<{ success: boolean; message: string }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
     return this.http.delete<{ success: boolean; message: string }>(url, { headers: this.authHeader }).pipe(
-      tap(() => this.invalidateWithinTrainingComparisonCache(workspaceId, trainingId))
+      tap(() => {
+        this.invalidateCoderTrainings(workspaceId);
+        this.invalidateWithinTrainingComparisonCache(workspaceId, trainingId);
+      })
     );
   }
 
@@ -244,7 +296,10 @@ export class CodingTrainingBackendService {
     return this.http.put<{ success: boolean; message: string }>(url, {
       label: newLabel
     }, { headers: this.authHeader }).pipe(
-      tap(() => this.invalidateWithinTrainingComparisonCache(workspaceId, trainingId))
+      tap(() => {
+        this.invalidateCoderTrainings(workspaceId);
+        this.invalidateWithinTrainingComparisonCache(workspaceId, trainingId);
+      })
     );
   }
 
