@@ -22,6 +22,9 @@ import { ManualCodingExportDialogComponent } from '../manual-coding-export-dialo
 import type {
   ManualCodeAvailabilityWarningDto
 } from '../../../../../../../api-dto/coding/manual-code-availability.dto';
+import type {
+  DuplicateValueGroupDto
+} from '../../../../../../../api-dto/coding/response-analysis.dto';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 
 type VariableCoverageOverview = NonNullable<
@@ -52,6 +55,27 @@ const createManualCodeAvailabilityWarning = (
   onlySpecialOptionsAvailable: true,
   message: 'Variable hat keine regulären Codes mit manueller Instruktion.'
 });
+
+const createDuplicateValueGroup = (
+  occurrenceCount: number | undefined,
+  previewCount: number
+): DuplicateValueGroupDto => {
+  const group: DuplicateValueGroupDto = {
+    unitName: 'Unit A',
+    unitAlias: null,
+    variableId: 'VAR_A',
+    normalizedValue: 'same-answer',
+    originalValue: 'same-answer',
+    occurrences: Array.from({ length: previewCount }, (_, index) => ({
+      personLogin: `person-${index + 1}`,
+      personCode: `code-${index + 1}`,
+      bookletName: 'Booklet A',
+      responseId: index + 1,
+      value: 'same-answer'
+    }))
+  };
+  return occurrenceCount === undefined ? group : { ...group, occurrenceCount };
+};
 
 describe('CodingManagementManualComponent', () => {
   let component: CodingManagementManualComponent;
@@ -499,6 +523,67 @@ describe('CodingManagementManualComponent', () => {
       ResponseMatchingFlag.IGNORE_CASE
     ]);
     expect(triggerSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses occurrenceCount for duplicate occurrence totals when only a preview is loaded', () => {
+    const previewOnlyGroup = createDuplicateValueGroup(12, 5);
+    const legacyFullGroup = createDuplicateValueGroup(undefined, 8);
+
+    expect(component.getDuplicateOccurrenceCount(previewOnlyGroup)).toBe(12);
+    expect(
+      component.getRemainingDuplicateOccurrenceCount(previewOnlyGroup)
+    ).toBe(7);
+    expect(component.getDuplicateOccurrenceCount(legacyFullGroup)).toBe(8);
+    expect(
+      component.getRemainingDuplicateOccurrenceCount(legacyFullGroup)
+    ).toBe(3);
+  });
+
+  it('uses occurrenceCount for duplicate aggregation threshold checks', () => {
+    const dialog = {
+      open: jest.fn().mockReturnValue({ afterClosed: () => of(false) })
+    };
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      dialog: typeof dialog;
+    };
+
+    componentInternals.dialog = dialog;
+    componentInternals.appService.selectedWorkspaceId = 5;
+    component.duplicateAggregationThreshold = 10;
+    component.responseAnalysis = {
+      emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+      duplicateValues: {
+        total: 1,
+        totalResponses: 12,
+        groups: [createDuplicateValueGroup(12, 5)],
+        isAggregationApplied: false
+      },
+      aggregationSummary: {
+        duplicateGroups: 1,
+        duplicateResponses: 12,
+        collapsedCases: 11,
+        rawCases: 12,
+        effectiveCases: 1,
+        threshold: 10,
+        aggregationActive: false
+      },
+      matchingFlags: [],
+      analysisTimestamp: new Date().toISOString()
+    };
+
+    component.onApplyDuplicateAggregation();
+
+    expect(dialog.open).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        data: {
+          duplicateGroups: 1,
+          totalResponses: 12,
+          threshold: 10
+        }
+      })
+    );
   });
 
   it('should not block preparation for duplicates when aggregation is active', () => {

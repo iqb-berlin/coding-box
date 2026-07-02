@@ -84,7 +84,10 @@ import {
   WorkspaceSettingsService
 } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
-import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
+import {
+  DuplicateValueGroupDto,
+  ResponseAnalysisDto
+} from '../../../../../../../api-dto/coding/response-analysis.dto';
 import {
   CodingFreshnessSummaryDto,
   CodingFreshnessSummaryItemDto
@@ -258,6 +261,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   // Response analysis data
   responseAnalysis: ResponseAnalysisDto | null = null;
   responseAnalysisError: string | null = null;
+  readonly duplicateOccurrencePreviewLimit = 5;
 
   isLoadingResponseAnalysis = false;
   showEmptyResponsesDetails = false;
@@ -4214,6 +4218,27 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.showDuplicateValuesDetails = !this.showDuplicateValuesDetails;
   }
 
+  getDuplicateOccurrenceCount(group: DuplicateValueGroupDto): number {
+    if (
+      typeof group.occurrenceCount === 'number' &&
+      Number.isFinite(group.occurrenceCount)
+    ) {
+      return Math.max(group.occurrenceCount, group.occurrences.length);
+    }
+    return group.occurrences.length;
+  }
+
+  getRemainingDuplicateOccurrenceCount(group: DuplicateValueGroupDto): number {
+    const visibleOccurrences = Math.min(
+      group.occurrences.length,
+      this.duplicateOccurrencePreviewLimit
+    );
+    return Math.max(
+      0,
+      this.getDuplicateOccurrenceCount(group) - visibleOccurrences
+    );
+  }
+
   onApplyEmptyResponseCoding(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId || !this.responseAnalysis || !this.emptyResponseMissing) {
@@ -4292,7 +4317,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     // Filter groups that meet the threshold
     const groupsMeetingThreshold = this.responseAnalysis.duplicateValues.groups.filter(
-      group => group.occurrences.length >= this.duplicateAggregationThreshold
+      group => this.getDuplicateOccurrenceCount(group) >=
+        this.duplicateAggregationThreshold
     );
 
     if (groupsMeetingThreshold.length === 0) {
@@ -4306,7 +4332,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     const totalResponsesInGroups = groupsMeetingThreshold.reduce(
-      (sum, group) => sum + group.occurrences.length,
+      (sum, group) => sum + this.getDuplicateOccurrenceCount(group),
       0
     );
 

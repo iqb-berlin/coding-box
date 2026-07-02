@@ -854,11 +854,16 @@
                       }}"</span
                     >
                     <span class="occurrence-count"
-                      >({{ group.occurrences.length }}x)</span
+                      >({{ getDuplicateOccurrenceCount(group) }}x)</span
                     >
                   </div>
                   <ul class="occurrence-list">
-                    <li *ngFor="let occ of group.occurrences | slice: 0 : 5">
+                    <li
+                      *ngFor="
+                        let occ of group.occurrences
+                          | slice: 0 : duplicateOccurrencePreviewLimit
+                      "
+                    >
                       {{ occ.personLogin
                       }}{{
                         occ.personCode ? ' (' + occ.personCode + ')' : ''
@@ -866,10 +871,10 @@
                       - {{ occ.bookletName }}
                     </li>
                     <li
-                      *ngIf="group.occurrences.length > 5"
+                      *ngIf="getRemainingDuplicateOccurrenceCount(group) > 0"
                       class="more-occurrences"
                     >
-                      +{{ group.occurrences.length - 5 }}
+                      +{{ getRemainingDuplicateOccurrenceCount(group) }}
                       {{
                         'coding-management-manual.response-analysis.more'
                           | translate
