@@ -275,8 +275,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   duplicateAggregationThreshold = 2;
   isApplyingDuplicateAggregation = false;
   private analysisPollingTimer?: ReturnType<typeof setTimeout>;
-  private readonly windowFocusRefreshThrottleMs = 1000;
+  private readonly windowFocusRefreshThrottleMs = 30000;
+  private readonly codingFreshnessRefreshThrottleMs = 30000;
   private lastWindowFocusRefreshAt = 0;
+  private lastCodingFreshnessRefreshAt = 0;
+  private codingFreshnessRequestGeneration = 0;
   private readonly handleWindowFocus = () => {
     if (!this.shouldRefreshManualStateOnFocus()) {
       return;
@@ -1515,10 +1518,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   refreshManualCodingPlanning(): void {
     const activeTab = this.activeManualTab;
-    this.loadManualTabData(activeTab);
+    this.loadManualTabData(activeTab, { forceRefresh: true });
     this.loadJobDefinitionsForExport();
     if (activeTab !== 'planning') {
-      this.loadCodingFreshness();
+      this.loadCodingFreshness({ force: true });
     }
     if (this.shouldReloadCodingJobsAfterManualTabData(activeTab)) {
       this.reloadCodingJobsList();
@@ -1530,29 +1533,25 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private shouldRefreshManualStateOnFocus(): boolean {
-    return this.activeManualTab === 'planning' ||
-      this.activeManualTab === 'execution' ||
-      this.activeManualTab === 'completion';
+    return this.autoRefreshManualCodingJobs &&
+      (this.activeManualTab === 'planning' ||
+        this.activeManualTab === 'execution' ||
+        this.activeManualTab === 'completion');
   }
 
   private refreshManualStateAfterExternalChange(): void {
     const activeTab = this.activeManualTab;
     this.loadManualTabData(activeTab, { reloadCodingJobs: false });
-    this.loadJobDefinitionsForExport();
     if (activeTab !== 'planning') {
       this.loadCodingFreshness();
     }
     if (this.shouldReloadCodingJobsAfterManualTabData(activeTab)) {
       this.reloadCodingJobsList();
     }
-
-    if (this.codingJobDefinitionsComponent) {
-      this.codingJobDefinitionsComponent.refresh();
-    }
   }
 
   private shouldReloadCodingJobsAfterManualTabData(tab: ManualCodingTab): boolean {
-    return tab !== 'training' && tab !== 'execution' && tab !== 'completion';
+    return tab === 'preparation';
   }
 
   isAnyPlanningDataLoading(): boolean {
@@ -2629,13 +2628,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private loadManualTabData(
     tab: ManualCodingTab,
-    options: { reloadCodingJobs?: boolean } = {}
+    options: { reloadCodingJobs?: boolean; forceRefresh?: boolean } = {}
   ): void {
     if (!this.isManualTabAvailable(tab)) {
       return;
     }
 
     const reloadCodingJobs = options.reloadCodingJobs ?? true;
+    const forceRefresh = options.forceRefresh ?? false;
     switch (tab) {
       case 'preparation':
         this.loadResponseAnalysis();
@@ -2646,7 +2646,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.loadCodingProgressOverview();
         this.loadCodingIncompleteVariables();
         this.loadManualFreshnessDecisionData();
-        this.loadCodingFreshness();
+        this.loadCodingFreshness({ force: forceRefresh });
         this.loadResponseAnalysisForPlanningIfNeeded();
         return;
       case 'training':
@@ -2969,24 +2969,59 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return score === null ? 'NA' : score;
   }
 
-  private loadCodingFreshness(): void {
+  private loadCodingFreshness(options: { force?: boolean } = {}): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      this.codingFreshnessRequestGeneration += 1;
       this.codingFreshnessSummary = null;
+      this.isLoadingCodingFreshness = false;
       return;
     }
 
+    if (!options.force && !this.autoRefreshManualCodingJobs) {
+      this.codingFreshnessRequestGeneration += 1;
+      this.isLoadingCodingFreshness = false;
+      return;
+    }
+
+    const now = Date.now();
+    if (
+      !options.force &&
+      (this.isLoadingCodingFreshness ||
+        (this.codingFreshnessSummary &&
+          now - this.lastCodingFreshnessRefreshAt <
+            this.codingFreshnessRefreshThrottleMs))
+    ) {
+      return;
+    }
+
+    const requestGeneration = this.codingFreshnessRequestGeneration + 1;
+    this.codingFreshnessRequestGeneration = requestGeneration;
     this.isLoadingCodingFreshness = true;
     this.testPersonCodingService
       .getCodingFreshness(workspaceId)
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
-          this.isLoadingCodingFreshness = false;
+          if (
+            this.codingFreshnessRequestGeneration === requestGeneration &&
+            this.appService.selectedWorkspaceId === workspaceId
+          ) {
+            this.isLoadingCodingFreshness = false;
+          }
         })
       )
       .subscribe(summary => {
+        if (
+          this.codingFreshnessRequestGeneration !== requestGeneration ||
+          this.appService.selectedWorkspaceId !== workspaceId ||
+          (!options.force && !this.autoRefreshManualCodingJobs)
+        ) {
+          return;
+        }
+
         this.codingFreshnessSummary = summary;
+        this.lastCodingFreshnessRefreshAt = Date.now();
       });
   }
 

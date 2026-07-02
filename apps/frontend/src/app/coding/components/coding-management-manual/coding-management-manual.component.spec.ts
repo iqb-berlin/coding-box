@@ -1354,10 +1354,10 @@ describe('CodingManagementManualComponent', () => {
     expect(loadManualTabDataSpy).not.toHaveBeenCalled();
   });
 
-  it('should refresh the active manual workflow tab when the window regains focus', () => {
+  it('should refresh the active manual workflow tab without reloading jobs when the window regains focus', () => {
     component.selectedManualTabIndex = 1;
     const componentInternals = component as unknown as {
-      loadManualTabData(tab: 'planning'): void;
+      loadManualTabData(tab: 'planning', options?: { reloadCodingJobs?: boolean }): void;
       loadCodingFreshness(): void;
       reloadCodingJobsList(): void;
     };
@@ -1378,7 +1378,27 @@ describe('CodingManagementManualComponent', () => {
       { reloadCodingJobs: false }
     );
     expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
-    expect(reloadCodingJobsListSpy).toHaveBeenCalled();
+    expect(reloadCodingJobsListSpy).not.toHaveBeenCalled();
+  });
+
+  it('should not refresh manual workflow tabs on focus when auto-refresh is disabled', () => {
+    component.selectedManualTabIndex = 1;
+    component.autoRefreshManualCodingJobs = false;
+    const componentInternals = component as unknown as {
+      loadManualTabData(tab: 'planning', options?: { reloadCodingJobs?: boolean }): void;
+      loadCodingFreshness(): void;
+    };
+    const loadManualTabDataSpy = jest
+      .spyOn(componentInternals, 'loadManualTabData')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+
+    window.dispatchEvent(new Event('focus'));
+
+    expect(loadManualTabDataSpy).not.toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
   });
 
   it('should not reload coding jobs twice when execution regains focus', () => {
