@@ -416,17 +416,30 @@ describe('JobQueueService', () => {
   it('finds queued response analysis jobs by workspace and cache key', async () => {
     const matchingJob = createJob({
       workspaceId: 1,
-      cacheKey: 'response-analysis:1__t2'
+      cacheKey: 'response-analysis:1__t2',
+      sourceRevision: 11
+    });
+    const staleRevisionJob = createJob({
+      workspaceId: 1,
+      cacheKey: 'response-analysis:1__t2',
+      sourceRevision: 10
     });
     const otherJob = createJob({
       workspaceId: 1,
       cacheKey: 'response-analysis:1_IGNORE_CASE_t2'
     });
-    queues[8].getJobs.mockResolvedValue([otherJob, matchingJob]);
+    queues[8].getJobs.mockResolvedValue([
+      otherJob,
+      staleRevisionJob,
+      matchingJob
+    ]);
 
     await expect(
-      service.getCodingAnalysisJobForCacheKey(1, 'response-analysis:1__t2')
+      service.getCodingAnalysisJobForCacheKey(1, 'response-analysis:1__t2', 11)
     ).resolves.toBe(matchingJob);
+    await expect(
+      service.getCodingAnalysisJobForCacheKey(1, 'response-analysis:1__t2', 12)
+    ).resolves.toBeNull();
   });
 
   it('expires large completed response analysis queue jobs', async () => {

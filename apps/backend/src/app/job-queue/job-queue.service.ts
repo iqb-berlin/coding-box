@@ -1239,21 +1239,27 @@ export class JobQueueService {
 
   async getCodingAnalysisJobForCacheKey(
     workspaceId: number,
-    cacheKey: string
+    cacheKey: string,
+    sourceRevision?: number
   ): Promise<Job<CodingAnalysisJobData> | null> {
     return this.findCodingAnalysisJob(
-      job => job.data.workspaceId === workspaceId && job.data.cacheKey === cacheKey
+      job => job.data.workspaceId === workspaceId &&
+        job.data.cacheKey === cacheKey &&
+        (
+          sourceRevision === undefined ||
+          job.data.sourceRevision === sourceRevision
+        )
     );
   }
 
   private async findCodingAnalysisJob(
     predicate: (job: Job<CodingAnalysisJobData>) => boolean
   ): Promise<Job<CodingAnalysisJobData> | null> {
-    const jobs = await this.responseAnalysisQueue.getJobs([
+    const jobs = (await this.responseAnalysisQueue.getJobs([
       'active',
       'waiting',
       'delayed'
-    ]);
+    ])).filter(Boolean);
     return jobs.find(predicate) || null;
   }
 

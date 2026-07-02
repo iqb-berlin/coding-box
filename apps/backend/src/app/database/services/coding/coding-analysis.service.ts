@@ -378,7 +378,8 @@ export class CodingAnalysisService {
     const reusableJob =
       await this.jobQueueService.getCodingAnalysisJobForCacheKey(
         workspaceId,
-        cacheKey
+        cacheKey,
+        sourceRevision
       );
     if (reusableJob && !options.forceRefresh) {
       this.logger.log(
@@ -391,10 +392,20 @@ export class CodingAnalysisService {
     const activeJob =
       await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);
     if (activeJob && !options.forceRefresh) {
+      const activeJobData = activeJob.data;
+      if (
+        activeJobData.cacheKey !== cacheKey ||
+        activeJobData.sourceRevision === sourceRevision
+      ) {
+        this.logger.log(
+          `Analysis job already running for workspace ${workspaceId} (Job ID: ${activeJob.id})`
+        );
+        return;
+      }
+
       this.logger.log(
-        `Analysis job already running for workspace ${workspaceId} (Job ID: ${activeJob.id})`
+        `Superseding stale response analysis job for workspace ${workspaceId} (Job ID: ${activeJob.id})`
       );
-      return;
     }
 
     if (activeJob && options.forceRefresh) {
@@ -677,10 +688,7 @@ export class CodingAnalysisService {
     analysis: Pick<ResponseAnalysisDto, 'sourceRevision'>,
     currentSourceRevision: number
   ): boolean {
-    return (
-      analysis.sourceRevision !== undefined &&
-      analysis.sourceRevision !== currentSourceRevision
-    );
+    return analysis.sourceRevision !== currentSourceRevision;
   }
 
   private async getWorkspaceResultsRevision(

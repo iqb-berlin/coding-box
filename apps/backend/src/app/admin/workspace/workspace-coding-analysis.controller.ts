@@ -590,8 +590,16 @@ export class WorkspaceCodingAnalysisController {
                   variableId: { type: 'string' },
                   normalizedValue: { type: 'string' },
                   originalValue: { type: 'string' },
+                  occurrenceCount: {
+                    type: 'number',
+                    nullable: true,
+                    description:
+                      'Total number of matching responses. occurrences may contain only a preview.'
+                  },
                   occurrences: {
                     type: 'array',
+                    description:
+                      'Preview of matching responses for this duplicate group.',
                     items: {
                       type: 'object',
                       properties: {

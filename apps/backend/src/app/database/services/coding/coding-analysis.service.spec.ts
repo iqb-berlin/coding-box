@@ -218,17 +218,54 @@ describe('CodingAnalysisService aggregation settings', () => {
         matchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
         threshold: 4,
         cacheKey: 'response-analysis:7_IGNORE_CASE_t4',
-        runId: 'existing-run'
+        runId: 'existing-run',
+        sourceRevision: 11
       }
     });
 
     await service.startAnalysis(7, [ResponseMatchingFlag.IGNORE_CASE], 4);
 
+    expect(jobQueueService.getCodingAnalysisJobForCacheKey).toHaveBeenCalledWith(
+      7,
+      'response-analysis:7_IGNORE_CASE_t4',
+      11
+    );
     expect(jobQueueService.addCodingAnalysisJob).not.toHaveBeenCalled();
     expect(cacheService.set).not.toHaveBeenCalledWith(
       'response-analysis:7_IGNORE_CASE_t4:run',
       expect.any(String),
       0
+    );
+  });
+
+  it('queues a superseding analysis when an older revision job uses the same cache key', async () => {
+    const { service, cacheService, jobQueueService } = createService();
+    jobQueueService.getActiveCodingAnalysisJob.mockResolvedValue({
+      id: 'old-job',
+      data: {
+        workspaceId: 7,
+        matchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
+        threshold: 4,
+        cacheKey: 'response-analysis:7_IGNORE_CASE_t4',
+        runId: 'old-run',
+        sourceRevision: 10
+      }
+    });
+
+    await service.startAnalysis(7, [ResponseMatchingFlag.IGNORE_CASE], 4);
+
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'response-analysis:7_IGNORE_CASE_t4:run',
+      expect.any(String),
+      0
+    );
+    expect(jobQueueService.addCodingAnalysisJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 7,
+        cacheKey: 'response-analysis:7_IGNORE_CASE_t4',
+        sourceRevision: 11,
+        runId: expect.any(String)
+      })
     );
   });
 
@@ -489,7 +526,7 @@ describe('CodingAnalysisService aggregation settings', () => {
     );
   });
 
-  it('keeps legacy cached response analysis without revision usable', async () => {
+  it('marks legacy cached response analysis without revision stale', async () => {
     const { service, cacheService, jobQueueService } = createService();
     const cachedAnalysis = {
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
@@ -517,8 +554,14 @@ describe('CodingAnalysisService aggregation settings', () => {
     const result = await service.getResponseAnalysis(7);
 
     expect(result.currentSourceRevision).toBe(11);
-    expect(result.isCalculating).toBe(false);
-    expect(jobQueueService.addCodingAnalysisJob).not.toHaveBeenCalled();
+    expect(result.isCalculating).toBe(true);
+    expect(jobQueueService.addCodingAnalysisJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 7,
+        cacheKey: 'response-analysis:7__t2',
+        sourceRevision: 11
+      })
+    );
   });
 
   it('keeps only a duplicate occurrence preview in page caches', () => {
