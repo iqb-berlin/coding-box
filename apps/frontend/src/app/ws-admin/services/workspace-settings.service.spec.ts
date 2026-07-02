@@ -39,6 +39,49 @@ describe('WorkspaceSettingsService', () => {
       expect(req.request.method).toBe('GET');
       req.flush({});
     });
+
+    it('should share an in-flight setting request', () => {
+      const received: string[] = [];
+
+      service.getWorkspaceSetting(1, 'k').subscribe(setting => {
+        received.push(setting.value);
+      });
+      service.getWorkspaceSetting(1, 'k').subscribe(setting => {
+        received.push(setting.value);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/k`);
+      req.flush({ id: 1, key: 'k', value: 'v' });
+
+      expect(received).toEqual(['v', 'v']);
+    });
+
+    it('should keep suppressed and default in-flight setting requests separate', () => {
+      service.getWorkspaceSetting(1, 'k', true).subscribe();
+      service.getWorkspaceSetting(1, 'k', false).subscribe();
+
+      const requests = httpMock.match(`${mockServerUrl}/workspace/1/settings/k`);
+      expect(requests).toHaveLength(2);
+      requests[0].flush({ id: 1, key: 'k', value: 'quiet' });
+      requests[1].flush({ id: 1, key: 'k', value: 'default' });
+    });
+
+    it('should reuse a recently fetched setting without a second request', () => {
+      const received: string[] = [];
+
+      service.getWorkspaceSetting(1, 'k').subscribe(setting => {
+        received.push(setting.value);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/k`);
+      req.flush({ id: 1, key: 'k', value: 'v' });
+
+      service.getWorkspaceSetting(1, 'k').subscribe(setting => {
+        received.push(setting.value);
+      });
+      httpMock.expectNone(`${mockServerUrl}/workspace/1/settings/k`);
+
+      expect(received).toEqual(['v', 'v']);
+    });
   });
 
   describe('setWorkspaceSetting', () => {
@@ -48,6 +91,20 @@ describe('WorkspaceSettingsService', () => {
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual({ key: 'k', value: 'v', description: undefined });
       req.flush({});
+    });
+
+    it('should invalidate cached settings after persisting a setting', () => {
+      service.getWorkspaceSetting(1, 'k').subscribe();
+      const getReq = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/k`);
+      getReq.flush({ id: 1, key: 'k', value: 'old' });
+
+      service.setWorkspaceSetting(1, 'k', 'new').subscribe();
+      const postReq = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      postReq.flush({ id: 1, key: 'k', value: 'new' });
+
+      service.getWorkspaceSetting(1, 'k').subscribe();
+      const secondGetReq = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/k`);
+      secondGetReq.flush({ id: 1, key: 'k', value: 'new' });
     });
   });
 
@@ -96,7 +153,8 @@ describe('WorkspaceSettingsService', () => {
       expect(req.request.body).toEqual({
         key: 'auto-refresh-manual-coding-jobs',
         value: '{"enabled":false}',
-        description: 'Controls whether manual coding job tables refresh automatically when the browser window regains focus'
+        description:
+          'Controls whether coding status and manual coding views refresh automatically'
       });
       req.flush({});
     });

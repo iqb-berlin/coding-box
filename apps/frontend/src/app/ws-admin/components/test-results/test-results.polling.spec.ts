@@ -75,7 +75,8 @@ describe('TestResultsComponent Polling', () => {
         {
           provide: WorkspaceSettingsService,
           useValue: {
-            getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false))
+            getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false)),
+            getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true))
           }
         },
         {
