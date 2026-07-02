@@ -2519,10 +2519,10 @@ export class WorkspaceTestResultsService {
     signature: Record<string, unknown>
   ): Promise<string> {
     const revision = await this.resolveTestResultsRevision(workspaceId);
-    const hash = createHash('sha1')
+    const hash = createHash('sha256')
       .update(JSON.stringify(signature))
       .digest('hex')
-      .slice(0, 16);
+      .slice(0, 32);
 
     return `flat_responses_count:${workspaceId}:v${revision}:${hash}`;
   }

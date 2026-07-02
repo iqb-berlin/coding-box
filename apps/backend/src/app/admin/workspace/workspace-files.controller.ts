@@ -37,7 +37,10 @@ import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.d
 import { WorkspaceFilesService, WorkspaceCoreService } from '../../database/services/workspace';
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
 import { WorkspaceSettingsDto } from '../../../../../../api-dto/workspaces/workspace-settings-dto';
-import { PersonService } from '../../database/services/test-results';
+import {
+  PersonService,
+  WorkspaceTestResultsService
+} from '../../database/services/test-results';
 import { CodingStatisticsService, CodingValidationService } from '../../database/services/coding';
 import { Setting } from '../../database/entities/setting.entity';
 import {
@@ -56,6 +59,7 @@ export class WorkspaceFilesController {
     private readonly personService: PersonService,
     private readonly codingStatisticsService: CodingStatisticsService,
     private readonly codingValidationService: CodingValidationService,
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
     @InjectRepository(Setting)
     private readonly settingRepository: Repository<Setting>
   ) { }
@@ -206,10 +210,15 @@ export class WorkspaceFilesController {
     );
 
     if (success) {
-      await this.codingStatisticsService.invalidateCache(workspaceId);
-      await this.codingValidationService.invalidateIncompleteVariablesCache(
-        workspaceId
-      );
+      await Promise.all([
+        this.codingStatisticsService.invalidateCache(workspaceId),
+        this.codingValidationService.invalidateIncompleteVariablesCache(
+          workspaceId
+        ),
+        this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+          workspaceId
+        )
+      ]);
     }
 
     return success;
@@ -254,10 +263,15 @@ export class WorkspaceFilesController {
     );
 
     if (success) {
-      await this.codingStatisticsService.invalidateCache(workspaceId);
-      await this.codingValidationService.invalidateIncompleteVariablesCache(
-        workspaceId
-      );
+      await Promise.all([
+        this.codingStatisticsService.invalidateCache(workspaceId),
+        this.codingValidationService.invalidateIncompleteVariablesCache(
+          workspaceId
+        ),
+        this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+          workspaceId
+        )
+      ]);
     }
 
     return success;
