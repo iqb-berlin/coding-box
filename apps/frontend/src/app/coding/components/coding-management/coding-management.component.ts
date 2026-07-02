@@ -182,6 +182,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   isLoadingManualAppliedResultsOverview = false;
   manualAppliedResultsOverviewLoadFailed = false;
   enableRegexSearch = false;
+  autoRefreshManualCodingJobs = true;
+  hasRequestedCodingStatusOverview = false;
   isStartingFreshnessCoding = false;
   activeFreshnessJobId: string | null = null;
   activeFreshnessJobProgress: number | null = null;
@@ -228,6 +230,15 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe(enabled => {
           this.enableRegexSearch = enabled;
+        });
+      this.workspaceSettingsService
+        .getAutoRefreshManualCodingJobs(workspaceId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(enabled => {
+          this.autoRefreshManualCodingJobs = enabled;
+          if (enabled) {
+            this.loadCodingStatusOverview();
+          }
         });
 
       this.codingManagementService.hasGeogebraResponses()
@@ -301,11 +312,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         if (event?.jobId && event.jobId === this.activeFreshnessJobId) {
           this.stopFreshnessJobPolling();
         }
-        this.fetchCodingStatistics();
-        this.loadCodingFreshness();
-        this.loadManualAppliedResultsOverview();
-        this.loadAutocodingReadiness();
-        this.refreshTableData();
+        this.refreshCodingStatusOverviewAfterChange();
       });
 
     this.testPersonCodingService.testResultsChanged$
@@ -316,9 +323,6 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
     // Check for active reset job (persists across navigation)
     this.codingManagementService.checkActiveResetJob();
-    this.loadCodingFreshness();
-    this.loadManualAppliedResultsOverview();
-    this.loadAutocodingReadiness();
     this.route.queryParamMap
       .pipe(takeUntil(this.destroy$))
       .subscribe(params => {
@@ -369,11 +373,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.testPersonCodingService.consumePendingStatisticsVersion(workspaceId);
       }
     }
-    this.fetchCodingStatistics();
-    this.loadCodingFreshness();
-    this.loadManualAppliedResultsOverview();
-    this.loadAutocodingReadiness();
-    this.refreshTableData();
+    this.refreshCodingStatusOverviewAfterChange();
   }
 
   fetchCodingStatistics(): void {
@@ -470,12 +470,31 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.loadAutocodingReadiness(true);
   }
 
-  private refreshCodingStatusOverview(): void {
+  refreshCodingStatusOverview(): void {
     this.fetchCodingStatistics();
+    this.loadCodingStatusOverview(true);
+    this.refreshTableData();
+  }
+
+  private refreshCodingStatusOverviewAfterChange(): void {
+    if (!this.autoRefreshManualCodingJobs) {
+      return;
+    }
+
+    this.fetchCodingStatistics();
+    this.loadCodingStatusOverview();
+    this.refreshTableData();
+  }
+
+  loadCodingStatusOverview(forceAutocodingReadiness = false): void {
+    this.hasRequestedCodingStatusOverview = true;
     this.loadCodingFreshness();
     this.loadManualAppliedResultsOverview();
-    this.loadAutocodingReadiness(true);
-    this.refreshTableData();
+    this.loadAutocodingReadiness(forceAutocodingReadiness);
+  }
+
+  shouldShowManualCodingStatusRefresh(): boolean {
+    return !this.autoRefreshManualCodingJobs;
   }
 
   startFreshnessCoding(version: 'v1' | 'v3'): void {
@@ -810,10 +829,16 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   get hasCodingFreshnessAttention(): boolean {
-    return this.hasAutocodingReadinessLoadFailed ||
+    return this.isCodingStatusOverviewPendingManualRefresh ||
+      this.hasAutocodingReadinessLoadFailed ||
       this.isAutocodingReadinessBlocked ||
       this.hasCodingFreshnessWarnings ||
       this.hasImportedResultsWithoutCoding;
+  }
+
+  get isCodingStatusOverviewPendingManualRefresh(): boolean {
+    return !this.hasRequestedCodingStatusOverview &&
+      this.shouldShowManualCodingStatusRefresh();
   }
 
   get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -878,6 +903,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   get codingFreshnessPanelTitle(): string {
+    if (this.isCodingStatusOverviewPendingManualRefresh) {
+      return this.translateService.instant('coding-management.readiness.title-not-checked');
+    }
+
     if (this.hasAutocodingReadinessLoadFailed) {
       return this.translateService.instant('coding-management.readiness.title-load-failed');
     }

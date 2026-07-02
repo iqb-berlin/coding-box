@@ -1383,7 +1383,9 @@
       "title-blocked": "Auto-Coding 1 nicht möglich",
       "title-not-started": "Kodierung noch nicht gestartet",
       "title-manual-coding-open": "Manuelle Kodierung abschließen",
+      "title-not-checked": "Kodierstand nicht automatisch geprüft",
       "checking": "Zustand wird geprüft...",
+      "manual-refresh-required": "Die automatische Aktualisierung ist deaktiviert. Aktualisieren Sie den Status bei Bedarf manuell.",
       "summary": "{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus, aber {{codeableResponses}} kodierbare Antworten.",
       "details-result-units": "{{count}} Ergebnis-Units",
       "details-unit-files": "{{count}} passende Unit-Dateien",
@@ -1407,6 +1409,7 @@
       "starting-freshness-coding": "Auto-Coding wird gestartet...",
       "update-running": "Aktualisierung läuft: {{progress}}%",
       "retry": "Erneut prüfen",
+      "refresh-status": "Status aktualisieren",
       "check-test-files": "Testdateien prüfen",
       "open-manual-review": "Manuelle Kodierung öffnen"
     },
