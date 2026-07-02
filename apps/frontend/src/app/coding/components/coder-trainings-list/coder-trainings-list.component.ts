@@ -95,6 +95,8 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   duplicateTrainingLabels = new Set<string>();
   selectedTrainingName: string | null = null;
   isLoading = false;
+  private loadCoderTrainingsPromise?: Promise<void>;
+  private loadCoderTrainingsWorkspaceId?: number;
   displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'selectionStrategy', 'created_at'];
 
   ngOnInit(): void {
@@ -141,47 +143,72 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   loadCoderTrainings(options: { resetFilters?: boolean } = {}): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const workspaceId = this.getCurrentWorkspaceId();
-      if (!workspaceId) {
-        this.clearTrainingState({ resetFilters: true });
-        reject();
-        return;
-      }
-
+    const workspaceId = this.getCurrentWorkspaceId();
+    if (!workspaceId) {
       this.loadRequestId += 1;
-      const requestId = this.loadRequestId;
-      this.isLoading = true;
-      this.clearTrainingState({ resetFilters: options.resetFilters });
+      this.clearTrainingState({ resetFilters: true });
+      this.isLoading = false;
+      this.loadCoderTrainingsPromise = undefined;
+      this.loadCoderTrainingsWorkspaceId = undefined;
+      return Promise.reject();
+    }
 
-      this.codingTrainingBackendService.getCoderTrainings(workspaceId)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: (trainings: CoderTraining[]) => {
-            if (requestId !== this.loadRequestId || this.getCurrentWorkspaceId() !== workspaceId) {
-              resolve();
-              return;
-            }
+    if (
+      !options.resetFilters &&
+      this.isLoading &&
+      this.loadCoderTrainingsPromise &&
+      this.loadCoderTrainingsWorkspaceId === workspaceId
+    ) {
+      return this.loadCoderTrainingsPromise;
+    }
 
-            this.originalData = trainings;
-            this.rebuildTrainingNameFilterOptions();
-            this.clearUnavailableTrainingNameFilter();
-            this.applyAllFilters();
-            this.isLoading = false;
-            resolve();
-          },
-          error: () => {
-            if (requestId !== this.loadRequestId || this.getCurrentWorkspaceId() !== workspaceId) {
-              resolve();
-              return;
-            }
+    this.loadRequestId += 1;
+    const requestId = this.loadRequestId;
+    this.isLoading = true;
+    this.loadCoderTrainingsWorkspaceId = workspaceId;
+    this.clearTrainingState({ resetFilters: options.resetFilters });
 
-            this.clearTrainingState({ resetFilters: options.resetFilters });
-            this.isLoading = false;
-            reject();
-          }
-        });
+    let resolveLoad: () => void = () => {};
+    let rejectLoad: () => void = () => {};
+    const loadPromise = new Promise<void>((resolve, reject) => {
+      resolveLoad = resolve;
+      rejectLoad = reject;
     });
+    this.loadCoderTrainingsPromise = loadPromise;
+
+    this.codingTrainingBackendService.getCoderTrainings(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (trainings: CoderTraining[]) => {
+          if (requestId !== this.loadRequestId || this.getCurrentWorkspaceId() !== workspaceId) {
+            resolveLoad();
+            return;
+          }
+
+          this.originalData = trainings;
+          this.rebuildTrainingNameFilterOptions();
+          this.clearUnavailableTrainingNameFilter();
+          this.applyAllFilters();
+          this.isLoading = false;
+          this.loadCoderTrainingsPromise = undefined;
+          this.loadCoderTrainingsWorkspaceId = undefined;
+          resolveLoad();
+        },
+        error: () => {
+          if (requestId !== this.loadRequestId || this.getCurrentWorkspaceId() !== workspaceId) {
+            resolveLoad();
+            return;
+          }
+
+          this.clearTrainingState({ resetFilters: options.resetFilters });
+          this.isLoading = false;
+          this.loadCoderTrainingsPromise = undefined;
+          this.loadCoderTrainingsWorkspaceId = undefined;
+          rejectLoad();
+        }
+      });
+
+    return loadPromise;
   }
 
   requestFullEdit(training: CoderTraining): void {

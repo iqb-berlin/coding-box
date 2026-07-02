@@ -110,6 +110,26 @@ describe('CoderTrainingsListComponent', () => {
     expect(component.coderTrainings.map(training => training.id)).toEqual([10, 11]);
   });
 
+  it('reuses an in-flight training list request', async () => {
+    const service = TestBed.inject(CodingTrainingBackendService) as unknown as {
+      getCoderTrainings: jest.Mock;
+    };
+    const trainings$ = new Subject<CoderTraining[]>();
+    service.getCoderTrainings.mockReturnValue(trainings$.asObservable());
+
+    const firstLoad = component.loadCoderTrainings();
+    const secondLoad = component.loadCoderTrainings();
+
+    expect(secondLoad).toBe(firstLoad);
+    expect(service.getCoderTrainings).toHaveBeenCalledTimes(1);
+
+    trainings$.next(trainings);
+    trainings$.complete();
+
+    await firstLoad;
+    await secondLoad;
+  });
+
   it('builds descriptive action labels for training rows', () => {
     const actionTarget = component.getTrainingActionTarget(trainings[0]);
 

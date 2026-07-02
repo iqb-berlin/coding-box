@@ -321,6 +321,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
   private flatSearchSubject = new Subject<void>();
   private flatSearchSubscription: Subscription;
+  private flatResponsesSubscription?: Subscription;
   private workspaceCacheInvalidatedSubscription: Subscription;
   private readonly FLAT_FILTER_DEBOUNCE_TIME = 400;
 
@@ -1062,6 +1063,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
   ngOnDestroy(): void {
     this.flatSearchSubscription.unsubscribe();
+    this.flatResponsesSubscription?.unsubscribe();
     this.workspaceCacheInvalidatedSubscription.unsubscribe();
     this.refreshFilterOptionsTimeoutIds.forEach(id => window.clearTimeout(id)
     );
@@ -1425,7 +1427,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.isLoadingFlat = true;
 
     const sessionFilterActive = this.flatFilters.sessionFilter;
-    this.testResultService
+    this.flatResponsesSubscription?.unsubscribe();
+    this.flatResponsesSubscription = this.testResultService
       .getFlatResponses(this.appService.selectedWorkspaceId, {
         page: validPage + 1,
         limit,
