@@ -68,7 +68,10 @@ import {
 } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 import { CodingFreshnessService } from './coding-freshness.service';
-import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import {
+  getCodingIncompleteVariablesCacheKeys,
+  getCodingIncompleteVariablesCacheVersionKey
+} from './coding-incomplete-variables-cache-key.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 import {
@@ -2939,8 +2942,13 @@ export class CodingJobService {
   private async invalidateIncompleteVariablesCache(
     workspaceId: number
   ): Promise<void> {
-    const cacheKey = getCodingIncompleteVariablesCacheKey(workspaceId);
-    await this.cacheService.delete(cacheKey);
+    await this.cacheService.incr(
+      getCodingIncompleteVariablesCacheVersionKey(workspaceId)
+    );
+    await Promise.all(
+      getCodingIncompleteVariablesCacheKeys(workspaceId)
+        .map(cacheKey => this.cacheService.delete(cacheKey))
+    );
     this.logger.log(
       `Invalidated manual coding variables cache for workspace ${workspaceId}`
     );

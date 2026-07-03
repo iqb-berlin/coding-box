@@ -36,7 +36,8 @@ describe('CodingStatisticsService', () => {
     mockCacheService = {
       get: jest.fn(),
       set: jest.fn(),
-      delete: jest.fn()
+      delete: jest.fn(),
+      incr: jest.fn().mockResolvedValue(1)
     } as unknown as jest.Mocked<CacheService>;
 
     mockJobQueueService = {
@@ -337,8 +338,14 @@ describe('CodingStatisticsService', () => {
 
       await service.invalidateIncompleteVariablesCache(1);
 
+      expect(mockCacheService.incr).toHaveBeenCalledWith(
+        'coding_incomplete_variables_version:1'
+      );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
         'coding_incomplete_variables_v8:1'
+      );
+      expect(mockCacheService.delete).toHaveBeenCalledWith(
+        'coding_incomplete_variables_scope_v1:1'
       );
     });
 
