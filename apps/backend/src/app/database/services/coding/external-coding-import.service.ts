@@ -14,7 +14,10 @@ import { statusStringToNumber, statusNumberToString } from '../../utils/response
 import FileUpload from '../../entities/file_upload.entity';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
-import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import {
+  getCodingIncompleteVariablesCacheKeys,
+  getCodingIncompleteVariablesCacheVersionKey
+} from './coding-incomplete-variables-cache-key.util';
 
 interface ExternalCodingRow {
   unit_key?: string;
@@ -1256,18 +1259,19 @@ export class ExternalCodingImportService {
     return results;
   }
 
-  private generateIncompleteVariablesCacheKey(workspaceId: number): string {
-    return getCodingIncompleteVariablesCacheKey(workspaceId);
-  }
-
   /**
    * Clear the manual coding variables cache for a specific workspace
    * Should be called whenever coding status changes for the workspace
    * @param workspaceId The workspace ID to clear cache for
    */
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
-    const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
-    await this.cacheService.delete(cacheKey);
+    await this.cacheService.incr(
+      getCodingIncompleteVariablesCacheVersionKey(workspaceId)
+    );
+    await Promise.all(
+      getCodingIncompleteVariablesCacheKeys(workspaceId)
+        .map(cacheKey => this.cacheService.delete(cacheKey))
+    );
     this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }
 }
