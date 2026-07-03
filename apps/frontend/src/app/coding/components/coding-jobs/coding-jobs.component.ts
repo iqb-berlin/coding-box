@@ -60,6 +60,7 @@ import {
   CodingJobBackendService
 } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
+import { TestPersonCodingService } from '../../services/test-person-coding.service';
 
 import {
   CodingJob,
@@ -165,6 +166,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private coderService = inject(CoderService);
+  private testPersonCodingService = inject(TestPersonCodingService);
 
   canApplyResults = false;
   canReviewCodingJobs = false;
@@ -1242,6 +1244,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result?.resultsApplied) {
+        this.notifyCodingResultsApplied(workspaceId);
         this.loadCodingJobs();
         this.jobsChanged.emit();
       }
@@ -1510,6 +1513,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
                   { duration: 6000 }
                 );
                 this.loadCodingJobs(); // Refresh the list to show updated status
+                this.notifyCodingResultsApplied(workspaceId);
                 this.jobsChanged.emit();
               } else {
                 this.snackBar.open(
@@ -1596,6 +1600,13 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }
   }
 
+  private notifyCodingResultsApplied(workspaceId: number): void {
+    this.testPersonCodingService.notifyTestResultsChanged({
+      workspaceId,
+      statisticsVersion: 'v2'
+    });
+  }
+
   bulkApplyCodingResults(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -1672,6 +1683,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             { duration: 5000 }
           );
           this.loadCodingJobs(); // Refresh the list
+          this.notifyCodingResultsApplied(workspaceId);
           this.jobsChanged.emit();
         } else {
           this.snackBar.open(

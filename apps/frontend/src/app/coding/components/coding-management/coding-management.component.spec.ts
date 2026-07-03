@@ -162,6 +162,7 @@ describe('CodingManagementComponent', () => {
         aggregationThreshold: null,
         aggregatedDuplicateCases: 0
       })),
+      invalidateCodingStatusCache: jest.fn(),
       startFreshnessCoding: jest.fn().mockReturnValue(of({
         totalResponses: 0,
         statusCounts: {},
