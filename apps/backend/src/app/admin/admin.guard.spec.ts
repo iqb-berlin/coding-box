@@ -69,6 +69,29 @@ describe('AdminGuard (Backend)', () => {
       expect(authService.isAdminUser).toHaveBeenCalledWith(1);
     });
 
+    it('should check admin access by database id for validated JWT users', async () => {
+      authService.isAdminUser.mockResolvedValue(true);
+      const context = {
+        switchToHttp: () => ({
+          getRequest: () => ({
+            user: {
+              id: 42,
+              userId: 42,
+              identity: 'oidc-42',
+              sub: 'oidc-42',
+              isAdmin: false
+            }
+          })
+        })
+      } as unknown as ExecutionContext;
+
+      const result = await guard.canActivate(context);
+
+      expect(result).toBe(true);
+      expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
+      expect(authService.isAdminUser).toHaveBeenCalledWith(42);
+    });
+
     it('should deny access for non-admin user', async () => {
       usersService.findUserByIdentity.mockResolvedValue({ id: 2 } as never);
       authService.isAdminUser.mockResolvedValue(false);
