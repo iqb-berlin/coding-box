@@ -2,6 +2,8 @@ import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
+import { WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE } from '../../auth/workspace-token';
 import { AccessLevelGuard } from '../../admin/workspace/access-level.guard';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WsgCodingJobController } from './coding-job.controller';
@@ -109,10 +111,33 @@ describe('WsgCodingJobController', () => {
     const handler = WsgCodingJobController.prototype[methodName];
 
     expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
-      JwtAuthGuard,
+      JwtOrWorkspaceTokenAuthGuard,
       WorkspaceGuard
     ]);
+    expect(Reflect.getMetadata('workspaceTokenScopes', handler)).toEqual([
+      WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE
+    ]);
     expect(Reflect.getMetadata('accessLevel', handler)).toBeUndefined();
+  });
+
+  it.each([
+    'getCodingJob',
+    'updateCodingJobStatus',
+    'updateCodingJobComment',
+    'saveCodingProgress',
+    'saveCodingNotes',
+    'getCodingProgress',
+    'getCodingJobUnits'
+  ] as const)('allows scoped workspace tokens for %s', methodName => {
+    const handler = WsgCodingJobController.prototype[methodName];
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtOrWorkspaceTokenAuthGuard,
+      WorkspaceGuard
+    ]);
+    expect(Reflect.getMetadata('workspaceTokenScopes', handler)).toEqual([
+      WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE
+    ]);
   });
 
   it('passes onlyOpen=true to the coding job service when requested', async () => {
