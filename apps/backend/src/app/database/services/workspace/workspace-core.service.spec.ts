@@ -14,7 +14,7 @@ const createRepo = () => ({
 
 describe('WorkspaceCoreService', () => {
   let repo: ReturnType<typeof createRepo>;
-  let cacheService: { delete: jest.Mock; deleteByPattern: jest.Mock };
+  let cacheService: { delete: jest.Mock; deleteByPattern: jest.Mock; incr: jest.Mock };
   let workspaceTestResultsService: { invalidateWorkspaceStatsCache: jest.Mock };
   let queryRunner: {
     connect: jest.Mock;
@@ -29,7 +29,11 @@ describe('WorkspaceCoreService', () => {
 
   beforeEach(() => {
     repo = createRepo();
-    cacheService = { delete: jest.fn(), deleteByPattern: jest.fn() };
+    cacheService = {
+      delete: jest.fn(),
+      deleteByPattern: jest.fn(),
+      incr: jest.fn().mockResolvedValue(1)
+    };
     workspaceTestResultsService = { invalidateWorkspaceStatsCache: jest.fn() };
     queryRunner = {
       connect: jest.fn(),
@@ -124,6 +128,9 @@ describe('WorkspaceCoreService', () => {
     expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v4:1:v1');
     expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v4:1:v2');
     expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v4:1:v3');
+    expect(cacheService.incr).toHaveBeenCalledWith('coding_incomplete_variables_version:1');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v8:1');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_scope_v1:1');
     expect(cacheService.delete).toHaveBeenCalledWith('flat_response_filter_options:version:1');
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('response-analysis:1_*');
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('responses:1:*');
