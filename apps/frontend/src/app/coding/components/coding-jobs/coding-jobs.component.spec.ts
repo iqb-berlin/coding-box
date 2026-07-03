@@ -751,7 +751,14 @@ describe('CodingJobsComponent', () => {
     expect(matSnackBarMock.open).toHaveBeenCalled();
   }));
 
-  it('should handle window focus', () => {
+  it('should ignore window focus by default', () => {
+    const loadSpy = jest.spyOn(component, 'loadCodingJobs');
+    window.dispatchEvent(new Event('focus'));
+    expect(loadSpy).not.toHaveBeenCalled();
+  });
+
+  it('should handle window focus when auto reload is enabled', () => {
+    component.autoReloadOnFocus = true;
     const loadSpy = jest.spyOn(component, 'loadCodingJobs');
     window.dispatchEvent(new Event('focus'));
     expect(loadSpy).toHaveBeenCalled();
