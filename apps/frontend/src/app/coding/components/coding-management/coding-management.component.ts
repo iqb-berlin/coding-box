@@ -12,7 +12,7 @@ import {
   reduce,
   takeUntil
 } from 'rxjs/operators';
-import { range, Subject } from 'rxjs';
+import { combineLatest, range, Subject } from 'rxjs';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
 import {
@@ -207,6 +207,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private freshnessJobPollingInterval: number | null = null;
   private lastResetProgress: number | null | undefined;
+  private hasLoadedManualCodingJobRefreshSetting = false;
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -218,27 +219,28 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.selectStatisticsVersion(pendingStatisticsVersion);
       }
 
-      this.workspaceSettingsService
-        .getAutoFetchCodingStatistics(workspaceId)
-        .subscribe(autoFetch => {
+      combineLatest([
+        this.workspaceSettingsService.getAutoFetchCodingStatistics(workspaceId),
+        this.workspaceSettingsService.getAutoRefreshManualCodingJobs(workspaceId)
+      ])
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(([autoFetch, autoRefresh]) => {
+          this.hasLoadedManualCodingJobRefreshSetting = true;
+          this.autoRefreshManualCodingJobs = autoRefresh;
+          if (!autoRefresh) {
+            return;
+          }
+
           if (autoFetch || pendingStatisticsVersion) {
             this.fetchCodingStatistics();
           }
+          this.loadCodingStatusOverview();
         });
       this.workspaceSettingsService
         .getEnableRegexSearch(workspaceId)
         .pipe(takeUntil(this.destroy$))
         .subscribe(enabled => {
           this.enableRegexSearch = enabled;
-        });
-      this.workspaceSettingsService
-        .getAutoRefreshManualCodingJobs(workspaceId)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe(enabled => {
-          this.autoRefreshManualCodingJobs = enabled;
-          if (enabled) {
-            this.loadCodingStatusOverview();
-          }
         });
 
       this.codingManagementService.hasGeogebraResponses()
@@ -285,11 +287,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         if (previousProgress !== undefined &&
           previousProgress !== null &&
           progress === null) {
-          this.fetchCodingStatistics();
-          this.loadCodingFreshness();
-          this.loadManualAppliedResultsOverview();
-          this.loadAutocodingReadiness();
-          this.refreshTableData();
+          this.refreshCodingStatusOverviewAfterChange();
         }
       });
 
@@ -477,7 +475,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   private refreshCodingStatusOverviewAfterChange(): void {
-    if (!this.autoRefreshManualCodingJobs) {
+    if (!this.hasLoadedManualCodingJobRefreshSetting ||
+      !this.autoRefreshManualCodingJobs) {
       return;
     }
 
