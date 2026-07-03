@@ -142,6 +142,8 @@ type PlanningStatusState =
   'complete';
 
 type ManualCodingTab = 'preparation' | 'planning' | 'training' | 'execution' | 'completion';
+type ConcreteCodingJobsReloadScope = 'productive' | 'training';
+type CodingJobsReloadScope = 'active' | 'productive' | 'training' | 'rendered';
 
 interface ManualFreshnessJobSummary {
   activeTrainingJobs: number;
@@ -188,6 +190,13 @@ interface ManualFreshnessTarget {
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
   @ViewChild(CodingJobsComponent) codingJobsComponent?: CodingJobsComponent;
+
+  @ViewChild('productiveCodingJobs')
+    productiveCodingJobsComponent?: CodingJobsComponent;
+
+  @ViewChild('trainingCodingJobs')
+    trainingCodingJobsComponent?: CodingJobsComponent;
+
   @ViewChild(CodingJobDefinitionsComponent)
     codingJobDefinitionsComponent?: CodingJobDefinitionsComponent;
 
@@ -226,6 +235,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     'execution',
     'completion'
   ];
+
+  renderedManualTabs: Record<ManualCodingTab, boolean> = {
+    preparation: true,
+    planning: false,
+    training: false,
+    execution: false,
+    completion: false
+  };
+
+  private readonly pendingCodingJobsReloadScopes =
+    new Set<ConcreteCodingJobsReloadScope>();
 
   private readonly manualCodingTabsWithoutCompletion: ManualCodingTab[] = [
     'preparation',
@@ -301,7 +321,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   duplicatePageSize = 50;
 
   // Debouncing for job definition changes
-  private jobDefinitionChangeSubject = new Subject<void>();
+  private jobDefinitionChangeSubject = new Subject<CodingJobsReloadScope>();
 
   private thresholdChangeSubject = new Subject<number>();
 
@@ -461,12 +481,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     // Set up debounced statistics refresh
     this.jobDefinitionChangeSubject
       .pipe(debounceTime(500), takeUntil(this.destroy$))
-      .subscribe(() => {
+      .subscribe(reloadScope => {
         this.loadJobDefinitionsForExport();
         this.loadManualTabData(this.activeManualTab);
-        if (this.coderTrainingsListComponent) {
-          this.coderTrainingsListComponent.loadCoderTrainings();
-        }
+        this.refreshCodingJobsAfterDataChange(reloadScope);
       });
 
     // Reload aggregation-dependent data when threshold changes.
@@ -517,7 +535,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.refreshAllStatistics();
         this.loadCodingFreshness();
         this.loadResponseAnalysis();
-        this.reloadCodingJobsList();
+        this.refreshCodingJobsAfterDataChange('rendered');
         this.loadJobDefinitionsForExport();
         if (this.codingJobDefinitionsComponent) {
           this.codingJobDefinitionsComponent.refresh();
@@ -577,6 +595,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   isManualTab(tab: ManualCodingTab): boolean {
     return this.activeManualTab === tab;
+  }
+
+  shouldRenderManualTab(tab: ManualCodingTab): boolean {
+    return this.renderedManualTabs[tab] || this.isManualTab(tab);
   }
 
   onManualTabChanged(index: number): void {
@@ -1122,8 +1144,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.codingJobsComponent) {
-      this.codingJobsComponent.openTransferCodingCasesDialog();
+    const executionCodingJobsComponent = this.getExecutionCodingJobsComponent();
+    if (executionCodingJobsComponent) {
+      executionCodingJobsComponent.openTransferCodingCasesDialog();
       return;
     }
 
@@ -1488,8 +1511,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
    * Event handler for job definition changes (create, update, delete)
    * Uses debouncing to prevent excessive API calls
    */
-  onJobDefinitionChanged(): void {
-    this.jobDefinitionChangeSubject.next();
+  onJobDefinitionChanged(reloadScope: CodingJobsReloadScope = 'active'): void {
+    this.jobDefinitionChangeSubject.next(reloadScope);
   }
 
   /**
@@ -1507,24 +1530,33 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadManualFreshnessDecisionData();
   }
 
-  reloadCodingJobsList(): void {
-    if (this.codingJobsComponent) {
-      this.codingJobsComponent.loadCodingJobs();
-    }
-    if (this.coderTrainingsListComponent) {
+  reloadCodingJobsList(reloadScope: CodingJobsReloadScope = 'active'): void {
+    const concreteReloadScopes =
+      this.getConcreteCodingJobsReloadScopes(reloadScope);
+    this.getCodingJobsComponentsForReload(reloadScope)
+      .forEach(component => component.loadCodingJobs());
+    concreteReloadScopes.forEach(scope => {
+      this.pendingCodingJobsReloadScopes.delete(scope);
+    });
+    if (this.shouldReloadCoderTrainings(reloadScope) &&
+      this.coderTrainingsListComponent) {
       this.coderTrainingsListComponent.loadCoderTrainings();
     }
   }
 
   refreshManualCodingPlanning(): void {
     const activeTab = this.activeManualTab;
-    this.loadManualTabData(activeTab, { forceRefresh: true });
+    this.loadManualTabData(activeTab, {
+      forceRefresh: true,
+      reloadCodingJobs: true,
+      codingJobsReloadScope: 'active'
+    });
     this.loadJobDefinitionsForExport();
     if (activeTab !== 'planning') {
       this.loadCodingFreshness({ force: true });
     }
     if (this.shouldReloadCodingJobsAfterManualTabData(activeTab)) {
-      this.reloadCodingJobsList();
+      this.reloadCodingJobsList('active');
     }
 
     if (this.codingJobDefinitionsComponent) {
@@ -1546,12 +1578,108 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.loadCodingFreshness();
     }
     if (this.shouldReloadCodingJobsAfterManualTabData(activeTab)) {
-      this.reloadCodingJobsList();
+      this.reloadCodingJobsList('active');
     }
   }
 
   private shouldReloadCodingJobsAfterManualTabData(tab: ManualCodingTab): boolean {
     return tab === 'preparation';
+  }
+
+  private getCodingJobsComponentsForReload(
+    reloadScope: CodingJobsReloadScope
+  ): CodingJobsComponent[] {
+    return this.uniqueCodingJobsComponents(
+      this.getConcreteCodingJobsReloadScopes(reloadScope)
+        .map(scope => this.getCodingJobsComponentForScope(scope))
+    );
+  }
+
+  private uniqueCodingJobsComponents(
+    candidateComponents: Array<CodingJobsComponent | undefined>
+  ): CodingJobsComponent[] {
+    const uniqueComponents: CodingJobsComponent[] = [];
+    candidateComponents.forEach(component => {
+      if (component && !uniqueComponents.includes(component)) {
+        uniqueComponents.push(component);
+      }
+    });
+    return uniqueComponents;
+  }
+
+  private getProductiveCodingJobsComponent(): CodingJobsComponent | undefined {
+    return this.productiveCodingJobsComponent ??
+      (this.activeManualTab === 'execution' ? this.codingJobsComponent : undefined);
+  }
+
+  private getTrainingCodingJobsComponent(): CodingJobsComponent | undefined {
+    return this.trainingCodingJobsComponent ??
+      (this.activeManualTab === 'training' ? this.codingJobsComponent : undefined);
+  }
+
+  private getExecutionCodingJobsComponent(): CodingJobsComponent | undefined {
+    return this.getProductiveCodingJobsComponent();
+  }
+
+  private getConcreteCodingJobsReloadScopes(
+    reloadScope: CodingJobsReloadScope
+  ): ConcreteCodingJobsReloadScope[] {
+    switch (reloadScope) {
+      case 'productive':
+        return ['productive'];
+      case 'training':
+        return ['training'];
+      case 'rendered':
+        return ['productive', 'training'];
+      case 'active':
+      default:
+        return this.getCodingJobsScopeForTab(this.activeManualTab);
+    }
+  }
+
+  private getCodingJobsScopeForTab(
+    tab: ManualCodingTab
+  ): ConcreteCodingJobsReloadScope[] {
+    switch (tab) {
+      case 'execution':
+        return ['productive'];
+      case 'training':
+        return ['training'];
+      default:
+        return [];
+    }
+  }
+
+  private getCodingJobsComponentForScope(
+    reloadScope: ConcreteCodingJobsReloadScope
+  ): CodingJobsComponent | undefined {
+    return reloadScope === 'productive' ?
+      this.getProductiveCodingJobsComponent() :
+      this.getTrainingCodingJobsComponent();
+  }
+
+  private refreshCodingJobsAfterDataChange(
+    reloadScope: CodingJobsReloadScope
+  ): void {
+    this.getConcreteCodingJobsReloadScopes(reloadScope)
+      .forEach(scope => {
+        if (this.getCodingJobsScopeForTab(this.activeManualTab).includes(scope)) {
+          this.reloadCodingJobsList(scope);
+          return;
+        }
+        this.pendingCodingJobsReloadScopes.add(scope);
+      });
+  }
+
+  private reloadPendingCodingJobsForTab(tab: ManualCodingTab): void {
+    this.getCodingJobsScopeForTab(tab)
+      .filter(scope => this.pendingCodingJobsReloadScopes.has(scope))
+      .forEach(scope => this.reloadCodingJobsList(scope));
+  }
+
+  private shouldReloadCoderTrainings(reloadScope: CodingJobsReloadScope): boolean {
+    return this.getConcreteCodingJobsReloadScopes(reloadScope)
+      .includes('training');
   }
 
   isAnyPlanningDataLoading(): boolean {
@@ -1818,7 +1946,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   canApplyCompletedJobResults(): boolean {
-    return this.codingJobsComponent?.canApplyResults ??
+    return this.getExecutionCodingJobsComponent()?.canApplyResults ??
       this.canApplyManualCodingResults;
   }
 
@@ -2583,7 +2711,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadCodingProgressOverview();
     this.loadCodingIncompleteVariables();
     this.loadStatusDistributionV2();
-    this.reloadCodingJobsList();
+    this.refreshCodingJobsAfterDataChange('rendered');
     this.loadJobDefinitionsForExport();
 
     if (this.codingJobDefinitionsComponent) {
@@ -2628,13 +2756,19 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private loadManualTabData(
     tab: ManualCodingTab,
-    options: { reloadCodingJobs?: boolean; forceRefresh?: boolean } = {}
+    options: {
+      reloadCodingJobs?: boolean;
+      codingJobsReloadScope?: CodingJobsReloadScope;
+      forceRefresh?: boolean;
+    } = {}
   ): void {
     if (!this.isManualTabAvailable(tab)) {
       return;
     }
 
-    const reloadCodingJobs = options.reloadCodingJobs ?? true;
+    this.renderedManualTabs[tab] = true;
+    const reloadCodingJobs = options.reloadCodingJobs ?? false;
+    const codingJobsReloadScope = options.codingJobsReloadScope ?? 'active';
     const forceRefresh = options.forceRefresh ?? false;
     switch (tab) {
       case 'preparation':
@@ -2651,7 +2785,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return;
       case 'training':
         if (reloadCodingJobs) {
-          this.reloadCodingJobsList();
+          this.reloadCodingJobsList(codingJobsReloadScope);
+        } else {
+          this.reloadPendingCodingJobsForTab(tab);
         }
         return;
       case 'execution':
@@ -2659,7 +2795,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.loadCaseCoverageOverview();
         this.loadWorkspaceKappaSummary();
         if (reloadCodingJobs) {
-          this.reloadCodingJobsList();
+          this.reloadCodingJobsList(codingJobsReloadScope);
+        } else {
+          this.reloadPendingCodingJobsForTab(tab);
         }
         return;
       case 'completion':
@@ -2795,7 +2933,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe(result => {
       if (result?.resultsApplied) {
         this.refreshAllStatistics();
-        this.reloadCodingJobsList();
+        this.refreshCodingJobsAfterDataChange('productive');
       }
     });
   }
@@ -3674,7 +3812,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.refreshAllStatistics();
     this.loadResponseAnalysis();
     this.loadCodingFreshness();
-    this.reloadCodingJobsList();
+    this.refreshCodingJobsAfterDataChange('productive');
   }
 
   private formatApplyCodingResultsMessage(
@@ -3770,7 +3908,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           );
           this.closeCoderTraining();
           this.refreshAllStatistics();
-          this.reloadCodingJobsList();
+          this.refreshCodingJobsAfterDataChange('training');
         },
         error: () => {
           this.showError('Fehler beim Generieren der Kodierer-Schulungspakete');
