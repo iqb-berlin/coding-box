@@ -1546,6 +1546,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
    * Refreshes all statistics with individual loading states
    */
   refreshAllStatistics(): void {
+    this.invalidateCodingStatusCache();
     this.loadCodingProgressOverview();
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
@@ -1572,6 +1573,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   refreshManualCodingPlanning(): void {
+    this.invalidateCodingStatusCache();
     const activeTab = this.activeManualTab;
     this.loadManualTabData(activeTab, {
       forceRefresh: true,
@@ -2747,6 +2749,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private refreshAggregationDependentViews(includeResponseAnalysis = true): void {
+    this.invalidateCodingStatusCache();
     if (includeResponseAnalysis) {
       this.loadResponseAnalysis();
     }
@@ -3190,6 +3193,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.codingFreshnessSummary = null;
       this.isLoadingCodingFreshness = false;
       return;
+    }
+
+    if (options.force) {
+      this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
     }
 
     if (!options.force && !this.hasLoadedManualCodingJobRefreshSetting) {
@@ -3877,6 +3884,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadResponseAnalysis();
     this.loadCodingFreshness({ force: true });
     this.refreshCodingJobsAfterDataChange('productive');
+  }
+
+  private invalidateCodingStatusCache(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (workspaceId) {
+      this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
+    }
   }
 
   private formatApplyCodingResultsMessage(

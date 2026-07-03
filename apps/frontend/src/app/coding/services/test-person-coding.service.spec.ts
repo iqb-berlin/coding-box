@@ -314,6 +314,66 @@ describe('TestPersonCodingService', () => {
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`);
       req.error(new ProgressEvent('error'));
     });
+
+    it('should reuse cached applied results overview until coding status is invalidated', () => {
+      const mockResponse: AppliedResultsOverview = {
+        totalIncompleteResponses: 2,
+        appliedResponses: 1,
+        remainingResponses: 1,
+        completionPercentage: 50,
+        rawTotalIncompleteResponses: 2,
+        rawAppliedResponses: 1,
+        rawCompletionPercentage: 50,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      };
+      const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`;
+      let cachedResponse: AppliedResultsOverview | null | undefined;
+
+      service.getAppliedResultsOverview(mockWorkspaceId).subscribe();
+      httpMock.expectOne(url).flush(mockResponse);
+
+      service.getAppliedResultsOverview(mockWorkspaceId).subscribe(response => {
+        cachedResponse = response;
+      });
+      httpMock.expectNone(url);
+      expect(cachedResponse).toEqual(mockResponse);
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+      service.getAppliedResultsOverview(mockWorkspaceId).subscribe();
+      httpMock.expectOne(url).flush(mockResponse);
+    });
+
+    it('should not cache failed applied results overview fallbacks', () => {
+      const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`;
+      const mockResponse: AppliedResultsOverview = {
+        totalIncompleteResponses: 2,
+        appliedResponses: 1,
+        remainingResponses: 1,
+        completionPercentage: 50,
+        rawTotalIncompleteResponses: 2,
+        rawAppliedResponses: 1,
+        rawCompletionPercentage: 50,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      };
+      let firstResponse: AppliedResultsOverview | null | undefined;
+      let secondResponse: AppliedResultsOverview | null | undefined;
+
+      service.getAppliedResultsOverview(mockWorkspaceId).subscribe(response => {
+        firstResponse = response;
+      });
+      httpMock.expectOne(url).error(new ProgressEvent('error'));
+      expect(firstResponse).toBeNull();
+
+      service.getAppliedResultsOverview(mockWorkspaceId).subscribe(response => {
+        secondResponse = response;
+      });
+      httpMock.expectOne(url).flush(mockResponse);
+      expect(secondResponse).toEqual(mockResponse);
+    });
   });
 
   describe('getResponseAnalysis', () => {
@@ -858,6 +918,114 @@ describe('TestPersonCodingService', () => {
   });
 
   describe('coding freshness', () => {
+    it('should reuse cached coding freshness until coding status is invalidated', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v1' as const,
+            state: 'STALE' as const,
+            unitCount: 3,
+            affectedResponseCount: 12
+          }
+        ]
+      };
+      const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness`;
+      let cachedResponse: unknown;
+
+      service.getCodingFreshness(mockWorkspaceId).subscribe();
+      httpMock.expectOne(url).flush(mockResponse);
+
+      service.getCodingFreshness(mockWorkspaceId).subscribe(response => {
+        cachedResponse = response;
+      });
+      httpMock.expectNone(url);
+      expect(cachedResponse).toEqual(mockResponse);
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+      service.getCodingFreshness(mockWorkspaceId).subscribe();
+      httpMock.expectOne(url).flush(mockResponse);
+    });
+
+    it('should keep newer in-flight coding freshness requests registered when stale requests finish', () => {
+      const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness`;
+      const staleResponse = {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 1,
+        items: []
+      };
+      const currentResponse = {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v1' as const,
+            state: 'PENDING' as const,
+            unitCount: 1,
+            affectedResponseCount: 1
+          }
+        ]
+      };
+      let currentSubscriberResponse: unknown;
+      let sharedSubscriberResponse: unknown;
+
+      service.getCodingFreshness(mockWorkspaceId).subscribe();
+      const staleRequest = httpMock.expectOne(url);
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+      service.getCodingFreshness(mockWorkspaceId).subscribe(response => {
+        currentSubscriberResponse = response;
+      });
+      const currentRequest = httpMock.expectOne(url);
+
+      staleRequest.flush(staleResponse);
+
+      service.getCodingFreshness(mockWorkspaceId).subscribe(response => {
+        sharedSubscriberResponse = response;
+      });
+      httpMock.expectNone(url);
+
+      currentRequest.flush(currentResponse);
+
+      expect(currentSubscriberResponse).toEqual(currentResponse);
+      expect(sharedSubscriberResponse).toEqual(currentResponse);
+    });
+
+    it('should not cache failed coding freshness fallbacks', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v1' as const,
+            state: 'STALE' as const,
+            unitCount: 3,
+            affectedResponseCount: 12
+          }
+        ]
+      };
+      const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness`;
+      let firstResponse: unknown;
+      let secondResponse: unknown;
+
+      service.getCodingFreshness(mockWorkspaceId).subscribe(response => {
+        firstResponse = response;
+      });
+      httpMock.expectOne(url).error(new ProgressEvent('error'));
+      expect(firstResponse).toEqual({
+        workspaceId: mockWorkspaceId,
+        currentRevision: 0,
+        items: []
+      });
+
+      service.getCodingFreshness(mockWorkspaceId).subscribe(response => {
+        secondResponse = response;
+      });
+      httpMock.expectOne(url).flush(mockResponse);
+      expect(secondResponse).toEqual(mockResponse);
+    });
+
     it('should request autocoding readiness with run and force-refresh params', () => {
       const mockResponse = {
         workspaceId: mockWorkspaceId,
@@ -893,6 +1061,130 @@ describe('TestPersonCodingService', () => {
       req.flush(mockResponse);
     });
 
+    it('should reuse cached autocoding readiness unless force-refresh is requested', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1,
+        readiness: 'READY',
+        blockers: [],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 1,
+        validResponses: 10,
+        codeableResponses: 10,
+        invalidVariableSamples: []
+      };
+      let cachedResponse: unknown;
+
+      service.getAutocodingReadiness(mockWorkspaceId, 1).subscribe();
+      httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1' &&
+        !request.params.has('forceRefresh')
+      )).flush(mockResponse);
+
+      service.getAutocodingReadiness(mockWorkspaceId, 1).subscribe(response => {
+        cachedResponse = response;
+      });
+      httpMock.expectNone(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1' &&
+        !request.params.has('forceRefresh')
+      ));
+      expect(cachedResponse).toEqual(mockResponse);
+
+      service.getAutocodingReadiness(mockWorkspaceId, 1, true).subscribe();
+      httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1' &&
+        request.params.get('forceRefresh') === 'true'
+      )).flush(mockResponse);
+    });
+
+    it('should keep force-refreshed autocoding readiness cached when stale requests finish later', () => {
+      const staleResponse = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1,
+        readiness: 'BLOCKED',
+        blockers: ['NO_CODEABLE_RESPONSES'],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 0,
+        validResponses: 0,
+        codeableResponses: 0,
+        invalidVariableSamples: []
+      };
+      const forceResponse = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1,
+        readiness: 'READY',
+        blockers: [],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 1,
+        validResponses: 10,
+        codeableResponses: 10,
+        invalidVariableSamples: []
+      };
+      let staleSubscriberResponse: unknown;
+      let forceSubscriberResponse: unknown;
+      let cachedResponse: unknown;
+
+      service.getAutocodingReadiness(mockWorkspaceId, 1).subscribe(response => {
+        staleSubscriberResponse = response;
+      });
+      const staleRequest = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1' &&
+        !request.params.has('forceRefresh')
+      ));
+
+      service.getAutocodingReadiness(mockWorkspaceId, 1, true).subscribe(response => {
+        forceSubscriberResponse = response;
+      });
+      const forceRequest = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1' &&
+        request.params.get('forceRefresh') === 'true'
+      ));
+
+      forceRequest.flush(forceResponse);
+      staleRequest.flush(staleResponse);
+
+      service.getAutocodingReadiness(mockWorkspaceId, 1).subscribe(response => {
+        cachedResponse = response;
+      });
+      httpMock.expectNone(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1'
+      ));
+
+      expect(staleSubscriberResponse).toEqual(staleResponse);
+      expect(forceSubscriberResponse).toEqual(forceResponse);
+      expect(cachedResponse).toEqual(forceResponse);
+    });
+
     it('should request the freshness scope with version and states', () => {
       const mockResponse = {
         workspaceId: mockWorkspaceId,
@@ -921,6 +1213,106 @@ describe('TestPersonCodingService', () => {
       ));
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
+    });
+
+    it('should reuse cached freshness scope until coding status is invalidated', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 1,
+        versions: ['v1'],
+        states: ['PENDING', 'STALE'],
+        unitCount: 2,
+        personCount: 1,
+        groupCount: 1,
+        affectedResponseCount: 4,
+        unitIds: [10, 11],
+        personIds: [100],
+        groupNames: ['Group1'],
+        groups: []
+      };
+      let cachedResponse: unknown;
+
+      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+        .subscribe();
+      httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+        request.params.get('version') === 'v1' &&
+        request.params.get('state') === 'PENDING,STALE'
+      )).flush(mockResponse);
+
+      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+        .subscribe(response => {
+          cachedResponse = response;
+        });
+      httpMock.expectNone(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+        request.params.get('version') === 'v1' &&
+        request.params.get('state') === 'PENDING,STALE'
+      ));
+      expect(cachedResponse).toEqual(mockResponse);
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+        .subscribe();
+      httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+        request.params.get('version') === 'v1' &&
+        request.params.get('state') === 'PENDING,STALE'
+      )).flush(mockResponse);
+    });
+
+    it('should not cache failed freshness scope fallbacks', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 1,
+        versions: ['v1'],
+        states: ['PENDING', 'STALE'],
+        unitCount: 2,
+        personCount: 1,
+        groupCount: 1,
+        affectedResponseCount: 4,
+        unitIds: [10, 11],
+        personIds: [100],
+        groupNames: ['Group1'],
+        groups: []
+      };
+      let firstResponse: unknown;
+      let secondResponse: unknown;
+
+      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+        .subscribe(response => {
+          firstResponse = response;
+        });
+      httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+        request.params.get('version') === 'v1' &&
+        request.params.get('state') === 'PENDING,STALE'
+      )).error(new ProgressEvent('error'));
+      expect(firstResponse).toEqual({
+        workspaceId: mockWorkspaceId,
+        currentRevision: 0,
+        versions: ['v1'],
+        states: ['PENDING', 'STALE'],
+        unitCount: 0,
+        personCount: 0,
+        groupCount: 0,
+        affectedResponseCount: 0,
+        unitIds: [],
+        personIds: [],
+        groupNames: [],
+        groups: []
+      });
+
+      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+        .subscribe(response => {
+          secondResponse = response;
+        });
+      httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+        request.params.get('version') === 'v1' &&
+        request.params.get('state') === 'PENDING,STALE'
+      )).flush(mockResponse);
+      expect(secondResponse).toEqual(mockResponse);
     });
 
     it('should start a coding freshness job', () => {
