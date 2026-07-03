@@ -71,6 +71,25 @@ describe('WorkspaceGuard (Backend)', () => {
     });
   });
 
+  it('allows a validated JWT user with database id and identity without another identity lookup', async () => {
+    const requestUser = {
+      id: 42,
+      userId: 42,
+      identity: 'oidc-42',
+      sub: 'oidc-42',
+      isAdmin: false
+    };
+    const context = createContext(requestUser);
+    authService.canAccessWorkSpace.mockResolvedValue(true);
+
+    const result = await guard.canActivate(context);
+
+    expect(result).toBe(true);
+    expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
+    expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(42, 123);
+    expect(context.switchToHttp().getRequest().user).toEqual(requestUser);
+  });
+
   it('denies an OIDC user without workspace access', async () => {
     usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as never);
     authService.canAccessWorkSpace.mockResolvedValue(false);

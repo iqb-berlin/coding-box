@@ -26,6 +26,14 @@ import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
 import { SERVER_URL } from '../../injection-tokens';
 
+const AUTH_ENDPOINTS_WITHOUT_ACCESS_TOKEN = [
+  '/auth/exchange',
+  '/auth/refresh',
+  '/auth/login',
+  '/auth/logout',
+  '/auth/profile'
+];
+
 export const authInterceptor: HttpInterceptorFn = (
   req: HttpRequest<unknown>,
   next: HttpHandlerFn
@@ -116,6 +124,10 @@ function getRequestWithAuthHeader(
     return of(req);
   }
 
+  if (isAuthEndpointWithoutAccessToken(req.url, serverUrl)) {
+    return of(req);
+  }
+
   const authorizationHeader = req.headers.get('Authorization');
   const shouldPreserveExplicitAuthorization =
     authorizationHeader &&
@@ -175,6 +187,37 @@ function isBackendRequest(url: string, serverUrl: string): boolean {
   }
 
   return false;
+}
+
+function isAuthEndpointWithoutAccessToken(url: string, serverUrl: string): boolean {
+  const backendPath = getBackendRelativePath(url, serverUrl);
+  return AUTH_ENDPOINTS_WITHOUT_ACCESS_TOKEN.some(endpoint => backendPath === endpoint ||
+    backendPath.startsWith(`${endpoint}/`));
+}
+
+function getBackendRelativePath(url: string, serverUrl: string): string {
+  const requestPath = getPathname(url);
+  const serverPath = getPathname(serverUrl).replace(/\/+$/, '');
+
+  if (serverPath && requestPath === serverPath) {
+    return '/';
+  }
+
+  if (serverPath && requestPath.startsWith(`${serverPath}/`)) {
+    return requestPath.slice(serverPath.length);
+  }
+
+  return requestPath.startsWith('/') ? requestPath : `/${requestPath}`;
+}
+
+function getPathname(url: string): string {
+  const baseUrl = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+
+  try {
+    return new URL(url, baseUrl).pathname;
+  } catch {
+    return url.split(/[?#]/, 1)[0];
+  }
 }
 
 function shouldSuppressBackendLoginAuthDataError(

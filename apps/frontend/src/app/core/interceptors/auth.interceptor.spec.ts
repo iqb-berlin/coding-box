@@ -94,6 +94,15 @@ describe('authInterceptor', () => {
     req.flush({});
   });
 
+  it('should not attach authorization or refresh recursively for auth refresh requests', () => {
+    http.post('/api/auth/refresh', { refresh_token: 'refresh-token' }).subscribe();
+
+    const req = httpMock.expectOne('/api/auth/refresh');
+    expect(authService.getValidToken).not.toHaveBeenCalled();
+    expect(req.request.headers.has('Authorization')).toBe(false);
+    req.flush({ access_token: 'fresh-token' });
+  });
+
   it('should preserve explicit authorization headers for scoped API tokens', () => {
     http.get('/api/scoped', {
       headers: new HttpHeaders({ Authorization: 'Bearer scoped-token' })
