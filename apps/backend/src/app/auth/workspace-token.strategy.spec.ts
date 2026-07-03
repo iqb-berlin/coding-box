@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { UnauthorizedException } from '@nestjs/common';
 import { WorkspaceTokenStrategy } from './workspace-token.strategy';
+import { WORKSPACE_API_TOKEN_TYPE, WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE } from './workspace-token';
 
 describe('WorkspaceTokenStrategy', () => {
   const createStrategy = () => new WorkspaceTokenStrategy({
@@ -14,13 +15,16 @@ describe('WorkspaceTokenStrategy', () => {
       token_use: 'workspace',
       userId: 12,
       username: 'coder',
-      workspace: 7
+      workspace: 7,
+      scopes: [WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE]
     })).resolves.toEqual({
       userId: 12,
       id: 12,
       name: 'coder',
       workspace: 7,
       tokenUse: 'workspace',
+      tokenType: WORKSPACE_API_TOKEN_TYPE,
+      scopes: [WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE],
       isWorkspaceToken: true
     });
   });

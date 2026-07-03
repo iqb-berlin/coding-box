@@ -107,6 +107,18 @@ export class ReplayCodingService {
   }
 
   async updateCodingJobStatus(workspaceId: number, jobId: number, status: 'active' | 'paused' | 'completed') {
+    if (this.isReviewMode) return Promise.resolve(undefined);
+    if (status === 'paused') {
+      return firstValueFrom(
+        this.codingJobBackendService.pauseCodingJob(workspaceId, jobId, ...this.authTokenArg)
+      );
+    }
+    if (status === 'completed') {
+      return firstValueFrom(
+        this.codingJobBackendService.submitCodingJob(workspaceId, jobId, ...this.authTokenArg)
+      );
+    }
+
     return firstValueFrom(
       this.codingJobBackendService.updateCodingJobStatus(workspaceId, jobId, status, ...this.authTokenArg)
     );
@@ -622,7 +634,6 @@ export class ReplayCodingService {
     this.codingJobBackendService.pauseCodingJobKeepalive(
       workspaceId,
       jobId,
-      'paused',
       ...this.authTokenArg
     );
   }

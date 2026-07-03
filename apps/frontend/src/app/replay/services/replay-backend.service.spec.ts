@@ -66,7 +66,7 @@ describe('ReplayBackendService', () => {
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-statistics`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(data);
-      expect(req.request.headers.get('Authorization')).toBeNull();
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
       expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       expect(req.request.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)).toBe(true);
       req.flush({});
@@ -140,7 +140,7 @@ describe('ReplayBackendService', () => {
   });
 
   describe('getReplayAssets', () => {
-    it('should fetch assets without a service-owned auth token when no URL token is supplied', () => {
+    it('should fetch assets with the stored auth token when no URL token is supplied', () => {
       service.getReplayAssets(1, 'unit-1').subscribe();
 
       const req = httpMock.expectOne(request => {
@@ -151,7 +151,7 @@ describe('ReplayBackendService', () => {
       expect(req.request.urlWithParams).toBe(
         `${mockServerUrl}admin/workspace/1/replay-assets/unit-1?replayPart=assets`
       );
-      expect(req.request.headers.get('Authorization')).toBeNull();
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
       req.flush({ unitDef: [], player: [], vocs: [] });
     });
   });

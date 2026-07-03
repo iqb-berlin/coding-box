@@ -1,8 +1,8 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import Keycloak from 'keycloak-js';
 import { AuthSessionActivityService } from './auth-session-activity.service';
 import { AppService } from './app.service';
+import { AuthService } from './auth.service';
 import {
   AUTH_SESSION_IDLE_TIMEOUT_MS,
   AUTH_SESSION_WARNING_DELAY_MS
@@ -10,7 +10,7 @@ import {
 
 describe('AuthSessionActivityService', () => {
   let service: AuthSessionActivityService;
-  let keycloak: { authenticated: boolean; updateToken: jest.Mock };
+  let authService: { isLoggedIn: jest.Mock; hasValidToken: jest.Mock };
   let appService: {
     needsReAuthentication: boolean;
     sessionExpiryWarning: boolean;
@@ -19,9 +19,9 @@ describe('AuthSessionActivityService', () => {
   };
 
   beforeEach(() => {
-    keycloak = {
-      authenticated: true,
-      updateToken: jest.fn().mockResolvedValue(true)
+    authService = {
+      isLoggedIn: jest.fn().mockReturnValue(true),
+      hasValidToken: jest.fn().mockReturnValue(true)
     };
     appService = {
       needsReAuthentication: false,
@@ -35,7 +35,7 @@ describe('AuthSessionActivityService', () => {
     TestBed.configureTestingModule({
       providers: [
         AuthSessionActivityService,
-        { provide: Keycloak, useValue: keycloak },
+        { provide: AuthService, useValue: authService },
         { provide: AppService, useValue: appService },
         { provide: Router, useValue: { url: '/coding' } }
       ]
@@ -45,7 +45,7 @@ describe('AuthSessionActivityService', () => {
   });
 
   afterEach(() => {
-    service.stop();
+    service?.stop();
   });
 
   it('should show an idle warning before the session expires', fakeAsync(() => {
@@ -84,13 +84,13 @@ describe('AuthSessionActivityService', () => {
     service.stop();
   }));
 
-  it('should force a token refresh when the user returns after the warning', fakeAsync(() => {
+  it('should keep the session active when the user returns with a valid token after the warning', fakeAsync(() => {
     service.start();
     tick(AUTH_SESSION_WARNING_DELAY_MS);
 
     window.dispatchEvent(new Event('mousemove'));
 
-    expect(keycloak.updateToken).toHaveBeenCalledWith(-1);
+    expect(authService.hasValidToken).toHaveBeenCalled();
     expect(appService.sessionExpiryWarning).toBe(false);
     service.stop();
   }));

@@ -20,7 +20,6 @@ import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.co
 import { ExportToastComponent } from './components/export-toast/export-toast.component';
 import { ErrorMessageDisplayComponent } from './shared/components/error-message-display/error-message-display.component';
 import { hasAdminBypass } from './core/guards/admin-access';
-import { AuthSessionActivityService } from './core/services/auth-session-activity.service';
 
 @Component({
   selector: 'app-root',

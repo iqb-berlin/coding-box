@@ -17,6 +17,9 @@ describe('ReplayCodingService', () => {
       updateCodingJob: jest.fn(),
       updateCodingJobStatus: jest.fn(),
       updateCodingJobComment: jest.fn(),
+      pauseCodingJob: jest.fn(),
+      resumeCodingJob: jest.fn(),
+      submitCodingJob: jest.fn(),
       getCodingProgress: jest.fn(),
       getCodingNotes: jest.fn(),
       getCodingJob: jest.fn(),
@@ -685,7 +688,6 @@ describe('ReplayCodingService', () => {
       expect(codingJobBackendServiceMock.pauseCodingJobKeepalive).toHaveBeenCalledWith(
         1,
         100,
-        'paused',
         'replay-token'
       );
     });

@@ -11,7 +11,6 @@ import {
   tap,
   throwError
 } from 'rxjs';
-import Keycloak from 'keycloak-js';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
@@ -241,7 +240,6 @@ export interface AppliedResultsOverview {
 export class TestPersonCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
-  private keycloak = inject(Keycloak, { optional: true });
   private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
@@ -266,6 +264,10 @@ export class TestPersonCodingService {
 
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
+  }
+
+  private async getValidAuthToken(): Promise<string | undefined> {
+    return localStorage.getItem('auth_token') || undefined;
   }
 
   private hasJobId(jobId: string | null | undefined): jobId is string {
@@ -833,7 +835,7 @@ export class TestPersonCodingService {
     onError: (error: string) => void
   ): Promise<void> {
     try {
-      const token = await this.getValidKeycloakToken();
+      const token = await this.getValidAuthToken();
       const response = await fetch(
         `${this.serverUrl}admin/workspace/${workspaceId}/coding/external-coding-import/stream`,
         {

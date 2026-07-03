@@ -57,6 +57,9 @@ describe('WsgCodingJobController', () => {
       getBulkCodingProgress: jest.fn().mockResolvedValue({}),
       createCodingJob: jest.fn().mockResolvedValue({ id: 124 }),
       updateCodingJob: jest.fn().mockResolvedValue({ id: 123 }),
+      pauseCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'paused' }),
+      resumeCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'active' }),
+      submitCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'completed' }),
       saveCodingProgress: jest.fn().mockResolvedValue({ id: 123 }),
       saveCodingIssueReviewProgress: jest.fn().mockResolvedValue({ id: 123 }),
       saveCodingNotes: jest.fn().mockResolvedValue({ id: 123 }),
@@ -163,20 +166,20 @@ describe('WsgCodingJobController', () => {
     }
   );
 
-  it('allows assigned coders to submit completed coding jobs for review', async () => {
-    codingJobService.updateCodingJob.mockResolvedValue({
+  it('allows assigned coders to submit coding jobs', async () => {
+    codingJobService.submitCodingJob.mockResolvedValue({
       id: 123,
       workspace_id: 47,
       name: 'Job',
-      status: 'review'
+      status: 'completed'
     });
 
     await expect(
-      controller.submitCodingJobForReview(47, 123, req)
+      controller.submitCodingJob(47, 123, req)
     ).resolves.toMatchObject({
       id: 123,
       workspace_id: 47,
-      status: 'review'
+      status: 'completed'
     });
 
     expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(
@@ -184,9 +187,7 @@ describe('WsgCodingJobController', () => {
       47,
       5
     );
-    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, {
-      status: 'review'
-    });
+    expect(codingJobService.submitCodingJob).toHaveBeenCalledWith(123, 47);
   });
 
   it.each([

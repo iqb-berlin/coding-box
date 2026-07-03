@@ -2,8 +2,8 @@ import {
   Injectable, NgZone, OnDestroy, inject
 } from '@angular/core';
 import { Router } from '@angular/router';
-import Keycloak from 'keycloak-js';
 import { AppService } from './app.service';
+import { AuthService } from './auth.service';
 import {
   AUTH_SESSION_IDLE_TIMEOUT_MS,
   AUTH_SESSION_WARNING_DELAY_MS
@@ -13,7 +13,7 @@ import {
   providedIn: 'root'
 })
 export class AuthSessionActivityService implements OnDestroy {
-  private readonly keycloak = inject(Keycloak);
+  private readonly authService = inject(AuthService);
   private readonly appService = inject(AppService);
   private readonly router = inject(Router);
   private readonly ngZone = inject(NgZone);
@@ -80,8 +80,8 @@ export class AuthSessionActivityService implements OnDestroy {
     const warningWasVisible = this.appService.sessionExpiryWarning;
     this.restart();
 
-    if (warningWasVisible) {
-      this.keycloak.updateToken(-1).catch(() => this.expireSession());
+    if (warningWasVisible && !this.authService.hasValidToken()) {
+      this.expireSession();
     }
   }
 
@@ -107,7 +107,7 @@ export class AuthSessionActivityService implements OnDestroy {
   }
 
   private isAuthenticatedSession(): boolean {
-    return !!this.keycloak.authenticated && !this.appService.needsReAuthentication;
+    return this.authService.isLoggedIn() && !this.appService.needsReAuthentication;
   }
 
   private clearTimers(): void {

@@ -1,7 +1,6 @@
 import {
   CanActivate, ExecutionContext, Injectable, UnauthorizedException
 } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
 import { AuthService } from '../../auth/service/auth.service';
 import { UsersService } from '../../database/services/users';
 import { WORKSPACE_TOKEN_USE } from '../../auth/workspace-token.constants';

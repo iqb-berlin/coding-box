@@ -31,6 +31,10 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
+import {
+  AllowWorkspaceTokenScopes,
+  WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE
+} from '../../auth/workspace-token';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WorkspaceId } from '../../admin/workspace/workspace.decorator';
 import {

@@ -14,6 +14,7 @@ import {
 import { DecodedToken } from './auth.models';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
+import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import {
   AppHttpError,
   BACKEND_CONNECTIVITY_ERROR_MESSAGE,
@@ -80,16 +81,33 @@ export class AppService {
     this.loadLogoSettings();
   }
 
-  createOwnToken(workspaceId: number, duration: number): Observable<string> {
+  createOwnToken(
+    workspaceId: number,
+    duration: number,
+    scopes: WorkspaceTokenScope[]
+  ): Observable<string> {
     return this.http.get<string>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/token/${duration}`
+      `${this.serverUrl}admin/workspace/${workspaceId}/token/${duration}`,
+      { params: this.createTokenScopeParams(scopes) }
     );
   }
 
-  createTokenForIdentity(workspaceId: number, identity: string, duration: number): Observable<string> {
+  createTokenForIdentity(
+    workspaceId: number,
+    identity: string,
+    duration: number,
+    scopes: WorkspaceTokenScope[]
+  ): Observable<string> {
     const encodedIdentity = encodeURIComponent(identity);
     return this.http.get<string>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/${encodedIdentity}/token/${duration}`
+      `${this.serverUrl}admin/workspace/${workspaceId}/${encodedIdentity}/token/${duration}`,
+      { params: this.createTokenScopeParams(scopes) }
+    );
+  }
+
+  getWorkspaceTokenPolicy(): Observable<WorkspaceTokenPolicy> {
+    return this.http.get<WorkspaceTokenPolicy>(
+      `${this.serverUrl}admin/workspace/token-policy`
     );
   }
 

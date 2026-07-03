@@ -410,6 +410,43 @@ export class UsersService {
     await this.deleteUsersWithStudyManagerInvariant(ids);
   }
 
+  private async deleteUsersWithStudyManagerInvariant(userIds: number[]): Promise<void> {
+    const uniqueUserIds = Array.from(new Set(userIds));
+    if (uniqueUserIds.length === 0) {
+      return;
+    }
+
+    await this.usersRepository.manager.transaction(async manager => {
+      const usersRepository = manager.getRepository(User);
+      const workspaceUsersRepository = manager.getRepository(WorkspaceUser);
+      await lockUserRows(manager, uniqueUserIds);
+      const membershipsToDelete = await workspaceUsersRepository.find({
+        where: { userId: In(uniqueUserIds) }
+      });
+      const affectedWorkspaceIds = Array.from(new Set(
+        membershipsToDelete.map(entry => entry.workspaceId)
+      ));
+      const lockedWorkspaceUsers = await lockWorkspaceUserRows(manager, affectedWorkspaceIds);
+      const userIdSet = new Set(uniqueUserIds);
+      const lockedMembershipsToDelete = lockedWorkspaceUsers
+        .filter(entry => userIdSet.has(entry.userId));
+      const affectedManagerWorkspaceIds = Array.from(new Set(
+        lockedMembershipsToDelete
+          .filter(entry => entry.accessLevel === 3)
+          .map(entry => entry.workspaceId)
+      ));
+
+      assertStudyManagersRemain(
+        affectedManagerWorkspaceIds,
+        lockedWorkspaceUsers,
+        [],
+        lockedMembershipsToDelete
+      );
+
+      await usersRepository.delete(uniqueUserIds);
+    });
+  }
+
   async createOidcProviderUser(oidcPdUser: CreateUserDto): Promise<number> {
     const {
       username, identity, issuer, isAdmin
@@ -441,6 +478,52 @@ export class UsersService {
     }
     this.logger.log(`Creating new OIDC Provider user: ${JSON.stringify(oidcPdUser)}`);
     const newUser = this.usersRepository.create(oidcPdUser);
+    await this.usersRepository.save(newUser);
+
+    return newUser.id;
+  }
+
+  async syncKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
+    const {
+      username, identity, issuer, isAdmin = false
+    } = keycloakUser;
+
+    if (!username || !identity || !issuer) {
+      throw new BadRequestException('Keycloak user requires username, identity and issuer.');
+    }
+
+    const existingUser = await this.usersRepository.findOne({
+      where: [
+        { identity, issuer },
+        { username }
+      ],
+      select: {
+        id: true, username: true, identity: true, issuer: true, isAdmin: true
+      }
+    });
+
+    if (existingUser) {
+      const updatedFields: Partial<User> = {};
+      const nextIsAdmin = existingUser.isAdmin || !!isAdmin;
+      if (identity && existingUser.identity !== identity) updatedFields.identity = identity;
+      if (issuer && existingUser.issuer !== issuer) updatedFields.issuer = issuer;
+      if (username && existingUser.username !== username) updatedFields.username = username;
+      if (existingUser.isAdmin !== nextIsAdmin) updatedFields.isAdmin = nextIsAdmin;
+
+      if (Object.keys(updatedFields).length > 0) {
+        await this.usersRepository.update({ id: existingUser.id }, updatedFields);
+        this.logger.log(`Updating existing user: ${JSON.stringify({ ...existingUser, ...updatedFields })}`);
+      }
+
+      return existingUser.id;
+    }
+    this.logger.log(`Creating new Keycloak user: ${JSON.stringify(keycloakUser)}`);
+    const newUser = this.usersRepository.create({
+      username,
+      identity,
+      issuer,
+      isAdmin: !!isAdmin
+    });
     await this.usersRepository.save(newUser);
 
     return newUser.id;

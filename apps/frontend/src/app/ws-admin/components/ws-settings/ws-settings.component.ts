@@ -620,12 +620,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     }
   }
 
-  private getAuthHeaders(): HttpHeaders | null {
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      return null;
-    }
-
+  private getAuthHeaders(): HttpHeaders {
     return new HttpHeaders({
       Accept: 'application/json'
     });
