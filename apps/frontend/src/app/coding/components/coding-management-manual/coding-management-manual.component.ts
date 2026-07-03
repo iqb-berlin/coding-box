@@ -129,6 +129,7 @@ interface SavedCodeProgress {
 
 type PlanningStatusState =
   'loading' |
+  'planning-data-required' |
   'preparation-required' |
   'warning' |
   'planning-incomplete' |
@@ -251,6 +252,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     execution: false,
     completion: false
   };
+
+  private hasLoadedPlanningDataBundle = false;
 
   private pendingAutomaticManualTabLoad: ManualCodingTab | null = null;
 
@@ -491,6 +494,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.jobDefinitionChangeSubject
       .pipe(debounceTime(500), takeUntil(this.destroy$))
       .subscribe(reloadScope => {
+        this.hasLoadedPlanningDataBundle = false;
         this.loadJobDefinitionsForExport();
         this.loadManualTabData(this.activeManualTab);
         this.refreshCodingJobsAfterDataChange(reloadScope);
@@ -543,6 +547,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe(() => {
         if (!this.hasLoadedManualCodingJobRefreshSetting ||
           !this.autoRefreshManualCodingJobs) {
+          return;
+        }
+
+        if (this.activeManualTab === 'planning') {
+          this.hasLoadedPlanningDataBundle = false;
+          this.refreshCodingJobsAfterDataChange('rendered');
+          this.loadJobDefinitionsForExport();
+          if (this.codingJobDefinitionsComponent) {
+            this.codingJobDefinitionsComponent.refresh();
+          }
           return;
         }
 
@@ -625,7 +639,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   shouldShowManualRefreshButton(): boolean {
     return !!this.appService.selectedWorkspaceId &&
       this.hasLoadedManualCodingJobRefreshSetting &&
-      !this.autoRefreshManualCodingJobs;
+      (this.activeManualTab === 'planning' ||
+        !this.autoRefreshManualCodingJobs);
+  }
+
+  shouldShowPlanningOverview(): boolean {
+    return this.isManualTab('planning') &&
+      this.hasPlanningDataBundleSnapshot();
   }
 
   onManualTabChanged(index: number): void {
@@ -1547,6 +1567,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
    */
   refreshAllStatistics(): void {
     this.invalidateCodingStatusCache();
+    this.hasLoadedPlanningDataBundle = true;
     this.loadCodingProgressOverview();
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
@@ -1596,8 +1617,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private shouldRefreshManualStateOnFocus(): boolean {
     return this.hasLoadedManualCodingJobRefreshSetting &&
       this.autoRefreshManualCodingJobs &&
-      (this.activeManualTab === 'planning' ||
-        this.activeManualTab === 'execution' ||
+      (this.activeManualTab === 'execution' ||
         this.activeManualTab === 'completion');
   }
 
@@ -1739,6 +1759,20 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.isLoadingManualFreshnessJobSummary ||
       this.isLoadingDoubleCodingConflictSummary ||
       this.isLoadingMatchingMode;
+  }
+
+  private hasPlanningDataBundleSnapshot(): boolean {
+    return this.hasLoadedPlanningDataBundle;
+  }
+
+  private shouldWaitForPlanningDataBundle(): boolean {
+    return !!this.appService.selectedWorkspaceId &&
+      !this.hasPlanningDataBundleSnapshot();
+  }
+
+  private shouldRequirePlanningDataRefresh(): boolean {
+    return this.activeManualTab === 'planning' &&
+      this.shouldWaitForPlanningDataBundle();
   }
 
   getOpenCodingCases(): number {
@@ -2209,6 +2243,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'complete':
         return 'status-complete';
       case 'loading':
+      case 'planning-data-required':
       case 'planning-ready':
       case 'training-ready':
       case 'execution-ready':
@@ -2220,6 +2255,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private getPlanningStatusState(): PlanningStatusState {
     if (this.isAnyPlanningDataLoading()) {
       return 'loading';
+    }
+
+    if (this.shouldRequirePlanningDataRefresh()) {
+      return 'planning-data-required';
     }
 
     if (this.hasPreparationRefreshTarget()) {
@@ -2279,6 +2318,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     switch (this.getPlanningStatusState()) {
       case 'loading':
         return 'sync';
+      case 'planning-data-required':
+        return 'refresh';
       case 'warning':
         return 'warning';
       case 'preparation-required':
@@ -2308,6 +2349,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     switch (this.getPlanningStatusState()) {
       case 'loading':
         return 'Status wird aktualisiert';
+      case 'planning-data-required':
+        return 'Planungsdaten aktualisieren';
       case 'warning':
         return this.hasVariableCoverageConflicts() ?
           'Konflikte prüfen' :
@@ -2342,6 +2385,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     if (planningStatusState === 'loading') {
       return 'Die Planungs- und Kodierfortschritte werden geladen.';
+    }
+
+    if (planningStatusState === 'planning-data-required') {
+      return 'Abdeckung, Kodierfortschritt und Freshness-Hinweise werden erst auf Anforderung geladen.';
     }
 
     if (planningStatusState === 'progress-unavailable') {
@@ -2410,6 +2457,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     switch (this.getPlanningStatusState()) {
       case 'loading':
         return 'Planungsstand wird geladen';
+      case 'planning-data-required':
+        return 'Planungsstand laden';
       case 'warning':
         return this.hasVariableCoverageConflicts() ?
           'Konflikte zuerst klären' :
@@ -2446,6 +2495,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     switch (this.getPlanningStatusState()) {
       case 'loading':
         return 'Warten Sie kurz, bis die Planungsdaten aktualisiert sind.';
+      case 'planning-data-required':
+        return 'Laden Sie die Planungsdaten, um Variablen- und Fallabdeckung, Kodierfortschritt, offene Variablen und Freshness-Hinweise zu prüfen.';
       case 'warning':
         if (this.hasVariableCoverageConflicts()) {
           return 'Prüfen Sie Variablen, die von mehreren Definitionen mit überlappenden Fällen verwendet werden.';
@@ -2505,6 +2556,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'complete':
         return this.canShowManualCompletionTab() ? 'Abschluss ansehen' : 'Zu den Kodierjobs';
       case 'loading':
+      case 'planning-data-required':
       case 'progress-unavailable':
         return 'Aktualisieren';
       default:
@@ -2580,7 +2632,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   performPlanningNextStep(): void {
     const planningStatusState = this.getPlanningStatusState();
-    if (planningStatusState === 'loading' || planningStatusState === 'progress-unavailable') {
+    if (planningStatusState === 'loading' ||
+        planningStatusState === 'planning-data-required' ||
+        planningStatusState === 'progress-unavailable') {
       this.refreshManualCodingPlanning();
       return;
     }
@@ -2590,6 +2644,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningNextStepIcon(): string {
     switch (this.getPlanningStatusState()) {
+      case 'planning-data-required':
+        return 'refresh';
       case 'warning':
         return 'warning';
       case 'preparation-required':
@@ -2750,6 +2806,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private refreshAggregationDependentViews(includeResponseAnalysis = true): void {
     this.invalidateCodingStatusCache();
+    this.hasLoadedPlanningDataBundle = true;
     if (includeResponseAnalysis) {
       this.loadResponseAnalysis();
     }
@@ -2828,13 +2885,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.loadResponseAnalysis();
         return;
       case 'planning':
-        this.loadVariableCoverageOverview();
-        this.loadCaseCoverageOverview();
-        this.loadCodingProgressOverview();
-        this.loadCodingIncompleteVariables();
-        this.loadManualFreshnessDecisionData();
-        this.loadCodingFreshness({ force: forceRefresh });
-        this.loadResponseAnalysisForPlanningIfNeeded();
+        if (forceRefresh) {
+          this.loadPlanningDataBundle(forceRefresh);
+        }
         return;
       case 'training':
         if (reloadCodingJobs) {
@@ -2862,6 +2915,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
   }
 
+  private loadPlanningDataBundle(forceRefresh: boolean): void {
+    this.hasLoadedPlanningDataBundle = true;
+    this.loadVariableCoverageOverview();
+    this.loadCaseCoverageOverview();
+    this.loadCodingProgressOverview();
+    this.loadCodingIncompleteVariables();
+    this.loadManualFreshnessDecisionData();
+    this.loadCodingFreshness({ force: forceRefresh });
+    this.loadResponseAnalysisForPlanningIfNeeded();
+  }
+
   private loadManualCodingJobRefreshSetting(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -2882,7 +2946,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             this.pendingAutomaticManualTabLoad = null;
             if (pendingTab) {
               this.loadManualTabData(pendingTab);
-            } else {
+            } else if (this.activeManualTab !== 'planning') {
               this.loadCodingFreshness();
             }
           } else {
@@ -2896,7 +2960,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.pendingAutomaticManualTabLoad = null;
           if (pendingTab) {
             this.loadManualTabData(pendingTab);
-          } else {
+          } else if (this.activeManualTab !== 'planning') {
             this.loadCodingFreshness();
           }
         }
@@ -2971,7 +3035,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private focusManualFreshnessTargetIfReady(): void {
     if (!this.pendingManualFreshnessFocus ||
         !this.manualFreshnessPlanningRequested ||
-        this.isAnyPlanningDataLoading()) {
+        this.isAnyPlanningDataLoading() ||
+        this.shouldWaitForPlanningDataBundle()) {
       return;
     }
 
