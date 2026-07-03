@@ -1497,6 +1497,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (options.force) {
+      this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
+    }
+
     const getCodingFreshness =
       (this.statisticsService as Partial<CodingStatisticsService>).getCodingFreshness;
     const codingFreshness$ = getCodingFreshness ?
