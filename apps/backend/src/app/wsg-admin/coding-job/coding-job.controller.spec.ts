@@ -89,7 +89,6 @@ describe('WsgCodingJobController', () => {
   it.each([
     'transferCodingCases',
     'createCodingJob',
-    'updateCodingJob',
     'deleteCodingJob',
     'restartCodingJobWithOpenUnits'
   ] as const)('requires coding-manager access for %s', methodName => {
@@ -99,6 +98,20 @@ describe('WsgCodingJobController', () => {
       JwtAuthGuard,
       WorkspaceGuard,
       AccessLevelGuard
+    ]);
+    expect(Reflect.getMetadata('accessLevel', handler)).toBe(2);
+  });
+
+  it('allows operate workspace tokens for updateCodingJob while keeping coding-manager access', () => {
+    const handler = WsgCodingJobController.prototype.updateCodingJob;
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtOrWorkspaceTokenAuthGuard,
+      WorkspaceGuard,
+      AccessLevelGuard
+    ]);
+    expect(Reflect.getMetadata('workspaceTokenScopes', handler)).toEqual([
+      WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE
     ]);
     expect(Reflect.getMetadata('accessLevel', handler)).toBe(2);
   });

@@ -71,8 +71,9 @@ export class AppComponent implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     const postLoginReturnUrl = await this.handleAuthCallback();
+    const activeToken = await this.authService.getValidToken(0);
 
-    if (this.authService.isLoggedIn()) {
+    if (activeToken) {
       this.setAuthState();
       this.appService.refreshAuthData();
       this.authSessionActivity.start();

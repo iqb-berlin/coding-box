@@ -80,8 +80,14 @@ export class AuthSessionActivityService implements OnDestroy {
     const warningWasVisible = this.appService.sessionExpiryWarning;
     this.restart();
 
-    if (warningWasVisible && !this.authService.hasValidToken()) {
-      this.expireSession();
+    if (warningWasVisible) {
+      this.authService.getValidToken(0)
+        .then(token => {
+          if (!token) {
+            this.expireSession();
+          }
+        })
+        .catch(() => this.expireSession());
     }
   }
 

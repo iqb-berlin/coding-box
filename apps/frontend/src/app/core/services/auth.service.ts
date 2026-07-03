@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, Observable } from 'rxjs';
 import { jwtDecode } from 'jwt-decode';
 import { AppService } from './app.service';
 import { AuthExchangeResponse, DecodedToken, UserProfile } from './auth.models';
@@ -14,7 +14,8 @@ export class AuthService {
   private readonly tokenKey = 'auth_token';
   private readonly idTokenKey = 'id_token';
   private readonly refreshTokenKey = 'refresh_token';
-  private isAuthenticatedSubject = new BehaviorSubject<boolean>(this.hasValidToken());
+  private refreshInFlight?: Promise<string | undefined>;
+  private isAuthenticatedSubject = new BehaviorSubject<boolean>(this.hasStoredSession());
 
   constructor() {
     this.checkTokenValidity();
@@ -39,18 +40,14 @@ export class AuthService {
   async getValidToken(minValidity = 30): Promise<string | undefined> {
     const token = this.getToken();
     if (!token) {
-      return undefined;
+      return this.refreshAccessToken();
     }
 
-    if (!this.isTokenValid(token, Math.max(0, minValidity))) {
-      localStorage.removeItem(this.tokenKey);
-      localStorage.removeItem(this.idTokenKey);
-      localStorage.removeItem(this.refreshTokenKey);
-      this.isAuthenticatedSubject.next(false);
-      return undefined;
+    if (this.isTokenValid(token, Math.max(0, minValidity))) {
+      return token;
     }
 
-    return token;
+    return this.refreshAccessToken();
   }
 
   getIdToken(): string | null {
@@ -62,11 +59,11 @@ export class AuthService {
   }
 
   isLoggedIn(): boolean {
-    const hasValidToken = this.hasValidToken();
-    if (hasValidToken !== this.isAuthenticatedSubject.value) {
-      this.isAuthenticatedSubject.next(hasValidToken);
+    const hasStoredSession = this.hasStoredSession();
+    if (hasStoredSession !== this.isAuthenticatedSubject.value) {
+      this.isAuthenticatedSubject.next(hasStoredSession);
     }
-    return hasValidToken;
+    return hasStoredSession;
   }
 
   loadUserProfile(): Promise<UserProfile> {
@@ -90,6 +87,10 @@ export class AuthService {
 
   exchangeLoginCode(code: string): Observable<AuthExchangeResponse> {
     return this.http.post<AuthExchangeResponse>(`${this.appService.serverUrl}auth/exchange`, { code });
+  }
+
+  refreshToken(refreshToken: string): Observable<AuthExchangeResponse> {
+    return this.http.post<AuthExchangeResponse>(`${this.appService.serverUrl}auth/refresh`, { refresh_token: refreshToken });
   }
 
   logout(): void {
@@ -144,6 +145,53 @@ export class AuthService {
     return this.isTokenValid(token);
   }
 
+  private async refreshAccessToken(): Promise<string | undefined> {
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
+    }
+
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) {
+      this.clearStoredTokens();
+      return undefined;
+    }
+
+    this.refreshInFlight = firstValueFrom(this.refreshToken(refreshToken))
+      .then(tokenResponse => {
+        this.setToken(tokenResponse.access_token);
+
+        if (tokenResponse.id_token) {
+          this.setIdToken(tokenResponse.id_token);
+        }
+
+        if (tokenResponse.refresh_token) {
+          this.setRefreshToken(tokenResponse.refresh_token);
+        }
+
+        return tokenResponse.access_token;
+      })
+      .catch(() => {
+        this.clearStoredTokens();
+        return undefined;
+      })
+      .finally(() => {
+        this.refreshInFlight = undefined;
+      });
+
+    return this.refreshInFlight;
+  }
+
+  private hasStoredSession(): boolean {
+    return this.hasValidToken() || !!this.getRefreshToken();
+  }
+
+  private clearStoredTokens(): void {
+    localStorage.removeItem(this.tokenKey);
+    localStorage.removeItem(this.idTokenKey);
+    localStorage.removeItem(this.refreshTokenKey);
+    this.isAuthenticatedSubject.next(false);
+  }
+
   private isTokenValid(token: string, minValidity = 0): boolean {
     try {
       const decoded = jwtDecode<DecodedToken>(token);
@@ -155,11 +203,14 @@ export class AuthService {
   }
 
   private checkTokenValidity(): void {
-    if (!this.hasValidToken()) {
+    const token = this.getToken();
+    if (token && !this.hasValidToken()) {
       localStorage.removeItem(this.tokenKey);
       localStorage.removeItem(this.idTokenKey);
-      localStorage.removeItem(this.refreshTokenKey);
-      this.isAuthenticatedSubject.next(false);
+    }
+
+    if (!this.hasStoredSession()) {
+      this.clearStoredTokens();
     }
   }
 }
