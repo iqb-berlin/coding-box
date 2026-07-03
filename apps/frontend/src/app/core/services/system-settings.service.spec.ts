@@ -38,22 +38,22 @@ describe('SystemSettingsService', () => {
     req.flush({ html: '<p>Text</p>', isDefault: false });
   });
 
-  it('updates the legal notice without service-owned auth headers', () => {
+  it('updates the legal notice with the stored auth token', () => {
     service.updateLegalNotice({ html: '<p>Updated</p>' }).subscribe();
 
     const req = httpMock.expectOne(`${serverUrl}legal-notice`);
     expect(req.request.method).toBe('PUT');
-    expect(req.request.headers.get('Authorization')).toBeNull();
+    expect(req.request.headers.get('Authorization')).toBe('Bearer token');
     expect(req.request.body).toEqual({ html: '<p>Updated</p>' });
     req.flush({ html: '<p>Updated</p>', isDefault: false });
   });
 
-  it('resets the legal notice without service-owned auth headers', () => {
+  it('resets the legal notice with the stored auth token', () => {
     service.resetLegalNotice().subscribe();
 
     const req = httpMock.expectOne(`${serverUrl}legal-notice`);
     expect(req.request.method).toBe('DELETE');
-    expect(req.request.headers.get('Authorization')).toBeNull();
+    expect(req.request.headers.get('Authorization')).toBe('Bearer token');
     req.flush({ html: '<p>Default</p>', isDefault: true });
   });
 });

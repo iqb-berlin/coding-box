@@ -36,6 +36,23 @@ export class AuthService {
     return localStorage.getItem(this.tokenKey);
   }
 
+  async getValidToken(minValidity = 30): Promise<string | undefined> {
+    const token = this.getToken();
+    if (!token) {
+      return undefined;
+    }
+
+    if (!this.isTokenValid(token, Math.max(0, minValidity))) {
+      localStorage.removeItem(this.tokenKey);
+      localStorage.removeItem(this.idTokenKey);
+      localStorage.removeItem(this.refreshTokenKey);
+      this.isAuthenticatedSubject.next(false);
+      return undefined;
+    }
+
+    return token;
+  }
+
   getIdToken(): string | null {
     return localStorage.getItem(this.idTokenKey);
   }
@@ -124,10 +141,14 @@ export class AuthService {
       return false;
     }
 
+    return this.isTokenValid(token);
+  }
+
+  private isTokenValid(token: string, minValidity = 0): boolean {
     try {
       const decoded = jwtDecode<DecodedToken>(token);
       const now = Date.now() / 1000;
-      return decoded.exp ? decoded.exp > now : false;
+      return decoded.exp ? decoded.exp > now + minValidity : false;
     } catch {
       return false;
     }

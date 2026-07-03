@@ -79,10 +79,12 @@ describe('AuthService', () => {
           userId: 5,
           username: 'study-manager',
           sub: '5',
-          workspace: 7
+          workspace: 7,
+          tokenType: WORKSPACE_API_TOKEN_TYPE,
+          scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
         },
         {
-          expiresIn: '30d',
+          expiresIn: '1d',
           issuer: 'coding-box',
           audience: 'coding-box-workspace-token',
           algorithm: 'HS256'
@@ -169,7 +171,7 @@ describe('AuthService', () => {
         expect.objectContaining({
           scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
         }),
-        { expiresIn: '90d' }
+        expect.objectContaining({ expiresIn: '90d' })
       );
     });
 
@@ -269,7 +271,12 @@ describe('AuthService', () => {
           userId: 12,
           username: 'coder',
           sub: '12',
-          workspace: 7
+          workspace: 7,
+          tokenType: WORKSPACE_API_TOKEN_TYPE,
+          scopes: [
+            WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
+            WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
+          ]
         },
         {
           expiresIn: '1d',

@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { Request } from 'express';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 import { UsersService } from './database/services/users';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -65,6 +66,12 @@ export class AppController {
       isAdmin: user.isAdmin,
       workspaces: workspaces
     };
+  }
+
+  private assertTokenMatchesRequestedIdentity(requestedIdentity: string, tokenIdentity?: string): void {
+    if (!tokenIdentity || tokenIdentity !== requestedIdentity) {
+      throw new ForbiddenException('Requested identity does not match the authenticated user');
+    }
   }
 
   @Post('tc_authentication')

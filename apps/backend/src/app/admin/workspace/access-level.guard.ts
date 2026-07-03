@@ -35,16 +35,13 @@ export class AccessLevelGuard implements CanActivate {
       this.reflector.get<number>('accessLevel', context.getHandler());
 
     const request = context.switchToHttp().getRequest();
-    const userId = request.user?.id;
+    const requestUserId = request.user?.id;
     assertWorkspaceApiTokenScopes(context, this.reflector, request.user);
 
     // If no access level is specified, allow access
     if (requiredLevel === undefined || requiredLevel === null) {
       return true;
     }
-
-    const request = context.switchToHttp().getRequest();
-    const requestUserId = request.user?.id;
 
     if (!requestUserId) {
       throw new UnauthorizedException('User ID not found in request');

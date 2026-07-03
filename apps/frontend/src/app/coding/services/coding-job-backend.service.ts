@@ -6,7 +6,6 @@ import {
 import {
   map, switchMap, tap
 } from 'rxjs/operators';
-import Keycloak from 'keycloak-js';
 import { SERVER_URL } from '../../injection-tokens';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 import type {
@@ -294,7 +293,6 @@ export interface ManualCodingScopeSummary {
 export class CodingJobBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
-  private keycloak = inject(Keycloak, { optional: true });
   private validationTaskStateService = inject(ValidationTaskStateService);
 
   private getAuthHeader(authToken?: string) {
@@ -306,12 +304,7 @@ export class CodingJobBackendService {
   }
 
   private getFetchAuthHeader(authToken?: string): Record<string, string> {
-    if (authToken) {
-      return this.getAuthHeader(authToken);
-    }
-
-    const token = this.keycloak?.authenticated ? this.keycloak.token : undefined;
-    return this.getAuthHeader(token);
+    return this.getAuthHeader(authToken);
   }
 
   getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {

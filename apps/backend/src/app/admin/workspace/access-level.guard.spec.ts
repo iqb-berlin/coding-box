@@ -49,12 +49,15 @@ describe('AccessLevelGuard (Backend)', () => {
     userId: number | string,
     workspaceId: string,
     requiredLevel?: number,
-    isAdmin = false
+    userOptions: boolean | Record<string, unknown> = false
   ): ExecutionContext => {
+    const user = typeof userOptions === 'boolean' ?
+      { id: userId, isAdmin: userOptions } :
+      { id: userId, ...userOptions };
     const context = {
       switchToHttp: () => ({
         getRequest: () => ({
-          user: { id: userId, isAdmin },
+          user,
           params: { workspace_id: workspaceId }
         })
       }),

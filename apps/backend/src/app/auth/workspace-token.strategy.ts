@@ -8,12 +8,14 @@ import {
   WORKSPACE_TOKEN_STRATEGY,
   WORKSPACE_TOKEN_USE
 } from './workspace-token.constants';
+import { WORKSPACE_API_TOKEN_TYPE } from './workspace-token';
 
 interface WorkspaceTokenPayload {
   token_use?: string;
   userId?: number | string;
   username?: string;
   workspace?: number | string;
+  scopes?: unknown;
 }
 
 @Injectable()
@@ -47,6 +49,10 @@ export class WorkspaceTokenStrategy extends PassportStrategy(Strategy, WORKSPACE
       name: payload.username,
       workspace,
       tokenUse: WORKSPACE_TOKEN_USE,
+      tokenType: WORKSPACE_API_TOKEN_TYPE,
+      scopes: Array.isArray(payload.scopes) ?
+        payload.scopes.filter((scope): scope is string => typeof scope === 'string') :
+        [],
       isWorkspaceToken: true
     };
   }
