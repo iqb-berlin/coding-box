@@ -23,6 +23,10 @@ import {
   TestPersonCodingService,
   TestResultsChangedEvent
 } from '../../services/test-person-coding.service';
+import {
+  CodingBackgroundJobsService,
+  CodingStatusGuardClearedEvent
+} from '../../services/coding-background-jobs.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 import { Success } from '../../models/success.model';
@@ -37,10 +41,12 @@ describe('CodingManagementComponent', () => {
   let mockAppService: jest.Mocked<Partial<AppService>>;
   let mockWorkspaceSettingsService: jest.Mocked<Partial<WorkspaceSettingsService>>;
   let mockTestPersonCodingService: jest.Mocked<Partial<TestPersonCodingService>>;
+  let mockCodingBackgroundJobsService: jest.Mocked<Partial<CodingBackgroundJobsService>>;
   let mockRouter: jest.Mocked<Partial<Router>>;
   let mockSnackBar: jest.Mocked<Partial<MatSnackBar>>;
   let autoCodingCompletedSubject: Subject<{ jobId?: string }>;
   let testResultsChangedSubject: Subject<TestResultsChangedEvent>;
+  let statusGuardClearedSubject: Subject<CodingStatusGuardClearedEvent>;
   let resetProgressSubject: Subject<number | null>;
   let queryParamMapSubject: BehaviorSubject<ParamMap>;
   let fakeActivatedRoute: ActivatedRoute;
@@ -171,7 +177,15 @@ describe('CodingManagementComponent', () => {
         groupNames: []
       })),
       getJobStatus: jest.fn(),
+      trackFreshnessCodingGuardUntilComplete: jest.fn(),
       notifyAutoCodingCompleted: jest.fn()
+    };
+
+    statusGuardClearedSubject = new Subject<CodingStatusGuardClearedEvent>();
+    mockCodingBackgroundJobsService = {
+      isStatusCheckGuardActive: jest.fn().mockReturnValue(false),
+      setJobRunning: jest.fn(),
+      statusGuardCleared$: statusGuardClearedSubject.asObservable()
     };
 
     mockRouter = {
@@ -220,6 +234,10 @@ describe('CodingManagementComponent', () => {
         {
           provide: TestPersonCodingService,
           useValue: mockTestPersonCodingService
+        },
+        {
+          provide: CodingBackgroundJobsService,
+          useValue: mockCodingBackgroundJobsService
         },
         {
           provide: Router,
@@ -322,6 +340,145 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
       expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, true);
+    });
+
+    it('should defer manual coding status refresh while a guarded background job is running', () => {
+      (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
+        .mockReturnValue(true);
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+      component.refreshCodingStatusOverview();
+
+      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
+        .mockReturnValue(false);
+      statusGuardClearedSubject.next({ workspaceId: 1 });
+
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, true);
+    });
+
+    it('should defer automatic coding status refresh while a guarded background job is running', () => {
+      (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
+        .mockReturnValue(true);
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+      autoCodingCompletedSubject.next({});
+
+      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
+        .mockReturnValue(false);
+      statusGuardClearedSubject.next({ workspaceId: 1 });
+
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
+    });
+
+    it('should not refresh twice when freshness completion clears a pending guarded refresh', () => {
+      let guardActive = true;
+      (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
+        .mockImplementation(() => guardActive);
+      (mockCodingBackgroundJobsService.setJobRunning as jest.Mock)
+        .mockImplementation(() => {
+          guardActive = false;
+          statusGuardClearedSubject.next({ workspaceId: 1 });
+        });
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+      component.refreshCodingStatusOverview();
+      component.activeFreshnessJobId = 'freshness-job-1';
+      autoCodingCompletedSubject.next({ jobId: 'freshness-job-1' });
+
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not refresh twice when a child freshness dialog clears the guard before completion is emitted', () => {
+      let guardActive = true;
+      (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
+        .mockImplementation(() => guardActive);
+      (mockCodingBackgroundJobsService.setJobRunning as jest.Mock)
+        .mockImplementation((_workspaceId, _kind, isRunning, jobId) => {
+          if (!isRunning && guardActive) {
+            guardActive = false;
+            statusGuardClearedSubject.next({
+              workspaceId: 1,
+              kind: 'freshness-coding',
+              jobId
+            });
+          }
+        });
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+      component.refreshCodingStatusOverview();
+      component.activeFreshnessJobId = 'freshness-job-1';
+      mockCodingBackgroundJobsService.setJobRunning?.(
+        1,
+        'freshness-coding',
+        false,
+        'freshness-job-1'
+      );
+      autoCodingCompletedSubject.next({ jobId: 'freshness-job-1' });
+
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
+      expect(component.activeFreshnessJobId).toBeNull();
+    });
+
+    it('should not refresh twice when reset progress clears after a guarded pending refresh was handled', () => {
+      let guardActive = true;
+      (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
+        .mockImplementation(() => guardActive);
+      resetProgressSubject.next(50);
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+      component.refreshCodingStatusOverview();
+
+      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+
+      guardActive = false;
+      statusGuardClearedSubject.next({
+        workspaceId: 1,
+        kind: 'autocoder-reset',
+        jobId: 'reset-job-1'
+      });
+      resetProgressSubject.next(null);
+
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
     });
 
     it('should not auto-fetch coding overview statistics when global auto-refresh is disabled', () => {
@@ -741,6 +898,24 @@ describe('CodingManagementComponent', () => {
       }
     });
 
+    it('should keep tracking an active freshness job guard after destroy', () => {
+      (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
+        totalResponses: 42,
+        statusCounts: {},
+        jobId: 'freshness-job-1',
+        message: 'Processing in background',
+        unitCount: 7,
+        personCount: 3,
+        groupNames: ['TG1']
+      }));
+
+      component.startFreshnessCoding('v1');
+      component.ngOnDestroy();
+
+      expect(mockTestPersonCodingService.trackFreshnessCodingGuardUntilComplete)
+        .toHaveBeenCalledWith(1, 'freshness-job-1');
+    });
+
     it('should not resume parent freshness polling when the dialog reports a terminal status for the started job', () => {
       jest.useFakeTimers();
       const afterClosed$ = new Subject<{ initialJobId: string; jobId: string; jobStatus: 'failed' }>();
@@ -771,6 +946,160 @@ describe('CodingManagementComponent', () => {
 
         expect(jest.getTimerCount()).toBe(0);
         expect(component.activeFreshnessJobId).toBeNull();
+      } finally {
+        component.ngOnDestroy();
+        jest.useRealTimers();
+      }
+    });
+
+    it('should refresh status overview when parent freshness polling observes a failed job', () => {
+      jest.useFakeTimers();
+      const afterClosed$ = new Subject<void>();
+      const dialogRef = {
+        afterClosed: jest.fn().mockReturnValue(afterClosed$),
+        close: jest.fn()
+      };
+
+      try {
+        (mockDialog.open as jest.Mock).mockReturnValueOnce(dialogRef);
+        (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
+          totalResponses: 42,
+          statusCounts: {},
+          jobId: 'freshness-job-1',
+          message: 'Processing in background',
+          unitCount: 7,
+          personCount: 3,
+          groupNames: ['TG1']
+        }));
+        (mockTestPersonCodingService.getJobStatus as jest.Mock).mockReturnValue(of({
+          status: 'failed',
+          progress: 100,
+          error: 'failed'
+        }));
+
+        component.startFreshnessCoding('v1');
+        afterClosed$.next();
+        afterClosed$.complete();
+        (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+        jest.advanceTimersByTime(2000);
+
+        expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
+        expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
+        expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
+        expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, true);
+      } finally {
+        component.ngOnDestroy();
+        jest.useRealTimers();
+      }
+    });
+
+    it('should keep the freshness guard active after a transient parent polling error', () => {
+      jest.useFakeTimers();
+      const afterClosed$ = new Subject<void>();
+      const dialogRef = {
+        afterClosed: jest.fn().mockReturnValue(afterClosed$),
+        close: jest.fn()
+      };
+
+      try {
+        (mockDialog.open as jest.Mock).mockReturnValueOnce(dialogRef);
+        (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
+          totalResponses: 42,
+          statusCounts: {},
+          jobId: 'freshness-job-1',
+          message: 'Processing in background',
+          unitCount: 7,
+          personCount: 3,
+          groupNames: ['TG1']
+        }));
+        (mockTestPersonCodingService.getJobStatus as jest.Mock)
+          .mockReturnValueOnce(of({ error: 'temporary status error' }))
+          .mockReturnValueOnce(of({
+            status: 'completed',
+            progress: 100
+          }));
+
+        component.startFreshnessCoding('v1');
+        afterClosed$.next();
+        afterClosed$.complete();
+        (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+        jest.advanceTimersByTime(2000);
+
+        expect(mockCodingBackgroundJobsService.setJobRunning).not.toHaveBeenCalledWith(
+          1,
+          'freshness-coding',
+          false,
+          'freshness-job-1'
+        );
+        expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+
+        jest.advanceTimersByTime(2000);
+
+        expect(mockCodingBackgroundJobsService.setJobRunning).toHaveBeenLastCalledWith(
+          1,
+          'freshness-coding',
+          false,
+          'freshness-job-1'
+        );
+        expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
+        expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
+        expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
+        expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, true);
+      } finally {
+        component.ngOnDestroy();
+        jest.useRealTimers();
+      }
+    });
+
+    it('should refresh completed freshness jobs once even when automatic refresh is disabled', () => {
+      jest.useFakeTimers();
+      const afterClosed$ = new Subject<void>();
+      const dialogRef = {
+        afterClosed: jest.fn().mockReturnValue(afterClosed$),
+        close: jest.fn()
+      };
+
+      try {
+        component.autoRefreshManualCodingJobs = false;
+        (mockDialog.open as jest.Mock).mockReturnValueOnce(dialogRef);
+        (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
+          totalResponses: 42,
+          statusCounts: {},
+          jobId: 'freshness-job-1',
+          message: 'Processing in background',
+          unitCount: 7,
+          personCount: 3,
+          groupNames: ['TG1']
+        }));
+        (mockTestPersonCodingService.getJobStatus as jest.Mock).mockReturnValue(of({
+          status: 'completed',
+          progress: 100
+        }));
+        (mockTestPersonCodingService.notifyAutoCodingCompleted as jest.Mock)
+          .mockImplementation(jobId => autoCodingCompletedSubject.next({ jobId }));
+
+        component.startFreshnessCoding('v1');
+        afterClosed$.next();
+        afterClosed$.complete();
+        (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+        jest.advanceTimersByTime(2000);
+
+        expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
+        expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledTimes(1);
+        expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledTimes(1);
+        expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
       } finally {
         component.ngOnDestroy();
         jest.useRealTimers();

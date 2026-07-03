@@ -46,6 +46,10 @@ import {
   TestPersonCodingService,
   TestResultsChangedEvent
 } from '../../services/test-person-coding.service';
+import {
+  CodingBackgroundJobsService,
+  CodingStatusGuardClearedEvent
+} from '../../services/coding-background-jobs.service';
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { CodingVariablesDialogComponent } from '../../../coding-management/coding-variables-dialog/coding-variables-dialog.component';
@@ -125,6 +129,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private codingManagementService = inject(CodingManagementService);
   private testPersonCodingService = inject(TestPersonCodingService);
+  private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
   private uiService = inject(CodingManagementUiService);
   private translateService = inject(TranslateService);
   private router = inject(Router);
@@ -206,8 +211,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
   private freshnessJobPollingInterval: number | null = null;
+  private activeFreshnessJobWorkspaceId: number | null = null;
   private lastResetProgress: number | null | undefined;
   private hasLoadedManualCodingJobRefreshSetting = false;
+  private pendingAutomaticCodingStatusRefreshAfterBackgroundJob = false;
+  private pendingForcedCodingStatusRefreshAfterBackgroundJob = false;
+  private freshnessJobCompletionRefreshHandledIds = new Set<string>();
+  private resetCompletionRefreshHandledAfterGuardClear = false;
+  private hasShownFreshnessJobStatusPollingError = false;
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -248,6 +259,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         .subscribe(available => {
           this.isGeogebraAvailable = available;
         });
+
+      this.codingBackgroundJobsService.statusGuardCleared$
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(event => {
+          if (event.workspaceId === this.appService.selectedWorkspaceId) {
+            this.refreshPendingCodingStatusOverviewAfterBackgroundJob(event);
+          }
+        });
     }
 
     // Subscribe to service state
@@ -287,6 +306,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         if (previousProgress !== undefined &&
           previousProgress !== null &&
           progress === null) {
+          if (this.resetCompletionRefreshHandledAfterGuardClear) {
+            this.resetCompletionRefreshHandledAfterGuardClear = false;
+            return;
+          }
           this.refreshCodingStatusOverviewAfterChange();
         }
       });
@@ -307,8 +330,21 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.testPersonCodingService.autoCodingCompleted$
       .pipe(takeUntil(this.destroy$))
       .subscribe(event => {
+        if (event?.jobId &&
+          this.consumeHandledFreshnessJobCompletionRefresh(event.jobId)) {
+          if (event.jobId === this.activeFreshnessJobId) {
+            this.finishFreshnessCodingJob(event.jobId);
+            this.stopFreshnessJobPolling();
+          }
+          return;
+        }
+
         if (event?.jobId && event.jobId === this.activeFreshnessJobId) {
+          const pendingRefreshHandled = this.finishFreshnessCodingJob(event.jobId);
           this.stopFreshnessJobPolling();
+          if (pendingRefreshHandled) {
+            return;
+          }
         }
         this.refreshCodingStatusOverviewAfterChange();
       });
@@ -332,6 +368,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.activeFreshnessJobId) {
+      this.testPersonCodingService.trackFreshnessCodingGuardUntilComplete(
+        this.activeFreshnessJobWorkspaceId || this.appService.selectedWorkspaceId,
+        this.activeFreshnessJobId
+      );
+    }
     this.stopFreshnessJobPolling();
     this.destroy$.next();
     this.destroy$.complete();
@@ -375,12 +417,20 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   fetchCodingStatistics(): void {
+    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(false)) {
+      return;
+    }
+
     this.codingManagementService.fetchCodingStatistics(this.selectedStatisticsVersion);
   }
 
   loadCodingFreshness(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      return;
+    }
+
+    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(false)) {
       return;
     }
 
@@ -423,6 +473,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(false)) {
+      return;
+    }
+
     this.isLoadingManualAppliedResultsOverview = true;
     this.manualAppliedResultsOverviewLoadFailed = false;
     this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
@@ -441,6 +495,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   loadAutocodingReadiness(forceRefresh = false): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      return;
+    }
+
+    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(forceRefresh)) {
       return;
     }
 
@@ -469,9 +527,17 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   refreshCodingStatusOverview(): void {
+    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(true)) {
+      return;
+    }
+
+    this.performCodingStatusOverviewRefresh(true);
+  }
+
+  private performCodingStatusOverviewRefresh(forceAutocodingReadiness = false): void {
     this.invalidateCodingStatusOverviewCache();
     this.fetchCodingStatistics();
-    this.loadCodingStatusOverview(true);
+    this.loadCodingStatusOverview(forceAutocodingReadiness);
     this.refreshTableData();
   }
 
@@ -481,10 +547,11 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.invalidateCodingStatusOverviewCache();
-    this.fetchCodingStatistics();
-    this.loadCodingStatusOverview();
-    this.refreshTableData();
+    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(false)) {
+      return;
+    }
+
+    this.performCodingStatusOverviewRefresh();
   }
 
   private invalidateCodingStatusOverviewCache(): void {
@@ -495,10 +562,72 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   loadCodingStatusOverview(forceAutocodingReadiness = false): void {
+    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(forceAutocodingReadiness)) {
+      return;
+    }
+
     this.hasRequestedCodingStatusOverview = true;
     this.loadCodingFreshness();
     this.loadManualAppliedResultsOverview();
     this.loadAutocodingReadiness(forceAutocodingReadiness);
+  }
+
+  private deferCodingStatusRefreshIfBackgroundJobIsRunning(forceRefresh: boolean): boolean {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)) {
+      return false;
+    }
+
+    if (forceRefresh) {
+      this.pendingForcedCodingStatusRefreshAfterBackgroundJob = true;
+    } else {
+      this.pendingAutomaticCodingStatusRefreshAfterBackgroundJob = true;
+    }
+    return true;
+  }
+
+  private hasPendingCodingStatusOverviewRefreshAfterBackgroundJob(): boolean {
+    return this.pendingForcedCodingStatusRefreshAfterBackgroundJob ||
+      this.pendingAutomaticCodingStatusRefreshAfterBackgroundJob;
+  }
+
+  private refreshPendingCodingStatusOverviewAfterBackgroundJob(
+    event?: CodingStatusGuardClearedEvent
+  ): void {
+    const forceRefresh = this.pendingForcedCodingStatusRefreshAfterBackgroundJob;
+    const shouldRefresh = this.hasPendingCodingStatusOverviewRefreshAfterBackgroundJob();
+
+    this.pendingForcedCodingStatusRefreshAfterBackgroundJob = false;
+    this.pendingAutomaticCodingStatusRefreshAfterBackgroundJob = false;
+
+    if (!shouldRefresh) {
+      return;
+    }
+
+    if (forceRefresh) {
+      this.performCodingStatusOverviewRefresh(true);
+      this.rememberGuardClearedCompletionRefresh(event);
+      return;
+    }
+
+    this.refreshCodingStatusOverviewAfterChange();
+    this.rememberGuardClearedCompletionRefresh(event);
+  }
+
+  private rememberGuardClearedCompletionRefresh(
+    event?: CodingStatusGuardClearedEvent
+  ): void {
+    if (event?.kind === 'freshness-coding' && event.jobId) {
+      this.freshnessJobCompletionRefreshHandledIds.add(event.jobId);
+    }
+
+    if (event?.kind === 'autocoder-reset') {
+      this.resetCompletionRefreshHandledAfterGuardClear = true;
+    }
+  }
+
+  private consumeHandledFreshnessJobCompletionRefresh(jobId: string): boolean {
+    return this.freshnessJobCompletionRefreshHandledIds.delete(jobId);
   }
 
   shouldShowManualCodingStatusRefresh(): boolean {
@@ -543,7 +672,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           return;
         }
 
+        this.codingBackgroundJobsService.setJobRunning(
+          workspaceId,
+          'freshness-coding',
+          true,
+          result.jobId
+        );
         this.activeFreshnessJobId = result.jobId;
+        this.activeFreshnessJobWorkspaceId = workspaceId;
         this.activeFreshnessJobProgress = 0;
         const dialogRef = this.openTestPersonCodingDialog({
           initialJobId: result.jobId,
@@ -560,15 +696,17 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
               dialogResult.jobStatus :
               null;
             if (this.isTerminalJobStatus(dialogStatus)) {
+              const alreadyRefreshed =
+                this.consumeHandledFreshnessJobCompletionRefresh(result.jobId);
+              const pendingRefreshHandled = this.finishFreshnessCodingJob(result.jobId);
               this.stopFreshnessJobPolling();
-              this.invalidateCodingStatusOverviewCache();
-              this.loadCodingFreshness();
-              this.loadManualAppliedResultsOverview();
-              this.loadAutocodingReadiness(true);
+              if (!alreadyRefreshed && !pendingRefreshHandled) {
+                this.performCodingStatusOverviewRefresh(true);
+              }
               return;
             }
 
-            this.startFreshnessJobPolling(result.jobId);
+            this.startFreshnessJobPolling(result.jobId, workspaceId);
           });
         this.snackBar.open(
           `Auto-Coding für ${result.unitCount} betroffene Einträge gestartet.`,
@@ -1056,28 +1194,38 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return getCodingFreshnessAutoCodingButtonLabel(this.autoCodingFreshnessWarnings, version);
   }
 
-  private startFreshnessJobPolling(jobId: string): void {
+  private startFreshnessJobPolling(
+    jobId: string,
+    workspaceId = this.activeFreshnessJobWorkspaceId || this.appService.selectedWorkspaceId
+  ): void {
     this.stopFreshnessJobPolling();
+    this.activeFreshnessJobId = jobId;
+    this.activeFreshnessJobWorkspaceId = workspaceId;
     this.freshnessJobPollingInterval = window.setInterval(() => {
-      const workspaceId = this.appService.selectedWorkspaceId;
-      if (!workspaceId) {
+      const currentWorkspaceId = this.activeFreshnessJobWorkspaceId || this.appService.selectedWorkspaceId;
+      if (!currentWorkspaceId) {
         this.stopFreshnessJobPolling();
         return;
       }
 
-      this.testPersonCodingService.getJobStatus(workspaceId, jobId)
+      this.testPersonCodingService.getJobStatus(currentWorkspaceId, jobId)
         .pipe(takeUntil(this.destroy$))
         .subscribe(status => {
           if (!('status' in status)) {
-            this.snackBar.open(status.error, 'Schließen', { duration: 5000 });
-            this.stopFreshnessJobPolling();
+            if (!this.hasShownFreshnessJobStatusPollingError) {
+              this.hasShownFreshnessJobStatusPollingError = true;
+              this.snackBar.open(status.error, 'Schließen', { duration: 5000 });
+            }
             return;
           }
 
+          this.hasShownFreshnessJobStatusPollingError = false;
           this.activeFreshnessJobProgress = status.progress;
           if (['completed', 'failed', 'cancelled', 'paused'].includes(status.status)) {
+            const pendingRefreshHandled = this.finishFreshnessCodingJob(jobId);
             this.stopFreshnessJobPolling();
             if (status.status === 'completed') {
+              this.freshnessJobCompletionRefreshHandledIds.add(jobId);
               this.testPersonCodingService.notifyAutoCodingCompleted(jobId);
               this.snackBar.open(
                 'Betroffene Ergebnisse wurden kodiert.',
@@ -1091,12 +1239,25 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
                 { duration: 6000 }
               );
             }
-            this.loadCodingFreshness();
-            this.loadManualAppliedResultsOverview();
-            this.loadAutocodingReadiness(true);
+            if (!pendingRefreshHandled) {
+              this.performCodingStatusOverviewRefresh(true);
+            }
           }
         });
     }, 2000);
+  }
+
+  private finishFreshnessCodingJob(jobId: string): boolean {
+    const workspaceId = this.activeFreshnessJobWorkspaceId || this.appService.selectedWorkspaceId;
+    const hadPendingRefresh = this.hasPendingCodingStatusOverviewRefreshAfterBackgroundJob();
+    this.codingBackgroundJobsService.setJobRunning(
+      workspaceId,
+      'freshness-coding',
+      false,
+      jobId
+    );
+    return hadPendingRefresh &&
+      !this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId);
   }
 
   private get allCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -1127,6 +1288,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       this.freshnessJobPollingInterval = null;
     }
     this.activeFreshnessJobId = null;
+    this.activeFreshnessJobWorkspaceId = null;
     this.activeFreshnessJobProgress = null;
   }
 

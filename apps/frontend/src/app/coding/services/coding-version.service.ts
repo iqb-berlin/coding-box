@@ -4,6 +4,8 @@ import { Observable, catchError, of } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 
+export const RESET_VERSION_JOB_STATUS_POLL_ERROR = 'Failed to get reset job status';
+
 export interface ResetVersionJobStatus {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'not_found';
   progress: number;
@@ -60,7 +62,7 @@ export class CodingVersionService {
         catchError(() => of({
           status: 'failed' as const,
           progress: 0,
-          error: 'Failed to get reset job status'
+          error: RESET_VERSION_JOB_STATUS_POLL_ERROR
         }))
       );
   }
