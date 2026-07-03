@@ -911,6 +911,27 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
+  it('should ask for an explicit planning data refresh before loading planning snapshots', () => {
+    component.selectedManualTabIndex = 1;
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      refreshManualCodingPlanning(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    const refreshManualCodingPlanningSpy = jest
+      .spyOn(componentInternals, 'refreshManualCodingPlanning')
+      .mockImplementation();
+
+    expect(component.getPlanningStatusClass()).toBe('status-ready');
+    expect(component.getPlanningStatusIcon()).toBe('refresh');
+    expect(component.getPlanningStatusTitle()).toBe('Planungsdaten aktualisieren');
+    expect(component.getPlanningNextStepActionLabel()).toBe('Aktualisieren');
+
+    component.performPlanningNextStep();
+
+    expect(refreshManualCodingPlanningSpy).toHaveBeenCalled();
+  });
+
   it('should not describe remaining applied results as open execution work without coding progress', () => {
     setCompletePlanningState();
     setAppliedResults(10, 0, 10);
@@ -1303,47 +1324,9 @@ describe('CodingManagementManualComponent', () => {
     expect(refreshCodingJobsAfterDataChangeSpy).toHaveBeenCalledWith('productive');
   });
 
-  it('should load all planning metrics when the planning tab is opened', () => {
-    const componentInternals = component as unknown as {
-      loadManualTabData(tab: 'planning'): void;
-      loadVariableCoverageOverview(): void;
-      loadCaseCoverageOverview(): void;
-      loadCodingProgressOverview(): void;
-      loadCodingIncompleteVariables(): void;
-      loadCodingFreshness(): void;
-      loadResponseAnalysis(): void;
-    };
-    const variableCoverageSpy = jest
-      .spyOn(componentInternals, 'loadVariableCoverageOverview')
-      .mockImplementation();
-    const caseCoverageSpy = jest
-      .spyOn(componentInternals, 'loadCaseCoverageOverview')
-      .mockImplementation();
-    const codingProgressSpy = jest
-      .spyOn(componentInternals, 'loadCodingProgressOverview')
-      .mockImplementation();
-    const incompleteVariablesSpy = jest
-      .spyOn(componentInternals, 'loadCodingIncompleteVariables')
-      .mockImplementation();
-    const loadCodingFreshnessSpy = jest
-      .spyOn(componentInternals, 'loadCodingFreshness')
-      .mockImplementation();
-    const loadResponseAnalysisSpy = jest
-      .spyOn(componentInternals, 'loadResponseAnalysis')
-      .mockImplementation();
-
-    componentInternals.loadManualTabData('planning');
-
-    expect(variableCoverageSpy).toHaveBeenCalled();
-    expect(caseCoverageSpy).toHaveBeenCalled();
-    expect(codingProgressSpy).toHaveBeenCalled();
-    expect(incompleteVariablesSpy).toHaveBeenCalled();
-    expect(loadCodingFreshnessSpy).toHaveBeenCalled();
-    expect(loadResponseAnalysisSpy).toHaveBeenCalled();
-  });
-
-  it('should skip automatic planning metrics when auto-refresh is disabled', () => {
-    component.autoRefreshManualCodingJobs = false;
+  it('should not load bundled planning data when the planning tab is opened', () => {
+    component.selectedManualTabIndex = 1;
+    component.autoRefreshManualCodingJobs = true;
     const componentInternals = component as unknown as {
       hasLoadedManualCodingJobRefreshSetting: boolean;
       appService: { selectedWorkspaceId: number };
@@ -1352,6 +1335,7 @@ describe('CodingManagementManualComponent', () => {
       loadCaseCoverageOverview(): void;
       loadCodingProgressOverview(): void;
       loadCodingIncompleteVariables(): void;
+      loadManualFreshnessDecisionData(): void;
       loadCodingFreshness(): void;
       loadResponseAnalysis(): void;
     };
@@ -1369,6 +1353,9 @@ describe('CodingManagementManualComponent', () => {
     const incompleteVariablesSpy = jest
       .spyOn(componentInternals, 'loadCodingIncompleteVariables')
       .mockImplementation();
+    const manualFreshnessDecisionSpy = jest
+      .spyOn(componentInternals, 'loadManualFreshnessDecisionData')
+      .mockImplementation();
     const loadCodingFreshnessSpy = jest
       .spyOn(componentInternals, 'loadCodingFreshness')
       .mockImplementation();
@@ -1382,6 +1369,58 @@ describe('CodingManagementManualComponent', () => {
     expect(caseCoverageSpy).not.toHaveBeenCalled();
     expect(codingProgressSpy).not.toHaveBeenCalled();
     expect(incompleteVariablesSpy).not.toHaveBeenCalled();
+    expect(manualFreshnessDecisionSpy).not.toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+    expect(loadResponseAnalysisSpy).not.toHaveBeenCalled();
+    expect(component.shouldRenderManualTabData('planning')).toBe(true);
+    expect(component.shouldShowManualRefreshButton()).toBe(true);
+  });
+
+  it('should skip automatic planning metrics when auto-refresh is disabled', () => {
+    component.autoRefreshManualCodingJobs = false;
+    const componentInternals = component as unknown as {
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      appService: { selectedWorkspaceId: number };
+      loadManualTabData(tab: 'planning'): void;
+      loadVariableCoverageOverview(): void;
+      loadCaseCoverageOverview(): void;
+      loadCodingProgressOverview(): void;
+      loadCodingIncompleteVariables(): void;
+      loadManualFreshnessDecisionData(): void;
+      loadCodingFreshness(): void;
+      loadResponseAnalysis(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    const variableCoverageSpy = jest
+      .spyOn(componentInternals, 'loadVariableCoverageOverview')
+      .mockImplementation();
+    const caseCoverageSpy = jest
+      .spyOn(componentInternals, 'loadCaseCoverageOverview')
+      .mockImplementation();
+    const codingProgressSpy = jest
+      .spyOn(componentInternals, 'loadCodingProgressOverview')
+      .mockImplementation();
+    const incompleteVariablesSpy = jest
+      .spyOn(componentInternals, 'loadCodingIncompleteVariables')
+      .mockImplementation();
+    const manualFreshnessDecisionSpy = jest
+      .spyOn(componentInternals, 'loadManualFreshnessDecisionData')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    const loadResponseAnalysisSpy = jest
+      .spyOn(componentInternals, 'loadResponseAnalysis')
+      .mockImplementation();
+
+    componentInternals.loadManualTabData('planning');
+
+    expect(variableCoverageSpy).not.toHaveBeenCalled();
+    expect(caseCoverageSpy).not.toHaveBeenCalled();
+    expect(codingProgressSpy).not.toHaveBeenCalled();
+    expect(incompleteVariablesSpy).not.toHaveBeenCalled();
+    expect(manualFreshnessDecisionSpy).not.toHaveBeenCalled();
     expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
     expect(loadResponseAnalysisSpy).not.toHaveBeenCalled();
     expect(component.shouldRenderManualTabData('planning')).toBe(false);
@@ -1397,6 +1436,7 @@ describe('CodingManagementManualComponent', () => {
       loadCaseCoverageOverview(): void;
       loadCodingProgressOverview(): void;
       loadCodingIncompleteVariables(): void;
+      loadManualFreshnessDecisionData(): void;
       loadCodingFreshness(options?: { force?: boolean }): void;
       loadJobDefinitionsForExport(): void;
       loadResponseAnalysis(): void;
@@ -1415,6 +1455,9 @@ describe('CodingManagementManualComponent', () => {
     const incompleteVariablesSpy = jest
       .spyOn(componentInternals, 'loadCodingIncompleteVariables')
       .mockImplementation();
+    const manualFreshnessDecisionSpy = jest
+      .spyOn(componentInternals, 'loadManualFreshnessDecisionData')
+      .mockImplementation();
     const loadCodingFreshnessSpy = jest
       .spyOn(componentInternals, 'loadCodingFreshness')
       .mockImplementation();
@@ -1431,6 +1474,7 @@ describe('CodingManagementManualComponent', () => {
     expect(caseCoverageSpy).toHaveBeenCalled();
     expect(codingProgressSpy).toHaveBeenCalled();
     expect(incompleteVariablesSpy).toHaveBeenCalled();
+    expect(manualFreshnessDecisionSpy).toHaveBeenCalled();
     expect(loadCodingFreshnessSpy).toHaveBeenCalledWith({ force: true });
     expect(component.shouldRenderManualTabData('planning')).toBe(true);
   });
@@ -1472,6 +1516,52 @@ describe('CodingManagementManualComponent', () => {
     expect(loadResponseAnalysisSpy).not.toHaveBeenCalled();
     expect(refreshCodingJobsAfterDataChangeSpy).not.toHaveBeenCalled();
     expect(loadJobDefinitionsForExportSpy).not.toHaveBeenCalled();
+  });
+
+  it('should not load bundled planning data after auto coding completes in planning', () => {
+    component.selectedManualTabIndex = 1;
+    component.autoRefreshManualCodingJobs = true;
+    setCompletePlanningState();
+    const componentInternals = component as unknown as {
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        notifyAutoCodingCompleted(jobId?: string): void;
+      };
+      refreshAllStatistics(): void;
+      loadCodingFreshness(): void;
+      loadResponseAnalysis(): void;
+      refreshCodingJobsAfterDataChange(scope: string): void;
+      loadJobDefinitionsForExport(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    expect(component.shouldShowPlanningOverview()).toBe(true);
+    const refreshAllStatisticsSpy = jest
+      .spyOn(componentInternals, 'refreshAllStatistics')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    const loadResponseAnalysisSpy = jest
+      .spyOn(componentInternals, 'loadResponseAnalysis')
+      .mockImplementation();
+    const refreshCodingJobsAfterDataChangeSpy = jest
+      .spyOn(componentInternals, 'refreshCodingJobsAfterDataChange')
+      .mockImplementation();
+    const loadJobDefinitionsForExportSpy = jest
+      .spyOn(componentInternals, 'loadJobDefinitionsForExport')
+      .mockImplementation();
+
+    componentInternals.testPersonCodingService.notifyAutoCodingCompleted();
+
+    expect(refreshAllStatisticsSpy).not.toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+    expect(loadResponseAnalysisSpy).not.toHaveBeenCalled();
+    expect(refreshCodingJobsAfterDataChangeSpy).toHaveBeenCalledWith('rendered');
+    expect(loadJobDefinitionsForExportSpy).toHaveBeenCalled();
+    expect(component.shouldShowPlanningOverview()).toBe(false);
+    expect(component.getPlanningStatusTitle()).toBe('Planungsdaten aktualisieren');
   });
 
   it('should wait for the auto-refresh setting before loading initial coding freshness', () => {
@@ -1759,7 +1849,7 @@ describe('CodingManagementManualComponent', () => {
     expect(trainingLoadCodingJobs).toHaveBeenCalledTimes(1);
   });
 
-  it('should refresh the active manual workflow tab without reloading jobs when the window regains focus', () => {
+  it('should not refresh planning data when the window regains focus', () => {
     component.selectedManualTabIndex = 1;
     const componentInternals = component as unknown as {
       loadManualTabData(tab: 'planning', options?: { reloadCodingJobs?: boolean }): void;
@@ -1778,10 +1868,7 @@ describe('CodingManagementManualComponent', () => {
 
     window.dispatchEvent(new Event('focus'));
 
-    expect(loadManualTabDataSpy).toHaveBeenCalledWith(
-      'planning',
-      { reloadCodingJobs: false }
-    );
+    expect(loadManualTabDataSpy).not.toHaveBeenCalled();
     expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
     expect(reloadCodingJobsListSpy).not.toHaveBeenCalled();
   });
@@ -2381,6 +2468,101 @@ describe('CodingManagementManualComponent', () => {
 
       expect(component.selectedManualTabIndex).toBe(3);
       expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(1, 'planning');
+      expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(2, 'execution');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-execution');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should wait for explicit planning data before following manual freshness focus', () => {
+    jest.useFakeTimers();
+    try {
+      const componentInternals = component as unknown as {
+        appService: { selectedWorkspaceId: number };
+        pendingManualFreshnessFocus: boolean;
+        manualFreshnessPlanningRequested: boolean;
+        requestManualFreshnessFocusIfNeeded(): void;
+        focusManualFreshnessTargetIfReady(): void;
+        loadManualTabData(tab: 'planning' | 'execution'): void;
+      };
+      componentInternals.appService.selectedWorkspaceId = 5;
+      componentInternals.pendingManualFreshnessFocus = true;
+      componentInternals.manualFreshnessPlanningRequested = false;
+      component.selectedManualTabIndex = 0;
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      componentInternals.requestManualFreshnessFocusIfNeeded();
+
+      expect(component.selectedManualTabIndex).toBe(1);
+      expect(loadManualTabDataSpy).toHaveBeenCalledWith('planning');
+      expect(scrollToSectionSpy).not.toHaveBeenCalled();
+      expect(componentInternals.pendingManualFreshnessFocus).toBe(true);
+      expect(component.getPlanningStatusTitle()).toBe('Planungsdaten aktualisieren');
+
+      setCompletePlanningState();
+      setCodingProgress(10, 4);
+      setAppliedResults(10, 0, 10);
+      componentInternals.focusManualFreshnessTargetIfReady();
+
+      expect(componentInternals.pendingManualFreshnessFocus).toBe(false);
+      expect(component.selectedManualTabIndex).toBe(3);
+      expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(2, 'execution');
+
+      jest.runOnlyPendingTimers();
+
+      expect(scrollToSectionSpy).toHaveBeenCalledWith('manual-execution');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should keep manual freshness focus pending after leaving planning before data is loaded', () => {
+    jest.useFakeTimers();
+    try {
+      const componentInternals = component as unknown as {
+        appService: { selectedWorkspaceId: number };
+        pendingManualFreshnessFocus: boolean;
+        manualFreshnessPlanningRequested: boolean;
+        requestManualFreshnessFocusIfNeeded(): void;
+        focusManualFreshnessTargetIfReady(): void;
+        loadManualTabData(tab: 'planning' | 'execution'): void;
+      };
+      componentInternals.appService.selectedWorkspaceId = 5;
+      componentInternals.pendingManualFreshnessFocus = true;
+      componentInternals.manualFreshnessPlanningRequested = false;
+      component.selectedManualTabIndex = 0;
+      const loadManualTabDataSpy = jest
+        .spyOn(componentInternals, 'loadManualTabData')
+        .mockImplementation();
+      const scrollToSectionSpy = jest
+        .spyOn(component, 'scrollToSection')
+        .mockImplementation();
+
+      componentInternals.requestManualFreshnessFocusIfNeeded();
+      component.selectedManualTabIndex = 2;
+      componentInternals.focusManualFreshnessTargetIfReady();
+
+      expect(component.selectedManualTabIndex).toBe(2);
+      expect(componentInternals.pendingManualFreshnessFocus).toBe(true);
+      expect(loadManualTabDataSpy).toHaveBeenCalledTimes(1);
+      expect(scrollToSectionSpy).not.toHaveBeenCalled();
+
+      setCompletePlanningState();
+      setCodingProgress(10, 4);
+      setAppliedResults(10, 0, 10);
+      componentInternals.focusManualFreshnessTargetIfReady();
+
+      expect(componentInternals.pendingManualFreshnessFocus).toBe(false);
+      expect(component.selectedManualTabIndex).toBe(3);
       expect(loadManualTabDataSpy).toHaveBeenNthCalledWith(2, 'execution');
 
       jest.runOnlyPendingTimers();
@@ -3061,6 +3243,8 @@ describe('CodingManagementManualComponent', () => {
   });
 
   function setCompletePlanningState(): void {
+    (component as unknown as { hasLoadedPlanningDataBundle: boolean })
+      .hasLoadedPlanningDataBundle = true;
     component.variableCoverageOverview = {
       totalVariables: 2,
       coveredVariables: 2,
