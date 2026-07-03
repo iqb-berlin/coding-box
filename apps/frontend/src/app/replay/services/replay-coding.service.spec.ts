@@ -15,6 +15,8 @@ describe('ReplayCodingService', () => {
   beforeEach(() => {
     codingJobBackendServiceMock = {
       updateCodingJob: jest.fn(),
+      updateCodingJobStatus: jest.fn(),
+      updateCodingJobComment: jest.fn(),
       pauseCodingJob: jest.fn(),
       resumeCodingJob: jest.fn(),
       submitCodingJob: jest.fn(),
@@ -52,21 +54,22 @@ describe('ReplayCodingService', () => {
   });
 
   describe('updateCodingJobStatus', () => {
-    it('should resume active status via dedicated backend endpoint', async () => {
-      codingJobBackendServiceMock.resumeCodingJob.mockReturnValue(of({} as CodingJob));
+    it('should update status via backend', async () => {
+      codingJobBackendServiceMock.updateCodingJobStatus.mockReturnValue(of({} as CodingJob));
       await service.updateCodingJobStatus(1, 100, 'active');
-      expect(codingJobBackendServiceMock.resumeCodingJob).toHaveBeenCalledWith(1, 100);
+      expect(codingJobBackendServiceMock.updateCodingJobStatus).toHaveBeenCalledWith(1, 100, 'active');
     });
 
     it('should pass the replay auth token to backend status updates', async () => {
-      codingJobBackendServiceMock.resumeCodingJob.mockReturnValue(of({} as CodingJob));
+      codingJobBackendServiceMock.updateCodingJobStatus.mockReturnValue(of({} as CodingJob));
       service.setAuthToken('replay-token');
 
       await service.updateCodingJobStatus(1, 100, 'active');
 
-      expect(codingJobBackendServiceMock.resumeCodingJob).toHaveBeenCalledWith(
+      expect(codingJobBackendServiceMock.updateCodingJobStatus).toHaveBeenCalledWith(
         1,
         100,
+        'active',
         'replay-token'
       );
     });
@@ -674,7 +677,7 @@ describe('ReplayCodingService', () => {
 
       await service.pauseCodingJob(1, 100);
 
-      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.updateCodingJobStatus).not.toHaveBeenCalled();
     });
 
     it('uses keepalive status update for unload pauses', () => {

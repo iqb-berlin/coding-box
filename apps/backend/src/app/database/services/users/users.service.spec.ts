@@ -509,7 +509,7 @@ describe('UsersService', () => {
     await expect(service.createUser({ username: 'new' } as never)).resolves.toBe(77);
   });
 
-  it('handles admin checks and keycloak users', async () => {
+  it('handles admin checks and OIDC provider users', async () => {
     usersRepository.findOne
       .mockResolvedValueOnce({ isAdmin: true })
       .mockResolvedValueOnce(null)
@@ -520,21 +520,21 @@ describe('UsersService', () => {
 
     await expect(service.getUserIsAdmin(1)).resolves.toBe(true);
     await expect(service.getUserIsAdmin(2)).resolves.toBe(false);
-    await expect(service.createKeycloakUser({
+    await expect(service.createOidcProviderUser({
       username: 'u', identity: 'new', issuer: 'iss', isAdmin: true
     } as never)).resolves.toBe(10);
     expect(usersRepository.update).toHaveBeenCalledWith({ id: 10 }, { identity: 'new', isAdmin: true });
-    await expect(service.createKeycloakUser({
+    await expect(service.createOidcProviderUser({
       username: 'fresh', identity: 'id', issuer: 'iss', isAdmin: false
     } as never)).resolves.toBe(77);
   });
 
-  it('does not demote existing database admins during keycloak login', async () => {
+  it('does not demote existing database admins during OIDC login', async () => {
     usersRepository.findOne.mockResolvedValueOnce({
       id: 10, username: 'u', identity: 'old', issuer: 'iss', isAdmin: true
     });
 
-    await expect(service.createKeycloakUser({
+    await expect(service.createOidcProviderUser({
       username: 'u', identity: 'new', issuer: 'iss', isAdmin: false
     } as never)).resolves.toBe(10);
 

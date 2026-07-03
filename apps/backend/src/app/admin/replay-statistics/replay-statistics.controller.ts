@@ -18,6 +18,7 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
 import {
   AllowAnyWorkspaceTokenScopes,
   isWorkspaceApiTokenUser,
@@ -68,7 +69,7 @@ export class ReplayStatisticsController {
     WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
     WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
   )
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   async storeReplayStatistics(
     @Param('workspace_id') workspaceId: string,
       @Body(new ValidationPipe({ transform: true, whitelist: true }))

@@ -112,7 +112,7 @@ export class CodingTrainingBackendService {
   private coderTrainingsInFlight = new Map<number, Observable<CoderTraining[]>>();
 
   private get authHeader() {
-    return {};
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   private getWithinTrainingComparisonCacheKey(workspaceId: number, trainingId: number): string {

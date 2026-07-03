@@ -28,7 +28,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
-  const host = configService.get('API_HOST') || 'localhost';
+  const host = configService.get('API_HOST') || '0.0.0.0';
   const port = 3333;
   const globalPrefix = 'api';
   const slowRequestThresholdMs = parseSlowRequestThresholdMs(

@@ -2,248 +2,99 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { KeycloakJwksService } from './keycloak-jwks.service';
+import { passportJwtSecret } from 'jwks-rsa';
 import { UsersService } from '../database/services/users';
-import {
-  ALLOW_LEGACY_WORKSPACE_REPLAY_TOKENS_ENV,
-  WORKSPACE_API_TOKEN_TYPE,
-  WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
-  WorkspaceTokenScope
-} from './workspace-token';
 
-type JwtSubject = string | number | {
-  identity?: string;
-};
-
-type JwtPayload = {
-  userId?: string | number;
-  sub?: JwtSubject;
-  username?: string;
-  workspace?: string | number;
-  tokenType?: string;
-  scopes?: unknown;
+interface OidcJwtPayload {
+  sub?: string;
   iss?: string;
-  aud?: string | string[];
-  azp?: string;
   preferred_username?: string;
-  email?: string;
   given_name?: string;
   family_name?: string;
-  realm_access?: {
-    roles?: string[];
-  };
-  resource_access?: Record<string, {
-    roles?: string[];
-  }>;
-};
-
-type JwtHeader = {
-  alg?: string;
-  kid?: string;
-};
-
-const ADMIN_ROLES = ['admin', 'system-admin', 'sys-admin', 'administrator'];
+  email?: string;
+  aud?: string | string[];
+  azp?: string;
+  realm_access?: { roles: string[] };
+}
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  private readonly expectedIssuer?: string;
-  private readonly keycloakClientId?: string;
-  private readonly allowLegacyWorkspaceReplayTokens: boolean;
+  private readonly oAuth2ClientId?: string;
 
   constructor(
     configService: ConfigService,
-    keycloakJwksService: KeycloakJwksService,
     private readonly usersService: UsersService
   ) {
-    const jwtSecret = configService.get<string>('JWT_SECRET');
-    const expectedIssuer = resolveExpectedIssuer(configService);
-    const keycloakClientId = configService.get<string>('KEYCLOAK_CLIENT_ID')?.trim();
+    const oidcIssuer = configService.get('OIDC_ISSUER');
+    const oidcJwksUri = configService.get('OIDC_JWKS_URI');
+    const oAuth2ClientId = configService.get<string>('OAUTH2_CLIENT_ID');
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      algorithms: ['RS256', 'HS256'],
-      secretOrKeyProvider: async (_request, token, done) => {
-        try {
-          const header = decodeJwtPart<JwtHeader>(token, 0);
-          if (header.alg === 'RS256') {
-            done(null, await keycloakJwksService.getSigningKey(header.kid));
-            return;
-          }
-
-          if (header.alg === 'HS256' && jwtSecret) {
-            done(null, jwtSecret);
-            return;
-          }
-
-          done(new UnauthorizedException('Unsupported JWT signing algorithm'));
-        } catch (error) {
-          done(error);
-        }
-      }
+      secretOrKeyProvider: passportJwtSecret({
+        cache: true,
+        rateLimit: true,
+        jwksRequestsPerMinute: 5,
+        jwksUri: `${oidcJwksUri}`
+      }),
+      issuer: `${oidcIssuer}`,
+      algorithms: ['RS256']
     });
 
-    this.expectedIssuer = expectedIssuer;
-    this.keycloakClientId = keycloakClientId;
-    this.allowLegacyWorkspaceReplayTokens = resolveAllowLegacyWorkspaceReplayTokens(configService);
+    this.oAuth2ClientId = oAuth2ClientId;
   }
 
-  async validate(
-    payload: JwtPayload
-  ) {
-    if (this.isKeycloakPayload(payload)) {
-      return this.validateKeycloakPayload(payload);
+  async validate(payload: OidcJwtPayload) {
+    if (!this.isTokenForConfiguredClient(payload)) {
+      throw new UnauthorizedException('JWT client does not match configured OAuth2 client');
     }
 
-    if (!this.isWorkspaceTokenPayload(payload)) {
-      throw new UnauthorizedException('JWT is not a valid Keycloak or workspace token');
-    }
-
-    return {
-      userId: payload.userId,
-      id: payload.userId,
-      name: payload.username,
-      workspace: payload.workspace || '',
-      identity: this.getIdentity(payload.sub),
-      tokenType: WORKSPACE_API_TOKEN_TYPE,
-      scopes: this.getWorkspaceTokenScopes(payload.scopes)
-    };
-  }
-
-  private async validateKeycloakPayload(payload: JwtPayload) {
-    if (this.expectedIssuer && payload.iss !== this.expectedIssuer) {
-      throw new UnauthorizedException('JWT issuer is not trusted');
-    }
-
-    if (this.keycloakClientId && !this.hasExpectedAudience(payload)) {
-      throw new UnauthorizedException('JWT audience is not trusted');
-    }
-
-    const identity = this.getKeycloakIdentity(payload);
-    const username = this.getKeycloakUsername(payload);
-    const roles = this.getKeycloakRoles(payload);
-    const userId = await this.usersService.syncKeycloakUser({
+    const identity = this.getIdentity(payload);
+    const username = this.getUsername(payload, identity);
+    const isAdmin = payload.realm_access?.roles?.includes('admin') || false;
+    const userId = await this.usersService.createOidcProviderUser({
       identity,
       issuer: payload.iss || '',
       username,
-      isAdmin: roles.some(role => ADMIN_ROLES.includes(role.toLowerCase())),
       email: payload.email,
       firstName: payload.given_name,
-      lastName: payload.family_name
+      lastName: payload.family_name,
+      isAdmin
     });
 
     return {
       userId,
       id: userId,
       name: username,
-      workspace: '',
+      firstName: payload.given_name,
+      lastName: payload.family_name,
+      email: payload.email,
+      isAdmin,
+      sub: identity,
       identity,
-      issuer: payload.iss,
-      roles
+      issuer: payload.iss
     };
   }
 
-  private isKeycloakPayload(payload: JwtPayload): boolean {
-    return typeof payload.iss === 'string' &&
-      typeof payload.sub === 'string' &&
-      (!!payload.preferred_username || !!payload.azp || !!payload.aud);
-  }
-
-  private isWorkspaceTokenPayload(payload: JwtPayload): boolean {
-    return payload.userId !== undefined &&
-      typeof payload.username === 'string' &&
-      payload.workspace !== undefined &&
-      payload.workspace !== null &&
-      payload.workspace !== '';
-  }
-
-  private getWorkspaceTokenScopes(scopes: unknown): WorkspaceTokenScope[] {
-    if (scopes === undefined) {
-      return this.allowLegacyWorkspaceReplayTokens ?
-        [WORKSPACE_TOKEN_SCOPE_REPLAY_READ] :
-        [];
+  private isTokenForConfiguredClient(payload: OidcJwtPayload): boolean {
+    if (!this.oAuth2ClientId) {
+      return false;
     }
 
-    if (!Array.isArray(scopes)) {
-      return [];
-    }
-
-    return scopes.filter((scope): scope is WorkspaceTokenScope => typeof scope === 'string');
+    const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud].filter(Boolean);
+    return payload.azp === this.oAuth2ClientId || audiences.includes(this.oAuth2ClientId);
   }
 
-  private getIdentity(subject?: JwtSubject): string | undefined {
-    if (subject && typeof subject === 'object' && typeof subject.identity === 'string') {
-      return subject.identity;
-    }
-
-    return undefined;
-  }
-
-  private getKeycloakIdentity(payload: JwtPayload): string {
-    if (typeof payload.sub !== 'string' || !payload.sub.trim()) {
+  private getIdentity(payload: OidcJwtPayload): string {
+    if (!payload.sub || !payload.sub.trim()) {
       throw new UnauthorizedException('JWT subject is missing');
     }
 
-    return payload.sub;
+    return payload.sub.trim();
   }
 
-  private getKeycloakUsername(payload: JwtPayload): string {
-    const username = payload.preferred_username || this.getKeycloakIdentity(payload);
-    return username.trim();
+  private getUsername(payload: OidcJwtPayload, identity: string): string {
+    return payload.preferred_username?.trim() || identity;
   }
-
-  private hasExpectedAudience(payload: JwtPayload): boolean {
-    if (!this.keycloakClientId) {
-      return true;
-    }
-
-    const audience = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
-    return payload.azp === this.keycloakClientId ||
-      audience.includes(this.keycloakClientId);
-  }
-
-  private getKeycloakRoles(payload: JwtPayload): string[] {
-    const realmRoles = payload.realm_access?.roles || [];
-    const clientRoles = this.keycloakClientId ?
-      (payload.resource_access?.[this.keycloakClientId]?.roles || []) :
-      [];
-
-    return Array.from(new Set([...realmRoles, ...clientRoles]
-      .filter(role => typeof role === 'string')
-      .map(role => role.trim())
-      .filter(Boolean)));
-  }
-}
-
-function decodeJwtPart<T>(token: string, partIndex: number): T {
-  const part = token.split('.')[partIndex];
-  if (!part) {
-    throw new UnauthorizedException('Malformed JWT');
-  }
-
-  return JSON.parse(Buffer.from(part, 'base64url').toString('utf8')) as T;
-}
-
-function resolveExpectedIssuer(configService: ConfigService): string | undefined {
-  const configuredIssuer = configService.get<string>('OIDC_ISSUER')?.trim();
-  if (configuredIssuer) {
-    return configuredIssuer.replace(/\/+$/, '');
-  }
-
-  const keycloakUrl = configService.get<string>('KEYCLOAK_URL')?.trim();
-  const realm = configService.get<string>('KEYCLOAK_REALM')?.trim();
-  if (!keycloakUrl || !realm) {
-    return undefined;
-  }
-
-  return `${keycloakUrl.replace(/\/+$/, '')}/realms/${realm}`;
-}
-
-function resolveAllowLegacyWorkspaceReplayTokens(configService: ConfigService): boolean {
-  const configuredValue = configService.get<string>(ALLOW_LEGACY_WORKSPACE_REPLAY_TOKENS_ENV);
-  if (configuredValue === undefined || configuredValue === null || configuredValue.trim() === '') {
-    return true;
-  }
-
-  return !['false', '0', 'no', 'off'].includes(configuredValue.trim().toLowerCase());
 }

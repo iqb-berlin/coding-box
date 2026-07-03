@@ -2,6 +2,8 @@ import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
+import { WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE } from '../../auth/workspace-token';
 import { AccessLevelGuard } from '../../admin/workspace/access-level.guard';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WsgCodingJobController } from './coding-job.controller';
@@ -56,7 +58,7 @@ describe('WsgCodingJobController', () => {
       getCodingJobUnits: jest.fn().mockResolvedValue([]),
       getBulkCodingProgress: jest.fn().mockResolvedValue({}),
       createCodingJob: jest.fn().mockResolvedValue({ id: 124 }),
-      updateCodingJob: jest.fn(),
+      updateCodingJob: jest.fn().mockResolvedValue({ id: 123 }),
       pauseCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'paused' }),
       resumeCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'active' }),
       submitCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'completed' }),
@@ -87,7 +89,6 @@ describe('WsgCodingJobController', () => {
   it.each([
     'transferCodingCases',
     'createCodingJob',
-    'updateCodingJob',
     'deleteCodingJob',
     'restartCodingJobWithOpenUnits'
   ] as const)('requires coding-manager access for %s', methodName => {
@@ -101,6 +102,20 @@ describe('WsgCodingJobController', () => {
     expect(Reflect.getMetadata('accessLevel', handler)).toBe(2);
   });
 
+  it('allows operate workspace tokens for updateCodingJob while keeping coding-manager access', () => {
+    const handler = WsgCodingJobController.prototype.updateCodingJob;
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtOrWorkspaceTokenAuthGuard,
+      WorkspaceGuard,
+      AccessLevelGuard
+    ]);
+    expect(Reflect.getMetadata('workspaceTokenScopes', handler)).toEqual([
+      WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE
+    ]);
+    expect(Reflect.getMetadata('accessLevel', handler)).toBe(2);
+  });
+
   it.each([
     'pauseCodingJob',
     'resumeCodingJob',
@@ -109,10 +124,33 @@ describe('WsgCodingJobController', () => {
     const handler = WsgCodingJobController.prototype[methodName];
 
     expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
-      JwtAuthGuard,
+      JwtOrWorkspaceTokenAuthGuard,
       WorkspaceGuard
     ]);
+    expect(Reflect.getMetadata('workspaceTokenScopes', handler)).toEqual([
+      WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE
+    ]);
     expect(Reflect.getMetadata('accessLevel', handler)).toBeUndefined();
+  });
+
+  it.each([
+    'getCodingJob',
+    'updateCodingJobStatus',
+    'updateCodingJobComment',
+    'saveCodingProgress',
+    'saveCodingNotes',
+    'getCodingProgress',
+    'getCodingJobUnits'
+  ] as const)('allows scoped workspace tokens for %s', methodName => {
+    const handler = WsgCodingJobController.prototype[methodName];
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtOrWorkspaceTokenAuthGuard,
+      WorkspaceGuard
+    ]);
+    expect(Reflect.getMetadata('workspaceTokenScopes', handler)).toEqual([
+      WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE
+    ]);
   });
 
   it('passes onlyOpen=true to the coding job service when requested', async () => {
@@ -166,20 +204,20 @@ describe('WsgCodingJobController', () => {
     }
   );
 
-  it('allows assigned coders to submit completed coding jobs for review', async () => {
-    codingJobService.updateCodingJob.mockResolvedValue({
+  it('allows assigned coders to submit coding jobs', async () => {
+    codingJobService.submitCodingJob.mockResolvedValue({
       id: 123,
       workspace_id: 47,
       name: 'Job',
-      status: 'review'
+      status: 'completed'
     });
 
     await expect(
-      controller.submitCodingJobForReview(47, 123, req)
+      controller.submitCodingJob(47, 123, req)
     ).resolves.toMatchObject({
       id: 123,
       workspace_id: 47,
-      status: 'review'
+      status: 'completed'
     });
 
     expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(
@@ -187,9 +225,7 @@ describe('WsgCodingJobController', () => {
       47,
       5
     );
-    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, {
-      status: 'review'
-    });
+    expect(codingJobService.submitCodingJob).toHaveBeenCalledWith(123, 47);
   });
 
   it.each([
@@ -313,28 +349,40 @@ describe('WsgCodingJobController', () => {
     expect(codingJobService.saveCodingNotes).toHaveBeenCalled();
   });
 
-  it('uses manager access for saving coding issue review notes', async () => {
-    await controller.saveCodingNotes(
-      47,
-      123,
-      {
-        testPerson: 'p@c@b',
-        unitId: 'u',
-        variableId: 'v',
-        notes: 'note',
-        issueReview: true
-      } as never,
-      req
-    );
+  it('uses general access for regular coding job updates', async () => {
+    await controller.updateCodingJob(47, 123, { name: 'New name' } as never, req);
 
+    expect(codingJobService.assertUserCanAccessCodingJob).toHaveBeenCalledWith(123, 47, 5);
     expect(codingJobService.assertUserCanCodeCodingJob).not.toHaveBeenCalled();
-    expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(5, 47);
-    expect(codingJobService.saveCodingIssueReviewNotes).toHaveBeenCalledWith(
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(
       123,
-      5,
-      expect.objectContaining({ issueReview: true })
+      47,
+      { name: 'New name' }
     );
-    expect(codingJobService.saveCodingNotes).not.toHaveBeenCalled();
+  });
+
+  it('uses coding access and only forwards status for replay status updates', async () => {
+    await controller.updateCodingJobStatus(47, 123, { status: 'paused' }, req);
+
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(123, 47, 5);
+    expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      { status: 'paused' }
+    );
+  });
+
+  it('uses general access and only forwards comment for replay comment updates', async () => {
+    await controller.updateCodingJobComment(47, 123, { comment: 'review note' }, req);
+
+    expect(codingJobService.assertUserCanAccessCodingJob).toHaveBeenCalledWith(123, 47, 5);
+    expect(codingJobService.assertUserCanCodeCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      { comment: 'review note' }
+    );
   });
 
   it('rejects jobDefinitionId on direct coding job creates', async () => {

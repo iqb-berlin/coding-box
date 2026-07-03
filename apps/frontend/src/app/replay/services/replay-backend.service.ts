@@ -71,7 +71,7 @@ export class ReplayBackendService {
   private http = inject(HttpClient);
 
   private get authHeader() {
-    return {};
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   storeReplayStatistics(

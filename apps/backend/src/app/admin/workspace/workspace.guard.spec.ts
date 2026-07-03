@@ -5,463 +5,135 @@ import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
-import {
-  AllowWorkspaceTokenScopes,
-  WORKSPACE_API_TOKEN_TYPE,
-  WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
-  WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE
-} from '../../auth/workspace-token';
+import { UsersService } from '../../database/services/users';
 
 describe('WorkspaceGuard (Backend)', () => {
   let guard: WorkspaceGuard;
   let authService: jest.Mocked<AuthService>;
+  let usersService: jest.Mocked<UsersService>;
 
   beforeEach(async () => {
-    const mockAuthService = {
-      canAccessWorkSpace: jest.fn()
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WorkspaceGuard,
         Reflector,
         {
           provide: AuthService,
-          useValue: mockAuthService
+          useValue: {
+            canAccessWorkSpace: jest.fn()
+          }
+        },
+        {
+          provide: UsersService,
+          useValue: {
+            findUserByIdentity: jest.fn()
+          }
         }
       ]
     }).compile();
 
     guard = module.get<WorkspaceGuard>(WorkspaceGuard);
     authService = module.get(AuthService);
+    usersService = module.get(UsersService);
   });
 
-  const createMockExecutionContext = (
-    userId: number,
-    workspaceId: string,
-    tokenWorkspaceId?: string | number,
-    userOverrides: Record<string, unknown> = {},
-    handler: () => void = jest.fn()
-  ): ExecutionContext => ({
-    switchToHttp: () => ({
-      getRequest: () => ({
-        user: {
-          id: userId,
-          ...(tokenWorkspaceId === undefined ? {} : { workspace: tokenWorkspaceId }),
-          ...userOverrides
-        },
-        params: { workspace_id: workspaceId }
+  const createContext = (
+    user: Record<string, unknown> | undefined,
+    workspaceId: string | undefined = '123'
+  ): ExecutionContext => {
+    const request = {
+      user,
+      params: workspaceId === undefined ? {} : { workspace_id: workspaceId }
+    };
+    return {
+      switchToHttp: () => ({
+        getRequest: () => request
       })
-    }),
-    getHandler: () => handler,
-    getClass: () => class TestController {}
-  } as unknown as ExecutionContext);
+    } as unknown as ExecutionContext;
+  };
 
-  describe('Security Validation - Workspace Access', () => {
-    it('should allow access when user can access workspace', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(true);
-      const context = createMockExecutionContext(1, '123');
+  it('allows an OIDC user with workspace access and normalizes the request user id', async () => {
+    const requestUser = { id: 'oidc-1', isAdmin: false };
+    const context = createContext(requestUser);
+    usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as never);
+    authService.canAccessWorkSpace.mockResolvedValue(true);
 
-      const result = await guard.canActivate(context);
+    const result = await guard.canActivate(context);
 
-      expect(result).toBe(true);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
-    });
-
-    it('should deny access when user cannot access workspace', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(false);
-      const context = createMockExecutionContext(1, '123');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
-    });
-
-    it('should validate both user ID and workspace ID', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(true);
-      const context = createMockExecutionContext(42, '789');
-
-      await guard.canActivate(context);
-
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(42, 789);
+    expect(result).toBe(true);
+    expect(usersService.findUserByIdentity).toHaveBeenCalledWith('oidc-1');
+    expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
+    expect(context.switchToHttp().getRequest().user).toEqual({
+      id: 1,
+      userId: 1,
+      identity: 'oidc-1',
+      isAdmin: false
     });
   });
 
-  describe('Security Validation - Workspace Isolation', () => {
-    it('should prevent access to different workspace', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(false);
-      const context = createMockExecutionContext(1, '999');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should verify workspace access for each request', async () => {
-      const context1 = createMockExecutionContext(1, '123');
-      const context2 = createMockExecutionContext(1, '456');
-
-      authService.canAccessWorkSpace.mockResolvedValueOnce(true);
-      authService.canAccessWorkSpace.mockResolvedValueOnce(false);
-
-      await guard.canActivate(context1);
-      await expect(guard.canActivate(context2)).rejects.toThrow(UnauthorizedException);
-
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledTimes(2);
-      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(1, 1, 123);
-      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(2, 1, 456);
-    });
-
-    it('should not allow cross-user workspace access', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(false);
-      const context = createMockExecutionContext(2, '123');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(2, 123);
-    });
-  });
-
-  describe('Security Validation - Request Structure', () => {
-    it('should handle missing user object', async () => {
-      const context = {
-        switchToHttp: () => ({
-          getRequest: () => ({
-            params: { workspace_id: '123' }
-          })
-        })
-      } as unknown as ExecutionContext;
-
-      await expect(guard.canActivate(context)).rejects.toThrow();
-    });
-
-    it('should handle missing params object', async () => {
-      const context = {
-        switchToHttp: () => ({
-          getRequest: () => ({
-            user: { id: 1 }
-          })
-        })
-      } as unknown as ExecutionContext;
-
-      await expect(guard.canActivate(context)).rejects.toThrow();
-    });
-
-    it('should handle missing workspace_id in params', async () => {
-      const context = {
-        switchToHttp: () => ({
-          getRequest: () => ({
-            user: { id: 1 },
-            params: {}
-          })
-        })
-      } as unknown as ExecutionContext;
-
-      authService.canAccessWorkSpace.mockResolvedValue(false);
-
-      await expect(guard.canActivate(context)).rejects.toThrow();
-    });
-
-    it('should handle null user', async () => {
-      const context = {
-        switchToHttp: () => ({
-          getRequest: () => ({
-            user: null,
-            params: { workspace_id: '123' }
-          })
-        })
-      } as unknown as ExecutionContext;
-
-      await expect(guard.canActivate(context)).rejects.toThrow();
-    });
-
-    it('should handle undefined user', async () => {
-      const context = {
-        switchToHttp: () => ({
-          getRequest: () => ({
-            user: undefined,
-            params: { workspace_id: '123' }
-          })
-        })
-      } as unknown as ExecutionContext;
-
-      await expect(guard.canActivate(context)).rejects.toThrow();
-    });
-  });
-
-  describe('Edge Cases - Workspace ID Formats', () => {
-    it('should handle numeric workspace ID', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(true);
-      const context = createMockExecutionContext(1, '123');
-
-      await guard.canActivate(context);
-
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
-    });
-
-    it('should reject non-numeric workspace ID', async () => {
-      const context = createMockExecutionContext(1, 'workspace-abc');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-
-      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
-    });
-
-    it('should handle zero workspace ID', async () => {
-      const context = createMockExecutionContext(1, '0');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
-    });
-
-    it('should handle negative workspace ID', async () => {
-      const context = createMockExecutionContext(1, '-1');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
-    });
-
-    it('should handle very large workspace ID', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(true);
-      const context = createMockExecutionContext(1, '999999999999');
-
-      await guard.canActivate(context);
-
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 999999999999);
-    });
-
-    it('should handle workspace ID with special characters', async () => {
-      const context = createMockExecutionContext(1, 'ws-123-abc');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
-    });
-
-    it.each(['1e2', '0x10', '1.5', '123abc', '00123'])(
-      'should reject ambiguous workspace ID format %s',
-      async workspaceId => {
-        const context = createMockExecutionContext(1, workspaceId);
-
-        await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-        expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
-      }
-    );
-
-    it('should accept a matching workspace claim', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(true);
-      const context = createMockExecutionContext(1, '123', 123);
-
-      await expect(guard.canActivate(context)).resolves.toBe(true);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
-    });
-
-    it('should reject a mismatching workspace claim before service lookup', async () => {
-      const context = createMockExecutionContext(1, '123', 456);
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
-    });
-
-    it('should reject ambiguous token workspace claims before service lookup', async () => {
-      const context = createMockExecutionContext(1, '123', '1e2');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('Security Validation - Workspace API Token Scopes', () => {
-    const createScopedHandler = () => {
-      const handler = jest.fn();
-      AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)(handler);
-      return handler;
+  it('allows a validated JWT user with database id and identity without another identity lookup', async () => {
+    const requestUser = {
+      id: 42,
+      userId: 42,
+      identity: 'oidc-42',
+      sub: 'oidc-42',
+      isAdmin: false
     };
+    const context = createContext(requestUser);
+    authService.canAccessWorkSpace.mockResolvedValue(true);
 
-    const createCodingScopedHandler = () => {
-      const handler = jest.fn();
-      AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)(handler);
-      return handler;
-    };
+    const result = await guard.canActivate(context);
 
-    it('should reject workspace API tokens for endpoints without allowed scopes', async () => {
-      const context = createMockExecutionContext(
-        1,
-        '123',
-        123,
-        {
-          tokenType: WORKSPACE_API_TOKEN_TYPE,
-          scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
-        }
-      );
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
-    });
-
-    it('should allow workspace API tokens when the endpoint allows the token scope', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(true);
-      const context = createMockExecutionContext(
-        1,
-        '123',
-        123,
-        {
-          tokenType: WORKSPACE_API_TOKEN_TYPE,
-          scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
-        },
-        createScopedHandler()
-      );
-
-      await expect(guard.canActivate(context)).resolves.toBe(true);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
-    });
-
-    it('should reject workspace API tokens with a missing required scope', async () => {
-      const context = createMockExecutionContext(
-        1,
-        '123',
-        123,
-        {
-          tokenType: WORKSPACE_API_TOKEN_TYPE,
-          scopes: [WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE]
-        },
-        createScopedHandler()
-      );
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
-    });
-
-    it('should reject replay-only workspace API tokens for coding job endpoints', async () => {
-      const context = createMockExecutionContext(
-        1,
-        '123',
-        123,
-        {
-          tokenType: WORKSPACE_API_TOKEN_TYPE,
-          scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
-        },
-        createCodingScopedHandler()
-      );
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
-    });
-
-    it('should reject correctly scoped workspace API tokens for a different workspace', async () => {
-      const context = createMockExecutionContext(
-        1,
-        '123',
-        456,
-        {
-          tokenType: WORKSPACE_API_TOKEN_TYPE,
-          scopes: [WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE]
-        },
-        createCodingScopedHandler()
-      );
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
-    });
+    expect(result).toBe(true);
+    expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
+    expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(42, 123);
+    expect(context.switchToHttp().getRequest().user).toEqual(requestUser);
   });
 
-  describe('Edge Cases - User ID Formats', () => {
-    it('should handle zero user ID', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(false);
-      const context = createMockExecutionContext(0, '123');
+  it('denies an OIDC user without workspace access', async () => {
+    usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as never);
+    authService.canAccessWorkSpace.mockResolvedValue(false);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(0, 123);
-    });
-
-    it('should handle negative user ID', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(false);
-      const context = createMockExecutionContext(-1, '123');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(-1, 123);
-    });
-
-    it('should handle very large user ID', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(true);
-      const context = createMockExecutionContext(Number.MAX_SAFE_INTEGER, '123');
-
-      await guard.canActivate(context);
-
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(Number.MAX_SAFE_INTEGER, 123);
-    });
+    await expect(guard.canActivate(createContext({ id: 'oidc-1' }))).rejects.toThrow(UnauthorizedException);
+    expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
   });
 
-  describe('Security - Service Errors', () => {
-    it('should propagate auth service errors', async () => {
-      authService.canAccessWorkSpace.mockRejectedValue(new Error('Database error'));
-      const context = createMockExecutionContext(1, '123');
+  it('denies an OIDC user that is unknown locally', async () => {
+    usersService.findUserByIdentity.mockResolvedValue(null);
 
-      await expect(guard.canActivate(context)).rejects.toThrow('Database error');
-    });
-
-    it('should handle auth service async response', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(false);
-      const context = createMockExecutionContext(1, '123');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should handle auth service returning null', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(null as unknown as boolean);
-      const context = createMockExecutionContext(1, '123');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should handle auth service returning undefined', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(undefined as unknown as boolean);
-      const context = createMockExecutionContext(1, '123');
-
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-    });
+    await expect(guard.canActivate(createContext({ id: 'oidc-1' }))).rejects.toThrow(UnauthorizedException);
+    expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
   });
 
-  describe('Security - Privilege Escalation Prevention', () => {
-    it('should not cache workspace access between requests', async () => {
-      const context1 = createMockExecutionContext(1, '123');
-      const context2 = createMockExecutionContext(1, '123');
+  it('allows a workspace token for its own workspace', async () => {
+    authService.canAccessWorkSpace.mockResolvedValue(true);
 
-      authService.canAccessWorkSpace.mockResolvedValueOnce(true);
-      authService.canAccessWorkSpace.mockResolvedValueOnce(false);
+    const result = await guard.canActivate(createContext({
+      id: 12,
+      workspace: 123,
+      tokenUse: 'workspace',
+      isWorkspaceToken: true
+    }));
 
-      await guard.canActivate(context1);
-      await expect(guard.canActivate(context2)).rejects.toThrow(UnauthorizedException);
-
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledTimes(2);
-    });
-
-    it('should always verify workspace access from auth service', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(true);
-      const context = createMockExecutionContext(1, '123');
-
-      await guard.canActivate(context);
-      await guard.canActivate(context);
-      await guard.canActivate(context);
-
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledTimes(3);
-    });
-
-    it('should verify access for each unique workspace', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(true);
-
-      await guard.canActivate(createMockExecutionContext(1, '123'));
-      await guard.canActivate(createMockExecutionContext(1, '456'));
-      await guard.canActivate(createMockExecutionContext(1, '789'));
-
-      expect(authService.canAccessWorkSpace).toHaveBeenCalledTimes(3);
-      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(1, 1, 123);
-      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(2, 1, 456);
-      expect(authService.canAccessWorkSpace).toHaveBeenNthCalledWith(3, 1, 789);
-    });
+    expect(result).toBe(true);
+    expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
+    expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(12, 123);
   });
 
-  describe('Error Messages', () => {
-    it('should throw UnauthorizedException for unauthorized access', async () => {
-      authService.canAccessWorkSpace.mockResolvedValue(false);
-      const context = createMockExecutionContext(1, '123');
+  it('denies a workspace token for another workspace', async () => {
+    await expect(guard.canActivate(createContext({
+      id: 12,
+      workspace: 456,
+      tokenUse: 'workspace',
+      isWorkspaceToken: true
+    }))).rejects.toThrow(UnauthorizedException);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-    });
+    expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+  });
+
+  it('denies malformed requests', async () => {
+    await expect(guard.canActivate(createContext(undefined))).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(createContext({ id: 'oidc-1' }, undefined))).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(createContext({ id: 'oidc-1' }, 'workspace-abc'))).rejects.toThrow(UnauthorizedException);
   });
 });

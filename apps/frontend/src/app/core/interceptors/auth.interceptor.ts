@@ -26,14 +26,19 @@ import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
 import { SERVER_URL } from '../../injection-tokens';
 
-/**
- * Functional interceptor for adding authentication headers and handling errors
- */
+const AUTH_ENDPOINTS_WITHOUT_ACCESS_TOKEN = [
+  '/auth/exchange',
+  '/auth/refresh',
+  '/auth/login',
+  '/auth/logout',
+  '/auth/profile'
+];
+
 export const authInterceptor: HttpInterceptorFn = (
   req: HttpRequest<unknown>,
   next: HttpHandlerFn
 ): Observable<HttpEvent<unknown>> => {
-  const appService: AppService = inject(AppService);
+  const appService = inject(AppService);
   const authService = inject(AuthService);
   const snackBar = inject(MatSnackBar);
   const router = inject(Router);
@@ -56,7 +61,17 @@ export const authInterceptor: HttpInterceptorFn = (
                 return;
               }
 
-              if (
+              if (error.status === 500 || error.status === 999) {
+                appService.setBackendUnavailable(true);
+                snackBar.open(
+                  'Backend ist nicht verfügbar. Bitte versuchen Sie es später erneut.',
+                  'Schließen',
+                  {
+                    duration: 0,
+                    panelClass: ['error-snackbar']
+                  }
+                );
+              } else if (
                 (error.status === 401 || error.status === 403) &&
                 !req.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)
               ) {
@@ -105,7 +120,22 @@ function getRequestWithAuthHeader(
   router: Router,
   serverUrl: string
 ): Observable<HttpRequest<unknown>> {
-  if (req.headers.has('Authorization') || !isBackendRequest(req.url, serverUrl)) {
+  if (!isBackendRequest(req.url, serverUrl)) {
+    return of(req);
+  }
+
+  if (isAuthEndpointWithoutAccessToken(req.url, serverUrl)) {
+    return of(req);
+  }
+
+  const authorizationHeader = req.headers.get('Authorization');
+  const shouldPreserveExplicitAuthorization =
+    authorizationHeader &&
+    authorizationHeader !== `Bearer ${authService.getToken()}` &&
+    authorizationHeader !== 'Bearer null' &&
+    authorizationHeader !== 'Bearer undefined';
+
+  if (shouldPreserveExplicitAuthorization) {
     return of(req);
   }
 
@@ -121,7 +151,9 @@ function getRequestWithAuthHeader(
       }),
       map(token => {
         if (!token) {
-          return req;
+          return authorizationHeader ? req.clone({
+            headers: req.headers.delete('Authorization')
+          }) : req;
         }
 
         return req.clone({
@@ -155,6 +187,37 @@ function isBackendRequest(url: string, serverUrl: string): boolean {
   }
 
   return false;
+}
+
+function isAuthEndpointWithoutAccessToken(url: string, serverUrl: string): boolean {
+  const backendPath = getBackendRelativePath(url, serverUrl);
+  return AUTH_ENDPOINTS_WITHOUT_ACCESS_TOKEN.some(endpoint => backendPath === endpoint ||
+    backendPath.startsWith(`${endpoint}/`));
+}
+
+function getBackendRelativePath(url: string, serverUrl: string): string {
+  const requestPath = getPathname(url);
+  const serverPath = getPathname(serverUrl).replace(/\/+$/, '');
+
+  if (serverPath && requestPath === serverPath) {
+    return '/';
+  }
+
+  if (serverPath && requestPath.startsWith(`${serverPath}/`)) {
+    return requestPath.slice(serverPath.length);
+  }
+
+  return requestPath.startsWith('/') ? requestPath : `/${requestPath}`;
+}
+
+function getPathname(url: string): string {
+  const baseUrl = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+
+  try {
+    return new URL(url, baseUrl).pathname;
+  } catch {
+    return url.split(/[?#]/, 1)[0];
+  }
 }
 
 function shouldSuppressBackendLoginAuthDataError(

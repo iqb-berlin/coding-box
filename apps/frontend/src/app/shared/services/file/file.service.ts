@@ -71,7 +71,7 @@ export class FileService {
   private validationTaskStateService = inject(ValidationTaskStateService);
 
   get authHeader() {
-    return {};
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   getDirectDownloadLink(): string {

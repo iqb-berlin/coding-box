@@ -40,6 +40,7 @@ import { CoderTrainingBundle } from './entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from './entities/coder-training-coder.entity';
 import { CoderTrainingDiscussionResult } from './entities/coder-training-discussion-result.entity';
 import { CodingUnitFreshness } from './entities/coding-unit-freshness.entity';
+import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
 
 export function parsePostgresPoolMax(value: string | number | undefined, fallback = 10): number {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -96,7 +97,8 @@ export function parsePostgresPoolMax(value: string | number | undefined, fallbac
           CoderTrainingCoder,
           CoderTrainingDiscussionResult,
           CodingUnitFreshness,
-          MissingsProfile
+          MissingsProfile,
+          TestPersonCodingJob
         ],
         synchronize: false,
         extra: {
