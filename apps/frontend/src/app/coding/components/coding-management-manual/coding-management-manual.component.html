@@ -1146,7 +1146,8 @@
         </div>
 
         <div
-          *ngIf="isManualTab('planning')"
+          *ngIf="shouldRenderManualTab('planning')"
+          [hidden]="!isManualTab('planning')"
           id="manual-planning"
           class="job-definitions-container"
         >
@@ -1163,8 +1164,8 @@
             </button>
           </div>
           <coding-box-coding-job-definitions
-            (bulkCreationCompleted)="reloadCodingJobsList()"
-            (jobDefinitionChanged)="onJobDefinitionChanged()"
+            (bulkCreationCompleted)="reloadCodingJobsList('productive')"
+            (jobDefinitionChanged)="onJobDefinitionChanged('productive')"
           ></coding-box-coding-job-definitions>
         </div>
 
@@ -1396,7 +1397,8 @@
         </div>
 
         <div
-          *ngIf="isManualTab('execution')"
+          *ngIf="shouldRenderManualTab('execution')"
+          [hidden]="!isManualTab('execution')"
           id="manual-execution"
           class="coding-jobs-container manual-section-block"
         >
@@ -1471,13 +1473,14 @@
           </div>
 
           <coding-box-coding-jobs
+            #productiveCodingJobs
             [jobScope]="'productive'"
             [showTrainingFilter]="false"
             [showComparisonActions]="false"
             [showTransferAction]="false"
             [showApplyActions]="false"
-            [autoReloadOnFocus]="autoRefreshManualCodingJobs"
-            (jobsChanged)="onJobDefinitionChanged()"
+            [autoReloadOnFocus]="false"
+            (jobsChanged)="onJobDefinitionChanged('productive')"
           ></coding-box-coding-jobs>
         </div>
 
@@ -1881,7 +1884,8 @@
         </div>
 
         <div
-          *ngIf="isManualTab('training')"
+          *ngIf="shouldRenderManualTab('training')"
+          [hidden]="!isManualTab('training')"
           id="manual-support"
           class="coder-training-list-container manual-section-block"
         >
@@ -1977,13 +1981,14 @@
           <div class="coding-jobs-container manual-section-block">
             <h3 class="manual-section-title">Kodierjobs</h3>
             <coding-box-coding-jobs
+              #trainingCodingJobs
               [jobScope]="'training'"
               [showTrainingFilter]="true"
               [showComparisonActions]="false"
               [showTransferAction]="false"
               [showApplyActions]="false"
-              [autoReloadOnFocus]="autoRefreshManualCodingJobs"
-              (jobsChanged)="onJobDefinitionChanged()"
+              [autoReloadOnFocus]="false"
+              (jobsChanged)="onJobDefinitionChanged('training')"
             ></coding-box-coding-jobs>
           </div>
         </div>
