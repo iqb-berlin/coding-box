@@ -9,10 +9,14 @@ import {
 } from '@angular/common/http';
 import { VariableAnalysisService } from './variable-analysis.service';
 import { SERVER_URL } from '../../../injection-tokens';
+import { CodingBackgroundJobsService } from '../../../coding/services/coding-background-jobs.service';
+import { TestPersonCodingService } from '../../../coding/services/test-person-coding.service';
 
 describe('VariableAnalysisService', () => {
   let service: VariableAnalysisService;
   let httpMock: HttpTestingController;
+  let codingBackgroundJobsService: CodingBackgroundJobsService;
+  let testPersonCodingService: TestPersonCodingService;
 
   const mockServerUrl = 'http://localhost/api/';
   const mockWorkspaceId = 1;
@@ -36,6 +40,8 @@ describe('VariableAnalysisService', () => {
 
     service = TestBed.inject(VariableAnalysisService);
     httpMock = TestBed.inject(HttpTestingController);
+    codingBackgroundJobsService = TestBed.inject(CodingBackgroundJobsService);
+    testPersonCodingService = TestBed.inject(TestPersonCodingService);
   });
 
   afterEach(() => {
@@ -44,6 +50,70 @@ describe('VariableAnalysisService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  it('should keep the response-analysis guard until active variable analysis jobs finish', () => {
+    jest.useFakeTimers();
+    const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
+    const invalidateCacheSpy = jest.spyOn(testPersonCodingService, 'invalidateCodingStatusCache');
+    const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/variable-analysis/jobs`;
+
+    try {
+      service.trackVariableAnalysisGuardUntilComplete(mockWorkspaceId);
+
+      expect(setJobRunningSpy).toHaveBeenCalledWith(
+        mockWorkspaceId,
+        'response-analysis',
+        true,
+        'variable-analysis-dialog'
+      );
+
+      jest.advanceTimersByTime(5000);
+      httpMock.expectOne(url).flush(
+        { message: 'temporary error' },
+        { status: 500, statusText: 'Server Error' }
+      );
+      expect(setJobRunningSpy).not.toHaveBeenCalledWith(
+        mockWorkspaceId,
+        'response-analysis',
+        false,
+        'variable-analysis-dialog'
+      );
+
+      jest.advanceTimersByTime(5000);
+      httpMock.expectOne(url).flush([
+        {
+          id: 1,
+          workspace_id: mockWorkspaceId,
+          type: 'variable-analysis',
+          status: 'processing',
+          created_at: new Date(),
+          updated_at: new Date()
+        }
+      ]);
+
+      jest.advanceTimersByTime(5000);
+      httpMock.expectOne(url).flush([
+        {
+          id: 1,
+          workspace_id: mockWorkspaceId,
+          type: 'variable-analysis',
+          status: 'completed',
+          created_at: new Date(),
+          updated_at: new Date()
+        }
+      ]);
+
+      expect(invalidateCacheSpy).toHaveBeenCalledWith(mockWorkspaceId);
+      expect(setJobRunningSpy).toHaveBeenLastCalledWith(
+        mockWorkspaceId,
+        'response-analysis',
+        false,
+        'variable-analysis-dialog'
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   describe('createAnalysisJob', () => {

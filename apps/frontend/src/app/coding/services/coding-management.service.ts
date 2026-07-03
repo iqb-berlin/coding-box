@@ -3,13 +3,17 @@ import {
   BehaviorSubject, Observable, of, forkJoin, timer, OperatorFunction, Subscription
 } from 'rxjs';
 import {
-  catchError, map, switchMap, takeWhile, finalize
+  catchError, map, switchMap, takeWhile, finalize, filter
 } from 'rxjs/operators';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { CodingExecutionService } from './coding-execution.service';
 import { CodingStatisticsService } from './coding-statistics.service';
-import { CodingVersionService, ResetVersionJobStatus } from './coding-version.service';
+import {
+  CodingVersionService,
+  RESET_VERSION_JOB_STATUS_POLL_ERROR,
+  ResetVersionJobStatus
+} from './coding-version.service';
 import { CodingExportService } from './coding-export.service';
 import { ResponseService } from '../../shared/services/response/response.service';
 import {
@@ -23,6 +27,7 @@ import { AppService } from '../../core/services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 import { ResponseEntity } from '../../shared/models/response-entity.model';
 import { ExportFormat } from '../components/export-dialog/export-dialog.component';
+import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 
 export type StatisticsVersion = 'v1' | 'v2' | 'v3';
 export type ResponseSource = 'base' | 'derived' | 'all';
@@ -90,6 +95,7 @@ export class CodingManagementService {
   private appService = inject(AppService);
   private translateService = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
+  private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
 
   private _codingStatistics = new BehaviorSubject<CodingStatistics | null>(null);
 
@@ -318,6 +324,12 @@ export class CodingManagementService {
 
     this.versionService.getActiveResetVersionJob(workspaceId).subscribe(activeJob => {
       if (activeJob.hasActiveJob && activeJob.jobId) {
+        this.codingBackgroundJobsService.setJobRunning(
+          workspaceId,
+          'autocoder-reset',
+          true,
+          activeJob.jobId
+        );
         this._resetJobId.next(activeJob.jobId);
         this._resetProgress.next(activeJob.progress ?? 0);
         this.startResetPolling(workspaceId, activeJob.jobId);
@@ -331,6 +343,12 @@ export class CodingManagementService {
 
     this.versionService.resetCodingVersion(workspaceId, version).subscribe({
       next: ({ jobId }) => {
+        this.codingBackgroundJobsService.setJobRunning(
+          workspaceId,
+          'autocoder-reset',
+          true,
+          jobId
+        );
         this._resetJobId.next(jobId);
         this._resetProgress.next(0);
         this.startResetPolling(workspaceId, jobId);
@@ -349,7 +367,12 @@ export class CodingManagementService {
     this.stopResetPolling();
 
     this.resetPollingSubscription = timer(0, 2000).pipe(
-      switchMap(() => this.versionService.getResetVersionJobStatus(workspaceId, jobId)),
+      switchMap(() => this.versionService.getResetVersionJobStatus(workspaceId, jobId)
+        .pipe(catchError(() => of(null)))),
+      filter((status): status is ResetVersionJobStatus => (
+        status !== null &&
+        !this.isTransientResetStatusPollingError(status)
+      )),
       takeWhile(
         (status: ResetVersionJobStatus) => ['pending', 'processing'].includes(status.status),
         true
@@ -358,6 +381,12 @@ export class CodingManagementService {
       this._resetProgress.next(status.progress);
 
       if (status.status === 'completed') {
+        this.codingBackgroundJobsService.setJobRunning(
+          workspaceId,
+          'autocoder-reset',
+          false,
+          jobId
+        );
         this._resetProgress.next(null);
         this._resetJobId.next(null);
 
@@ -373,11 +402,31 @@ export class CodingManagementService {
           );
         }
       } else if (status.status === 'failed') {
+        this.codingBackgroundJobsService.setJobRunning(
+          workspaceId,
+          'autocoder-reset',
+          false,
+          jobId
+        );
         this._resetProgress.next(null);
         this._resetJobId.next(null);
         this.showErrorSnackbar('coding-management.descriptions.error-reset');
+      } else if (!['pending', 'processing'].includes(status.status)) {
+        this.codingBackgroundJobsService.setJobRunning(
+          workspaceId,
+          'autocoder-reset',
+          false,
+          jobId
+        );
+        this._resetProgress.next(null);
+        this._resetJobId.next(null);
       }
     });
+  }
+
+  private isTransientResetStatusPollingError(status: ResetVersionJobStatus): boolean {
+    return status.status === 'failed' &&
+      status.error === RESET_VERSION_JOB_STATUS_POLL_ERROR;
   }
 
   private stopResetPolling(): void {

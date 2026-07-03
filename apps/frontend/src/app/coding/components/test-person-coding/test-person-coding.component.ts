@@ -40,6 +40,7 @@ import {
   TestPersonCodingService,
   WorkspaceGroupCodingStats
 } from '../../services/test-person-coding.service';
+import { CodingBackgroundJobsService } from '../../services/coding-background-jobs.service';
 import { AppService } from '../../../core/services/app.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
@@ -81,6 +82,7 @@ export class TestPersonCodingComponent implements OnInit {
   private translateService = inject(TranslateService);
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
   private dialog = inject(MatDialog);
+  private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
   @Input() initialJobId: string | null = null;
   @Input() initialAutoCoderRun: 1 | 2 | null = null;
 
@@ -117,6 +119,7 @@ export class TestPersonCodingComponent implements OnInit {
   jobStatusInterval: number | null = null;
   lastObservedJobId: string | null = null;
   private observedJobStatuses = new Map<string, JobStatus['status']>();
+  private hasShownJobStatusPollingError = false;
 
   allJobs: JobInfo[] = [];
   jobsLoading = false;
@@ -136,6 +139,7 @@ export class TestPersonCodingComponent implements OnInit {
 
     if (this.initialJobId) {
       this.activeJobId = this.initialJobId;
+      this.setFreshnessCodingGuard(this.initialJobId, true);
       this.startJobStatusPolling(this.initialJobId);
     }
 
@@ -178,6 +182,7 @@ export class TestPersonCodingComponent implements OnInit {
             if (activeJob) {
               this.rememberJobStatus(activeJob.jobId, activeJob);
               this.jobStatus = activeJob;
+              this.updateFreshnessCodingGuardFromStatus(activeJob.jobId, activeJob);
               if (
                 ['completed', 'failed', 'cancelled', 'paused'].includes(
                   activeJob.status
@@ -316,6 +321,7 @@ export class TestPersonCodingComponent implements OnInit {
 
     this.activeJobId = jobId;
     this.jobStatus = null;
+    this.hasShownJobStatusPollingError = false;
     this.jobStatusInterval = window.setInterval(() => {
       this.loadJobStatus(jobId);
     }, 2000);
@@ -327,19 +333,29 @@ export class TestPersonCodingComponent implements OnInit {
       .getJobStatus(this.workspaceId, jobId)
       .subscribe(status => {
         if (!('status' in status)) {
-          this.snackBar.open(
-            this.translateService.instant('test-person-coding.job-error', {
-              error: status.error
-            }),
-            this.translateService.instant('close'),
-            { duration: 5000 }
-          );
+          if (!this.hasShownJobStatusPollingError) {
+            this.hasShownJobStatusPollingError = true;
+            this.snackBar.open(
+              this.translateService.instant('test-person-coding.job-error', {
+                error: status.error
+              }),
+              this.translateService.instant('close'),
+              { duration: 5000 }
+            );
+          }
+
+          if (this.isFreshnessCodingJob(jobId)) {
+            return;
+          }
+
           this.stopJobStatusPolling();
           return;
         }
 
+        this.hasShownJobStatusPollingError = false;
         this.jobStatus = status;
         this.rememberJobStatus(jobId, status);
+        this.updateFreshnessCodingGuardFromStatus(jobId, status);
 
         if (
           ['completed', 'failed', 'cancelled', 'paused'].includes(
@@ -406,6 +422,7 @@ export class TestPersonCodingComponent implements OnInit {
     }
     this.activeJobId = null;
     this.jobStatus = null;
+    this.hasShownJobStatusPollingError = false;
   }
 
   private rememberJobStatus(jobId: string, status: JobStatus): void {
@@ -419,11 +436,36 @@ export class TestPersonCodingComponent implements OnInit {
         return;
       }
       this.lastNotifiedCompletedJobId = jobId;
+      this.setFreshnessCodingGuard(jobId, false);
     }
 
     this.loadStatistics();
     this.loadWorkspaceGroups();
     this.testPersonCodingService.notifyAutoCodingCompleted(jobId);
+  }
+
+  private updateFreshnessCodingGuardFromStatus(jobId: string, status: JobStatus): void {
+    if (!this.isFreshnessCodingJob(jobId, status)) {
+      return;
+    }
+
+    this.setFreshnessCodingGuard(
+      jobId,
+      !['completed', 'failed', 'cancelled', 'paused'].includes(status.status)
+    );
+  }
+
+  private isFreshnessCodingJob(jobId: string, status?: JobStatus): boolean {
+    return jobId === this.initialJobId || status?.source === 'coding-freshness';
+  }
+
+  private setFreshnessCodingGuard(jobId: string, isRunning: boolean): void {
+    this.codingBackgroundJobsService.setJobRunning(
+      this.workspaceId,
+      'freshness-coding',
+      isRunning,
+      jobId
+    );
   }
 
   cancelJob(jobId?: string): void {

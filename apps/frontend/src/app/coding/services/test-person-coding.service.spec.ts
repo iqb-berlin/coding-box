@@ -12,10 +12,12 @@ import {
 } from './test-person-coding.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings.service';
+import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 
 describe('TestPersonCodingService', () => {
   let service: TestPersonCodingService;
   let httpMock: HttpTestingController;
+  let codingBackgroundJobsService: CodingBackgroundJobsService;
   let keycloak: { authenticated: boolean; token?: string; updateToken: jest.Mock };
   let fetchMock: jest.Mock;
   let originalFetch: typeof globalThis.fetch | undefined;
@@ -50,6 +52,7 @@ describe('TestPersonCodingService', () => {
     });
 
     service = TestBed.inject(TestPersonCodingService);
+    codingBackgroundJobsService = TestBed.inject(CodingBackgroundJobsService);
     httpMock = TestBed.inject(HttpTestingController);
   });
 
@@ -374,6 +377,32 @@ describe('TestPersonCodingService', () => {
       httpMock.expectOne(url).flush(mockResponse);
       expect(secondResponse).toEqual(mockResponse);
     });
+
+    it('should return null without requesting applied results overview while the status guard is active', () => {
+      const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`;
+      let response: AppliedResultsOverview | null | undefined;
+
+      codingBackgroundJobsService.setJobRunning(
+        mockWorkspaceId,
+        'response-analysis',
+        true,
+        'analysis-1'
+      );
+
+      service.getAppliedResultsOverview(mockWorkspaceId).subscribe(result => {
+        response = result;
+      });
+
+      httpMock.expectNone(url);
+      expect(response).toBeNull();
+
+      codingBackgroundJobsService.setJobRunning(
+        mockWorkspaceId,
+        'response-analysis',
+        false,
+        'analysis-1'
+      );
+    });
   });
 
   describe('getResponseAnalysis', () => {
@@ -414,6 +443,61 @@ describe('TestPersonCodingService', () => {
         { message: 'analysis failed' },
         { status: 500, statusText: 'Server Error' }
       );
+    });
+
+    it('should keep the response-analysis guard after transient polling errors', () => {
+      jest.useFakeTimers();
+      const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
+      const invalidateCacheSpy = jest.spyOn(service, 'invalidateCodingStatusCache');
+      const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/response-analysis`;
+
+      try {
+        service.trackResponseAnalysisGuardUntilComplete(mockWorkspaceId, 2);
+
+        expect(setJobRunningSpy).toHaveBeenCalledWith(
+          mockWorkspaceId,
+          'response-analysis',
+          true,
+          'manual-response-analysis'
+        );
+
+        jest.advanceTimersByTime(5000);
+        httpMock.expectOne(request => (
+          request.url === url &&
+          request.params.get('threshold') === '2'
+        )).flush(
+          { message: 'temporary error' },
+          { status: 500, statusText: 'Server Error' }
+        );
+        expect(setJobRunningSpy).not.toHaveBeenCalledWith(
+          mockWorkspaceId,
+          'response-analysis',
+          false,
+          'manual-response-analysis'
+        );
+
+        jest.advanceTimersByTime(5000);
+        httpMock.expectOne(request => (
+          request.url === url &&
+          request.params.get('threshold') === '2'
+        )).flush({
+          emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+          duplicateValues: { total: 0, totalResponses: 0, groups: [] },
+          matchingFlags: [],
+          analysisTimestamp: '2026-05-14T00:00:00.000Z',
+          isCalculating: false
+        });
+
+        expect(invalidateCacheSpy).toHaveBeenCalledWith(mockWorkspaceId);
+        expect(setJobRunningSpy).toHaveBeenLastCalledWith(
+          mockWorkspaceId,
+          'response-analysis',
+          false,
+          'manual-response-analysis'
+        );
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 
@@ -1026,6 +1110,41 @@ describe('TestPersonCodingService', () => {
       expect(secondResponse).toEqual(mockResponse);
     });
 
+    it('should return a fallback without requesting coding freshness while the status guard is active', () => {
+      let response: unknown;
+      const complete = jest.fn();
+      const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness`;
+
+      codingBackgroundJobsService.setJobRunning(
+        mockWorkspaceId,
+        'response-analysis',
+        true,
+        'analysis-1'
+      );
+
+      service.getCodingFreshness(mockWorkspaceId).subscribe({
+        next: result => {
+          response = result;
+        },
+        complete
+      });
+
+      httpMock.expectNone(url);
+      expect(response).toEqual({
+        workspaceId: mockWorkspaceId,
+        currentRevision: 0,
+        items: []
+      });
+      expect(complete).toHaveBeenCalled();
+
+      codingBackgroundJobsService.setJobRunning(
+        mockWorkspaceId,
+        'response-analysis',
+        false,
+        'analysis-1'
+      );
+    });
+
     it('should request autocoding readiness with run and force-refresh params', () => {
       const mockResponse = {
         workspaceId: mockWorkspaceId,
@@ -1342,6 +1461,59 @@ describe('TestPersonCodingService', () => {
         states: ['PENDING', 'STALE']
       });
       req.flush(mockResponse);
+    });
+
+    it('should keep the freshness-coding guard until the job reaches a terminal status', () => {
+      jest.useFakeTimers();
+      const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
+      const invalidateCacheSpy = jest.spyOn(service, 'invalidateCodingStatusCache');
+      const jobId = 'freshness-job-1';
+      const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${jobId}`;
+
+      try {
+        service.trackFreshnessCodingGuardUntilComplete(mockWorkspaceId, jobId);
+
+        expect(setJobRunningSpy).toHaveBeenCalledWith(
+          mockWorkspaceId,
+          'freshness-coding',
+          true,
+          jobId
+        );
+
+        jest.advanceTimersByTime(5000);
+        httpMock.expectOne(url).flush(
+          { message: 'temporary error' },
+          { status: 500, statusText: 'Server Error' }
+        );
+        expect(setJobRunningSpy).not.toHaveBeenCalledWith(
+          mockWorkspaceId,
+          'freshness-coding',
+          false,
+          jobId
+        );
+
+        jest.advanceTimersByTime(5000);
+        httpMock.expectOne(url).flush({
+          status: 'processing',
+          progress: 50
+        });
+
+        jest.advanceTimersByTime(5000);
+        httpMock.expectOne(url).flush({
+          status: 'completed',
+          progress: 100
+        });
+
+        expect(invalidateCacheSpy).toHaveBeenCalledWith(mockWorkspaceId);
+        expect(setJobRunningSpy).toHaveBeenLastCalledWith(
+          mockWorkspaceId,
+          'freshness-coding',
+          false,
+          jobId
+        );
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 
