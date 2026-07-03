@@ -20,6 +20,7 @@ import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.co
 import { ExportToastComponent } from './components/export-toast/export-toast.component';
 import { ErrorMessageDisplayComponent } from './shared/components/error-message-display/error-message-display.component';
 import { hasAdminBypass } from './core/guards/admin-access';
+import { AuthSessionActivityService } from './core/services/auth-session-activity.service';
 
 @Component({
   selector: 'app-root',
@@ -45,6 +46,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   url = inject(LocationStrategy);
   private router = inject(Router);
+  private authSessionActivity = inject(AuthSessionActivityService);
 
   title = 'IQB-Kodierbox';
   isLoggedIn = false;
@@ -73,6 +75,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (this.authService.isLoggedIn()) {
       this.setAuthState();
       this.appService.refreshAuthData();
+      this.authSessionActivity.start();
       if (postLoginReturnUrl) {
         this.router.navigateByUrl(postLoginReturnUrl).catch(() => undefined);
       }
@@ -88,6 +91,7 @@ export class AppComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
     this.authDataSubscription?.unsubscribe();
+    this.authSessionActivity.stop();
   }
 
   private updateCurrentWorkspaceName(): void {

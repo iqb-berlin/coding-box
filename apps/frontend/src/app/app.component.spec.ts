@@ -5,6 +5,7 @@ import { Observable, Subject, of } from 'rxjs';
 import { AppComponent } from './app.component';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
+import { AuthSessionActivityService } from './core/services/auth-session-activity.service';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 
 describe('AppComponent', () => {
@@ -32,6 +33,10 @@ describe('AppComponent', () => {
     events: Subject<NavigationEnd>;
     url: string;
     navigateByUrl: jest.Mock;
+  };
+  let authSessionActivity: {
+    start: jest.Mock;
+    stop: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -73,12 +78,17 @@ describe('AppComponent', () => {
       url: '/home?auth=session-expired&returnUrl=%2Fworkspace-admin%2F1%2Ftest-results',
       navigateByUrl: jest.fn().mockResolvedValue(true)
     };
+    authSessionActivity = {
+      start: jest.fn(),
+      stop: jest.fn()
+    };
 
     await TestBed.configureTestingModule({
       imports: [AppComponent],
       providers: [
         { provide: AppService, useValue: appService },
         { provide: AuthService, useValue: authService },
+        { provide: AuthSessionActivityService, useValue: authSessionActivity },
         { provide: Router, useValue: router },
         { provide: LocationStrategy, useValue: { path: jest.fn().mockReturnValue('/') } }
       ]
@@ -108,9 +118,19 @@ describe('AppComponent', () => {
     expect(authService.setIdToken).toHaveBeenCalledWith('id-token');
     expect(authService.setRefreshToken).toHaveBeenCalledWith('refresh-token');
     expect(appService.refreshAuthData).toHaveBeenCalled();
+    expect(authSessionActivity.start).toHaveBeenCalled();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/workspace-admin/1/test-results');
     expect(window.location.href).toBe('http://localhost/#/workspace-admin/1/test-results');
     expect(window.location.href).not.toContain('auth_code=');
     expect(window.location.href).not.toContain('#/#');
+  });
+
+  it('stops auth session activity on destroy', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+
+    fixture.destroy();
+
+    expect(authSessionActivity.stop).toHaveBeenCalled();
   });
 });

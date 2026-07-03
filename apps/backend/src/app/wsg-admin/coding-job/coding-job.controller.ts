@@ -452,6 +452,7 @@ export class WsgCodingJobController {
   }
 
   @Get(':id')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -594,6 +595,7 @@ export class WsgCodingJobController {
   }
 
   @Put(':id/status')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -622,6 +624,7 @@ export class WsgCodingJobController {
   }
 
   @Put(':id/comment')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -703,7 +706,7 @@ export class WsgCodingJobController {
 
   @Post(':id/pause')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Pause an assigned coding job',
@@ -740,7 +743,7 @@ export class WsgCodingJobController {
 
   @Post(':id/resume')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Resume an assigned coding job',
@@ -777,7 +780,7 @@ export class WsgCodingJobController {
 
   @Post(':id/submit')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Submit an assigned coding job',
@@ -894,6 +897,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/progress')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -951,6 +955,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/notes')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -1051,6 +1056,7 @@ export class WsgCodingJobController {
   }
 
   @Get(':id/progress')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -1148,6 +1154,7 @@ export class WsgCodingJobController {
   }
 
   @Get(':id/units')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
