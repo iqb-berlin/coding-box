@@ -1520,6 +1520,7 @@
             [showComparisonActions]="false"
             [showTransferAction]="false"
             [showApplyActions]="false"
+            [showRefreshAction]="shouldShowManualRefreshButton()"
             [autoReloadOnFocus]="false"
             (jobsChanged)="onJobDefinitionChanged('productive')"
           ></coding-box-coding-jobs>
@@ -2044,6 +2045,7 @@
               [showComparisonActions]="false"
               [showTransferAction]="false"
               [showApplyActions]="false"
+              [showRefreshAction]="shouldShowManualRefreshButton()"
               [autoReloadOnFocus]="false"
               (jobsChanged)="onJobDefinitionChanged('training')"
             ></coding-box-coding-jobs>

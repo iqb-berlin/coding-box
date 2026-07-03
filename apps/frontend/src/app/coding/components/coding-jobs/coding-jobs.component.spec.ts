@@ -503,6 +503,21 @@ describe('CodingJobsComponent', () => {
     ).toContain('Keine Kodierjobs vorhanden');
   });
 
+  it('shows the refresh action by default', () => {
+    expect(
+      fixture.nativeElement.querySelector('.utility-actions')?.textContent
+    ).toContain('Aktualisieren');
+  });
+
+  it('hides the refresh action when manual refresh is not available', () => {
+    component.showRefreshAction = false;
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('.utility-actions')?.textContent
+    ).not.toContain('Aktualisieren');
+  });
+
   it('should choose a single primary row action by job state', () => {
     component.canApplyResults = true;
 
