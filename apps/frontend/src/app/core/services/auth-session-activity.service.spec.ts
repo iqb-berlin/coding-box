@@ -10,7 +10,7 @@ import {
 
 describe('AuthSessionActivityService', () => {
   let service: AuthSessionActivityService;
-  let authService: { isLoggedIn: jest.Mock; hasValidToken: jest.Mock };
+  let authService: { isLoggedIn: jest.Mock; getValidToken: jest.Mock };
   let appService: {
     needsReAuthentication: boolean;
     sessionExpiryWarning: boolean;
@@ -21,7 +21,7 @@ describe('AuthSessionActivityService', () => {
   beforeEach(() => {
     authService = {
       isLoggedIn: jest.fn().mockReturnValue(true),
-      hasValidToken: jest.fn().mockReturnValue(true)
+      getValidToken: jest.fn().mockResolvedValue('token')
     };
     appService = {
       needsReAuthentication: false,
@@ -90,7 +90,7 @@ describe('AuthSessionActivityService', () => {
 
     window.dispatchEvent(new Event('mousemove'));
 
-    expect(authService.hasValidToken).toHaveBeenCalled();
+    expect(authService.getValidToken).toHaveBeenCalledWith(0);
     expect(appService.sessionExpiryWarning).toBe(false);
     service.stop();
   }));

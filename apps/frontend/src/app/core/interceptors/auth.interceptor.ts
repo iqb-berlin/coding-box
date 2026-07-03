@@ -112,7 +112,18 @@ function getRequestWithAuthHeader(
   router: Router,
   serverUrl: string
 ): Observable<HttpRequest<unknown>> {
-  if (req.headers.has('Authorization') || !isBackendRequest(req.url, serverUrl)) {
+  if (!isBackendRequest(req.url, serverUrl)) {
+    return of(req);
+  }
+
+  const authorizationHeader = req.headers.get('Authorization');
+  const shouldPreserveExplicitAuthorization =
+    authorizationHeader &&
+    authorizationHeader !== `Bearer ${authService.getToken()}` &&
+    authorizationHeader !== 'Bearer null' &&
+    authorizationHeader !== 'Bearer undefined';
+
+  if (shouldPreserveExplicitAuthorization) {
     return of(req);
   }
 
@@ -128,7 +139,9 @@ function getRequestWithAuthHeader(
       }),
       map(token => {
         if (!token) {
-          return req;
+          return authorizationHeader ? req.clone({
+            headers: req.headers.delete('Authorization')
+          }) : req;
         }
 
         return req.clone({

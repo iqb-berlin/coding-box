@@ -11,6 +11,7 @@ import { VariableAnalysisService } from './variable-analysis.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { CodingBackgroundJobsService } from '../../../coding/services/coding-background-jobs.service';
 import { TestPersonCodingService } from '../../../coding/services/test-person-coding.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 describe('VariableAnalysisService', () => {
   let service: VariableAnalysisService;
@@ -24,7 +25,10 @@ describe('VariableAnalysisService', () => {
   beforeEach(() => {
     Object.defineProperty(window, 'localStorage', {
       value: {
-        getItem: jest.fn().mockReturnValue('mock-token')
+        getItem: jest.fn().mockReturnValue('mock-token'),
+        setItem: jest.fn(),
+        removeItem: jest.fn(),
+        clear: jest.fn()
       },
       writable: true
     });
@@ -34,7 +38,13 @@ describe('VariableAnalysisService', () => {
         VariableAnalysisService,
         provideHttpClient(withInterceptorsFromDi()),
         provideHttpClientTesting(),
-        { provide: SERVER_URL, useValue: mockServerUrl }
+        { provide: SERVER_URL, useValue: mockServerUrl },
+        {
+          provide: AuthService,
+          useValue: {
+            getValidToken: jest.fn().mockResolvedValue('mock-token')
+          }
+        }
       ]
     });
 

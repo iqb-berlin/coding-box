@@ -46,6 +46,12 @@ describe('AuthController', () => {
         id_token: 'id-token',
         refresh_token: 'refresh-token'
       }),
+      refreshToken: jest.fn().mockResolvedValue({
+        access_token: 'fresh-access-token',
+        token_type: 'Bearer',
+        expires_in: 300,
+        refresh_token: 'rotated-refresh-token'
+      }),
       exchangeCodeForToken: jest.fn().mockResolvedValue({
         access_token: 'access-token',
         token_type: 'Bearer',
@@ -60,7 +66,12 @@ describe('AuthController', () => {
         family_name: 'User',
         email: 'tester@example.test',
         realm_access: { roles: [] }
-      })
+      }),
+      getProfileUrl: jest.fn((redirectUri?: string) => (
+        redirectUri ?
+          `https://oidc.example.test/account?referrer_uri=${encodeURIComponent(redirectUri)}` :
+          'https://oidc.example.test/account'
+      ))
     };
 
     authService = {
@@ -169,6 +180,17 @@ describe('AuthController', () => {
     expect(oidcAuthService.consumeTokenExchange).toHaveBeenCalledWith('exchange-code');
   });
 
+  it('refreshes OIDC tokens through the backend refresh endpoint', async () => {
+    await expect(controller.refreshToken({ refresh_token: 'refresh-token' })).resolves.toEqual({
+      access_token: 'fresh-access-token',
+      token_type: 'Bearer',
+      expires_in: 300,
+      refresh_token: 'rotated-refresh-token'
+    });
+
+    expect(oidcAuthService.refreshToken).toHaveBeenCalledWith('refresh-token');
+  });
+
   it('rejects expired one-time login codes', async () => {
     oidcAuthService.consumeTokenExchange?.mockResolvedValue(null);
 
@@ -194,5 +216,21 @@ describe('AuthController', () => {
 
     expect(status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
     expect(json).toHaveBeenCalledWith({ error: 'Failed to initiate login' });
+  });
+
+  it('allows only same-origin profile return redirects', async () => {
+    await controller.redirectToProfile(response, 'https://app.example.test/workspace/1');
+
+    expect(oidcAuthService.getProfileUrl).toHaveBeenCalledWith('https://app.example.test/workspace/1');
+    expect(redirect).toHaveBeenCalledWith(
+      'https://oidc.example.test/account?referrer_uri=https%3A%2F%2Fapp.example.test%2Fworkspace%2F1'
+    );
+  });
+
+  it('drops disallowed profile return redirects', async () => {
+    await controller.redirectToProfile(response, 'https://evil.example.test/phish');
+
+    expect(oidcAuthService.getProfileUrl).toHaveBeenCalledWith(undefined);
+    expect(redirect).toHaveBeenCalledWith('https://oidc.example.test/account');
   });
 });

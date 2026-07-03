@@ -408,6 +408,36 @@ export class AuthController {
     return tokenResponse;
   }
 
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Refresh an OIDC access token',
+    description: 'Uses a refresh token to obtain a fresh OIDC access token'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        refresh_token: {
+          type: 'string',
+          description: 'Refresh token from the OIDC provider'
+        }
+      },
+      required: ['refresh_token']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Successfully refreshed the access token'
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Invalid or expired refresh token'
+  })
+  async refreshToken(
+    @Body() refreshData: { refresh_token: string }
+  ): Promise<OidcTokenResponse> {
+    return this.oidcAuthService.refreshToken(refreshData?.refresh_token);
+  }
+
   @Post('logout')
   @ApiOperation({
     summary: 'Logout from OpenID Connect Provider SSO',
@@ -487,7 +517,8 @@ export class AuthController {
     this.logger.log('Redirecting to OpenID Connect Provider profile management');
 
     try {
-      const profileUrl = this.oidcAuthService.getProfileUrl(redirectUri);
+      const allowedRedirectUrl = this.resolveAllowedRedirectUrl(redirectUri);
+      const profileUrl = this.oidcAuthService.getProfileUrl(allowedRedirectUrl?.toString());
       res.redirect(profileUrl);
     } catch (error) {
       this.logger.error('Profile redirect failed:', error);

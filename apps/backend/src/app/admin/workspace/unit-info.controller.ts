@@ -10,7 +10,7 @@ import {
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
 import {
   AllowWorkspaceTokenScopes,
   WORKSPACE_TOKEN_SCOPE_REPLAY_READ
@@ -21,7 +21,7 @@ import { UnitInfoDto } from '../../../../../../api-dto/unit-info/unit-info.dto';
 
 @ApiTags('Unit Info')
 @Controller('admin/workspace/:workspaceId/unit')
-@UseGuards(JwtAuthGuard, WorkspaceGuard)
+@UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
 export class UnitInfoController {
   constructor(private readonly unitInfoService: UnitInfoService) {}
 

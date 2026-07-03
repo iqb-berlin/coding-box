@@ -9,6 +9,20 @@ describe('AuthService', () => {
   let httpMock: HttpTestingController;
   let appService: jest.Mocked<Pick<AppService, 'serverUrl' | 'reAuthenticationReturnUrl' | 'createLoginRedirectUri' | 'markExplicitLogoutInProgress' | 'clearAuthState'>>;
   let originalLocation: Location;
+  let storageMock: {
+    getItem: jest.Mock;
+    setItem: jest.Mock;
+    removeItem: jest.Mock;
+  };
+
+  const createToken = (expiresInSeconds: number): string => {
+    const payload = {
+      sub: 'oidc-user-id',
+      preferred_username: 'tester',
+      exp: Math.floor(Date.now() / 1000) + expiresInSeconds
+    };
+    return `header.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.signature`;
+  };
 
   beforeEach(() => {
     originalLocation = window.location;
@@ -20,12 +34,13 @@ describe('AuthService', () => {
       writable: true
     });
 
+    storageMock = {
+      getItem: jest.fn().mockReturnValue(null),
+      setItem: jest.fn(),
+      removeItem: jest.fn()
+    };
     Object.defineProperty(window, 'localStorage', {
-      value: {
-        getItem: jest.fn().mockReturnValue(null),
-        setItem: jest.fn(),
-        removeItem: jest.fn()
-      },
+      value: storageMock,
       writable: true
     });
 
@@ -97,5 +112,49 @@ describe('AuthService', () => {
       token_type: 'Bearer',
       expires_in: 3600
     });
+  });
+
+  it('should refresh expired access tokens with the stored refresh token', async () => {
+    const expiredToken = createToken(-30);
+    const freshToken = createToken(300);
+    storageMock.getItem.mockImplementation((key: string) => ({
+      auth_token: expiredToken,
+      refresh_token: 'refresh-token'
+    })[key] ?? null);
+
+    const tokenPromise = service.getValidToken();
+
+    const req = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ refresh_token: 'refresh-token' });
+    req.flush({
+      access_token: freshToken,
+      token_type: 'Bearer',
+      expires_in: 300,
+      id_token: 'fresh-id-token',
+      refresh_token: 'rotated-refresh-token'
+    });
+
+    await expect(tokenPromise).resolves.toBe(freshToken);
+    expect(storageMock.setItem).toHaveBeenCalledWith('auth_token', freshToken);
+    expect(storageMock.setItem).toHaveBeenCalledWith('id_token', 'fresh-id-token');
+    expect(storageMock.setItem).toHaveBeenCalledWith('refresh_token', 'rotated-refresh-token');
+  });
+
+  it('should clear stored tokens when refresh fails', async () => {
+    storageMock.getItem.mockImplementation((key: string) => ({
+      auth_token: createToken(-30),
+      refresh_token: 'refresh-token'
+    })[key] ?? null);
+
+    const tokenPromise = service.getValidToken();
+
+    const req = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
+    req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+
+    await expect(tokenPromise).resolves.toBeUndefined();
+    expect(storageMock.removeItem).toHaveBeenCalledWith('auth_token');
+    expect(storageMock.removeItem).toHaveBeenCalledWith('id_token');
+    expect(storageMock.removeItem).toHaveBeenCalledWith('refresh_token');
   });
 });

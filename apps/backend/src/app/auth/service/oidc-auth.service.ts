@@ -19,7 +19,7 @@ export interface OidcTokenResponse {
   access_token: string;
   token_type: string;
   expires_in: number;
-  refresh_token: string;
+  refresh_token?: string;
   scope?: string;
   id_token?: string;
 }
@@ -132,6 +132,48 @@ export class OidcAuthService {
     } catch (error) {
       this.logger.error('Failed to exchange authorization code for token:', error.response?.data || error.message);
       throw new UnauthorizedException('Failed to exchange authorization code for token');
+    }
+  }
+
+  /**
+   * Refresh an access token using an OpenID Connect refresh token.
+   * @param refreshToken - Refresh token from the provider
+   * @returns Refreshed token response from OpenID Connect Provider
+   */
+  async refreshToken(refreshToken: string): Promise<OidcTokenResponse> {
+    if (!this.oidcConfiguration.token_endpoint || !this.oAuth2ClientId) {
+      throw new UnauthorizedException('OpenID Connect token endpoint configuration is missing');
+    }
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token is required');
+    }
+
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: this.oAuth2ClientId,
+      refresh_token: refreshToken
+    });
+
+    if (this.oAuth2ClientSecret) {
+      params.append('client_secret', this.oAuth2ClientSecret);
+    }
+
+    try {
+      this.logger.log('Refreshing OpenID Connect access token');
+
+      const response = await firstValueFrom(
+        this.httpService.post(this.oidcConfiguration.token_endpoint, params.toString(), {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        })
+      );
+
+      return response.data;
+    } catch (error) {
+      this.logger.error('Failed to refresh access token:', error.response?.data || error.message);
+      throw new UnauthorizedException('Failed to refresh access token');
     }
   }
 

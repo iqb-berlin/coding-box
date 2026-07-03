@@ -12,11 +12,13 @@ import {
 import { SERVER_URL } from '../../injection-tokens';
 import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
+import { AuthService } from '../../core/services/auth.service';
 
 describe('TestPersonCodingService', () => {
   let service: TestPersonCodingService;
   let httpMock: HttpTestingController;
   let codingBackgroundJobsService: CodingBackgroundJobsService;
+  let authService: { getValidToken: jest.Mock };
   let fetchMock: jest.Mock;
   let originalFetch: typeof globalThis.fetch | undefined;
   const mockServerUrl = 'http://localhost:3000/';
@@ -33,12 +35,16 @@ describe('TestPersonCodingService', () => {
       },
       writable: true
     });
+    authService = {
+      getValidToken: jest.fn().mockResolvedValue(mockAuthToken)
+    };
 
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withInterceptorsFromDi()),
         provideHttpClientTesting(),
         TestPersonCodingService,
+        { provide: AuthService, useValue: authService },
         { provide: SERVER_URL, useValue: mockServerUrl }
       ]
     });
@@ -143,6 +149,7 @@ describe('TestPersonCodingService', () => {
           }
         })
       );
+      expect(authService.getValidToken).toHaveBeenCalled();
       expect(onError).toHaveBeenCalledWith('HTTP 401: Unauthorized');
     });
   });

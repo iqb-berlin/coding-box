@@ -13,6 +13,7 @@ import {
 } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
+import { AuthService } from '../../core/services/auth.service';
 import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
 import {
   ValidateCodingCompletenessResponseDto
@@ -240,6 +241,7 @@ export interface AppliedResultsOverview {
 export class TestPersonCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private authService = inject(AuthService);
   private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
@@ -267,7 +269,7 @@ export class TestPersonCodingService {
   }
 
   private async getValidAuthToken(): Promise<string | undefined> {
-    return localStorage.getItem('auth_token') || undefined;
+    return this.authService.getValidToken();
   }
 
   private hasJobId(jobId: string | null | undefined): jobId is string {

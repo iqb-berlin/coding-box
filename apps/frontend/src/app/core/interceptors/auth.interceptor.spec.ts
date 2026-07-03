@@ -34,6 +34,7 @@ describe('authInterceptor', () => {
       reAuthenticationReturnUrl: undefined
     } as unknown as jest.Mocked<AppService>;
     authService = {
+      getToken: jest.fn().mockReturnValue('keycloak-token'),
       getValidToken: jest.fn().mockResolvedValue('keycloak-token')
     } as unknown as jest.Mocked<AuthService>;
 
@@ -101,6 +102,22 @@ describe('authInterceptor', () => {
     const req = httpMock.expectOne('/api/scoped');
     expect(authService.getValidToken).not.toHaveBeenCalled();
     expect(req.request.headers.get('Authorization')).toBe('Bearer scoped-token');
+    req.flush({});
+  });
+
+  it('should replace stale stored-token authorization headers with a refreshed access token', async () => {
+    authService.getToken.mockReturnValue('stale-token');
+    authService.getValidToken.mockResolvedValue('fresh-token');
+
+    http.get('/api/workspaces', {
+      headers: new HttpHeaders({ Authorization: 'Bearer stale-token' })
+    }).subscribe();
+
+    await Promise.resolve();
+
+    const req = httpMock.expectOne('/api/workspaces');
+    expect(authService.getValidToken).toHaveBeenCalled();
+    expect(req.request.headers.get('Authorization')).toBe('Bearer fresh-token');
     req.flush({});
   });
 

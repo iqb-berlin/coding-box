@@ -551,7 +551,7 @@ export class WsgCodingJobController {
 
   @Put(':id')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiBearerAuth()
   @ApiOperation({

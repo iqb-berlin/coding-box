@@ -14,6 +14,7 @@ describe('AppComponent', () => {
     setToken: jest.Mock;
     setIdToken: jest.Mock;
     setRefreshToken: jest.Mock;
+    getValidToken: jest.Mock;
     isLoggedIn: jest.Mock;
     getLoggedUser: jest.Mock;
     getRoles: jest.Mock;
@@ -51,6 +52,7 @@ describe('AppComponent', () => {
       setToken: jest.fn(),
       setIdToken: jest.fn(),
       setRefreshToken: jest.fn(),
+      getValidToken: jest.fn().mockResolvedValue('access-token'),
       isLoggedIn: jest.fn().mockReturnValue(true),
       getLoggedUser: jest.fn().mockReturnValue({ sub: 'oidc-user-id', preferred_username: 'tester' }),
       getRoles: jest.fn().mockReturnValue([])
