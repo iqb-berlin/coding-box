@@ -120,6 +120,7 @@ import {
 } from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
+import { CodingBackgroundJobsService } from '../../services/coding-background-jobs.service';
 
 interface SavedCodeProgress {
   id?: number;
@@ -217,6 +218,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private exportJobService = inject(ExportJobService);
   private translateService = inject(TranslateService);
   private dialog = inject(MatDialog);
+  private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private document = inject(DOCUMENT);
@@ -314,6 +316,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private lastWindowFocusRefreshAt = 0;
   private lastCodingFreshnessRefreshAt = 0;
   private codingFreshnessRequestGeneration = 0;
+  private responseAnalysisGuardActive = false;
+  private responseAnalysisGuardWorkspaceId: number | null = null;
+  private hasShownResponseAnalysisPollingError = false;
+  private pendingManualStateRefreshAfterBackgroundJob = false;
+  private pendingCodingFreshnessRefreshAfterBackgroundJob = false;
+  private pendingForcedCodingFreshnessRefreshAfterBackgroundJob = false;
   private readonly handleWindowFocus = () => {
     if (!this.shouldRefreshManualStateOnFocus()) {
       return;
@@ -321,6 +329,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     const now = Date.now();
     if (now - this.lastWindowFocusRefreshAt < this.windowFocusRefreshThrottleMs) {
+      return;
+    }
+
+    if (this.shouldSuppressCodingStatusChecks()) {
+      this.pendingManualStateRefreshAfterBackgroundJob = true;
       return;
     }
 
@@ -570,6 +583,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         }
       });
 
+    this.codingBackgroundJobsService.statusGuardCleared$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => {
+        if (event.workspaceId === this.appService.selectedWorkspaceId) {
+          this.refreshPendingManualStatusAfterBackgroundJob();
+        }
+      });
+
     this.loadInitialManualCodingState();
     this.loadManualCodingJobRefreshSetting();
     this.loadManualCodingApplyPermission();
@@ -580,6 +601,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (this.analysisPollingTimer) {
       clearTimeout(this.analysisPollingTimer);
     }
+    this.finalizeResponseAnalysisGuardOnDestroy();
     this.document.defaultView?.removeEventListener('focus', this.handleWindowFocus);
     this.destroy$.next();
     this.destroy$.complete();
@@ -1566,6 +1588,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
    * Refreshes all statistics with individual loading states
    */
   refreshAllStatistics(): void {
+    if (this.shouldSuppressCodingStatusChecks()) {
+      this.pendingManualStateRefreshAfterBackgroundJob = true;
+      return;
+    }
+
     this.invalidateCodingStatusCache();
     this.hasLoadedPlanningDataBundle = true;
     this.loadCodingProgressOverview();
@@ -1594,6 +1621,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   refreshManualCodingPlanning(): void {
+    if (this.shouldSuppressCodingStatusChecks()) {
+      this.pendingManualStateRefreshAfterBackgroundJob = true;
+      return;
+    }
+
     this.invalidateCodingStatusCache();
     const activeTab = this.activeManualTab;
     this.loadManualTabData(activeTab, {
@@ -1621,15 +1653,165 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.activeManualTab === 'completion');
   }
 
-  private refreshManualStateAfterExternalChange(): void {
+  private refreshManualStateAfterExternalChange(
+    options: { forceCodingFreshness?: boolean } = {}
+  ): void {
+    if (this.shouldSuppressCodingStatusChecks()) {
+      this.pendingManualStateRefreshAfterBackgroundJob = true;
+      return;
+    }
+
     const activeTab = this.activeManualTab;
     this.loadManualTabData(activeTab, { reloadCodingJobs: false });
     if (activeTab !== 'planning') {
-      this.loadCodingFreshness();
+      if (options.forceCodingFreshness) {
+        this.loadCodingFreshness({ force: true });
+      } else {
+        this.loadCodingFreshness();
+      }
     }
     if (this.shouldReloadCodingJobsAfterManualTabData(activeTab)) {
       this.reloadCodingJobsList('active');
     }
+  }
+
+  private shouldSuppressCodingStatusChecks(): boolean {
+    return this.codingBackgroundJobsService.isStatusCheckGuardActive(
+      this.appService.selectedWorkspaceId
+    );
+  }
+
+  private refreshPendingManualStatusAfterBackgroundJob(): void {
+    const shouldRefreshManualState = this.pendingManualStateRefreshAfterBackgroundJob;
+    const shouldRefreshCodingFreshness = this.pendingCodingFreshnessRefreshAfterBackgroundJob ||
+      this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob;
+    const forceCodingFreshness = this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob;
+    const activeTab = this.activeManualTab;
+
+    this.pendingManualStateRefreshAfterBackgroundJob = false;
+    this.pendingCodingFreshnessRefreshAfterBackgroundJob = false;
+    this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob = false;
+
+    if (shouldRefreshManualState) {
+      this.refreshManualStateAfterExternalChange({
+        forceCodingFreshness: shouldRefreshCodingFreshness && forceCodingFreshness
+      });
+    }
+
+    if (shouldRefreshCodingFreshness &&
+      (!shouldRefreshManualState || activeTab === 'planning')) {
+      this.loadCodingFreshness({ force: forceCodingFreshness });
+    }
+  }
+
+  private setManualResponseAnalysisGuardRunning(
+    workspaceId: number,
+    isActive: boolean
+  ): void {
+    const guardService = this.testPersonCodingService as unknown as {
+      setResponseAnalysisGuardRunning?: (
+        guardedWorkspaceId: number,
+        guardedIsActive: boolean
+      ) => void;
+    };
+
+    if (guardService.setResponseAnalysisGuardRunning) {
+      guardService.setResponseAnalysisGuardRunning(workspaceId, isActive);
+      return;
+    }
+
+    this.codingBackgroundJobsService.setJobRunning(
+      workspaceId,
+      'response-analysis',
+      isActive,
+      'manual-response-analysis'
+    );
+  }
+
+  private trackManualResponseAnalysisGuardUntilComplete(
+    workspaceId: number | null | undefined,
+    threshold: number
+  ): void {
+    if (!workspaceId) {
+      return;
+    }
+
+    const guardService = this.testPersonCodingService as unknown as {
+      trackResponseAnalysisGuardUntilComplete?: (
+        guardedWorkspaceId: number,
+        guardedThreshold?: number
+      ) => void;
+    };
+
+    if (guardService.trackResponseAnalysisGuardUntilComplete) {
+      guardService.trackResponseAnalysisGuardUntilComplete(workspaceId, threshold);
+      return;
+    }
+
+    this.setManualResponseAnalysisGuardRunning(workspaceId, true);
+  }
+
+  private setResponseAnalysisGuardActive(isActive: boolean): void {
+    if (!isActive && !this.responseAnalysisGuardActive) {
+      return;
+    }
+
+    const workspaceId = isActive ?
+      this.appService.selectedWorkspaceId :
+      this.responseAnalysisGuardWorkspaceId;
+    if (!workspaceId ||
+      (this.responseAnalysisGuardActive === isActive &&
+        this.responseAnalysisGuardWorkspaceId === workspaceId)) {
+      return;
+    }
+
+    if (isActive &&
+      this.responseAnalysisGuardActive &&
+      this.responseAnalysisGuardWorkspaceId &&
+      this.responseAnalysisGuardWorkspaceId !== workspaceId) {
+      this.setManualResponseAnalysisGuardRunning(
+        this.responseAnalysisGuardWorkspaceId,
+        false
+      );
+    }
+
+    this.responseAnalysisGuardActive = isActive;
+    this.responseAnalysisGuardWorkspaceId = isActive ? workspaceId : null;
+    this.setManualResponseAnalysisGuardRunning(
+      workspaceId,
+      isActive
+    );
+  }
+
+  private finalizeResponseAnalysisGuardOnDestroy(): void {
+    if (!this.responseAnalysisGuardActive) {
+      return;
+    }
+
+    this.trackManualResponseAnalysisGuardUntilComplete(
+      this.responseAnalysisGuardWorkspaceId || this.appService.selectedWorkspaceId,
+      this.normalizeAggregationThreshold(this.duplicateAggregationThreshold)
+    );
+  }
+
+  private shouldKeepResponseAnalysisGuardAfterPollingError(
+    workspaceId: number
+  ): boolean {
+    return this.responseAnalysisGuardActive &&
+      this.responseAnalysisGuardWorkspaceId === workspaceId;
+  }
+
+  private scheduleResponseAnalysisPollingRetry(workspaceId: number): void {
+    if (this.analysisPollingTimer) {
+      clearTimeout(this.analysisPollingTimer);
+    }
+
+    this.analysisPollingTimer = setTimeout(() => {
+      this.analysisPollingTimer = undefined;
+      if (this.shouldKeepResponseAnalysisGuardAfterPollingError(workspaceId)) {
+        this.loadResponseAnalysis();
+      }
+    }, 5000);
   }
 
   private shouldSkipAutomaticManualTabLoad(
@@ -3260,10 +3442,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (options.force) {
-      this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
-    }
-
     if (!options.force && !this.hasLoadedManualCodingJobRefreshSetting) {
       this.codingFreshnessRequestGeneration += 1;
       this.isLoadingCodingFreshness = false;
@@ -3274,6 +3452,20 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.codingFreshnessRequestGeneration += 1;
       this.isLoadingCodingFreshness = false;
       return;
+    }
+
+    if (this.shouldSuppressCodingStatusChecks()) {
+      this.pendingCodingFreshnessRefreshAfterBackgroundJob = true;
+      if (options.force) {
+        this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob = true;
+      }
+      this.codingFreshnessRequestGeneration += 1;
+      this.isLoadingCodingFreshness = false;
+      return;
+    }
+
+    if (options.force) {
+      this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
     }
 
     const now = Date.now();
@@ -4373,6 +4565,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   loadResponseAnalysis(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      this.setResponseAnalysisGuardActive(false);
       this.isLoadingResponseAnalysis = false;
       return;
     }
@@ -4399,6 +4592,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.responseAnalysis = analysis;
           this.responseAnalysisError = null;
           this.isLoadingResponseAnalysis = false;
+          this.hasShownResponseAnalysisPollingError = false;
+          this.setResponseAnalysisGuardActive(analysis.isCalculating === true);
           this.focusManualFreshnessTargetIfReady();
 
           if (analysis.isCalculating) {
@@ -4413,8 +4608,23 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         error: error => {
           this.isLoadingResponseAnalysis = false;
           this.focusManualFreshnessTargetIfReady();
+          const responseAnalysisError = `Fehler beim Laden der Antwortanalyse: ${error.message || error}`;
+          if (this.shouldKeepResponseAnalysisGuardAfterPollingError(workspaceId)) {
+            if (!this.hasShownResponseAnalysisPollingError) {
+              this.hasShownResponseAnalysisPollingError = true;
+              this.snackBar.open(
+                responseAnalysisError,
+                'OK',
+                { duration: 3000 }
+              );
+            }
+            this.scheduleResponseAnalysisPollingRetry(workspaceId);
+            return;
+          }
+
+          this.setResponseAnalysisGuardActive(false);
           this.responseAnalysis = null;
-          this.responseAnalysisError = `Fehler beim Laden der Antwortanalyse: ${error.message || error}`;
+          this.responseAnalysisError = responseAnalysisError;
           this.snackBar.open(
             this.responseAnalysisError,
             'OK',
@@ -4464,6 +4674,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: () => {
+          this.setResponseAnalysisGuardActive(true);
           this.snackBar.open('Antwortanalyse wurde gestartet.', 'OK', { duration: 3000 });
           if (shouldRefreshAggregationDependentViews) {
             this.refreshAggregationDependentViews(false);
@@ -4471,6 +4682,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.loadResponseAnalysis(); // Start polling
         },
         error: error => {
+          this.setResponseAnalysisGuardActive(false);
           this.isLoadingResponseAnalysis = false;
           if (settingsReadyForAnalysis) {
             this.snackBar.open(

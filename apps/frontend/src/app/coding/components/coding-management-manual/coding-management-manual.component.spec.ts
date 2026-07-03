@@ -167,6 +167,126 @@ describe('CodingManagementManualComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('should keep tracking the response-analysis guard after destroy while analysis is calculating', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        setResponseAnalysisGuardRunning: (
+          workspaceId: number,
+          isRunning: boolean
+        ) => void;
+        trackResponseAnalysisGuardUntilComplete: (
+          workspaceId: number,
+          threshold?: number
+        ) => void;
+      };
+      setResponseAnalysisGuardActive: (isActive: boolean) => void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    const setGuardSpy = jest
+      .spyOn(componentInternals.testPersonCodingService, 'setResponseAnalysisGuardRunning')
+      .mockImplementation(() => undefined);
+    const trackGuardSpy = jest
+      .spyOn(componentInternals.testPersonCodingService, 'trackResponseAnalysisGuardUntilComplete')
+      .mockImplementation(() => undefined);
+
+    componentInternals.setResponseAnalysisGuardActive(true);
+    component.ngOnDestroy();
+
+    expect(setGuardSpy).toHaveBeenCalledWith(5, true);
+    expect(trackGuardSpy).toHaveBeenCalledWith(5, 2);
+  });
+
+  it('should not clear the response-analysis guard on destroy when it is not owned by this component', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        setResponseAnalysisGuardRunning: (
+          workspaceId: number,
+          isRunning: boolean
+        ) => void;
+      };
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    const setGuardSpy = jest
+      .spyOn(componentInternals.testPersonCodingService, 'setResponseAnalysisGuardRunning')
+      .mockImplementation(() => undefined);
+
+    component.ngOnDestroy();
+
+    expect(setGuardSpy).not.toHaveBeenCalledWith(5, false);
+  });
+
+  it('should keep the response-analysis guard active after a transient polling error', () => {
+    jest.useFakeTimers();
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        getResponseAnalysis: jest.Mock;
+        setResponseAnalysisGuardRunning: (
+          workspaceId: number,
+          isRunning: boolean
+        ) => void;
+      };
+      setResponseAnalysisGuardActive: (isActive: boolean) => void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    const setGuardSpy = jest
+      .spyOn(componentInternals.testPersonCodingService, 'setResponseAnalysisGuardRunning')
+      .mockImplementation(() => undefined);
+    const getResponseAnalysisSpy = jest
+      .spyOn(componentInternals.testPersonCodingService, 'getResponseAnalysis')
+      .mockReturnValueOnce(throwError(() => new Error('temporary polling error')))
+      .mockReturnValueOnce(of({
+        emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+        duplicateValues: { total: 0, totalResponses: 0, groups: [] },
+        matchingFlags: [],
+        isCalculating: false
+      }));
+
+    try {
+      componentInternals.setResponseAnalysisGuardActive(true);
+      setGuardSpy.mockClear();
+
+      component.loadResponseAnalysis();
+
+      expect(getResponseAnalysisSpy).toHaveBeenCalledTimes(1);
+      expect(setGuardSpy).not.toHaveBeenCalledWith(5, false);
+
+      jest.advanceTimersByTime(5000);
+
+      expect(getResponseAnalysisSpy).toHaveBeenCalledTimes(2);
+      expect(setGuardSpy).toHaveBeenLastCalledWith(5, false);
+    } finally {
+      component.ngOnDestroy();
+      jest.useRealTimers();
+    }
+  });
+
+  it('should run pending manual state and forced freshness refresh after a background guard clears', () => {
+    component.selectedManualTabIndex = 1;
+    const componentInternals = component as unknown as {
+      pendingManualStateRefreshAfterBackgroundJob: boolean;
+      pendingForcedCodingFreshnessRefreshAfterBackgroundJob: boolean;
+      refreshPendingManualStatusAfterBackgroundJob(): void;
+      loadManualTabData(tab: string, options?: { reloadCodingJobs?: boolean }): void;
+      loadCodingFreshness(options?: { force?: boolean }): void;
+    };
+    componentInternals.pendingManualStateRefreshAfterBackgroundJob = true;
+    componentInternals.pendingForcedCodingFreshnessRefreshAfterBackgroundJob = true;
+    const loadManualTabDataSpy = jest
+      .spyOn(componentInternals, 'loadManualTabData')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+
+    componentInternals.refreshPendingManualStatusAfterBackgroundJob();
+
+    expect(loadManualTabDataSpy).toHaveBeenCalledWith('planning', { reloadCodingJobs: false });
+    expect(loadCodingFreshnessSpy).toHaveBeenCalledWith({ force: true });
+  });
+
   it('should flag duplicate findings as diagnostic when aggregation is disabled', () => {
     component.responseAnalysis = {
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
