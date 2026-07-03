@@ -13,10 +13,14 @@ import {
 import { CodingExecutionService } from './coding-execution.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingExportService } from './coding-export.service';
-import { CodingVersionService } from './coding-version.service';
+import {
+  CodingVersionService,
+  RESET_VERSION_JOB_STATUS_POLL_ERROR
+} from './coding-version.service';
 import { ResponseService } from '../../shared/services/response/response.service';
 import { AppService } from '../../core/services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
+import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 
 describe('CodingManagementService', () => {
   let service: CodingManagementService;
@@ -28,6 +32,7 @@ describe('CodingManagementService', () => {
   let appServiceMock: jest.Mocked<AppService>;
   let translateServiceMock: jest.Mocked<TranslateService>;
   let snackBarMock: jest.Mocked<MatSnackBar>;
+  let codingBackgroundJobsService: CodingBackgroundJobsService;
 
   const mockCodingStatistics: CodingStatistics = {
     totalResponses: 100,
@@ -62,7 +67,9 @@ describe('CodingManagementService', () => {
     } as unknown as jest.Mocked<CodingExportService>;
 
     versionServiceMock = {
-      resetCodingVersion: jest.fn()
+      resetCodingVersion: jest.fn(),
+      getActiveResetVersionJob: jest.fn(),
+      getResetVersionJobStatus: jest.fn()
     } as unknown as jest.Mocked<CodingVersionService>;
 
     responseServiceMock = {
@@ -96,6 +103,7 @@ describe('CodingManagementService', () => {
     });
 
     service = TestBed.inject(CodingManagementService);
+    codingBackgroundJobsService = TestBed.inject(CodingBackgroundJobsService);
   });
 
   it('should be created', () => {
@@ -162,6 +170,61 @@ describe('CodingManagementService', () => {
 
       expect(statisticsServiceMock.getCodingStatistics).toHaveBeenCalledWith(1, 'v1');
     });
+  });
+
+  describe('resetCodingVersion', () => {
+    it('should keep the reset guard active after a transient polling error', fakeAsync(() => {
+      const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
+      versionServiceMock.resetCodingVersion.mockReturnValue(of({
+        jobId: 'reset-job-1',
+        message: 'started'
+      }));
+      versionServiceMock.getResetVersionJobStatus
+        .mockReturnValueOnce(of({
+          status: 'failed',
+          progress: 0,
+          error: RESET_VERSION_JOB_STATUS_POLL_ERROR
+        }))
+        .mockReturnValueOnce(of({
+          status: 'completed',
+          progress: 100,
+          result: {
+            affectedResponseCount: 3,
+            cascadeResetVersions: [],
+            message: 'completed'
+          }
+        }));
+
+      service.resetCodingVersion('v1');
+
+      expect(setJobRunningSpy).toHaveBeenCalledWith(
+        1,
+        'autocoder-reset',
+        true,
+        'reset-job-1'
+      );
+      expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(true);
+
+      tick(0);
+
+      expect(setJobRunningSpy).not.toHaveBeenCalledWith(
+        1,
+        'autocoder-reset',
+        false,
+        'reset-job-1'
+      );
+      expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(true);
+
+      tick(2000);
+
+      expect(setJobRunningSpy).toHaveBeenLastCalledWith(
+        1,
+        'autocoder-reset',
+        false,
+        'reset-job-1'
+      );
+      expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(false);
+    }));
   });
 
   describe('searchResponses', () => {

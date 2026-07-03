@@ -107,7 +107,9 @@ describe('VariableAnalysisDialogComponent', () => {
           pageSize: 50,
           totalPages: 0
         })
-      )
+      ),
+      setVariableAnalysisGuardRunning: jest.fn(),
+      trackVariableAnalysisGuardUntilComplete: jest.fn()
     } as unknown as jest.Mocked<VariableAnalysisService>;
 
     mockSnackBar = {
@@ -145,6 +147,16 @@ describe('VariableAnalysisDialogComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should keep tracking the response-analysis guard after destroy while a job is active', () => {
+    expect(component.activeJob).toBeDefined();
+
+    component.ngOnDestroy();
+
+    expect(
+      mockVariableAnalysisService.trackVariableAnalysisGuardUntilComplete
+    ).toHaveBeenCalledWith(1);
   });
 
   describe('analyzeVariables', () => {
@@ -333,6 +345,30 @@ describe('VariableAnalysisDialogComponent', () => {
       component.refreshJobs();
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
+
+    it('should not clear the response-analysis guard when the initial job load fails', () => {
+      fixture.destroy();
+      mockVariableAnalysisService.getAllJobs.mockReturnValue(
+        throwError(() => new Error('network error'))
+      );
+      mockVariableAnalysisService.setVariableAnalysisGuardRunning.mockClear();
+      mockVariableAnalysisService
+        .trackVariableAnalysisGuardUntilComplete
+        .mockClear();
+
+      const failingFixture = TestBed.createComponent(
+        VariableAnalysisDialogComponent
+      );
+      failingFixture.detectChanges();
+      failingFixture.destroy();
+
+      expect(
+        mockVariableAnalysisService.setVariableAnalysisGuardRunning
+      ).not.toHaveBeenCalledWith(1, false);
+      expect(
+        mockVariableAnalysisService.trackVariableAnalysisGuardUntilComplete
+      ).not.toHaveBeenCalled();
+    });
   });
 
   describe('startNewAnalysis', () => {
@@ -343,6 +379,35 @@ describe('VariableAnalysisDialogComponent', () => {
         mockVariableAnalysisService.createAnalysisJob
       ).toHaveBeenCalledWith(1, 10);
       expect(mockVariableAnalysisService.getAllJobs).toHaveBeenCalled();
+    });
+
+    it('should keep the response-analysis guard active if refreshing jobs fails after starting analysis', () => {
+      const startedJob: VariableAnalysisJobDto = {
+        ...mockJobs[0],
+        id: 2,
+        status: 'pending'
+      };
+      component.activeJob = undefined;
+      component.jobs = [];
+      mockVariableAnalysisService.createAnalysisJob.mockReturnValueOnce(
+        of(startedJob)
+      );
+      mockVariableAnalysisService.getAllJobs.mockClear();
+      mockVariableAnalysisService.getAllJobs.mockReturnValueOnce(
+        throwError(() => new Error('network error'))
+      );
+      mockVariableAnalysisService.setVariableAnalysisGuardRunning.mockClear();
+
+      component.startNewAnalysis();
+
+      expect(component.activeJob).toEqual(startedJob);
+      expect(mockVariableAnalysisService.getAllJobs).toHaveBeenCalledTimes(1);
+      expect(
+        mockVariableAnalysisService.setVariableAnalysisGuardRunning
+      ).toHaveBeenCalledWith(1, true);
+      expect(
+        mockVariableAnalysisService.setVariableAnalysisGuardRunning
+      ).not.toHaveBeenCalledWith(1, false);
     });
   });
 
