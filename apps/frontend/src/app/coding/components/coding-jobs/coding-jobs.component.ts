@@ -226,6 +226,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   @Input() showTransferAction = true;
   @Input() showApplyActions = true;
   @Input() showBulkDeleteAction = true;
+  @Input() showRefreshAction = true;
   @Input() autoReloadOnFocus = false;
 
   private handleWindowFocus = () => {
