@@ -469,6 +469,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   refreshCodingStatusOverview(): void {
+    this.invalidateCodingStatusOverviewCache();
     this.fetchCodingStatistics();
     this.loadCodingStatusOverview(true);
     this.refreshTableData();
@@ -480,9 +481,17 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.invalidateCodingStatusOverviewCache();
     this.fetchCodingStatistics();
     this.loadCodingStatusOverview();
     this.refreshTableData();
+  }
+
+  private invalidateCodingStatusOverviewCache(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (workspaceId) {
+      this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
+    }
   }
 
   loadCodingStatusOverview(forceAutocodingReadiness = false): void {
@@ -529,6 +538,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
             'Schließen',
             { duration: 5000 }
           );
+          this.invalidateCodingStatusOverviewCache();
           this.loadCodingFreshness();
           return;
         }
@@ -551,6 +561,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
               null;
             if (this.isTerminalJobStatus(dialogStatus)) {
               this.stopFreshnessJobPolling();
+              this.invalidateCodingStatusOverviewCache();
               this.loadCodingFreshness();
               this.loadManualAppliedResultsOverview();
               this.loadAutocodingReadiness(true);

@@ -122,6 +122,7 @@ describe('TestResultsComponent', () => {
           provide: TestPersonCodingService,
           useValue: {
             notifyTestResultsChanged: jest.fn(),
+            invalidateCodingStatusCache: jest.fn(),
             getAppliedResultsOverview: jest.fn().mockReturnValue(of({
               totalIncompleteResponses: 0,
               appliedResponses: 0,
@@ -427,6 +428,11 @@ describe('TestResultsComponent', () => {
   });
 
   it('should keep manual coding status refresh visible after a manual check', () => {
+    const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
+      invalidateCodingStatusCache: jest.Mock;
+    };
+
+    testPersonCodingService.invalidateCodingStatusCache.mockClear();
     (component as unknown as {
       setAutoRefreshCodingStatus: (enabled: boolean) => void;
     }).setAutoRefreshCodingStatus(false);
@@ -434,6 +440,7 @@ describe('TestResultsComponent', () => {
     component.refreshCodingFreshnessStatusManually();
 
     expect(component.shouldShowCodingFreshnessManualNotice).toBe(true);
+    expect(testPersonCodingService.invalidateCodingStatusCache).toHaveBeenCalledWith(1);
   });
 
   it('should ignore stale manual coding status responses after status was cleared', () => {

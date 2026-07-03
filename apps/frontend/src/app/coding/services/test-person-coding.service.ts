@@ -4,7 +4,10 @@ import {
   Observable,
   Subject,
   catchError,
+  finalize,
   of,
+  shareReplay,
+  tap,
   throwError
 } from 'rxjs';
 import Keycloak from 'keycloak-js';
@@ -240,6 +243,15 @@ export class TestPersonCodingService {
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
   private pendingStatisticsVersions = new Map<number, CodingStatisticsVersion>();
+  private codingFreshnessCache = new Map<number, CodingFreshnessSummaryDto>();
+  private codingFreshnessRequests = new Map<number, Observable<CodingFreshnessSummaryDto>>();
+  private autocodingReadinessCache = new Map<string, AutocodingReadinessDto>();
+  private autocodingReadinessRequests = new Map<string, Observable<AutocodingReadinessDto>>();
+  private codingFreshnessScopeCache = new Map<string, CodingFreshnessScopeDto>();
+  private codingFreshnessScopeRequests = new Map<string, Observable<CodingFreshnessScopeDto>>();
+  private appliedResultsOverviewCache = new Map<number, AppliedResultsOverview | null>();
+  private appliedResultsOverviewRequests = new Map<number, Observable<AppliedResultsOverview | null>>();
+  private codingStatusCacheGeneration = 0;
   autoCodingCompleted$ = this.autoCodingCompletedSubject.asObservable();
   testResultsChanged$ = this.testResultsChangedSubject.asObservable();
 
@@ -260,11 +272,20 @@ export class TestPersonCodingService {
     return typeof jobId === 'string' && jobId.trim().length > 0;
   }
 
+  private deleteCacheKeysForWorkspace<T>(cache: Map<string, T>, workspaceId: number): void {
+    const workspacePrefix = `${workspaceId}:`;
+    Array.from(cache.keys())
+      .filter(key => key.startsWith(workspacePrefix))
+      .forEach(key => cache.delete(key));
+  }
+
   notifyAutoCodingCompleted(jobId?: string): void {
+    this.invalidateCodingStatusCache();
     this.autoCodingCompletedSubject.next({ jobId });
   }
 
   notifyTestResultsChanged(event: TestResultsChangedEvent = {}): void {
+    this.invalidateCodingStatusCache(event.workspaceId);
     if (event.workspaceId && event.statisticsVersion) {
       this.pendingStatisticsVersions.set(event.workspaceId, event.statisticsVersion);
     }
@@ -275,6 +296,30 @@ export class TestPersonCodingService {
     const version = this.pendingStatisticsVersions.get(workspaceId) ?? null;
     this.pendingStatisticsVersions.delete(workspaceId);
     return version;
+  }
+
+  invalidateCodingStatusCache(workspaceId?: number): void {
+    this.codingStatusCacheGeneration += 1;
+    if (!workspaceId) {
+      this.codingFreshnessCache.clear();
+      this.codingFreshnessRequests.clear();
+      this.autocodingReadinessCache.clear();
+      this.autocodingReadinessRequests.clear();
+      this.codingFreshnessScopeCache.clear();
+      this.codingFreshnessScopeRequests.clear();
+      this.appliedResultsOverviewCache.clear();
+      this.appliedResultsOverviewRequests.clear();
+      return;
+    }
+
+    this.codingFreshnessCache.delete(workspaceId);
+    this.codingFreshnessRequests.delete(workspaceId);
+    this.appliedResultsOverviewCache.delete(workspaceId);
+    this.appliedResultsOverviewRequests.delete(workspaceId);
+    this.deleteCacheKeysForWorkspace(this.autocodingReadinessCache, workspaceId);
+    this.deleteCacheKeysForWorkspace(this.autocodingReadinessRequests, workspaceId);
+    this.deleteCacheKeysForWorkspace(this.codingFreshnessScopeCache, workspaceId);
+    this.deleteCacheKeysForWorkspace(this.codingFreshnessScopeRequests, workspaceId);
   }
 
   codeTestPersons(workspaceId: number, testPersonIds: string, autoCoderRun: number = 1): Observable<CodingStatisticsWithJob> {
@@ -474,7 +519,18 @@ export class TestPersonCodingService {
   }
 
   getCodingFreshness(workspaceId: number): Observable<CodingFreshnessSummaryDto> {
-    return this.http
+    const cached = this.codingFreshnessCache.get(workspaceId);
+    if (cached) {
+      return of(cached);
+    }
+
+    const pendingRequest = this.codingFreshnessRequests.get(workspaceId);
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+
+    const requestGeneration = this.codingStatusCacheGeneration;
+    const request$ = this.http
       .get<CodingFreshnessSummaryDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness`,
       {
@@ -483,12 +539,26 @@ export class TestPersonCodingService {
       }
     )
       .pipe(
+        tap(summary => {
+          if (this.codingStatusCacheGeneration === requestGeneration) {
+            this.codingFreshnessCache.set(workspaceId, summary);
+          }
+        }),
         catchError(() => of({
           workspaceId,
           currentRevision: 0,
           items: []
-        }))
+        })),
+        finalize(() => {
+          if (this.codingFreshnessRequests.get(workspaceId) === request$) {
+            this.codingFreshnessRequests.delete(workspaceId);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: false })
       );
+
+    this.codingFreshnessRequests.set(workspaceId, request$);
+    return request$;
   }
 
   getAutocodingReadiness(
@@ -496,12 +566,26 @@ export class TestPersonCodingService {
     autoCoderRun: 1 | 2 = 1,
     forceRefresh = false
   ): Observable<AutocodingReadinessDto> {
+    const cacheKey = `${workspaceId}:${autoCoderRun}`;
+    if (!forceRefresh) {
+      const cached = this.autocodingReadinessCache.get(cacheKey);
+      if (cached) {
+        return of(cached);
+      }
+
+      const pendingRequest = this.autocodingReadinessRequests.get(cacheKey);
+      if (pendingRequest) {
+        return pendingRequest;
+      }
+    }
+
     let params = new HttpParams().set('autoCoderRun', autoCoderRun.toString());
     if (forceRefresh) {
       params = params.set('forceRefresh', 'true');
     }
 
-    return this.http
+    const requestGeneration = this.codingStatusCacheGeneration;
+    const request$ = this.http
       .get<AutocodingReadinessDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/readiness`,
       {
@@ -511,8 +595,25 @@ export class TestPersonCodingService {
       }
     )
       .pipe(
-        catchError(error => throwError(() => error))
+        tap(readiness => {
+          if (
+            this.codingStatusCacheGeneration === requestGeneration &&
+            this.autocodingReadinessRequests.get(cacheKey) === request$
+          ) {
+            this.autocodingReadinessCache.set(cacheKey, readiness);
+          }
+        }),
+        catchError(error => throwError(() => error)),
+        finalize(() => {
+          if (this.autocodingReadinessRequests.get(cacheKey) === request$) {
+            this.autocodingReadinessRequests.delete(cacheKey);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: false })
       );
+
+    this.autocodingReadinessRequests.set(cacheKey, request$);
+    return request$;
   }
 
   getCodingFreshnessScope(
@@ -520,6 +621,21 @@ export class TestPersonCodingService {
     version?: 'v1' | 'v2' | 'v3',
     states?: ('PENDING' | 'STALE' | 'MANUAL_REVIEW_REQUIRED')[]
   ): Observable<CodingFreshnessScopeDto> {
+    const cacheKey = [
+      workspaceId,
+      version || 'all',
+      states?.join(',') || 'all'
+    ].join(':');
+    const cached = this.codingFreshnessScopeCache.get(cacheKey);
+    if (cached) {
+      return of(cached);
+    }
+
+    const pendingRequest = this.codingFreshnessScopeRequests.get(cacheKey);
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+
     let params = new HttpParams();
     if (version) {
       params = params.set('version', version);
@@ -528,7 +644,8 @@ export class TestPersonCodingService {
       params = params.set('state', states.join(','));
     }
 
-    return this.http
+    const requestGeneration = this.codingStatusCacheGeneration;
+    const request$ = this.http
       .get<CodingFreshnessScopeDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness/scope`,
       {
@@ -538,6 +655,11 @@ export class TestPersonCodingService {
       }
     )
       .pipe(
+        tap(scope => {
+          if (this.codingStatusCacheGeneration === requestGeneration) {
+            this.codingFreshnessScopeCache.set(cacheKey, scope);
+          }
+        }),
         catchError(() => {
           const fallback: CodingFreshnessScopeDto = {
             workspaceId,
@@ -560,8 +682,17 @@ export class TestPersonCodingService {
             groups: []
           };
           return of(fallback);
-        })
+        }),
+        finalize(() => {
+          if (this.codingFreshnessScopeRequests.get(cacheKey) === request$) {
+            this.codingFreshnessScopeRequests.delete(cacheKey);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: false })
       );
+
+    this.codingFreshnessScopeRequests.set(cacheKey, request$);
+    return request$;
   }
 
   startFreshnessCoding(
@@ -807,14 +938,38 @@ export class TestPersonCodingService {
   }
 
   getAppliedResultsOverview(workspaceId: number): Observable<AppliedResultsOverview | null> {
-    return this.http
+    if (this.appliedResultsOverviewCache.has(workspaceId)) {
+      return of(this.appliedResultsOverviewCache.get(workspaceId) ?? null);
+    }
+
+    const pendingRequest = this.appliedResultsOverviewRequests.get(workspaceId);
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+
+    const requestGeneration = this.codingStatusCacheGeneration;
+    const request$ = this.http
       .get<AppliedResultsOverview>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/applied-results-overview`,
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(() => of(null))
+        tap(overview => {
+          if (this.codingStatusCacheGeneration === requestGeneration) {
+            this.appliedResultsOverviewCache.set(workspaceId, overview);
+          }
+        }),
+        catchError(() => of(null)),
+        finalize(() => {
+          if (this.appliedResultsOverviewRequests.get(workspaceId) === request$) {
+            this.appliedResultsOverviewRequests.delete(workspaceId);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: false })
       );
+
+    this.appliedResultsOverviewRequests.set(workspaceId, request$);
+    return request$;
   }
 
   generateCoderTrainingPackages(
