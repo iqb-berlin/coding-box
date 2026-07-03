@@ -1342,6 +1342,138 @@ describe('CodingManagementManualComponent', () => {
     expect(loadResponseAnalysisSpy).toHaveBeenCalled();
   });
 
+  it('should skip automatic planning metrics when auto-refresh is disabled', () => {
+    component.autoRefreshManualCodingJobs = false;
+    const componentInternals = component as unknown as {
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      appService: { selectedWorkspaceId: number };
+      loadManualTabData(tab: 'planning'): void;
+      loadVariableCoverageOverview(): void;
+      loadCaseCoverageOverview(): void;
+      loadCodingProgressOverview(): void;
+      loadCodingIncompleteVariables(): void;
+      loadCodingFreshness(): void;
+      loadResponseAnalysis(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    const variableCoverageSpy = jest
+      .spyOn(componentInternals, 'loadVariableCoverageOverview')
+      .mockImplementation();
+    const caseCoverageSpy = jest
+      .spyOn(componentInternals, 'loadCaseCoverageOverview')
+      .mockImplementation();
+    const codingProgressSpy = jest
+      .spyOn(componentInternals, 'loadCodingProgressOverview')
+      .mockImplementation();
+    const incompleteVariablesSpy = jest
+      .spyOn(componentInternals, 'loadCodingIncompleteVariables')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    const loadResponseAnalysisSpy = jest
+      .spyOn(componentInternals, 'loadResponseAnalysis')
+      .mockImplementation();
+
+    componentInternals.loadManualTabData('planning');
+
+    expect(variableCoverageSpy).not.toHaveBeenCalled();
+    expect(caseCoverageSpy).not.toHaveBeenCalled();
+    expect(codingProgressSpy).not.toHaveBeenCalled();
+    expect(incompleteVariablesSpy).not.toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+    expect(loadResponseAnalysisSpy).not.toHaveBeenCalled();
+    expect(component.shouldRenderManualTabData('planning')).toBe(false);
+  });
+
+  it('should load planning metrics through the manual refresh when auto-refresh is disabled', () => {
+    component.selectedManualTabIndex = 1;
+    component.autoRefreshManualCodingJobs = false;
+    const componentInternals = component as unknown as {
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      appService: { selectedWorkspaceId: number };
+      loadVariableCoverageOverview(): void;
+      loadCaseCoverageOverview(): void;
+      loadCodingProgressOverview(): void;
+      loadCodingIncompleteVariables(): void;
+      loadCodingFreshness(options?: { force?: boolean }): void;
+      loadJobDefinitionsForExport(): void;
+      loadResponseAnalysis(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    const variableCoverageSpy = jest
+      .spyOn(componentInternals, 'loadVariableCoverageOverview')
+      .mockImplementation();
+    const caseCoverageSpy = jest
+      .spyOn(componentInternals, 'loadCaseCoverageOverview')
+      .mockImplementation();
+    const codingProgressSpy = jest
+      .spyOn(componentInternals, 'loadCodingProgressOverview')
+      .mockImplementation();
+    const incompleteVariablesSpy = jest
+      .spyOn(componentInternals, 'loadCodingIncompleteVariables')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    jest
+      .spyOn(componentInternals, 'loadJobDefinitionsForExport')
+      .mockImplementation();
+    jest
+      .spyOn(componentInternals, 'loadResponseAnalysis')
+      .mockImplementation();
+
+    component.refreshManualCodingPlanning();
+
+    expect(variableCoverageSpy).toHaveBeenCalled();
+    expect(caseCoverageSpy).toHaveBeenCalled();
+    expect(codingProgressSpy).toHaveBeenCalled();
+    expect(incompleteVariablesSpy).toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).toHaveBeenCalledWith({ force: true });
+    expect(component.shouldRenderManualTabData('planning')).toBe(true);
+  });
+
+  it('should not refresh after auto coding completes before auto-refresh setting is loaded', () => {
+    component.autoRefreshManualCodingJobs = true;
+    const componentInternals = component as unknown as {
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      testPersonCodingService: {
+        notifyAutoCodingCompleted(jobId?: string): void;
+      };
+      refreshAllStatistics(): void;
+      loadCodingFreshness(): void;
+      loadResponseAnalysis(): void;
+      refreshCodingJobsAfterDataChange(scope: string): void;
+      loadJobDefinitionsForExport(): void;
+    };
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = false;
+    const refreshAllStatisticsSpy = jest
+      .spyOn(componentInternals, 'refreshAllStatistics')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    const loadResponseAnalysisSpy = jest
+      .spyOn(componentInternals, 'loadResponseAnalysis')
+      .mockImplementation();
+    const refreshCodingJobsAfterDataChangeSpy = jest
+      .spyOn(componentInternals, 'refreshCodingJobsAfterDataChange')
+      .mockImplementation();
+    const loadJobDefinitionsForExportSpy = jest
+      .spyOn(componentInternals, 'loadJobDefinitionsForExport')
+      .mockImplementation();
+
+    componentInternals.testPersonCodingService.notifyAutoCodingCompleted();
+
+    expect(refreshAllStatisticsSpy).not.toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+    expect(loadResponseAnalysisSpy).not.toHaveBeenCalled();
+    expect(refreshCodingJobsAfterDataChangeSpy).not.toHaveBeenCalled();
+    expect(loadJobDefinitionsForExportSpy).not.toHaveBeenCalled();
+  });
+
   it('should wait for the auto-refresh setting before loading initial coding freshness', () => {
     const manualRefreshSetting$ = new Subject<boolean>();
     const isolatedFixture = TestBed.createComponent(CodingManagementManualComponent);

@@ -81,6 +81,21 @@
             <mat-icon>upload</mat-icon>
             {{ 'coding-management-manual.import.button' | translate }}
           </button>
+          <button
+            *ngIf="shouldShowManualRefreshButton()"
+            mat-stroked-button
+            color="primary"
+            type="button"
+            (click)="refreshManualCodingPlanning()"
+            [disabled]="isAnyPlanningDataLoading()"
+            [attr.aria-label]="
+              'coding-management-manual.buttons.refresh-manual-coding-aria'
+                | translate
+            "
+          >
+            <mat-icon>refresh</mat-icon>
+            {{ 'coding-management-manual.buttons.refresh' | translate }}
+          </button>
         </div>
       </div>
       <hr />
@@ -1151,19 +1166,23 @@
           id="manual-planning"
           class="job-definitions-container"
         >
-          <div class="manual-tab-actions">
+          <div *ngIf="shouldShowManualRefreshButton()" class="manual-tab-actions">
             <button
               mat-stroked-button
               color="primary"
               (click)="refreshManualCodingPlanning()"
               [disabled]="isAnyPlanningDataLoading()"
-              aria-label="Planungsdaten aktualisieren"
+              [attr.aria-label]="
+                'coding-management-manual.buttons.refresh-planning-aria'
+                  | translate
+              "
             >
               <mat-icon>refresh</mat-icon>
-              Aktualisieren
+              {{ 'coding-management-manual.buttons.refresh' | translate }}
             </button>
           </div>
           <coding-box-coding-job-definitions
+            *ngIf="shouldRenderManualTabData('planning')"
             (bulkCreationCompleted)="reloadCodingJobsList('productive')"
             (jobDefinitionChanged)="onJobDefinitionChanged('productive')"
           ></coding-box-coding-job-definitions>
@@ -1195,10 +1214,17 @@
                 <mat-icon class="section-info-icon">info</mat-icon>
               </button>
               <button
+                *ngIf="shouldShowManualRefreshButton()"
                 mat-icon-button
                 (click)="refreshAllStatistics()"
-                matTooltip="Statistiken manuell aktualisieren"
-                aria-label="Statistiken manuell aktualisieren"
+                [matTooltip]="
+                  'coding-management-manual.buttons.refresh-statistics-aria'
+                    | translate
+                "
+                [attr.aria-label]="
+                  'coding-management-manual.buttons.refresh-statistics-aria'
+                    | translate
+                "
               >
                 <mat-icon>refresh</mat-icon>
               </button>
@@ -1470,9 +1496,24 @@
               <mat-icon>compare</mat-icon>
               Doppelkodierungsreview
             </button>
+            <button
+              *ngIf="shouldShowManualRefreshButton()"
+              mat-stroked-button
+              color="primary"
+              type="button"
+              (click)="refreshManualCodingPlanning()"
+              [attr.aria-label]="
+                'coding-management-manual.buttons.refresh-execution-aria'
+                  | translate
+              "
+            >
+              <mat-icon>refresh</mat-icon>
+              {{ 'coding-management-manual.buttons.refresh' | translate }}
+            </button>
           </div>
 
           <coding-box-coding-jobs
+            *ngIf="shouldRenderManualTabData('execution')"
             #productiveCodingJobs
             [jobScope]="'productive'"
             [showTrainingFilter]="false"
@@ -1970,8 +2011,23 @@
               <mat-icon>compare_arrows</mat-icon>
               Schulungen vergleichen
             </button>
+            <button
+              *ngIf="shouldShowManualRefreshButton()"
+              mat-stroked-button
+              color="primary"
+              type="button"
+              (click)="refreshManualCodingPlanning()"
+              [attr.aria-label]="
+                'coding-management-manual.buttons.refresh-training-aria'
+                  | translate
+              "
+            >
+              <mat-icon>refresh</mat-icon>
+              {{ 'coding-management-manual.buttons.refresh' | translate }}
+            </button>
           </div>
           <coding-box-coder-trainings-list
+            *ngIf="shouldRenderManualTabData('training')"
             [showCreateButton]="false"
             [workspaceId]="workspaceId"
             (onCreateTraining)="openCoderTraining()"
@@ -1981,6 +2037,7 @@
           <div class="coding-jobs-container manual-section-block">
             <h3 class="manual-section-title">Kodierjobs</h3>
             <coding-box-coding-jobs
+              *ngIf="shouldRenderManualTabData('training')"
               #trainingCodingJobs
               [jobScope]="'training'"
               [showTrainingFilter]="true"
@@ -2032,7 +2089,9 @@
             </div>
           </div>
 
-          <coding-box-variable-bundle-manager></coding-box-variable-bundle-manager>
+          <coding-box-variable-bundle-manager
+            *ngIf="shouldRenderManualTabData('preparation')"
+          ></coding-box-variable-bundle-manager>
         </div>
       </div>
     </div>
