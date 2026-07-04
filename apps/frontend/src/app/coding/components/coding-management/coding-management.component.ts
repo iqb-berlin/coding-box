@@ -188,7 +188,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   manualAppliedResultsOverviewLoadFailed = false;
   enableRegexSearch = false;
   autoRefreshManualCodingJobs = true;
-  hasRequestedCodingStatusOverview = false;
+  hasLoadedFullCodingStatusOverview = false;
   isStartingFreshnessCoding = false;
   activeFreshnessJobId: string | null = null;
   activeFreshnessJobProgress: number | null = null;
@@ -245,7 +245,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
             this.fetchCodingStatistics();
           }
           if (autoRefresh) {
-            this.loadCodingStatusOverview();
+            this.loadInitialCodingStatusOverview();
           }
         });
       this.workspaceSettingsService
@@ -426,7 +426,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.codingManagementService.fetchCodingStatistics(this.selectedStatisticsVersion);
   }
 
-  loadCodingFreshness(): void {
+  loadCodingFreshness(loadScopeOnWarnings = true): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
@@ -446,10 +446,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       )
       .subscribe(summary => {
         this.codingFreshnessSummary = summary;
-        if (this.hasCodingFreshnessWarnings) {
+        if (loadScopeOnWarnings && this.hasCodingFreshnessWarnings) {
           this.loadCodingFreshnessScope();
         } else {
           this.codingFreshnessScope = null;
+        }
+        if (!loadScopeOnWarnings && this.hasSecondAutocodingFreshnessWarnings) {
+          this.loadManualAppliedResultsOverview();
         }
       });
   }
@@ -516,6 +519,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .subscribe({
         next: readiness => {
           this.autocodingReadiness = readiness;
+          this.hasLoadedFullCodingStatusOverview = true;
         },
         error: () => {
           this.autocodingReadiness = null;
@@ -559,6 +563,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private invalidateCodingStatusOverviewCache(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
+      this.hasLoadedFullCodingStatusOverview = false;
       this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
     }
   }
@@ -568,12 +573,23 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.hasRequestedCodingStatusOverview = true;
+    if (forceAutocodingReadiness) {
+      this.hasLoadedFullCodingStatusOverview = false;
+    }
     this.loadCodingFreshness();
     this.loadManualAppliedResultsOverview();
     if (forceAutocodingReadiness) {
       this.loadAutocodingReadiness(true);
     }
+  }
+
+  private loadInitialCodingStatusOverview(): void {
+    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(false)) {
+      return;
+    }
+
+    this.hasLoadedFullCodingStatusOverview = false;
+    this.loadCodingFreshness(false);
   }
 
   private scheduleAutomaticCodingStatusOverviewRefresh(): void {
@@ -656,7 +672,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   shouldShowManualCodingStatusRefresh(): boolean {
-    return !this.autoRefreshManualCodingJobs;
+    if (this.isStartingFreshnessCoding || this.activeFreshnessJobId) {
+      return false;
+    }
+
+    return !this.autoRefreshManualCodingJobs ||
+      !this.hasLoadedFullCodingStatusOverview;
   }
 
   startFreshnessCoding(version: 'v1' | 'v3'): void {
@@ -987,7 +1008,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   get hasImportedResultsWithoutCoding(): boolean {
-    return !this.hasCodingFreshnessWarnings &&
+    return this.statisticsLoaded &&
+      !this.hasCodingFreshnessWarnings &&
       (this.codingFreshnessSummary?.currentRevision || 0) > 0 &&
       (this.codingFreshnessSummary?.items || []).length === 0 &&
       (this.codingStatistics.totalResponses || 0) === 0;
@@ -1010,8 +1032,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   get isCodingStatusOverviewPendingManualRefresh(): boolean {
-    return !this.hasRequestedCodingStatusOverview &&
-      this.shouldShowManualCodingStatusRefresh();
+    return !this.hasLoadedFullCodingStatusOverview &&
+      this.shouldShowManualCodingStatusRefresh() &&
+      !this.hasAutocodingReadinessLoadFailed &&
+      !this.isAutocodingReadinessBlocked &&
+      !this.hasCodingFreshnessWarnings &&
+      !this.hasImportedResultsWithoutCoding;
   }
 
   get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -1292,6 +1318,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   private get secondAutocodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
     return getSecondAutocodingFreshnessWarnings(this.allCodingFreshnessWarnings);
+  }
+
+  private get hasSecondAutocodingFreshnessWarnings(): boolean {
+    return this.secondAutocodingFreshnessWarnings.length > 0;
   }
 
   private get isSecondAutocodingWaitingForManualCoding(): boolean {

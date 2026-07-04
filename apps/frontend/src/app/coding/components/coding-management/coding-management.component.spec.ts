@@ -270,7 +270,7 @@ describe('CodingManagementComponent', () => {
           'title-not-started': 'Kodierung noch nicht gestartet',
           'title-manual-coding-open': 'Manuelle Kodierung abschließen',
           'title-not-checked': 'Kodierstand nicht automatisch geprüft',
-          'manual-refresh-required': 'Die automatische Aktualisierung ist deaktiviert. Aktualisieren Sie den Status bei Bedarf manuell.',
+          'manual-refresh-required': 'Der vollständige Kodierstand wurde noch nicht geprüft. Aktualisieren Sie den Status bei Bedarf manuell.',
           summary: '{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus, aber {{codeableResponses}} kodierbare Antworten.',
           'details-result-units': '{{count}} Ergebnis-Units',
           'details-unit-files': '{{count}} passende Unit-Dateien',
@@ -319,6 +319,50 @@ describe('CodingManagementComponent', () => {
 
     it('should check manual coding auto-refresh setting on init', () => {
       expect(mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1);
+    });
+
+    it('should only load lightweight coding freshness on init when auto-refresh is enabled', () => {
+      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+    });
+
+    it('should keep the manual full status refresh available after the initial light load', () => {
+      expect(component.shouldShowManualCodingStatusRefresh()).toBe(true);
+      expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(true);
+
+      component.refreshCodingStatusOverview();
+
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, true);
+      expect(component.shouldShowManualCodingStatusRefresh()).toBe(false);
+      expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(false);
+    });
+
+    it('should load manual applied results on init when second auto-coding freshness is open', () => {
+      fixture.destroy();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock)
+        .mockReturnValueOnce(of({
+          workspaceId: 1,
+          currentRevision: 2,
+          items: [{
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 12,
+            affectedResponseCount: 34
+          }]
+        }));
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshnessScope as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      isolatedFixture.detectChanges();
+
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getCodingFreshnessScope).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      isolatedFixture.destroy();
     });
 
     it('should defer autocoding readiness until a forced coding status refresh', () => {
@@ -612,7 +656,7 @@ describe('CodingManagementComponent', () => {
   describe('Coding Freshness', () => {
     it('should show pending manual status refresh as an attention state', () => {
       component.autoRefreshManualCodingJobs = false;
-      component.hasRequestedCodingStatusOverview = false;
+      component.hasLoadedFullCodingStatusOverview = false;
 
       expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(true);
       expect(component.hasCodingFreshnessAttention).toBe(true);
@@ -665,8 +709,11 @@ describe('CodingManagementComponent', () => {
       );
 
       fixture.detectChanges();
-      const actionPanel = fixture.nativeElement.querySelector('.coding-freshness-actions') as HTMLElement | null;
-      const manualActionButton = Array.from(actionPanel?.querySelectorAll('button') || [])
+      const manualActionButton = Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '.coding-freshness-actions button'
+        ) as NodeListOf<HTMLButtonElement>
+      )
         .find(button => button.textContent?.includes('Manuelle Kodierung öffnen')) as HTMLButtonElement | undefined;
       expect(manualActionButton).toBeTruthy();
 

@@ -1385,7 +1385,7 @@
       "title-manual-coding-open": "Manuelle Kodierung abschließen",
       "title-not-checked": "Kodierstand nicht automatisch geprüft",
       "checking": "Zustand wird geprüft...",
-      "manual-refresh-required": "Die automatische Aktualisierung ist deaktiviert. Aktualisieren Sie den Status bei Bedarf manuell.",
+      "manual-refresh-required": "Der vollständige Kodierstand wurde noch nicht geprüft. Aktualisieren Sie den Status bei Bedarf manuell.",
       "summary": "{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus, aber {{codeableResponses}} kodierbare Antworten.",
       "details-result-units": "{{count}} Ergebnis-Units",
       "details-unit-files": "{{count}} passende Unit-Dateien",
