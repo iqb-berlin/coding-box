@@ -1,7 +1,10 @@
 import { ConflictException } from '@nestjs/common';
 import { JobQueueService } from './job-queue.service';
 
-const createJob = (data: Record<string, unknown> = { workspaceId: 1, taskId: 7 }, state = 'waiting') => ({
+const createJob = (
+  data: Record<string, unknown> | null = { workspaceId: 1, taskId: 7 },
+  state = 'waiting'
+) => ({
   id: 'job-1',
   data,
   failedReason: undefined,
@@ -103,6 +106,17 @@ describe('JobQueueService', () => {
     await expect(service.addResetCodingVersionJob({ workspaceId: 1, version: 'v1' })).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addValidationTaskJob({ taskId: 7 })).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addExternalCodingImportJob({ workspaceId: 1, tempFilePath: '/tmp/a', fileName: 'a.csv' })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('reuses active coding statistics jobs for the same workspace and version', async () => {
+    const activeStatisticsJob = createJob({ workspaceId: 1, version: 'v2' });
+    queues[1].getJobs.mockResolvedValue([activeStatisticsJob]);
+
+    await expect(service.addCodingStatisticsJob(1, 'v2'))
+      .resolves.toBe(activeStatisticsJob);
+    await expect(service.getActiveCodingStatisticsJob(1, 'v2'))
+      .resolves.toBe(activeStatisticsJob);
+    expect(queues[1].add).not.toHaveBeenCalled();
   });
 
   it('allows jobs when no duplicate active job exists', async () => {
@@ -267,6 +281,23 @@ describe('JobQueueService', () => {
     await expect(service.getVariableAnalysisJobs(1)).resolves.toHaveLength(1);
     await expect(service.getActiveCodingAnalysisJob(1)).resolves.toHaveProperty('id', 'job-1');
     await expect(service.getActiveResetCodingVersionJob(1)).resolves.toHaveProperty('id', 'job-1');
+  });
+
+  it('ignores stale null jobs when listing export jobs', async () => {
+    queues[2].getJobs.mockResolvedValue([
+      null,
+      createJob(null),
+      createJob({ workspaceId: 2, exportType: 'test-results' }),
+      createJob({ workspaceId: 1, exportType: 'test-results' })
+    ] as never);
+
+    const exportJobs = await service.getExportJobs(1);
+
+    expect(exportJobs).toHaveLength(1);
+    expect(exportJobs[0].data).toMatchObject({
+      workspaceId: 1,
+      exportType: 'test-results'
+    });
   });
 
   it('covers all registered process overview queues', async () => {

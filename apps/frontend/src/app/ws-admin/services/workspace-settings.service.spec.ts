@@ -117,9 +117,9 @@ describe('WorkspaceSettingsService', () => {
       req.flush({ value: '{"enabled":true}' });
     });
 
-    it('should return true on error', () => {
+    it('should return false on error', () => {
       service.getAutoFetchCodingStatistics(1).subscribe(val => {
-        expect(val).toBe(true);
+        expect(val).toBe(false);
       });
       const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auto-fetch-coding-statistics`);
       req.flush({}, { status: 404, statusText: 'Not Found' });

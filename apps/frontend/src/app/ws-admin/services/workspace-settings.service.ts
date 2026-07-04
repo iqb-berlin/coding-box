@@ -144,14 +144,14 @@ export class WorkspaceSettingsService {
         next: setting => {
           try {
             const parsed = JSON.parse(setting.value);
-            observer.next(parsed.enabled ?? true);
+            observer.next(parsed.enabled ?? false);
           } catch {
-            observer.next(true);
+            observer.next(false);
           }
           observer.complete();
         },
         error: () => {
-          observer.next(true);
+          observer.next(false);
           observer.complete();
         }
       });

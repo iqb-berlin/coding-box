@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import {
-  BehaviorSubject, Observable, of, forkJoin, timer, OperatorFunction, Subscription
+  BehaviorSubject, Observable, of, forkJoin, timer, OperatorFunction, Subscription, EMPTY
 } from 'rxjs';
 import {
   catchError, map, switchMap, takeWhile, finalize, filter
@@ -119,11 +119,19 @@ export class CodingManagementService {
   resetJobId$ = this._resetJobId.asObservable();
 
   private resetPollingSubscription: Subscription | null = null;
+  private readonly activeStatisticsFetches = new Set<string>();
+  private readonly statisticsPollingSubscriptions = new Map<string, Subscription>();
   private activeDownloads = new Map<DownloadOperationKind, ActiveDownloadOperation>();
 
   fetchCodingStatistics(version: StatisticsVersion): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
+
+    const fetchKey = this.getStatisticsFetchKey(workspaceId, version);
+    if (this.activeStatisticsFetches.has(fetchKey)) {
+      return;
+    }
+    this.activeStatisticsFetches.add(fetchKey);
 
     this._isLoadingStatistics.next(true);
     // Reset reference stats
@@ -132,21 +140,26 @@ export class CodingManagementService {
 
     this.executionService.createCodingStatisticsJob(workspaceId, version)
       .pipe(
-        catchError(() => of({
-          jobId: '' as string,
-          message: this.translateService.instant('coding-management.loading.creating-coding-statistics')
-        }))
+        catchError(() => {
+          this.showErrorSnackbar('coding-management.loading.creating-coding-statistics');
+          this.finishStatisticsFetch(fetchKey);
+          return EMPTY;
+        })
       )
       .subscribe(({ jobId }) => {
         if (!jobId) {
-          this.handleNoJobIdStatistics(workspaceId, version);
+          this.handleNoJobIdStatistics(workspaceId, version, fetchKey);
         } else {
-          this.pollStatisticsJob(workspaceId, jobId, version);
+          this.pollStatisticsJob(workspaceId, jobId, version, fetchKey);
         }
       });
   }
 
-  private handleNoJobIdStatistics(workspaceId: number, version: StatisticsVersion): void {
+  private handleNoJobIdStatistics(
+    workspaceId: number,
+    version: StatisticsVersion,
+    fetchKey: string
+  ): void {
     if (version === 'v2') {
       // v2 compares to v1
       forkJoin({
@@ -154,7 +167,7 @@ export class CodingManagementService {
         reference: this.statisticsService.getCodingStatistics(workspaceId, 'v1')
       }).pipe(
         this.handleStatisticsError({ current: this.emptyStats, reference: this.emptyStats }),
-        finalize(() => this._isLoadingStatistics.next(false))
+        finalize(() => this.finishStatisticsFetch(fetchKey))
       ).subscribe((result: { current: CodingStatistics; reference: CodingStatistics }) => {
         const { current, reference } = result;
         this._codingStatistics.next(current);
@@ -173,7 +186,7 @@ export class CodingManagementService {
           v2Stats: this.emptyStats,
           v1Stats: this.emptyStats
         }),
-        finalize(() => this._isLoadingStatistics.next(false))
+        finalize(() => this.finishStatisticsFetch(fetchKey))
       ).subscribe((result: { current: CodingStatistics; v2Stats: CodingStatistics; v1Stats: CodingStatistics }) => {
         const { current, v2Stats, v1Stats } = result;
         this._codingStatistics.next(current);
@@ -192,7 +205,7 @@ export class CodingManagementService {
             this.showErrorSnackbar('coding-management.descriptions.error-statistics');
             return of({ totalResponses: 0, statusCounts: {} });
           }),
-          finalize(() => this._isLoadingStatistics.next(false))
+          finalize(() => this.finishStatisticsFetch(fetchKey))
         )
         .subscribe(statistics => {
           this._codingStatistics.next(statistics);
@@ -200,11 +213,21 @@ export class CodingManagementService {
     }
   }
 
-  private pollStatisticsJob(workspaceId: number, jobId: string, version: StatisticsVersion): void {
-    timer(0, 2000).pipe(
+  private pollStatisticsJob(
+    workspaceId: number,
+    jobId: string,
+    version: StatisticsVersion,
+    fetchKey: string
+  ): void {
+    const pollingSubscription = timer(0, 2000).pipe(
       switchMap(() => this.executionService.getCodingStatisticsJobStatus(workspaceId, jobId)),
       takeWhile(status => ['pending', 'processing'].includes(status.status), true),
-      finalize(() => this._isLoadingStatistics.next(false))
+      finalize(() => {
+        if (this.statisticsPollingSubscriptions.get(fetchKey) === pollingSubscription) {
+          this.statisticsPollingSubscriptions.delete(fetchKey);
+        }
+        this.finishStatisticsFetch(fetchKey);
+      })
     ).subscribe((status: CodingJobStatus) => {
       if (status.status === 'completed' && status.result) {
         this._codingStatistics.next(status.result);
@@ -213,6 +236,16 @@ export class CodingManagementService {
         this.snackBar.open(`Statistik-Job ${status.status}`, 'Schließen', { duration: 5000, panelClass: ['error-snackbar'] });
       }
     });
+    this.statisticsPollingSubscriptions.set(fetchKey, pollingSubscription);
+  }
+
+  private getStatisticsFetchKey(workspaceId: number, version: StatisticsVersion): string {
+    return `${workspaceId}:${version}`;
+  }
+
+  private finishStatisticsFetch(fetchKey: string): void {
+    this.activeStatisticsFetches.delete(fetchKey);
+    this._isLoadingStatistics.next(this.activeStatisticsFetches.size > 0);
   }
 
   private fetchReferenceStatisticsAfterJob(workspaceId: number, version: StatisticsVersion): void {

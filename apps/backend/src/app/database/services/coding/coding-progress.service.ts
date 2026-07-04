@@ -14,6 +14,7 @@ import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+import { CacheService } from '../../../cache/cache.service';
 import {
   buildAggregationGroups,
   countEffectiveManualCodingCases,
@@ -32,6 +33,7 @@ import {
   applyNonCodingIssueReviewJobFilter,
   getNonCodingIssueReviewJobSqlCondition
 } from './coding-job-type.util';
+import { getCodingIncompleteVariablesCacheVersionKey } from './coding-incomplete-variables-cache-key.util';
 
 type ResponseMatchingFlag =
   | 'NO_AGGREGATION'
@@ -88,6 +90,32 @@ interface DeriveErrorManualProgress {
   deriveErrorRawAppliedResponses: number;
 }
 
+interface AppliedResultsOverview {
+  totalIncompleteResponses: number;
+  appliedResponses: number;
+  remainingResponses: number;
+  completionPercentage: number;
+  rawTotalIncompleteResponses: number;
+  rawAppliedResponses: number;
+  rawCompletionPercentage: number;
+  aggregationActive: boolean;
+  aggregationThreshold: number | null;
+  aggregatedDuplicateCases: number;
+  statusTotalIncompleteResponses: number;
+  coveredSourceVariableCount: number;
+  coveredSourceResponseCount: number;
+  deriveErrorTotalResponses: number;
+  deriveErrorAppliedResponses: number;
+  deriveErrorRemainingResponses: number;
+  deriveErrorRawTotalResponses: number;
+  deriveErrorRawAppliedResponses: number;
+}
+
+interface CachedAppliedResultsOverview {
+  cacheVersion: number;
+  data: AppliedResultsOverview;
+}
+
 interface ManualProgressStatusQuery {
   where: (condition: string | Brackets, parameters?: Record<string, unknown>) => unknown;
   andWhere: (condition: string | Brackets, parameters?: Record<string, unknown>) => unknown;
@@ -124,6 +152,8 @@ interface ManualCodingVariableLookups {
 export class CodingProgressService {
   private readonly logger = new Logger(CodingProgressService.name);
 
+  private readonly APPLIED_RESULTS_OVERVIEW_CACHE_TTL_SECONDS = 0;
+
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
@@ -137,6 +167,7 @@ export class CodingProgressService {
     private settingRepository: Repository<Setting>,
     private workspaceFilesService: WorkspaceFilesService,
     private workspaceExclusionService: WorkspaceExclusionService,
+    private cacheService: CacheService,
     @Optional()
     private missingsProfilesService?: MissingsProfilesService
   ) { }
@@ -208,26 +239,63 @@ export class CodingProgressService {
     };
   }
 
-  async getAppliedResultsOverview(workspaceId: number): Promise<{
-    totalIncompleteResponses: number;
-    appliedResponses: number;
-    remainingResponses: number;
-    completionPercentage: number;
-    rawTotalIncompleteResponses: number;
-    rawAppliedResponses: number;
-    rawCompletionPercentage: number;
-    aggregationActive: boolean;
-    aggregationThreshold: number | null;
-    aggregatedDuplicateCases: number;
-    statusTotalIncompleteResponses: number;
-    coveredSourceVariableCount: number;
-    coveredSourceResponseCount: number;
-    deriveErrorTotalResponses: number;
-    deriveErrorAppliedResponses: number;
-    deriveErrorRemainingResponses: number;
-    deriveErrorRawTotalResponses: number;
-    deriveErrorRawAppliedResponses: number;
-  }> {
+  async getAppliedResultsOverview(workspaceId: number, skipCache = false): Promise<AppliedResultsOverview> {
+    const cacheKey = this.getAppliedResultsOverviewCacheKey(workspaceId);
+    const cacheVersion = await this.getAppliedResultsOverviewCacheVersion(workspaceId);
+
+    if (!skipCache) {
+      const cachedOverview = await this.cacheService.get<CachedAppliedResultsOverview>(cacheKey);
+      if (this.isFreshAppliedResultsOverviewCache(cachedOverview, cacheVersion)) {
+        this.logger.log(`Returning cached applied results overview for workspace ${workspaceId}`);
+        return cachedOverview.data;
+      }
+    }
+
+    const overview = await this.computeAppliedResultsOverview(workspaceId);
+    await this.cacheService.set(
+      cacheKey,
+      {
+        cacheVersion,
+        data: overview
+      },
+      this.APPLIED_RESULTS_OVERVIEW_CACHE_TTL_SECONDS
+    );
+    return overview;
+  }
+
+  async refreshAppliedResultsOverview(workspaceId: number): Promise<AppliedResultsOverview> {
+    return this.getAppliedResultsOverview(workspaceId, true);
+  }
+
+  async invalidateAppliedResultsOverviewCache(workspaceId: number): Promise<void> {
+    const cacheKey = this.getAppliedResultsOverviewCacheKey(workspaceId);
+    await this.cacheService.delete(cacheKey);
+    this.logger.log(`Invalidated applied results overview cache for workspace ${workspaceId}`);
+  }
+
+  private getAppliedResultsOverviewCacheKey(workspaceId: number): string {
+    return `coding-progress:applied-results-overview:v1:${workspaceId}`;
+  }
+
+  private async getAppliedResultsOverviewCacheVersion(workspaceId: number): Promise<number> {
+    return this.cacheService.getNumber(
+      getCodingIncompleteVariablesCacheVersionKey(workspaceId),
+      0
+    );
+  }
+
+  private isFreshAppliedResultsOverviewCache(
+    cachedOverview: CachedAppliedResultsOverview | null,
+    cacheVersion: number
+  ): cachedOverview is CachedAppliedResultsOverview {
+    return Boolean(
+      cachedOverview &&
+      cachedOverview.cacheVersion === cacheVersion &&
+      cachedOverview.data
+    );
+  }
+
+  private async computeAppliedResultsOverview(workspaceId: number): Promise<AppliedResultsOverview> {
     const responseScope = await this.getCoverageResponseScope(workspaceId);
     const responses = responseScope.manualResponses;
     const appliedResponseIds = new Set(
