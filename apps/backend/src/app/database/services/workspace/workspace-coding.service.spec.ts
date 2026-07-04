@@ -174,7 +174,8 @@ describe('WorkspaceCodingService', () => {
   const mockCodingProgressService = {
     getCodingProgressOverview: jest.fn(),
     getVariableCoverageOverview: jest.fn(),
-    getCaseCoverageOverview: jest.fn()
+    getCaseCoverageOverview: jest.fn(),
+    invalidateAppliedResultsOverviewCache: jest.fn()
   };
 
   const mockCodingReplayService = {
