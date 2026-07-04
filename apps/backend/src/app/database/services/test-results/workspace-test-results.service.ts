@@ -76,6 +76,10 @@ import {
   TestResultsTimestampSource
 } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 import {
+  getCodingReadinessCachePattern,
+  getCodingReadinessCacheVersionKey
+} from '../coding/coding-readiness-cache-key.util';
+import {
   assertValidRegexSearchPattern,
   toRegexSearchException,
   withRegexSearchStatementTimeout
@@ -1632,7 +1636,9 @@ export class WorkspaceTestResultsService {
       this.cacheService.delete(`${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}`),
       this.cacheService.deleteByPattern(`${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-*`),
       this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
-      this.cacheService.deleteByPattern(`flat_response_filter_options:${workspaceId}:*`)
+      this.cacheService.deleteByPattern(`flat_response_filter_options:${workspaceId}:*`),
+      this.cacheService.incr(getCodingReadinessCacheVersionKey(workspaceId)),
+      this.cacheService.deleteByPattern(getCodingReadinessCachePattern(workspaceId))
     ]);
   }
 

@@ -97,6 +97,7 @@ describe('WorkspaceTestResultsService', () => {
     set: jest.Mock;
     delete: jest.Mock;
     deleteByPattern: jest.Mock;
+    incr: jest.Mock;
   };
   let dataSource: DataSource;
 
@@ -147,7 +148,8 @@ describe('WorkspaceTestResultsService', () => {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
       delete: jest.fn().mockResolvedValue(undefined),
-      deleteByPattern: jest.fn().mockResolvedValue(undefined)
+      deleteByPattern: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1)
     };
 
     personsRepository = {
@@ -2048,6 +2050,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
     });
 
     it('deleteUnit should invalidate cache', async () => {
@@ -2073,6 +2077,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
     });
 
     it('deleteResponse should invalidate cache', async () => {
@@ -2111,6 +2117,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
     });
   });
 

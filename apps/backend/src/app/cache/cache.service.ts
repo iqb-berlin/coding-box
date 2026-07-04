@@ -333,11 +333,13 @@ export class CacheService {
    */
   async deleteByPattern(pattern: string): Promise<void> {
     try {
+      const keyPrefix = this.getKeyPrefix();
+      const scanPattern = keyPrefix ? `${keyPrefix}${pattern}` : pattern;
       let cursor = '0';
       do {
-        const reply = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        const reply = await this.redis.scan(cursor, 'MATCH', scanPattern, 'COUNT', 100);
         cursor = reply[0];
-        const keys = reply[1];
+        const keys = this.toLogicalKeys(reply[1], keyPrefix);
         if (keys.length > 0) {
           await this.redis.del(...keys);
         }
@@ -348,5 +350,20 @@ export class CacheService {
         error.stack
       );
     }
+  }
+
+  private getKeyPrefix(): string {
+    const keyPrefix = this.redis.options?.keyPrefix;
+    return typeof keyPrefix === 'string' ? keyPrefix : '';
+  }
+
+  private toLogicalKeys(keys: string[], keyPrefix: string): string[] {
+    if (!keyPrefix) {
+      return keys;
+    }
+
+    return keys
+      .filter(key => key.startsWith(keyPrefix))
+      .map(key => key.slice(keyPrefix.length));
   }
 }
