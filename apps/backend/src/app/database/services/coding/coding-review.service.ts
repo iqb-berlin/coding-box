@@ -20,6 +20,7 @@ import {
 } from './coding-job-type.util';
 import { CodingJobService } from './coding-job.service';
 import { CodingAnalysisService } from './coding-analysis.service';
+import { CodingValidationService } from './coding-validation.service';
 
 type JobDefinitionBundleScope = {
   bundleIds: number[];
@@ -108,6 +109,7 @@ export class CodingReviewService {
     private variableBundleRepository: Repository<VariableBundle>,
     private codingStatisticsService: CodingStatisticsService,
     private codingAnalysisService: CodingAnalysisService,
+    private codingValidationService: CodingValidationService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private codingJobService: CodingJobService,
     @Optional()
@@ -1235,6 +1237,12 @@ export class CodingReviewService {
       }
       if (appliedCount > 0 && typeof this.codingAnalysisService.invalidateCache === 'function') {
         await this.codingAnalysisService.invalidateCache(workspaceId);
+      }
+      if (
+        appliedCount > 0 &&
+        typeof this.codingValidationService.invalidateIncompleteVariablesCache === 'function'
+      ) {
+        await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       }
 
       const message = `Applied ${appliedCount} resolutions successfully. ${failedCount > 0 ? `${failedCount} failed.` : ''

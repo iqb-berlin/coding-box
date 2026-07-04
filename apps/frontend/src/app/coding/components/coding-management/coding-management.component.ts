@@ -216,9 +216,11 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private hasLoadedManualCodingJobRefreshSetting = false;
   private pendingAutomaticCodingStatusRefreshAfterBackgroundJob = false;
   private pendingForcedCodingStatusRefreshAfterBackgroundJob = false;
+  private scheduledAutomaticCodingStatusRefresh: number | null = null;
   private freshnessJobCompletionRefreshHandledIds = new Set<string>();
   private resetCompletionRefreshHandledAfterGuardClear = false;
   private hasShownFreshnessJobStatusPollingError = false;
+  private readonly automaticCodingStatusRefreshDebounceMs = 250;
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -238,14 +240,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         .subscribe(([autoFetch, autoRefresh]) => {
           this.hasLoadedManualCodingJobRefreshSetting = true;
           this.autoRefreshManualCodingJobs = autoRefresh;
-          if (!autoRefresh) {
-            return;
-          }
 
           if (autoFetch || pendingStatisticsVersion) {
             this.fetchCodingStatistics();
           }
-          this.loadCodingStatusOverview();
+          if (autoRefresh) {
+            this.loadCodingStatusOverview();
+          }
         });
       this.workspaceSettingsService
         .getEnableRegexSearch(workspaceId)
@@ -375,6 +376,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       );
     }
     this.stopFreshnessJobPolling();
+    this.clearScheduledAutomaticCodingStatusRefresh();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -551,7 +553,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.performCodingStatusOverviewRefresh();
+    this.scheduleAutomaticCodingStatusOverviewRefresh();
   }
 
   private invalidateCodingStatusOverviewCache(): void {
@@ -569,7 +571,30 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.hasRequestedCodingStatusOverview = true;
     this.loadCodingFreshness();
     this.loadManualAppliedResultsOverview();
-    this.loadAutocodingReadiness(forceAutocodingReadiness);
+    if (forceAutocodingReadiness) {
+      this.loadAutocodingReadiness(true);
+    }
+  }
+
+  private scheduleAutomaticCodingStatusOverviewRefresh(): void {
+    if (this.scheduledAutomaticCodingStatusRefresh !== null) {
+      return;
+    }
+
+    this.scheduledAutomaticCodingStatusRefresh = window.setTimeout(() => {
+      this.scheduledAutomaticCodingStatusRefresh = null;
+      if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(false)) {
+        return;
+      }
+      this.performCodingStatusOverviewRefresh();
+    }, this.automaticCodingStatusRefreshDebounceMs);
+  }
+
+  private clearScheduledAutomaticCodingStatusRefresh(): void {
+    if (this.scheduledAutomaticCodingStatusRefresh !== null) {
+      clearTimeout(this.scheduledAutomaticCodingStatusRefresh);
+      this.scheduledAutomaticCodingStatusRefresh = null;
+    }
   }
 
   private deferCodingStatusRefreshIfBackgroundJobIsRunning(forceRefresh: boolean): boolean {
@@ -1459,8 +1484,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed()
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.fetchCodingStatistics();
+      .subscribe(dialogResult => {
+        if (data?.initialJobId) {
+          return;
+        }
+        if (this.isTerminalJobStatus(dialogResult?.jobStatus)) {
+          this.refreshCodingStatusOverviewAfterChange();
+        }
       });
 
     return dialogRef;
