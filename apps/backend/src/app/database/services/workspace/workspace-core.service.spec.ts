@@ -91,6 +91,7 @@ describe('WorkspaceCoreService', () => {
     });
     await expect(service.patch({ id: 1, name: 'Patched', settings: { a: true } } as never)).resolves.toBeUndefined();
     expect(cacheService.delete).toHaveBeenCalled();
+    expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
     await expect(service.remove([])).resolves.toBeUndefined();
     await expect(service.remove([1])).resolves.toBeUndefined();
     expect(queryRunner.commitTransaction).toHaveBeenCalled();

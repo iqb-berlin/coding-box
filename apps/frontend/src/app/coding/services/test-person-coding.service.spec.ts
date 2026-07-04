@@ -1227,6 +1227,141 @@ describe('TestPersonCodingService', () => {
       )).flush(mockResponse);
     });
 
+    it('should request cached autocoding readiness with cache-only params', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1,
+        readiness: 'READY',
+        blockers: [],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 1,
+        validResponses: 10,
+        codeableResponses: 10,
+        invalidVariableSamples: [],
+        fromCache: true
+      };
+      let cachedResponse: unknown;
+
+      service.getCachedAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
+
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1' &&
+        request.params.get('cacheOnly') === 'true' &&
+        !request.params.has('forceRefresh')
+      ));
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+
+      service.getCachedAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          cachedResponse = response;
+        });
+      httpMock.expectNone(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1'
+      ));
+      expect(cachedResponse).toEqual(mockResponse);
+    });
+
+    it('should ignore stale cache-only autocoding readiness responses after invalidation', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1,
+        readiness: 'READY',
+        blockers: [],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 1,
+        validResponses: 10,
+        codeableResponses: 10,
+        invalidVariableSamples: [],
+        fromCache: true
+      };
+      let staleResponse: unknown = 'unset';
+
+      service.getCachedAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          staleResponse = response;
+        });
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1' &&
+        request.params.get('cacheOnly') === 'true'
+      ));
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+      req.flush(mockResponse);
+
+      expect(staleResponse).toBeNull();
+    });
+
+    it('should not let cache-only autocoding readiness misses block full readiness requests', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1,
+        readiness: 'READY',
+        blockers: [],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 1,
+        validResponses: 10,
+        codeableResponses: 10,
+        invalidVariableSamples: []
+      };
+      let cacheOnlyResponse: unknown = 'unset';
+      let fullResponse: unknown;
+
+      service.getCachedAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          cacheOnlyResponse = response;
+        });
+      httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1' &&
+        request.params.get('cacheOnly') === 'true'
+      )).flush(null);
+
+      service.getAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          fullResponse = response;
+        });
+      httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1' &&
+        !request.params.has('cacheOnly') &&
+        !request.params.has('forceRefresh')
+      )).flush(mockResponse);
+
+      expect(cacheOnlyResponse).toBeNull();
+      expect(fullResponse).toEqual(mockResponse);
+    });
+
     it('should keep force-refreshed autocoding readiness cached when stale requests finish later', () => {
       const staleResponse = {
         workspaceId: mockWorkspaceId,

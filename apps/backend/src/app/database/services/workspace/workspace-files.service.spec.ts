@@ -242,8 +242,8 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
   const mockCodingFreshnessService = {
     markUnitsStaleAfterCodingSchemeChange: jest.fn().mockResolvedValue(undefined)
   };
-  const mockCodingReadinessCacheInvalidator = {
-    invalidateWorkspaceReadinessCache: jest.fn()
+  const mockWorkspaceTestResultsService = {
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
   };
   const mockWorkspaceFileParsingService = {
     extractUnitInfo: jest.fn().mockResolvedValue({
@@ -266,12 +266,11 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
-      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
+      mockWorkspaceTestResultsService as unknown as CtorParams[11],
       undefined,
       mockCodingFreshnessService as unknown as CtorParams[13],
       undefined,
-      undefined,
-      mockCodingReadinessCacheInvalidator as unknown as CtorParams[16]
+      undefined
     );
   }
 
@@ -441,7 +440,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     expect(mockCodingStatisticsService.invalidateCache).not.toHaveBeenCalled();
     expect(mockCodingStatisticsService.invalidateIncompleteVariablesCache)
       .toHaveBeenCalledWith(1);
-    expect(mockCodingReadinessCacheInvalidator.invalidateWorkspaceReadinessCache)
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache)
       .toHaveBeenCalledWith(1);
   });
 
@@ -614,12 +613,12 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     ]);
   });
 
-  it('invalidates auto-coding readiness cache when workspace file caches are invalidated', async () => {
+  it('invalidates workspace stats caches when workspace file caches are invalidated', async () => {
     const service = makeService();
 
     await service.invalidateWorkspaceFileCaches(1);
 
-    expect(mockCodingReadinessCacheInvalidator.invalidateWorkspaceReadinessCache)
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache)
       .toHaveBeenCalledWith(1);
   });
 });

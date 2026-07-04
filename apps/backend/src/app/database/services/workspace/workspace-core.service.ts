@@ -120,6 +120,7 @@ export class WorkspaceCoreService {
       await this.workspaceRepository.save(workspaceGroupToUpdate);
       await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceData.id}`);
       if (workspaceData.settings) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceData.id);
         await this.invalidateCachesAffectedByExclusions(workspaceData.id);
       }
     }
