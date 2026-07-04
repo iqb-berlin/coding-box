@@ -270,7 +270,7 @@ describe('CodingManagementComponent', () => {
           'title-not-started': 'Kodierung noch nicht gestartet',
           'title-manual-coding-open': 'Manuelle Kodierung abschließen',
           'title-not-checked': 'Kodierstand nicht automatisch geprüft',
-          'manual-refresh-required': 'Die automatische Aktualisierung ist deaktiviert. Aktualisieren Sie den Status bei Bedarf manuell.',
+          'manual-refresh-required': 'Der vollständige Kodierstand wurde noch nicht geprüft. Aktualisieren Sie den Status bei Bedarf manuell.',
           summary: '{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus, aber {{codeableResponses}} kodierbare Antworten.',
           'details-result-units': '{{count}} Ergebnis-Units',
           'details-unit-files': '{{count}} passende Unit-Dateien',
@@ -321,9 +321,57 @@ describe('CodingManagementComponent', () => {
       expect(mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1);
     });
 
-    it('should load autocoding readiness for the first autocoder run', () => {
+    it('should only load lightweight coding freshness on init when auto-refresh is enabled', () => {
+      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+    });
+
+    it('should keep the manual full status refresh available after the initial light load', () => {
+      expect(component.shouldShowManualCodingStatusRefresh()).toBe(true);
+      expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(true);
+
+      component.refreshCodingStatusOverview();
+
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, true);
+      expect(component.shouldShowManualCodingStatusRefresh()).toBe(false);
+      expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(false);
+    });
+
+    it('should load manual applied results on init when second auto-coding freshness is open', () => {
+      fixture.destroy();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock)
+        .mockReturnValueOnce(of({
+          workspaceId: 1,
+          currentRevision: 2,
+          items: [{
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 12,
+            affectedResponseCount: 34
+          }]
+        }));
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshnessScope as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      isolatedFixture.detectChanges();
+
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getCodingFreshnessScope).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      isolatedFixture.destroy();
+    });
+
+    it('should defer autocoding readiness until a forced coding status refresh', () => {
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      component.refreshCodingStatusOverview();
+
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
-      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, true);
     });
 
     it('should refresh coding status overview when requested by query param', () => {
@@ -368,28 +416,34 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should defer automatic coding status refresh while a guarded background job is running', () => {
-      (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
-        .mockReturnValue(true);
-      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
-      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
-      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
-      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+      jest.useFakeTimers();
+      try {
+        (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
+          .mockReturnValue(true);
+        (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
 
-      autoCodingCompletedSubject.next({});
+        autoCodingCompletedSubject.next({});
 
-      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
-      expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
-      expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
-      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+        expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+        expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
+        expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
+        expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
 
-      (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
-        .mockReturnValue(false);
-      statusGuardClearedSubject.next({ workspaceId: 1 });
+        (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
+          .mockReturnValue(false);
+        statusGuardClearedSubject.next({ workspaceId: 1 });
+        jest.advanceTimersByTime(250);
 
-      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
-      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
-      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
-      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
+        expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
+        expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
+        expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
+        expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('should not refresh twice when freshness completion clears a pending guarded refresh', () => {
@@ -481,7 +535,7 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
     });
 
-    it('should not auto-fetch coding overview statistics when global auto-refresh is disabled', () => {
+    it('should still auto-fetch coding statistics when status auto-refresh is disabled', () => {
       fixture.destroy();
       (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
       (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
@@ -497,7 +551,7 @@ describe('CodingManagementComponent', () => {
       isolatedFixture.detectChanges();
 
       expect(isolatedComponent.autoRefreshManualCodingJobs).toBe(false);
-      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v1');
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
@@ -536,7 +590,7 @@ describe('CodingManagementComponent', () => {
 
       manualRefreshSetting$.next(false);
 
-      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
@@ -602,7 +656,7 @@ describe('CodingManagementComponent', () => {
   describe('Coding Freshness', () => {
     it('should show pending manual status refresh as an attention state', () => {
       component.autoRefreshManualCodingJobs = false;
-      component.hasRequestedCodingStatusOverview = false;
+      component.hasLoadedFullCodingStatusOverview = false;
 
       expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(true);
       expect(component.hasCodingFreshnessAttention).toBe(true);
@@ -655,8 +709,11 @@ describe('CodingManagementComponent', () => {
       );
 
       fixture.detectChanges();
-      const actionPanel = fixture.nativeElement.querySelector('.coding-freshness-actions') as HTMLElement | null;
-      const manualActionButton = Array.from(actionPanel?.querySelectorAll('button') || [])
+      const manualActionButton = Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '.coding-freshness-actions button'
+        ) as NodeListOf<HTMLButtonElement>
+      )
         .find(button => button.textContent?.includes('Manuelle Kodierung öffnen')) as HTMLButtonElement | undefined;
       expect(manualActionButton).toBeTruthy();
 
@@ -1175,13 +1232,22 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should switch to changed statistics version when test results change', () => {
-      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      jest.useFakeTimers();
+      try {
+        (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
 
-      testResultsChangedSubject.next({ workspaceId: 1, statisticsVersion: 'v2' });
+        testResultsChangedSubject.next({ workspaceId: 1, statisticsVersion: 'v2' });
 
-      expect(component.selectedStatisticsVersion).toBe('v2');
-      expect(component.filterParams.version).toBe('v2');
-      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
+        expect(component.selectedStatisticsVersion).toBe('v2');
+        expect(component.filterParams.version).toBe('v2');
+        expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+
+        jest.advanceTimersByTime(250);
+
+        expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('should ignore changed test results from a different workspace', () => {

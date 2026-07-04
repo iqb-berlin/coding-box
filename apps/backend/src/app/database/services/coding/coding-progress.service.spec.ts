@@ -101,6 +101,12 @@ describe('CodingProgressService variable coverage conflicts', () => {
     getDerivedVariablesBySourceMap: jest.Mock;
     getManualInstructionVariableMap: jest.Mock;
   };
+  let cacheService: {
+    get: jest.Mock;
+    set: jest.Mock;
+    delete: jest.Mock;
+    getNumber: jest.Mock;
+  };
   let service: CodingProgressService;
 
   beforeEach(() => {
@@ -124,6 +130,12 @@ describe('CodingProgressService variable coverage conflicts', () => {
         testletIgnoredUnits: []
       })
     };
+    cacheService = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue(true),
+      delete: jest.fn().mockResolvedValue(true),
+      getNumber: jest.fn().mockResolvedValue(0)
+    };
 
     service = new CodingProgressService(
       responseRepository as never,
@@ -132,7 +144,8 @@ describe('CodingProgressService variable coverage conflicts', () => {
       variableBundleRepository as never,
       settingRepository as never,
       workspaceFilesService as never,
-      workspaceExclusionService as never
+      workspaceExclusionService as never,
+      cacheService as never
     );
   });
 
@@ -324,6 +337,67 @@ describe('CodingProgressService variable coverage conflicts', () => {
       deriveErrorAppliedResponses: 1,
       deriveErrorRemainingResponses: 0
     });
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'coding-progress:applied-results-overview:v1:5',
+      expect.objectContaining({
+        cacheVersion: 0,
+        data: expect.objectContaining({
+          rawTotalIncompleteResponses: 2,
+          rawAppliedResponses: 1,
+          deriveErrorRawTotalResponses: 1,
+          deriveErrorRawAppliedResponses: 1
+        })
+      }),
+      0
+    );
+  });
+
+  it('returns cached applied result progress without querying responses', async () => {
+    const cachedOverview = {
+      totalIncompleteResponses: 3,
+      appliedResponses: 2,
+      remainingResponses: 1,
+      completionPercentage: 66.67,
+      rawTotalIncompleteResponses: 4,
+      rawAppliedResponses: 2,
+      rawCompletionPercentage: 50,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0,
+      statusTotalIncompleteResponses: 4,
+      coveredSourceVariableCount: 0,
+      coveredSourceResponseCount: 0,
+      deriveErrorTotalResponses: 1,
+      deriveErrorAppliedResponses: 1,
+      deriveErrorRemainingResponses: 0,
+      deriveErrorRawTotalResponses: 1,
+      deriveErrorRawAppliedResponses: 1
+    };
+    cacheService.get.mockResolvedValueOnce({
+      cacheVersion: 0,
+      data: cachedOverview
+    });
+
+    const result = await service.getAppliedResultsOverview(5);
+
+    expect(result).toBe(cachedOverview);
+    expect(cacheService.getNumber).toHaveBeenCalledWith(
+      'coding_incomplete_variables_version:5',
+      0
+    );
+    expect(cacheService.get).toHaveBeenCalledWith(
+      'coding-progress:applied-results-overview:v1:5'
+    );
+    expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(cacheService.set).not.toHaveBeenCalled();
+  });
+
+  it('invalidates cached applied result progress for the workspace', async () => {
+    await service.invalidateAppliedResultsOverviewCache(5);
+
+    expect(cacheService.delete).toHaveBeenCalledWith(
+      'coding-progress:applied-results-overview:v1:5'
+    );
   });
 
   it('limits manual pool existence checks to non-training coding jobs', async () => {

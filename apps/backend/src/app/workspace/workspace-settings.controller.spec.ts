@@ -15,6 +15,20 @@ describe('WorkspaceSettingsController', () => {
     );
   });
 
+  it('returns the default coding statistics auto-fetch setting disabled when it is missing', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'auto-fetch-coding-statistics')
+    ).resolves.toEqual({
+      id: 0,
+      key: 'workspace-5-auto-fetch-coding-statistics',
+      value: JSON.stringify({ enabled: false }),
+      description:
+        'Controls whether coding statistics are automatically fetched in the coding management component'
+    });
+  });
+
   it('returns the default manual coding job auto-refresh setting when it is missing', async () => {
     settingRepository.findOne.mockResolvedValue(null);
 
