@@ -161,14 +161,33 @@ describe('CodingManagementService', () => {
       expect(executionServiceMock.createCodingStatisticsJob).not.toHaveBeenCalled();
     });
 
-    it('should handle failure to create job', () => {
+    it('should not start duplicate statistics jobs for the same workspace and version while one is active', () => {
+      const jobStart$ = new Subject<{ jobId: string; message: string }>();
+      executionServiceMock.createCodingStatisticsJob.mockReturnValue(jobStart$);
+
+      service.fetchCodingStatistics('v1');
+      service.fetchCodingStatistics('v1');
+
+      expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not synchronously fetch statistics when job creation fails', () => {
       executionServiceMock.createCodingStatisticsJob.mockReturnValue(throwError(() => new Error('Failed')));
-      // Expect it to call handleNoJobIdStatistics -> getCodingStatistics
       statisticsServiceMock.getCodingStatistics.mockReturnValue(of(mockCodingStatistics));
+      let isLoading: boolean | undefined;
+      service.isLoadingStatistics$.subscribe(value => {
+        isLoading = value;
+      });
 
       service.fetchCodingStatistics('v1');
 
-      expect(statisticsServiceMock.getCodingStatistics).toHaveBeenCalledWith(1, 'v1');
+      expect(statisticsServiceMock.getCodingStatistics).not.toHaveBeenCalled();
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        'coding-management.loading.creating-coding-statistics',
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+      expect(isLoading).toBe(false);
     });
   });
 

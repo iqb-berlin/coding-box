@@ -34,7 +34,7 @@ export class WorkspaceSettingsController {
         return {
           id: 0,
           key: settingKey,
-          value: JSON.stringify({ enabled: true }),
+          value: JSON.stringify({ enabled: false }),
           description:
             'Controls whether coding statistics are automatically fetched in the coding management component'
         };
