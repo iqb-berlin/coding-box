@@ -3036,6 +3036,100 @@ describe('CoderTrainingService', () => {
       );
     });
 
+    it('treats regex-enabled comparison text filters as literal text on the backend', async () => {
+      const serviceInternals = service as unknown as {
+        getWithinTrainingComparisonAggregateRows: () => Promise<unknown>;
+        getWithinTrainingComparisonRowsForResponseIds: () => Promise<unknown>;
+      };
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        workspace_id: 1
+      });
+      (codingJobRepository.find as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 11,
+          name: 'job-a',
+          missings_profile_id: null,
+          codingJobCoders: [{ user: { username: 'Coder A' } }]
+        },
+        {
+          id: 12,
+          name: 'job-b',
+          missings_profile_id: null,
+          codingJobCoders: [{ user: { username: 'Coder B' } }]
+        }
+      ]);
+      jest.spyOn(serviceInternals, 'getWithinTrainingComparisonAggregateRows').mockResolvedValue([
+        {
+          responseId: 201,
+          unitName: 'Unit .*',
+          variableId: 'VAR',
+          personCode: 'P1',
+          personLogin: 'login-a',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          completeCodeCount: 2,
+          distinctCodeCount: 1,
+          hasNotes: false
+        },
+        {
+          responseId: 202,
+          unitName: 'Unit ABC',
+          variableId: 'VAR',
+          personCode: 'P2',
+          personLogin: 'login-b',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          completeCodeCount: 2,
+          distinctCodeCount: 1,
+          hasNotes: false
+        }
+      ]);
+      const pageRowsSpy = jest.spyOn(serviceInternals, 'getWithinTrainingComparisonRowsForResponseIds').mockResolvedValue([
+        {
+          responseId: 201,
+          unitName: 'Unit .*',
+          variableId: 'VAR',
+          personCode: 'P1',
+          personLogin: 'login-a',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          testPerson: 'login-a (group) - booklet',
+          givenAnswer: 'answer a',
+          replayCode: null,
+          replayScore: null,
+          discussionCode: null,
+          discussionScore: null,
+          discussionNotes: null,
+          discussionManagerUserId: null,
+          discussionManagerName: null,
+          discussionSource: null,
+          coders: []
+        }
+      ]);
+
+      const result = await service.getWithinTrainingCodingComparisonPage(1, 5, {
+        filters: {
+          unitName: 'Unit .*',
+          regexSearch: true
+        }
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.data[0].responseId).toBe(201);
+      expect(result.summary.visibleRows).toBe(1);
+      expect(pageRowsSpy).toHaveBeenCalledWith(
+        1,
+        5,
+        [201],
+        expect.any(Array),
+        expect.any(Array),
+        expect.any(Map),
+        expect.any(Object),
+        expect.any(Object)
+      );
+    });
+
     it('rejects automatic missing agreement when raw comparison jobs use different missing profiles', async () => {
       (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
         id: 5,
