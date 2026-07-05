@@ -1065,7 +1065,12 @@ export class WorkspaceCodingStatisticsController {
   @ApiQuery({
     name: 'forceRefresh',
     required: false,
-    description: 'Ignore the short-lived readiness cache and recalculate.'
+    description: 'Ignore the readiness cache and recalculate.'
+  })
+  @ApiQuery({
+    name: 'cacheOnly',
+    required: false,
+    description: 'Return cached readiness only and do not recalculate.'
   })
   @ApiOkResponse({
     description: 'Auto-coding readiness diagnostics retrieved successfully.'
@@ -1073,12 +1078,19 @@ export class WorkspaceCodingStatisticsController {
   async getAutocodingReadiness(
     @WorkspaceId() workspace_id: number,
       @Query('autoCoderRun') autoCoderRun?: string | string[],
-      @Query('forceRefresh') forceRefresh?: string | string[]
-  ): Promise<AutocodingReadinessDto> {
-    return this.codingReadinessService.getReadiness(workspace_id, {
+      @Query('forceRefresh') forceRefresh?: string | string[],
+      @Query('cacheOnly') cacheOnly?: string | string[]
+  ): Promise<AutocodingReadinessDto | null> {
+    const options = {
       autoCoderRun: this.parseAutoCoderRun(autoCoderRun),
       forceRefresh: this.parseBooleanQuery(forceRefresh)
-    });
+    };
+
+    if (this.parseBooleanQuery(cacheOnly)) {
+      return this.codingReadinessService.getReadinessFromCache(workspace_id, options);
+    }
+
+    return this.codingReadinessService.getReadiness(workspace_id, options);
   }
 
   @Post(':workspace_id/coding/freshness/code')

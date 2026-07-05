@@ -528,6 +528,29 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadCachedAutocodingReadiness(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    if (this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)) {
+      return;
+    }
+
+    this.testPersonCodingService.getCachedAutocodingReadiness(workspaceId, 1)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(readiness => {
+        if (!readiness) {
+          return;
+        }
+
+        this.autocodingReadiness = readiness;
+        this.autocodingReadinessLoadFailed = false;
+        this.hasLoadedFullCodingStatusOverview = true;
+      });
+  }
+
   refreshAutocodingReadiness(): void {
     this.loadAutocodingReadiness(true);
   }
@@ -540,10 +563,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.performCodingStatusOverviewRefresh(true);
   }
 
-  private performCodingStatusOverviewRefresh(forceAutocodingReadiness = false): void {
+  private performCodingStatusOverviewRefresh(includeAutocodingReadiness = false): void {
     this.invalidateCodingStatusOverviewCache();
     this.fetchCodingStatistics();
-    this.loadCodingStatusOverview(forceAutocodingReadiness);
+    this.loadCodingStatusOverview(includeAutocodingReadiness);
     this.refreshTableData();
   }
 
@@ -568,18 +591,18 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
   }
 
-  loadCodingStatusOverview(forceAutocodingReadiness = false): void {
-    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(forceAutocodingReadiness)) {
+  loadCodingStatusOverview(includeAutocodingReadiness = false): void {
+    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(includeAutocodingReadiness)) {
       return;
     }
 
-    if (forceAutocodingReadiness) {
+    if (includeAutocodingReadiness) {
       this.hasLoadedFullCodingStatusOverview = false;
     }
     this.loadCodingFreshness();
     this.loadManualAppliedResultsOverview();
-    if (forceAutocodingReadiness) {
-      this.loadAutocodingReadiness(true);
+    if (includeAutocodingReadiness) {
+      this.loadAutocodingReadiness(false);
     }
   }
 
@@ -590,6 +613,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
     this.hasLoadedFullCodingStatusOverview = false;
     this.loadCodingFreshness(false);
+    this.loadCachedAutocodingReadiness();
   }
 
   private scheduleAutomaticCodingStatusOverviewRefresh(): void {

@@ -15,7 +15,10 @@ describe('WorkspaceCodingStatisticsController', () => {
     getCodedVariablesForKappa: jest.Mock;
   };
   let codingReplayService: { generateReplayUrlsForItemsBulk: jest.Mock };
-  let codingReadinessService: { getReadiness: jest.Mock };
+  let codingReadinessService: {
+    getReadiness: jest.Mock;
+    getReadinessFromCache: jest.Mock;
+  };
   let controller: WorkspaceCodingStatisticsController;
   const request = {
     protocol: 'http',
@@ -71,7 +74,8 @@ describe('WorkspaceCodingStatisticsController', () => {
         validResponses: 0,
         codeableResponses: 0,
         invalidVariableSamples: []
-      })
+      }),
+      getReadinessFromCache: jest.fn().mockResolvedValue(null)
     };
 
     controller = new WorkspaceCodingStatisticsController(
@@ -154,6 +158,16 @@ describe('WorkspaceCodingStatisticsController', () => {
       autoCoderRun: 2,
       forceRefresh: true
     });
+  });
+
+  it('delegates cache-only autocoding readiness requests without recalculating', async () => {
+    await controller.getAutocodingReadiness(5, '1', undefined, 'true');
+
+    expect(codingReadinessService.getReadinessFromCache).toHaveBeenCalledWith(5, {
+      autoCoderRun: 1,
+      forceRefresh: false
+    });
+    expect(codingReadinessService.getReadiness).not.toHaveBeenCalled();
   });
 
   it('adds weighted mean kappa per variable to detailed kappa statistics', async () => {
