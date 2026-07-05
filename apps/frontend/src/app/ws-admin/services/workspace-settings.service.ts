@@ -108,6 +108,26 @@ export class WorkspaceSettingsService {
     );
   }
 
+  setWorkspaceSettings(
+    workspaceId: number,
+    settings: {
+      key: string;
+      value: string;
+      description?: string;
+    }[]
+  ): Observable<WorkspaceSettings[]> {
+    return this.http.post<WorkspaceSettings[]>(
+      `${this.serverUrl}/workspace/${workspaceId}/settings/batch`,
+      { settings }
+    ).pipe(
+      tap(() => {
+        settings.forEach(setting => {
+          this.invalidateWorkspaceSetting(workspaceId, setting.key);
+        });
+      })
+    );
+  }
+
   updateWorkspaceSetting(
     workspaceId: number,
     settingId: number,
@@ -206,6 +226,58 @@ export class WorkspaceSettingsService {
       value,
       'Controls whether coding status and manual coding views refresh automatically'
     );
+  }
+
+  getEvaluationMode(workspaceId: number): Observable<boolean> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(
+        workspaceId,
+        'evaluation-mode',
+        true
+      ).subscribe({
+        next: setting => {
+          try {
+            const parsed = JSON.parse(setting.value);
+            observer.next(parsed.enabled ?? false);
+          } catch {
+            observer.next(false);
+          }
+          observer.complete();
+        },
+        error: () => {
+          observer.next(false);
+          observer.complete();
+        }
+      });
+    });
+  }
+
+  setEvaluationMode(
+    workspaceId: number,
+    enabled: boolean
+  ): Observable<WorkspaceSettings[]> {
+    const autoFetchEnabled = false;
+    const autoRefreshEnabled = !enabled;
+    return this.setWorkspaceSettings(workspaceId, [
+      {
+        key: 'evaluation-mode',
+        value: JSON.stringify({ enabled }),
+        description:
+          'Controls whether expensive automatic coding refreshes are disabled for evaluation sessions'
+      },
+      {
+        key: 'auto-fetch-coding-statistics',
+        value: JSON.stringify({ enabled: autoFetchEnabled }),
+        description:
+          'Controls whether coding statistics are automatically fetched in the coding management component'
+      },
+      {
+        key: 'auto-refresh-manual-coding-jobs',
+        value: JSON.stringify({ enabled: autoRefreshEnabled }),
+        description:
+          'Controls whether coding status and manual coding views refresh automatically'
+      }
+    ]);
   }
 
   getShowTestResultsLogAnomalies(workspaceId: number): Observable<boolean> {
