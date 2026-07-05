@@ -330,6 +330,24 @@ describe('CodingTrainingBackendService', () => {
       discussionSource: null,
       coders: []
     }];
+    const comparisonPage = (data = comparisonData) => ({
+      data,
+      total: data.length,
+      page: 1,
+      limit: 50,
+      totalPages: data.length > 0 ? 1 : 0,
+      summary: {
+        visibleRows: data.length,
+        comparableRows: 0,
+        matchingRows: 0,
+        matchingPercentage: 0,
+        incompleteRows: 0,
+        notComparableRows: data.length,
+        deviationRows: 0,
+        completionRate: 0
+      },
+      availableCoders: []
+    });
 
     it('should reuse cached comparison data while freshness is unchanged', () => {
       const firstResults: unknown[] = [];
@@ -338,8 +356,8 @@ describe('CodingTrainingBackendService', () => {
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
         .flush(freshness('v1'));
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`)
-        .flush(comparisonData);
-      expect(firstResults).toEqual([comparisonData]);
+        .flush(comparisonPage());
+      expect(firstResults).toEqual([comparisonPage()]);
 
       const secondResults: unknown[] = [];
       service.getCachedWithinTrainingCodingResults(1, 5).subscribe(result => secondResults.push(result));
@@ -347,7 +365,7 @@ describe('CodingTrainingBackendService', () => {
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
         .flush(freshness('v1'));
       httpMock.expectNone(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`);
-      expect(secondResults).toEqual([comparisonData]);
+      expect(secondResults).toEqual([comparisonPage()]);
     });
 
     it('should reload comparison data when freshness changes', () => {
@@ -355,7 +373,7 @@ describe('CodingTrainingBackendService', () => {
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
         .flush(freshness('v1'));
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`)
-        .flush(comparisonData);
+        .flush(comparisonPage());
 
       const updatedData = [{ ...comparisonData[0], responseId: 2 }];
       const results: unknown[] = [];
@@ -364,8 +382,8 @@ describe('CodingTrainingBackendService', () => {
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
         .flush(freshness('v2'));
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`)
-        .flush(updatedData);
-      expect(results).toEqual([updatedData]);
+        .flush(comparisonPage(updatedData));
+      expect(results).toEqual([comparisonPage(updatedData)]);
     });
 
     it('should invalidate cached comparison data after saving a discussion result', () => {
@@ -373,7 +391,7 @@ describe('CodingTrainingBackendService', () => {
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
         .flush(freshness('v1'));
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`)
-        .flush(comparisonData);
+        .flush(comparisonPage());
 
       service.saveDiscussionResult(1, 5, 99, 7, 2, 'Replay note').subscribe();
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/discussion-result`)
@@ -391,7 +409,7 @@ describe('CodingTrainingBackendService', () => {
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
         .flush(freshness('v1'));
       httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`)
-        .flush(comparisonData);
+        .flush(comparisonPage());
     });
   });
 

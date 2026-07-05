@@ -190,10 +190,11 @@
       class="comparison-table"
       *ngIf="
         !isLoading &&
-        ((comparisonMode === 'between-trainings' &&
-          comparisonData.length > 0) ||
+        (((comparisonMode === 'between-trainings' &&
+          selectedTrainings.selected.length >= 2) ||
           (comparisonMode === 'within-training' &&
-            withinTrainingData.length > 0))
+            selectedTrainingForWithin)) &&
+          (totalItems > 0 || hasNoSelectedCodersState() || hasFilterEmptyState()))
       "
     >
       <div class="comparison-warning-list" *ngIf="getComparisonWarnings().length > 0">
@@ -692,20 +693,16 @@
           mat-table
           [dataSource]="dataSource"
           matSort
+          [matSortActive]="sortBy"
+          [matSortDirection]="sortDirection"
+          (matSortChange)="onComparisonSortChange($event)"
           class="mat-elevation-z2"
         >
           <!-- Index/Case Number Column -->
           <ng-container matColumnDef="index">
             <th mat-header-cell *matHeaderCellDef>#</th>
             <td mat-cell *matCellDef="let row; let i = index">
-              {{
-                (dataSource.paginator
-                  ? dataSource.paginator.pageIndex *
-                    dataSource.paginator.pageSize
-                  : 0) +
-                  i +
-                  1
-              }}
+              {{ pageIndex * pageSize + i + 1 }}
             </td>
           </ng-container>
 
@@ -1007,7 +1004,11 @@
         </table>
 
         <mat-paginator
+          [length]="totalItems"
+          [pageIndex]="pageIndex"
+          [pageSize]="pageSize"
           [pageSizeOptions]="[50, 100, 200, 500]"
+          (page)="onComparisonPageChange($event)"
           showFirstLastButtons
         ></mat-paginator>
       </div>
@@ -1052,8 +1053,10 @@
       *ngIf="
         !isLoading &&
         comparisonMode === 'between-trainings' &&
-        comparisonData.length === 0 &&
-        selectedTrainings.selected.length >= 2
+        totalItems === 0 &&
+        selectedTrainings.selected.length >= 2 &&
+        !hasActiveFilters() &&
+        !hasNoSelectedCodersState()
       "
     >
       <mat-icon>info</mat-icon>
@@ -1069,8 +1072,10 @@
       *ngIf="
         !isLoading &&
         comparisonMode === 'within-training' &&
-        withinTrainingData.length === 0 &&
-        selectedTrainingForWithin
+        totalItems === 0 &&
+        selectedTrainingForWithin &&
+        !hasActiveFilters() &&
+        !hasNoSelectedCodersState()
       "
     >
       <mat-icon>info</mat-icon>
