@@ -269,6 +269,8 @@ export class CodingResultsComparisonComponent implements OnInit {
   private dialog = inject(MatDialog);
   private testPersonCodingService = inject(TestPersonCodingService);
   private ngUnsubscribe = new Subject<void>();
+  private comparisonRequestCancel$ = new Subject<void>();
+  private kappaRequestCancel$ = new Subject<void>();
   private comparisonRequestId = 0;
   private kappaRequestId = 0;
   private coderTrainingsRequestId = 0;
@@ -408,12 +410,42 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   ngOnDestroy(): void {
+    this.cancelComparisonRequest();
+    this.cancelKappaRequest();
+    this.comparisonRequestCancel$.complete();
+    this.kappaRequestCancel$.complete();
     this.ngUnsubscribe.next();
     this.ngUnsubscribe.complete();
   }
 
   ngAfterViewInit(): void {
     this.dataSource.sort = this.sort;
+  }
+
+  private cancelComparisonRequest(): void {
+    this.comparisonRequestId += 1;
+    this.comparisonRequestCancel$.next();
+    this.isLoading = false;
+  }
+
+  private startComparisonRequest(): number {
+    this.comparisonRequestCancel$.next();
+    this.comparisonRequestId += 1;
+    this.isLoading = true;
+    return this.comparisonRequestId;
+  }
+
+  private cancelKappaRequest(): void {
+    this.kappaRequestId += 1;
+    this.kappaRequestCancel$.next();
+    this.isLoadingKappa = false;
+  }
+
+  private startKappaRequest(): number {
+    this.kappaRequestCancel$.next();
+    this.kappaRequestId += 1;
+    this.isLoadingKappa = true;
+    return this.kappaRequestId;
   }
 
   private getSelectedCoderResults(comparison: TrainingComparison | WithinTrainingComparison): ComparisonCoderResult[] {
@@ -1515,8 +1547,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   onModeChange(): void {
-    this.comparisonRequestId += 1;
-    this.isLoading = false;
+    this.cancelComparisonRequest();
     this.resetKappaState();
     this.selectedTrainings.clear();
     this.filteredTrainings = [...this.availableTrainings];
@@ -1539,8 +1570,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     if (this.comparisonMode === 'between-trainings' && this.selectedTrainings.selected.length >= 2) {
       this.loadComparison();
     } else {
-      this.comparisonRequestId += 1;
-      this.isLoading = false;
+      this.cancelComparisonRequest();
       this.comparisonData = [];
       this.availableCodersFromTrainings = [];
       this.codersFromTrainingsFormControl.setValue([]);
@@ -1556,8 +1586,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     if (this.comparisonMode === 'within-training' && this.selectedTrainingForWithin) {
       this.loadComparison();
     } else {
-      this.comparisonRequestId += 1;
-      this.isLoading = false;
+      this.cancelComparisonRequest();
       this.withinTrainingData = [];
       this.availableCoders = [];
       this.codersFormControl.setValue([]);
@@ -1687,13 +1716,14 @@ export class CodingResultsComparisonComponent implements OnInit {
         return;
       }
 
-      this.comparisonRequestId += 1;
-      const requestId = this.comparisonRequestId;
-      this.isLoading = true;
+      const requestId = this.startComparisonRequest();
       this.resetKappaState();
       const trainingIds = this.selectedTrainings.selected.join(',');
       this.codingTrainingBackendService.compareTrainingCodingResults(this.data.workspaceId, trainingIds)
-        .pipe(takeUntil(this.ngUnsubscribe))
+        .pipe(
+          takeUntil(this.comparisonRequestCancel$),
+          takeUntil(this.ngUnsubscribe)
+        )
         .subscribe({
           next: data => {
             if (requestId !== this.comparisonRequestId ||
@@ -1760,10 +1790,8 @@ export class CodingResultsComparisonComponent implements OnInit {
         return;
       }
 
-      this.comparisonRequestId += 1;
-      const requestId = this.comparisonRequestId;
+      const requestId = this.startComparisonRequest();
       const trainingId = this.selectedTrainingForWithin;
-      this.isLoading = true;
       this.resetKappaState();
       this.withinTrainingData = [];
       this.availableCoders = [];
@@ -1771,7 +1799,10 @@ export class CodingResultsComparisonComponent implements OnInit {
       this.selectedCoderIds.clear();
       this.dataSource.data = [];
       this.codingTrainingBackendService.getCachedWithinTrainingCodingResults(this.data.workspaceId, trainingId)
-        .pipe(takeUntil(this.ngUnsubscribe))
+        .pipe(
+          takeUntil(this.comparisonRequestCancel$),
+          takeUntil(this.ngUnsubscribe)
+        )
         .subscribe({
           next: data => {
             if (requestId !== this.comparisonRequestId ||
@@ -1890,10 +1921,8 @@ export class CodingResultsComparisonComponent implements OnInit {
     }
 
     this.resetKappaState();
-    this.kappaRequestId += 1;
-    const requestId = this.kappaRequestId;
+    const requestId = this.startKappaRequest();
     const trainingId = this.selectedTrainingForWithin;
-    this.isLoadingKappa = true;
     const level = this.useCodeLevel ? 'code' : 'score';
     this.codingTrainingBackendService
       .getTrainingCohensKappa(
@@ -1902,7 +1931,10 @@ export class CodingResultsComparisonComponent implements OnInit {
         this.useWeightedMean,
         level
       )
-      .pipe(takeUntil(this.ngUnsubscribe))
+      .pipe(
+        takeUntil(this.kappaRequestCancel$),
+        takeUntil(this.ngUnsubscribe)
+      )
       .subscribe({
         next: stats => {
           if (requestId !== this.kappaRequestId ||
@@ -2130,11 +2162,10 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   private resetKappaState(): void {
-    this.kappaRequestId += 1;
+    this.cancelKappaRequest();
     this.kappaStatistics = null;
     this.originalKappaStatistics = null;
     this.variableKappaSummaries = [];
-    this.isLoadingKappa = false;
   }
 
   toggleKappaStatistics(): void {
