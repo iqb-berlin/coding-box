@@ -108,6 +108,41 @@ describe('WorkspaceSettingsService', () => {
     });
   });
 
+  describe('setWorkspaceSettings', () => {
+    it('should post settings as one batch', () => {
+      service.setWorkspaceSettings(1, [
+        { key: 'one', value: '1', description: 'First' },
+        { key: 'two', value: '2', description: 'Second' }
+      ]).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/batch`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        settings: [
+          { key: 'one', value: '1', description: 'First' },
+          { key: 'two', value: '2', description: 'Second' }
+        ]
+      });
+      req.flush([]);
+    });
+
+    it('should invalidate cached settings after persisting a batch', () => {
+      service.getWorkspaceSetting(1, 'one').subscribe();
+      const getReq = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/one`);
+      getReq.flush({ id: 1, key: 'one', value: 'old' });
+
+      service.setWorkspaceSettings(1, [
+        { key: 'one', value: 'new' }
+      ]).subscribe();
+      const postReq = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/batch`);
+      postReq.flush([{ id: 1, key: 'one', value: 'new' }]);
+
+      service.getWorkspaceSetting(1, 'one').subscribe();
+      const secondGetReq = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/one`);
+      secondGetReq.flush({ id: 1, key: 'one', value: 'new' });
+    });
+  });
+
   describe('getAutoFetchCodingStatistics', () => {
     it('should return parsed boolean', () => {
       service.getAutoFetchCodingStatistics(1).subscribe(val => {
@@ -157,6 +192,86 @@ describe('WorkspaceSettingsService', () => {
           'Controls whether coding status and manual coding views refresh automatically'
       });
       req.flush({});
+    });
+  });
+
+  describe('getEvaluationMode', () => {
+    it('should return parsed boolean', () => {
+      service.getEvaluationMode(1).subscribe(val => {
+        expect(val).toBe(true);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/evaluation-mode`);
+      req.flush({ value: '{"enabled":true}' });
+    });
+
+    it('should return false on error', () => {
+      service.getEvaluationMode(1).subscribe(val => {
+        expect(val).toBe(false);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/evaluation-mode`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setEvaluationMode', () => {
+    it('should persist evaluation mode and disable expensive automatic refreshes', () => {
+      service.setEvaluationMode(1, true).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/batch`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        settings: [
+          {
+            key: 'evaluation-mode',
+            value: '{"enabled":true}',
+            description:
+              'Controls whether expensive automatic coding refreshes are disabled for evaluation sessions'
+          },
+          {
+            key: 'auto-fetch-coding-statistics',
+            value: '{"enabled":false}',
+            description:
+              'Controls whether coding statistics are automatically fetched in the coding management component'
+          },
+          {
+            key: 'auto-refresh-manual-coding-jobs',
+            value: '{"enabled":false}',
+            description:
+              'Controls whether coding status and manual coding views refresh automatically'
+          }
+        ]
+      });
+      req.flush([]);
+    });
+
+    it('should persist evaluation mode off and restore normal automatic refresh defaults', () => {
+      service.setEvaluationMode(1, false).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/batch`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        settings: [
+          {
+            key: 'evaluation-mode',
+            value: '{"enabled":false}',
+            description:
+              'Controls whether expensive automatic coding refreshes are disabled for evaluation sessions'
+          },
+          {
+            key: 'auto-fetch-coding-statistics',
+            value: '{"enabled":false}',
+            description:
+              'Controls whether coding statistics are automatically fetched in the coding management component'
+          },
+          {
+            key: 'auto-refresh-manual-coding-jobs',
+            value: '{"enabled":true}',
+            description:
+              'Controls whether coding status and manual coding views refresh automatically'
+          }
+        ]
+      });
+      req.flush([]);
     });
   });
 
