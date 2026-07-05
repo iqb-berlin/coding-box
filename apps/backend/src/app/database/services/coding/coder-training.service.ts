@@ -878,27 +878,9 @@ export class CoderTrainingService {
     return sortDirection === 'desc' ? 'desc' : 'asc';
   }
 
-  private isComparisonRegexPatternValid(pattern: string): boolean {
-    const normalizedPattern = pattern.trim();
-    if (!normalizedPattern) {
-      return true;
-    }
-    if (normalizedPattern.length > 256) {
-      return false;
-    }
-
-    try {
-      RegExp(normalizedPattern);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   private matchesComparisonTextFilter(
     value: string | number | null | undefined,
-    filter: string | null | undefined,
-    regexSearch: boolean
+    filter: string | null | undefined
   ): boolean {
     const normalizedFilter = (filter || '').trim();
     if (!normalizedFilter) {
@@ -906,19 +888,7 @@ export class CoderTrainingService {
     }
 
     const text = String(value ?? '');
-    if (!regexSearch) {
-      return text.toLowerCase().includes(normalizedFilter.toLowerCase());
-    }
-
-    if (!this.isComparisonRegexPatternValid(normalizedFilter)) {
-      return false;
-    }
-
-    try {
-      return new RegExp(normalizedFilter).test(text);
-    } catch {
-      return false;
-    }
+    return text.toLowerCase().includes(normalizedFilter.toLowerCase());
   }
 
   private matchesComparisonTextFilters(
@@ -928,13 +898,12 @@ export class CoderTrainingService {
     >,
     filters: TrainingComparisonFiltersDto
   ): boolean {
-    const regexSearch = filters.regexSearch === true;
     return (
-      this.matchesComparisonTextFilter(row.unitName, filters.unitName, regexSearch) &&
-      this.matchesComparisonTextFilter(row.variableId, filters.variableId, regexSearch) &&
-      this.matchesComparisonTextFilter(row.personLogin, filters.personLogin, regexSearch) &&
-      this.matchesComparisonTextFilter(row.personGroup, filters.personGroup, regexSearch) &&
-      this.matchesComparisonTextFilter(row.bookletName, filters.bookletName, regexSearch)
+      this.matchesComparisonTextFilter(row.unitName, filters.unitName) &&
+      this.matchesComparisonTextFilter(row.variableId, filters.variableId) &&
+      this.matchesComparisonTextFilter(row.personLogin, filters.personLogin) &&
+      this.matchesComparisonTextFilter(row.personGroup, filters.personGroup) &&
+      this.matchesComparisonTextFilter(row.bookletName, filters.bookletName)
     );
   }
 
