@@ -386,6 +386,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
     this.stopFreshnessJobPolling();
     this.clearScheduledAutomaticCodingStatusRefresh();
+    this.codingManagementService.cancelViewBoundStatisticsFetches(this.appService.selectedWorkspaceId);
     this.responseTableRequestCancel$.next();
     this.responseTableRequestCancel$.complete();
     this.destroy$.next();
