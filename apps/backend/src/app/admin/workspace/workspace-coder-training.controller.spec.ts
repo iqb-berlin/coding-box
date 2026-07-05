@@ -8,6 +8,8 @@ import {
 describe('WorkspaceCoderTrainingController', () => {
   let controller: WorkspaceCoderTrainingController;
   let coderTrainingService: {
+    getTrainingCodingComparisonPage: jest.Mock;
+    getWithinTrainingCodingComparisonPage: jest.Mock;
     getWithinTrainingCodingComparison: jest.Mock;
     getWithinTrainingComparisonFreshness: jest.Mock;
     transformToCoderPairs: jest.Mock;
@@ -24,6 +26,8 @@ describe('WorkspaceCoderTrainingController', () => {
 
   beforeEach(() => {
     coderTrainingService = {
+      getTrainingCodingComparisonPage: jest.fn(),
+      getWithinTrainingCodingComparisonPage: jest.fn(),
       getWithinTrainingCodingComparison: jest.fn(),
       getWithinTrainingComparisonFreshness: jest.fn(),
       transformToCoderPairs: jest.fn(),
@@ -42,6 +46,132 @@ describe('WorkspaceCoderTrainingController', () => {
       coderTrainingService as unknown as CoderTrainingService,
       codingStatisticsService as unknown as CodingStatisticsService,
       coderTrainingResultsApplyService as unknown as CoderTrainingResultsApplyService
+    );
+  });
+
+  it('forwards between-training comparison paging, sorting, and filters to the service', async () => {
+    const page = {
+      data: [],
+      total: 0,
+      page: 2,
+      limit: 25,
+      totalPages: 0,
+      summary: {
+        visibleRows: 0,
+        comparableRows: 0,
+        matchingRows: 0,
+        matchingPercentage: 0,
+        incompleteRows: 0,
+        notComparableRows: 0,
+        deviationRows: 0,
+        completionRate: 0
+      },
+      availableCoders: []
+    };
+    coderTrainingService.getTrainingCodingComparisonPage.mockResolvedValue(page);
+
+    const result = await controller.compareTrainingCodingResults(
+      12,
+      '1,2',
+      '2',
+      '25',
+      'personLogin',
+      'desc',
+      '1_101,2_201',
+      'Unit',
+      'VAR',
+      'login',
+      'group',
+      'booklet',
+      'differ',
+      'with-notes',
+      'true'
+    );
+
+    expect(result).toBe(page);
+    expect(coderTrainingService.getTrainingCodingComparisonPage).toHaveBeenCalledWith(
+      12,
+      [1, 2],
+      {
+        page: 2,
+        limit: 25,
+        sortBy: 'personLogin',
+        sortDirection: 'desc',
+        selectedCoderKeys: ['1_101', '2_201'],
+        filters: {
+          unitName: 'Unit',
+          variableId: 'VAR',
+          personLogin: 'login',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          match: 'differ',
+          notesMode: 'with-notes',
+          regexSearch: true
+        }
+      }
+    );
+  });
+
+  it('forwards within-training comparison paging and selected jobs to the service', async () => {
+    const page = {
+      data: [],
+      total: 0,
+      page: 1,
+      limit: 50,
+      totalPages: 0,
+      summary: {
+        visibleRows: 0,
+        comparableRows: 0,
+        matchingRows: 0,
+        matchingPercentage: 0,
+        incompleteRows: 0,
+        notComparableRows: 0,
+        deviationRows: 0,
+        completionRate: 0
+      },
+      availableCoders: []
+    };
+    coderTrainingService.getWithinTrainingCodingComparisonPage.mockResolvedValue(page);
+
+    const result = await controller.compareWithinTrainingCodingResults(
+      12,
+      '5',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '11,12',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'match',
+      'none',
+      undefined
+    );
+
+    expect(result).toBe(page);
+    expect(coderTrainingService.getWithinTrainingCodingComparisonPage).toHaveBeenCalledWith(
+      12,
+      5,
+      {
+        page: 1,
+        limit: 50,
+        sortBy: undefined,
+        sortDirection: undefined,
+        selectedJobIds: [11, 12],
+        filters: {
+          unitName: undefined,
+          variableId: undefined,
+          personLogin: undefined,
+          personGroup: undefined,
+          bookletName: undefined,
+          match: 'match',
+          notesMode: 'none',
+          regexSearch: undefined
+        }
+      }
     );
   });
 
