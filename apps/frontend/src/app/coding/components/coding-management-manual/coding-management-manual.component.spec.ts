@@ -263,6 +263,75 @@ describe('CodingManagementManualComponent', () => {
     }
   });
 
+  it('should cancel response analysis when leaving the preparation flow', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        getResponseAnalysis: jest.Mock;
+        setResponseAnalysisGuardRunning: (
+          workspaceId: number,
+          isRunning: boolean
+        ) => void;
+      };
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    component.selectedManualTabIndex = 0;
+    let responseAnalysisUnsubscribed = false;
+    jest
+      .spyOn(componentInternals.testPersonCodingService, 'setResponseAnalysisGuardRunning')
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn(componentInternals.testPersonCodingService, 'getResponseAnalysis')
+      .mockReturnValue(new Observable(() => (
+        () => {
+          responseAnalysisUnsubscribed = true;
+        }
+      )));
+
+    component.loadResponseAnalysis();
+    expect(component.isLoadingResponseAnalysis).toBe(true);
+
+    component.onManualTabChanged(2);
+
+    expect(responseAnalysisUnsubscribed).toBe(true);
+    expect(component.isLoadingResponseAnalysis).toBe(false);
+  });
+
+  it('should hand off the response-analysis guard when leaving the preparation flow while analysis is calculating', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        setResponseAnalysisGuardRunning: (
+          workspaceId: number,
+          isRunning: boolean
+        ) => void;
+        trackResponseAnalysisGuardUntilComplete: (
+          workspaceId: number,
+          threshold?: number
+        ) => void;
+      };
+      setResponseAnalysisGuardActive: (isActive: boolean) => void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    component.selectedManualTabIndex = 0;
+    const setGuardSpy = jest
+      .spyOn(componentInternals.testPersonCodingService, 'setResponseAnalysisGuardRunning')
+      .mockImplementation(() => undefined);
+    const trackGuardSpy = jest
+      .spyOn(componentInternals.testPersonCodingService, 'trackResponseAnalysisGuardUntilComplete')
+      .mockImplementation(() => undefined);
+
+    componentInternals.setResponseAnalysisGuardActive(true);
+    setGuardSpy.mockClear();
+
+    component.onManualTabChanged(2);
+    component.ngOnDestroy();
+
+    expect(trackGuardSpy).toHaveBeenCalledTimes(1);
+    expect(trackGuardSpy).toHaveBeenCalledWith(5, 2);
+    expect(setGuardSpy).not.toHaveBeenCalledWith(5, false);
+  });
+
   it('should run pending manual state and forced freshness refresh after a background guard clears', () => {
     component.selectedManualTabIndex = 1;
     const componentInternals = component as unknown as {

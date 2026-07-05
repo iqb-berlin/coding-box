@@ -9,7 +9,9 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, Subject, throwError } from 'rxjs';
+import {
+  Observable, of, Subject, throwError
+} from 'rxjs';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -213,9 +215,17 @@ describe('CodingResultsComparisonComponent', () => {
   it('should ignore stale within-training comparison responses after a training switch', () => {
     const firstTrainingResponse$ = new Subject<unknown[]>();
     const secondTrainingResponse$ = new Subject<unknown[]>();
+    let firstTrainingUnsubscribed = false;
+    const firstTrainingResponse = new Observable<unknown[]>(subscriber => {
+      const subscription = firstTrainingResponse$.subscribe(subscriber);
+      return () => {
+        firstTrainingUnsubscribed = true;
+        subscription.unsubscribe();
+      };
+    });
     codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockImplementation(
       (_workspaceId: number, trainingId: number) => (
-        trainingId === 5 ? firstTrainingResponse$.asObservable() : secondTrainingResponse$.asObservable()
+        trainingId === 5 ? firstTrainingResponse : secondTrainingResponse$.asObservable()
       )
     );
     component.comparisonMode = 'within-training';
@@ -224,6 +234,7 @@ describe('CodingResultsComparisonComponent', () => {
 
     component.selectedTrainingForWithin = 6;
     component.loadComparison();
+    expect(firstTrainingUnsubscribed).toBe(true);
     secondTrainingResponse$.next([
       {
         responseId: 2,

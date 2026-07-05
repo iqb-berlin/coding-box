@@ -210,7 +210,7 @@ export class CodingTrainingBackendService {
             this.coderTrainingsInFlight.delete(workspaceId);
           }
         }),
-        shareReplay({ bufferSize: 1, refCount: false })
+        shareReplay({ bufferSize: 1, refCount: true })
       );
 
     this.coderTrainingsInFlight.set(workspaceId, request$);
