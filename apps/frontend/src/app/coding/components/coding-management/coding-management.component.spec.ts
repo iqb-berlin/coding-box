@@ -71,7 +71,8 @@ describe('CodingManagementComponent', () => {
       downloadCodingResults: jest.fn().mockReturnValue(Promise.resolve()),
       hasGeogebraResponses: jest.fn().mockReturnValue(of(false)),
       downloadCodingList: jest.fn(),
-      checkActiveResetJob: jest.fn()
+      checkActiveResetJob: jest.fn(),
+      cancelViewBoundStatisticsFetches: jest.fn()
     };
 
     mockUiService = {
@@ -326,6 +327,12 @@ describe('CodingManagementComponent', () => {
 
     it('should check manual coding auto-refresh setting on init', () => {
       expect(mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1);
+    });
+
+    it('should cancel view-bound statistics fetches on destroy', () => {
+      component.ngOnDestroy();
+
+      expect(mockCodingManagementService.cancelViewBoundStatisticsFetches).toHaveBeenCalledWith(1);
     });
 
     it('should only load lightweight coding freshness on init when auto-refresh is enabled', () => {
