@@ -171,6 +171,60 @@ describe('CodingManagementService', () => {
       expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledTimes(1);
     });
 
+    it('should cancel view-bound statistics polling without cancelling other background operations', fakeAsync(() => {
+      const jobId = 'statistics-job-1';
+      const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
+      executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
+      executionServiceMock.getCodingStatisticsJobStatus.mockReturnValue(of({
+        status: 'processing',
+        progress: 50,
+        result: undefined
+      } as CodingJobStatus));
+      let isLoading: boolean | undefined;
+      service.isLoadingStatistics$.subscribe(value => {
+        isLoading = value;
+      });
+
+      service.fetchCodingStatistics('v1');
+
+      tick(0);
+      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
+      expect(isLoading).toBe(true);
+
+      service.cancelViewBoundStatisticsFetches(1);
+      tick(2000);
+
+      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
+      expect(isLoading).toBe(false);
+      expect(setJobRunningSpy).not.toHaveBeenCalled();
+    }));
+
+    it('should allow statistics to be fetched again after a view-bound polling cancellation', fakeAsync(() => {
+      const jobId = 'statistics-job-1';
+      executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
+      executionServiceMock.getCodingStatisticsJobStatus
+        .mockReturnValueOnce(of({
+          status: 'processing',
+          progress: 50,
+          result: undefined
+        } as CodingJobStatus))
+        .mockReturnValueOnce(of({
+          status: 'completed',
+          progress: 100,
+          result: mockCodingStatistics
+        } as CodingJobStatus));
+
+      service.fetchCodingStatistics('v1');
+      tick(0);
+
+      service.cancelViewBoundStatisticsFetches(1);
+      service.fetchCodingStatistics('v1');
+      tick(0);
+
+      expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledTimes(2);
+      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(2);
+    }));
+
     it('should not synchronously fetch statistics when job creation fails', () => {
       executionServiceMock.createCodingStatisticsJob.mockReturnValue(throwError(() => new Error('Failed')));
       statisticsServiceMock.getCodingStatistics.mockReturnValue(of(mockCodingStatistics));
