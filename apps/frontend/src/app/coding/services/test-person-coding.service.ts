@@ -627,7 +627,7 @@ export class TestPersonCodingService {
             this.codingFreshnessRequests.delete(workspaceId);
           }
         }),
-        shareReplay({ bufferSize: 1, refCount: false })
+        shareReplay({ bufferSize: 1, refCount: true })
       );
 
     this.codingFreshnessRequests.set(workspaceId, request$);
@@ -686,7 +686,7 @@ export class TestPersonCodingService {
             this.autocodingReadinessRequests.delete(cacheKey);
           }
         }),
-        shareReplay({ bufferSize: 1, refCount: false })
+        shareReplay({ bufferSize: 1, refCount: true })
       );
 
     this.autocodingReadinessRequests.set(cacheKey, request$);
@@ -743,7 +743,7 @@ export class TestPersonCodingService {
             this.autocodingReadinessCacheOnlyRequests.delete(cacheKey);
           }
         }),
-        shareReplay({ bufferSize: 1, refCount: false })
+        shareReplay({ bufferSize: 1, refCount: true })
       );
 
     this.autocodingReadinessCacheOnlyRequests.set(cacheKey, request$);
@@ -804,7 +804,7 @@ export class TestPersonCodingService {
             this.codingFreshnessScopeRequests.delete(cacheKey);
           }
         }),
-        shareReplay({ bufferSize: 1, refCount: false })
+        shareReplay({ bufferSize: 1, refCount: true })
       );
 
     this.codingFreshnessScopeRequests.set(cacheKey, request$);
@@ -1087,7 +1087,7 @@ export class TestPersonCodingService {
             this.appliedResultsOverviewRequests.delete(workspaceId);
           }
         }),
-        shareReplay({ bufferSize: 1, refCount: false })
+        shareReplay({ bufferSize: 1, refCount: true })
       );
 
     this.appliedResultsOverviewRequests.set(workspaceId, request$);
