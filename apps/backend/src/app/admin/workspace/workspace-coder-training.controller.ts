@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Param,
@@ -35,6 +36,129 @@ import {
   TrainingDiscussionApplySource
 } from '../../../../../../api-dto/coding/training-discussion-apply.dto';
 import { TrainingComparisonFreshnessDto } from '../../../../../../api-dto/coding/training-comparison-freshness.dto';
+import {
+  TrainingCodingComparisonPageDto,
+  TrainingComparisonFiltersDto,
+  TrainingComparisonMatchFilter,
+  TrainingComparisonNotesFilter,
+  TrainingComparisonSortBy,
+  TrainingComparisonSortDirection,
+  WithinTrainingCodingComparisonPageDto
+} from '../../../../../../api-dto/coding/training-comparison.dto';
+
+const trainingComparisonSummarySchema = {
+  type: 'object',
+  properties: {
+    visibleRows: { type: 'number' },
+    comparableRows: { type: 'number' },
+    matchingRows: { type: 'number' },
+    matchingPercentage: { type: 'number' },
+    incompleteRows: { type: 'number' },
+    notComparableRows: { type: 'number' },
+    deviationRows: { type: 'number' },
+    completionRate: { type: 'number' }
+  }
+};
+
+const trainingComparisonCoderSchema = {
+  type: 'object',
+  properties: {
+    trainingId: { type: 'number', description: 'Training ID' },
+    trainingLabel: { type: 'string', description: 'Training label' },
+    coderId: { type: 'number', description: 'Coder (Job) ID' },
+    coderName: { type: 'string', description: 'Coder name' }
+  }
+};
+
+const trainingComparisonCoderResultSchema = {
+  type: 'object',
+  properties: {
+    ...trainingComparisonCoderSchema.properties,
+    code: { type: 'string', nullable: true },
+    score: { type: 'number', nullable: true },
+    notes: { type: 'string', nullable: true },
+    codingIssueOption: { type: 'number', nullable: true }
+  }
+};
+
+const withinTrainingComparisonCoderSchema = {
+  type: 'object',
+  properties: {
+    jobId: { type: 'number', description: 'Job ID' },
+    coderName: { type: 'string', description: 'Coder name' }
+  }
+};
+
+const withinTrainingComparisonCoderResultSchema = {
+  type: 'object',
+  properties: {
+    ...withinTrainingComparisonCoderSchema.properties,
+    code: { type: 'string', nullable: true },
+    score: { type: 'number', nullable: true },
+    notes: { type: 'string', nullable: true },
+    codingIssueOption: { type: 'number', nullable: true }
+  }
+};
+
+const trainingCodingComparisonRowSchema = {
+  type: 'object',
+  properties: {
+    responseId: { type: 'number' },
+    unitName: { type: 'string', description: 'Name of the unit' },
+    variableId: { type: 'string', description: 'Variable ID' },
+    personCode: { type: 'string', description: 'Person code' },
+    personLogin: { type: 'string', description: 'Person login' },
+    personGroup: { type: 'string', description: 'Person group' },
+    bookletName: { type: 'string', description: 'Test booklet name' },
+    testPerson: { type: 'string', description: 'Test person details' },
+    coders: {
+      type: 'array',
+      items: trainingComparisonCoderResultSchema
+    }
+  }
+};
+
+const withinTrainingCodingComparisonRowSchema = {
+  type: 'object',
+  properties: {
+    ...trainingCodingComparisonRowSchema.properties,
+    givenAnswer: { type: 'string', description: 'Given answer' },
+    replayCode: { type: 'number', nullable: true },
+    replayScore: { type: 'number', nullable: true },
+    discussionCode: { type: 'number', nullable: true },
+    discussionScore: { type: 'number', nullable: true },
+    discussionNotes: { type: 'string', nullable: true },
+    discussionManagerUserId: { type: 'number', nullable: true },
+    discussionManagerName: { type: 'string', nullable: true },
+    discussionSource: { type: 'string', enum: ['manual', 'auto_agreement'], nullable: true },
+    coders: {
+      type: 'array',
+      items: withinTrainingComparisonCoderResultSchema
+    }
+  }
+};
+
+const createTrainingComparisonPageSchema = (
+  dataItemSchema: Record<string, unknown>,
+  coderSchema: Record<string, unknown>
+) => ({
+  type: 'object',
+  properties: {
+    data: {
+      type: 'array',
+      items: dataItemSchema
+    },
+    total: { type: 'number' },
+    page: { type: 'number' },
+    limit: { type: 'number' },
+    totalPages: { type: 'number' },
+    summary: trainingComparisonSummarySchema,
+    availableCoders: {
+      type: 'array',
+      items: coderSchema
+    }
+  }
+});
 
 @ApiTags('Admin Workspace Coder Training')
 @Controller('admin/workspace')
@@ -76,6 +200,140 @@ export class WorkspaceCoderTrainingController {
     });
 
     return caseCountsByVariable;
+  }
+
+  private parsePositiveIntQuery(
+    value: string | undefined,
+    name: string,
+    defaultValue?: number,
+    maxValue?: number
+  ): number {
+    if (value === undefined || value === '') {
+      if (defaultValue !== undefined) {
+        return defaultValue;
+      }
+      throw new BadRequestException(`${name} must be a positive integer`);
+    }
+
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new BadRequestException(`${name} must be a positive integer`);
+    }
+
+    return maxValue ? Math.min(parsed, maxValue) : parsed;
+  }
+
+  private parsePositiveIntCsv(value: string | undefined, name: string): number[] | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value.trim() === '') {
+      return [];
+    }
+
+    return value.split(',')
+      .map(item => {
+        const parsed = Number(item.trim());
+        if (!Number.isInteger(parsed) || parsed <= 0) {
+          throw new BadRequestException(`${name} must contain positive integers`);
+        }
+        return parsed;
+      });
+  }
+
+  private parseStringCsv(value: string | undefined): string[] | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value.trim() === '') {
+      return [];
+    }
+
+    return value.split(',')
+      .map(item => item.trim())
+      .filter(item => item.length > 0);
+  }
+
+  private parseBooleanQuery(value: string | undefined): boolean | undefined {
+    if (value === undefined || value === '') {
+      return undefined;
+    }
+    if (value === 'true') {
+      return true;
+    }
+    if (value === 'false') {
+      return false;
+    }
+    throw new BadRequestException('Boolean query values must be "true" or "false"');
+  }
+
+  private parseComparisonSortBy(value: string | undefined): TrainingComparisonSortBy | undefined {
+    if (!value) {
+      return undefined;
+    }
+    if ([
+      'responseId',
+      'unitName',
+      'variableId',
+      'personLogin',
+      'personGroup',
+      'bookletName'
+    ].includes(value)) {
+      return value as TrainingComparisonSortBy;
+    }
+    throw new BadRequestException('sortBy is not supported for training comparisons');
+  }
+
+  private parseComparisonSortDirection(value: string | undefined): TrainingComparisonSortDirection | undefined {
+    if (!value) {
+      return undefined;
+    }
+    if (value === 'asc' || value === 'desc') {
+      return value;
+    }
+    throw new BadRequestException('sortDirection must be "asc" or "desc"');
+  }
+
+  private parseComparisonMatchFilter(value: string | undefined): TrainingComparisonMatchFilter | undefined {
+    if (!value) {
+      return undefined;
+    }
+    if (value === 'all' || value === 'match' || value === 'differ') {
+      return value;
+    }
+    throw new BadRequestException('match must be one of "all", "match", or "differ"');
+  }
+
+  private parseComparisonNotesFilter(value: string | undefined): TrainingComparisonNotesFilter | undefined {
+    if (!value) {
+      return undefined;
+    }
+    if (value === 'all' || value === 'none' || value === 'with-notes') {
+      return value;
+    }
+    throw new BadRequestException('notesMode must be one of "all", "none", or "with-notes"');
+  }
+
+  private buildComparisonFilters(
+    unitName: string | undefined,
+    variableId: string | undefined,
+    personLogin: string | undefined,
+    personGroup: string | undefined,
+    bookletName: string | undefined,
+    match: string | undefined,
+    notesMode: string | undefined,
+    regexSearch: string | undefined
+  ): TrainingComparisonFiltersDto {
+    return {
+      unitName,
+      variableId,
+      personLogin,
+      personGroup,
+      bookletName,
+      match: this.parseComparisonMatchFilter(match),
+      notesMode: this.parseComparisonNotesFilter(notesMode),
+      regexSearch: this.parseBooleanQuery(regexSearch)
+    };
   }
 
   @Post(':workspace_id/coding/coder-training-packages')
@@ -451,82 +709,54 @@ export class WorkspaceCoderTrainingController {
   })
   @ApiOkResponse({
     description: 'Comparison of coding results across training components',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          unitName: { type: 'string', description: 'Name of the unit' },
-          variableId: { type: 'string', description: 'Variable ID' },
-          personCode: { type: 'string', description: 'Person Code' },
-          personLogin: { type: 'string', description: 'Person Login' },
-          personGroup: { type: 'string', description: 'Person Group' },
-          bookletName: { type: 'string', description: 'Test booklet name' },
-          testPerson: { type: 'string', description: 'Test Person' },
-          coders: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                trainingId: { type: 'number', description: 'Training ID' },
-                trainingLabel: {
-                  type: 'string',
-                  description: 'Training label'
-                },
-                coderId: { type: 'number', description: 'Coder (Job) ID' },
-                coderName: { type: 'string', description: 'Coder Name' },
-                code: {
-                  type: 'string',
-                  description: 'Code given by coders in this training'
-                },
-                score: {
-                  type: 'number',
-                  description: 'Score given by coders in this training'
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    schema: createTrainingComparisonPageSchema(
+      trainingCodingComparisonRowSchema,
+      trainingComparisonCoderSchema
+    )
   })
   async compareTrainingCodingResults(
     @WorkspaceId() workspace_id: number,
-      @Query('trainingIds') trainingIdsQuery: string
-  ): Promise<
-      Array<{
-        responseId: number;
-        unitName: string;
-        variableId: string;
-        personCode: string;
-        personLogin: string;
-        personGroup: string;
-        bookletName: string;
-        testPerson: string;
-        coders: Array<{
-          trainingId: number;
-          trainingLabel: string;
-          coderId: number;
-          coderName: string;
-          code: string | null;
-          score: number | null;
-          notes: string | null;
-          codingIssueOption: number | null;
-        }>;
-      }>
-      > {
-    const trainingIds = trainingIdsQuery
-      .split(',')
-      .map(id => parseInt(id.trim(), 10))
-      .filter(id => !Number.isNaN(id));
+      @Query('trainingIds') trainingIdsQuery: string | undefined,
+      @Query('page') page: string | undefined,
+      @Query('limit') limit: string | undefined,
+      @Query('sortBy') sortBy: string | undefined,
+      @Query('sortDirection') sortDirection: string | undefined,
+      @Query('coderKeys') coderKeys: string | undefined,
+      @Query('unitName') unitName: string | undefined,
+      @Query('variableId') variableId: string | undefined,
+      @Query('personLogin') personLogin: string | undefined,
+      @Query('personGroup') personGroup: string | undefined,
+      @Query('bookletName') bookletName: string | undefined,
+      @Query('match') match: string | undefined,
+      @Query('notesMode') notesMode: string | undefined,
+      @Query('regexSearch') regexSearch: string | undefined
+  ): Promise<TrainingCodingComparisonPageDto> {
+    const trainingIds = this.parsePositiveIntCsv(trainingIdsQuery, 'trainingIds') ?? [];
 
     if (trainingIds.length === 0) {
-      throw new Error('At least one valid training ID must be provided');
+      throw new BadRequestException('At least one valid training ID must be provided');
     }
 
-    return this.coderTrainingService.getTrainingCodingComparison(
+    return this.coderTrainingService.getTrainingCodingComparisonPage(
       workspace_id,
-      trainingIds
+      trainingIds,
+      {
+        page: this.parsePositiveIntQuery(page, 'page', 1),
+        limit: this.parsePositiveIntQuery(limit, 'limit', 50, 500),
+        sortBy: this.parseComparisonSortBy(sortBy),
+        sortDirection: this.parseComparisonSortDirection(sortDirection),
+        selectedCoderKeys: this.parseStringCsv(coderKeys),
+        filters: this.buildComparisonFilters(
+          unitName,
+          variableId,
+          personLogin,
+          personGroup,
+          bookletName,
+          match,
+          notesMode,
+          regexSearch
+        )
+      }
     );
   }
 
@@ -543,87 +773,53 @@ export class WorkspaceCoderTrainingController {
   @ApiOkResponse({
     description:
       'Comparison of coding results within a single training by individual coders',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          unitName: { type: 'string', description: 'Name of the unit' },
-          variableId: { type: 'string', description: 'Variable ID' },
-          personCode: { type: 'string', description: 'Person code' },
-          personLogin: { type: 'string', description: 'Person login' },
-          personGroup: { type: 'string', description: 'Person group' },
-          bookletName: { type: 'string', description: 'Test booklet name' },
-          testPerson: { type: 'string', description: 'Test person details' },
-          givenAnswer: { type: 'string', description: 'Given answer' },
-          discussionCode: { type: 'number', nullable: true },
-          discussionScore: { type: 'number', nullable: true },
-          discussionNotes: { type: 'string', nullable: true },
-          discussionManagerUserId: { type: 'number', nullable: true },
-          discussionManagerName: { type: 'string', nullable: true },
-          discussionSource: { type: 'string', enum: ['manual', 'auto_agreement'], nullable: true },
-          coders: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                jobId: { type: 'number', description: 'Job ID' },
-                coderName: { type: 'string', description: 'Name of the coder' },
-                code: {
-                  type: 'string',
-                  description: 'Code given by this coder'
-                },
-                score: {
-                  type: 'number',
-                  description: 'Score given by this coder'
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    schema: createTrainingComparisonPageSchema(
+      withinTrainingCodingComparisonRowSchema,
+      withinTrainingComparisonCoderSchema
+    )
   })
   async compareWithinTrainingCodingResults(
     @WorkspaceId() workspace_id: number,
-      @Query('trainingId') trainingId: number
-  ): Promise<
-      Array<{
-        responseId: number;
-        unitName: string;
-        variableId: string;
-        personCode: string;
-        personLogin: string;
-        personGroup: string;
-        bookletName: string;
-        testPerson: string;
-        givenAnswer: string;
-        replayCode: number | null;
-        replayScore: number | null;
-        discussionCode: number | null;
-        discussionScore: number | null;
-        discussionNotes: string | null;
-        discussionManagerUserId: number | null;
-        discussionManagerName: string | null;
-        discussionSource: 'manual' | 'auto_agreement' | null;
-        coders: Array<{
-          jobId: number;
-          coderName: string;
-          code: string | null;
-          score: number | null;
-          notes: string | null;
-          codingIssueOption: number | null;
-        }>;
-      }>
-      > {
+      @Query('trainingId') trainingIdParam: string,
+      @Query('page') page: string | undefined,
+      @Query('limit') limit: string | undefined,
+      @Query('sortBy') sortBy: string | undefined,
+      @Query('sortDirection') sortDirection: string | undefined,
+      @Query('jobIds') jobIds: string | undefined,
+      @Query('unitName') unitName: string | undefined,
+      @Query('variableId') variableId: string | undefined,
+      @Query('personLogin') personLogin: string | undefined,
+      @Query('personGroup') personGroup: string | undefined,
+      @Query('bookletName') bookletName: string | undefined,
+      @Query('match') match: string | undefined,
+      @Query('notesMode') notesMode: string | undefined,
+      @Query('regexSearch') regexSearch: string | undefined
+  ): Promise<WithinTrainingCodingComparisonPageDto> {
+    const trainingId = this.parsePositiveIntQuery(trainingIdParam, 'trainingId');
     if (!trainingId || trainingId <= 0) {
-      throw new Error('Valid training ID must be provided');
+      throw new BadRequestException('Valid training ID must be provided');
     }
 
-    // Get coding results for all jobs within the training
-    return this.coderTrainingService.getWithinTrainingCodingComparison(
+    return this.coderTrainingService.getWithinTrainingCodingComparisonPage(
       workspace_id,
-      trainingId
+      trainingId,
+      {
+        page: this.parsePositiveIntQuery(page, 'page', 1),
+        limit: this.parsePositiveIntQuery(limit, 'limit', 50, 500),
+        sortBy: this.parseComparisonSortBy(sortBy),
+        sortDirection: this.parseComparisonSortDirection(sortDirection),
+        selectedJobIds: this.parsePositiveIntCsv(jobIds, 'jobIds'),
+        filters: this.buildComparisonFilters(
+          unitName,
+          variableId,
+          personLogin,
+          personGroup,
+          bookletName,
+          match,
+          notesMode,
+          regexSearch
+        )
+      }
     );
   }
 
@@ -1186,7 +1382,8 @@ export class WorkspaceCoderTrainingController {
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
       @Query('weightedMean') weightedMean?: string,
-      @Query('level') level?: 'code' | 'score'
+      @Query('level') level?: 'code' | 'score',
+      @Query('jobIds') jobIds?: string
   ): Promise<{
         variables: Array<{
           unitName: string;
@@ -1230,8 +1427,15 @@ export class WorkspaceCoderTrainingController {
       workspace_id,
       trainingId
     );
+    const selectedJobIds = this.parsePositiveIntCsv(jobIds, 'jobIds');
+    const filteredComparisonData = selectedJobIds === undefined ?
+      comparisonData :
+      comparisonData.map(item => ({
+        ...item,
+        coders: item.coders.filter(coder => selectedJobIds.includes(coder.jobId))
+      }));
 
-    if (comparisonData.length === 0) {
+    if (filteredComparisonData.length === 0) {
       return {
         variables: [],
         workspaceSummary: {
@@ -1246,10 +1450,10 @@ export class WorkspaceCoderTrainingController {
       };
     }
 
-    const caseCountsByVariable = this.calculateTrainingKappaCaseCountsByVariable(comparisonData, calculationLevel);
+    const caseCountsByVariable = this.calculateTrainingKappaCaseCountsByVariable(filteredComparisonData, calculationLevel);
 
     // 2. Transform to coder pairs format
-    const coderPairs = this.coderTrainingService.transformToCoderPairs(comparisonData);
+    const coderPairs = this.coderTrainingService.transformToCoderPairs(filteredComparisonData);
 
     if (coderPairs.length === 0) {
       return {

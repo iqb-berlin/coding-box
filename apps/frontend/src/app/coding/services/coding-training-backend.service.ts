@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   Observable,
   catchError,
@@ -18,6 +18,15 @@ import {
   TrainingDiscussionApplySource
 } from '../../../../../../api-dto/coding/training-discussion-apply.dto';
 import { TrainingComparisonFreshnessDto } from '../../../../../../api-dto/coding/training-comparison-freshness.dto';
+import {
+  TrainingCodingComparisonPageDto,
+  TrainingCodingComparisonRowDto,
+  TrainingComparisonFiltersDto,
+  TrainingComparisonSortBy,
+  TrainingComparisonSortDirection,
+  WithinTrainingCodingComparisonPageDto,
+  WithinTrainingCodingComparisonRowDto
+} from '../../../../../../api-dto/coding/training-comparison.dto';
 
 export interface CoderTrainingJob {
   coderId: number;
@@ -34,53 +43,17 @@ export interface CreateCoderTrainingJobsResponse {
   trainingId?: number;
 }
 
-export interface TrainingCodingResult {
-  responseId: number;
-  unitName: string;
-  variableId: string;
-  personCode: string;
-  personLogin: string;
-  personGroup: string;
-  bookletName: string;
-  testPerson: string;
-  coders: Array<{
-    trainingId: number;
-    trainingLabel: string;
-    coderId: number;
-    coderName: string;
-    code: string | null;
-    score: number | null;
-    notes: string | null;
-    codingIssueOption: number | null;
-  }>;
-}
+export type TrainingCodingResult = TrainingCodingComparisonRowDto;
+export type WithinTrainingCodingResult = WithinTrainingCodingComparisonRowDto;
 
-export interface WithinTrainingCodingResult {
-  responseId: number;
-  unitName: string;
-  variableId: string;
-  personCode: string;
-  personLogin: string;
-  personGroup: string;
-  bookletName: string;
-  testPerson: string;
-  givenAnswer: string;
-  replayCode: number | null;
-  replayScore: number | null;
-  discussionCode: number | null;
-  discussionScore: number | null;
-  discussionNotes: string | null;
-  discussionManagerUserId: number | null;
-  discussionManagerName: string | null;
-  discussionSource: 'manual' | 'auto_agreement' | null;
-  coders: Array<{
-    jobId: number;
-    coderName: string;
-    code: string | null;
-    score: number | null;
-    notes: string | null;
-    codingIssueOption: number | null;
-  }>;
+export interface TrainingComparisonQueryOptions {
+  page?: number;
+  limit?: number;
+  sortBy?: TrainingComparisonSortBy;
+  sortDirection?: TrainingComparisonSortDirection;
+  filters?: TrainingComparisonFiltersDto;
+  selectedCoderKeys?: string[];
+  selectedJobIds?: number[];
 }
 
 export interface CodingJobForTraining {
@@ -98,7 +71,7 @@ export interface CodingJobForTraining {
 
 interface WithinTrainingComparisonCacheEntry {
   freshness: TrainingComparisonFreshnessDto;
-  data: WithinTrainingCodingResult[];
+  pages: Map<string, WithinTrainingCodingComparisonPageDto>;
 }
 
 @Injectable({
@@ -303,23 +276,69 @@ export class CodingTrainingBackendService {
     );
   }
 
+  private buildTrainingComparisonParams(
+    options: TrainingComparisonQueryOptions,
+    selectedParamName?: 'coderKeys' | 'jobIds'
+  ): HttpParams {
+    let params = new HttpParams();
+
+    if (options.page !== undefined) {
+      params = params.set('page', options.page.toString());
+    }
+    if (options.limit !== undefined) {
+      params = params.set('limit', options.limit.toString());
+    }
+    if (options.sortBy) {
+      params = params.set('sortBy', options.sortBy);
+    }
+    if (options.sortDirection) {
+      params = params.set('sortDirection', options.sortDirection);
+    }
+
+    const filters = options.filters;
+    if (filters) {
+      if (filters.unitName) params = params.set('unitName', filters.unitName);
+      if (filters.variableId) params = params.set('variableId', filters.variableId);
+      if (filters.personLogin) params = params.set('personLogin', filters.personLogin);
+      if (filters.personGroup) params = params.set('personGroup', filters.personGroup);
+      if (filters.bookletName) params = params.set('bookletName', filters.bookletName);
+      if (filters.match) params = params.set('match', filters.match);
+      if (filters.notesMode) params = params.set('notesMode', filters.notesMode);
+      if (filters.regexSearch !== undefined) {
+        params = params.set('regexSearch', filters.regexSearch.toString());
+      }
+    }
+
+    if (selectedParamName === 'coderKeys' && options.selectedCoderKeys !== undefined) {
+      params = params.set('coderKeys', options.selectedCoderKeys.join(','));
+    }
+    if (selectedParamName === 'jobIds' && options.selectedJobIds !== undefined) {
+      params = params.set('jobIds', options.selectedJobIds.join(','));
+    }
+
+    return params;
+  }
+
   compareTrainingCodingResults(
     workspaceId: number,
-    trainingIds: string
-  ): Observable<TrainingCodingResult[]> {
-    const url = `${this.serverUrl
-    }admin/workspace/${workspaceId}/coding/compare-training-results?trainingIds=${encodeURIComponent(
-      trainingIds
-    )}`;
-    return this.http.get<TrainingCodingResult[]>(url, { headers: this.authHeader });
+    trainingIds: string,
+    options: TrainingComparisonQueryOptions = {}
+  ): Observable<TrainingCodingComparisonPageDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/compare-training-results`;
+    const params = this.buildTrainingComparisonParams(options, 'coderKeys')
+      .set('trainingIds', trainingIds);
+    return this.http.get<TrainingCodingComparisonPageDto>(url, { headers: this.authHeader, params });
   }
 
   compareWithinTrainingCodingResults(
     workspaceId: number,
-    trainingId: number
-  ): Observable<WithinTrainingCodingResult[]> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/compare-within-training?trainingId=${trainingId}`;
-    return this.http.get<WithinTrainingCodingResult[]>(url, { headers: this.authHeader });
+    trainingId: number,
+    options: TrainingComparisonQueryOptions = {}
+  ): Observable<WithinTrainingCodingComparisonPageDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/compare-within-training`;
+    const params = this.buildTrainingComparisonParams(options, 'jobIds')
+      .set('trainingId', trainingId.toString());
+    return this.http.get<WithinTrainingCodingComparisonPageDto>(url, { headers: this.authHeader, params });
   }
 
   getTrainingComparisonFreshness(
@@ -332,28 +351,35 @@ export class CodingTrainingBackendService {
 
   getCachedWithinTrainingCodingResults(
     workspaceId: number,
-    trainingId: number
-  ): Observable<WithinTrainingCodingResult[]> {
+    trainingId: number,
+    options: TrainingComparisonQueryOptions = {}
+  ): Observable<WithinTrainingCodingComparisonPageDto> {
     const cacheKey = this.getWithinTrainingComparisonCacheKey(workspaceId, trainingId);
+    const pageCacheKey = JSON.stringify(options);
 
     return this.getTrainingComparisonFreshness(workspaceId, trainingId).pipe(
       catchError(() => of(null)),
       switchMap(freshness => {
         if (!freshness) {
-          return this.compareWithinTrainingCodingResults(workspaceId, trainingId);
+          return this.compareWithinTrainingCodingResults(workspaceId, trainingId, options);
         }
 
         const cached = this.withinTrainingComparisonCache.get(cacheKey);
-        if (cached && cached.freshness.version === freshness.version) {
-          return of(cached.data);
+        const cachedPage = cached?.pages.get(pageCacheKey);
+        if (cached && cached.freshness.version === freshness.version && cachedPage) {
+          return of(cachedPage);
         }
 
-        return this.compareWithinTrainingCodingResults(workspaceId, trainingId).pipe(
-          tap(data => {
-            this.withinTrainingComparisonCache.set(cacheKey, {
-              freshness,
-              data
-            });
+        return this.compareWithinTrainingCodingResults(workspaceId, trainingId, options).pipe(
+          tap(page => {
+            const cacheEntry = cached && cached.freshness.version === freshness.version ?
+              cached :
+              {
+                freshness,
+                pages: new Map<string, WithinTrainingCodingComparisonPageDto>()
+              };
+            cacheEntry.pages.set(pageCacheKey, page);
+            this.withinTrainingComparisonCache.set(cacheKey, cacheEntry);
           })
         );
       })
@@ -436,7 +462,8 @@ export class CodingTrainingBackendService {
     workspaceId: number,
     trainingId: number,
     weightedMean: boolean = true,
-    level: 'code' | 'score' = 'code'
+    level: 'code' | 'score' = 'code',
+    selectedJobIds?: number[]
   ): Observable<{
       variables: Array<{
         unitName: string;
@@ -468,7 +495,13 @@ export class CodingTrainingBackendService {
         calculationLevel: 'code' | 'score';
       };
     }> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/cohens-kappa?weightedMean=${weightedMean}&level=${level}`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/cohens-kappa`;
+    let params = new HttpParams()
+      .set('weightedMean', weightedMean.toString())
+      .set('level', level);
+    if (selectedJobIds !== undefined) {
+      params = params.set('jobIds', selectedJobIds.join(','));
+    }
     return this.http.get<{
       variables: Array<{
         unitName: string;
@@ -499,6 +532,6 @@ export class CodingTrainingBackendService {
         weightingMethod: 'weighted' | 'unweighted';
         calculationLevel: 'code' | 'score';
       };
-    }>(url, { headers: this.authHeader });
+    }>(url, { headers: this.authHeader, params });
   }
 }
