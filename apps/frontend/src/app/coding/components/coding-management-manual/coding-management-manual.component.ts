@@ -310,6 +310,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   // Duplicate aggregation state
   duplicateAggregationThreshold = 2;
   isApplyingDuplicateAggregation = false;
+  private readonly responseAnalysisRequestCancel$ = new Subject<void>();
+  private responseAnalysisRequestId = 0;
   private analysisPollingTimer?: ReturnType<typeof setTimeout>;
   private readonly windowFocusRefreshThrottleMs = 30000;
   private readonly codingFreshnessRefreshThrottleMs = 30000;
@@ -594,9 +596,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.analysisPollingTimer) {
-      clearTimeout(this.analysisPollingTimer);
-    }
+    this.cancelResponseAnalysisRequest();
+    this.responseAnalysisRequestCancel$.complete();
     this.finalizeResponseAnalysisGuardOnDestroy();
     this.document.defaultView?.removeEventListener('focus', this.handleWindowFocus);
     this.destroy$.next();
@@ -608,6 +609,51 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   get activeManualTab(): ManualCodingTab {
     return this.visibleManualCodingTabs[this.selectedManualTabIndex] || 'preparation';
+  }
+
+  private isResponseAnalysisTab(tab: ManualCodingTab): boolean {
+    return tab === 'preparation' || tab === 'planning';
+  }
+
+  private cancelResponseAnalysisRequest(
+    options: { markNotLoading?: boolean } = {}
+  ): void {
+    this.responseAnalysisRequestId += 1;
+    if (this.analysisPollingTimer) {
+      clearTimeout(this.analysisPollingTimer);
+      this.analysisPollingTimer = undefined;
+    }
+    this.responseAnalysisRequestCancel$.next();
+    if (options.markNotLoading !== false) {
+      this.isLoadingResponseAnalysis = false;
+    }
+  }
+
+  private shouldAcceptResponseAnalysisResult(
+    requestId: number,
+    workspaceId: number
+  ): boolean {
+    return requestId === this.responseAnalysisRequestId &&
+      this.appService.selectedWorkspaceId === workspaceId &&
+      this.isResponseAnalysisTab(this.activeManualTab);
+  }
+
+  private handOffResponseAnalysisGuardUntilComplete(): void {
+    if (!this.responseAnalysisGuardActive) {
+      return;
+    }
+
+    this.trackManualResponseAnalysisGuardUntilComplete(
+      this.responseAnalysisGuardWorkspaceId || this.appService.selectedWorkspaceId,
+      this.normalizeAggregationThreshold(this.duplicateAggregationThreshold)
+    );
+    this.responseAnalysisGuardActive = false;
+    this.responseAnalysisGuardWorkspaceId = null;
+  }
+
+  private stopResponseAnalysisView(): void {
+    this.cancelResponseAnalysisRequest();
+    this.handOffResponseAnalysisGuardUntilComplete();
   }
 
   get workspaceId(): number {
@@ -671,7 +717,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const previousTab = this.activeManualTab;
     this.selectedManualTabIndex = index;
+    if (this.isResponseAnalysisTab(previousTab) &&
+      !this.isResponseAnalysisTab(this.activeManualTab)) {
+      this.stopResponseAnalysisView();
+    }
     this.loadManualTabData(this.activeManualTab);
   }
 
@@ -682,7 +733,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     if (this.selectedManualTabIndex !== tabIndex) {
+      const previousTab = this.activeManualTab;
       this.selectedManualTabIndex = tabIndex;
+      if (this.isResponseAnalysisTab(previousTab) &&
+        !this.isResponseAnalysisTab(tab)) {
+        this.stopResponseAnalysisView();
+      }
       this.loadManualTabData(tab);
     }
 
@@ -4583,11 +4639,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.analysisPollingTimer) {
-      clearTimeout(this.analysisPollingTimer);
-      this.analysisPollingTimer = undefined;
+    if (!this.isResponseAnalysisTab(this.activeManualTab)) {
+      this.stopResponseAnalysisView();
+      return;
     }
 
+    this.cancelResponseAnalysisRequest({
+      markNotLoading: false
+    });
+    const requestId = this.responseAnalysisRequestId + 1;
+    this.responseAnalysisRequestId = requestId;
     this.isLoadingResponseAnalysis = true;
     this.responseAnalysisError = null;
     this.testPersonCodingService
@@ -4599,9 +4660,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.duplicatePageIndex + 1,
         this.duplicatePageSize
       )
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.responseAnalysisRequestCancel$),
+        takeUntil(this.destroy$)
+      )
       .subscribe({
         next: (analysis: ResponseAnalysisDto & { isCalculating?: boolean }) => {
+          if (!this.shouldAcceptResponseAnalysisResult(requestId, workspaceId)) {
+            return;
+          }
+
           this.responseAnalysis = analysis;
           this.responseAnalysisError = null;
           this.isLoadingResponseAnalysis = false;
@@ -4612,13 +4680,19 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           if (analysis.isCalculating) {
             // Poll every 5 seconds if calculating
             this.analysisPollingTimer = setTimeout(() => {
-              if (this.responseAnalysis?.isCalculating) {
+              this.analysisPollingTimer = undefined;
+              if (this.responseAnalysis?.isCalculating &&
+                this.shouldAcceptResponseAnalysisResult(requestId, workspaceId)) {
                 this.loadResponseAnalysis();
               }
             }, 5000);
           }
         },
         error: error => {
+          if (!this.shouldAcceptResponseAnalysisResult(requestId, workspaceId)) {
+            return;
+          }
+
           this.isLoadingResponseAnalysis = false;
           this.focusManualFreshnessTargetIfReady();
           const responseAnalysisError = `Fehler beim Laden der Antwortanalyse: ${error.message || error}`;
