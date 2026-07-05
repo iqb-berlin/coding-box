@@ -6,6 +6,7 @@ import {
   Subject,
   catchError,
   finalize,
+  map,
   of,
   shareReplay,
   tap,
@@ -250,6 +251,7 @@ export class TestPersonCodingService {
   private codingFreshnessRequests = new Map<number, Observable<CodingFreshnessSummaryDto>>();
   private autocodingReadinessCache = new Map<string, AutocodingReadinessDto>();
   private autocodingReadinessRequests = new Map<string, Observable<AutocodingReadinessDto>>();
+  private autocodingReadinessCacheOnlyRequests = new Map<string, Observable<AutocodingReadinessDto | null>>();
   private codingFreshnessScopeCache = new Map<string, CodingFreshnessScopeDto>();
   private codingFreshnessScopeRequests = new Map<string, Observable<CodingFreshnessScopeDto>>();
   private appliedResultsOverviewCache = new Map<number, AppliedResultsOverview | null>();
@@ -314,6 +316,7 @@ export class TestPersonCodingService {
       this.codingFreshnessRequests.clear();
       this.autocodingReadinessCache.clear();
       this.autocodingReadinessRequests.clear();
+      this.autocodingReadinessCacheOnlyRequests.clear();
       this.codingFreshnessScopeCache.clear();
       this.codingFreshnessScopeRequests.clear();
       this.appliedResultsOverviewCache.clear();
@@ -327,6 +330,7 @@ export class TestPersonCodingService {
     this.appliedResultsOverviewRequests.delete(workspaceId);
     this.deleteCacheKeysForWorkspace(this.autocodingReadinessCache, workspaceId);
     this.deleteCacheKeysForWorkspace(this.autocodingReadinessRequests, workspaceId);
+    this.deleteCacheKeysForWorkspace(this.autocodingReadinessCacheOnlyRequests, workspaceId);
     this.deleteCacheKeysForWorkspace(this.codingFreshnessScopeCache, workspaceId);
     this.deleteCacheKeysForWorkspace(this.codingFreshnessScopeRequests, workspaceId);
   }
@@ -686,6 +690,63 @@ export class TestPersonCodingService {
       );
 
     this.autocodingReadinessRequests.set(cacheKey, request$);
+    return request$;
+  }
+
+  getCachedAutocodingReadiness(
+    workspaceId: number,
+    autoCoderRun: 1 | 2 = 1
+  ): Observable<AutocodingReadinessDto | null> {
+    const cacheKey = `${workspaceId}:${autoCoderRun}`;
+    const cached = this.autocodingReadinessCache.get(cacheKey);
+    if (cached) {
+      return of(cached);
+    }
+
+    if (this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)) {
+      return of(null);
+    }
+
+    const pendingRequest = this.autocodingReadinessCacheOnlyRequests.get(cacheKey);
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+
+    const params = new HttpParams()
+      .set('autoCoderRun', autoCoderRun.toString())
+      .set('cacheOnly', 'true');
+    const requestGeneration = this.codingStatusCacheGeneration;
+    const request$ = this.http
+      .get<AutocodingReadinessDto | null>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/readiness`,
+      {
+        headers: this.authHeader,
+        params,
+        context: suppressGlobalHttpErrorContext()
+      }
+    )
+      .pipe(
+        map(readiness => (
+          this.codingStatusCacheGeneration === requestGeneration ? readiness : null
+        )),
+        tap(readiness => {
+          if (
+            readiness &&
+            this.autocodingReadinessCacheOnlyRequests.get(cacheKey) === request$
+          ) {
+            this.autocodingReadinessCache.set(cacheKey, readiness);
+          }
+        }),
+        catchError(() => of(null)),
+        finalize(() => {
+          if (this.autocodingReadinessCacheOnlyRequests.get(cacheKey) === request$) {
+            this.autocodingReadinessCacheOnlyRequests.delete(cacheKey);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: false })
+      );
+
+    this.autocodingReadinessCacheOnlyRequests.set(cacheKey, request$);
     return request$;
   }
 
