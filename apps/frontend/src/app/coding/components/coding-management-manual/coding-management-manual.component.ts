@@ -566,10 +566,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         if (this.activeManualTab === 'planning') {
           this.hasLoadedPlanningDataBundle = false;
           this.refreshCodingJobsAfterDataChange('rendered');
-          this.loadJobDefinitionsForExport();
-          if (this.codingJobDefinitionsComponent) {
-            this.codingJobDefinitionsComponent.refresh();
-          }
           return;
         }
 
@@ -1943,6 +1939,23 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.isLoadingMatchingMode;
   }
 
+  private isPlanningStatusLoading(): boolean {
+    return this.isLoadingInitialResponseAnalysisForStatus() ||
+      this.isLoadingCodingProgress ||
+      this.isLoadingVariableCoverage ||
+      this.isLoadingCaseCoverage ||
+      this.isLoadingManualCodeAvailability ||
+      this.isLoadingCodingIncompleteVariables ||
+      this.isLoadingAppliedResultsOverview ||
+      this.isLoadingManualFreshnessJobSummary ||
+      this.isLoadingDoubleCodingConflictSummary ||
+      this.isLoadingMatchingMode;
+  }
+
+  private isLoadingInitialResponseAnalysisForStatus(): boolean {
+    return this.isLoadingResponseAnalysis && !this.responseAnalysis;
+  }
+
   private hasPlanningDataBundleSnapshot(): boolean {
     return this.hasLoadedPlanningDataBundle;
   }
@@ -2435,7 +2448,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private getPlanningStatusState(): PlanningStatusState {
-    if (this.isAnyPlanningDataLoading()) {
+    if (this.isPlanningStatusLoading()) {
       return 'loading';
     }
 

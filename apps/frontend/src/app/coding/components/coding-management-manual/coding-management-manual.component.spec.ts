@@ -1031,6 +1031,46 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
+  it('should keep the planning status stable while polling an existing response analysis', () => {
+    setCompletePlanningState();
+    component.variableCoverageOverview = {
+      ...component.variableCoverageOverview!,
+      missingVariables: 1
+    };
+    component.responseAnalysis = {
+      emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+      duplicateValues: {
+        total: 0,
+        totalResponses: 0,
+        groups: [],
+        isAggregationApplied: true
+      },
+      aggregationSummary: {
+        duplicateGroups: 0,
+        duplicateResponses: 0,
+        collapsedCases: 0,
+        rawCases: 10,
+        effectiveCases: 10,
+        threshold: 2,
+        aggregationActive: true
+      },
+      matchingFlags: [],
+      analysisTimestamp: new Date().toISOString(),
+      isCalculating: true
+    };
+    component.isLoadingResponseAnalysis = true;
+
+    expect(component.getPlanningStatusTitle()).toBe('Planung noch unvollständig');
+    expect(component.getPlanningStatusIcon()).toBe('assignment_late');
+  });
+
+  it('should show an updating status while the initial response analysis is loading', () => {
+    component.responseAnalysis = null;
+    component.isLoadingResponseAnalysis = true;
+
+    expect(component.getPlanningStatusTitle()).toBe('Status wird aktualisiert');
+  });
+
   it('should ask for an explicit planning data refresh before loading planning snapshots', () => {
     component.selectedManualTabIndex = 1;
     const componentInternals = component as unknown as {
@@ -1638,7 +1678,7 @@ describe('CodingManagementManualComponent', () => {
     expect(loadJobDefinitionsForExportSpy).not.toHaveBeenCalled();
   });
 
-  it('should not load bundled planning data after auto coding completes in planning', () => {
+  it('should not reload planning job definitions after auto coding completes in planning', () => {
     component.selectedManualTabIndex = 1;
     component.autoRefreshManualCodingJobs = true;
     setCompletePlanningState();
@@ -1654,6 +1694,10 @@ describe('CodingManagementManualComponent', () => {
       refreshCodingJobsAfterDataChange(scope: string): void;
       loadJobDefinitionsForExport(): void;
     };
+    const refreshJobDefinitionsSpy = jest.fn();
+    component.codingJobDefinitionsComponent = {
+      refresh: refreshJobDefinitionsSpy
+    } as unknown as CodingManagementManualComponent['codingJobDefinitionsComponent'];
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
     expect(component.shouldShowPlanningOverview()).toBe(true);
@@ -1679,7 +1723,8 @@ describe('CodingManagementManualComponent', () => {
     expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
     expect(loadResponseAnalysisSpy).not.toHaveBeenCalled();
     expect(refreshCodingJobsAfterDataChangeSpy).toHaveBeenCalledWith('rendered');
-    expect(loadJobDefinitionsForExportSpy).toHaveBeenCalled();
+    expect(loadJobDefinitionsForExportSpy).not.toHaveBeenCalled();
+    expect(refreshJobDefinitionsSpy).not.toHaveBeenCalled();
     expect(component.shouldShowPlanningOverview()).toBe(false);
     expect(component.getPlanningStatusTitle()).toBe('Planungsdaten aktualisieren');
   });

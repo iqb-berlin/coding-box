@@ -271,6 +271,7 @@ describe('CodingManagementComponent', () => {
           'title-not-started': 'Kodierung noch nicht gestartet',
           'title-manual-coding-open': 'Manuelle Kodierung abschließen',
           'title-not-checked': 'Kodierstand nicht automatisch geprüft',
+          checking: 'Zustand wird geprüft...',
           'manual-refresh-required': 'Der vollständige Kodierstand wurde noch nicht geprüft. Aktualisieren Sie den Status bei Bedarf manuell.',
           summary: '{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus, aber {{codeableResponses}} kodierbare Antworten.',
           'details-result-units': '{{count}} Ergebnis-Units',
@@ -327,6 +328,36 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getCachedAutocodingReadiness).toHaveBeenCalledWith(1, 1);
       expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+    });
+
+    it('should not show full-check loading copy during the lightweight initial refresh', () => {
+      fixture.destroy();
+      const codingFreshnessSubject = new Subject<{
+        workspaceId: number;
+        currentRevision: number;
+        items: never[];
+      }>();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock)
+        .mockReturnValueOnce(codingFreshnessSubject.asObservable());
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      const isolatedComponent = isolatedFixture.componentInstance;
+      isolatedFixture.detectChanges();
+
+      const text = isolatedFixture.nativeElement.textContent;
+      expect(isolatedComponent.isLoadingCodingFreshness).toBe(true);
+      expect(isolatedComponent.isFullCodingStatusCheckLoading).toBe(false);
+      expect(text).toContain('Der vollständige Kodierstand wurde noch nicht geprüft');
+      expect(text).not.toContain('Zustand wird geprüft');
+      expect(isolatedFixture.nativeElement.querySelector('.coding-freshness-state-spinner')).toBeNull();
+
+      codingFreshnessSubject.next({
+        workspaceId: 1,
+        currentRevision: 0,
+        items: []
+      });
+      codingFreshnessSubject.complete();
+      isolatedFixture.destroy();
     });
 
     it('should use cached autocoding readiness on init when available', () => {
@@ -411,6 +442,21 @@ describe('CodingManagementComponent', () => {
 
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
+    });
+
+    it('should show full-check loading copy during a manual status refresh', () => {
+      const autocodingReadinessSubject = new Subject<never>();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock)
+        .mockReturnValueOnce(autocodingReadinessSubject.asObservable());
+
+      component.refreshCodingStatusOverview();
+      fixture.detectChanges();
+
+      expect(component.isFullCodingStatusCheckLoading).toBe(true);
+      expect(fixture.nativeElement.textContent).toContain('Zustand wird geprüft');
+      expect(fixture.nativeElement.querySelector('.coding-freshness-state-spinner')).not.toBeNull();
+
+      autocodingReadinessSubject.complete();
     });
 
     it('should refresh coding status overview when requested by query param', () => {
