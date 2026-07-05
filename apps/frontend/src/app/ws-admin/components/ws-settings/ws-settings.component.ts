@@ -95,6 +95,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   readonly externalReplayTokenScopes = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES;
   autoFetchCodingStatistics = true;
   autoRefreshManualCodingJobs = true;
+  evaluationMode = false;
   includeDeriveErrorInManualCoding = false;
   enableRegexSearch = false;
   showTestResultsLogAnomalies = false;
@@ -108,14 +109,26 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     this.loadWorkspaceTokenPolicy();
     if (workspaceId) {
       this.workspaceSettingsService
+        .getEvaluationMode(workspaceId)
+        .subscribe(enabled => {
+          this.evaluationMode = enabled;
+          if (enabled) {
+            this.applyEvaluationModeLocalPreset(true);
+          }
+        });
+      this.workspaceSettingsService
         .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(enabled => {
-          this.autoFetchCodingStatistics = enabled;
+          this.autoFetchCodingStatistics = this.evaluationMode ?
+            false :
+            enabled;
         });
       this.workspaceSettingsService
         .getAutoRefreshManualCodingJobs(workspaceId)
         .subscribe(enabled => {
-          this.autoRefreshManualCodingJobs = enabled;
+          this.autoRefreshManualCodingJobs = this.evaluationMode ?
+            false :
+            enabled;
         });
       this.workspaceSettingsService
         .getIncludeDeriveErrorInManualCoding(workspaceId)
@@ -261,7 +274,57 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     });
   }
 
+  toggleEvaluationMode(toggleEvent: { checked: boolean }): void {
+    const previousState = {
+      evaluationMode: this.evaluationMode,
+      autoFetchCodingStatistics: this.autoFetchCodingStatistics,
+      autoRefreshManualCodingJobs: this.autoRefreshManualCodingJobs
+    };
+    const enabled = toggleEvent.checked;
+    this.applyEvaluationModeLocalPreset(enabled);
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService
+        .setEvaluationMode(workspaceId, enabled)
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              enabled ?
+                this.translateService.instant(
+                  'ws-settings.evaluation-mode-enabled'
+                ) :
+                this.translateService.instant(
+                  'ws-settings.evaluation-mode-disabled'
+                ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.evaluationMode = previousState.evaluationMode;
+            this.autoFetchCodingStatistics =
+              previousState.autoFetchCodingStatistics;
+            this.autoRefreshManualCodingJobs =
+              previousState.autoRefreshManualCodingJobs;
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
+          }
+        });
+    }
+  }
+
   toggleAutoFetchCodingStatistics(toggleEvent: { checked: boolean }): void {
+    if (this.evaluationMode) {
+      return;
+    }
+
     this.autoFetchCodingStatistics = toggleEvent.checked;
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -301,6 +364,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   toggleAutoRefreshManualCodingJobs(toggleEvent: { checked: boolean }): void {
+    if (this.evaluationMode) {
+      return;
+    }
+
     this.autoRefreshManualCodingJobs = toggleEvent.checked;
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -337,6 +404,12 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           }
         });
     }
+  }
+
+  private applyEvaluationModeLocalPreset(enabled: boolean): void {
+    this.evaluationMode = enabled;
+    this.autoFetchCodingStatistics = false;
+    this.autoRefreshManualCodingJobs = !enabled;
   }
 
   toggleIncludeDeriveErrorInManualCoding(toggleEvent: { checked: boolean }): void {

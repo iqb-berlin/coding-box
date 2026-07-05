@@ -144,7 +144,7 @@ describe('CodingManagementManualComponent', () => {
           'outdated-note':
             'Diese Antwort-Analyse basiert auf {{analysisRawCases}} Rohantworten. Der aktuelle manuelle Vorbereitungsbestand umfasst {{referenceRawCases}} Rohantworten. Bitte neu berechnen; deshalb kann die hier gezeigte Einsparung von den Fortschrittswerten abweichen.',
           'rest-scope-note':
-            'Diese Antwort-Analyse basiert auf {{analysisRawCases}} vorbereiteten Rohantworten. Der aktuelle Restbestand umfasst {{currentRawManualResponses}} Rohantworten, weil bereits Ergebnisse angewendet wurden oder Fälle nicht mehr separat gezählt werden.'
+            'Diese Antwort-Analyse basiert auf {{analysisRawCases}} vorbereiteten Rohantworten. Der aktuelle manuelle Arbeitsumfang umfasst {{currentRawManualResponses}} Rohantworten, weil nicht alle analysierten Antworten in der aktuellen manuellen Planung berücksichtigt werden.'
         },
         errors: {
           'replay-auth-token-failed':
@@ -715,7 +715,7 @@ describe('CodingManagementManualComponent', () => {
     fixture.detectChanges();
     const pageText = fixture.nativeElement.textContent as string;
     expect(pageText).toContain(
-      'Der aktuelle Restbestand umfasst 17705 Rohantworten'
+      'Der aktuelle manuelle Arbeitsumfang umfasst 17705 Rohantworten'
     );
     expect(pageText).not.toContain(
       'Der aktuelle manuelle Vorbereitungsbestand umfasst'

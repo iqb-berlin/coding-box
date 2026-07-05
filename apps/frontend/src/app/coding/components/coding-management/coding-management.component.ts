@@ -186,6 +186,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   manualAppliedResultsOverview: AppliedResultsOverview | null = null;
   isLoadingManualAppliedResultsOverview = false;
   manualAppliedResultsOverviewLoadFailed = false;
+  evaluationMode = false;
   enableRegexSearch = false;
   autoRefreshManualCodingJobs = true;
   hasLoadedFullCodingStatusOverview = false;
@@ -220,6 +221,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private freshnessJobCompletionRefreshHandledIds = new Set<string>();
   private resetCompletionRefreshHandledAfterGuardClear = false;
   private hasShownFreshnessJobStatusPollingError = false;
+  private readonly responseTableRequestCancel$ = new Subject<void>();
+  private responseTableRequestId = 0;
   private readonly automaticCodingStatusRefreshDebounceMs = 250;
 
   ngOnInit(): void {
@@ -233,18 +236,24 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       }
 
       combineLatest([
+        this.workspaceSettingsService.getEvaluationMode(workspaceId),
         this.workspaceSettingsService.getAutoFetchCodingStatistics(workspaceId),
         this.workspaceSettingsService.getAutoRefreshManualCodingJobs(workspaceId)
       ])
         .pipe(takeUntil(this.destroy$))
-        .subscribe(([autoFetch, autoRefresh]) => {
-          this.hasLoadedManualCodingJobRefreshSetting = true;
-          this.autoRefreshManualCodingJobs = autoRefresh;
+        .subscribe(([evaluationMode, autoFetch, autoRefresh]) => {
+          const effectiveAutoRefresh = !evaluationMode && autoRefresh;
+          const shouldFetchInitialStatistics =
+            !evaluationMode && (autoFetch || pendingStatisticsVersion);
 
-          if (autoFetch || pendingStatisticsVersion) {
+          this.evaluationMode = evaluationMode;
+          this.hasLoadedManualCodingJobRefreshSetting = true;
+          this.autoRefreshManualCodingJobs = effectiveAutoRefresh;
+
+          if (shouldFetchInitialStatistics) {
             this.fetchCodingStatistics();
           }
-          if (autoRefresh) {
+          if (effectiveAutoRefresh) {
             this.loadInitialCodingStatusOverview();
           }
         });
@@ -377,6 +386,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
     this.stopFreshnessJobPolling();
     this.clearScheduledAutomaticCodingStatusRefresh();
+    this.responseTableRequestCancel$.next();
+    this.responseTableRequestCancel$.complete();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -885,19 +896,23 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   onReplayClick(response: Success): void {
-    this.uiService.openReplayForResponse(response).subscribe(replayUrl => {
-      if (replayUrl) {
-        window.open(replayUrl, '_blank');
-      }
-    });
+    this.uiService.openReplayForResponse(response)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(replayUrl => {
+        if (replayUrl) {
+          window.open(replayUrl, '_blank');
+        }
+      });
   }
 
   onShowCodingScheme(unitId: number): void {
-    this.uiService.getCodingSchemeFromUnit(unitId).subscribe(codingSchemeRef => {
-      if (codingSchemeRef) {
-        this.uiService.showCodingSchemeDialog(codingSchemeRef);
-      }
-    });
+    this.uiService.getCodingSchemeFromUnit(unitId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(codingSchemeRef => {
+        if (codingSchemeRef) {
+          this.uiService.showCodingSchemeDialog(codingSchemeRef);
+        }
+      });
   }
 
   onShowUnitXml(unitId: number): void {
@@ -1375,12 +1390,23 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.activeFreshnessJobProgress = null;
   }
 
+  private startResponseTableRequest(): number {
+    this.responseTableRequestCancel$.next();
+    this.responseTableRequestId += 1;
+    return this.responseTableRequestId;
+  }
+
+  private isCurrentResponseTableRequest(requestId: number): boolean {
+    return requestId === this.responseTableRequestId;
+  }
+
   // Data Fetching Methods
   private fetchResponsesByStatus(
     status: string,
     page: number = 1,
     limit: number = this.pageSize
   ): void {
+    const requestId = this.startResponseTableRequest();
     this.isLoading = true;
     this.currentStatusFilter = status;
 
@@ -1391,8 +1417,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       limit,
       this.sortBy || undefined,
       this.sortDirection || undefined
+    ).pipe(
+      takeUntil(this.responseTableRequestCancel$),
+      takeUntil(this.destroy$)
     ).subscribe({
       next: response => {
+        if (!this.isCurrentResponseTableRequest(requestId)) {
+          return;
+        }
         this.data = response.data.map((item: ResponseEntity) => {
           const codeKey = `code_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
           const scoreKey = `score_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
@@ -1429,12 +1461,16 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         }
       },
       error: () => {
+        if (!this.isCurrentResponseTableRequest(requestId)) {
+          return;
+        }
         this.isLoading = false;
       }
     });
   }
 
   private fetchResponsesWithFilters(): void {
+    const requestId = this.startResponseTableRequest();
     this.isLoading = true;
 
     if (!this.hasActiveFilters()) {
@@ -1453,8 +1489,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       this.pageSize,
       this.sortBy || undefined,
       this.sortDirection || undefined
+    ).pipe(
+      takeUntil(this.responseTableRequestCancel$),
+      takeUntil(this.destroy$)
     ).subscribe({
       next: (response: { data: SearchResponseItem[]; total: number }) => {
+        if (!this.isCurrentResponseTableRequest(requestId)) {
+          return;
+        }
         this.data = this.mapSearchResponseItemsToSuccess(response.data);
         this.totalRecords = response.total;
         this.isLoading = false;
@@ -1468,6 +1510,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         }
       },
       error: () => {
+        if (!this.isCurrentResponseTableRequest(requestId)) {
+          return;
+        }
         this.isLoading = false;
       }
     });

@@ -1,14 +1,44 @@
 import { Repository } from 'typeorm';
+import { BadRequestException } from '@nestjs/common';
 import { WorkspaceSettingsController } from './workspace-settings.controller';
 import { Setting } from '../database/entities/setting.entity';
 
+interface TransactionalSettingRepositoryMock {
+  findOne: jest.Mock<Promise<Setting | null>, [unknown]>;
+  create: jest.Mock<Setting, [Partial<Setting>]>;
+  save: jest.Mock<Promise<Setting>, [Setting]>;
+}
+
+interface SettingRepositoryMock extends TransactionalSettingRepositoryMock {
+  manager: {
+    transaction: jest.Mock;
+  };
+}
+
 describe('WorkspaceSettingsController', () => {
   let controller: WorkspaceSettingsController;
-  let settingRepository: jest.Mocked<Pick<Repository<Setting>, 'findOne'>>;
+  let transactionalSettingRepository: TransactionalSettingRepositoryMock;
+  let settingRepository: SettingRepositoryMock;
 
   beforeEach(() => {
+    transactionalSettingRepository = {
+      findOne: jest.fn(),
+      create: jest.fn((setting: Partial<Setting>) => setting as Setting),
+      save: jest.fn((setting: Setting) => Promise.resolve(setting))
+    };
     settingRepository = {
-      findOne: jest.fn()
+      findOne: jest.fn(),
+      create: jest.fn((setting: Partial<Setting>) => setting as Setting),
+      save: jest.fn((setting: Setting) => Promise.resolve(setting)),
+      manager: {
+        transaction: jest.fn((
+          callback: (entityManager: {
+            getRepository: () => TransactionalSettingRepositoryMock;
+          }) => unknown
+        ) => callback({
+          getRepository: () => transactionalSettingRepository
+        }))
+      }
     };
     controller = new WorkspaceSettingsController(
       settingRepository as unknown as Repository<Setting>
@@ -43,6 +73,20 @@ describe('WorkspaceSettingsController', () => {
     });
   });
 
+  it('returns evaluation mode disabled by default when it is missing', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'evaluation-mode')
+    ).resolves.toEqual({
+      id: 0,
+      key: 'workspace-5-evaluation-mode',
+      value: JSON.stringify({ enabled: false }),
+      description:
+        'Controls whether expensive automatic coding refreshes are disabled for evaluation sessions'
+    });
+  });
+
   it('returns DERIVE_ERROR manual coding disabled by default when it is missing', async () => {
     settingRepository.findOne.mockResolvedValue(null);
 
@@ -69,5 +113,72 @@ describe('WorkspaceSettingsController', () => {
       description:
         'Controls whether selected workspace search fields interpret input as regular expressions'
     });
+  });
+
+  it('saves workspace settings in a single transaction', async () => {
+    transactionalSettingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.createWorkspaceSettings(5, {
+        settings: [
+          {
+            key: 'evaluation-mode',
+            value: JSON.stringify({ enabled: true }),
+            description: 'Evaluation mode'
+          },
+          {
+            key: 'auto-refresh-manual-coding-jobs',
+            value: JSON.stringify({ enabled: false }),
+            description: 'Auto refresh'
+          }
+        ]
+      })
+    ).resolves.toEqual([
+      {
+        id: 'workspace-5-evaluation-mode',
+        key: 'workspace-5-evaluation-mode',
+        value: JSON.stringify({ enabled: true }),
+        description: 'Evaluation mode'
+      },
+      {
+        id: 'workspace-5-auto-refresh-manual-coding-jobs',
+        key: 'workspace-5-auto-refresh-manual-coding-jobs',
+        value: JSON.stringify({ enabled: false }),
+        description: 'Auto refresh'
+      }
+    ]);
+
+    expect(settingRepository.manager.transaction).toHaveBeenCalledTimes(1);
+    expect(transactionalSettingRepository.save).toHaveBeenCalledWith({
+      key: 'workspace-5-evaluation-mode',
+      content: JSON.stringify({ enabled: true })
+    });
+    expect(transactionalSettingRepository.save).toHaveBeenCalledWith({
+      key: 'workspace-5-auto-refresh-manual-coding-jobs',
+      content: JSON.stringify({ enabled: false })
+    });
+  });
+
+  it('rejects a batch request without a settings array', async () => {
+    await expect(
+      controller.createWorkspaceSettings(5, {} as never)
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(settingRepository.manager.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a batch request with invalid setting entries', async () => {
+    await expect(
+      controller.createWorkspaceSettings(5, {
+        settings: [
+          {
+            key: '',
+            value: JSON.stringify({ enabled: true })
+          }
+        ]
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(settingRepository.manager.transaction).not.toHaveBeenCalled();
   });
 });

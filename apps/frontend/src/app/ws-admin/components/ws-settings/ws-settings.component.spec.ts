@@ -64,6 +64,8 @@ describe('WsSettingsComponent', () => {
       setAutoFetchCodingStatistics: jest.fn().mockReturnValue(of({})),
       getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true)),
       setAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of({})),
+      getEvaluationMode: jest.fn().mockReturnValue(of(false)),
+      setEvaluationMode: jest.fn().mockReturnValue(of([])),
       getIncludeDeriveErrorInManualCoding: jest.fn().mockReturnValue(of(false)),
       setIncludeDeriveErrorInManualCoding: jest.fn().mockReturnValue(of({})),
       getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false)),
@@ -128,6 +130,8 @@ describe('WsSettingsComponent', () => {
   describe('ngOnInit', () => {
     it('should load workspace settings on init', () => {
       expect(mockAppService.getWorkspaceTokenPolicy).toHaveBeenCalled();
+      expect(mockWorkspaceSettingsService.getEvaluationMode).toHaveBeenCalledWith(1);
+      expect(component.evaluationMode).toBe(false);
       expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
       expect(component.autoFetchCodingStatistics).toBe(true);
       expect(mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1);
@@ -227,6 +231,46 @@ describe('WsSettingsComponent', () => {
     });
   });
 
+  describe('toggleEvaluationMode', () => {
+    it('should enable evaluation mode and turn off expensive automatic refreshes', () => {
+      component.toggleEvaluationMode({ checked: true });
+
+      expect(component.evaluationMode).toBe(true);
+      expect(component.autoFetchCodingStatistics).toBe(false);
+      expect(component.autoRefreshManualCodingJobs).toBe(false);
+      expect(mockWorkspaceSettingsService.setEvaluationMode).toHaveBeenCalledWith(1, true);
+    });
+
+    it('should disable evaluation mode and restore normal automatic refresh defaults', () => {
+      component.evaluationMode = true;
+      component.autoFetchCodingStatistics = false;
+      component.autoRefreshManualCodingJobs = false;
+
+      component.toggleEvaluationMode({ checked: false });
+
+      expect(component.evaluationMode).toBe(false);
+      expect(component.autoFetchCodingStatistics).toBe(false);
+      expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(mockWorkspaceSettingsService.setEvaluationMode).toHaveBeenCalledWith(1, false);
+    });
+
+    it('should revert state on error', () => {
+      mockWorkspaceSettingsService.setEvaluationMode.mockReturnValue(
+        throwError(() => new Error('error'))
+      );
+      component.evaluationMode = false;
+      component.autoFetchCodingStatistics = true;
+      component.autoRefreshManualCodingJobs = true;
+
+      component.toggleEvaluationMode({ checked: true });
+
+      expect(component.evaluationMode).toBe(false);
+      expect(component.autoFetchCodingStatistics).toBe(true);
+      expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+  });
+
   describe('toggleAutoFetchCodingStatistics', () => {
     it('should call service with true', () => {
       component.toggleAutoFetchCodingStatistics({ checked: true });
@@ -246,6 +290,14 @@ describe('WsSettingsComponent', () => {
       component.toggleAutoFetchCodingStatistics({ checked: false });
       expect(component.autoFetchCodingStatistics).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should ignore changes while evaluation mode is active', () => {
+      component.evaluationMode = true;
+
+      component.toggleAutoFetchCodingStatistics({ checked: true });
+
+      expect(mockWorkspaceSettingsService.setAutoFetchCodingStatistics).not.toHaveBeenCalled();
     });
   });
 
@@ -268,6 +320,14 @@ describe('WsSettingsComponent', () => {
       component.toggleAutoRefreshManualCodingJobs({ checked: false });
       expect(component.autoRefreshManualCodingJobs).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should ignore changes while evaluation mode is active', () => {
+      component.evaluationMode = true;
+
+      component.toggleAutoRefreshManualCodingJobs({ checked: true });
+
+      expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).not.toHaveBeenCalled();
     });
   });
 

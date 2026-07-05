@@ -101,7 +101,8 @@ describe('CodingManagementComponent', () => {
     mockWorkspaceSettingsService = {
       getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(false)),
       getEnableRegexSearch: jest.fn().mockReturnValue(of(false)),
-      getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true))
+      getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true)),
+      getEvaluationMode: jest.fn().mockReturnValue(of(false))
     };
     autoCodingCompletedSubject = new Subject<{ jobId?: string }>();
     testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
@@ -313,6 +314,10 @@ describe('CodingManagementComponent', () => {
 
     it('should check auto-fetch setting on init', () => {
       expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
+    });
+
+    it('should check evaluation mode setting on init', () => {
+      expect(mockWorkspaceSettingsService.getEvaluationMode).toHaveBeenCalledWith(1);
     });
 
     it('should check regex search setting on init', () => {
@@ -640,6 +645,57 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      isolatedFixture.destroy();
+    });
+
+    it('should suppress automatic coding status loads when evaluation mode is active', () => {
+      fixture.destroy();
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCachedAutocodingReadiness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+      (mockWorkspaceSettingsService.getEvaluationMode as jest.Mock)
+        .mockReturnValueOnce(of(true));
+      (mockWorkspaceSettingsService.getAutoFetchCodingStatistics as jest.Mock)
+        .mockReturnValueOnce(of(true));
+      (mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs as jest.Mock)
+        .mockReturnValueOnce(of(true));
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      const isolatedComponent = isolatedFixture.componentInstance;
+      isolatedFixture.detectChanges();
+
+      expect(isolatedComponent.evaluationMode).toBe(true);
+      expect(isolatedComponent.autoRefreshManualCodingJobs).toBe(false);
+      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getCachedAutocodingReadiness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      isolatedFixture.destroy();
+    });
+
+    it('should suppress pending statistics auto-fetch when evaluation mode is active', () => {
+      fixture.destroy();
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.consumePendingStatisticsVersion as jest.Mock)
+        .mockReturnValueOnce('v2');
+      (mockWorkspaceSettingsService.getEvaluationMode as jest.Mock)
+        .mockReturnValueOnce(of(true));
+      (mockWorkspaceSettingsService.getAutoFetchCodingStatistics as jest.Mock)
+        .mockReturnValueOnce(of(false));
+      (mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs as jest.Mock)
+        .mockReturnValueOnce(of(false));
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      const isolatedComponent = isolatedFixture.componentInstance;
+      isolatedFixture.detectChanges();
+
+      expect(isolatedComponent.selectedStatisticsVersion).toBe('v2');
+      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
 
       isolatedFixture.destroy();
     });
