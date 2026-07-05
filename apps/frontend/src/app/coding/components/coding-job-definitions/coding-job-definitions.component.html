@@ -32,7 +32,7 @@
   </div>
 
 
-  <div *ngIf="isLoading" class="loading-container">
+  <div *ngIf="isLoading && jobDefinitions.length === 0" class="loading-container">
     <mat-spinner diameter="30"></mat-spinner>
     <span>{{ 'coding-job-definitions.loading' | translate }}</span>
   </div>
@@ -43,7 +43,7 @@
   </div>
 
   <div
-    *ngIf="!isLoading && jobDefinitions.length > 0"
+    *ngIf="jobDefinitions.length > 0"
     class="definition-summary"
     aria-label="Status der Jobdefinitionen">
     <div class="summary-item">
@@ -64,7 +64,10 @@
     </div>
   </div>
 
-  <div *ngIf="!isLoading && jobDefinitions.length > 0" class="job-definitions-table-wrapper">
+  <div
+    *ngIf="jobDefinitions.length > 0"
+    class="job-definitions-table-wrapper"
+    [attr.aria-busy]="isLoading">
     <table mat-table [dataSource]="jobDefinitions" class="job-definitions-table">
       <!-- Actions Column -->
       <ng-container matColumnDef="actions">

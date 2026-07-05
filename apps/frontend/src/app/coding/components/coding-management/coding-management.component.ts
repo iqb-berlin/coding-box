@@ -1055,6 +1055,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       this.hasImportedResultsWithoutCoding;
   }
 
+  get isFullCodingStatusCheckLoading(): boolean {
+    return this.isLoadingAutocodingReadiness;
+  }
+
   get isCodingStatusOverviewPendingManualRefresh(): boolean {
     return !this.hasLoadedFullCodingStatusOverview &&
       this.shouldShowManualCodingStatusRefresh() &&
