@@ -20,7 +20,11 @@ describe('TestResultsUploadStateService', () => {
     getLogAnomalyDetails: jest.Mock;
     requestFlatResponseFilters: jest.Mock;
   };
-  let testPersonCodingServiceMock: { getAppliedResultsOverview: jest.Mock; getCodingFreshness: jest.Mock };
+  let testPersonCodingServiceMock: {
+    getAppliedResultsOverview: jest.Mock;
+    getCodingFreshness: jest.Mock;
+    invalidateCodingStatusCache: jest.Mock;
+  };
   let dialogMock: { open: jest.Mock };
   let snackBarMock: { open: jest.Mock };
 
@@ -55,6 +59,7 @@ describe('TestResultsUploadStateService', () => {
       requestFlatResponseFilters: jest.fn()
     };
     testPersonCodingServiceMock = {
+      invalidateCodingStatusCache: jest.fn(),
       getCodingFreshness: jest.fn().mockReturnValue(of({
         workspaceId: 1,
         currentRevision: 0,
@@ -253,6 +258,7 @@ describe('TestResultsUploadStateService', () => {
     flushMicrotasks();
 
     expect(currentBatches.length).toBe(0);
+    expect(testPersonCodingServiceMock.invalidateCodingStatusCache).toHaveBeenCalledWith(1);
     expect(dialogMock.open).toHaveBeenCalled();
     expect(snackBarMock.open).toHaveBeenCalled();
 

@@ -51,7 +51,10 @@ describe('ExternalCodingImportService', () => {
         }
       }
     };
-    const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1)
+    };
     const codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
@@ -102,7 +105,9 @@ describe('ExternalCodingImportService', () => {
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
+    expect(cacheService.incr).toHaveBeenCalledWith('coding_incomplete_variables_version:17');
     expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v8:17');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_scope_v1:17');
   });
 
   it('imports DERIVE_ERROR without turning it into completed false coding', async () => {
@@ -140,7 +145,10 @@ describe('ExternalCodingImportService', () => {
         }
       }
     };
-    const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1)
+    };
     const codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
@@ -221,7 +229,10 @@ describe('ExternalCodingImportService', () => {
         }
       }
     };
-    const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1)
+    };
     const codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
@@ -261,6 +272,53 @@ describe('ExternalCodingImportService', () => {
       status_v2: statusStringToNumber('CODING_COMPLETE'),
       code_v2: 1,
       score_v2: 2
+    });
+  });
+
+  it('prefers coding scheme aliases over colliding technical ids when validating imported codes', async () => {
+    const service = new ExternalCodingImportService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { delete: jest.fn().mockResolvedValue(undefined) } as never,
+      { markManualCodingCurrent: jest.fn().mockResolvedValue(undefined) } as never
+    );
+    jest.spyOn(service as unknown as {
+      getCodingSchemeForUnit: () => Promise<unknown>;
+    }, 'getCodingSchemeForUnit')
+      .mockResolvedValue({
+        variableCodings: [
+          {
+            id: '04',
+            alias: '02',
+            codes: [{ id: 4, score: 99 }]
+          },
+          {
+            id: '07',
+            alias: '04',
+            codes: [{ id: 4, score: 4 }]
+          }
+        ]
+      });
+
+    const result = await (service as unknown as {
+      validateCodeAgainstScheme: (
+        unit: unknown,
+        variableId: string,
+        code: number | null
+      ) => Promise<{ isValid: boolean; score: number | null; status: string }>;
+    }).validateCodeAgainstScheme(
+      { id: 1, name: 'DHB003', alias: 'DHB003' },
+      '04',
+      4
+    );
+
+    expect(result).toEqual({
+      isValid: true,
+      score: 4,
+      status: 'CODING_COMPLETE'
     });
   });
 

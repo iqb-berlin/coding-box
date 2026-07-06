@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -36,12 +37,14 @@ describe('CodingStatisticsService', () => {
     mockCacheService = {
       get: jest.fn(),
       set: jest.fn(),
-      delete: jest.fn()
+      delete: jest.fn(),
+      incr: jest.fn().mockResolvedValue(1)
     } as unknown as jest.Mocked<CacheService>;
 
     mockJobQueueService = {
       getTestPersonCodingJob: jest.fn(),
       getCodingStatisticsJob: jest.fn(),
+      getActiveCodingStatisticsJob: jest.fn().mockResolvedValue(undefined),
       addCodingStatisticsJob: jest.fn(),
       cancelTestPersonCodingJob: jest.fn(),
       deleteTestPersonCodingJob: jest.fn(),
@@ -337,8 +340,14 @@ describe('CodingStatisticsService', () => {
 
       await service.invalidateIncompleteVariablesCache(1);
 
+      expect(mockCacheService.incr).toHaveBeenCalledWith(
+        'coding_incomplete_variables_version:1'
+      );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
         'coding_incomplete_variables_v8:1'
+      );
+      expect(mockCacheService.delete).toHaveBeenCalledWith(
+        'coding_incomplete_variables_scope_v1:1'
       );
     });
 
@@ -479,6 +488,70 @@ describe('CodingStatisticsService', () => {
       expect(mockCacheService.get).toHaveBeenCalledWith(
         'coding-statistics:schema-v4:1:v1'
       );
+    });
+
+    it('should return an active statistics job for the same workspace and version', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      const mockJob: Partial<Job> = { id: 'job-active' };
+      mockJobQueueService.getActiveCodingStatisticsJob.mockResolvedValue(
+        mockJob as Job
+      );
+
+      const result = await service.createCodingStatisticsJob(1, 'v1');
+
+      expect(result).toEqual({
+        jobId: 'job-active',
+        message: 'Using active coding statistics job'
+      });
+      expect(mockJobQueueService.assertNoDependencyConflicts)
+        .toHaveBeenCalledWith('coding-statistics', 1);
+      expect(mockJobQueueService.getActiveCodingStatisticsJob)
+        .toHaveBeenCalledWith(1, 'v1');
+      expect(
+        mockJobQueueService.assertNoDependencyConflicts.mock.invocationCallOrder[0]
+      ).toBeLessThan(
+        mockJobQueueService.getActiveCodingStatisticsJob.mock.invocationCallOrder[0]
+      );
+      expect(mockCacheService.delete).not.toHaveBeenCalled();
+      expect(mockJobQueueService.addCodingStatisticsJob).not.toHaveBeenCalled();
+    });
+
+    it('should not reuse an active statistics job when dependency conflicts exist', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      const conflict = new ConflictException('Auto-coding is still active');
+      const mockJob: Partial<Job> = { id: 'job-active' };
+      mockJobQueueService.assertNoDependencyConflicts.mockRejectedValue(conflict);
+      mockJobQueueService.getActiveCodingStatisticsJob.mockResolvedValue(
+        mockJob as Job
+      );
+
+      await expect(service.createCodingStatisticsJob(1, 'v1'))
+        .rejects.toBe(conflict);
+
+      expect(mockJobQueueService.assertNoDependencyConflicts)
+        .toHaveBeenCalledWith('coding-statistics', 1);
+      expect(mockJobQueueService.getActiveCodingStatisticsJob)
+        .not.toHaveBeenCalled();
+      expect(mockCacheService.delete).not.toHaveBeenCalled();
+      expect(mockJobQueueService.addCodingStatisticsJob).not.toHaveBeenCalled();
+    });
+
+    it('should reuse an in-flight statistics job request for the same workspace and version', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.delete.mockResolvedValue(true);
+      const mockJob: Partial<Job> = { id: 'job-123' };
+      mockJobQueueService.addCodingStatisticsJob.mockResolvedValue(
+        mockJob as Job
+      );
+
+      const [firstResult, secondResult] = await Promise.all([
+        service.createCodingStatisticsJob(1, 'v1'),
+        service.createCodingStatisticsJob(1, 'v1')
+      ]);
+
+      expect(firstResult).toEqual(secondResult);
+      expect(mockCacheService.get).toHaveBeenCalledTimes(1);
+      expect(mockJobQueueService.addCodingStatisticsJob).toHaveBeenCalledTimes(1);
     });
 
     it('should read coding statistics job status only from the statistics queue', async () => {

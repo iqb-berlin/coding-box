@@ -48,7 +48,7 @@
 
   <section class="coding-freshness-panel" [class.is-current]="!hasCodingFreshnessAttention">
     <div class="coding-freshness-main">
-      @if (isLoadingCodingFreshness || isLoadingAutocodingReadiness || isLoadingManualAppliedResultsOverview) {
+      @if (isFullCodingStatusCheckLoading) {
       <mat-spinner diameter="22" class="coding-freshness-state-spinner"></mat-spinner>
       } @else {
       <mat-icon>{{ hasCodingFreshnessAttention ? 'warning' : 'check_circle' }}</mat-icon>
@@ -58,8 +58,10 @@
           {{ codingFreshnessPanelTitle }}
         </div>
         <div class="coding-freshness-text">
-          @if (isLoadingCodingFreshness || isLoadingAutocodingReadiness || isLoadingManualAppliedResultsOverview) {
+          @if (isFullCodingStatusCheckLoading) {
           {{ 'coding-management.readiness.checking' | translate }}
+          } @else if (isCodingStatusOverviewPendingManualRefresh) {
+          {{ 'coding-management.readiness.manual-refresh-required' | translate }}
           } @else if (hasAutocodingReadinessLoadFailed) {
           {{ 'coding-management.readiness.load-failed' | translate }}
           } @else if (isAutocodingReadinessBlocked) {
@@ -113,6 +115,17 @@
         }
       </div>
     </div>
+
+    @if (shouldShowManualCodingStatusRefresh()) {
+    <div class="coding-freshness-actions">
+      <button mat-stroked-button color="primary"
+        [disabled]="isLoadingCodingFreshness || isLoadingManualAppliedResultsOverview || isLoadingAutocodingReadiness"
+        (click)="refreshCodingStatusOverview()">
+        <mat-icon>refresh</mat-icon>
+        {{ 'coding-management.readiness.refresh-status' | translate }}
+      </button>
+    </div>
+    }
 
     @if (isStartingFreshnessCoding) {
     <div class="coding-freshness-job">

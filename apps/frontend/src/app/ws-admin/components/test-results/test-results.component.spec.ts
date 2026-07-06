@@ -8,7 +8,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
 import { environment } from '../../../../environments/environment';
@@ -122,6 +122,7 @@ describe('TestResultsComponent', () => {
           provide: TestPersonCodingService,
           useValue: {
             notifyTestResultsChanged: jest.fn(),
+            invalidateCodingStatusCache: jest.fn(),
             getAppliedResultsOverview: jest.fn().mockReturnValue(of({
               totalIncompleteResponses: 0,
               appliedResponses: 0,
@@ -151,7 +152,8 @@ describe('TestResultsComponent', () => {
         {
           provide: WorkspaceSettingsService,
           useValue: {
-            getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false))
+            getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false)),
+            getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true))
           }
         },
         {
@@ -217,6 +219,13 @@ describe('TestResultsComponent', () => {
       'response-status': {
         tooltips: {
           DERIVE_ERROR: 'DERIVE_ERROR bedeutet: Ableitung/Solver fehlgeschlagen, z. B. Typkonflikt im Kodierschema. Keine inhaltlich falsche Antwort.'
+        }
+      },
+      'test-results-page': {
+        'coding-status': {
+          'manual-title': 'Kodierstatus wird manuell aktualisiert',
+          'manual-text': 'Automatische Statusprüfungen sind für diesen Arbeitsbereich deaktiviert. Aktualisieren Sie den Kodierstatus nur bei Bedarf.',
+          refresh: 'Kodierstatus aktualisieren'
         }
       }
     });
@@ -387,6 +396,84 @@ describe('TestResultsComponent', () => {
     expect(testResultService.invalidateCache).toHaveBeenCalledWith(1);
     expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
     expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalled();
+  });
+
+  it('should not refresh coding state after flat-table deletion when auto refresh is disabled', () => {
+    const testResultService = TestBed.inject(TestResultService) as unknown as {
+      getWorkspaceOverview: jest.Mock;
+      invalidateCache: jest.Mock;
+    };
+    const codingStatisticsService = TestBed.inject(CodingStatisticsService) as unknown as {
+      getCodingFreshness: jest.Mock;
+    };
+    const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
+      getAppliedResultsOverview: jest.Mock;
+      notifyTestResultsChanged: jest.Mock;
+    };
+
+    codingStatisticsService.getCodingFreshness.mockClear();
+    testPersonCodingService.getAppliedResultsOverview.mockClear();
+    (component as unknown as {
+      setAutoRefreshCodingStatus: (enabled: boolean) => void;
+    }).setAutoRefreshCodingStatus(false);
+
+    component.onFlatTableResponseDeleted();
+
+    expect(testResultService.invalidateCache).toHaveBeenCalledWith(1);
+    expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
+    expect(codingStatisticsService.getCodingFreshness).not.toHaveBeenCalled();
+    expect(testPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
+    expect(component.shouldShowCodingFreshnessManualNotice).toBe(true);
+    expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalled();
+  });
+
+  it('should keep manual coding status refresh visible after a manual check', () => {
+    const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
+      invalidateCodingStatusCache: jest.Mock;
+    };
+
+    testPersonCodingService.invalidateCodingStatusCache.mockClear();
+    (component as unknown as {
+      setAutoRefreshCodingStatus: (enabled: boolean) => void;
+    }).setAutoRefreshCodingStatus(false);
+
+    component.refreshCodingFreshnessStatusManually();
+
+    expect(component.shouldShowCodingFreshnessManualNotice).toBe(true);
+    expect(testPersonCodingService.invalidateCodingStatusCache).toHaveBeenCalledWith(1);
+  });
+
+  it('should ignore stale manual coding status responses after status was cleared', () => {
+    const codingStatisticsService = TestBed.inject(CodingStatisticsService) as unknown as {
+      getCodingFreshness: jest.Mock;
+    };
+    const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
+      getAppliedResultsOverview: jest.Mock;
+    };
+    const codingFreshness$ = new Subject<unknown>();
+    const appliedResults$ = new Subject<unknown>();
+
+    codingStatisticsService.getCodingFreshness.mockReturnValue(
+      codingFreshness$.asObservable()
+    );
+    testPersonCodingService.getAppliedResultsOverview.mockReturnValue(
+      appliedResults$.asObservable()
+    );
+    (component as unknown as {
+      setAutoRefreshCodingStatus: (enabled: boolean) => void;
+    }).setAutoRefreshCodingStatus(false);
+
+    component.refreshCodingFreshnessStatusManually();
+    component.onFlatTableResponseDeleted();
+    codingFreshness$.next({ items: [] });
+    codingFreshness$.complete();
+    appliedResults$.next({ appliedResponses: 5 });
+    appliedResults$.complete();
+
+    expect(component.codingFreshnessSummary).toBeNull();
+    expect(component.manualAppliedResultsOverview).toBeNull();
+    expect(component.isLoadingCodingFreshnessStatus).toBe(false);
+    expect(component.isLoadingManualAppliedResultsOverview).toBe(false);
   });
 
   it('should keep the last workspace overview while a reload has no result yet', () => {

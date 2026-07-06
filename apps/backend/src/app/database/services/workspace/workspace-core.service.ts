@@ -20,7 +20,10 @@ import {
   CODING_STATISTICS_CACHE_VERSIONS,
   getCodingStatisticsCacheKey
 } from '../coding/coding-statistics-cache-key.util';
-import { getCodingIncompleteVariablesCacheKey } from '../coding/coding-incomplete-variables-cache-key.util';
+import {
+  getCodingIncompleteVariablesCacheKeys,
+  getCodingIncompleteVariablesCacheVersionKey
+} from '../coding/coding-incomplete-variables-cache-key.util';
 
 @Injectable()
 export class WorkspaceCoreService {
@@ -117,6 +120,7 @@ export class WorkspaceCoreService {
       await this.workspaceRepository.save(workspaceGroupToUpdate);
       await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceData.id}`);
       if (workspaceData.settings) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceData.id);
         await this.invalidateCachesAffectedByExclusions(workspaceData.id);
       }
     }
@@ -198,11 +202,15 @@ export class WorkspaceCoreService {
   }
 
   private async invalidateCachesAffectedByExclusions(workspaceId: number): Promise<void> {
+    await this.cacheService.incr(
+      getCodingIncompleteVariablesCacheVersionKey(workspaceId)
+    );
     await Promise.all([
       ...CODING_STATISTICS_CACHE_VERSIONS.map(version => (
         this.cacheService.delete(getCodingStatisticsCacheKey(workspaceId, version))
       )),
-      this.cacheService.delete(getCodingIncompleteVariablesCacheKey(workspaceId)),
+      ...getCodingIncompleteVariablesCacheKeys(workspaceId)
+        .map(cacheKey => this.cacheService.delete(cacheKey)),
       this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
       this.cacheService.deleteByPattern(`response-analysis:${workspaceId}_*`),
       this.cacheService.deleteByPattern(`responses:${workspaceId}:*`),

@@ -25,6 +25,12 @@ import {
   getCodingVariableIdCandidateSql,
   isCodingVariableIdCandidate
 } from './coding-response-candidate.util';
+import { CacheService } from '../../../cache/cache.service';
+import {
+  getCodingReadinessCacheKey,
+  getCodingReadinessCachePattern,
+  getCodingReadinessCacheVersionKey
+} from './coding-readiness-cache-key.util';
 
 export type AutocodingReadinessOptions = {
   personIds?: string[];
@@ -41,7 +47,7 @@ type ReadinessCacheSignature = {
 };
 
 type ReadinessCacheEntry = {
-  expiresAt: number;
+  signature: ReadinessCacheSignature;
   readiness: AutocodingReadinessDto;
 };
 
@@ -88,10 +94,8 @@ export class CodingReadinessService {
   private readonly logger = new Logger(CodingReadinessService.name);
   private readonly maxSamplesPerUnit = 8;
   private readonly maxSampleUnits = 10;
-  private readonly cacheTtlMs = 60_000;
-  private readonly readinessCache = new Map<string, ReadinessCacheEntry>();
+  private readonly scopedCacheTtlSeconds = 600;
   private readonly readinessInFlight = new Map<string, Promise<AutocodingReadinessDto>>();
-  private readonly cacheRevisionByWorkspace = new Map<number, number>();
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -101,7 +105,8 @@ export class CodingReadinessService {
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,
     private readonly workspaceFilesService: WorkspaceFilesService,
-    private readonly workspaceExclusionService: WorkspaceExclusionService
+    private readonly workspaceExclusionService: WorkspaceExclusionService,
+    private readonly cacheService: CacheService
   ) {}
 
   async getReadiness(
@@ -121,7 +126,7 @@ export class CodingReadinessService {
         {
           sourceRevision: 0,
           fileRevision: '0:',
-          cacheRevision: this.getWorkspaceCacheRevision(workspaceId),
+          cacheRevision: await this.getWorkspaceCacheRevision(workspaceId),
           scopedUnitHash: ''
         }
       );
@@ -129,14 +134,15 @@ export class CodingReadinessService {
 
     const cacheSignature = await this.getCacheSignature(workspaceId, unitIds, options);
     const cacheKey = this.buildCacheKey(workspaceId, autoCoderRun, cacheSignature);
+    const inFlightKey = this.buildInFlightKey(workspaceId, autoCoderRun, cacheSignature);
     if (!options.forceRefresh) {
-      const cached = this.getCachedReadiness(cacheKey);
+      const cached = await this.getCachedReadiness(cacheKey, cacheSignature);
       if (cached) {
         return cached;
       }
     }
 
-    const inFlight = this.readinessInFlight.get(cacheKey);
+    const inFlight = this.readinessInFlight.get(inFlightKey);
     if (inFlight) {
       return inFlight;
     }
@@ -150,12 +156,30 @@ export class CodingReadinessService {
       cacheSignature,
       cacheKey
     );
-    this.readinessInFlight.set(cacheKey, readinessPromise);
+    this.readinessInFlight.set(inFlightKey, readinessPromise);
     try {
       return await readinessPromise;
     } finally {
-      this.readinessInFlight.delete(cacheKey);
+      this.readinessInFlight.delete(inFlightKey);
     }
+  }
+
+  async getReadinessFromCache(
+    workspaceId: number,
+    options: AutocodingReadinessOptions = {}
+  ): Promise<AutocodingReadinessDto | null> {
+    const autoCoderRun = options.autoCoderRun || 1;
+    const units = await this.getScopedUnits(workspaceId, options);
+    const unitIds = units.map(unit => unit.id);
+    if (unitIds.length === 0) {
+      return null;
+    }
+
+    const cacheSignature = await this.getCacheSignature(workspaceId, unitIds, options);
+    return this.getCachedReadiness(
+      this.buildCacheKey(workspaceId, autoCoderRun, cacheSignature),
+      cacheSignature
+    );
   }
 
   async assertAutoCodingCanProcess(
@@ -173,22 +197,15 @@ export class CodingReadinessService {
     throw new BadRequestException(this.buildBlockedMessage(readiness));
   }
 
-  invalidateWorkspaceReadinessCache(workspaceId: number): void {
+  async invalidateWorkspaceReadinessCache(workspaceId: number): Promise<void> {
     const workspaceKeyPrefix = `${workspaceId}|`;
-    for (const key of Array.from(this.readinessCache.keys())) {
-      if (key.startsWith(workspaceKeyPrefix)) {
-        this.readinessCache.delete(key);
-      }
-    }
     for (const key of Array.from(this.readinessInFlight.keys())) {
       if (key.startsWith(workspaceKeyPrefix)) {
         this.readinessInFlight.delete(key);
       }
     }
-    this.cacheRevisionByWorkspace.set(
-      workspaceId,
-      this.getWorkspaceCacheRevision(workspaceId) + 1
-    );
+    await this.cacheService.incr(getCodingReadinessCacheVersionKey(workspaceId));
+    await this.cacheService.deleteByPattern(getCodingReadinessCachePattern(workspaceId));
   }
 
   async filterResponsesValidVariables(
@@ -300,7 +317,14 @@ export class CodingReadinessService {
       invalidVariableSamples: variableDiagnostics.invalidVariableSamples
     }, startedAt, false, cacheSignature);
 
-    this.setCachedReadiness(cacheKey, readiness);
+    await this.setCachedReadinessIfCurrent(
+      workspaceId,
+      units.map(unit => unit.id),
+      options,
+      cacheKey,
+      cacheSignature,
+      readiness
+    );
     this.logger.debug(
       `Computed autocoding readiness for workspace ${workspaceId}, run ${autoCoderRun} ` +
       `in ${readiness.computationMs}ms: ${readiness.readiness}.`
@@ -857,13 +881,16 @@ export class CodingReadinessService {
     return {
       sourceRevision,
       fileRevision,
-      cacheRevision: this.getWorkspaceCacheRevision(workspaceId),
+      cacheRevision: await this.getWorkspaceCacheRevision(workspaceId),
       scopedUnitHash: this.hashScope(unitIds, options)
     };
   }
 
-  private getWorkspaceCacheRevision(workspaceId: number): number {
-    return this.cacheRevisionByWorkspace.get(workspaceId) || 0;
+  private async getWorkspaceCacheRevision(workspaceId: number): Promise<number> {
+    return this.cacheService.getNumber(
+      getCodingReadinessCacheVersionKey(workspaceId),
+      0
+    );
   }
 
   private hashScope(
@@ -922,6 +949,23 @@ export class CodingReadinessService {
     autoCoderRun: 1 | 2,
     signature: ReadinessCacheSignature
   ): string {
+    return getCodingReadinessCacheKey(
+      workspaceId,
+      autoCoderRun,
+      this.hashValues([
+        signature.sourceRevision,
+        signature.fileRevision,
+        signature.cacheRevision,
+        signature.scopedUnitHash
+      ])
+    );
+  }
+
+  private buildInFlightKey(
+    workspaceId: number,
+    autoCoderRun: 1 | 2,
+    signature: ReadinessCacheSignature
+  ): string {
     return [
       workspaceId,
       autoCoderRun,
@@ -932,14 +976,12 @@ export class CodingReadinessService {
     ].join('|');
   }
 
-  private getCachedReadiness(cacheKey: string): AutocodingReadinessDto | null {
-    const entry = this.readinessCache.get(cacheKey);
-    if (!entry) {
-      return null;
-    }
-
-    if (entry.expiresAt <= Date.now()) {
-      this.readinessCache.delete(cacheKey);
+  private async getCachedReadiness(
+    cacheKey: string,
+    signature: ReadinessCacheSignature
+  ): Promise<AutocodingReadinessDto | null> {
+    const entry = await this.cacheService.get<ReadinessCacheEntry>(cacheKey);
+    if (!entry?.signature || !this.isSameSignature(entry.signature, signature)) {
       return null;
     }
 
@@ -949,14 +991,86 @@ export class CodingReadinessService {
     };
   }
 
+  private async setCachedReadinessIfCurrent(
+    workspaceId: number,
+    unitIds: number[],
+    options: AutocodingReadinessOptions,
+    cacheKey: string,
+    signature: ReadinessCacheSignature,
+    readiness: AutocodingReadinessDto
+  ): Promise<boolean> {
+    try {
+      const currentUnitIds = (await this.getScopedUnits(workspaceId, options))
+        .map(unit => unit.id);
+      if (!this.hasSameUnitScope(unitIds, currentUnitIds)) {
+        this.logger.debug(
+          `Skipped caching autocoding readiness for workspace ${workspaceId}; ` +
+          'scoped units changed while computing.'
+        );
+        return false;
+      }
+
+      const currentSignature = await this.getCacheSignature(workspaceId, currentUnitIds, options);
+      if (!this.isSameSignature(signature, currentSignature)) {
+        this.logger.debug(
+          `Skipped caching autocoding readiness for workspace ${workspaceId}; ` +
+          'cache signature changed while computing.'
+        );
+        return false;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Skipped caching autocoding readiness for workspace ${workspaceId}; ` +
+        `could not revalidate cache signature: ${message}`
+      );
+      return false;
+    }
+
+    return this.setCachedReadiness(cacheKey, signature, readiness, options);
+  }
+
+  private hasSameUnitScope(
+    previousUnitIds: number[],
+    currentUnitIds: number[]
+  ): boolean {
+    const previous = this.uniquePositiveIds(previousUnitIds).sort((a, b) => a - b);
+    const current = this.uniquePositiveIds(currentUnitIds).sort((a, b) => a - b);
+    return previous.length === current.length &&
+      previous.every((unitId, index) => unitId === current[index]);
+  }
+
   private setCachedReadiness(
     cacheKey: string,
-    readiness: AutocodingReadinessDto
-  ): void {
-    this.readinessCache.set(cacheKey, {
-      expiresAt: Date.now() + this.cacheTtlMs,
+    signature: ReadinessCacheSignature,
+    readiness: AutocodingReadinessDto,
+    options: AutocodingReadinessOptions
+  ): Promise<boolean> {
+    return this.cacheService.set(cacheKey, {
+      signature,
       readiness
-    });
+    }, this.getCacheTtlSeconds(options));
+  }
+
+  private getCacheTtlSeconds(options: AutocodingReadinessOptions): number {
+    return this.isScopedReadiness(options) ? this.scopedCacheTtlSeconds : 0;
+  }
+
+  private isScopedReadiness(options: AutocodingReadinessOptions): boolean {
+    return this.uniquePositiveIds(
+      (options.personIds || []).map(id => Number(id))
+    ).length > 0 ||
+      this.uniquePositiveIds(options.unitIds || []).length > 0;
+  }
+
+  private isSameSignature(
+    cached: ReadinessCacheSignature,
+    current: ReadinessCacheSignature
+  ): boolean {
+    return cached.sourceRevision === current.sourceRevision &&
+      cached.fileRevision === current.fileRevision &&
+      cached.cacheRevision === current.cacheRevision &&
+      cached.scopedUnitHash === current.scopedUnitHash;
   }
 
   private withComputationMetadata(

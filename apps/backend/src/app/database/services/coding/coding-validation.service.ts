@@ -26,12 +26,15 @@ import {
 } from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
 import {
-  buildAggregationGroups,
-  deduplicateManualCodingResponses,
-  getManualCodingDeduplicationKey,
+  countEffectiveManualCodingCases,
   ManualCodingDeduplicationResponse
 } from './aggregation-metrics.util';
-import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import {
+  getCodingIncompleteVariablesCacheKey,
+  getCodingIncompleteVariablesCacheKeys,
+  getCodingIncompleteVariablesCacheVersionKey,
+  getCodingIncompleteVariablesScopeCacheKey
+} from './coding-incomplete-variables-cache-key.util';
 import {
   getCoveredSourceKeysForManualDerivedVariables,
   isCoveredSourceVariable,
@@ -113,9 +116,18 @@ type ManualCodingVariableWithCaseInfo = {
   coderTrainingRequired: boolean;
 };
 
+type VersionedCodingCacheValue<T> = {
+  invalidationVersion: number;
+  data: T;
+};
+
 @Injectable()
 export class CodingValidationService {
   private readonly logger = new Logger(CodingValidationService.name);
+  private readonly incompleteVariablesCacheTtlSeconds = 300;
+  private readonly incompleteVariablesInFlight = new Map<string, Promise<ManualCodingVariableWithCaseInfo[]>>();
+  private readonly manualCodingScopeInFlight = new Map<string, Promise<ManualCodingScopeFromDb>>();
+  private readonly manualCodeAvailabilityInFlight = new Map<string, Promise<ManualCodeAvailabilityValidationDto>>();
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -530,9 +542,69 @@ export class CodingValidationService {
     > {
     try {
       if (
+        !unitName &&
+        trainingRequired === undefined &&
+        !includeDeriveErrorOnly &&
+        excludeJobDefinitionId === undefined
+      ) {
+        return await this.getDefaultCodingIncompleteVariables(workspaceId);
+      }
+
+      if (
+        unitName &&
+        trainingRequired === undefined &&
+        !includeDeriveErrorOnly &&
+        excludeJobDefinitionId === undefined
+      ) {
+        const cachedDefaultVariables =
+          await this.getCachedDefaultCodingIncompleteVariables(workspaceId);
+        if (cachedDefaultVariables) {
+          return this.filterManualCodingVariables(
+            cachedDefaultVariables,
+            unitName
+          );
+        }
+      }
+
+      if (includeDeriveErrorOnly) {
+        const queryDetails = [
+          unitName ? ` and unit ${unitName}` : '',
+          trainingRequired !== undefined ? ` (trainingRequired: ${trainingRequired})` : '',
+          excludeJobDefinitionId !== undefined ? ` excluding job definition ${excludeJobDefinitionId}` : ''
+        ].join('');
+        this.logger.log(
+          `Querying manual coding variables including DERIVE_ERROR cases for workspace ${workspaceId}${queryDetails} (not cached)`
+        );
+        const variables = await this.fetchCodingIncompleteVariablesFromDb(
+          workspaceId,
+          unitName,
+          trainingRequired,
+          true
+        );
+        return await this.enrichVariablesWithCaseInfo(
+          workspaceId,
+          variables,
+          true,
+          excludeJobDefinitionId
+        );
+      }
+
+      const reusableDefaultScope =
+        !unitName &&
+        trainingRequired === undefined &&
+        excludeJobDefinitionId !== undefined;
+      const variables = reusableDefaultScope ?
+        (await this.getDefaultManualCodingScope(workspaceId)).variables :
+        await this.fetchCodingIncompleteVariablesFromDb(
+          workspaceId,
+          unitName,
+          trainingRequired,
+          false
+        );
+
+      if (
         unitName ||
         trainingRequired !== undefined ||
-        includeDeriveErrorOnly ||
         excludeJobDefinitionId !== undefined
       ) {
         const queryDetails = [
@@ -541,68 +613,16 @@ export class CodingValidationService {
           excludeJobDefinitionId !== undefined ? ` excluding job definition ${excludeJobDefinitionId}` : ''
         ].join('');
         this.logger.log(
-          `Querying manual coding variables for workspace ${workspaceId}${queryDetails} (not cached)`
-        );
-        const variables = await this.fetchCodingIncompleteVariablesFromDb(
-          workspaceId,
-          unitName,
-          trainingRequired,
-          includeDeriveErrorOnly
+          `Querying manual coding variables for workspace ${workspaceId}${queryDetails}${reusableDefaultScope ? ' (scope cache reusable)' : ' (not cached)'}`
         );
         return await this.enrichVariablesWithCaseInfo(
           workspaceId,
           variables,
-          includeDeriveErrorOnly,
+          false,
           excludeJobDefinitionId
         );
       }
-      const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
-      const cachedResult = await this.cacheService.get<
-      {
-        unitName: string;
-        variableId: string;
-        responseCount: number;
-        deriveErrorResponseCount: number;
-        casesInJobs: number;
-        availableCases: number;
-        uniqueCasesAfterAggregation: number;
-        availableCasesWithDeriveError?: number;
-        uniqueCasesAfterAggregationWithDeriveError?: number;
-        isDerived: boolean;
-        coderTrainingRequired: boolean;
-      }[]
-      >(cacheKey);
-      if (cachedResult) {
-        this.logger.log(
-          `Retrieved ${cachedResult.length} manual coding variables from cache for workspace ${workspaceId}`
-        );
-        return cachedResult;
-      }
-      this.logger.log(
-        `Cache miss: Querying manual coding variables for workspace ${workspaceId}`
-      );
-      const variables = await this.fetchCodingIncompleteVariablesFromDb(
-        workspaceId,
-        undefined,
-        undefined,
-        includeDeriveErrorOnly
-      );
-      const result = await this.enrichVariablesWithCaseInfo(
-        workspaceId,
-        variables
-      );
-
-      const cacheSet = await this.cacheService.set(cacheKey, result, 300); // Cache for 5 minutes
-      if (cacheSet) {
-        this.logger.log(
-          `Cached ${result.length} manual coding variables for workspace ${workspaceId}`
-        );
-      } else {
-        this.logger.warn(
-          `Failed to cache manual coding variables for workspace ${workspaceId}`
-        );
-      }
-      return result;
+      return await this.enrichVariablesWithCaseInfo(workspaceId, variables);
     } catch (error) {
       this.logger.error(
         `Error getting manual coding variables: ${error.message}`,
@@ -620,11 +640,13 @@ export class CodingValidationService {
     trainingRequired?: boolean
   ): Promise<ManualCodingScopeSummary> {
     try {
-      const scope = await this.fetchManualCodingScopeFromDb(
-        workspaceId,
-        unitName,
-        trainingRequired
-      );
+      const scope = (!unitName && trainingRequired === undefined) ?
+        await this.getDefaultManualCodingScope(workspaceId) :
+        await this.fetchManualCodingScopeFromDb(
+          workspaceId,
+          unitName,
+          trainingRequired
+        );
 
       return {
         manualVariableCount: scope.variables.length,
@@ -646,6 +668,40 @@ export class CodingValidationService {
   }
 
   async validateManualCodeAvailability(
+    workspaceId: number,
+    unitName?: string,
+    trainingRequired?: boolean
+  ): Promise<ManualCodeAvailabilityValidationDto> {
+    const cacheVersion =
+      await this.getIncompleteVariablesCacheVersion(workspaceId);
+    const inFlightKey = this.generateManualCodeAvailabilityInFlightKey(
+      workspaceId,
+      unitName,
+      trainingRequired,
+      cacheVersion
+    );
+    const inFlight = this.manualCodeAvailabilityInFlight.get(inFlightKey);
+    if (inFlight) {
+      this.logger.log(
+        `Reusing in-flight manual code availability validation for workspace ${workspaceId}`
+      );
+      return inFlight;
+    }
+
+    const request = this.computeManualCodeAvailability(
+      workspaceId,
+      unitName,
+      trainingRequired
+    ).finally(() => {
+      if (this.manualCodeAvailabilityInFlight.get(inFlightKey) === request) {
+        this.manualCodeAvailabilityInFlight.delete(inFlightKey);
+      }
+    });
+    this.manualCodeAvailabilityInFlight.set(inFlightKey, request);
+    return request;
+  }
+
+  private async computeManualCodeAvailability(
     workspaceId: number,
     unitName?: string,
     trainingRequired?: boolean
@@ -707,6 +763,284 @@ export class CodingValidationService {
         'Could not validate manual code availability. Please check the coding schemes.'
       );
     }
+  }
+
+  private async getDefaultCodingIncompleteVariables(
+    workspaceId: number
+  ): Promise<ManualCodingVariableWithCaseInfo[]> {
+    const cacheVersion =
+      await this.getIncompleteVariablesCacheVersion(workspaceId);
+    const cachedResult = await this.getCachedDefaultCodingIncompleteVariables(
+      workspaceId,
+      cacheVersion
+    );
+    if (cachedResult) {
+      return cachedResult;
+    }
+
+    const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
+    const inFlightKey = this.generateVersionedInFlightKey(
+      cacheKey,
+      cacheVersion
+    );
+    const inFlight = this.incompleteVariablesInFlight.get(inFlightKey);
+    if (inFlight) {
+      this.logger.log(
+        `Reusing in-flight manual coding variables query for workspace ${workspaceId}`
+      );
+      return inFlight;
+    }
+
+    const request = this.fetchDefaultCodingIncompleteVariables(
+      workspaceId,
+      cacheVersion
+    )
+      .finally(() => {
+        if (this.incompleteVariablesInFlight.get(inFlightKey) === request) {
+          this.incompleteVariablesInFlight.delete(inFlightKey);
+        }
+      });
+    this.incompleteVariablesInFlight.set(inFlightKey, request);
+    return request;
+  }
+
+  private async getCachedDefaultCodingIncompleteVariables(
+    workspaceId: number,
+    cacheVersion?: number
+  ): Promise<ManualCodingVariableWithCaseInfo[] | null> {
+    const expectedCacheVersion =
+      cacheVersion ?? await this.getIncompleteVariablesCacheVersion(workspaceId);
+    const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
+    const inFlightKey = this.generateVersionedInFlightKey(
+      cacheKey,
+      expectedCacheVersion
+    );
+    const inFlight = this.incompleteVariablesInFlight.get(inFlightKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const cachedResult = this.getVersionedCachedData(
+      await this.cacheService.get<
+      VersionedCodingCacheValue<ManualCodingVariableWithCaseInfo[]> |
+      ManualCodingVariableWithCaseInfo[]
+      >(cacheKey),
+      expectedCacheVersion
+    );
+    if (cachedResult) {
+      this.logger.log(
+        `Retrieved ${cachedResult.length} manual coding variables from cache for workspace ${workspaceId}`
+      );
+    }
+    return cachedResult;
+  }
+
+  private async fetchDefaultCodingIncompleteVariables(
+    workspaceId: number,
+    cacheVersion: number
+  ): Promise<ManualCodingVariableWithCaseInfo[]> {
+    this.logger.log(
+      `Cache miss: Querying manual coding variables for workspace ${workspaceId}`
+    );
+    const scope = await this.getDefaultManualCodingScope(
+      workspaceId,
+      cacheVersion
+    );
+    const result = await this.enrichVariablesWithCaseInfo(
+      workspaceId,
+      scope.variables
+    );
+
+    const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
+    const cacheSet = await this.setVersionedCodingCache(
+      workspaceId,
+      cacheKey,
+      result,
+      cacheVersion
+    );
+    if (cacheSet) {
+      this.logger.log(
+        `Cached ${result.length} manual coding variables for workspace ${workspaceId}`
+      );
+    } else {
+      this.logger.warn(
+        `Failed to cache manual coding variables for workspace ${workspaceId}`
+      );
+    }
+    return result;
+  }
+
+  private async getDefaultManualCodingScope(
+    workspaceId: number,
+    cacheVersion?: number
+  ): Promise<ManualCodingScopeFromDb> {
+    const expectedCacheVersion =
+      cacheVersion ?? await this.getIncompleteVariablesCacheVersion(workspaceId);
+    const cacheKey = this.generateManualCodingScopeCacheKey(workspaceId);
+    const cachedScope = this.getVersionedCachedData(
+      await this.cacheService.get<
+      VersionedCodingCacheValue<ManualCodingScopeFromDb> |
+      ManualCodingScopeFromDb
+      >(cacheKey),
+      expectedCacheVersion
+    );
+    if (cachedScope) {
+      this.logger.log(
+        `Retrieved manual coding scope summary data from cache for workspace ${workspaceId}`
+      );
+      return cachedScope;
+    }
+
+    const inFlightKey = this.generateVersionedInFlightKey(
+      cacheKey,
+      expectedCacheVersion
+    );
+    const inFlight = this.manualCodingScopeInFlight.get(inFlightKey);
+    if (inFlight) {
+      this.logger.log(
+        `Reusing in-flight manual coding scope query for workspace ${workspaceId}`
+      );
+      return inFlight;
+    }
+
+    const request = this.fetchDefaultManualCodingScope(
+      workspaceId,
+      expectedCacheVersion
+    )
+      .finally(() => {
+        if (this.manualCodingScopeInFlight.get(inFlightKey) === request) {
+          this.manualCodingScopeInFlight.delete(inFlightKey);
+        }
+      });
+    this.manualCodingScopeInFlight.set(inFlightKey, request);
+    return request;
+  }
+
+  private async fetchDefaultManualCodingScope(
+    workspaceId: number,
+    cacheVersion: number
+  ): Promise<ManualCodingScopeFromDb> {
+    const scope = await this.fetchManualCodingScopeFromDb(workspaceId);
+    const cacheKey = this.generateManualCodingScopeCacheKey(workspaceId);
+    const cacheSet = await this.setVersionedCodingCache(
+      workspaceId,
+      cacheKey,
+      scope,
+      cacheVersion
+    );
+    if (cacheSet) {
+      this.logger.log(
+        `Cached manual coding scope summary data for workspace ${workspaceId}`
+      );
+    } else {
+      this.logger.warn(
+        `Failed to cache manual coding scope summary data for workspace ${workspaceId}`
+      );
+    }
+    return scope;
+  }
+
+  private filterManualCodingVariables<T extends {
+    unitName: string;
+    coderTrainingRequired?: boolean;
+  }>(
+    variables: T[],
+    unitName?: string,
+    trainingRequired?: boolean
+  ): T[] {
+    return variables.filter(variable => (
+      (!unitName || variable.unitName === unitName) &&
+      (
+        trainingRequired === undefined ||
+        variable.coderTrainingRequired === trainingRequired
+      )
+    ));
+  }
+
+  private async getIncompleteVariablesCacheVersion(
+    workspaceId: number
+  ): Promise<number> {
+    return this.cacheService.getNumber(
+      getCodingIncompleteVariablesCacheVersionKey(workspaceId),
+      0
+    );
+  }
+
+  private async setVersionedCodingCache<T>(
+    workspaceId: number,
+    cacheKey: string,
+    data: T,
+    cacheVersion: number
+  ): Promise<boolean> {
+    const currentCacheVersion =
+      await this.getIncompleteVariablesCacheVersion(workspaceId);
+    if (currentCacheVersion !== cacheVersion) {
+      this.logger.log(
+        `Skipped caching ${cacheKey} because workspace ${workspaceId} was invalidated while the query was running`
+      );
+      return false;
+    }
+
+    return this.cacheService.set<VersionedCodingCacheValue<T>>(
+      cacheKey,
+      {
+        invalidationVersion: cacheVersion,
+        data
+      },
+      this.incompleteVariablesCacheTtlSeconds
+    );
+  }
+
+  private getVersionedCachedData<T>(
+    cachedValue: VersionedCodingCacheValue<T> | T | null,
+    expectedCacheVersion: number
+  ): T | null {
+    if (!cachedValue) {
+      return null;
+    }
+
+    if (this.isVersionedCodingCacheValue(cachedValue)) {
+      return cachedValue.invalidationVersion === expectedCacheVersion ?
+        cachedValue.data :
+        null;
+    }
+
+    return expectedCacheVersion === 0 ? cachedValue : null;
+  }
+
+  private isVersionedCodingCacheValue<T>(
+    value: VersionedCodingCacheValue<T> | T
+  ): value is VersionedCodingCacheValue<T> {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'invalidationVersion' in value &&
+      'data' in value
+    );
+  }
+
+  private generateVersionedInFlightKey(
+    cacheKey: string,
+    cacheVersion: number
+  ): string {
+    return `${cacheKey}:version:${cacheVersion}`;
+  }
+
+  private generateManualCodingScopeCacheKey(workspaceId: number): string {
+    return getCodingIncompleteVariablesScopeCacheKey(workspaceId);
+  }
+
+  private generateManualCodeAvailabilityInFlightKey(
+    workspaceId: number,
+    unitName?: string,
+    trainingRequired?: boolean,
+    cacheVersion = 0
+  ): string {
+    const unitKey = unitName ? encodeURIComponent(unitName) : 'all';
+    const trainingKey = trainingRequired === undefined ?
+      'all' :
+      String(trainingRequired);
+    return `${workspaceId}:${cacheVersion}:${trainingKey}:${unitKey}`;
   }
 
   /**
@@ -804,45 +1138,14 @@ export class CodingValidationService {
             variableId: response.variableid
           }));
         const assignedResponseIds = assignedResponseIdsByVariable.get(key) || new Set<number>();
-        const assignedDeduplicationKeys = new Set(
-          responsesWithCaseFields
-            .filter(response => assignedResponseIds.has(response.responseId))
-            .map(response => getManualCodingDeduplicationKey(response))
-        );
-        const dedupedResponses = deduplicateManualCodingResponses(responsesWithCaseFields);
-        const assignedDedupedResponseIds = new Set(
-          dedupedResponses
-            .filter(response => (
-              assignedResponseIds.has(response.responseId) ||
-              assignedDeduplicationKeys.has(getManualCodingDeduplicationKey(response))
-            ))
-            .map(response => response.responseId)
-        );
-        const aggregatedGroups = buildAggregationGroups(
-          dedupedResponses,
+
+        return countEffectiveManualCodingCases(
+          responsesWithCaseFields,
+          assignedResponseIds,
           matchingFlags,
           aggregationThreshold,
           derivedVariableMap
         );
-
-        let uniqueCases = 0;
-        let casesInJobs = 0;
-
-        for (const group of aggregatedGroups) {
-          if (aggregationThreshold !== null && group.responses.length >= aggregationThreshold) {
-            uniqueCases += 1;
-            if (group.responses.some(response => assignedDedupedResponseIds.has(response.responseId))) {
-              casesInJobs += 1;
-            }
-          } else {
-            uniqueCases += group.responses.length;
-            casesInJobs += group.responses
-              .filter(response => assignedDedupedResponseIds.has(response.responseId))
-              .length;
-          }
-        }
-
-        return { uniqueCases, casesInJobs };
       };
 
       const includeDeriveErrorForVariable = includeDeriveErrorInCaseInfo &&
@@ -1315,10 +1618,39 @@ export class CodingValidationService {
 
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
     const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
-    await this.cacheService.delete(cacheKey);
+    const scopeCacheKey = this.generateManualCodingScopeCacheKey(workspaceId);
+    await this.cacheService.incr(
+      getCodingIncompleteVariablesCacheVersionKey(workspaceId)
+    );
+    await Promise.all(
+      getCodingIncompleteVariablesCacheKeys(workspaceId)
+        .map(key => this.cacheService.delete(key))
+    );
+    this.deleteInFlightEntriesForCacheKey(
+      this.incompleteVariablesInFlight,
+      cacheKey
+    );
+    this.deleteInFlightEntriesForCacheKey(
+      this.manualCodingScopeInFlight,
+      scopeCacheKey
+    );
+    const availabilityKeyPrefix = `${workspaceId}:`;
+    Array.from(this.manualCodeAvailabilityInFlight.keys())
+      .filter(key => key.startsWith(availabilityKeyPrefix))
+      .forEach(key => this.manualCodeAvailabilityInFlight.delete(key));
     this.logger.log(
       `Invalidated manual coding variables cache for workspace ${workspaceId}`
     );
+  }
+
+  private deleteInFlightEntriesForCacheKey<T>(
+    inFlightEntries: Map<string, Promise<T>>,
+    cacheKey: string
+  ): void {
+    const keyPrefix = `${cacheKey}:version:`;
+    Array.from(inFlightEntries.keys())
+      .filter(key => key.startsWith(keyPrefix))
+      .forEach(key => inFlightEntries.delete(key));
   }
 
   /**

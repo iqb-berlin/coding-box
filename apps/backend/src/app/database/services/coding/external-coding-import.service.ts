@@ -14,7 +14,10 @@ import { statusStringToNumber, statusNumberToString } from '../../utils/response
 import FileUpload from '../../entities/file_upload.entity';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
-import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import {
+  getCodingIncompleteVariablesCacheKeys,
+  getCodingIncompleteVariablesCacheVersionKey
+} from './coding-incomplete-variables-cache-key.util';
 
 interface ExternalCodingRow {
   unit_key?: string;
@@ -1045,7 +1048,7 @@ export class ExternalCodingImportService {
       }
 
       const variableCoding = Array.isArray(codingScheme.variableCodings) ?
-        codingScheme.variableCodings.find(vc => vc.id === variableId) : null;
+        this.findVariableCoding(codingScheme.variableCodings, variableId) : null;
 
       if (!variableCoding) {
         // Variable not found in coding scheme, leave as CODING_INCOMPLETE
@@ -1102,6 +1105,22 @@ export class ExternalCodingImportService {
       .trim()
       .toLowerCase()
       .replace(/[\s-]+/g, '_');
+  }
+
+  private findVariableCoding<T extends { id?: string | number; alias?: string | number }>(
+    variableCodings: T[],
+    variableId: string
+  ): T | undefined {
+    const normalizedVariableId = String(variableId || '').trim();
+    if (!normalizedVariableId) {
+      return undefined;
+    }
+
+    return variableCodings.find(variableCoding => (
+      String(variableCoding.alias || '').trim() === normalizedVariableId
+    )) || variableCodings.find(variableCoding => (
+      String(variableCoding.id || '').trim() === normalizedVariableId
+    ));
   }
 
   private normalizeCellValue(value: unknown): string {
@@ -1240,18 +1259,19 @@ export class ExternalCodingImportService {
     return results;
   }
 
-  private generateIncompleteVariablesCacheKey(workspaceId: number): string {
-    return getCodingIncompleteVariablesCacheKey(workspaceId);
-  }
-
   /**
    * Clear the manual coding variables cache for a specific workspace
    * Should be called whenever coding status changes for the workspace
    * @param workspaceId The workspace ID to clear cache for
    */
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
-    const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
-    await this.cacheService.delete(cacheKey);
+    await this.cacheService.incr(
+      getCodingIncompleteVariablesCacheVersionKey(workspaceId)
+    );
+    await Promise.all(
+      getCodingIncompleteVariablesCacheKeys(workspaceId)
+        .map(cacheKey => this.cacheService.delete(cacheKey))
+    );
     this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }
 }

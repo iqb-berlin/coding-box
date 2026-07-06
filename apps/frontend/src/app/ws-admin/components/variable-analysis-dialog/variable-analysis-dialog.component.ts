@@ -258,6 +258,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   activeJob: VariableAnalysisJobDto | undefined;
   private refreshSubscription: Subscription | undefined;
+  private hasLoadedJobsSuccessfully = false;
+  private responseAnalysisGuardActive = false;
   private readonly POLLING_INTERVAL = 5000;
   private readonly ACTIVE_JOB_STATUSES = [
     'pending',
@@ -315,7 +317,6 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       error: () => {
         this.isJobsLoading = false;
         this.isInitializing = false;
-        this.updatePollingState();
       }
     });
   }
@@ -337,6 +338,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   private updatePollingState(): void {
+    this.setResponseAnalysisGuardActive(
+      Boolean(this.activeJob || this.isStartingJob)
+    );
     if (this.activeJob || this.isStartingJob) {
       this.startPolling();
       return;
@@ -353,6 +357,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     jobs: VariableAnalysisJobDto[],
     autoStartIfEmpty = false
   ): void {
+    this.hasLoadedJobsSuccessfully = true;
     const previousActiveJob = this.activeJob;
     this.jobs = jobs.filter(job => job.type === 'variable-analysis');
     this.activeJob = this.jobs.find(job => this.isActiveJob(job));
@@ -852,7 +857,6 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           );
         }
         this.isJobsLoading = false;
-        this.updatePollingState();
       }
     });
   }
@@ -860,6 +864,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   startNewAnalysis(): void {
     if (this.isStartingJob || this.activeJob) return;
     this.isStartingJob = true;
+    this.setResponseAnalysisGuardActive(true);
     this.hasAutoStarted = true;
     this.isJobsLoading = true;
     const loadingSnackBar = this.snackBar.open(
@@ -876,6 +881,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (job: VariableAnalysisJobDto) => {
           this.isStartingJob = false;
+          this.applyStartedJob(job);
           this.isJobsLoading = false; // Reset loading flag here too
           loadingSnackBar.dismiss();
           this.snackBar.open(
@@ -889,6 +895,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         },
         error: error => {
           this.isStartingJob = false;
+          this.setResponseAnalysisGuardActive(Boolean(this.activeJob));
           loadingSnackBar.dismiss();
           const errorMessage = error?.error?.message || error?.message || '';
           this.snackBar.open(
@@ -900,6 +907,17 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           this.updatePollingState();
         }
       });
+  }
+
+  private applyStartedJob(job: VariableAnalysisJobDto): void {
+    if (job.type === 'variable-analysis') {
+      this.jobs = [
+        job,
+        ...this.jobs.filter(existingJob => existingJob.id !== job.id)
+      ];
+    }
+    this.activeJob = this.isActiveJob(job) ? job : undefined;
+    this.updatePollingState();
   }
 
   cancelJob(jobId: number | string): void {
@@ -1219,6 +1237,14 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     }
   }
 
+  private setResponseAnalysisGuardActive(isActive: boolean): void {
+    this.responseAnalysisGuardActive = isActive;
+    this.variableAnalysisService.setVariableAnalysisGuardRunning(
+      this.data.workspaceId,
+      isActive
+    );
+  }
+
   formatDate(date: Date): string {
     if (!date) return '';
     return new Date(date).toLocaleString();
@@ -1226,6 +1252,16 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopPolling();
+    if (this.activeJob || this.isStartingJob) {
+      this.variableAnalysisService.trackVariableAnalysisGuardUntilComplete(
+        this.data.workspaceId
+      );
+    } else if (
+      this.hasLoadedJobsSuccessfully ||
+      this.responseAnalysisGuardActive
+    ) {
+      this.setResponseAnalysisGuardActive(false);
+    }
     this.searchSubscription?.unsubscribe();
   }
 

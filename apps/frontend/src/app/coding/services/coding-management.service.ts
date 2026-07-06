@@ -1,15 +1,19 @@
 import { Injectable, inject } from '@angular/core';
 import {
-  BehaviorSubject, Observable, of, forkJoin, timer, OperatorFunction, Subscription
+  BehaviorSubject, Observable, of, forkJoin, timer, OperatorFunction, Subscription, EMPTY
 } from 'rxjs';
 import {
-  catchError, map, switchMap, takeWhile, finalize
+  catchError, map, switchMap, takeWhile, finalize, filter
 } from 'rxjs/operators';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { CodingExecutionService } from './coding-execution.service';
 import { CodingStatisticsService } from './coding-statistics.service';
-import { CodingVersionService, ResetVersionJobStatus } from './coding-version.service';
+import {
+  CodingVersionService,
+  RESET_VERSION_JOB_STATUS_POLL_ERROR,
+  ResetVersionJobStatus
+} from './coding-version.service';
 import { CodingExportService } from './coding-export.service';
 import { ResponseService } from '../../shared/services/response/response.service';
 import {
@@ -23,6 +27,7 @@ import { AppService } from '../../core/services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 import { ResponseEntity } from '../../shared/models/response-entity.model';
 import { ExportFormat } from '../components/export-dialog/export-dialog.component';
+import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 
 export type StatisticsVersion = 'v1' | 'v2' | 'v3';
 export type ResponseSource = 'base' | 'derived' | 'all';
@@ -66,6 +71,11 @@ type DownloadCancelledError = Error & {
   code: typeof DOWNLOAD_CANCELLED_ERROR_CODE;
 };
 
+type ActiveStatisticsFetch = {
+  workspaceId: number;
+  subscription: Subscription;
+};
+
 function createDownloadCancelledError(): DownloadCancelledError {
   const error = new Error('Download cancelled') as DownloadCancelledError;
   error.name = 'DownloadCancelledError';
@@ -90,6 +100,7 @@ export class CodingManagementService {
   private appService = inject(AppService);
   private translateService = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
+  private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
 
   private _codingStatistics = new BehaviorSubject<CodingStatistics | null>(null);
 
@@ -113,51 +124,88 @@ export class CodingManagementService {
   resetJobId$ = this._resetJobId.asObservable();
 
   private resetPollingSubscription: Subscription | null = null;
+  private readonly activeStatisticsFetches = new Map<string, ActiveStatisticsFetch>();
   private activeDownloads = new Map<DownloadOperationKind, ActiveDownloadOperation>();
 
   fetchCodingStatistics(version: StatisticsVersion): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
+    const fetchKey = this.getStatisticsFetchKey(workspaceId, version);
+    if (this.activeStatisticsFetches.has(fetchKey)) {
+      return;
+    }
+    const activeFetch: ActiveStatisticsFetch = {
+      workspaceId,
+      subscription: new Subscription()
+    };
+    this.activeStatisticsFetches.set(fetchKey, activeFetch);
+
     this._isLoadingStatistics.next(true);
     // Reset reference stats
     this._referenceStatistics.next(null);
     this._referenceVersion.next(null);
 
-    this.executionService.createCodingStatisticsJob(workspaceId, version)
+    let hasStartedStatisticsLoad = false;
+    const jobStartSubscription = this.executionService.createCodingStatisticsJob(workspaceId, version)
       .pipe(
-        catchError(() => of({
-          jobId: '' as string,
-          message: this.translateService.instant('coding-management.loading.creating-coding-statistics')
-        }))
+        catchError(() => {
+          this.showErrorSnackbar('coding-management.loading.creating-coding-statistics');
+          return EMPTY;
+        }),
+        finalize(() => {
+          if (!hasStartedStatisticsLoad) {
+            this.finishStatisticsFetch(fetchKey, activeFetch);
+          }
+        })
       )
       .subscribe(({ jobId }) => {
+        hasStartedStatisticsLoad = true;
+        if (!this.isActiveStatisticsFetch(fetchKey, activeFetch)) {
+          return;
+        }
         if (!jobId) {
-          this.handleNoJobIdStatistics(workspaceId, version);
+          this.handleNoJobIdStatistics(workspaceId, version, fetchKey, activeFetch);
         } else {
-          this.pollStatisticsJob(workspaceId, jobId, version);
+          this.pollStatisticsJob(workspaceId, jobId, version, fetchKey, activeFetch);
         }
       });
+    activeFetch.subscription.add(jobStartSubscription);
   }
 
-  private handleNoJobIdStatistics(workspaceId: number, version: StatisticsVersion): void {
+  cancelViewBoundStatisticsFetches(workspaceId?: number): void {
+    [...this.activeStatisticsFetches.entries()]
+      .filter(([, activeFetch]) => workspaceId === undefined || activeFetch.workspaceId === workspaceId)
+      .forEach(([fetchKey, activeFetch]) => this.finishStatisticsFetch(fetchKey, activeFetch));
+  }
+
+  private handleNoJobIdStatistics(
+    workspaceId: number,
+    version: StatisticsVersion,
+    fetchKey: string,
+    activeFetch: ActiveStatisticsFetch
+  ): void {
     if (version === 'v2') {
       // v2 compares to v1
-      forkJoin({
+      const statisticsSubscription = forkJoin({
         current: this.statisticsService.getCodingStatistics(workspaceId, 'v2'),
         reference: this.statisticsService.getCodingStatistics(workspaceId, 'v1')
       }).pipe(
         this.handleStatisticsError({ current: this.emptyStats, reference: this.emptyStats }),
-        finalize(() => this._isLoadingStatistics.next(false))
+        finalize(() => this.finishStatisticsFetch(fetchKey, activeFetch))
       ).subscribe((result: { current: CodingStatistics; reference: CodingStatistics }) => {
+        if (!this.isActiveStatisticsFetch(fetchKey, activeFetch)) {
+          return;
+        }
         const { current, reference } = result;
         this._codingStatistics.next(current);
         this._referenceStatistics.next(reference);
         this._referenceVersion.next('v1');
       });
+      activeFetch.subscription.add(statisticsSubscription);
     } else if (version === 'v3') {
       // v3 compares to v2 if v2 has data, otherwise to v1
-      forkJoin({
+      const statisticsSubscription = forkJoin({
         current: this.statisticsService.getCodingStatistics(workspaceId, 'v3'),
         v2Stats: this.statisticsService.getCodingStatistics(workspaceId, 'v2'),
         v1Stats: this.statisticsService.getCodingStatistics(workspaceId, 'v1')
@@ -167,8 +215,11 @@ export class CodingManagementService {
           v2Stats: this.emptyStats,
           v1Stats: this.emptyStats
         }),
-        finalize(() => this._isLoadingStatistics.next(false))
+        finalize(() => this.finishStatisticsFetch(fetchKey, activeFetch))
       ).subscribe((result: { current: CodingStatistics; v2Stats: CodingStatistics; v1Stats: CodingStatistics }) => {
+        if (!this.isActiveStatisticsFetch(fetchKey, activeFetch)) {
+          return;
+        }
         const { current, v2Stats, v1Stats } = result;
         this._codingStatistics.next(current);
         if (this.statisticsDiffer(v2Stats, v1Stats)) {
@@ -179,54 +230,118 @@ export class CodingManagementService {
           this._referenceVersion.next('v1');
         }
       });
+      activeFetch.subscription.add(statisticsSubscription);
     } else {
-      this.statisticsService.getCodingStatistics(workspaceId, version)
+      const statisticsSubscription = this.statisticsService.getCodingStatistics(workspaceId, version)
         .pipe(
           catchError(() => {
             this.showErrorSnackbar('coding-management.descriptions.error-statistics');
             return of({ totalResponses: 0, statusCounts: {} });
           }),
-          finalize(() => this._isLoadingStatistics.next(false))
+          finalize(() => this.finishStatisticsFetch(fetchKey, activeFetch))
         )
         .subscribe(statistics => {
+          if (!this.isActiveStatisticsFetch(fetchKey, activeFetch)) {
+            return;
+          }
           this._codingStatistics.next(statistics);
         });
+      activeFetch.subscription.add(statisticsSubscription);
     }
   }
 
-  private pollStatisticsJob(workspaceId: number, jobId: string, version: StatisticsVersion): void {
-    timer(0, 2000).pipe(
+  private pollStatisticsJob(
+    workspaceId: number,
+    jobId: string,
+    version: StatisticsVersion,
+    fetchKey: string,
+    activeFetch: ActiveStatisticsFetch
+  ): void {
+    let waitsForReferenceStatistics = false;
+    const pollingSubscription = timer(0, 2000).pipe(
       switchMap(() => this.executionService.getCodingStatisticsJobStatus(workspaceId, jobId)),
       takeWhile(status => ['pending', 'processing'].includes(status.status), true),
-      finalize(() => this._isLoadingStatistics.next(false))
+      finalize(() => {
+        if (!waitsForReferenceStatistics) {
+          this.finishStatisticsFetch(fetchKey, activeFetch);
+        }
+      })
     ).subscribe((status: CodingJobStatus) => {
+      if (!this.isActiveStatisticsFetch(fetchKey, activeFetch)) {
+        return;
+      }
       if (status.status === 'completed' && status.result) {
         this._codingStatistics.next(status.result);
-        this.fetchReferenceStatisticsAfterJob(workspaceId, version);
+        waitsForReferenceStatistics = this.fetchReferenceStatisticsAfterJob(
+          workspaceId,
+          version,
+          fetchKey,
+          activeFetch
+        );
       } else if (['failed', 'cancelled', 'paused'].includes(status.status)) {
         this.snackBar.open(`Statistik-Job ${status.status}`, 'Schließen', { duration: 5000, panelClass: ['error-snackbar'] });
       }
     });
+    activeFetch.subscription.add(pollingSubscription);
   }
 
-  private fetchReferenceStatisticsAfterJob(workspaceId: number, version: StatisticsVersion): void {
+  private getStatisticsFetchKey(workspaceId: number, version: StatisticsVersion): string {
+    return `${workspaceId}:${version}`;
+  }
+
+  private finishStatisticsFetch(fetchKey: string, activeFetch?: ActiveStatisticsFetch): void {
+    const currentFetch = this.activeStatisticsFetches.get(fetchKey);
+    if (!currentFetch || (activeFetch && currentFetch !== activeFetch)) {
+      return;
+    }
+    this.activeStatisticsFetches.delete(fetchKey);
+    if (!currentFetch.subscription.closed) {
+      currentFetch.subscription.unsubscribe();
+    }
+    this._isLoadingStatistics.next(this.activeStatisticsFetches.size > 0);
+  }
+
+  private isActiveStatisticsFetch(fetchKey: string, activeFetch: ActiveStatisticsFetch): boolean {
+    return this.activeStatisticsFetches.get(fetchKey) === activeFetch;
+  }
+
+  private fetchReferenceStatisticsAfterJob(
+    workspaceId: number,
+    version: StatisticsVersion,
+    fetchKey: string,
+    activeFetch: ActiveStatisticsFetch
+  ): boolean {
     if (version === 'v2') {
-      this.statisticsService.getCodingStatistics(workspaceId, 'v1')
-        .pipe(catchError(() => of({ totalResponses: 0, statusCounts: {} })))
+      const referenceSubscription = this.statisticsService.getCodingStatistics(workspaceId, 'v1')
+        .pipe(
+          catchError(() => of({ totalResponses: 0, statusCounts: {} })),
+          finalize(() => this.finishStatisticsFetch(fetchKey, activeFetch))
+        )
         .subscribe(ref => {
+          if (!this.isActiveStatisticsFetch(fetchKey, activeFetch)) {
+            return;
+          }
           this._referenceStatistics.next(ref);
           this._referenceVersion.next('v1');
         });
-    } else if (version === 'v3') {
-      forkJoin({
+      activeFetch.subscription.add(referenceSubscription);
+      return true;
+    }
+
+    if (version === 'v3') {
+      const referenceSubscription = forkJoin({
         v2Stats: this.statisticsService.getCodingStatistics(workspaceId, 'v2'),
         v1Stats: this.statisticsService.getCodingStatistics(workspaceId, 'v1')
       }).pipe(
         catchError(() => of({
           v2Stats: { totalResponses: 0, statusCounts: {} },
           v1Stats: { totalResponses: 0, statusCounts: {} }
-        }))
+        })),
+        finalize(() => this.finishStatisticsFetch(fetchKey, activeFetch))
       ).subscribe((result: { v2Stats: CodingStatistics; v1Stats: CodingStatistics }) => {
+        if (!this.isActiveStatisticsFetch(fetchKey, activeFetch)) {
+          return;
+        }
         const { v2Stats, v1Stats } = result;
         if (this.statisticsDiffer(v2Stats, v1Stats)) {
           this._referenceStatistics.next(v2Stats);
@@ -236,7 +351,10 @@ export class CodingManagementService {
           this._referenceVersion.next('v1');
         }
       });
+      activeFetch.subscription.add(referenceSubscription);
+      return true;
     }
+    return false;
   }
 
   fetchResponsesByStatus(
@@ -318,6 +436,12 @@ export class CodingManagementService {
 
     this.versionService.getActiveResetVersionJob(workspaceId).subscribe(activeJob => {
       if (activeJob.hasActiveJob && activeJob.jobId) {
+        this.codingBackgroundJobsService.setJobRunning(
+          workspaceId,
+          'autocoder-reset',
+          true,
+          activeJob.jobId
+        );
         this._resetJobId.next(activeJob.jobId);
         this._resetProgress.next(activeJob.progress ?? 0);
         this.startResetPolling(workspaceId, activeJob.jobId);
@@ -331,6 +455,12 @@ export class CodingManagementService {
 
     this.versionService.resetCodingVersion(workspaceId, version).subscribe({
       next: ({ jobId }) => {
+        this.codingBackgroundJobsService.setJobRunning(
+          workspaceId,
+          'autocoder-reset',
+          true,
+          jobId
+        );
         this._resetJobId.next(jobId);
         this._resetProgress.next(0);
         this.startResetPolling(workspaceId, jobId);
@@ -349,7 +479,12 @@ export class CodingManagementService {
     this.stopResetPolling();
 
     this.resetPollingSubscription = timer(0, 2000).pipe(
-      switchMap(() => this.versionService.getResetVersionJobStatus(workspaceId, jobId)),
+      switchMap(() => this.versionService.getResetVersionJobStatus(workspaceId, jobId)
+        .pipe(catchError(() => of(null)))),
+      filter((status): status is ResetVersionJobStatus => (
+        status !== null &&
+        !this.isTransientResetStatusPollingError(status)
+      )),
       takeWhile(
         (status: ResetVersionJobStatus) => ['pending', 'processing'].includes(status.status),
         true
@@ -358,6 +493,12 @@ export class CodingManagementService {
       this._resetProgress.next(status.progress);
 
       if (status.status === 'completed') {
+        this.codingBackgroundJobsService.setJobRunning(
+          workspaceId,
+          'autocoder-reset',
+          false,
+          jobId
+        );
         this._resetProgress.next(null);
         this._resetJobId.next(null);
 
@@ -373,11 +514,31 @@ export class CodingManagementService {
           );
         }
       } else if (status.status === 'failed') {
+        this.codingBackgroundJobsService.setJobRunning(
+          workspaceId,
+          'autocoder-reset',
+          false,
+          jobId
+        );
         this._resetProgress.next(null);
         this._resetJobId.next(null);
         this.showErrorSnackbar('coding-management.descriptions.error-reset');
+      } else if (!['pending', 'processing'].includes(status.status)) {
+        this.codingBackgroundJobsService.setJobRunning(
+          workspaceId,
+          'autocoder-reset',
+          false,
+          jobId
+        );
+        this._resetProgress.next(null);
+        this._resetJobId.next(null);
       }
     });
+  }
+
+  private isTransientResetStatusPollingError(status: ResetVersionJobStatus): boolean {
+    return status.status === 'failed' &&
+      status.error === RESET_VERSION_JOB_STATUS_POLL_ERROR;
   }
 
   private stopResetPolling(): void {

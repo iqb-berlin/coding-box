@@ -39,6 +39,79 @@ describe('CodingTrainingBackendService', () => {
     expect(service).toBeTruthy();
   });
 
+  describe('getCoderTrainings', () => {
+    const coderTrainings = [{
+      id: 10,
+      workspace_id: 1,
+      label: 'Training A',
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+      updated_at: new Date('2026-01-01T00:00:00.000Z'),
+      jobsCount: 2
+    }];
+
+    it('should share an in-flight coder training request', () => {
+      const received: unknown[] = [];
+
+      service.getCoderTrainings(1).subscribe(trainings => received.push(trainings));
+      service.getCoderTrainings(1).subscribe(trainings => received.push(trainings));
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`);
+      expect(req.request.method).toBe('GET');
+      req.flush(coderTrainings);
+
+      expect(received).toEqual([coderTrainings, coderTrainings]);
+      httpMock.expectNone(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`);
+    });
+
+    it('should reuse cached coder trainings after the first request', () => {
+      const received: unknown[] = [];
+
+      service.getCoderTrainings(1).subscribe(trainings => received.push(trainings));
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`);
+      req.flush(coderTrainings);
+
+      service.getCoderTrainings(1).subscribe(trainings => received.push(trainings));
+
+      expect(received).toEqual([coderTrainings, coderTrainings]);
+      httpMock.expectNone(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`);
+    });
+
+    it('should invalidate cached coder trainings after a training mutation', () => {
+      service.getCoderTrainings(1).subscribe();
+      httpMock
+        .expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`)
+        .flush(coderTrainings);
+
+      service.updateCoderTrainingLabel(1, 10, 'Training B').subscribe();
+      const updateReq = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/10/label`);
+      expect(updateReq.request.method).toBe('PUT');
+      updateReq.flush({});
+
+      service.getCoderTrainings(1).subscribe();
+      httpMock
+        .expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`)
+        .flush([{ ...coderTrainings[0], label: 'Training B' }]);
+    });
+
+    it('should not cache a stale in-flight response after invalidation', () => {
+      service.getCoderTrainings(1).subscribe();
+      const staleListReq = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`);
+
+      service.updateCoderTrainingLabel(1, 10, 'Training B').subscribe();
+      httpMock
+        .expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/10/label`)
+        .flush({});
+
+      staleListReq.flush(coderTrainings);
+
+      service.getCoderTrainings(1).subscribe();
+      httpMock
+        .expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings`)
+        .flush([{ ...coderTrainings[0], label: 'Training B' }]);
+    });
+  });
+
   describe('createCoderTrainingJobs', () => {
     it('should create jobs', () => {
       service.createCoderTrainingJobs(1, [], [], 'Label').subscribe();
@@ -195,6 +268,148 @@ describe('CodingTrainingBackendService', () => {
         notes: 'Replay note'
       });
       req.flush({});
+    });
+  });
+
+  describe('getTrainingComparisonFreshness', () => {
+    it('should request the training comparison freshness token', () => {
+      service.getTrainingComparisonFreshness(1, 5).subscribe(result => {
+        expect(result.version).toBe('v1');
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`);
+      expect(req.request.method).toBe('GET');
+      req.flush({
+        workspaceId: 1,
+        trainingId: 5,
+        version: 'v1',
+        jobCount: 2,
+        unitCount: 4,
+        responseCount: 2,
+        discussionResultCount: 0,
+        latestTrainingChange: null,
+        latestJobChange: null,
+        latestUnitChange: null,
+        latestDiscussionChange: null
+      });
+    });
+  });
+
+  describe('getCachedWithinTrainingCodingResults', () => {
+    const freshness = (version: string) => ({
+      workspaceId: 1,
+      trainingId: 5,
+      version,
+      jobCount: 2,
+      unitCount: 4,
+      responseCount: 2,
+      discussionResultCount: 0,
+      latestTrainingChange: null,
+      latestJobChange: null,
+      latestUnitChange: null,
+      latestDiscussionChange: null
+    });
+
+    const comparisonData = [{
+      responseId: 1,
+      unitName: 'Unit',
+      variableId: 'Var',
+      personCode: 'P1',
+      personLogin: 'login',
+      personGroup: 'group',
+      bookletName: 'booklet',
+      testPerson: 'login (group) - booklet',
+      givenAnswer: 'answer',
+      replayCode: null,
+      replayScore: null,
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionManagerUserId: null,
+      discussionManagerName: null,
+      discussionSource: null,
+      coders: []
+    }];
+    const comparisonPage = (data = comparisonData) => ({
+      data,
+      total: data.length,
+      page: 1,
+      limit: 50,
+      totalPages: data.length > 0 ? 1 : 0,
+      summary: {
+        visibleRows: data.length,
+        comparableRows: 0,
+        matchingRows: 0,
+        matchingPercentage: 0,
+        incompleteRows: 0,
+        notComparableRows: data.length,
+        deviationRows: 0,
+        completionRate: 0
+      },
+      availableCoders: []
+    });
+
+    it('should reuse cached comparison data while freshness is unchanged', () => {
+      const firstResults: unknown[] = [];
+      service.getCachedWithinTrainingCodingResults(1, 5).subscribe(result => firstResults.push(result));
+
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
+        .flush(freshness('v1'));
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`)
+        .flush(comparisonPage());
+      expect(firstResults).toEqual([comparisonPage()]);
+
+      const secondResults: unknown[] = [];
+      service.getCachedWithinTrainingCodingResults(1, 5).subscribe(result => secondResults.push(result));
+
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
+        .flush(freshness('v1'));
+      httpMock.expectNone(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`);
+      expect(secondResults).toEqual([comparisonPage()]);
+    });
+
+    it('should reload comparison data when freshness changes', () => {
+      service.getCachedWithinTrainingCodingResults(1, 5).subscribe();
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
+        .flush(freshness('v1'));
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`)
+        .flush(comparisonPage());
+
+      const updatedData = [{ ...comparisonData[0], responseId: 2 }];
+      const results: unknown[] = [];
+      service.getCachedWithinTrainingCodingResults(1, 5).subscribe(result => results.push(result));
+
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
+        .flush(freshness('v2'));
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`)
+        .flush(comparisonPage(updatedData));
+      expect(results).toEqual([comparisonPage(updatedData)]);
+    });
+
+    it('should invalidate cached comparison data after saving a discussion result', () => {
+      service.getCachedWithinTrainingCodingResults(1, 5).subscribe();
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
+        .flush(freshness('v1'));
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`)
+        .flush(comparisonPage());
+
+      service.saveDiscussionResult(1, 5, 99, 7, 2, 'Replay note').subscribe();
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/discussion-result`)
+        .flush({
+          success: true,
+          code: 7,
+          score: 2,
+          notes: 'Replay note',
+          source: 'manual',
+          managerUserId: 1,
+          managerName: 'Manager'
+        });
+
+      service.getCachedWithinTrainingCodingResults(1, 5).subscribe();
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/comparison-freshness`)
+        .flush(freshness('v1'));
+      httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/compare-within-training?trainingId=5`)
+        .flush(comparisonPage());
     });
   });
 

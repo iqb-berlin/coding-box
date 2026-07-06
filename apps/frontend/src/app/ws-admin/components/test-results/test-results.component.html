@@ -90,7 +90,32 @@
     </div>
   </div>
 
-  @if (hasCodingFreshnessWarning) {
+  @if (shouldShowCodingFreshnessManualNotice) {
+  <div class="coding-freshness-banner manual-status">
+    <div class="coding-freshness-icon">
+      <mat-icon>sync_disabled</mat-icon>
+    </div>
+    <div class="coding-freshness-copy">
+      <div class="coding-freshness-title">
+        {{ 'test-results-page.coding-status.manual-title' | translate }}
+      </div>
+      <div class="coding-freshness-text">
+        {{ 'test-results-page.coding-status.manual-text' | translate }}
+      </div>
+    </div>
+    <button
+      mat-stroked-button
+      type="button"
+      [disabled]="isLoadingCodingFreshnessStatus"
+      (click)="refreshCodingFreshnessStatusManually()"
+    >
+      <mat-icon [class.inline-rotating-icon]="isLoadingCodingFreshnessStatus">
+        refresh
+      </mat-icon>
+      {{ 'test-results-page.coding-status.refresh' | translate }}
+    </button>
+  </div>
+  } @if (hasCodingFreshnessWarning) {
   <div class="coding-freshness-banner">
     <div class="coding-freshness-icon">
       <mat-icon>warning</mat-icon>

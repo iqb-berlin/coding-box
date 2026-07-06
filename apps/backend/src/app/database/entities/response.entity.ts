@@ -10,6 +10,8 @@ import { Unit } from './unit.entity';
 @Index(['unitid', 'status']) // Composite index for filtering by status
 @Index(['status']) // Index for filtering by status distribution
 @Index(['status_v1']) // Index for filtering by coded status
+@Index(['status_v2']) // Index for filtering by second coding status
+@Index(['status_v3']) // Index for filtering by third coding status
 @Index(['is_autocoder_generated'])
 export class ResponseEntity {
   @PrimaryGeneratedColumn()

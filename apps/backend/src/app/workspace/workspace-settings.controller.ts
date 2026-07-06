@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -11,6 +12,23 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from '../database/entities/setting.entity';
+
+interface WorkspaceSettingWriteDto {
+  key: string;
+  value: string;
+  description?: string;
+}
+
+interface WorkspaceSettingsBatchDto {
+  settings: WorkspaceSettingWriteDto[];
+}
+
+interface WorkspaceSettingResponse {
+  id: string;
+  key: string;
+  value: string;
+  description?: string;
+}
 
 @Controller('workspace/:workspaceId/settings')
 export class WorkspaceSettingsController {
@@ -34,7 +52,7 @@ export class WorkspaceSettingsController {
         return {
           id: 0,
           key: settingKey,
-          value: JSON.stringify({ enabled: true }),
+          value: JSON.stringify({ enabled: false }),
           description:
             'Controls whether coding statistics are automatically fetched in the coding management component'
         };
@@ -46,6 +64,15 @@ export class WorkspaceSettingsController {
           value: JSON.stringify({ enabled: true }),
           description:
             'Controls whether manual coding job tables refresh automatically when the browser window regains focus'
+        };
+      }
+      if (key === 'evaluation-mode') {
+        return {
+          id: 0,
+          key: settingKey,
+          value: JSON.stringify({ enabled: false }),
+          description:
+            'Controls whether expensive automatic coding refreshes are disabled for evaluation sessions'
         };
       }
       if (key === 'show-test-results-log-anomalies') {
@@ -95,10 +122,52 @@ export class WorkspaceSettingsController {
     };
   }
 
+  @Post('batch')
+  async createWorkspaceSettings(
+  @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Body() createSettingsDto: WorkspaceSettingsBatchDto
+  ) {
+    const settings = this.validateWorkspaceSettingsBatch(createSettingsDto);
+
+    return this.settingRepository.manager.transaction(async entityManager => {
+      const transactionalSettingRepository =
+        entityManager.getRepository(Setting);
+
+      const savedSettings: WorkspaceSettingResponse[] = [];
+      for (const settingDto of settings) {
+        const settingKey = `workspace-${workspaceId}-${settingDto.key}`;
+        const existingSetting = await transactionalSettingRepository.findOne({
+          where: { key: settingKey }
+        });
+
+        if (existingSetting) {
+          existingSetting.content = settingDto.value;
+          const updated = await transactionalSettingRepository.save(existingSetting);
+          savedSettings.push(this.toWorkspaceSettingResponse(
+            updated,
+            settingDto.description
+          ));
+        } else {
+          const newSetting = transactionalSettingRepository.create({
+            key: settingKey,
+            content: settingDto.value
+          });
+          const saved = await transactionalSettingRepository.save(newSetting);
+          savedSettings.push(this.toWorkspaceSettingResponse(
+            saved,
+            settingDto.description
+          ));
+        }
+      }
+
+      return savedSettings;
+    });
+  }
+
   @Post()
   async createWorkspaceSetting(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
-    @Body() createSettingDto: { key: string; value: string; description?: string }
+    @Body() createSettingDto: WorkspaceSettingWriteDto
   ) {
     const settingKey = `workspace-${workspaceId}-${createSettingDto.key}`;
     const existingSetting = await this.settingRepository.findOne({
@@ -108,12 +177,10 @@ export class WorkspaceSettingsController {
     if (existingSetting) {
       existingSetting.content = createSettingDto.value;
       const updated = await this.settingRepository.save(existingSetting);
-      return {
-        id: updated.key,
-        key: updated.key,
-        value: updated.content,
-        description: createSettingDto.description
-      };
+      return this.toWorkspaceSettingResponse(
+        updated,
+        createSettingDto.description
+      );
     }
 
     const newSetting = this.settingRepository.create({
@@ -122,12 +189,10 @@ export class WorkspaceSettingsController {
     });
 
     const saved = await this.settingRepository.save(newSetting);
-    return {
-      id: saved.key,
-      key: saved.key,
-      value: saved.content,
-      description: createSettingDto.description
-    };
+    return this.toWorkspaceSettingResponse(
+      saved,
+      createSettingDto.description
+    );
   }
 
   @Put(':settingId')
@@ -165,5 +230,38 @@ export class WorkspaceSettingsController {
       throw new Error(`Setting ${settingId} not found`);
     }
     return { message: 'Setting deleted successfully' };
+  }
+
+  private toWorkspaceSettingResponse(
+    setting: Setting,
+    description?: string
+  ): WorkspaceSettingResponse {
+    return {
+      id: setting.key,
+      key: setting.key,
+      value: setting.content,
+      description
+    };
+  }
+
+  private validateWorkspaceSettingsBatch(
+    createSettingsDto: WorkspaceSettingsBatchDto
+  ): WorkspaceSettingWriteDto[] {
+    if (!createSettingsDto || !Array.isArray(createSettingsDto.settings)) {
+      throw new BadRequestException('settings must be an array');
+    }
+
+    createSettingsDto.settings.forEach((setting, index) => {
+      if (!setting ||
+        typeof setting.key !== 'string' ||
+        setting.key.trim().length === 0 ||
+        typeof setting.value !== 'string') {
+        throw new BadRequestException(
+          `settings[${index}] must include a non-empty key and string value`
+        );
+      }
+    });
+
+    return createSettingsDto.settings;
   }
 }

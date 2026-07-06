@@ -9,7 +9,9 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, Subject, throwError } from 'rxjs';
+import {
+  Observable, of, Subject, throwError
+} from 'rxjs';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -20,12 +22,62 @@ import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-s
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 
 describe('CodingResultsComparisonComponent', () => {
+  const comparisonSummary = (visibleRows: number) => ({
+    visibleRows,
+    comparableRows: visibleRows,
+    matchingRows: visibleRows,
+    matchingPercentage: visibleRows > 0 ? 100 : 0,
+    incompleteRows: 0,
+    notComparableRows: 0,
+    deviationRows: 0,
+    completionRate: visibleRows > 0 ? 100 : 0
+  });
+  const withinComparisonPage = (
+    data: unknown[],
+    availableCoders = [{ jobId: 1, coderName: 'Coder 1' }]
+  ) => ({
+    data,
+    total: data.length,
+    page: 1,
+    limit: 50,
+    totalPages: data.length > 0 ? 1 : 0,
+    summary: comparisonSummary(data.length),
+    availableCoders
+  });
+  const betweenComparisonPage = (
+    data: unknown[],
+    summary = comparisonSummary(data.length),
+    availableCoders = [
+      {
+        trainingId: 1,
+        trainingLabel: 'Training 1',
+        coderId: 101,
+        coderName: 'Coder 101'
+      },
+      {
+        trainingId: 2,
+        trainingLabel: 'Training 2',
+        coderId: 201,
+        coderName: 'Coder 201'
+      }
+    ]
+  ) => ({
+    data,
+    total: data.length,
+    page: 1,
+    limit: 50,
+    totalPages: data.length > 0 ? 1 : 0,
+    summary,
+    availableCoders
+  });
+
   let component: CodingResultsComparisonComponent;
   let fixture: ComponentFixture<CodingResultsComparisonComponent>;
   let codingTrainingBackendService: {
     getCoderTrainings: jest.Mock;
     compareTrainingCodingResults: jest.Mock;
     compareWithinTrainingCodingResults: jest.Mock;
+    getCachedWithinTrainingCodingResults: jest.Mock;
     saveDiscussionResult: jest.Mock;
     previewApplyDiscussionResults: jest.Mock;
     applyDiscussionResults: jest.Mock;
@@ -57,6 +109,7 @@ describe('CodingResultsComparisonComponent', () => {
       getCoderTrainings: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
       compareTrainingCodingResults: jest.fn(),
       compareWithinTrainingCodingResults: jest.fn(),
+      getCachedWithinTrainingCodingResults: jest.fn(),
       saveDiscussionResult: jest.fn().mockReturnValue(of({
         success: true,
         code: 7,
@@ -162,6 +215,147 @@ describe('CodingResultsComparisonComponent', () => {
     component.ngOnInit();
 
     expect(component.comparisonMode).toBe('within-training');
+  });
+
+  it('should load within-training comparison without requesting kappa while kappa section is collapsed', () => {
+    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockReturnValue(of(withinComparisonPage([
+      {
+        responseId: 1,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        testPerson: 'Test1',
+        personLogin: 'login',
+        personCode: 'code',
+        personGroup: 'group',
+        bookletName: 'booklet',
+        givenAnswer: 'answer',
+        replayCode: null,
+        replayScore: null,
+        discussionCode: null,
+        discussionScore: null,
+        discussionNotes: null,
+        discussionManagerUserId: null,
+        discussionManagerName: null,
+        discussionSource: null,
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder1',
+            code: '7',
+            score: 2,
+            notes: null,
+            codingIssueOption: null
+          }
+        ]
+      }
+    ])));
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.showKappaStatistics = false;
+
+    component.loadComparison();
+
+    expect(codingTrainingBackendService.getCachedWithinTrainingCodingResults).toHaveBeenCalledWith(1, 5, expect.objectContaining({
+      page: 1,
+      limit: 50
+    }));
+    expect(codingTrainingBackendService.getTrainingCohensKappa).not.toHaveBeenCalled();
+    expect(component.withinTrainingData).toHaveLength(1);
+    expect(component.isLoading).toBe(false);
+  });
+
+  it('should ignore stale within-training comparison responses after a training switch', () => {
+    const firstTrainingResponse$ = new Subject<unknown>();
+    const secondTrainingResponse$ = new Subject<unknown>();
+    let firstTrainingUnsubscribed = false;
+    const firstTrainingResponse = new Observable<unknown>(subscriber => {
+      const subscription = firstTrainingResponse$.subscribe(subscriber);
+      return () => {
+        firstTrainingUnsubscribed = true;
+        subscription.unsubscribe();
+      };
+    });
+    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockImplementation(
+      (_workspaceId: number, trainingId: number) => (
+        trainingId === 5 ? firstTrainingResponse : secondTrainingResponse$.asObservable()
+      )
+    );
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.loadComparison();
+
+    component.selectedTrainingForWithin = 6;
+    component.loadComparison();
+    expect(firstTrainingUnsubscribed).toBe(true);
+    secondTrainingResponse$.next(withinComparisonPage([
+      {
+        responseId: 2,
+        unitName: 'Unit2',
+        variableId: 'Var2',
+        testPerson: 'Training 6',
+        personLogin: 'login-2',
+        personCode: 'code-2',
+        personGroup: 'group',
+        bookletName: 'booklet',
+        givenAnswer: 'answer 2',
+        replayCode: null,
+        replayScore: null,
+        discussionCode: null,
+        discussionScore: null,
+        discussionNotes: null,
+        discussionManagerUserId: null,
+        discussionManagerName: null,
+        discussionSource: null,
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder 1',
+            code: '7',
+            score: 2,
+            notes: null,
+            codingIssueOption: null
+          }
+        ]
+      }
+    ]));
+
+    firstTrainingResponse$.next(withinComparisonPage([
+      {
+        responseId: 1,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        testPerson: 'Training 5',
+        personLogin: 'login-1',
+        personCode: 'code-1',
+        personGroup: 'group',
+        bookletName: 'booklet',
+        givenAnswer: 'answer 1',
+        replayCode: null,
+        replayScore: null,
+        discussionCode: null,
+        discussionScore: null,
+        discussionNotes: null,
+        discussionManagerUserId: null,
+        discussionManagerName: null,
+        discussionSource: null,
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder 1',
+            code: '8',
+            score: 3,
+            notes: null,
+            codingIssueOption: null
+          }
+        ]
+      }
+    ]));
+
+    expect(component.selectedTrainingForWithin).toBe(6);
+    expect(component.withinTrainingData).toHaveLength(1);
+    expect(component.withinTrainingData[0].responseId).toBe(2);
+    expect(component.dataSource.data[0].responseId).toBe(2);
+    expect(component.isLoading).toBe(false);
   });
 
   it('should expose replay as its own table column', () => {
@@ -449,6 +643,7 @@ describe('CodingResultsComparisonComponent', () => {
       }
     ];
     component.dataSource.data = component.withinTrainingData;
+    component.calculateStatistics();
 
     (component as unknown as { updateDisplayedColumns: () => void }).updateDisplayedColumns();
     fixture.detectChanges();
@@ -608,10 +803,29 @@ describe('CodingResultsComparisonComponent', () => {
       match: 'differ',
       notesMode: 'with-notes'
     };
+    component.selectedTrainings.select(1, 2);
+    (component as unknown as { hasInitializedBetweenCoderSelection: boolean }).hasInitializedBetweenCoderSelection = true;
+    codingTrainingBackendService.compareTrainingCodingResults.mockReturnValue(of(betweenComparisonPage(
+      [component.comparisonData[1]],
+      {
+        visibleRows: 1,
+        comparableRows: 1,
+        matchingRows: 0,
+        matchingPercentage: 0,
+        incompleteRows: 0,
+        notComparableRows: 0,
+        deviationRows: 1,
+        completionRate: 100
+      }
+    )));
     component.applyTableFilters();
 
     expect(component.getFilteredRowsCount()).toBe(1);
-    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([2]);
+    expect(component.dataSource.data.map(row => row.responseId)).toEqual([2]);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenCalledWith(1, '1,2', expect.objectContaining({
+      selectedCoderKeys: ['1_101', '2_201'],
+      filters: expect.objectContaining(component.tableFilters)
+    }));
     expect(component.totalComparisons).toBe(1);
     expect(component.matchingComparisons).toBe(0);
   });
@@ -686,10 +900,22 @@ describe('CodingResultsComparisonComponent', () => {
     component.dataSource.data = component.comparisonData;
     component.tableFilters.variableId = '^VAR_1';
     component.tableFilters.bookletName = 'Booklet-\\d+$';
+    component.selectedTrainings.select(1, 2);
+    (component as unknown as { hasInitializedBetweenCoderSelection: boolean }).hasInitializedBetweenCoderSelection = true;
+    codingTrainingBackendService.compareTrainingCodingResults.mockReturnValue(of(betweenComparisonPage([
+      component.comparisonData[0]
+    ])));
 
     component.applyTableFilters();
 
-    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([1]);
+    expect(component.dataSource.data.map(row => row.responseId)).toEqual([1]);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenCalledWith(1, '1,2', expect.objectContaining({
+      filters: expect.objectContaining({
+        variableId: '^VAR_1',
+        bookletName: 'Booklet-\\d+$',
+        regexSearch: true
+      })
+    }));
   });
 
   it('should distinguish rows without visible coder notes from rows with visible coder notes', () => {
@@ -766,16 +992,31 @@ describe('CodingResultsComparisonComponent', () => {
       }
     ];
     component.dataSource.data = component.comparisonData;
+    component.selectedTrainings.select(1, 2);
+    (component as unknown as { hasInitializedBetweenCoderSelection: boolean }).hasInitializedBetweenCoderSelection = true;
+    const originalRows = [...component.comparisonData];
 
     component.tableFilters.notesMode = 'with-notes';
+    codingTrainingBackendService.compareTrainingCodingResults.mockReturnValueOnce(of(betweenComparisonPage([
+      originalRows[1]
+    ])));
     component.applyTableFilters();
 
-    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([11]);
+    expect(component.dataSource.data.map(row => row.responseId)).toEqual([11]);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenLastCalledWith(1, '1,2', expect.objectContaining({
+      filters: expect.objectContaining({ notesMode: 'with-notes' })
+    }));
 
     component.tableFilters.notesMode = 'none';
+    codingTrainingBackendService.compareTrainingCodingResults.mockReturnValueOnce(of(betweenComparisonPage([
+      originalRows[0]
+    ])));
     component.applyTableFilters();
 
-    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([10]);
+    expect(component.dataSource.data.map(row => row.responseId)).toEqual([10]);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenLastCalledWith(1, '1,2', expect.objectContaining({
+      filters: expect.objectContaining({ notesMode: 'none' })
+    }));
   });
 
   it('should render compact coding issue badges and only real note icons in coder cells', () => {
@@ -829,7 +1070,25 @@ describe('CodingResultsComparisonComponent', () => {
         ]
       }
     ];
+    component.selectedTrainings.select(1, 2);
+    component.availableCodersFromTrainings = [
+      {
+        trainingId: 1,
+        trainingLabel: 'Training A',
+        coderId: 101,
+        coderName: 'Ada'
+      },
+      {
+        trainingId: 2,
+        trainingLabel: 'Training B',
+        coderId: 201,
+        coderName: 'Ben'
+      }
+    ];
+    component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
+    component.selectedCodersFromTrainings = new Set(['1_101', '2_201']);
     component.dataSource.data = component.comparisonData;
+    component.calculateStatistics();
 
     (component as unknown as { updateDisplayedColumns: () => void }).updateDisplayedColumns();
     fixture.detectChanges();
@@ -944,6 +1203,7 @@ describe('CodingResultsComparisonComponent', () => {
       }
     ];
     component.dataSource.data = component.withinTrainingData;
+    component.calculateStatistics();
     component.discussionCodeByResponseId[1] = '7';
     component.discussionScoreByResponseId[1] = 2;
 
@@ -1839,11 +2099,18 @@ describe('CodingResultsComparisonComponent', () => {
         ]
       }
     ];
+    component.dataSource.data = component.withinTrainingData;
+    component.calculateStatistics();
     component.originalKappaStatistics = {
       variables: [
         {
           unitName: 'U1',
           variableId: 'V1',
+          meanKappa: 0.84,
+          meanAgreement: 0.866666,
+          caseCount: 1,
+          validPairCount: 15,
+          coderPairCount: 2,
           coderPairs: [
             {
               coder1Id: 1,
@@ -1951,6 +2218,11 @@ describe('CodingResultsComparisonComponent', () => {
       variables: [{
         unitName: 'U1',
         variableId: 'V1',
+        meanKappa: 0.85,
+        meanAgreement: 0.85,
+        caseCount: 1,
+        validPairCount: 15,
+        coderPairCount: 2,
         coderPairs: [
           {
             coder1Id: 1,

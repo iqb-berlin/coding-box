@@ -27,7 +27,10 @@ import {
   getCodingStatisticsCacheKey,
   type CodingStatisticsVersion
 } from './coding-statistics-cache-key.util';
-import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import {
+  getCodingIncompleteVariablesCacheKeys,
+  getCodingIncompleteVariablesCacheVersionKey
+} from './coding-incomplete-variables-cache-key.util';
 import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 
 export interface KappaCalculationResult {
@@ -55,6 +58,9 @@ export interface KappaVariableSummary {
 export class CodingStatisticsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(CodingStatisticsService.name);
   private readonly CACHE_TTL_SECONDS = 0; // No expiration (TTL=0 means no EX flag in Redis) - persist until explicitly invalidated
+  private readonly STATISTICS_PRELOAD_CONCURRENCY = 2;
+  private readonly statisticsJobRequests =
+    new Map<string, Promise<{ jobId: string; message: string }>>();
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -79,16 +85,35 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       const workspaceIds = await this.getWorkspaceIdsWithResponses();
       this.logger.log(`Found ${workspaceIds.length} workspaces with responses, preloading statistics...`);
 
-      const preloadPromises = workspaceIds.map(workspaceId => this.getCodingStatistics(workspaceId).catch(error => {
-        this.logger.error(`Failed to preload statistics for workspace ${workspaceId}: ${error.message}`);
-      })
-      );
-
-      await Promise.allSettled(preloadPromises);
+      await this.preloadStatisticsForWorkspaces(workspaceIds);
       this.logger.log('Finished preloading coding statistics for all workspaces');
     } catch (error) {
       this.logger.error(`Error during application bootstrap: ${error.message}`);
     }
+  }
+
+  private async preloadStatisticsForWorkspaces(workspaceIds: number[]): Promise<void> {
+    const workerCount = Math.min(
+      this.STATISTICS_PRELOAD_CONCURRENCY,
+      workspaceIds.length
+    );
+    let nextIndex = 0;
+
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (nextIndex < workspaceIds.length) {
+        const workspaceId = workspaceIds[nextIndex];
+        nextIndex += 1;
+        try {
+          await this.getCodingStatistics(workspaceId);
+        } catch (error) {
+          this.logger.error(
+            `Failed to preload statistics for workspace ${workspaceId}: ${error.message}`
+          );
+        }
+      }
+    });
+
+    await Promise.allSettled(workers);
   }
 
   private async getWorkspaceIdsWithResponses(): Promise<number[]> {
@@ -304,8 +329,13 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {
-    const cacheKey = getCodingIncompleteVariablesCacheKey(workspace_id);
-    await this.cacheService.delete(cacheKey);
+    await this.cacheService.incr(
+      getCodingIncompleteVariablesCacheVersionKey(workspace_id)
+    );
+    await Promise.all(
+      getCodingIncompleteVariablesCacheKeys(workspace_id)
+        .map(cacheKey => this.cacheService.delete(cacheKey))
+    );
     this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
   }
 
@@ -408,6 +438,26 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     workspaceId: number,
     version: CodingStatisticsVersion = 'v1'
   ): Promise<{ jobId: string; message: string }> {
+    const requestKey = `${workspaceId}:${version}`;
+    const inFlightRequest = this.statisticsJobRequests.get(requestKey);
+    if (inFlightRequest) {
+      return inFlightRequest;
+    }
+
+    const request = this.createCodingStatisticsJobInternal(workspaceId, version)
+      .finally(() => {
+        if (this.statisticsJobRequests.get(requestKey) === request) {
+          this.statisticsJobRequests.delete(requestKey);
+        }
+      });
+    this.statisticsJobRequests.set(requestKey, request);
+    return request;
+  }
+
+  private async createCodingStatisticsJobInternal(
+    workspaceId: number,
+    version: CodingStatisticsVersion
+  ): Promise<{ jobId: string; message: string }> {
     try {
       const cacheKey = getCodingStatisticsCacheKey(workspaceId, version);
       const cachedResult = await this.cacheService.get<CodingStatistics>(
@@ -419,13 +469,24 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         );
         return { jobId: '', message: 'Using cached coding statistics' };
       }
-      // We don't delete the cache here because we just checked it. If it was there, we returned.
-      // If it's not there, we don't need to delete it.
-      // However, the original code deleted it. Let's keep deleting it just in case of race conditions or partial writes?
-      // Actually, if we are starting a job, we should probably clear any stale cache just to be sure.
-      await this.cacheService.delete(cacheKey);
 
       await this.jobQueueService.assertNoDependencyConflicts('coding-statistics', workspaceId);
+
+      const activeJob = await this.jobQueueService.getActiveCodingStatisticsJob(
+        workspaceId,
+        version
+      );
+      if (activeJob) {
+        this.logger.log(
+          `Reusing active coding statistics job ${activeJob.id} for workspace ${workspaceId} (version: ${version})`
+        );
+        return {
+          jobId: activeJob.id.toString(),
+          message: 'Using active coding statistics job'
+        };
+      }
+
+      await this.cacheService.delete(cacheKey);
 
       this.logger.log(
         `No cached coding statistics for workspace ${workspaceId} (version: ${version}), creating job to recalculate`
