@@ -6,12 +6,17 @@ import { CodingListService } from '../coding/coding-list.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 const VARIABLE_PAIR_SEPARATOR = '\u001F';
+const UNSET_STATUS = 0;
+const CODING_COMPLETE_STATUS = 5;
+const CODING_INCOMPLETE_STATUS = 8;
 
 interface ResponseFixtureRow {
   unitId: string;
   variableId: string;
   code_v1: string | null;
-  score_v1: number;
+  score_v1: number | null;
+  status_v1?: number | null;
+  consider?: boolean;
   loginName?: string;
   loginCode?: string;
   loginGroup?: string;
@@ -47,6 +52,20 @@ const toVariablePairKey = (unitId: string, variableId: string): string => (
 const toAggregationKey = (row: ResponseFixtureRow): string => (
   `${row.unitId}${VARIABLE_PAIR_SEPARATOR}${row.variableId}${VARIABLE_PAIR_SEPARATOR}${row.code_v1 ?? ''}`
 );
+
+const compareNullableNumericCode = (left: string | null, right: string | null): number => {
+  if (left === null && right === null) {
+    return 0;
+  }
+  if (left === null) {
+    return 1;
+  }
+  if (right === null) {
+    return -1;
+  }
+
+  return Number(left) - Number(right);
+};
 
 const createQueryBuilder = (
   kind: QueryKind,
@@ -131,11 +150,31 @@ const filterRows = (
     qb.params.aggregationVariableIdRegex,
     qb.params.totalCountVariableIdRegex
   ].find((value): value is string => typeof value === 'string');
+  const ignoredCodingStatuses = Object.entries(qb.params)
+    .find(([key, value]) => (
+      key.endsWith('IgnoredStatuses') &&
+      Array.isArray(value)
+    ))?.[1] as number[] | undefined;
+  const considerFilter = Object.entries(qb.params)
+    .find(([key]) => key.endsWith('Consider'))?.[1];
   const pairKeyFilters = Object.values(qb.params)
     .filter((value): value is string[] => (
       Array.isArray(value) &&
       value.every(item => typeof item === 'string' && item.includes(VARIABLE_PAIR_SEPARATOR))
     ));
+
+  if (typeof considerFilter === 'boolean') {
+    filteredRows = filteredRows.filter(row => (row.consider ?? true) === considerFilter);
+  }
+
+  if (ignoredCodingStatuses) {
+    filteredRows = filteredRows.filter(row => {
+      if (row.status_v1 === null || row.status_v1 === undefined) {
+        return false;
+      }
+      return !ignoredCodingStatuses.includes(row.status_v1);
+    });
+  }
 
   if (unitIdFilter) {
     filteredRows = filteredRows.filter(row => row.unitId.includes(unitIdFilter));
@@ -176,7 +215,7 @@ const getAggregatedRows = (rows: ResponseFixtureRow[]) => {
 
     if (existing) {
       existing.occurrenceCount += 1;
-      existing.score_V1 = Math.max(existing.score_V1, row.score_v1);
+      existing.score_V1 = Math.max(existing.score_V1, row.score_v1 ?? 0);
       return;
     }
 
@@ -185,7 +224,7 @@ const getAggregatedRows = (rows: ResponseFixtureRow[]) => {
       variableId: row.variableId,
       code_v1: row.code_v1,
       occurrenceCount: 1,
-      score_V1: row.score_v1
+      score_V1: row.score_v1 ?? 0
     });
   });
 
@@ -193,7 +232,7 @@ const getAggregatedRows = (rows: ResponseFixtureRow[]) => {
     .sort((a, b) => (
       a.unitId.localeCompare(b.unitId) ||
       a.variableId.localeCompare(b.variableId) ||
-      (a.code_v1 ?? '').localeCompare(b.code_v1 ?? '')
+      compareNullableNumericCode(a.code_v1, b.code_v1)
     ))
     .map(row => ({
       ...row,
@@ -271,13 +310,15 @@ describe('VariableAnalysisReplayService', () => {
       unitId: 'MDB002',
       variableId: '00',
       code_v1: '9',
-      score_v1: 0
+      score_v1: 0,
+      status_v1: CODING_COMPLETE_STATUS
     },
     {
       unitId: 'MDB002',
       variableId: '01',
       code_v1: '0',
       score_v1: 0,
+      status_v1: CODING_COMPLETE_STATUS,
       loginName: 'login-code-0',
       loginCode: 'person-0',
       loginGroup: 'group-0',
@@ -288,6 +329,7 @@ describe('VariableAnalysisReplayService', () => {
       variableId: '01',
       code_v1: '1',
       score_v1: 1,
+      status_v1: CODING_COMPLETE_STATUS,
       loginName: 'login-code-1',
       loginCode: 'person-1',
       loginGroup: 'group-1',
@@ -295,9 +337,43 @@ describe('VariableAnalysisReplayService', () => {
     },
     {
       unitId: 'MDB002',
+      variableId: '01',
+      code_v1: null,
+      score_v1: null,
+      status_v1: CODING_INCOMPLETE_STATUS,
+      loginName: 'login-code-empty',
+      loginCode: 'person-empty',
+      loginGroup: 'group-empty',
+      bookletId: 'booklet-empty'
+    },
+    {
+      unitId: 'MDB002',
+      variableId: '01',
+      code_v1: null,
+      score_v1: null,
+      status_v1: null
+    },
+    {
+      unitId: 'MDB002',
+      variableId: '01',
+      code_v1: '0',
+      score_v1: 0,
+      status_v1: UNSET_STATUS
+    },
+    {
+      unitId: 'MDB002',
+      variableId: '01',
+      code_v1: '1',
+      score_v1: 1,
+      status_v1: CODING_COMPLETE_STATUS,
+      consider: false
+    },
+    {
+      unitId: 'MDB002',
       variableId: '02',
       code_v1: '0',
-      score_v1: 0
+      score_v1: 0,
+      status_v1: CODING_COMPLETE_STATUS
     }
   ];
 
@@ -368,15 +444,15 @@ describe('VariableAnalysisReplayService', () => {
   it('counts and paginates only variables from the workspace unit-variable map', async () => {
     const result = await service.getVariableAnalysis(7, 'token', 'http://server', 1, 1);
 
-    expect(result.total).toBe(3);
+    expect(result.total).toBe(4);
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
       unitId: 'MDB002',
       variableId: '01',
       code: '0',
       occurrenceCount: 1,
-      totalCount: 2,
-      relativeOccurrence: 0.5
+      totalCount: 3,
+      relativeOccurrence: 1 / 3
     });
     expect(result.data[0].replayUrl).toContain('/MDB002/1/01?auth=token&workspaceId=7');
     expect(result.data[0].replayUrl).toContain('login-code-0@person-0@group-0@booklet-0');
@@ -389,10 +465,50 @@ describe('VariableAnalysisReplayService', () => {
       row
     ]));
 
+    expect(rowByAggregationKey.get(`MDB002${VARIABLE_PAIR_SEPARATOR}01${VARIABLE_PAIR_SEPARATOR}`)?.replayUrl)
+      .toContain('login-code-empty@person-empty@group-empty@booklet-empty');
     expect(rowByAggregationKey.get(`MDB002${VARIABLE_PAIR_SEPARATOR}01${VARIABLE_PAIR_SEPARATOR}0`)?.replayUrl)
       .toContain('login-code-0@person-0@group-0@booklet-0');
     expect(rowByAggregationKey.get(`MDB002${VARIABLE_PAIR_SEPARATOR}01${VARIABLE_PAIR_SEPARATOR}1`)?.replayUrl)
       .toContain('login-code-1@person-1@group-1@booklet-1');
+  });
+
+  it('keeps incomplete empty-code responses but excludes reset, ignored-status and unconsidered responses', async () => {
+    const result = await service.getVariableAnalysis(
+      7,
+      'token',
+      'http://server',
+      1,
+      10,
+      undefined,
+      '01'
+    );
+
+    expect(result.total).toBe(3);
+    expect(result.data).toHaveLength(3);
+    expect(result.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        variableId: '01',
+        code: '',
+        occurrenceCount: 1,
+        totalCount: 3,
+        relativeOccurrence: 1 / 3
+      }),
+      expect.objectContaining({
+        variableId: '01',
+        code: '0',
+        occurrenceCount: 1,
+        totalCount: 3,
+        relativeOccurrence: 1 / 3
+      }),
+      expect.objectContaining({
+        variableId: '01',
+        code: '1',
+        occurrenceCount: 1,
+        totalCount: 3,
+        relativeOccurrence: 1 / 3
+      })
+    ]));
   });
 
   it('applies the derivation filter before counting and paginating', async () => {
@@ -478,7 +594,7 @@ describe('VariableAnalysisReplayService', () => {
       true
     );
 
-    expect(result.total).toBe(3);
-    expect(result.data.map(row => row.variableId)).toEqual(['01', '01', '02']);
+    expect(result.total).toBe(4);
+    expect(result.data.map(row => row.variableId)).toEqual(['01', '01', '01', '02']);
   });
 });
