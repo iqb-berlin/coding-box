@@ -10,6 +10,11 @@ import { AppModule } from './app/app.module';
 import { ExportWorkerModule } from './app/export-worker/export-worker.module';
 import { isExportWorkerProcess } from './app/export-worker/export-worker-role';
 import { GlobalHttpExceptionFilter } from './app/http/global-http-exception.filter';
+import {
+  SLOW_REQUEST_THRESHOLD_ENV,
+  createRequestMonitoringMiddleware,
+  parseSlowRequestThresholdMs
+} from './app/http/request-monitoring.middleware';
 import { REQUEST_ID_HEADER } from './app/http/request-id';
 import { requestIdMiddleware } from './app/http/request-id.middleware';
 
@@ -26,6 +31,9 @@ async function bootstrap() {
   const host = configService.get('API_HOST') || 'localhost';
   const port = 3333;
   const globalPrefix = 'api';
+  const slowRequestThresholdMs = parseSlowRequestThresholdMs(
+    configService.get(SLOW_REQUEST_THRESHOLD_ENV)
+  );
 
   app.use(requestIdMiddleware);
   app.useGlobalFilters(new GlobalHttpExceptionFilter());
@@ -36,6 +44,7 @@ async function bootstrap() {
     req.url = query ? `${normalizedPathname}?${query}` : normalizedPathname;
     next();
   });
+  app.use(createRequestMonitoringMiddleware({ slowRequestThresholdMs }));
 
   const packagesRoot = path.resolve('./packages');
   const packageDirectoryMap = new Map<string, string>();

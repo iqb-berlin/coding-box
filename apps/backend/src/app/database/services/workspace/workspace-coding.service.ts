@@ -64,6 +64,7 @@ export class WorkspaceCodingService {
     );
 
     await this.invalidateIncompleteVariablesCache(workspace_id);
+    await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspace_id);
     await this.codingAnalysisService.invalidateCache(workspace_id);
     await this.codingStatisticsService.invalidateCache(workspace_id);
     await this.codingStatisticsService.refreshStatistics(
@@ -272,6 +273,7 @@ export class WorkspaceCodingService {
       }>;
     }> {
     await this.codingAnalysisService.invalidateCache(workspaceId);
+    await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
     return this.externalCodingImportService.importExternalCodingWithProgress(
       workspaceId,
       body,
@@ -303,6 +305,7 @@ export class WorkspaceCodingService {
       }>;
     }> {
     await this.codingAnalysisService.invalidateCache(workspaceId);
+    await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
     return this.externalCodingImportService.importExternalCoding(
       workspaceId,
       body
@@ -392,6 +395,7 @@ export class WorkspaceCodingService {
       messageParams?: Record<string, unknown>;
     }> {
     await this.codingAnalysisService.invalidateCache(workspaceId);
+    await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
     return this.codingJobOperationsService.applyCodingResults(
       workspaceId,
       codingJobId
@@ -504,6 +508,7 @@ export class WorkspaceCodingService {
     }>;
   }> {
     await this.codingAnalysisService.invalidateCache(workspaceId);
+    await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
     return this.codingJobOperationsService.bulkApplyCodingResults(workspaceId);
   }
 
@@ -639,6 +644,7 @@ export class WorkspaceCodingService {
       skippedCount: number;
       message: string;
     }> {
+    await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
     return this.codingReviewService.applyDoubleCodedResolutions(
       workspaceId,
       decisions
@@ -694,6 +700,7 @@ export class WorkspaceCodingService {
       message: string;
     }> {
     await this.codingAnalysisService.invalidateCache(workspaceId);
+    await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
     return this.codingVersionService.resetCodingVersion(
       workspaceId,
       version,

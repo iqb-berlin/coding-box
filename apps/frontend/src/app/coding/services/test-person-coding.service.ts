@@ -1,10 +1,15 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import {
+  EMPTY,
   Observable,
   Subject,
   catchError,
+  finalize,
+  map,
   of,
+  shareReplay,
+  tap,
   throwError
 } from 'rxjs';
 import Keycloak from 'keycloak-js';
@@ -29,6 +34,7 @@ import {
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
 import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
 import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings.service';
+import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 
 interface ExternalCodingImportWithPreviewDto {
   file: string;
@@ -96,8 +102,11 @@ export interface CohensKappaStatisticsResponse {
     variablesIncluded: number;
     codersIncluded: number;
     weightingMethod: 'weighted' | 'unweighted';
+    calculationLevel?: CohensKappaCalculationLevel;
   };
 }
+
+export type CohensKappaCalculationLevel = 'code' | 'score';
 
 export interface CohensKappaScope {
   jobDefinitionIds?: number[];
@@ -234,9 +243,26 @@ export class TestPersonCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private keycloak = inject(Keycloak, { optional: true });
+  private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
   private pendingStatisticsVersions = new Map<number, CodingStatisticsVersion>();
+  private codingFreshnessCache = new Map<number, CodingFreshnessSummaryDto>();
+  private codingFreshnessRequests = new Map<number, Observable<CodingFreshnessSummaryDto>>();
+  private autocodingReadinessCache = new Map<string, AutocodingReadinessDto>();
+  private autocodingReadinessRequests = new Map<string, Observable<AutocodingReadinessDto>>();
+  private autocodingReadinessCacheOnlyRequests = new Map<string, Observable<AutocodingReadinessDto | null>>();
+  private codingFreshnessScopeCache = new Map<string, CodingFreshnessScopeDto>();
+  private codingFreshnessScopeRequests = new Map<string, Observable<CodingFreshnessScopeDto>>();
+  private appliedResultsOverviewCache = new Map<number, AppliedResultsOverview | null>();
+  private appliedResultsOverviewRequests = new Map<number, Observable<AppliedResultsOverview | null>>();
+  private responseAnalysisGuardPollTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  private responseAnalysisGuardThresholds = new Map<number, number | undefined>();
+  private freshnessCodingGuardPollTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly responseAnalysisGuardPollIntervalMs = 5000;
+  private readonly freshnessCodingGuardPollIntervalMs = 5000;
+  private readonly responseAnalysisGuardJobId = 'manual-response-analysis';
+  private codingStatusCacheGeneration = 0;
   autoCodingCompleted$ = this.autoCodingCompletedSubject.asObservable();
   testResultsChanged$ = this.testResultsChangedSubject.asObservable();
 
@@ -257,11 +283,20 @@ export class TestPersonCodingService {
     return typeof jobId === 'string' && jobId.trim().length > 0;
   }
 
+  private deleteCacheKeysForWorkspace<T>(cache: Map<string, T>, workspaceId: number): void {
+    const workspacePrefix = `${workspaceId}:`;
+    Array.from(cache.keys())
+      .filter(key => key.startsWith(workspacePrefix))
+      .forEach(key => cache.delete(key));
+  }
+
   notifyAutoCodingCompleted(jobId?: string): void {
+    this.invalidateCodingStatusCache();
     this.autoCodingCompletedSubject.next({ jobId });
   }
 
   notifyTestResultsChanged(event: TestResultsChangedEvent = {}): void {
+    this.invalidateCodingStatusCache(event.workspaceId);
     if (event.workspaceId && event.statisticsVersion) {
       this.pendingStatisticsVersions.set(event.workspaceId, event.statisticsVersion);
     }
@@ -272,6 +307,92 @@ export class TestPersonCodingService {
     const version = this.pendingStatisticsVersions.get(workspaceId) ?? null;
     this.pendingStatisticsVersions.delete(workspaceId);
     return version;
+  }
+
+  invalidateCodingStatusCache(workspaceId?: number): void {
+    this.codingStatusCacheGeneration += 1;
+    if (!workspaceId) {
+      this.codingFreshnessCache.clear();
+      this.codingFreshnessRequests.clear();
+      this.autocodingReadinessCache.clear();
+      this.autocodingReadinessRequests.clear();
+      this.autocodingReadinessCacheOnlyRequests.clear();
+      this.codingFreshnessScopeCache.clear();
+      this.codingFreshnessScopeRequests.clear();
+      this.appliedResultsOverviewCache.clear();
+      this.appliedResultsOverviewRequests.clear();
+      return;
+    }
+
+    this.codingFreshnessCache.delete(workspaceId);
+    this.codingFreshnessRequests.delete(workspaceId);
+    this.appliedResultsOverviewCache.delete(workspaceId);
+    this.appliedResultsOverviewRequests.delete(workspaceId);
+    this.deleteCacheKeysForWorkspace(this.autocodingReadinessCache, workspaceId);
+    this.deleteCacheKeysForWorkspace(this.autocodingReadinessRequests, workspaceId);
+    this.deleteCacheKeysForWorkspace(this.autocodingReadinessCacheOnlyRequests, workspaceId);
+    this.deleteCacheKeysForWorkspace(this.codingFreshnessScopeCache, workspaceId);
+    this.deleteCacheKeysForWorkspace(this.codingFreshnessScopeRequests, workspaceId);
+  }
+
+  private createCodingFreshnessFallback(workspaceId: number): CodingFreshnessSummaryDto {
+    return {
+      workspaceId,
+      currentRevision: 0,
+      items: []
+    };
+  }
+
+  private createAutocodingReadinessFallback(
+    workspaceId: number,
+    autoCoderRun: 1 | 2
+  ): AutocodingReadinessDto {
+    return {
+      workspaceId,
+      autoCoderRun,
+      readiness: 'NO_RESULTS',
+      blockers: [],
+      rawResponsesTotal: 0,
+      rawResponsesWithRelevantStatus: 0,
+      resultUnitsTotal: 0,
+      resultUnitKeysTotal: 0,
+      matchedUnitFiles: 0,
+      missingUnitFiles: [],
+      matchedCodingSchemes: 0,
+      missingCodingSchemes: [],
+      invalidCodingSchemes: [],
+      validVariablePairs: 0,
+      validResponses: 0,
+      codeableResponses: 0,
+      invalidVariableSamples: []
+    };
+  }
+
+  private createCodingFreshnessScopeFallback(
+    workspaceId: number,
+    version?: CodingFreshnessVersion,
+    states?: CodingFreshnessState[]
+  ): CodingFreshnessScopeDto {
+    return {
+      workspaceId,
+      currentRevision: 0,
+      versions: version ?
+        [version] :
+        (['v1', 'v2', 'v3'] as CodingFreshnessVersion[]),
+      states: states || ([
+        'PENDING',
+        'STALE',
+        'MANUAL_REVIEW_REQUIRED'
+      ] as CodingFreshnessState[]),
+      unitCount: 0,
+      personCount: 0,
+      groupCount: 0,
+      affectedResponseCount: 0,
+      unitIds: [],
+      personIds: [],
+      groupNames: [],
+      groups: []
+    };
   }
 
   codeTestPersons(workspaceId: number, testPersonIds: string, autoCoderRun: number = 1): Observable<CodingStatisticsWithJob> {
@@ -471,7 +592,22 @@ export class TestPersonCodingService {
   }
 
   getCodingFreshness(workspaceId: number): Observable<CodingFreshnessSummaryDto> {
-    return this.http
+    const cached = this.codingFreshnessCache.get(workspaceId);
+    if (this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)) {
+      return of(cached || this.createCodingFreshnessFallback(workspaceId));
+    }
+
+    if (cached) {
+      return of(cached);
+    }
+
+    const pendingRequest = this.codingFreshnessRequests.get(workspaceId);
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+
+    const requestGeneration = this.codingStatusCacheGeneration;
+    const request$ = this.http
       .get<CodingFreshnessSummaryDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness`,
       {
@@ -480,12 +616,22 @@ export class TestPersonCodingService {
       }
     )
       .pipe(
-        catchError(() => of({
-          workspaceId,
-          currentRevision: 0,
-          items: []
-        }))
+        tap(summary => {
+          if (this.codingStatusCacheGeneration === requestGeneration) {
+            this.codingFreshnessCache.set(workspaceId, summary);
+          }
+        }),
+        catchError(() => of(this.createCodingFreshnessFallback(workspaceId))),
+        finalize(() => {
+          if (this.codingFreshnessRequests.get(workspaceId) === request$) {
+            this.codingFreshnessRequests.delete(workspaceId);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: true })
       );
+
+    this.codingFreshnessRequests.set(workspaceId, request$);
+    return request$;
   }
 
   getAutocodingReadiness(
@@ -493,12 +639,30 @@ export class TestPersonCodingService {
     autoCoderRun: 1 | 2 = 1,
     forceRefresh = false
   ): Observable<AutocodingReadinessDto> {
+    const cacheKey = `${workspaceId}:${autoCoderRun}`;
+    const cached = this.autocodingReadinessCache.get(cacheKey);
+    if (this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)) {
+      return of(cached || this.createAutocodingReadinessFallback(workspaceId, autoCoderRun));
+    }
+
+    if (!forceRefresh) {
+      if (cached) {
+        return of(cached);
+      }
+
+      const pendingRequest = this.autocodingReadinessRequests.get(cacheKey);
+      if (pendingRequest) {
+        return pendingRequest;
+      }
+    }
+
     let params = new HttpParams().set('autoCoderRun', autoCoderRun.toString());
     if (forceRefresh) {
       params = params.set('forceRefresh', 'true');
     }
 
-    return this.http
+    const requestGeneration = this.codingStatusCacheGeneration;
+    const request$ = this.http
       .get<AutocodingReadinessDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/readiness`,
       {
@@ -508,8 +672,82 @@ export class TestPersonCodingService {
       }
     )
       .pipe(
-        catchError(error => throwError(() => error))
+        tap(readiness => {
+          if (
+            this.codingStatusCacheGeneration === requestGeneration &&
+            this.autocodingReadinessRequests.get(cacheKey) === request$
+          ) {
+            this.autocodingReadinessCache.set(cacheKey, readiness);
+          }
+        }),
+        catchError(error => throwError(() => error)),
+        finalize(() => {
+          if (this.autocodingReadinessRequests.get(cacheKey) === request$) {
+            this.autocodingReadinessRequests.delete(cacheKey);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: true })
       );
+
+    this.autocodingReadinessRequests.set(cacheKey, request$);
+    return request$;
+  }
+
+  getCachedAutocodingReadiness(
+    workspaceId: number,
+    autoCoderRun: 1 | 2 = 1
+  ): Observable<AutocodingReadinessDto | null> {
+    const cacheKey = `${workspaceId}:${autoCoderRun}`;
+    const cached = this.autocodingReadinessCache.get(cacheKey);
+    if (cached) {
+      return of(cached);
+    }
+
+    if (this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)) {
+      return of(null);
+    }
+
+    const pendingRequest = this.autocodingReadinessCacheOnlyRequests.get(cacheKey);
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+
+    const params = new HttpParams()
+      .set('autoCoderRun', autoCoderRun.toString())
+      .set('cacheOnly', 'true');
+    const requestGeneration = this.codingStatusCacheGeneration;
+    const request$ = this.http
+      .get<AutocodingReadinessDto | null>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/readiness`,
+      {
+        headers: this.authHeader,
+        params,
+        context: suppressGlobalHttpErrorContext()
+      }
+    )
+      .pipe(
+        map(readiness => (
+          this.codingStatusCacheGeneration === requestGeneration ? readiness : null
+        )),
+        tap(readiness => {
+          if (
+            readiness &&
+            this.autocodingReadinessCacheOnlyRequests.get(cacheKey) === request$
+          ) {
+            this.autocodingReadinessCache.set(cacheKey, readiness);
+          }
+        }),
+        catchError(() => of(null)),
+        finalize(() => {
+          if (this.autocodingReadinessCacheOnlyRequests.get(cacheKey) === request$) {
+            this.autocodingReadinessCacheOnlyRequests.delete(cacheKey);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: true })
+      );
+
+    this.autocodingReadinessCacheOnlyRequests.set(cacheKey, request$);
+    return request$;
   }
 
   getCodingFreshnessScope(
@@ -517,6 +755,25 @@ export class TestPersonCodingService {
     version?: 'v1' | 'v2' | 'v3',
     states?: ('PENDING' | 'STALE' | 'MANUAL_REVIEW_REQUIRED')[]
   ): Observable<CodingFreshnessScopeDto> {
+    const cacheKey = [
+      workspaceId,
+      version || 'all',
+      states?.join(',') || 'all'
+    ].join(':');
+    const cached = this.codingFreshnessScopeCache.get(cacheKey);
+    if (this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)) {
+      return of(cached || this.createCodingFreshnessScopeFallback(workspaceId, version, states));
+    }
+
+    if (cached) {
+      return of(cached);
+    }
+
+    const pendingRequest = this.codingFreshnessScopeRequests.get(cacheKey);
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+
     let params = new HttpParams();
     if (version) {
       params = params.set('version', version);
@@ -525,7 +782,8 @@ export class TestPersonCodingService {
       params = params.set('state', states.join(','));
     }
 
-    return this.http
+    const requestGeneration = this.codingStatusCacheGeneration;
+    const request$ = this.http
       .get<CodingFreshnessScopeDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness/scope`,
       {
@@ -535,30 +793,22 @@ export class TestPersonCodingService {
       }
     )
       .pipe(
-        catchError(() => {
-          const fallback: CodingFreshnessScopeDto = {
-            workspaceId,
-            currentRevision: 0,
-            versions: version ?
-              [version] :
-              (['v1', 'v2', 'v3'] as CodingFreshnessVersion[]),
-            states: states || ([
-              'PENDING',
-              'STALE',
-              'MANUAL_REVIEW_REQUIRED'
-            ] as CodingFreshnessState[]),
-            unitCount: 0,
-            personCount: 0,
-            groupCount: 0,
-            affectedResponseCount: 0,
-            unitIds: [],
-            personIds: [],
-            groupNames: [],
-            groups: []
-          };
-          return of(fallback);
-        })
+        tap(scope => {
+          if (this.codingStatusCacheGeneration === requestGeneration) {
+            this.codingFreshnessScopeCache.set(cacheKey, scope);
+          }
+        }),
+        catchError(() => of(this.createCodingFreshnessScopeFallback(workspaceId, version, states))),
+        finalize(() => {
+          if (this.codingFreshnessScopeRequests.get(cacheKey) === request$) {
+            this.codingFreshnessScopeRequests.delete(cacheKey);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: true })
       );
+
+    this.codingFreshnessScopeRequests.set(cacheKey, request$);
+    return request$;
   }
 
   startFreshnessCoding(
@@ -804,14 +1054,44 @@ export class TestPersonCodingService {
   }
 
   getAppliedResultsOverview(workspaceId: number): Observable<AppliedResultsOverview | null> {
-    return this.http
+    if (this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)) {
+      return this.appliedResultsOverviewCache.has(workspaceId) ?
+        of(this.appliedResultsOverviewCache.get(workspaceId) ?? null) :
+        of(null);
+    }
+
+    if (this.appliedResultsOverviewCache.has(workspaceId)) {
+      return of(this.appliedResultsOverviewCache.get(workspaceId) ?? null);
+    }
+
+    const pendingRequest = this.appliedResultsOverviewRequests.get(workspaceId);
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+
+    const requestGeneration = this.codingStatusCacheGeneration;
+    const request$ = this.http
       .get<AppliedResultsOverview>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/applied-results-overview`,
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(() => of(null))
+        tap(overview => {
+          if (this.codingStatusCacheGeneration === requestGeneration) {
+            this.appliedResultsOverviewCache.set(workspaceId, overview);
+          }
+        }),
+        catchError(() => of(null)),
+        finalize(() => {
+          if (this.appliedResultsOverviewRequests.get(workspaceId) === request$) {
+            this.appliedResultsOverviewRequests.delete(workspaceId);
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: true })
       );
+
+    this.appliedResultsOverviewRequests.set(workspaceId, request$);
+    return request$;
   }
 
   generateCoderTrainingPackages(
@@ -977,6 +1257,172 @@ export class TestPersonCodingService {
           coveredSourceResponseCount: 0
         }))
       );
+  }
+
+  setResponseAnalysisGuardRunning(
+    workspaceId: number | null | undefined,
+    isRunning: boolean
+  ): void {
+    if (!workspaceId) {
+      return;
+    }
+
+    if (!isRunning) {
+      this.clearResponseAnalysisGuardPolling(workspaceId);
+    }
+
+    this.codingBackgroundJobsService.setJobRunning(
+      workspaceId,
+      'response-analysis',
+      isRunning,
+      this.responseAnalysisGuardJobId
+    );
+  }
+
+  trackResponseAnalysisGuardUntilComplete(
+    workspaceId: number | null | undefined,
+    threshold?: number
+  ): void {
+    if (!workspaceId) {
+      return;
+    }
+
+    this.responseAnalysisGuardThresholds.set(workspaceId, threshold);
+    this.setResponseAnalysisGuardRunning(workspaceId, true);
+    this.scheduleResponseAnalysisGuardPoll(workspaceId);
+  }
+
+  private scheduleResponseAnalysisGuardPoll(workspaceId: number): void {
+    if (this.responseAnalysisGuardPollTimers.has(workspaceId)) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      this.responseAnalysisGuardPollTimers.delete(workspaceId);
+      this.pollResponseAnalysisGuard(workspaceId);
+    }, this.responseAnalysisGuardPollIntervalMs);
+    this.responseAnalysisGuardPollTimers.set(workspaceId, timeoutId);
+  }
+
+  private pollResponseAnalysisGuard(workspaceId: number): void {
+    const threshold = this.responseAnalysisGuardThresholds.get(workspaceId);
+    this.getResponseAnalysis(workspaceId, threshold)
+      .pipe(catchError(() => {
+        this.scheduleResponseAnalysisGuardPoll(workspaceId);
+        return EMPTY;
+      }))
+      .subscribe(analysis => {
+        if (analysis?.isCalculating === true) {
+          this.scheduleResponseAnalysisGuardPoll(workspaceId);
+          return;
+        }
+
+        this.invalidateCodingStatusCache(workspaceId);
+        this.setResponseAnalysisGuardRunning(workspaceId, false);
+      });
+  }
+
+  private clearResponseAnalysisGuardPolling(workspaceId: number): void {
+    const timeoutId = this.responseAnalysisGuardPollTimers.get(workspaceId);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      this.responseAnalysisGuardPollTimers.delete(workspaceId);
+    }
+    this.responseAnalysisGuardThresholds.delete(workspaceId);
+  }
+
+  setFreshnessCodingGuardRunning(
+    workspaceId: number | null | undefined,
+    jobId: string | null | undefined,
+    isRunning: boolean
+  ): void {
+    if (!workspaceId || !jobId) {
+      return;
+    }
+
+    if (!isRunning) {
+      this.clearFreshnessCodingGuardPolling(workspaceId, jobId);
+    }
+
+    this.codingBackgroundJobsService.setJobRunning(
+      workspaceId,
+      'freshness-coding',
+      isRunning,
+      jobId
+    );
+  }
+
+  trackFreshnessCodingGuardUntilComplete(
+    workspaceId: number | null | undefined,
+    jobId: string | null | undefined
+  ): void {
+    if (!workspaceId || !jobId) {
+      return;
+    }
+
+    this.setFreshnessCodingGuardRunning(workspaceId, jobId, true);
+    this.scheduleFreshnessCodingGuardPoll(workspaceId, jobId);
+  }
+
+  private scheduleFreshnessCodingGuardPoll(
+    workspaceId: number,
+    jobId: string
+  ): void {
+    const pollKey = this.createFreshnessCodingGuardPollKey(workspaceId, jobId);
+    if (this.freshnessCodingGuardPollTimers.has(pollKey)) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      this.freshnessCodingGuardPollTimers.delete(pollKey);
+      this.pollFreshnessCodingGuard(workspaceId, jobId);
+    }, this.freshnessCodingGuardPollIntervalMs);
+    this.freshnessCodingGuardPollTimers.set(pollKey, timeoutId);
+  }
+
+  private pollFreshnessCodingGuard(
+    workspaceId: number,
+    jobId: string
+  ): void {
+    this.getJobStatus(workspaceId, jobId)
+      .pipe(catchError(() => of({ error: `Failed to get status for job ${jobId}` })))
+      .subscribe(status => {
+        if (!('status' in status)) {
+          this.scheduleFreshnessCodingGuardPoll(workspaceId, jobId);
+          return;
+        }
+
+        if (!this.isTerminalCodingJobStatus(status.status)) {
+          this.scheduleFreshnessCodingGuardPoll(workspaceId, jobId);
+          return;
+        }
+
+        this.invalidateCodingStatusCache(workspaceId);
+        this.setFreshnessCodingGuardRunning(workspaceId, jobId, false);
+      });
+  }
+
+  private clearFreshnessCodingGuardPolling(
+    workspaceId: number,
+    jobId: string
+  ): void {
+    const pollKey = this.createFreshnessCodingGuardPollKey(workspaceId, jobId);
+    const timeoutId = this.freshnessCodingGuardPollTimers.get(pollKey);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      this.freshnessCodingGuardPollTimers.delete(pollKey);
+    }
+  }
+
+  private createFreshnessCodingGuardPollKey(
+    workspaceId: number,
+    jobId: string
+  ): string {
+    return `${workspaceId}:${jobId}`;
+  }
+
+  private isTerminalCodingJobStatus(status: JobStatus['status']): boolean {
+    return ['completed', 'failed', 'cancelled', 'paused'].includes(status);
   }
 
   getResponseAnalysis(
@@ -1236,12 +1682,14 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = true,
     unitName?: string,
     variableId?: string,
-    scope?: CohensKappaScope
+    scope?: CohensKappaScope,
+    calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<CohensKappaStatisticsResponse> {
     let params = new HttpParams();
 
     params = params.set('weightedMean', weightedMean.toString());
     params = params.set('excludeTrainings', excludeTrainings.toString());
+    params = params.set('level', calculationLevel);
 
     if (unitName) {
       params = params.set('unitName', unitName);
@@ -1267,7 +1715,8 @@ export class TestPersonCodingService {
             meanAgreement: null,
             variablesIncluded: 0,
             codersIncluded: 0,
-            weightingMethod: 'weighted' as 'weighted' | 'unweighted'
+            weightingMethod: 'weighted' as 'weighted' | 'unweighted',
+            calculationLevel
           }
         }))
       );
@@ -1279,14 +1728,16 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = true,
     unitName?: string,
     variableId?: string,
-    scope?: CohensKappaScope
+    scope?: CohensKappaScope,
+    calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<Blob> {
     const params = this.buildCohensKappaExportParams(
       weightedMean,
       excludeTrainings,
       unitName,
       variableId,
-      scope
+      scope,
+      calculationLevel
     );
 
     return this.http
@@ -1307,14 +1758,16 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = true,
     unitName?: string,
     variableId?: string,
-    scope?: CohensKappaScope
+    scope?: CohensKappaScope,
+    calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<Blob> {
     const params = this.buildCohensKappaExportParams(
       weightedMean,
       excludeTrainings,
       unitName,
       variableId,
-      scope
+      scope,
+      calculationLevel
     );
 
     return this.http
@@ -1335,14 +1788,16 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = true,
     unitName?: string,
     variableId?: string,
-    scope?: CohensKappaScope
+    scope?: CohensKappaScope,
+    calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<Blob> {
     const params = this.buildCohensKappaExportParams(
       weightedMean,
       excludeTrainings,
       unitName,
       variableId,
-      scope
+      scope,
+      calculationLevel
     );
 
     return this.http
@@ -1362,11 +1817,13 @@ export class TestPersonCodingService {
     excludeTrainings: boolean,
     unitName?: string,
     variableId?: string,
-    scope?: CohensKappaScope
+    scope?: CohensKappaScope,
+    calculationLevel: CohensKappaCalculationLevel = 'code'
   ): HttpParams {
     let params = new HttpParams()
       .set('weightedMean', weightedMean.toString())
-      .set('excludeTrainings', excludeTrainings.toString());
+      .set('excludeTrainings', excludeTrainings.toString())
+      .set('level', calculationLevel);
 
     if (unitName) {
       params = params.set('unitName', unitName);

@@ -11,7 +11,6 @@ import {
 } from '@angular/common/http';
 import { registerLocaleData, HashLocationStrategy, LocationStrategy } from '@angular/common';
 import localeDeAt from '@angular/common/locales/de-AT';
-import { TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import {
   AutoRefreshTokenService, createInterceptorCondition,
@@ -20,6 +19,7 @@ import {
   UserActivityService,
   withAutoRefreshToken
 } from 'keycloak-angular';
+import { Observable } from 'rxjs';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
@@ -27,8 +27,20 @@ import { journalInterceptor } from './core/interceptors/journal-interceptor';
 import { SERVER_URL } from './injection-tokens';
 import { AUTH_SESSION_IDLE_TIMEOUT_MS } from './core/services/auth-session.config';
 
-export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
-  return new TranslateHttpLoader(http, './assets/i18n/', '.json');
+const translationCacheBust = Date.now().toString();
+
+export class CacheBustingTranslateLoader implements TranslateLoader {
+  constructor(private http: HttpClient) {}
+
+  getTranslation(lang: string): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(
+      `./assets/i18n/${lang}.json?v=${translationCacheBust}`
+    );
+  }
+}
+
+export function createTranslateLoader(http: HttpClient): CacheBustingTranslateLoader {
+  return new CacheBustingTranslateLoader(http);
 }
 
 const allUrlsCondition = createInterceptorCondition<IncludeBearerTokenCondition>({

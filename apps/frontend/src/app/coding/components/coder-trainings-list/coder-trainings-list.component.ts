@@ -1,11 +1,13 @@
 import {
   Component,
   OnDestroy,
+  OnChanges,
   OnInit,
   inject,
   Input,
   Output,
-  EventEmitter
+  EventEmitter,
+  SimpleChanges
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -72,7 +74,7 @@ interface TrainingNameFilterOption {
   templateUrl: './coder-trainings-list.component.html',
   styleUrls: ['./coder-trainings-list.component.scss']
 })
-export class CoderTrainingsListComponent implements OnInit, OnDestroy {
+export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy {
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
@@ -80,8 +82,10 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
   private translate = inject(TranslateService);
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
   private destroy$ = new Subject<void>();
+  private loadRequestId = 0;
 
   @Input() showCreateButton = true;
+  @Input() workspaceId?: number;
   @Output() onCreateTraining = new EventEmitter<void>();
   @Output() onEditTraining = new EventEmitter<CoderTraining>(); // New
 
@@ -91,10 +95,20 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
   duplicateTrainingLabels = new Set<string>();
   selectedTrainingName: string | null = null;
   isLoading = false;
+  private loadCoderTrainingsPromise?: Promise<void>;
+  private loadCoderTrainingsWorkspaceId?: number;
   displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'selectionStrategy', 'created_at'];
 
   ngOnInit(): void {
     this.loadCoderTrainings();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.workspaceId && !changes.workspaceId.firstChange) {
+      this.loadRequestId += 1;
+      this.clearTrainingState({ resetFilters: true });
+      this.loadCoderTrainings({ resetFilters: true });
+    }
   }
 
   ngOnDestroy(): void {
@@ -102,34 +116,99 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  loadCoderTrainings(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const workspaceId = this.appService.selectedWorkspaceId;
-      if (!workspaceId) {
-        reject();
-        return;
-      }
+  private getCurrentWorkspaceId(): number {
+    return this.workspaceId || this.appService.selectedWorkspaceId;
+  }
 
-      this.codingTrainingBackendService.getCoderTrainings(workspaceId)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: (trainings: CoderTraining[]) => {
-            this.originalData = trainings;
-            this.rebuildTrainingNameFilterOptions();
-            this.applyAllFilters();
-            this.isLoading = false;
-            resolve();
-          },
-          error: () => {
-            this.coderTrainings = [];
-            this.originalData = [];
-            this.trainingNameFilterOptions = [];
-            this.duplicateTrainingLabels.clear();
-            this.isLoading = false;
-            reject();
-          }
-        });
+  private clearTrainingState(options: { resetFilters?: boolean } = {}): void {
+    this.coderTrainings = [];
+    this.originalData = [];
+    this.trainingNameFilterOptions = [];
+    this.duplicateTrainingLabels.clear();
+    if (options.resetFilters) {
+      this.selectedTrainingName = null;
+    }
+  }
+
+  private clearUnavailableTrainingNameFilter(): void {
+    if (!this.selectedTrainingName) {
+      return;
+    }
+
+    const selectedOptionExists = this.trainingNameFilterOptions
+      .some(option => option.label === this.selectedTrainingName);
+    if (!selectedOptionExists) {
+      this.selectedTrainingName = null;
+    }
+  }
+
+  loadCoderTrainings(options: { resetFilters?: boolean } = {}): Promise<void> {
+    const workspaceId = this.getCurrentWorkspaceId();
+    if (!workspaceId) {
+      this.loadRequestId += 1;
+      this.clearTrainingState({ resetFilters: true });
+      this.isLoading = false;
+      this.loadCoderTrainingsPromise = undefined;
+      this.loadCoderTrainingsWorkspaceId = undefined;
+      return Promise.reject();
+    }
+
+    if (
+      !options.resetFilters &&
+      this.isLoading &&
+      this.loadCoderTrainingsPromise &&
+      this.loadCoderTrainingsWorkspaceId === workspaceId
+    ) {
+      return this.loadCoderTrainingsPromise;
+    }
+
+    this.loadRequestId += 1;
+    const requestId = this.loadRequestId;
+    this.isLoading = true;
+    this.loadCoderTrainingsWorkspaceId = workspaceId;
+    this.clearTrainingState({ resetFilters: options.resetFilters });
+
+    let resolveLoad: () => void = () => {};
+    let rejectLoad: () => void = () => {};
+    const loadPromise = new Promise<void>((resolve, reject) => {
+      resolveLoad = resolve;
+      rejectLoad = reject;
     });
+    this.loadCoderTrainingsPromise = loadPromise;
+
+    this.codingTrainingBackendService.getCoderTrainings(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (trainings: CoderTraining[]) => {
+          if (requestId !== this.loadRequestId || this.getCurrentWorkspaceId() !== workspaceId) {
+            resolveLoad();
+            return;
+          }
+
+          this.originalData = trainings;
+          this.rebuildTrainingNameFilterOptions();
+          this.clearUnavailableTrainingNameFilter();
+          this.applyAllFilters();
+          this.isLoading = false;
+          this.loadCoderTrainingsPromise = undefined;
+          this.loadCoderTrainingsWorkspaceId = undefined;
+          resolveLoad();
+        },
+        error: () => {
+          if (requestId !== this.loadRequestId || this.getCurrentWorkspaceId() !== workspaceId) {
+            resolveLoad();
+            return;
+          }
+
+          this.clearTrainingState({ resetFilters: options.resetFilters });
+          this.isLoading = false;
+          this.loadCoderTrainingsPromise = undefined;
+          this.loadCoderTrainingsWorkspaceId = undefined;
+          rejectLoad();
+        }
+      });
+
+    return loadPromise;
   }
 
   requestFullEdit(training: CoderTraining): void {

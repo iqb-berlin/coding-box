@@ -1,4 +1,4 @@
-<div class="error-messages-container">
+<div class="error-messages-container priority-errors">
   @if (appService.backendUnavailable) {
   <div class="error-message backend-unavailable">
     <div class="error-content">
@@ -51,7 +51,9 @@
     </div>
   </div>
   }
+</div>
 
+<div class="error-messages-container transient-errors">
   <!-- Other Error Messages -->
   @for (error of appService.errorMessages; track error.id) {
   <div class="error-message other-error">

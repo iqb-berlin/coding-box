@@ -253,6 +253,7 @@ export class TestResultsUploadStateService {
       mode: 'indeterminate'
     });
     this.testResultService.invalidateCache(batch.workspaceId);
+    this.testPersonCodingService.invalidateCodingStatusCache(batch.workspaceId);
     this.validationTaskStateService.invalidateWorkspace(batch.workspaceId);
 
     const jobStatuses$ = this.waitForCompletedJobResults(batch, finalJobStatuses);

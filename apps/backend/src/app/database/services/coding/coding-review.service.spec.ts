@@ -197,6 +197,7 @@ describe('CodingReviewService', () => {
       variableBundleRepository as never,
       {} as never,
       {} as never,
+      {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
@@ -362,6 +363,7 @@ describe('CodingReviewService', () => {
       codingJobUnitRepository as never,
       jobDefinitionRepository as never,
       variableBundleRepository as never,
+      {} as never,
       {} as never,
       {} as never,
       {
@@ -1136,6 +1138,7 @@ describe('CodingReviewService', () => {
         responseId: 10,
         unitName: 'UNIT_1',
         variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
         personLogin: 'person-1',
         personCode: 'P001',
         personGroup: 'GROUP_1',
@@ -1156,6 +1159,7 @@ describe('CodingReviewService', () => {
         responseId: 10,
         unitName: 'UNIT_1',
         variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
         personLogin: 'person-1',
         personCode: 'P001',
         personGroup: 'GROUP_1',
@@ -1176,6 +1180,7 @@ describe('CodingReviewService', () => {
         responseId: 10,
         unitName: 'UNIT_1',
         variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
         personLogin: 'person-1',
         personCode: 'P001',
         personGroup: 'GROUP_1',
@@ -1196,6 +1201,7 @@ describe('CodingReviewService', () => {
         responseId: 11,
         unitName: 'UNIT:2',
         variableId: 'VAR:2',
+        variableAnchor: 'ANCHOR:2',
         personLogin: 'person-2',
         personCode: 'P002',
         personGroup: 'GROUP_2',
@@ -1225,6 +1231,7 @@ describe('CodingReviewService', () => {
     expect(queryBuilder.innerJoin).toHaveBeenCalledWith('cj.codingJobCoders', 'cjc');
     expect(queryBuilder.leftJoin).toHaveBeenCalledWith('cj.training', 'training');
     expect(queryBuilder.select).toHaveBeenCalledWith('cju.response_id', 'responseId');
+    expect(queryBuilder.addSelect).toHaveBeenCalledWith('cju.variable_anchor', 'variableAnchor');
     expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.code IS NOT NULL');
     expect(queryBuilder.andWhere).toHaveBeenCalledWith('cj.training_id IS NULL');
     expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cju.id', 'ASC');
@@ -1241,6 +1248,7 @@ describe('CodingReviewService', () => {
         responseId: 10,
         unitName: 'UNIT_1',
         variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
         personLogin: 'person-1',
         personCode: 'P001',
         personGroup: 'GROUP_1',
@@ -1263,6 +1271,7 @@ describe('CodingReviewService', () => {
         responseId: 11,
         unitName: 'UNIT:2',
         variableId: 'VAR:2',
+        variableAnchor: 'ANCHOR:2',
         coderResults: [
           {
             coderId: 3,
@@ -1281,6 +1290,103 @@ describe('CodingReviewService', () => {
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.code IS NOT NULL');
     expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cj.training_id IS NULL');
+  });
+
+  it('uses score values as the database filter for score-level kappa data', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([]);
+
+    await service.getCodedVariablesForKappa(workspaceId, true, [], [], [], 'score');
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.score IS NOT NULL');
+    expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cju.code IS NOT NULL');
+  });
+
+  it('deduplicates kappa rows by score availability when score-level kappa data is loaded', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 100,
+        jobName: 'Older code-level job',
+        jobDefinitionId: null,
+        trainingId: null,
+        trainingLabel: null,
+        code: 1,
+        score: 1,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      },
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 101,
+        jobName: 'Newer score-only job',
+        jobDefinitionId: null,
+        trainingId: null,
+        trainingLabel: null,
+        code: null,
+        score: 2,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-19T00:00:00.000Z')
+      },
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 2,
+        coderName: 'Coder 2',
+        jobId: 102,
+        jobName: 'Other coder job',
+        jobDefinitionId: null,
+        trainingId: null,
+        trainingLabel: null,
+        code: 1,
+        score: 2,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      }
+    ]);
+
+    const result = await service.getCodedVariablesForKappa(workspaceId, true, [], [], [], 'score');
+
+    expect(result[0].coderResults).toEqual([
+      expect.objectContaining({
+        coderId: 1,
+        jobId: 101,
+        code: null,
+        score: 2
+      }),
+      expect.objectContaining({
+        coderId: 2,
+        jobId: 102,
+        code: 1,
+        score: 2
+      })
+    ]);
   });
 
   it('applies job definition, coder training and coder scopes to kappa data', async () => {
@@ -1344,6 +1450,9 @@ describe('CodingReviewService', () => {
     const codingAnalysisService = {
       invalidateCache: jest.fn().mockResolvedValue(undefined)
     };
+    const codingValidationService = {
+      invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
+    };
     const localService = new CodingReviewService(
       responseRepository as never,
       codingJobUnitRepository as never,
@@ -1351,6 +1460,7 @@ describe('CodingReviewService', () => {
       variableBundleRepository as never,
       codingStatisticsService as never,
       codingAnalysisService as never,
+      codingValidationService as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
@@ -1403,6 +1513,7 @@ describe('CodingReviewService', () => {
     });
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+    expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
   });
 
   it('skips explicit replay decisions with codes unsupported by the coding scheme', async () => {
@@ -1429,6 +1540,7 @@ describe('CodingReviewService', () => {
       codingJobUnitRepository as never,
       jobDefinitionRepository as never,
       variableBundleRepository as never,
+      {} as never,
       {} as never,
       {} as never,
       {
@@ -1477,6 +1589,7 @@ describe('CodingReviewService', () => {
       codingJobUnitRepository as never,
       jobDefinitionRepository as never,
       variableBundleRepository as never,
+      {} as never,
       {} as never,
       {} as never,
       {
@@ -1554,6 +1667,7 @@ describe('CodingReviewService', () => {
       jobDefinitionRepository as never,
       variableBundleRepository as never,
       codingStatisticsService as never,
+      {} as never,
       {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)

@@ -1,8 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { EMPTY, Observable } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { SERVER_URL } from '../../../injection-tokens';
 import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
+import { CodingBackgroundJobsService } from '../../../coding/services/coding-background-jobs.service';
+import { TestPersonCodingService } from '../../../coding/services/test-person-coding.service';
 
 export interface JobCancelResult {
   success: boolean;
@@ -137,6 +140,16 @@ export interface VariableAnalysisExportOptions {
 export class VariableAnalysisService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
+  private testPersonCodingService = inject(TestPersonCodingService);
+  private variableAnalysisGuardPollTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  private readonly variableAnalysisGuardJobId = 'variable-analysis-dialog';
+  private readonly variableAnalysisGuardPollIntervalMs = 5000;
+  private readonly activeJobStatuses = new Set<VariableAnalysisJobDto['status']>([
+    'pending',
+    'waiting',
+    'processing'
+  ]);
 
   get authHeader() {
     return {};
@@ -257,6 +270,79 @@ export class VariableAnalysisService {
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs`,
       { headers: this.authHeader }
     );
+  }
+
+  setVariableAnalysisGuardRunning(
+    workspaceId: number | null | undefined,
+    isRunning: boolean
+  ): void {
+    if (!workspaceId) {
+      return;
+    }
+
+    if (!isRunning) {
+      this.clearVariableAnalysisGuardPolling(workspaceId);
+    }
+
+    this.codingBackgroundJobsService.setJobRunning(
+      workspaceId,
+      'response-analysis',
+      isRunning,
+      this.variableAnalysisGuardJobId
+    );
+  }
+
+  trackVariableAnalysisGuardUntilComplete(
+    workspaceId: number | null | undefined
+  ): void {
+    if (!workspaceId) {
+      return;
+    }
+
+    this.setVariableAnalysisGuardRunning(workspaceId, true);
+    this.scheduleVariableAnalysisGuardPoll(workspaceId);
+  }
+
+  private scheduleVariableAnalysisGuardPoll(workspaceId: number): void {
+    if (this.variableAnalysisGuardPollTimers.has(workspaceId)) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      this.variableAnalysisGuardPollTimers.delete(workspaceId);
+      this.pollVariableAnalysisGuard(workspaceId);
+    }, this.variableAnalysisGuardPollIntervalMs);
+    this.variableAnalysisGuardPollTimers.set(workspaceId, timeoutId);
+  }
+
+  private pollVariableAnalysisGuard(workspaceId: number): void {
+    this.getAllJobs(workspaceId)
+      .pipe(catchError(() => {
+        this.scheduleVariableAnalysisGuardPoll(workspaceId);
+        return EMPTY;
+      }))
+      .subscribe(jobs => {
+        const hasActiveAnalysisJob = jobs.some(job => (
+          job.type === 'variable-analysis' &&
+          this.activeJobStatuses.has(job.status)
+        ));
+
+        if (hasActiveAnalysisJob) {
+          this.scheduleVariableAnalysisGuardPoll(workspaceId);
+          return;
+        }
+
+        this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
+        this.setVariableAnalysisGuardRunning(workspaceId, false);
+      });
+  }
+
+  private clearVariableAnalysisGuardPolling(workspaceId: number): void {
+    const timeoutId = this.variableAnalysisGuardPollTimers.get(workspaceId);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      this.variableAnalysisGuardPollTimers.delete(workspaceId);
+    }
   }
 
   cancelJob(

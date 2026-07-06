@@ -2,6 +2,10 @@ import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { Unit } from '../../entities/unit.entity';
 import { CodingReadinessService } from './coding-readiness.service';
+import {
+  getCodingReadinessCachePattern,
+  getCodingReadinessCacheVersionKey
+} from './coding-readiness-cache-key.util';
 
 type QueryBuilderMock = {
   leftJoin: jest.Mock;
@@ -35,6 +39,13 @@ type ReadinessQueryMocks = {
   unitQuery: QueryBuilderMock;
   countQuery: QueryBuilderMock;
   candidateQuery: QueryBuilderMock;
+  cacheService: {
+    get: jest.Mock;
+    set: jest.Mock;
+    getNumber: jest.Mock;
+    incr: jest.Mock;
+    deleteByPattern: jest.Mock;
+  };
 };
 
 const createQueryBuilderMock = (): QueryBuilderMock => {
@@ -150,13 +161,34 @@ const createService = (
       testletIgnoredUnits: []
     })
   };
+  const cacheValues = new Map<string, unknown>();
+  const cacheService = {
+    get: jest.fn(async (key: string) => cacheValues.get(key) ?? null),
+    set: jest.fn(async (key: string, value: unknown) => {
+      cacheValues.set(key, value);
+      return true;
+    }),
+    getNumber: jest.fn().mockResolvedValue(0),
+    incr: jest.fn().mockResolvedValue(1),
+    deleteByPattern: jest.fn(async (pattern: string) => {
+      const prefix = pattern.endsWith('*') ? pattern.slice(0, -1) : pattern;
+      Array.from(cacheValues.keys())
+        .filter(key => key.startsWith(prefix))
+        .forEach(key => cacheValues.delete(key));
+    })
+  };
+
+  Object.assign(queryMocks || {}, {
+    cacheService
+  });
 
   return new CodingReadinessService(
     responseRepository as never,
     unitRepository as never,
     fileUploadRepository as never,
     workspaceFilesService as never,
-    workspaceExclusionService as never
+    workspaceExclusionService as never,
+    cacheService as never
   );
 };
 
@@ -209,32 +241,231 @@ describe('CodingReadinessService', () => {
       'unit.id = ANY(:unitIds)',
       { unitIds: [1, 2] }
     );
+    expect(queryMocks.cacheService?.set)
+      .toHaveBeenCalledWith(expect.any(String), expect.any(Object), 600);
   });
 
-  it('invalidates cached and in-flight readiness entries for a workspace', () => {
+  it('invalidates cached and in-flight readiness entries for a workspace', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
     const service = createService({
       units: [],
       rawResponsesTotal: 0,
       candidateRows: [],
       unitFiles: [],
       unitVariableMap: new Map()
-    });
+    }, queryMocks);
     const internals = service as unknown as {
-      readinessCache: Map<string, unknown>;
       readinessInFlight: Map<string, unknown>;
-      cacheRevisionByWorkspace: Map<number, number>;
     };
-    internals.readinessCache.set('1|1|1|files|0|scope', {});
-    internals.readinessCache.set('2|1|1|files|0|scope', {});
     internals.readinessInFlight.set('1|1|1|files|0|scope', Promise.resolve({}));
-    internals.cacheRevisionByWorkspace.set(1, 4);
 
-    service.invalidateWorkspaceReadinessCache(1);
+    await service.invalidateWorkspaceReadinessCache(1);
 
-    expect(internals.readinessCache.has('1|1|1|files|0|scope')).toBe(false);
-    expect(internals.readinessCache.has('2|1|1|files|0|scope')).toBe(true);
     expect(internals.readinessInFlight.has('1|1|1|files|0|scope')).toBe(false);
-    expect(internals.cacheRevisionByWorkspace.get(1)).toBe(5);
+    expect(queryMocks.cacheService?.incr)
+      .toHaveBeenCalledWith(getCodingReadinessCacheVersionKey(1));
+    expect(queryMocks.cacheService?.deleteByPattern)
+      .toHaveBeenCalledWith(getCodingReadinessCachePattern(1));
+  });
+
+  it('returns cached readiness while the cache signature is unchanged', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
+    const service = createService({
+      units: [
+        createUnit(1, 'UNIT_OK')
+      ],
+      rawResponsesTotal: 1,
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 1 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])]
+      ])
+    }, queryMocks);
+
+    const first = await service.getReadiness(1);
+    const second = await service.getReadiness(1);
+
+    expect(first.fromCache).toBe(false);
+    expect(second.fromCache).toBe(true);
+    expect(second.readiness).toBe('READY');
+    expect(queryMocks.countQuery?.getCount).toHaveBeenCalledTimes(1);
+    expect(queryMocks.candidateQuery?.getRawMany).toHaveBeenCalledTimes(1);
+    expect(queryMocks.cacheService?.set).toHaveBeenCalledTimes(1);
+    expect(queryMocks.cacheService?.set)
+      .toHaveBeenCalledWith(expect.any(String), expect.any(Object), 0);
+  });
+
+  it('returns cached readiness without recomputing diagnostics', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
+    const service = createService({
+      units: [
+        createUnit(1, 'UNIT_OK')
+      ],
+      rawResponsesTotal: 1,
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 1 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])]
+      ])
+    }, queryMocks);
+
+    await service.getReadiness(1);
+    queryMocks.countQuery?.getCount.mockClear();
+    queryMocks.candidateQuery?.getRawMany.mockClear();
+
+    const cached = await service.getReadinessFromCache(1);
+
+    expect(cached?.fromCache).toBe(true);
+    expect(cached?.readiness).toBe('READY');
+    expect(queryMocks.countQuery?.getCount).not.toHaveBeenCalled();
+    expect(queryMocks.candidateQuery?.getRawMany).not.toHaveBeenCalled();
+  });
+
+  it('returns null for cache-only readiness misses', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
+    const service = createService({
+      units: [
+        createUnit(1, 'UNIT_OK')
+      ],
+      rawResponsesTotal: 1,
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 1 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])]
+      ])
+    }, queryMocks);
+
+    const cached = await service.getReadinessFromCache(1);
+
+    expect(cached).toBeNull();
+    expect(queryMocks.countQuery?.getCount).not.toHaveBeenCalled();
+    expect(queryMocks.candidateQuery?.getRawMany).not.toHaveBeenCalled();
+    expect(queryMocks.cacheService?.set).not.toHaveBeenCalled();
+  });
+
+  it('does not cache readiness when the cache signature changes during computation', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
+    const service = createService({
+      units: [
+        createUnit(1, 'UNIT_OK')
+      ],
+      rawResponsesTotal: 1,
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 1 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])]
+      ])
+    }, queryMocks);
+    const cacheService = queryMocks.cacheService as ReadinessQueryMocks['cacheService'];
+    cacheService.getNumber
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(1);
+
+    const readiness = await service.getReadiness(1);
+
+    expect(readiness.readiness).toBe('READY');
+    expect(readiness.fromCache).toBe(false);
+    expect(cacheService.set).not.toHaveBeenCalled();
+  });
+
+  it('does not cache readiness when the scoped units change during computation', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
+    const originalScope = [
+      createUnit(1, 'UNIT_OK')
+    ];
+    const updatedScope = [
+      createUnit(1, 'UNIT_OK'),
+      createUnit(2, 'UNIT_NEW')
+    ];
+    const service = createService({
+      units: originalScope,
+      rawResponsesTotal: 1,
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 1 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])]
+      ])
+    }, queryMocks);
+    const unitQuery = queryMocks.unitQuery as QueryBuilderMock;
+    const cacheService = queryMocks.cacheService as ReadinessQueryMocks['cacheService'];
+    unitQuery.getMany
+      .mockResolvedValueOnce(originalScope)
+      .mockResolvedValueOnce(updatedScope);
+
+    const readiness = await service.getReadiness(1);
+
+    expect(readiness.readiness).toBe('READY');
+    expect(readiness.fromCache).toBe(false);
+    expect(cacheService.set).not.toHaveBeenCalled();
+  });
+
+  it('returns computed readiness without caching when cache revalidation fails', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
+    const originalScope = [
+      createUnit(1, 'UNIT_OK')
+    ];
+    const service = createService({
+      units: originalScope,
+      rawResponsesTotal: 1,
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 1 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [
+        createFile('SCHEME_OK', createCodingScheme('var1'))
+      ],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])]
+      ])
+    }, queryMocks);
+    const unitQuery = queryMocks.unitQuery as QueryBuilderMock;
+    const cacheService = queryMocks.cacheService as ReadinessQueryMocks['cacheService'];
+    unitQuery.getMany
+      .mockResolvedValueOnce(originalScope)
+      .mockRejectedValueOnce(new Error('scope revalidation failed'));
+
+    const readiness = await service.getReadiness(1);
+
+    expect(readiness.readiness).toBe('READY');
+    expect(readiness.fromCache).toBe(false);
+    expect(cacheService.set).not.toHaveBeenCalled();
   });
 
   it('keeps missing files as diagnostics without blocking partially codeable data', async () => {

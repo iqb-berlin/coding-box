@@ -33,10 +33,13 @@ import {
   BehaviorSubject,
   Subject,
   Subscription,
+  catchError,
   debounceTime,
   distinctUntilChanged,
   finalize,
   firstValueFrom,
+  forkJoin,
+  of,
   switchMap,
   takeWhile,
   timer as rxjsTimer
@@ -461,6 +464,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   manualAppliedResultsOverview: AppliedResultsOverview | null = null;
   manualAppliedResultsOverviewLoadFailed: boolean = false;
   isLoadingManualAppliedResultsOverview: boolean = false;
+  autoRefreshCodingStatus: boolean = true;
+  codingFreshnessStatusChecked: boolean = false;
+  isLoadingCodingFreshnessStatus: boolean = false;
+  private codingFreshnessStatusRequestGeneration = 0;
 
   exportJobId: string | null = null;
   isExporting: boolean = false;
@@ -504,7 +511,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       if (wsId === this.appService.selectedWorkspaceId) {
         this.loadWorkspaceOverview();
         this.reloadLogAnomalySummaryIfRequested();
-        this.loadCodingFreshnessStatus();
+        this.refreshCodingFreshnessStatusAfterChange();
         this.createTestResultsList(
           this.pageIndex,
           this.pageSize,
@@ -529,9 +536,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
 
     this.loadTestResultsLogAnomalySetting();
+    this.loadCodingStatusAutoRefreshSetting();
     this.createTestResultsList(0, this.pageSize);
     this.loadWorkspaceOverview();
-    this.loadCodingFreshnessStatus();
     this.startValidationStatusCheck();
     this.checkExistingExportJobs();
     this.isInitialized = true;
@@ -1264,6 +1271,41 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadCodingStatusAutoRefreshSetting(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.setAutoRefreshCodingStatus(true);
+      return;
+    }
+
+    this.workspaceSettingsService
+      .getAutoRefreshManualCodingJobs(workspaceId)
+      .subscribe(enabled => {
+        this.setAutoRefreshCodingStatus(enabled);
+      });
+  }
+
+  private setAutoRefreshCodingStatus(enabled: boolean): void {
+    this.autoRefreshCodingStatus = enabled;
+
+    if (enabled) {
+      this.loadCodingFreshnessStatus({ force: true });
+      return;
+    }
+
+    this.clearCodingFreshnessStatus();
+  }
+
+  private clearCodingFreshnessStatus(): void {
+    this.codingFreshnessStatusRequestGeneration += 1;
+    this.codingFreshnessSummary = null;
+    this.manualAppliedResultsOverview = null;
+    this.manualAppliedResultsOverviewLoadFailed = false;
+    this.isLoadingManualAppliedResultsOverview = false;
+    this.isLoadingCodingFreshnessStatus = false;
+    this.codingFreshnessStatusChecked = false;
+  }
+
   private setShowTestResultsLogAnomalies(enabled: boolean): void {
     this.showTestResultsLogAnomalies = enabled;
 
@@ -1442,60 +1484,73 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  private loadCodingFreshnessStatus(): void {
-    this.loadCodingFreshnessSummary();
-    this.loadManualAppliedResultsOverview();
-  }
-
-  private loadCodingFreshnessSummary(): void {
+  private loadCodingFreshnessStatus(
+    options: { force?: boolean } = {}
+  ): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.codingFreshnessSummary = null;
+      this.clearCodingFreshnessStatus();
       return;
+    }
+
+    if (this.isLoadingCodingFreshnessStatus && !options.force) {
+      return;
+    }
+
+    if (options.force) {
+      this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
     }
 
     const getCodingFreshness =
       (this.statisticsService as Partial<CodingStatisticsService>).getCodingFreshness;
-    if (!getCodingFreshness) {
-      return;
-    }
+    const codingFreshness$ = getCodingFreshness ?
+      getCodingFreshness.call(this.statisticsService, workspaceId)
+        .pipe(catchError(() => of(null))) :
+      of(null);
 
-    getCodingFreshness.call(this.statisticsService, workspaceId)
+    const requestGeneration =
+      this.codingFreshnessStatusRequestGeneration + 1;
+    this.codingFreshnessStatusRequestGeneration = requestGeneration;
+    this.codingFreshnessStatusChecked = true;
+    this.isLoadingCodingFreshnessStatus = true;
+    this.isLoadingManualAppliedResultsOverview = true;
+    this.manualAppliedResultsOverviewLoadFailed = false;
+
+    forkJoin([
+      codingFreshness$,
+      this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
+        .pipe(catchError(() => of(null)))
+    ])
+      .pipe(finalize(() => {
+        if (this.codingFreshnessStatusRequestGeneration === requestGeneration) {
+          this.isLoadingCodingFreshnessStatus = false;
+          this.isLoadingManualAppliedResultsOverview = false;
+        }
+      }))
       .subscribe({
-        next: summary => {
+        next: ([summary, overview]) => {
+          if (this.codingFreshnessStatusRequestGeneration !== requestGeneration) {
+            return;
+          }
+
           this.codingFreshnessSummary = summary;
-        },
-        error: () => {
-          this.codingFreshnessSummary = null;
+          this.manualAppliedResultsOverview = overview;
+          this.manualAppliedResultsOverviewLoadFailed = overview === null;
         }
       });
   }
 
-  private loadManualAppliedResultsOverview(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      this.manualAppliedResultsOverview = null;
-      this.manualAppliedResultsOverviewLoadFailed = false;
-      this.isLoadingManualAppliedResultsOverview = false;
+  refreshCodingFreshnessStatusManually(): void {
+    this.loadCodingFreshnessStatus({ force: true });
+  }
+
+  private refreshCodingFreshnessStatusAfterChange(): void {
+    if (this.autoRefreshCodingStatus) {
+      this.loadCodingFreshnessStatus({ force: true });
       return;
     }
 
-    this.isLoadingManualAppliedResultsOverview = true;
-    this.manualAppliedResultsOverviewLoadFailed = false;
-    this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
-      .pipe(finalize(() => {
-        this.isLoadingManualAppliedResultsOverview = false;
-      }))
-      .subscribe({
-        next: overview => {
-          this.manualAppliedResultsOverview = overview;
-          this.manualAppliedResultsOverviewLoadFailed = overview === null;
-        },
-        error: () => {
-          this.manualAppliedResultsOverview = null;
-          this.manualAppliedResultsOverviewLoadFailed = true;
-        }
-      });
+    this.clearCodingFreshnessStatus();
   }
 
   private async fetchCodingFreshnessSummary(
@@ -1575,6 +1630,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   get hasCodingFreshnessWarning(): boolean {
     return this.codingFreshnessWarnings.length > 0 ||
       this.shouldShowSecondAutocodingWaitingState;
+  }
+
+  get shouldShowCodingFreshnessManualNotice(): boolean {
+    return !this.autoRefreshCodingStatus;
   }
 
   get codingFreshnessDisplayWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -1743,7 +1802,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
     this.loadWorkspaceOverview();
     this.reloadLogAnomalySummaryIfRequested();
-    this.loadCodingFreshnessStatus();
+    this.refreshCodingFreshnessStatusAfterChange();
     this.testPersonCodingService.notifyTestResultsChanged();
   }
 
@@ -2167,7 +2226,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.testResultService.invalidateCache(workspaceId);
         }
         this.loadWorkspaceOverview();
-        this.loadCodingFreshnessStatus();
+        this.refreshCodingFreshnessStatusAfterChange();
         this.createTestResultsList(
           this.pageIndex,
           this.pageSize,
@@ -2667,7 +2726,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             this.appService.selectedWorkspaceId
           );
           this.loadWorkspaceOverview();
-          this.loadCodingFreshnessStatus();
+          this.refreshCodingFreshnessStatusAfterChange();
           this.testPersonCodingService.notifyTestResultsChanged();
           this.createTestResultsList(
             this.pageIndex,
@@ -2689,7 +2748,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             { duration: 5000 }
           );
           this.loadWorkspaceOverview();
-          this.loadCodingFreshnessStatus();
+          this.refreshCodingFreshnessStatusAfterChange();
           this.testPersonCodingService.notifyTestResultsChanged();
           this.createTestResultsList(
             this.pageIndex,
@@ -2881,7 +2940,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                   { duration: 3000 }
                 );
                 this.loadWorkspaceOverview();
-                this.loadCodingFreshnessStatus();
+                this.refreshCodingFreshnessStatusAfterChange();
                 this.testPersonCodingService.notifyTestResultsChanged();
               } else {
                 this.snackBar.open(
@@ -2948,7 +3007,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                   { duration: 3000 }
                 );
                 this.loadWorkspaceOverview();
-                this.loadCodingFreshnessStatus();
+                this.refreshCodingFreshnessStatusAfterChange();
                 this.testPersonCodingService.notifyTestResultsChanged();
               } else {
                 this.snackBar.open(

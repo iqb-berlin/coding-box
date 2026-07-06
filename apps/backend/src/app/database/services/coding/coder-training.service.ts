@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository, In, IsNull, Not, Brackets
 } from 'typeorm';
+import { createHash } from 'crypto';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
@@ -40,6 +41,24 @@ import {
   buildAggregationGroups,
   deduplicateManualCodingResponses
 } from './aggregation-metrics.util';
+import { TrainingComparisonFreshnessDto } from '../../../../../../../api-dto/coding/training-comparison-freshness.dto';
+import {
+  TrainingCodingComparisonPageDto,
+  TrainingCodingComparisonRowDto,
+  TrainingComparisonCoderDto,
+  TrainingComparisonFiltersDto,
+  TrainingComparisonNotesFilter,
+  TrainingComparisonSortBy,
+  TrainingComparisonSortDirection,
+  TrainingComparisonSummaryDto,
+  WithinTrainingCodingComparisonPageDto,
+  WithinTrainingCodingComparisonRowDto,
+  WithinTrainingComparisonCoderDto
+} from '../../../../../../../api-dto/coding/training-comparison.dto';
+import {
+  CodingStatisticsService,
+  KappaCalculationResult
+} from './coding-statistics.service';
 
 interface CoderTrainingResponse {
   responseId: number;
@@ -136,6 +155,187 @@ type TrainingResponseJobUnit = {
   unit: CodingJobUnit;
 };
 
+type WithinTrainingCodingRow = {
+  jobId: number | string;
+  unitRowId: number | string;
+  responseId: number | string;
+  unitName: string;
+  variableId: string;
+  personCode: string;
+  personLogin: string;
+  personGroup: string | null;
+  bookletName: string;
+  givenAnswer: string | null;
+  replayCodeV1: number | string | null;
+  replayCodeV2: number | string | null;
+  replayCodeV3: number | string | null;
+  replayScoreV1: number | string | null;
+  replayScoreV2: number | string | null;
+  replayScoreV3: number | string | null;
+  code: number | string | null;
+  score: number | string | null;
+  notes: string | null;
+  codingIssueOption: number | string | null;
+};
+
+type TrainingComparisonFreshnessAggregateRow = {
+  unitCount: number | string | null;
+  responseCount: number | string | null;
+  latestUnitChange: Date | string | null;
+};
+
+type TrainingDiscussionFreshnessAggregateRow = {
+  discussionResultCount: number | string | null;
+  latestDiscussionChange: Date | string | null;
+};
+
+type TrainingComparisonResponseFreshnessRow = {
+  responseId: number | string | null;
+  responseHash: string | null;
+};
+
+type TrainingComparisonStatus = 'match' | 'differ' | 'incomplete' | 'not_comparable';
+
+type TrainingComparisonCodeSlot = {
+  code: string | null;
+  hasEntry: boolean;
+  trainingId?: number;
+};
+
+type TrainingComparisonPageOptions = {
+  page?: number;
+  limit?: number;
+  sortBy?: TrainingComparisonSortBy;
+  sortDirection?: TrainingComparisonSortDirection;
+  filters?: TrainingComparisonFiltersDto;
+  selectedCoderKeys?: string[];
+  selectedJobIds?: number[];
+};
+
+type TrainingKappaCalculationLevel = 'code' | 'score';
+
+export type TrainingCohensKappaStatistics = {
+  variables: Array<{
+    unitName: string;
+    variableId: string;
+    meanKappa: number | null;
+    meanAgreement: number | null;
+    caseCount: number;
+    validPairCount: number;
+    coderPairCount: number;
+    coderPairs: Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      kappa: number | null;
+      agreement: number;
+      totalItems: number;
+      validPairs: number;
+      interpretation: string;
+    }>;
+  }>;
+  workspaceSummary: {
+    totalDoubleCodedResponses: number;
+    totalCoderPairs: number;
+    averageKappa: number | null;
+    variablesIncluded: number;
+    codersIncluded: number;
+    weightingMethod: 'weighted' | 'unweighted';
+    calculationLevel: TrainingKappaCalculationLevel;
+  };
+};
+
+type TrainingKappaOptions = {
+  weightedMean?: boolean;
+  level?: TrainingKappaCalculationLevel;
+  selectedJobIds?: number[];
+};
+
+type TrainingComparisonAggregateRow = {
+  responseId: number | string;
+  unitName: string;
+  variableId: string;
+  personCode: string;
+  personLogin: string;
+  personGroup: string | null;
+  bookletName: string;
+  completeCodeCount: number | string | null;
+  distinctCodeCount: number | string | null;
+  hasNotes: boolean | string | number | null;
+};
+
+type TrainingComparisonCandidate = {
+  responseId: number;
+  unitName: string;
+  variableId: string;
+  personCode: string;
+  personLogin: string;
+  personGroup: string;
+  bookletName: string;
+  testPerson: string;
+  status: TrainingComparisonStatus;
+  hasNotes: boolean;
+};
+
+type TrainingComparisonRawUnitRow = {
+  trainingId: number | string;
+  trainingLabel: string;
+  jobId: number | string;
+  coderName: string | null;
+  missingsProfileId: number | string | null;
+  responseId: number | string;
+  unitName: string;
+  variableId: string;
+  personCode: string;
+  personLogin: string;
+  personGroup: string | null;
+  bookletName: string;
+  code: number | string | null;
+  score: number | string | null;
+  notes: string | null;
+  codingIssueOption: number | string | null;
+};
+
+type WithinTrainingKappaCaseRow = {
+  responseId: number | string;
+  unitName: string;
+  variableId: string;
+  validValueCount: number | string | null;
+};
+
+type WithinTrainingKappaValueRow = {
+  responseId: number | string;
+  jobId: number | string;
+  unitName: string;
+  variableId: string;
+  code: string | null;
+  score: number | string | null;
+};
+
+type WithinTrainingKappaCase = {
+  responseId: number;
+  unitName: string;
+  variableId: string;
+  validValueCount: number;
+};
+
+type KappaCoderValue = {
+  code: number | null;
+  score: number | null;
+};
+
+type TrainingKappaCoderPairInput = {
+  coder1Id: number;
+  coder1Name: string;
+  coder2Id: number;
+  coder2Name: string;
+  unitName: string;
+  variableId: string;
+  codes: Array<{ code1: number | null; code2: number | null }>;
+  scores: Array<{ score1: number | null; score2: number | null }>;
+};
+
 type MissingCodePair = { mirCode: number; mciCode: number };
 type MissingCodeDisplayContext = MissingCodePair & {
   negativeCodes: Set<number>;
@@ -188,7 +388,8 @@ export class CoderTrainingService {
     private codingJobService: CodingJobService,
     private workspaceFilesService: WorkspaceFilesService,
     private missingsProfilesService: MissingsProfilesService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    private codingStatisticsService: CodingStatisticsService
   ) { }
 
   private async buildMissingCodesByJobId(
@@ -738,6 +939,1121 @@ export class CoderTrainingService {
     ]));
   }
 
+  private normalizeComparisonPage(page?: number): number {
+    const normalizedPage = Math.floor(Number(page ?? 1));
+    return Number.isFinite(normalizedPage) && normalizedPage > 0 ? normalizedPage : 1;
+  }
+
+  private normalizeComparisonLimit(limit?: number): number {
+    const normalizedLimit = Math.floor(Number(limit ?? 50));
+    if (!Number.isFinite(normalizedLimit) || normalizedLimit <= 0) {
+      return 50;
+    }
+    return Math.min(normalizedLimit, 500);
+  }
+
+  private normalizeComparisonSortBy(sortBy?: TrainingComparisonSortBy): TrainingComparisonSortBy {
+    return sortBy ?? 'unitName';
+  }
+
+  private normalizeComparisonSortDirection(
+    sortDirection?: TrainingComparisonSortDirection
+  ): TrainingComparisonSortDirection {
+    return sortDirection === 'desc' ? 'desc' : 'asc';
+  }
+
+  private matchesComparisonTextFilter(
+    value: string | number | null | undefined,
+    filter: string | null | undefined
+  ): boolean {
+    const normalizedFilter = (filter || '').trim();
+    if (!normalizedFilter) {
+      return true;
+    }
+
+    const text = String(value ?? '');
+    return text.toLowerCase().includes(normalizedFilter.toLowerCase());
+  }
+
+  private matchesComparisonTextFilters(
+    row: Pick<
+    TrainingCodingComparisonRowDto,
+    'unitName' | 'variableId' | 'personLogin' | 'personGroup' | 'bookletName'
+    >,
+    filters: TrainingComparisonFiltersDto
+  ): boolean {
+    return (
+      this.matchesComparisonTextFilter(row.unitName, filters.unitName) &&
+      this.matchesComparisonTextFilter(row.variableId, filters.variableId) &&
+      this.matchesComparisonTextFilter(row.personLogin, filters.personLogin) &&
+      this.matchesComparisonTextFilter(row.personGroup, filters.personGroup) &&
+      this.matchesComparisonTextFilter(row.bookletName, filters.bookletName)
+    );
+  }
+
+  private getComparisonStatusFromSlots(slots: TrainingComparisonCodeSlot[]): TrainingComparisonStatus {
+    if (slots.length < 2) {
+      return 'not_comparable';
+    }
+
+    if (slots.some(slot => !slot.hasEntry || slot.code === null)) {
+      return 'incomplete';
+    }
+
+    const firstCode = slots[0].code;
+    return slots.every(slot => slot.code === firstCode) ? 'match' : 'differ';
+  }
+
+  private parseTrainingCoderKey(key: string): { trainingId: number; coderId: number } | null {
+    const [trainingIdRaw, coderIdRaw] = key.split('_');
+    const trainingId = Number(trainingIdRaw);
+    const coderId = Number(coderIdRaw);
+    if (!Number.isInteger(trainingId) || !Number.isInteger(coderId)) {
+      return null;
+    }
+    return { trainingId, coderId };
+  }
+
+  private getTrainingComparisonStatus(
+    row: TrainingCodingComparisonRowDto,
+    selectedTrainingIds: number[],
+    selectedCoderKeys: string[]
+  ): TrainingComparisonStatus {
+    const slots: TrainingComparisonCodeSlot[] = selectedCoderKeys.map(key => {
+      const parsedKey = this.parseTrainingCoderKey(key);
+      if (!parsedKey) {
+        return {
+          code: null,
+          hasEntry: false
+        };
+      }
+
+      const coder = row.coders.find(item => (
+        item.trainingId === parsedKey.trainingId &&
+        item.coderId === parsedKey.coderId
+      ));
+      return {
+        code: coder?.code ?? null,
+        hasEntry: !!coder,
+        trainingId: parsedKey.trainingId
+      };
+    });
+
+    const trainingsWithSelectedCoder = new Set(slots
+      .map(slot => slot.trainingId)
+      .filter((trainingId): trainingId is number => trainingId !== undefined));
+    selectedTrainingIds.forEach(trainingId => {
+      if (!trainingsWithSelectedCoder.has(trainingId)) {
+        slots.push({
+          code: null,
+          hasEntry: false,
+          trainingId
+        });
+      }
+    });
+
+    return this.getComparisonStatusFromSlots(slots);
+  }
+
+  private getWithinTrainingComparisonStatus(
+    row: WithinTrainingCodingComparisonRowDto,
+    selectedJobIds: number[]
+  ): TrainingComparisonStatus {
+    const slots = selectedJobIds.map(jobId => {
+      const coder = row.coders.find(item => item.jobId === jobId);
+      return {
+        code: coder?.code ?? null,
+        hasEntry: !!coder
+      };
+    });
+    return this.getComparisonStatusFromSlots(slots);
+  }
+
+  private rowHasTrainingComparisonNotes(
+    row: TrainingCodingComparisonRowDto,
+    selectedCoderKeys: string[]
+  ): boolean {
+    return selectedCoderKeys.some(key => {
+      const parsedKey = this.parseTrainingCoderKey(key);
+      if (!parsedKey) {
+        return false;
+      }
+      const coder = row.coders.find(item => (
+        item.trainingId === parsedKey.trainingId &&
+        item.coderId === parsedKey.coderId
+      ));
+      return !!coder?.notes?.trim();
+    });
+  }
+
+  private rowHasWithinTrainingComparisonNotes(
+    row: WithinTrainingCodingComparisonRowDto,
+    selectedJobIds: number[]
+  ): boolean {
+    return selectedJobIds.some(jobId => {
+      const coder = row.coders.find(item => item.jobId === jobId);
+      return !!coder?.notes?.trim();
+    });
+  }
+
+  private matchesComparisonStateFilters(
+    status: TrainingComparisonStatus,
+    hasNotes: boolean,
+    filters: TrainingComparisonFiltersDto
+  ): boolean {
+    if (filters.match === 'match' && status !== 'match') {
+      return false;
+    }
+    if (filters.match === 'differ' && status !== 'differ') {
+      return false;
+    }
+
+    const notesMode: TrainingComparisonNotesFilter = filters.notesMode ?? 'all';
+    if (notesMode === 'none') {
+      return !hasNotes;
+    }
+    if (notesMode === 'with-notes') {
+      return hasNotes;
+    }
+
+    return true;
+  }
+
+  private calculateComparisonSummary<T>(
+    rows: T[],
+    getStatus: (row: T) => TrainingComparisonStatus
+  ): TrainingComparisonSummaryDto {
+    const statuses = rows.map(row => getStatus(row));
+    const comparableRows = statuses.filter(status => status === 'match' || status === 'differ').length;
+    const matchingRows = statuses.filter(status => status === 'match').length;
+    const incompleteRows = statuses.filter(status => status === 'incomplete').length;
+    const notComparableRows = statuses.filter(status => status === 'not_comparable').length;
+    const visibleRows = rows.length;
+
+    return {
+      visibleRows,
+      comparableRows,
+      matchingRows,
+      matchingPercentage: comparableRows > 0 ? Math.round((matchingRows / comparableRows) * 100) : 0,
+      incompleteRows,
+      notComparableRows,
+      deviationRows: Math.max(comparableRows - matchingRows, 0),
+      completionRate: visibleRows > 0 ? Math.round((comparableRows / visibleRows) * 100) : 0
+    };
+  }
+
+  private getComparisonSortValue(
+    row: Pick<
+    TrainingCodingComparisonRowDto,
+    'responseId' | 'unitName' | 'variableId' | 'personLogin' | 'personGroup' | 'bookletName'
+    >,
+    sortBy: TrainingComparisonSortBy
+  ): string | number {
+    return row[sortBy] ?? '';
+  }
+
+  private compareComparisonValues(a: string | number, b: string | number): number {
+    if (typeof a === 'number' && typeof b === 'number') {
+      return a - b;
+    }
+    return String(a).localeCompare(String(b), 'de');
+  }
+
+  private sortComparisonRows<T extends Pick<
+  TrainingCodingComparisonRowDto,
+  'responseId' | 'unitName' | 'variableId' | 'personLogin' | 'personGroup' | 'bookletName'
+  >>(
+    rows: T[],
+    sortBy?: TrainingComparisonSortBy,
+    sortDirection?: TrainingComparisonSortDirection
+  ): T[] {
+    const normalizedSortBy = this.normalizeComparisonSortBy(sortBy);
+    const directionMultiplier = this.normalizeComparisonSortDirection(sortDirection) === 'desc' ? -1 : 1;
+
+    return [...rows].sort((a, b) => {
+      const primary = this.compareComparisonValues(
+        this.getComparisonSortValue(a, normalizedSortBy),
+        this.getComparisonSortValue(b, normalizedSortBy)
+      );
+      if (primary !== 0) {
+        return primary * directionMultiplier;
+      }
+
+      return (
+        this.compareComparisonValues(a.unitName, b.unitName) ||
+        this.compareComparisonValues(a.variableId, b.variableId) ||
+        this.compareComparisonValues(a.personLogin, b.personLogin) ||
+        this.compareComparisonValues(a.responseId, b.responseId)
+      );
+    });
+  }
+
+  private getTrainingComparisonAvailableCoders(
+    rows: TrainingCodingComparisonRowDto[]
+  ): TrainingComparisonCoderDto[] {
+    const codersByKey = new Map<string, TrainingComparisonCoderDto>();
+    rows.forEach(row => {
+      row.coders.forEach(coder => {
+        const key = `${coder.trainingId}_${coder.coderId}`;
+        if (!codersByKey.has(key)) {
+          codersByKey.set(key, {
+            trainingId: coder.trainingId,
+            trainingLabel: coder.trainingLabel,
+            coderId: coder.coderId,
+            coderName: coder.coderName
+          });
+        }
+      });
+    });
+
+    return Array.from(codersByKey.values()).sort((a, b) => (
+      a.trainingId - b.trainingId || a.coderName.localeCompare(b.coderName, 'de')
+    ));
+  }
+
+  private getWithinTrainingComparisonAvailableCoders(
+    rows: WithinTrainingCodingComparisonRowDto[]
+  ): WithinTrainingComparisonCoderDto[] {
+    const codersByJobId = new Map<number, WithinTrainingComparisonCoderDto>();
+    rows.forEach(row => {
+      row.coders.forEach(coder => {
+        if (!codersByJobId.has(coder.jobId)) {
+          codersByJobId.set(coder.jobId, {
+            jobId: coder.jobId,
+            coderName: coder.coderName
+          });
+        }
+      });
+    });
+
+    return Array.from(codersByJobId.values()).sort((a, b) => a.jobId - b.jobId);
+  }
+
+  private paginateComparisonRows<T>(rows: T[], page: number, limit: number): T[] {
+    return rows.slice((page - 1) * limit, page * limit);
+  }
+
+  private toBooleanValue(value: boolean | string | number | null | undefined): boolean {
+    return value === true || value === 'true' || value === 1 || value === '1';
+  }
+
+  private getComparisonStatusFromAggregate(
+    row: Pick<TrainingComparisonAggregateRow, 'completeCodeCount' | 'distinctCodeCount'>,
+    slotCount: number
+  ): TrainingComparisonStatus {
+    if (slotCount < 2) {
+      return 'not_comparable';
+    }
+
+    const completeCodeCount = this.toFreshnessNumber(row.completeCodeCount);
+    if (completeCodeCount < slotCount) {
+      return 'incomplete';
+    }
+
+    return this.toFreshnessNumber(row.distinctCodeCount) <= 1 ? 'match' : 'differ';
+  }
+
+  private toComparisonCandidate(
+    row: TrainingComparisonAggregateRow,
+    slotCount: number
+  ): TrainingComparisonCandidate {
+    const personGroup = row.personGroup || '';
+    return {
+      responseId: this.toFreshnessNumber(row.responseId),
+      unitName: row.unitName,
+      variableId: row.variableId,
+      personCode: row.personCode,
+      personLogin: row.personLogin,
+      personGroup,
+      bookletName: row.bookletName,
+      testPerson: `${row.personLogin} (${personGroup}) - ${row.bookletName}`,
+      status: this.getComparisonStatusFromAggregate(row, slotCount),
+      hasNotes: this.toBooleanValue(row.hasNotes)
+    };
+  }
+
+  private matchesComparisonCandidateFilters(
+    row: TrainingComparisonCandidate,
+    filters: TrainingComparisonFiltersDto
+  ): boolean {
+    return this.matchesComparisonTextFilters(row, filters) &&
+      this.matchesComparisonStateFilters(row.status, row.hasNotes, filters);
+  }
+
+  private calculateComparisonSummaryFromCandidates(
+    rows: TrainingComparisonCandidate[]
+  ): TrainingComparisonSummaryDto {
+    return this.calculateComparisonSummary(rows, row => row.status);
+  }
+
+  private getTrainingComparisonSelection(
+    selectedTrainingIds: number[],
+    selectedCoderKeys: string[],
+    availableCoders: TrainingComparisonCoderDto[]
+  ): { selectedJobIds: number[]; slotCount: number } {
+    const trainingIds = [...new Set(selectedTrainingIds)];
+    const selectedTrainingIdSet = new Set(trainingIds);
+    const availableCoderKeys = new Set(availableCoders.map(coder => `${coder.trainingId}_${coder.coderId}`));
+    const normalizedKeyMap = new Map<string, { trainingId: number; coderId: number }>();
+    const parsedKeys = selectedCoderKeys
+      .map(key => this.parseTrainingCoderKey(key))
+      .filter((key): key is { trainingId: number; coderId: number } => (
+        key !== null &&
+        selectedTrainingIdSet.has(key.trainingId) &&
+        availableCoderKeys.has(`${key.trainingId}_${key.coderId}`)
+      ));
+    parsedKeys.forEach(key => {
+      normalizedKeyMap.set(`${key.trainingId}_${key.coderId}`, key);
+    });
+    const normalizedKeys = [...normalizedKeyMap.values()];
+    const selectedTrainingKeys = new Set(normalizedKeys.map(key => key.trainingId));
+    const missingTrainingSlots = trainingIds
+      .filter(trainingId => !selectedTrainingKeys.has(trainingId))
+      .length;
+
+    return {
+      selectedJobIds: [...new Set(normalizedKeys.map(key => key.coderId))],
+      slotCount: normalizedKeys.length + missingTrainingSlots
+    };
+  }
+
+  private getWithinTrainingComparisonSelectedJobIds(
+    selectedJobIds: number[] | undefined,
+    jobs: Array<Pick<CodingJob, 'id'>>
+  ): number[] {
+    const availableJobIds = new Set(jobs.map(job => job.id));
+    const requestedJobIds = selectedJobIds ?? jobs.map(job => job.id);
+    return [...new Set(requestedJobIds.filter(jobId => availableJobIds.has(jobId)))];
+  }
+
+  private getTrainingJobCoderName(job: Pick<CodingJob, 'id' | 'name'> & {
+    codingJobCoders?: Array<{ user?: { username?: string | null } | null }> | null;
+  }): string {
+    return job.codingJobCoders?.[0]?.user?.username || `Job ${job.id}`;
+  }
+
+  private getWithinTrainingJobCoderName(job: Pick<CodingJob, 'id' | 'name'> & {
+    codingJobCoders?: Array<{ user?: { username?: string | null } | null }> | null;
+  }): string {
+    return job.codingJobCoders?.[0]?.user?.username || `Coder ${job.name}`;
+  }
+
+  private buildComparisonDisplayCodeSqlExpression(
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>,
+    defaultMissingCodeContext: MissingCodeDisplayContext
+  ): string {
+    const buildJobCase = (selector: (context: MissingCodeDisplayContext) => number): string => {
+      const cases = Array.from(missingCodesByJobId.entries())
+        .map(([jobId, context]) => `WHEN ${jobId} THEN '${selector(context)}'`)
+        .join(' ');
+      return `(CASE cj.id ${cases} ELSE '${selector(defaultMissingCodeContext)}' END)`;
+    };
+
+    return `CASE
+      WHEN cju.code IS NULL AND cju.coding_issue_option IS NULL THEN NULL
+      WHEN cju.code = -3 OR cju.coding_issue_option = -3 THEN ${buildJobCase(context => context.mirCode)}
+      WHEN cju.code = -4 OR cju.coding_issue_option = -4 THEN ${buildJobCase(context => context.mciCode)}
+      ELSE cju.code::text
+    END`;
+  }
+
+  private toSqlScoreLiteral(score: number | null): string {
+    return score === null ? 'NULL' : score.toString();
+  }
+
+  private buildComparisonMissingScoreByJobSqlExpression(
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>,
+    defaultMissingCodeContext: MissingCodeDisplayContext,
+    selector: (context: MissingCodeDisplayContext) => number | null
+  ): string {
+    const cases = Array.from(missingCodesByJobId.entries())
+      .map(([jobId, context]) => `WHEN ${jobId} THEN ${this.toSqlScoreLiteral(selector(context))}`)
+      .join(' ');
+    return `(CASE cj.id ${cases} ELSE ${this.toSqlScoreLiteral(selector(defaultMissingCodeContext))} END)`;
+  }
+
+  private buildComparisonNegativeMissingScoreSqlExpression(
+    context: MissingCodeDisplayContext
+  ): string {
+    const cases = Array.from(context.negativeCodes)
+      .sort((a, b) => a - b)
+      .map(code => `WHEN ${code} THEN ${this.toSqlScoreLiteral(this.getMissingScoreFromContext(context, code))}`)
+      .join(' ');
+
+    return cases.length > 0 ? `(CASE cju.code ${cases} ELSE cju.score END)` : 'cju.score';
+  }
+
+  private buildComparisonNegativeMissingScoreByJobSqlExpression(
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>,
+    defaultMissingCodeContext: MissingCodeDisplayContext
+  ): string {
+    const cases = Array.from(missingCodesByJobId.entries())
+      .map(([jobId, context]) => `WHEN ${jobId} THEN ${this.buildComparisonNegativeMissingScoreSqlExpression(context)}`)
+      .join(' ');
+    return `(CASE cj.id ${cases} ELSE ${this.buildComparisonNegativeMissingScoreSqlExpression(defaultMissingCodeContext)} END)`;
+  }
+
+  private buildComparisonDisplayScoreSqlExpression(
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>,
+    defaultMissingCodeContext: MissingCodeDisplayContext
+  ): string {
+    const mirScoreExpression = this.buildComparisonMissingScoreByJobSqlExpression(
+      missingCodesByJobId,
+      defaultMissingCodeContext,
+      context => this.getMissingScoreFromContext(context, context.mirCode)
+    );
+    const mciScoreExpression = this.buildComparisonMissingScoreByJobSqlExpression(
+      missingCodesByJobId,
+      defaultMissingCodeContext,
+      context => this.getMissingScoreFromContext(context, context.mciCode)
+    );
+    const negativeMissingScoreExpression = this.buildComparisonNegativeMissingScoreByJobSqlExpression(
+      missingCodesByJobId,
+      defaultMissingCodeContext
+    );
+
+    return `CASE
+      WHEN cju.code IS NULL AND cju.coding_issue_option IS NULL THEN cju.score
+      WHEN cju.code = -3 OR cju.coding_issue_option = -3 THEN ${mirScoreExpression}
+      WHEN cju.code = -4 OR cju.coding_issue_option = -4 THEN ${mciScoreExpression}
+      WHEN cju.code < 0 THEN ${negativeMissingScoreExpression}
+      ELSE cju.score
+    END`;
+  }
+
+  private addComparisonAggregateSelects(
+    query: ReturnType<Repository<CodingJobUnit>['createQueryBuilder']>,
+    selectedJobIds: number[],
+    displayCodeExpression: string,
+    selectedJobParameterName: string
+  ): void {
+    if (selectedJobIds.length === 0) {
+      query
+        .addSelect('0', 'completeCodeCount')
+        .addSelect('0', 'distinctCodeCount')
+        .addSelect('false', 'hasNotes');
+      return;
+    }
+
+    const selectedJobCondition = `cj.id IN (:...${selectedJobParameterName})`;
+    query
+      .addSelect(
+        `COUNT(DISTINCT cj.id) FILTER (WHERE ${selectedJobCondition} AND (${displayCodeExpression}) IS NOT NULL)`,
+        'completeCodeCount'
+      )
+      .addSelect(
+        `COUNT(DISTINCT (${displayCodeExpression})) FILTER (WHERE ${selectedJobCondition} AND (${displayCodeExpression}) IS NOT NULL)`,
+        'distinctCodeCount'
+      )
+      .addSelect(
+        `COALESCE(BOOL_OR(${selectedJobCondition} AND cju.notes IS NOT NULL AND BTRIM(cju.notes) <> ''), false)`,
+        'hasNotes'
+      )
+      .setParameter(selectedJobParameterName, selectedJobIds);
+  }
+
+  private async getTrainingComparisonAvailableCodersForJobs(
+    workspaceId: number,
+    trainingIds: number[],
+    jobs: Array<Pick<CodingJob, 'id' | 'name' | 'training_id'> & {
+      training?: Pick<CoderTraining, 'id' | 'label'> | null;
+      codingJobCoders?: Array<{ user?: { username?: string | null } | null }> | null;
+    }>,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<TrainingComparisonCoderDto[]> {
+    if (jobs.length === 0) {
+      return [];
+    }
+
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .select('DISTINCT cj.id', 'jobId')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cj.training_id IN (:...trainingIds)', { trainingIds });
+
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'trainingComparisonAvailableCoders'
+    });
+
+    const rows = await query.getRawMany<{ jobId: number | string }>();
+    const jobIdsWithUnits = new Set(rows.map(row => this.toFreshnessNumber(row.jobId)));
+
+    return jobs
+      .filter(job => jobIdsWithUnits.has(job.id))
+      .map(job => ({
+        trainingId: job.training?.id ?? job.training_id!,
+        trainingLabel: job.training?.label ?? '',
+        coderId: job.id,
+        coderName: this.getTrainingJobCoderName(job)
+      }))
+      .sort((a, b) => (
+        a.trainingId - b.trainingId || a.coderName.localeCompare(b.coderName, 'de')
+      ));
+  }
+
+  private async getTrainingComparisonAggregateRows(
+    workspaceId: number,
+    trainingIds: number[],
+    selectedJobIds: number[],
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>,
+    defaultMissingCodeContext: MissingCodeDisplayContext,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<TrainingComparisonAggregateRow[]> {
+    const displayCodeExpression = this.buildComparisonDisplayCodeSqlExpression(
+      missingCodesByJobId,
+      defaultMissingCodeContext
+    );
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .select('cju.response_id', 'responseId')
+      .addSelect('MIN(cju.unit_name)', 'unitName')
+      .addSelect('MIN(cju.variable_id)', 'variableId')
+      .addSelect('MIN(cju.person_code)', 'personCode')
+      .addSelect('MIN(cju.person_login)', 'personLogin')
+      .addSelect('MIN(cju.person_group)', 'personGroup')
+      .addSelect('MIN(cju.booklet_name)', 'bookletName')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cj.training_id IN (:...trainingIds)', { trainingIds })
+      .groupBy('cju.response_id');
+
+    this.addComparisonAggregateSelects(
+      query,
+      selectedJobIds,
+      displayCodeExpression,
+      'trainingComparisonSelectedJobIds'
+    );
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'trainingComparisonAggregate'
+    });
+
+    return query.getRawMany<TrainingComparisonAggregateRow>();
+  }
+
+  private async getTrainingComparisonRowsForResponseIds(
+    workspaceId: number,
+    trainingIds: number[],
+    responseIds: number[],
+    pageCandidates: TrainingComparisonCandidate[],
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>,
+    defaultMissingCodeContext: MissingCodeDisplayContext,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<TrainingCodingComparisonRowDto[]> {
+    if (responseIds.length === 0) {
+      return [];
+    }
+
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .innerJoin('cj.training', 'ct')
+      .leftJoin('cj.codingJobCoders', 'cjc')
+      .leftJoin('cjc.user', 'coderUser')
+      .select('ct.id', 'trainingId')
+      .addSelect('ct.label', 'trainingLabel')
+      .addSelect('cj.id', 'jobId')
+      .addSelect('coderUser.username', 'coderName')
+      .addSelect('cj.missings_profile_id', 'missingsProfileId')
+      .addSelect('cju.response_id', 'responseId')
+      .addSelect('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect('cju.person_code', 'personCode')
+      .addSelect('cju.person_login', 'personLogin')
+      .addSelect('cju.person_group', 'personGroup')
+      .addSelect('cju.booklet_name', 'bookletName')
+      .addSelect('cju.code', 'code')
+      .addSelect('cju.score', 'score')
+      .addSelect('cju.notes', 'notes')
+      .addSelect('cju.coding_issue_option', 'codingIssueOption')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cj.training_id IN (:...trainingIds)', { trainingIds })
+      .andWhere('cju.response_id IN (:...responseIds)', { responseIds })
+      .orderBy('ct.label', 'ASC')
+      .addOrderBy('cj.id', 'ASC')
+      .addOrderBy('cju.id', 'ASC');
+
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'trainingComparisonRows'
+    });
+
+    const rawRows = await query.getRawMany<TrainingComparisonRawUnitRow>();
+    const codersByResponseId = new Map<number, TrainingCodingComparisonRowDto['coders']>();
+    const seenSlots = new Set<string>();
+    rawRows.forEach(row => {
+      const responseId = this.toFreshnessNumber(row.responseId);
+      const jobId = this.toFreshnessNumber(row.jobId);
+      const slotKey = `${responseId}:${jobId}`;
+      if (seenSlots.has(slotKey)) {
+        return;
+      }
+      seenSlots.add(slotKey);
+
+      const code = this.toNullableScore(row.code);
+      const score = this.toNullableScore(row.score);
+      const codingIssueOption = this.toNullableScore(row.codingIssueOption);
+      const mappedDisplay = this.mapDisplayCodeAndScore(
+        code,
+        score,
+        codingIssueOption,
+        missingCodesByJobId.get(jobId) ?? defaultMissingCodeContext
+      );
+      const coders = codersByResponseId.get(responseId) ?? [];
+      coders.push({
+        trainingId: this.toFreshnessNumber(row.trainingId),
+        trainingLabel: row.trainingLabel,
+        coderId: jobId,
+        coderName: row.coderName || `Job ${jobId}`,
+        code: mappedDisplay.code,
+        score: mappedDisplay.score,
+        notes: row.notes,
+        codingIssueOption
+      });
+      codersByResponseId.set(responseId, coders);
+    });
+
+    return pageCandidates.map(candidate => ({
+      responseId: candidate.responseId,
+      unitName: candidate.unitName,
+      variableId: candidate.variableId,
+      personCode: candidate.personCode,
+      personLogin: candidate.personLogin,
+      personGroup: candidate.personGroup,
+      bookletName: candidate.bookletName,
+      testPerson: candidate.testPerson,
+      coders: codersByResponseId.get(candidate.responseId) ?? []
+    }));
+  }
+
+  private async getWithinTrainingComparisonAggregateRows(
+    workspaceId: number,
+    trainingId: number,
+    selectedJobIds: number[],
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>,
+    defaultMissingCodeContext: MissingCodeDisplayContext,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<TrainingComparisonAggregateRow[]> {
+    const displayCodeExpression = this.buildComparisonDisplayCodeSqlExpression(
+      missingCodesByJobId,
+      defaultMissingCodeContext
+    );
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .select('cju.response_id', 'responseId')
+      .addSelect('MIN(cju.unit_name)', 'unitName')
+      .addSelect('MIN(cju.variable_id)', 'variableId')
+      .addSelect('MIN(cju.person_code)', 'personCode')
+      .addSelect('MIN(cju.person_login)', 'personLogin')
+      .addSelect('MIN(cju.person_group)', 'personGroup')
+      .addSelect('MIN(cju.booklet_name)', 'bookletName')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cj.training_id = :trainingId', { trainingId })
+      .groupBy('cju.response_id');
+
+    this.addComparisonAggregateSelects(
+      query,
+      selectedJobIds,
+      displayCodeExpression,
+      'withinTrainingComparisonSelectedJobIds'
+    );
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'withinTrainingComparisonAggregate'
+    });
+
+    return query.getRawMany<TrainingComparisonAggregateRow>();
+  }
+
+  private async getWithinTrainingComparisonRowsForResponseIds(
+    workspaceId: number,
+    trainingId: number,
+    responseIds: number[],
+    pageCandidates: TrainingComparisonCandidate[],
+    jobs: Array<Pick<CodingJob, 'id' | 'name' | 'missings_profile_id'> & {
+      codingJobCoders?: Array<{ user?: { username?: string | null } | null }> | null;
+    }>,
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>,
+    defaultMissingCodeContext: MissingCodeDisplayContext,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<WithinTrainingCodingComparisonRowDto[]> {
+    if (responseIds.length === 0) {
+      return [];
+    }
+
+    const coderNameByJobId = new Map<number, string>();
+    jobs.forEach(job => {
+      coderNameByJobId.set(job.id, this.getWithinTrainingJobCoderName(job));
+    });
+
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .leftJoin('cju.response', 'resp')
+      .select('cj.id', 'jobId')
+      .addSelect('cju.id', 'unitRowId')
+      .addSelect('cju.response_id', 'responseId')
+      .addSelect('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect('cju.person_code', 'personCode')
+      .addSelect('cju.person_login', 'personLogin')
+      .addSelect('cju.person_group', 'personGroup')
+      .addSelect('cju.booklet_name', 'bookletName')
+      .addSelect('resp.value', 'givenAnswer')
+      .addSelect('resp.code_v1', 'replayCodeV1')
+      .addSelect('resp.code_v2', 'replayCodeV2')
+      .addSelect('resp.code_v3', 'replayCodeV3')
+      .addSelect('resp.score_v1', 'replayScoreV1')
+      .addSelect('resp.score_v2', 'replayScoreV2')
+      .addSelect('resp.score_v3', 'replayScoreV3')
+      .addSelect('cju.code', 'code')
+      .addSelect('cju.score', 'score')
+      .addSelect('cju.notes', 'notes')
+      .addSelect('cju.coding_issue_option', 'codingIssueOption')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cj.training_id = :trainingId', { trainingId })
+      .andWhere('cju.response_id IN (:...responseIds)', { responseIds })
+      .orderBy('cju.id', 'ASC')
+      .addOrderBy('cj.id', 'ASC');
+
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'withinTrainingComparisonRows'
+    });
+
+    const rawRows = await query.getRawMany<WithinTrainingCodingRow>();
+    const unitsByResponseId = new Map<number, Map<number, WithinTrainingCodingRow>>();
+    const firstRowByResponseId = new Map<number, WithinTrainingCodingRow>();
+
+    rawRows.forEach(row => {
+      const responseId = this.toNullableScore(row.responseId);
+      const jobId = this.toNullableScore(row.jobId);
+      if (responseId === null || jobId === null) {
+        return;
+      }
+
+      if (!firstRowByResponseId.has(responseId)) {
+        firstRowByResponseId.set(responseId, row);
+      }
+      if (!unitsByResponseId.has(responseId)) {
+        unitsByResponseId.set(responseId, new Map<number, WithinTrainingCodingRow>());
+      }
+      unitsByResponseId.get(responseId)!.set(jobId, row);
+    });
+
+    const persistedDiscussionResults = await this.coderTrainingDiscussionResultRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        training_id: trainingId,
+        response_id: In(responseIds)
+      }
+    });
+    const discussionByResponseId = new Map<number, CoderTrainingDiscussionResult>();
+    persistedDiscussionResults.forEach(result => {
+      discussionByResponseId.set(result.response_id, result);
+    });
+
+    const managerUserIds = [...new Set(persistedDiscussionResults
+      .map(result => result.manager_user_id)
+      .filter((id): id is number => id !== null && id !== undefined))];
+    const managerNameById = new Map<number, string>();
+    if (managerUserIds.length > 0) {
+      const users = await this.userRepository.find({
+        where: { id: In(managerUserIds) }
+      });
+      users.forEach(user => {
+        managerNameById.set(user.id, user.username);
+      });
+    }
+
+    const resultRows: WithinTrainingCodingComparisonRowDto[] = [];
+    for (const candidate of pageCandidates) {
+      const unitsByJobId = unitsByResponseId.get(candidate.responseId) ?? new Map<number, WithinTrainingCodingRow>();
+      const firstRow = firstRowByResponseId.get(candidate.responseId);
+      const codersData: WithinTrainingCoderResult[] = jobs.map(job => {
+        const unit = unitsByJobId.get(job.id);
+        const code = this.toNullableScore(unit?.code);
+        const score = this.toNullableScore(unit?.score);
+        const codingIssueOption = this.toNullableScore(unit?.codingIssueOption);
+        const mappedDisplay = this.mapDisplayCodeAndScore(
+          code,
+          score,
+          codingIssueOption,
+          missingCodesByJobId.get(job.id) ?? defaultMissingCodeContext
+        );
+
+        return {
+          jobId: job.id,
+          coderName: coderNameByJobId.get(job.id) ?? `Coder ${job.name}`,
+          code: mappedDisplay.code,
+          score: mappedDisplay.score,
+          notes: unit?.notes ?? null,
+          codingIssueOption
+        };
+      });
+
+      const discussionResult = discussionByResponseId.get(candidate.responseId);
+      const hasManualDiscussionResult = discussionResult?.code !== null && discussionResult?.code !== undefined;
+      const automaticDiscussionResult = hasManualDiscussionResult ?
+        null :
+        await this.deriveAutomaticDiscussionResultForRawResponse(
+          workspaceId,
+          trainingId,
+          candidate.responseId,
+          jobs,
+          unitsByJobId,
+          codersData
+        );
+      let discussionCode = automaticDiscussionResult?.code ?? null;
+      let discussionScore = automaticDiscussionResult?.score ?? null;
+      let discussionNotes: string | null = null;
+      let discussionManagerUserId: number | null = null;
+      let discussionManagerName: string | null = null;
+      let discussionSource: DiscussionSource = automaticDiscussionResult ? 'auto_agreement' : null;
+
+      if (hasManualDiscussionResult) {
+        discussionCode = discussionResult!.code;
+        discussionScore = discussionResult!.score;
+        discussionNotes = discussionResult!.notes ?? null;
+        discussionManagerUserId = discussionResult!.manager_user_id ?? null;
+        discussionManagerName = discussionResult!.manager_user_id ?
+          (managerNameById.get(discussionResult!.manager_user_id) ?? discussionResult!.manager_name ?? null) :
+          (discussionResult!.manager_name ?? null);
+        discussionSource = 'manual';
+      }
+
+      resultRows.push({
+        responseId: candidate.responseId,
+        unitName: candidate.unitName,
+        variableId: candidate.variableId,
+        personCode: candidate.personCode,
+        personLogin: candidate.personLogin,
+        personGroup: candidate.personGroup,
+        bookletName: candidate.bookletName,
+        testPerson: candidate.testPerson,
+        givenAnswer: firstRow?.givenAnswer || '',
+        replayCode: this.toNullableScore(firstRow?.replayCodeV3) ??
+          this.toNullableScore(firstRow?.replayCodeV2) ??
+          this.toNullableScore(firstRow?.replayCodeV1),
+        replayScore: this.toNullableScore(firstRow?.replayScoreV3) ??
+          this.toNullableScore(firstRow?.replayScoreV2) ??
+          this.toNullableScore(firstRow?.replayScoreV1),
+        discussionCode,
+        discussionScore,
+        discussionNotes,
+        discussionManagerUserId,
+        discussionManagerName,
+        discussionSource,
+        coders: codersData
+      });
+    }
+
+    return resultRows;
+  }
+
+  private async getWithinTrainingKappaCaseRows(
+    workspaceId: number,
+    trainingId: number,
+    selectedJobIds: number[],
+    calculationLevel: TrainingKappaCalculationLevel,
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>,
+    defaultMissingCodeContext: MissingCodeDisplayContext,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<WithinTrainingKappaCaseRow[]> {
+    const selectedJobParameterName = 'withinTrainingKappaCaseSelectedJobIds';
+    const valueExpression = calculationLevel === 'score' ?
+      this.buildComparisonDisplayScoreSqlExpression(missingCodesByJobId, defaultMissingCodeContext) :
+      this.buildComparisonDisplayCodeSqlExpression(missingCodesByJobId, defaultMissingCodeContext);
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .select('cju.response_id', 'responseId')
+      .addSelect('MIN(cju.unit_name)', 'unitName')
+      .addSelect('MIN(cju.variable_id)', 'variableId')
+      .addSelect(
+        `COUNT(DISTINCT cj.id) FILTER (
+          WHERE cj.id IN (:...${selectedJobParameterName})
+          AND (${valueExpression}) IS NOT NULL
+        )`,
+        'validValueCount'
+      )
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cj.training_id = :trainingId', { trainingId })
+      .groupBy('cju.response_id')
+      .orderBy('MIN(cju.unit_name)', 'ASC')
+      .addOrderBy('MIN(cju.variable_id)', 'ASC')
+      .addOrderBy('cju.response_id', 'ASC')
+      .setParameter(selectedJobParameterName, selectedJobIds);
+
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'withinTrainingKappaCases'
+    });
+
+    return query.getRawMany<WithinTrainingKappaCaseRow>();
+  }
+
+  private async getWithinTrainingKappaValueRows(
+    workspaceId: number,
+    trainingId: number,
+    selectedJobIds: number[],
+    missingCodesByJobId: Map<number, MissingCodeDisplayContext>,
+    defaultMissingCodeContext: MissingCodeDisplayContext,
+    exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
+  ): Promise<WithinTrainingKappaValueRow[]> {
+    if (selectedJobIds.length === 0) {
+      return [];
+    }
+
+    const displayCodeExpression = this.buildComparisonDisplayCodeSqlExpression(
+      missingCodesByJobId,
+      defaultMissingCodeContext
+    );
+    const displayScoreExpression = this.buildComparisonDisplayScoreSqlExpression(
+      missingCodesByJobId,
+      defaultMissingCodeContext
+    );
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .select('cj.id', 'jobId')
+      .addSelect('cju.response_id', 'responseId')
+      .addSelect('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect(displayCodeExpression, 'code')
+      .addSelect(displayScoreExpression, 'score')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cj.training_id = :trainingId', { trainingId })
+      .andWhere('cj.id IN (:...withinTrainingKappaValueJobIds)', {
+        withinTrainingKappaValueJobIds: selectedJobIds
+      })
+      .orderBy('cju.id', 'ASC')
+      .addOrderBy('cj.id', 'ASC');
+
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'withinTrainingKappaValues'
+    });
+
+    return query.getRawMany<WithinTrainingKappaValueRow>();
+  }
+
+  private normalizeWithinTrainingKappaCases(
+    rows: WithinTrainingKappaCaseRow[]
+  ): WithinTrainingKappaCase[] {
+    return rows
+      .map(row => {
+        const responseId = this.toNullableScore(row.responseId);
+        if (responseId === null) {
+          return null;
+        }
+        return {
+          responseId,
+          unitName: row.unitName,
+          variableId: row.variableId,
+          validValueCount: this.toFreshnessNumber(row.validValueCount)
+        };
+      })
+      .filter((row): row is WithinTrainingKappaCase => row !== null);
+  }
+
+  private toKappaCode(value: string | null): number | null {
+    if (value === null) {
+      return null;
+    }
+
+    const parsed = parseInt(value, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  private buildWithinTrainingKappaCoderPairs(
+    cases: WithinTrainingKappaCase[],
+    valueRows: WithinTrainingKappaValueRow[],
+    selectedJobs: Array<Pick<CodingJob, 'id' | 'name'> & {
+      codingJobCoders?: Array<{ user?: { username?: string | null } | null }> | null;
+    }>
+  ): TrainingKappaCoderPairInput[] {
+    const selectedJobIds = new Set(selectedJobs.map(job => job.id));
+    const valuesByResponseAndJob = new Map<string, KappaCoderValue>();
+    valueRows.forEach(row => {
+      const responseId = this.toNullableScore(row.responseId);
+      const jobId = this.toNullableScore(row.jobId);
+      if (responseId === null || jobId === null || !selectedJobIds.has(jobId)) {
+        return;
+      }
+
+      valuesByResponseAndJob.set(`${responseId}:${jobId}`, {
+        code: this.toKappaCode(row.code),
+        score: this.toNullableScore(row.score)
+      });
+    });
+
+    const casesByVariable = new Map<string, WithinTrainingKappaCase[]>();
+    cases.forEach(item => {
+      const key = this.getTrainingKappaVariableKey(item.unitName, item.variableId);
+      if (!casesByVariable.has(key)) {
+        casesByVariable.set(key, []);
+      }
+      casesByVariable.get(key)!.push(item);
+    });
+
+    const coderPairs: TrainingKappaCoderPairInput[] = [];
+    Array.from(casesByVariable.values()).forEach(variableCases => {
+      variableCases.sort((a, b) => a.responseId - b.responseId);
+      const firstCase = variableCases[0];
+      if (!firstCase) {
+        return;
+      }
+
+      for (let i = 0; i < selectedJobs.length; i++) {
+        for (let j = i + 1; j < selectedJobs.length; j++) {
+          const coder1 = selectedJobs[i];
+          const coder2 = selectedJobs[j];
+          const codes: Array<{ code1: number | null; code2: number | null }> = [];
+          const scores: Array<{ score1: number | null; score2: number | null }> = [];
+
+          variableCases.forEach(item => {
+            const coder1Value = valuesByResponseAndJob.get(`${item.responseId}:${coder1.id}`);
+            const coder2Value = valuesByResponseAndJob.get(`${item.responseId}:${coder2.id}`);
+            codes.push({
+              code1: coder1Value?.code ?? null,
+              code2: coder2Value?.code ?? null
+            });
+            scores.push({
+              score1: coder1Value?.score ?? null,
+              score2: coder2Value?.score ?? null
+            });
+          });
+
+          if (codes.length > 0) {
+            coderPairs.push({
+              coder1Id: coder1.id,
+              coder1Name: this.getWithinTrainingJobCoderName(coder1),
+              coder2Id: coder2.id,
+              coder2Name: this.getWithinTrainingJobCoderName(coder2),
+              unitName: firstCase.unitName,
+              variableId: firstCase.variableId,
+              codes,
+              scores
+            });
+          }
+        }
+      }
+    });
+
+    return coderPairs;
+  }
+
   private mapDisplayCodeAndScore(
     code: number | null,
     score: number | null,
@@ -823,6 +2139,38 @@ export class CoderTrainingService {
         responseId,
         result.code,
         exclusions
+      )
+    };
+  }
+
+  private async deriveAutomaticDiscussionResultForRawResponse(
+    workspaceId: number,
+    trainingId: number,
+    responseId: number,
+    jobs: Array<Pick<CodingJob, 'id' | 'missings_profile_id'>>,
+    unitsByJobId: Map<number, WithinTrainingCodingRow>,
+    coders: WithinTrainingCoderResult[]
+  ): Promise<{ code: number; score: number | null } | null> {
+    const result = this.deriveAutomaticDiscussionResult(coders);
+    if (!result || result.code >= 0) {
+      return result;
+    }
+
+    const responseJobs = jobs.filter(job => unitsByJobId.has(job.id));
+    const resolvedProfileIds = await Promise.all(responseJobs.map(job => (
+      this.missingsProfilesService.resolveMissingsProfileId(workspaceId, job.missings_profile_id)
+    )));
+    const profileKeys = new Set(resolvedProfileIds);
+    if (profileKeys.size > 1) {
+      throw new BadRequestException(`Conflicting missing profiles for response ${responseId} in training ${trainingId}`);
+    }
+
+    return {
+      code: result.code,
+      score: await this.getMissingScoreForProfile(
+        workspaceId,
+        resolvedProfileIds[0] ?? null,
+        result.code
       )
     };
   }
@@ -976,6 +2324,14 @@ export class CoderTrainingService {
       exclusions
     );
 
+    return this.getMissingScoreForProfile(workspaceId, profileId, code);
+  }
+
+  private async getMissingScoreForProfile(
+    workspaceId: number,
+    profileId: number | null,
+    code: number
+  ): Promise<number> {
     try {
       return (await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
         workspaceId,
@@ -2164,13 +3520,310 @@ export class CoderTrainingService {
     return comparisonData;
   }
 
+  async getTrainingCodingComparisonPage(
+    workspaceId: number,
+    trainingIds: number[],
+    options: TrainingComparisonPageOptions = {}
+  ): Promise<TrainingCodingComparisonPageDto> {
+    const page = this.normalizeComparisonPage(options.page);
+    const limit = this.normalizeComparisonLimit(options.limit);
+    const filters = options.filters ?? {};
+    if (trainingIds.length === 0) {
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
+        summary: this.calculateComparisonSummaryFromCandidates([]),
+        availableCoders: []
+      };
+    }
+
+    const trainings = await this.coderTrainingRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        id: In(trainingIds)
+      },
+      relations: [
+        'codingJobs',
+        'codingJobs.codingJobCoders',
+        'codingJobs.codingJobCoders.user'
+      ],
+      order: { label: 'ASC' }
+    });
+
+    if (trainings.length === 0) {
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
+        summary: this.calculateComparisonSummaryFromCandidates([]),
+        availableCoders: []
+      };
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const allTrainingJobs = trainings.flatMap(training => (
+      (training.codingJobs || []).map(job => ({
+        ...job,
+        training
+      }))
+    ));
+    const [missingCodesByJobId, defaultMissingCodeContext, availableCoders] = await Promise.all([
+      this.buildMissingCodesByJobId(workspaceId, allTrainingJobs),
+      this.getDefaultMissingCodeDisplayContext(workspaceId),
+      this.getTrainingComparisonAvailableCodersForJobs(workspaceId, trainingIds, allTrainingJobs, exclusions)
+    ]);
+    const selectedCoderKeys = options.selectedCoderKeys ?? availableCoders
+      .map(coder => `${coder.trainingId}_${coder.coderId}`);
+    const selection = this.getTrainingComparisonSelection(trainingIds, selectedCoderKeys, availableCoders);
+    const aggregateRows = await this.getTrainingComparisonAggregateRows(
+      workspaceId,
+      trainingIds,
+      selection.selectedJobIds,
+      missingCodesByJobId,
+      defaultMissingCodeContext,
+      exclusions
+    );
+
+    const filteredCandidates = aggregateRows
+      .map(row => this.toComparisonCandidate(row, selection.slotCount))
+      .filter(row => this.matchesComparisonCandidateFilters(row, filters));
+    const sortedCandidates = this.sortComparisonRows(filteredCandidates, options.sortBy, options.sortDirection);
+    const pageCandidates = this.paginateComparisonRows(sortedCandidates, page, limit);
+    const pageRows = await this.getTrainingComparisonRowsForResponseIds(
+      workspaceId,
+      trainingIds,
+      pageCandidates.map(row => row.responseId),
+      pageCandidates,
+      missingCodesByJobId,
+      defaultMissingCodeContext,
+      exclusions
+    );
+
+    return {
+      data: pageRows,
+      total: filteredCandidates.length,
+      page,
+      limit,
+      totalPages: Math.ceil(filteredCandidates.length / limit),
+      summary: this.calculateComparisonSummaryFromCandidates(filteredCandidates),
+      availableCoders
+    };
+  }
+
+  private toFreshnessNumber(value: number | string | null | undefined): number {
+    const numericValue = Number(value ?? 0);
+    return Number.isFinite(numericValue) ? numericValue : 0;
+  }
+
+  private toFreshnessIsoString(value: Date | string | null | undefined): string | null {
+    if (!value) {
+      return null;
+    }
+
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value.toISOString();
+    }
+
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
+  }
+
+  private createTrainingComparisonVersion(payload: Record<string, unknown>): string {
+    return createHash('sha256')
+      .update(JSON.stringify(payload))
+      .digest('hex')
+      .slice(0, 16);
+  }
+
+  private createTrainingComparisonResponseSignature(rows: TrainingComparisonResponseFreshnessRow[]): string {
+    const normalizedRows = rows
+      .map(row => ({
+        responseId: this.toFreshnessNumber(row.responseId),
+        responseHash: row.responseHash ?? ''
+      }))
+      .sort((a, b) => a.responseId - b.responseId);
+
+    return createHash('sha256')
+      .update(JSON.stringify(normalizedRows))
+      .digest('hex');
+  }
+
+  private createExclusionFreshnessSignature(exclusions: {
+    globalIgnoredUnits: string[];
+    ignoredBooklets: string[];
+    testletIgnoredUnits: { bookletId: string; unitId: string }[];
+  }): Record<string, unknown> {
+    return {
+      globalIgnoredUnits: [...exclusions.globalIgnoredUnits].sort(),
+      ignoredBooklets: [...exclusions.ignoredBooklets].sort(),
+      testletIgnoredUnits: [...exclusions.testletIgnoredUnits]
+        .map(item => `${item.bookletId}:${item.unitId}`)
+        .sort()
+    };
+  }
+
+  async getWithinTrainingComparisonFreshness(
+    workspaceId: number,
+    trainingId: number
+  ): Promise<TrainingComparisonFreshnessDto> {
+    const training = await this.coderTrainingRepository.findOne({
+      where: {
+        workspace_id: workspaceId,
+        id: trainingId
+      }
+    });
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const jobs = training ?
+      await this.codingJobRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          training_id: trainingId
+        },
+        order: { id: 'ASC' }
+      }) :
+      [];
+
+    let unitAggregate: TrainingComparisonFreshnessAggregateRow = {
+      unitCount: 0,
+      responseCount: 0,
+      latestUnitChange: null
+    };
+    let responseSignature = '';
+
+    if (jobs.length > 0) {
+      const unitQuery = this.codingJobUnitRepository
+        .createQueryBuilder('cju')
+        .innerJoin('cju.coding_job', 'cj')
+        .select('COUNT(DISTINCT cju.id)', 'unitCount')
+        .addSelect('COUNT(DISTINCT cju.response_id)', 'responseCount')
+        .addSelect('MAX(cju.updated_at)', 'latestUnitChange')
+        .where('cj.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('cj.training_id = :trainingId', { trainingId });
+
+      applyResolvedExclusionsToQuery(unitQuery, exclusions, {
+        unitNameExpression: 'cju.unit_name',
+        bookletNameExpression: 'cju.booklet_name',
+        parameterPrefix: 'withinTrainingFreshness'
+      });
+
+      unitAggregate = await unitQuery.getRawOne<TrainingComparisonFreshnessAggregateRow>() ?? unitAggregate;
+
+      const responseSignatureQuery = this.codingJobUnitRepository
+        .createQueryBuilder('cju')
+        .innerJoin('cju.coding_job', 'cj')
+        .leftJoin('cju.response', 'resp')
+        .select('cju.response_id', 'responseId')
+        .addSelect(`
+          MD5(
+            CONCAT_WS(
+              CHR(31),
+              CAST(cju.response_id AS text),
+              COALESCE(resp.value, ''),
+              COALESCE(CAST(resp.code_v1 AS text), ''),
+              COALESCE(CAST(resp.score_v1 AS text), ''),
+              COALESCE(CAST(resp.code_v2 AS text), ''),
+              COALESCE(CAST(resp.score_v2 AS text), ''),
+              COALESCE(CAST(resp.code_v3 AS text), ''),
+              COALESCE(CAST(resp.score_v3 AS text), '')
+            )
+          )
+        `, 'responseHash')
+        .where('cj.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('cj.training_id = :trainingId', { trainingId })
+        .groupBy('cju.response_id')
+        .addGroupBy('resp.value')
+        .addGroupBy('resp.code_v1')
+        .addGroupBy('resp.score_v1')
+        .addGroupBy('resp.code_v2')
+        .addGroupBy('resp.score_v2')
+        .addGroupBy('resp.code_v3')
+        .addGroupBy('resp.score_v3')
+        .orderBy('cju.response_id', 'ASC');
+
+      applyResolvedExclusionsToQuery(responseSignatureQuery, exclusions, {
+        unitNameExpression: 'cju.unit_name',
+        bookletNameExpression: 'cju.booklet_name',
+        parameterPrefix: 'withinTrainingResponseFreshness'
+      });
+
+      responseSignature = this.createTrainingComparisonResponseSignature(
+        await responseSignatureQuery.getRawMany<TrainingComparisonResponseFreshnessRow>()
+      );
+    }
+
+    const discussionAggregate = (await this.coderTrainingDiscussionResultRepository
+      .createQueryBuilder('ctdr')
+      .select('COUNT(DISTINCT ctdr.id)', 'discussionResultCount')
+      .addSelect('MAX(ctdr.updated_at)', 'latestDiscussionChange')
+      .where('ctdr.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('ctdr.training_id = :trainingId', { trainingId })
+      .getRawOne<TrainingDiscussionFreshnessAggregateRow>()) ?? {
+      discussionResultCount: 0,
+      latestDiscussionChange: null
+    };
+
+    const latestTrainingChange = this.toFreshnessIsoString(training?.updated_at);
+    const latestJobChange = this.toFreshnessIsoString(
+      jobs
+        .map(job => job.updated_at)
+        .filter((value): value is Date => !!value)
+        .sort((a, b) => b.getTime() - a.getTime())[0]
+    );
+    const latestUnitChange = this.toFreshnessIsoString(unitAggregate.latestUnitChange);
+    const latestDiscussionChange = this.toFreshnessIsoString(discussionAggregate.latestDiscussionChange);
+    const jobCount = jobs.length;
+    const unitCount = this.toFreshnessNumber(unitAggregate.unitCount);
+    const responseCount = this.toFreshnessNumber(unitAggregate.responseCount);
+    const discussionResultCount = this.toFreshnessNumber(discussionAggregate.discussionResultCount);
+    const missingProfileSignature = jobs
+      .map(job => (job.missings_profile_id ?? 'default').toString())
+      .sort()
+      .join(',');
+
+    const versionPayload = {
+      workspaceId,
+      trainingId,
+      trainingExists: !!training,
+      jobIds: jobs.map(job => job.id),
+      jobCount,
+      unitCount,
+      responseCount,
+      discussionResultCount,
+      latestTrainingChange,
+      latestJobChange,
+      latestUnitChange,
+      latestDiscussionChange,
+      responseSignature,
+      missingProfileSignature,
+      exclusions: this.createExclusionFreshnessSignature(exclusions)
+    };
+
+    return {
+      workspaceId,
+      trainingId,
+      version: this.createTrainingComparisonVersion(versionPayload),
+      jobCount,
+      unitCount,
+      responseCount,
+      discussionResultCount,
+      latestTrainingChange,
+      latestJobChange,
+      latestUnitChange,
+      latestDiscussionChange
+    };
+  }
+
   async getWithinTrainingCodingComparison(
     workspaceId: number,
     trainingId: number
   ): Promise<Array<{
-
       responseId: number;
-
       unitName: string;
       variableId: string;
       personCode: string;
@@ -2195,17 +3848,36 @@ export class CoderTrainingService {
       where: {
         workspace_id: workspaceId,
         id: trainingId
-      },
-      relations: ['codingJobs.codingJobCoders.user', 'codingJobs.codingJobUnits.response.unit.booklet.person']
+      }
     });
 
-    if (!training || !training.codingJobs) {
+    if (!training) {
+      return [];
+    }
+
+    const jobs = await this.codingJobRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        training_id: trainingId
+      },
+      relations: ['codingJobCoders.user'],
+      order: { id: 'ASC' }
+    });
+
+    if (jobs.length === 0) {
       return [];
     }
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, training.codingJobs);
+    const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, jobs);
     const defaultMissingCodeContext = await this.getDefaultMissingCodeDisplayContext(workspaceId);
+    const coderNameByJobId = new Map<number, string>();
+    jobs.forEach(job => {
+      const coderName = job.codingJobCoders?.[0]?.user?.username ?
+        `${job.codingJobCoders[0].user.username}` :
+        `Coder ${job.name}`;
+      coderNameByJobId.set(job.id, coderName);
+    });
 
     const unitVariableMap = new Map<string, {
       responseId: number;
@@ -2221,32 +3893,79 @@ export class CoderTrainingService {
       replayScore: number | null;
     }>();
 
-    training.codingJobs.forEach(job => {
-      job.codingJobUnits?.forEach(unit => {
-        if (isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)) {
-          return;
-        }
-        const unitVariableKey = unit.response_id.toString();
-        if (!unitVariableMap.has(unitVariableKey)) {
-          const givenAnswer = unit.response?.value || '';
-          const personGroup = unit.response?.unit?.booklet?.person?.group || '';
-          const testPerson = `${unit.person_login} (${personGroup}) - ${unit.booklet_name}`;
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .leftJoin('cju.response', 'resp')
+      .select('cj.id', 'jobId')
+      .addSelect('cju.id', 'unitRowId')
+      .addSelect('cju.response_id', 'responseId')
+      .addSelect('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect('cju.person_code', 'personCode')
+      .addSelect('cju.person_login', 'personLogin')
+      .addSelect('cju.person_group', 'personGroup')
+      .addSelect('cju.booklet_name', 'bookletName')
+      .addSelect('resp.value', 'givenAnswer')
+      .addSelect('resp.code_v1', 'replayCodeV1')
+      .addSelect('resp.code_v2', 'replayCodeV2')
+      .addSelect('resp.code_v3', 'replayCodeV3')
+      .addSelect('resp.score_v1', 'replayScoreV1')
+      .addSelect('resp.score_v2', 'replayScoreV2')
+      .addSelect('resp.score_v3', 'replayScoreV3')
+      .addSelect('cju.code', 'code')
+      .addSelect('cju.score', 'score')
+      .addSelect('cju.notes', 'notes')
+      .addSelect('cju.coding_issue_option', 'codingIssueOption')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cj.training_id = :trainingId', { trainingId })
+      .orderBy('cju.id', 'ASC')
+      .addOrderBy('cj.id', 'ASC');
 
-          unitVariableMap.set(unitVariableKey, {
-            responseId: unit.response_id,
-            unitName: unit.unit_name,
-            variableId: unit.variable_id,
-            personCode: unit.person_code,
-            personLogin: unit.person_login,
-            personGroup: personGroup,
-            bookletName: unit.booklet_name,
-            testPerson,
-            givenAnswer,
-            replayCode: unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null,
-            replayScore: unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null
-          });
-        }
-      });
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'withinTrainingComparison'
+    });
+
+    const rows = await query.getRawMany<WithinTrainingCodingRow>();
+    const unitsByResponseId = new Map<number, Map<number, WithinTrainingCodingRow>>();
+
+    rows.forEach(row => {
+      const responseId = this.toNullableScore(row.responseId);
+      const jobId = this.toNullableScore(row.jobId);
+      if (responseId === null || jobId === null) {
+        return;
+      }
+
+      const unitVariableKey = responseId.toString();
+      if (!unitVariableMap.has(unitVariableKey)) {
+        const personGroup = row.personGroup || '';
+        const testPerson = `${row.personLogin} (${personGroup}) - ${row.bookletName}`;
+
+        unitVariableMap.set(unitVariableKey, {
+          responseId,
+          unitName: row.unitName,
+          variableId: row.variableId,
+          personCode: row.personCode,
+          personLogin: row.personLogin,
+          personGroup,
+          bookletName: row.bookletName,
+          testPerson,
+          givenAnswer: row.givenAnswer || '',
+          replayCode: this.toNullableScore(row.replayCodeV3) ??
+            this.toNullableScore(row.replayCodeV2) ??
+            this.toNullableScore(row.replayCodeV1),
+          replayScore: this.toNullableScore(row.replayScoreV3) ??
+            this.toNullableScore(row.replayScoreV2) ??
+            this.toNullableScore(row.replayScoreV1)
+        });
+      }
+
+      if (!unitsByResponseId.has(responseId)) {
+        unitsByResponseId.set(responseId, new Map<number, WithinTrainingCodingRow>());
+      }
+      unitsByResponseId.get(responseId)!.set(jobId, row);
     });
 
     const comparisonData = [];
@@ -2279,31 +3998,12 @@ export class CoderTrainingService {
     }
 
     for (const [, unitVar] of unitVariableMap.entries()) {
-      const codersData: WithinTrainingCoderResult[] = [];
-
-      for (const job of training.codingJobs) {
-        let code: number | null = null;
-        let score: number | null = null;
-        let notes: string | null = null;
-        let codingIssueOption: number | null = null;
-
-        const coderName = job.codingJobCoders && job.codingJobCoders.length > 0 && job.codingJobCoders[0].user ?
-          `${job.codingJobCoders[0].user.username || 'Unknown'}` :
-          `Coder ${job.name}`;
-
-        job.codingJobUnits?.forEach(unit => {
-          if (
-            unit.response_id === unitVar.responseId &&
-            !isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)
-          ) {
-            code = unit.code;
-            if (unit.score !== null) {
-              score = unit.score;
-            }
-            notes = unit.notes;
-            codingIssueOption = unit.coding_issue_option;
-          }
-        });
+      const unitsByJobId = unitsByResponseId.get(unitVar.responseId) ?? new Map<number, WithinTrainingCodingRow>();
+      const codersData: WithinTrainingCoderResult[] = jobs.map(job => {
+        const unit = unitsByJobId.get(job.id);
+        const code = this.toNullableScore(unit?.code);
+        const score = this.toNullableScore(unit?.score);
+        const codingIssueOption = this.toNullableScore(unit?.codingIssueOption);
 
         const mappedDisplay = this.mapDisplayCodeAndScore(
           code,
@@ -2312,26 +4012,27 @@ export class CoderTrainingService {
           missingCodesByJobId.get(job.id) ?? defaultMissingCodeContext
         );
 
-        codersData.push({
+        return {
           jobId: job.id,
-          coderName,
+          coderName: coderNameByJobId.get(job.id) ?? `Coder ${job.name}`,
           code: mappedDisplay.code,
           score: mappedDisplay.score,
-          notes,
+          notes: unit?.notes ?? null,
           codingIssueOption
-        });
-      }
+        };
+      });
 
       const discussionResult = discussionByResponseId.get(unitVar.responseId);
       const hasManualDiscussionResult = discussionResult?.code !== null && discussionResult?.code !== undefined;
       const automaticDiscussionResult = hasManualDiscussionResult ?
         null :
-        await this.deriveAutomaticDiscussionResultForResponse(
+        await this.deriveAutomaticDiscussionResultForRawResponse(
           workspaceId,
-          training,
+          trainingId,
           unitVar.responseId,
-          codersData,
-          exclusions
+          jobs,
+          unitsByJobId,
+          codersData
         );
       let discussionCode = automaticDiscussionResult?.code ?? null;
       let discussionScore = automaticDiscussionResult?.score ?? null;
@@ -2373,9 +4074,300 @@ export class CoderTrainingService {
       });
     }
 
-    this.logger.log(`Generated within-training comparison data for ${comparisonData.length} unit/variable combinations across ${training.codingJobs.length} coders`);
+    this.logger.log(`Generated within-training comparison data for ${comparisonData.length} unit/variable combinations across ${jobs.length} coders`);
 
     return comparisonData;
+  }
+
+  async getWithinTrainingCodingComparisonPage(
+    workspaceId: number,
+    trainingId: number,
+    options: TrainingComparisonPageOptions = {}
+  ): Promise<WithinTrainingCodingComparisonPageDto> {
+    const page = this.normalizeComparisonPage(options.page);
+    const limit = this.normalizeComparisonLimit(options.limit);
+    const filters = options.filters ?? {};
+    const training = await this.coderTrainingRepository.findOne({
+      where: {
+        workspace_id: workspaceId,
+        id: trainingId
+      }
+    });
+
+    if (!training) {
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
+        summary: this.calculateComparisonSummaryFromCandidates([]),
+        availableCoders: []
+      };
+    }
+
+    const jobs = await this.codingJobRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        training_id: trainingId
+      },
+      relations: ['codingJobCoders.user'],
+      order: { id: 'ASC' }
+    });
+
+    if (jobs.length === 0) {
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
+        summary: this.calculateComparisonSummaryFromCandidates([]),
+        availableCoders: []
+      };
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const [missingCodesByJobId, defaultMissingCodeContext] = await Promise.all([
+      this.buildMissingCodesByJobId(workspaceId, jobs),
+      this.getDefaultMissingCodeDisplayContext(workspaceId)
+    ]);
+    const selectedJobIds = this.getWithinTrainingComparisonSelectedJobIds(options.selectedJobIds, jobs);
+    const aggregateRows = await this.getWithinTrainingComparisonAggregateRows(
+      workspaceId,
+      trainingId,
+      selectedJobIds,
+      missingCodesByJobId,
+      defaultMissingCodeContext,
+      exclusions
+    );
+    const availableCoders = aggregateRows.length > 0 ?
+      jobs.map(job => ({
+        jobId: job.id,
+        coderName: this.getWithinTrainingJobCoderName(job)
+      })) :
+      [];
+    const slotCount = selectedJobIds.length;
+
+    const filteredCandidates = aggregateRows
+      .map(row => this.toComparisonCandidate(row, slotCount))
+      .filter(row => this.matchesComparisonCandidateFilters(row, filters));
+    const sortedCandidates = this.sortComparisonRows(filteredCandidates, options.sortBy, options.sortDirection);
+    const pageCandidates = this.paginateComparisonRows(sortedCandidates, page, limit);
+    const pageRows = await this.getWithinTrainingComparisonRowsForResponseIds(
+      workspaceId,
+      trainingId,
+      pageCandidates.map(row => row.responseId),
+      pageCandidates,
+      jobs,
+      missingCodesByJobId,
+      defaultMissingCodeContext,
+      exclusions
+    );
+
+    return {
+      data: pageRows,
+      total: filteredCandidates.length,
+      page,
+      limit,
+      totalPages: Math.ceil(filteredCandidates.length / limit),
+      summary: this.calculateComparisonSummaryFromCandidates(filteredCandidates),
+      availableCoders
+    };
+  }
+
+  async getWithinTrainingCohensKappa(
+    workspaceId: number,
+    trainingId: number,
+    options: TrainingKappaOptions = {}
+  ): Promise<TrainingCohensKappaStatistics> {
+    const useWeightedMean = options.weightedMean ?? true;
+    const calculationLevel = options.level ?? 'code';
+    const emptyStatistics = this.createEmptyTrainingKappaStatistics(useWeightedMean, calculationLevel);
+    const training = await this.coderTrainingRepository.findOne({
+      where: {
+        workspace_id: workspaceId,
+        id: trainingId
+      }
+    });
+
+    if (!training) {
+      return emptyStatistics;
+    }
+
+    const jobs = await this.codingJobRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        training_id: trainingId
+      },
+      relations: ['codingJobCoders.user'],
+      order: { id: 'ASC' }
+    });
+    const selectedJobIds = this.getWithinTrainingComparisonSelectedJobIds(options.selectedJobIds, jobs);
+    const jobById = new Map(jobs.map(job => [job.id, job]));
+    const selectedJobs = selectedJobIds
+      .map(jobId => jobById.get(jobId))
+      .filter((job): job is CodingJob => job !== undefined);
+
+    if (selectedJobs.length < 2) {
+      return emptyStatistics;
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const [missingCodesByJobId, defaultMissingCodeContext] = await Promise.all([
+      this.buildMissingCodesByJobId(workspaceId, selectedJobs),
+      this.getDefaultMissingCodeDisplayContext(workspaceId)
+    ]);
+    const [caseRows, valueRows] = await Promise.all([
+      this.getWithinTrainingKappaCaseRows(
+        workspaceId,
+        trainingId,
+        selectedJobIds,
+        calculationLevel,
+        missingCodesByJobId,
+        defaultMissingCodeContext,
+        exclusions
+      ),
+      this.getWithinTrainingKappaValueRows(
+        workspaceId,
+        trainingId,
+        selectedJobIds,
+        missingCodesByJobId,
+        defaultMissingCodeContext,
+        exclusions
+      )
+    ]);
+    const cases = this.normalizeWithinTrainingKappaCases(caseRows);
+    const coderPairs = this.buildWithinTrainingKappaCoderPairs(cases, valueRows, selectedJobs);
+
+    if (coderPairs.length === 0) {
+      return emptyStatistics;
+    }
+
+    const kappaResults = this.codingStatisticsService.calculateCohensKappa(coderPairs, calculationLevel);
+    const caseCountsByVariable = this.calculateTrainingKappaCaseCountsByVariable(cases);
+
+    return this.createTrainingKappaStatistics(
+      kappaResults,
+      caseCountsByVariable,
+      useWeightedMean,
+      calculationLevel
+    );
+  }
+
+  private getTrainingKappaVariableKey(unitName: string, variableId: string): string {
+    return `${unitName}:${variableId}`;
+  }
+
+  private createEmptyTrainingKappaStatistics(
+    useWeightedMean: boolean,
+    calculationLevel: TrainingKappaCalculationLevel
+  ): TrainingCohensKappaStatistics {
+    return {
+      variables: [],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 0,
+        totalCoderPairs: 0,
+        averageKappa: null,
+        variablesIncluded: 0,
+        codersIncluded: 0,
+        weightingMethod: useWeightedMean ? 'weighted' : 'unweighted',
+        calculationLevel
+      }
+    };
+  }
+
+  private calculateTrainingKappaCaseCountsByVariable(
+    cases: WithinTrainingKappaCase[]
+  ): Map<string, number> {
+    const caseCountsByVariable = new Map<string, number>();
+
+    cases.forEach(item => {
+      if (item.validValueCount < 2) return;
+
+      const key = this.getTrainingKappaVariableKey(item.unitName, item.variableId);
+      caseCountsByVariable.set(key, (caseCountsByVariable.get(key) ?? 0) + 1);
+    });
+
+    return caseCountsByVariable;
+  }
+
+  private createTrainingKappaStatistics(
+    kappaResults: KappaCalculationResult[],
+    caseCountsByVariable: Map<string, number>,
+    useWeightedMean: boolean,
+    calculationLevel: TrainingKappaCalculationLevel
+  ): TrainingCohensKappaStatistics {
+    const variableMap = new Map<string, {
+      unitName: string;
+      variableId: string;
+      coderPairs: KappaCalculationResult[];
+    }>();
+
+    kappaResults.forEach(result => {
+      const unitName = result.unitName as string;
+      const variableId = result.variableId as string;
+      const key = this.getTrainingKappaVariableKey(unitName, variableId);
+      if (!variableMap.has(key)) {
+        variableMap.set(key, {
+          unitName,
+          variableId,
+          coderPairs: []
+        });
+      }
+      variableMap.get(key)!.coderPairs.push(result);
+    });
+
+    const variables = Array.from(variableMap.entries())
+      .map(([key, variable]) => ({
+        ...variable,
+        caseCount: caseCountsByVariable.get(key) ?? 0,
+        ...this.codingStatisticsService.calculateKappaVariableSummary(variable.coderPairs)
+      }));
+
+    let totalWeightedKappa = 0;
+    let totalWeight = 0;
+    let totalKappa = 0;
+    let validKappaCount = 0;
+    const uniqueCoders = new Set<number>();
+
+    kappaResults.forEach(result => {
+      uniqueCoders.add(result.coder1Id);
+      uniqueCoders.add(result.coder2Id);
+
+      if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+        if (useWeightedMean) {
+          const weight = result.validPairs;
+          totalWeightedKappa += result.kappa * weight;
+          totalWeight += weight;
+        } else {
+          totalKappa += result.kappa;
+          validKappaCount += 1;
+        }
+      }
+    });
+
+    let averageKappa: number | null;
+    if (useWeightedMean) {
+      averageKappa = totalWeight > 0 ? totalWeightedKappa / totalWeight : null;
+    } else {
+      averageKappa = validKappaCount > 0 ? totalKappa / validKappaCount : null;
+    }
+    const totalDoubleCodedResponses = Array.from(caseCountsByVariable.values())
+      .reduce((sum, caseCount) => sum + caseCount, 0);
+
+    return {
+      variables,
+      workspaceSummary: {
+        totalDoubleCodedResponses,
+        totalCoderPairs: kappaResults.length,
+        averageKappa,
+        variablesIncluded: variableMap.size,
+        codersIncluded: uniqueCoders.size,
+        weightingMethod: useWeightedMean ? 'weighted' : 'unweighted',
+        calculationLevel
+      }
+    };
   }
 
   async updateCoderTraining(

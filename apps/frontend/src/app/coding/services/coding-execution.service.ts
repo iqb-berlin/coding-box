@@ -120,10 +120,7 @@ export class CodingExecutionService {
       .post<{ jobId: string; message: string }>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics/job`,
       {},
-      { params }
-    )
-      .pipe(
-        catchError(() => of({ jobId: '', message: 'Failed to create job' }))
-      );
+      { params, context: suppressGlobalHttpErrorContext() }
+    );
   }
 }

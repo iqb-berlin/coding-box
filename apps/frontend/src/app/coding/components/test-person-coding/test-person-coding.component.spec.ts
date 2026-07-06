@@ -7,6 +7,7 @@ import { of } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
+import { CodingBackgroundJobsService } from '../../services/coding-background-jobs.service';
 import {
   JobStatus,
   TestPersonCodingService
@@ -17,11 +18,18 @@ describe('TestPersonCodingComponent', () => {
   let fixture: ComponentFixture<TestPersonCodingComponent>;
   let component: TestPersonCodingComponent;
   let mockTestPersonCodingService: jest.Mocked<Partial<TestPersonCodingService>>;
+  let codingBackgroundJobsService: CodingBackgroundJobsService;
 
   beforeEach(async () => {
     mockTestPersonCodingService = {
       getAllJobs: jest.fn().mockReturnValue(of([])),
       getWorkspaceGroups: jest.fn().mockReturnValue(of([])),
+      getCodingStatistics: jest.fn().mockReturnValue(
+        of({
+          totalResponses: 0,
+          statusCounts: {}
+        })
+      ),
       getJobStatus: jest.fn(),
       notifyAutoCodingCompleted: jest.fn()
     };
@@ -62,6 +70,7 @@ describe('TestPersonCodingComponent', () => {
 
     fixture = TestBed.createComponent(TestPersonCodingComponent);
     component = fixture.componentInstance;
+    codingBackgroundJobsService = TestBed.inject(CodingBackgroundJobsService);
   });
 
   afterEach(() => {
@@ -86,6 +95,67 @@ describe('TestPersonCodingComponent', () => {
       expect(component.getLastObservedJobStatus('freshness-job-1')).toBe('failed');
       expect(jest.getTimerCount()).toBe(0);
     } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should keep freshness job polling active after a transient status error', () => {
+    jest.useFakeTimers();
+    try {
+      const setJobRunningSpy = jest.spyOn(
+        codingBackgroundJobsService,
+        'setJobRunning'
+      );
+      const completedStatus: JobStatus = {
+        status: 'completed',
+        progress: 100
+      };
+
+      component.initialJobId = 'freshness-job-1';
+      codingBackgroundJobsService.setJobRunning(
+        1,
+        'freshness-coding',
+        true,
+        'freshness-job-1'
+      );
+      (mockTestPersonCodingService.getJobStatus as jest.Mock)
+        .mockReturnValueOnce(of({ error: 'temporary status error' }))
+        .mockReturnValueOnce(of(completedStatus));
+
+      component.startJobStatusPolling('freshness-job-1');
+
+      expect(component.activeJobId).toBe('freshness-job-1');
+      expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(true);
+      expect(jest.getTimerCount()).toBe(1);
+      expect(setJobRunningSpy).not.toHaveBeenCalledWith(
+        1,
+        'freshness-coding',
+        false,
+        'freshness-job-1'
+      );
+
+      jest.advanceTimersByTime(2000);
+
+      expect(setJobRunningSpy).toHaveBeenCalledWith(
+        1,
+        'freshness-coding',
+        false,
+        'freshness-job-1'
+      );
+      expect(component.activeJobId).toBeNull();
+      expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(false);
+      expect(jest.getTimerCount()).toBe(0);
+      expect(
+        mockTestPersonCodingService.notifyAutoCodingCompleted
+      ).toHaveBeenCalledWith('freshness-job-1');
+    } finally {
+      component.stopJobStatusPolling();
+      codingBackgroundJobsService.setJobRunning(
+        1,
+        'freshness-coding',
+        false,
+        'freshness-job-1'
+      );
       jest.useRealTimers();
     }
   });

@@ -711,11 +711,13 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
       next: result => {
         this.isLoading = false;
         this.applyProgress = -1;
+        this.notifyImportApplied(workspaceId);
         this.dialogRef.close({ applied: true, result });
       },
       error: () => {
         this.isLoading = false;
         this.applyProgress = -1;
+        this.notifyImportApplied(workspaceId);
         this.snackBar.open(
           'Import abgeschlossen, aber Ergebnis konnte nicht geladen werden.',
           '',
@@ -724,5 +726,15 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         this.dialogRef.close({ applied: true });
       }
     });
+  }
+
+  private notifyImportApplied(workspaceId: number): void {
+    const event = this.data.sourceVersion ?
+      {
+        workspaceId,
+        statisticsVersion: this.data.sourceVersion
+      } :
+      { workspaceId };
+    this.testPersonCodingService.notifyTestResultsChanged(event);
   }
 }

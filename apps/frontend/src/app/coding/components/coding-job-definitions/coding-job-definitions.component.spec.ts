@@ -117,6 +117,25 @@ describe('CodingJobDefinitionsComponent', () => {
     expect(fixture.nativeElement.querySelector('.empty-state')).toBeTruthy();
   });
 
+  it('keeps existing definitions visible while refreshing', () => {
+    component.isLoading = true;
+    component.jobDefinitions = [
+      {
+        id: 1,
+        status: 'approved',
+        assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+        assignedVariableBundles: [],
+        assignedCoders: [],
+        createdJobsCount: 0
+      }
+    ];
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.loading-container')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.definition-summary')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.job-definitions-table-wrapper')).toBeTruthy();
+  });
+
   it('keeps the create action only in the empty state when no definitions exist', () => {
     component.isLoading = false;
     component.jobDefinitions = [];

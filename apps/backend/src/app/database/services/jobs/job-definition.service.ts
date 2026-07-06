@@ -315,13 +315,30 @@ export class JobDefinitionService {
         ];
       })
     );
+    const availableUsageKey = 'available';
+    const availableUsageRequest: PlannedVariableUsageBatchRequest | undefined =
+      typeof requestedUsageRequest.maxCodingCases === 'number' &&
+      requestedUsageRequest.maxCodingCases > 0 ?
+        {
+          ...requestedUsageRequest,
+          key: availableUsageKey,
+          maxCodingCases: null
+        } :
+        undefined;
+    const usageRequests = availableUsageRequest ?
+      [requestedUsageRequest, ...existingUsageRequests, availableUsageRequest] :
+      [requestedUsageRequest, ...existingUsageRequests];
     const usageByRequestKey = await this.codingJobService.calculateDistributionVariableUsageByStatusBatch(
       workspaceId,
-      [requestedUsageRequest, ...existingUsageRequests]
+      usageRequests
     );
     const requestedUsage =
       usageByRequestKey.get(requestedUsageKey) ||
       new Map<string, DistributionVariableUsageByStatus>();
+    const plannerAvailableUsage = availableUsageRequest ?
+      usageByRequestKey.get(availableUsageKey) ||
+        new Map<string, DistributionVariableUsageByStatus>() :
+      requestedUsage;
 
     existingUsageRequests.forEach(usageRequest => {
       const usage =
@@ -345,7 +362,11 @@ export class JobDefinitionService {
         reservedCasesByVariable.get(variableKey),
         includeDeriveError
       );
-      const remainingCases = (availableCases ?? 0) - reservedCases;
+      const plannerAvailableCases = this.getVariableUsageCountForConflict(
+        plannerAvailableUsage.get(variableKey),
+        includeDeriveError
+      );
+      const remainingCases = plannerAvailableCases - reservedCases;
 
       if (availableCases === undefined || remainingCases <= 0 || requestedCases > remainingCases) {
         unavailableVariables.push(variableKey.replace('::', ':'));

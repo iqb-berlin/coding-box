@@ -72,6 +72,41 @@ describe('CohensKappaStatisticsComponent', () => {
     };
   }
 
+  function createKappaResponseWithCoderPairs(): CohensKappaStatisticsResponse {
+    return {
+      ...kappaResponse,
+      variables: [
+        {
+          ...kappaResponse.variables[0],
+          coderPairs: [
+            {
+              coder1Id: 1,
+              coder1Name: 'Coder 1',
+              coder2Id: 2,
+              coder2Name: 'Coder 2',
+              kappa: 1,
+              agreement: 1,
+              totalItems: 2,
+              validPairs: 2,
+              interpretation: 'kappa.almost_perfect'
+            },
+            {
+              coder1Id: 1,
+              coder1Name: 'Coder 1',
+              coder2Id: 3,
+              coder2Name: 'Coder 3',
+              kappa: 0.5,
+              agreement: 0.75,
+              totalItems: 2,
+              validPairs: 2,
+              interpretation: 'kappa.moderate'
+            }
+          ]
+        }
+      ]
+    };
+  }
+
   function createTraining(id: number, label: string): CoderTraining {
     return {
       id,
@@ -83,9 +118,12 @@ describe('CohensKappaStatisticsComponent', () => {
     };
   }
 
-  async function createComponent(dialogData: CohensKappaStatisticsDialogData): Promise<void> {
+  async function createComponent(
+    dialogData: CohensKappaStatisticsDialogData,
+    response: CohensKappaStatisticsResponse = kappaResponse
+  ): Promise<void> {
     testPersonCodingService = {
-      getCohensKappaStatistics: jest.fn().mockReturnValue(of(kappaResponse)),
+      getCohensKappaStatistics: jest.fn().mockReturnValue(of(response)),
       exportCohensKappaSummaryAsCsv: jest.fn().mockReturnValue(of(new Blob(['summary']))),
       exportCohensKappaStatisticsAsXlsx: jest.fn().mockReturnValue(of(new Blob(['xlsx']))),
       exportCohensKappaStatisticsAsCsv: jest.fn().mockReturnValue(of(new Blob(['details'])))
@@ -144,7 +182,8 @@ describe('CohensKappaStatisticsComponent', () => {
       false,
       undefined,
       undefined,
-      { coderTrainingIds: [7] }
+      { coderTrainingIds: [7] },
+      'code'
     );
   });
 
@@ -174,7 +213,126 @@ describe('CohensKappaStatisticsComponent', () => {
       false,
       undefined,
       undefined,
-      { coderTrainingIds: [9] }
+      { coderTrainingIds: [9] },
+      'code'
+    );
+  });
+
+  it('reloads kappa statistics with selected coders and keeps coders selectable', async () => {
+    await createComponent(
+      {
+        excludeTrainings: false,
+        availableCoderTrainings: [trainings[0]]
+      },
+      createKappaResponseWithCoderPairs()
+    );
+
+    expect(component.availableCoders).toEqual([
+      { id: 1, name: 'Coder 1' },
+      { id: 2, name: 'Coder 2' },
+      { id: 3, name: 'Coder 3' }
+    ]);
+    expect(component.selectedCoderIds).toEqual([1, 2, 3]);
+
+    component.selectedCoderIds = [1, 2];
+    component.onCoderSelectionChange();
+
+    expect(testPersonCodingService.getCohensKappaStatistics).toHaveBeenLastCalledWith(
+      1,
+      true,
+      false,
+      undefined,
+      undefined,
+      { coderTrainingIds: [7], coderIds: [1, 2] },
+      'code'
+    );
+    expect(component.availableCoders).toHaveLength(3);
+    expect(component.selectedCoderIds).toEqual([1, 2]);
+  });
+
+  it('keeps coder controls visible after clearing the coder selection', async () => {
+    await createComponent(
+      {
+        excludeTrainings: false,
+        availableCoderTrainings: [trainings[0]]
+      },
+      createKappaResponseWithCoderPairs()
+    );
+
+    component.clearCoderSelection();
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(component.workspaceKappaSummary).toBeNull();
+    expect(component.canLoadKappaStatistics).toBe(false);
+    expect(element.querySelector('.workspace-kappa-card')).not.toBeNull();
+    expect(element.querySelector('.coder-selection')).not.toBeNull();
+  });
+
+  it('reloads kappa statistics on score level', async () => {
+    await createComponent({
+      excludeTrainings: false,
+      availableCoderTrainings: [trainings[0]]
+    });
+
+    component.useCodeLevel = false;
+    component.toggleCalculationLevel();
+
+    expect(testPersonCodingService.getCohensKappaStatistics).toHaveBeenLastCalledWith(
+      1,
+      true,
+      false,
+      undefined,
+      undefined,
+      { coderTrainingIds: [7] },
+      'score'
+    );
+  });
+
+  it('resets selected coder filters when changing the calculation level', async () => {
+    await createComponent(
+      {
+        excludeTrainings: false,
+        availableCoderTrainings: [trainings[0]]
+      },
+      createKappaResponseWithCoderPairs()
+    );
+    component.selectedCoderIds = [1, 2];
+
+    component.useCodeLevel = false;
+    component.toggleCalculationLevel();
+
+    expect(testPersonCodingService.getCohensKappaStatistics).toHaveBeenLastCalledWith(
+      1,
+      true,
+      false,
+      undefined,
+      undefined,
+      { coderTrainingIds: [7] },
+      'score'
+    );
+  });
+
+  it('resets selected coder filters when changing the training exclusion scope', async () => {
+    await createComponent(
+      {
+        excludeTrainings: true
+      },
+      createKappaResponseWithCoderPairs()
+    );
+    component.selectedCoderIds = [1, 2];
+
+    component.excludeTrainings = false;
+    component.toggleExcludeTrainings();
+
+    expect(testPersonCodingService.getCohensKappaStatistics).toHaveBeenLastCalledWith(
+      1,
+      true,
+      false,
+      undefined,
+      undefined,
+      {},
+      'code'
     );
   });
 
@@ -225,7 +383,8 @@ describe('CohensKappaStatisticsComponent', () => {
       false,
       undefined,
       undefined,
-      { coderTrainingIds: [7] }
+      { coderTrainingIds: [7] },
+      'code'
     );
   });
 });

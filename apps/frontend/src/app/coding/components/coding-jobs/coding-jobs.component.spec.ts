@@ -20,6 +20,7 @@ import { CoderService } from '../../services/coder.service';
 import { CodingJob } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { TestPersonCodingService } from '../../services/test-person-coding.service';
 
 describe('CodingJobsComponent', () => {
   let component: CodingJobsComponent;
@@ -31,6 +32,7 @@ describe('CodingJobsComponent', () => {
   let matSnackBarMock: Partial<MatSnackBar>;
   let matDialogMock: Partial<MatDialog>;
   let userBackendServiceMock: Partial<UserBackendService>;
+  let testPersonCodingServiceMock: { notifyTestResultsChanged: jest.Mock };
   let overlayContainer: OverlayContainer;
 
   const mockCodingJobs: Partial<CodingJob>[] = [
@@ -139,6 +141,10 @@ describe('CodingJobsComponent', () => {
       getUsers: jest.fn().mockReturnValue(of([{ id: 1, accessLevel: 3 }]))
     };
 
+    testPersonCodingServiceMock = {
+      notifyTestResultsChanged: jest.fn()
+    };
+
     coderServiceMock = {
       getCoders: jest.fn().mockReturnValue(of(mockCoders))
     };
@@ -166,6 +172,7 @@ describe('CodingJobsComponent', () => {
         { provide: AppService, useValue: appServiceMock },
         { provide: UserBackendService, useValue: userBackendServiceMock },
         { provide: CoderService, useValue: coderServiceMock },
+        { provide: TestPersonCodingService, useValue: testPersonCodingServiceMock },
         { provide: MatSnackBar, useValue: matSnackBarMock },
         { provide: MatDialog, useValue: matDialogMock },
         {
@@ -188,6 +195,7 @@ describe('CodingJobsComponent', () => {
             { provide: AppService, useValue: appServiceMock },
             { provide: UserBackendService, useValue: userBackendServiceMock },
             { provide: CoderService, useValue: coderServiceMock },
+            { provide: TestPersonCodingService, useValue: testPersonCodingServiceMock },
             { provide: MatSnackBar, useValue: matSnackBarMock },
             { provide: MatDialog, useValue: matDialogMock }
           ]
@@ -503,6 +511,21 @@ describe('CodingJobsComponent', () => {
     ).toContain('Keine Kodierjobs vorhanden');
   });
 
+  it('shows the refresh action by default', () => {
+    expect(
+      fixture.nativeElement.querySelector('.utility-actions')?.textContent
+    ).toContain('Aktualisieren');
+  });
+
+  it('hides the refresh action when manual refresh is not available', () => {
+    component.showRefreshAction = false;
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('.utility-actions')?.textContent
+    ).not.toContain('Aktualisieren');
+  });
+
   it('should choose a single primary row action by job state', () => {
     component.canApplyResults = true;
 
@@ -751,7 +774,14 @@ describe('CodingJobsComponent', () => {
     expect(matSnackBarMock.open).toHaveBeenCalled();
   }));
 
-  it('should handle window focus', () => {
+  it('should ignore window focus by default', () => {
+    const loadSpy = jest.spyOn(component, 'loadCodingJobs');
+    window.dispatchEvent(new Event('focus'));
+    expect(loadSpy).not.toHaveBeenCalled();
+  });
+
+  it('should handle window focus when auto reload is enabled', () => {
+    component.autoReloadOnFocus = true;
     const loadSpy = jest.spyOn(component, 'loadCodingJobs');
     window.dispatchEvent(new Event('focus'));
     expect(loadSpy).toHaveBeenCalled();
@@ -906,6 +936,31 @@ describe('CodingJobsComponent', () => {
       'Schließen',
       expect.objectContaining({})
     );
+    expect(testPersonCodingServiceMock.notifyTestResultsChanged)
+      .toHaveBeenCalledWith({
+        workspaceId: 1,
+        statisticsVersion: 'v2'
+      });
+  });
+
+  it('should notify status consumers when coding results were applied in the result dialog', () => {
+    const job = mockCodingJobs[0] as CodingJob;
+    (matDialogMock.open as jest.Mock).mockReturnValue({
+      backdropClick: () => of(),
+      keydownEvents: () => of(),
+      afterClosed: () => of({ resultsApplied: true }),
+      componentInstance: {
+        closeDialog: jest.fn()
+      }
+    });
+
+    component.viewCodingResults(job);
+
+    expect(testPersonCodingServiceMock.notifyTestResultsChanged)
+      .toHaveBeenCalledWith({
+        workspaceId: 1,
+        statisticsVersion: 'v2'
+      });
   });
 
   it('should handle bulk apply coding results', () => {
@@ -966,6 +1021,11 @@ describe('CodingJobsComponent', () => {
     expect(
       codingJobBackendServiceMock.bulkApplyCodingResults
     ).toHaveBeenCalledWith(1);
+    expect(testPersonCodingServiceMock.notifyTestResultsChanged)
+      .toHaveBeenCalledWith({
+        workspaceId: 1,
+        statisticsVersion: 'v2'
+      });
     expect(matSnackBarMock.open).toHaveBeenCalledWith(
       expect.stringContaining('Massenanwendung abgeschlossen'),
       'Schließen',

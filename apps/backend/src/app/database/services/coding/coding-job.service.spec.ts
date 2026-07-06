@@ -99,7 +99,7 @@ describe('CodingJobService', () => {
   let fileUploadRepository: ReturnType<typeof createRepo>;
   let settingRepository: ReturnType<typeof createRepo>;
   let connection: { transaction: jest.Mock };
-  let cacheService: { delete: jest.Mock };
+  let cacheService: { delete: jest.Mock; incr: jest.Mock };
   let codingFreshnessService: { reconcileAppliedManualCodingJobs: jest.Mock };
   let codingFileCacheService: { getVariablePageMap: jest.Mock };
   let missingsProfilesService: {
@@ -198,7 +198,10 @@ describe('CodingJobService', () => {
       })
       )
     };
-    cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1)
+    };
     jobDefinitionRepository.createQueryBuilder.mockReturnValue({
       setLock: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
@@ -1754,8 +1757,14 @@ describe('CodingJobService', () => {
     expect(codingJobRepository.create.mock.calls[0][0]).not.toHaveProperty(
       'job_definition_id'
     );
+    expect(cacheService.incr).toHaveBeenCalledWith(
+      'coding_incomplete_variables_version:7'
+    );
     expect(cacheService.delete).toHaveBeenCalledWith(
       'coding_incomplete_variables_v8:7'
+    );
+    expect(cacheService.delete).toHaveBeenCalledWith(
+      'coding_incomplete_variables_scope_v1:7'
     );
   });
 
@@ -3395,6 +3404,86 @@ describe('CodingJobService', () => {
       expect.objectContaining({
         code: 7,
         score: 5,
+        is_open: false
+      })
+    );
+  });
+
+  it('prefers coding scheme aliases over colliding technical ids when saving progress', async () => {
+    const job = { id: 1, workspace_id: 3 };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'DHB003',
+      unit_alias: 'DHB003',
+      variable_id: '04',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    fileUploadRepository.find
+      .mockResolvedValueOnce([
+        {
+          file_id: 'DHB003',
+          data: '<Unit><CodingSchemeRef>DHB003</CodingSchemeRef></Unit>'
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          file_id: 'DHB003.VOCS',
+          data: {
+            variableCodings: [
+              {
+                id: '04',
+                alias: '02',
+                codes: [
+                  {
+                    id: 2,
+                    code: '2',
+                    label: 'Visible 02',
+                    score: 2,
+                    manualInstruction: '<p>Manual 02</p>'
+                  }
+                ]
+              },
+              {
+                id: '07',
+                alias: '04',
+                codes: [
+                  {
+                    id: 4,
+                    code: '4',
+                    label: 'Visible 04',
+                    score: 4,
+                    manualInstruction: '<p>Manual 04</p>'
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]);
+    (
+      service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }
+    ).checkAndUpdateCodingJobCompletion = jest.fn();
+
+    await service.saveCodingProgress(1, {
+      testPerson: 'login@code@booklet',
+      unitId: 'DHB003',
+      variableId: '04',
+      selectedCode: { id: 4, score: 999 }
+    } as never);
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 4,
+        score: 4,
         is_open: false
       })
     );

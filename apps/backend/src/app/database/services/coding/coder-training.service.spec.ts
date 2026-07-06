@@ -16,6 +16,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
+import { CodingStatisticsService } from './coding-statistics.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
@@ -37,6 +38,10 @@ describe('CoderTrainingService', () => {
   let coderTrainingCoderRepository: Repository<CoderTrainingCoder>;
   let codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>;
   let coderTrainingDiscussionResultRepository: Repository<CoderTrainingDiscussionResult>;
+  let codingStatisticsService: {
+    calculateCohensKappa: jest.Mock;
+    calculateKappaVariableSummary: jest.Mock;
+  };
   let missingsProfilesService: {
     getMissingsProfileDetails: jest.Mock;
     ensureDefaultMissingsProfile: jest.Mock;
@@ -71,6 +76,10 @@ describe('CoderTrainingService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     mockRepository.count.mockResolvedValue(0);
+    codingStatisticsService = {
+      calculateCohensKappa: jest.fn(),
+      calculateKappaVariableSummary: jest.fn()
+    };
     missingsProfilesService = {
       getMissingsProfileDetails: jest.fn(),
       ensureDefaultMissingsProfile: jest.fn().mockResolvedValue({
@@ -131,6 +140,7 @@ describe('CoderTrainingService', () => {
         { provide: CodingJobService, useValue: mockCodingJobService },
         { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
         { provide: MissingsProfilesService, useValue: missingsProfilesService },
+        { provide: CodingStatisticsService, useValue: codingStatisticsService },
         {
           provide: WorkspaceExclusionService,
           useValue: {
@@ -1266,6 +1276,26 @@ describe('CoderTrainingService', () => {
   });
 
   describe('getTrainingCodingComparison', () => {
+    const emptyExclusions = {
+      globalIgnoredUnits: [],
+      ignoredBooklets: [],
+      testletIgnoredUnits: []
+    };
+
+    const createRawQueryBuilder = <T>(rawRows: T[]) => ({
+      innerJoin: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      setParameter: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue(rawRows)
+    });
+
     const createComparisonUnit = (
       responseId: number,
       overrides: Partial<CodingJobUnit> = {}
@@ -1338,6 +1368,434 @@ describe('CoderTrainingService', () => {
         score: 1,
         codingIssueOption: null
       }));
+    });
+
+    it('returns a paged between-training comparison with global summary metrics', async () => {
+      const fullComparisonSpy = jest.spyOn(service, 'getTrainingCodingComparison').mockResolvedValue([]);
+      const serviceInternals = service as unknown as {
+        getTrainingComparisonAvailableCodersForJobs: () => Promise<unknown>;
+        getTrainingComparisonAggregateRows: () => Promise<unknown>;
+        getTrainingComparisonRowsForResponseIds: () => Promise<unknown>;
+      };
+      (coderTrainingRepository.find as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 1,
+          label: 'Training A',
+          codingJobs: [{
+            id: 11,
+            name: 'job-a',
+            training_id: 1,
+            missings_profile_id: null,
+            codingJobCoders: [{ user: { username: 'Coder A' } }]
+          }]
+        },
+        {
+          id: 2,
+          label: 'Training B',
+          codingJobs: [{
+            id: 21,
+            name: 'job-b',
+            training_id: 2,
+            missings_profile_id: null,
+            codingJobCoders: [{ user: { username: 'Coder B' } }]
+          }]
+        }
+      ]);
+      jest.spyOn(serviceInternals, 'getTrainingComparisonAvailableCodersForJobs').mockResolvedValue([
+        {
+          trainingId: 1,
+          trainingLabel: 'Training A',
+          coderId: 11,
+          coderName: 'Coder A'
+        },
+        {
+          trainingId: 2,
+          trainingLabel: 'Training B',
+          coderId: 21,
+          coderName: 'Coder B'
+        }
+      ]);
+      jest.spyOn(serviceInternals, 'getTrainingComparisonAggregateRows').mockResolvedValue([
+        {
+          responseId: 101,
+          unitName: 'Unit A',
+          variableId: 'VAR',
+          personCode: 'P1',
+          personLogin: 'login-a',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          completeCodeCount: 2,
+          distinctCodeCount: 2,
+          hasNotes: true
+        },
+        {
+          responseId: 102,
+          unitName: 'Unit B',
+          variableId: 'VAR',
+          personCode: 'P2',
+          personLogin: 'login-b',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          completeCodeCount: 2,
+          distinctCodeCount: 1,
+          hasNotes: false
+        },
+        {
+          responseId: 103,
+          unitName: 'Unit C',
+          variableId: 'VAR',
+          personCode: 'P3',
+          personLogin: 'login-c',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          completeCodeCount: 1,
+          distinctCodeCount: 1,
+          hasNotes: false
+        }
+      ]);
+      const pageRowsSpy = jest.spyOn(serviceInternals, 'getTrainingComparisonRowsForResponseIds').mockResolvedValue([
+        {
+          responseId: 102,
+          unitName: 'Unit B',
+          variableId: 'VAR',
+          personCode: 'P2',
+          personLogin: 'login-b',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          testPerson: 'login-b (group) - booklet',
+          coders: [
+            {
+              trainingId: 1,
+              trainingLabel: 'Training A',
+              coderId: 11,
+              coderName: 'Coder A',
+              code: '1',
+              score: 1,
+              notes: null,
+              codingIssueOption: null
+            },
+            {
+              trainingId: 2,
+              trainingLabel: 'Training B',
+              coderId: 21,
+              coderName: 'Coder B',
+              code: '1',
+              score: 1,
+              notes: null,
+              codingIssueOption: null
+            }
+          ]
+        }
+      ]);
+
+      const result = await service.getTrainingCodingComparisonPage(1, [1, 2], {
+        page: 2,
+        limit: 1,
+        sortBy: 'unitName',
+        sortDirection: 'desc',
+        selectedCoderKeys: ['1_11', '2_21']
+      });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].responseId).toBe(102);
+      expect(result.total).toBe(3);
+      expect(result.totalPages).toBe(3);
+      expect(result.summary).toEqual({
+        visibleRows: 3,
+        comparableRows: 2,
+        matchingRows: 1,
+        matchingPercentage: 50,
+        incompleteRows: 1,
+        notComparableRows: 0,
+        deviationRows: 1,
+        completionRate: 67
+      });
+      expect(result.availableCoders).toEqual([
+        {
+          trainingId: 1,
+          trainingLabel: 'Training A',
+          coderId: 11,
+          coderName: 'Coder A'
+        },
+        {
+          trainingId: 2,
+          trainingLabel: 'Training B',
+          coderId: 21,
+          coderName: 'Coder B'
+        }
+      ]);
+      expect(fullComparisonSpy).not.toHaveBeenCalled();
+      expect(pageRowsSpy).toHaveBeenCalledWith(
+        1,
+        [1, 2],
+        [102],
+        expect.any(Array),
+        expect.any(Map),
+        expect.any(Object),
+        expect.any(Object)
+      );
+    });
+
+    it('normalizes selected coder keys before calculating between-training slots', () => {
+      const serviceInternals = service as unknown as {
+        getTrainingComparisonSelection: (
+          selectedTrainingIds: number[],
+          selectedCoderKeys: string[],
+          availableCoders: Array<{
+            trainingId: number;
+            trainingLabel: string;
+            coderId: number;
+            coderName: string;
+          }>
+        ) => { selectedJobIds: number[]; slotCount: number };
+      };
+
+      const result = serviceInternals.getTrainingComparisonSelection(
+        [1, 2, 2, 3],
+        ['1_11', '1_11', '2_21', '2_999', '4_41', 'invalid'],
+        [
+          {
+            trainingId: 1,
+            trainingLabel: 'Training A',
+            coderId: 11,
+            coderName: 'Coder A'
+          },
+          {
+            trainingId: 2,
+            trainingLabel: 'Training B',
+            coderId: 21,
+            coderName: 'Coder B'
+          }
+        ]
+      );
+
+      expect(result).toEqual({
+        selectedJobIds: [11, 21],
+        slotCount: 3
+      });
+    });
+
+    it('builds aggregate SQL for paged between-training comparison metrics', async () => {
+      const rawRows = [{
+        responseId: '101',
+        unitName: 'Unit A',
+        variableId: 'VAR',
+        personCode: 'P1',
+        personLogin: 'login-a',
+        personGroup: 'group',
+        bookletName: 'booklet',
+        completeCodeCount: '2',
+        distinctCodeCount: '1',
+        hasNotes: 'true'
+      }];
+      const qb = createRawQueryBuilder(rawRows);
+      const serviceInternals = service as unknown as {
+        getTrainingComparisonAggregateRows: (
+          workspaceId: number,
+          trainingIds: number[],
+          selectedJobIds: number[],
+          missingCodesByJobId: Map<number, {
+            mirCode: number;
+            mciCode: number;
+            negativeCodes: Set<number>;
+            scoresByCode: Map<number, number | null>;
+          }>,
+          defaultMissingCodeContext: {
+            mirCode: number;
+            mciCode: number;
+            negativeCodes: Set<number>;
+            scoresByCode: Map<number, number | null>;
+          },
+          exclusions: typeof emptyExclusions
+        ) => Promise<typeof rawRows>;
+      };
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn().mockReturnValue(qb);
+
+      const result = await serviceInternals.getTrainingComparisonAggregateRows(
+        1,
+        [5],
+        [11],
+        new Map([
+          [11, {
+            mirCode: -31,
+            mciCode: -41,
+            negativeCodes: new Set([-31, -41]),
+            scoresByCode: new Map([[-31, 7], [-41, 3]])
+          }]
+        ]),
+        {
+          mirCode: -98,
+          mciCode: -97,
+          negativeCodes: new Set([-98, -97, -99]),
+          scoresByCode: new Map([[-98, 0], [-97, 0], [-99, 0]])
+        },
+        emptyExclusions
+      );
+
+      const aggregateSql = qb.addSelect.mock.calls.map(([sql]) => String(sql)).join('\n');
+      expect(result).toEqual(rawRows);
+      expect((mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder).toHaveBeenCalledWith('cju');
+      expect(qb.groupBy).toHaveBeenCalledWith('cju.response_id');
+      expect(qb.setParameter).toHaveBeenCalledWith('trainingComparisonSelectedJobIds', [11]);
+      expect(aggregateSql).toContain('COUNT(DISTINCT cj.id) FILTER');
+      expect(aggregateSql).toContain('COUNT(DISTINCT (CASE');
+      expect(aggregateSql).toContain('WHEN cju.code = -3 OR cju.coding_issue_option = -3');
+      expect(aggregateSql).toContain("WHEN 11 THEN '-31'");
+      expect(aggregateSql).toContain("ELSE '-98'");
+      expect(aggregateSql).toContain('BOOL_OR');
+    });
+
+    it('loads only requested between-training detail rows and maps display missing codes', async () => {
+      const rawRows = [
+        {
+          trainingId: 1,
+          trainingLabel: 'Training A',
+          jobId: 11,
+          coderName: null,
+          missingsProfileId: null,
+          responseId: 101,
+          unitName: 'Unit A',
+          variableId: 'VAR',
+          personCode: 'P1',
+          personLogin: 'login-a',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          code: null,
+          score: null,
+          notes: 'note',
+          codingIssueOption: -3
+        },
+        {
+          trainingId: 2,
+          trainingLabel: 'Training B',
+          jobId: 21,
+          coderName: 'Coder B',
+          missingsProfileId: null,
+          responseId: 101,
+          unitName: 'Unit A',
+          variableId: 'VAR',
+          personCode: 'P1',
+          personLogin: 'login-a',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          code: -4,
+          score: null,
+          notes: null,
+          codingIssueOption: null
+        }
+      ];
+      const qb = createRawQueryBuilder(rawRows);
+      const serviceInternals = service as unknown as {
+        getTrainingComparisonRowsForResponseIds: (
+          workspaceId: number,
+          trainingIds: number[],
+          responseIds: number[],
+          pageCandidates: Array<{
+            responseId: number;
+            unitName: string;
+            variableId: string;
+            personCode: string;
+            personLogin: string;
+            personGroup: string;
+            bookletName: string;
+            testPerson: string;
+            status: string;
+            hasNotes: boolean;
+          }>,
+          missingCodesByJobId: Map<number, {
+            mirCode: number;
+            mciCode: number;
+            negativeCodes: Set<number>;
+            scoresByCode: Map<number, number | null>;
+          }>,
+          defaultMissingCodeContext: {
+            mirCode: number;
+            mciCode: number;
+            negativeCodes: Set<number>;
+            scoresByCode: Map<number, number | null>;
+          },
+          exclusions: typeof emptyExclusions
+        ) => Promise<Array<{
+          responseId: number;
+          coders: Array<{
+            coderId: number;
+            coderName: string;
+            code: string | null;
+            score: number | null;
+            notes: string | null;
+          }>;
+        }>>;
+      };
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn().mockReturnValue(qb);
+
+      const result = await serviceInternals.getTrainingComparisonRowsForResponseIds(
+        1,
+        [1, 2],
+        [101],
+        [{
+          responseId: 101,
+          unitName: 'Unit A',
+          variableId: 'VAR',
+          personCode: 'P1',
+          personLogin: 'login-a',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          testPerson: 'login-a (group) - booklet',
+          status: 'match',
+          hasNotes: true
+        }],
+        new Map([
+          [11, {
+            mirCode: -31,
+            mciCode: -41,
+            negativeCodes: new Set([-31, -41]),
+            scoresByCode: new Map([[-31, 7], [-41, 3]])
+          }]
+        ]),
+        {
+          mirCode: -98,
+          mciCode: -97,
+          negativeCodes: new Set([-98, -97, -99]),
+          scoresByCode: new Map([[-98, 0], [-97, 0], [-99, 0]])
+        },
+        emptyExclusions
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('cju.response_id IN (:...responseIds)', { responseIds: [101] });
+      expect(result).toEqual([
+        {
+          responseId: 101,
+          unitName: 'Unit A',
+          variableId: 'VAR',
+          personCode: 'P1',
+          personLogin: 'login-a',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          testPerson: 'login-a (group) - booklet',
+          coders: [
+            {
+              trainingId: 1,
+              trainingLabel: 'Training A',
+              coderId: 11,
+              coderName: 'Job 11',
+              code: '-31',
+              score: 7,
+              notes: 'note',
+              codingIssueOption: -3
+            },
+            {
+              trainingId: 2,
+              trainingLabel: 'Training B',
+              coderId: 21,
+              coderName: 'Coder B',
+              code: '-97',
+              score: 0,
+              notes: null,
+              codingIssueOption: null
+            }
+          ]
+        }
+      ]);
     });
   });
 
@@ -2109,6 +2567,998 @@ describe('CoderTrainingService', () => {
         ],
         exclusions
       )).rejects.toThrow('Conflicting missing profiles for response 101 in training 5');
+    });
+  });
+
+  describe('getWithinTrainingCodingComparison', () => {
+    const createFreshnessQueryBuilder = (
+      row: Record<string, unknown> = {},
+      rows: Record<string, unknown>[] = []
+    ) => ({
+      innerJoin: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      addGroupBy: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue(rows),
+      getRawOne: jest.fn().mockResolvedValue(row)
+    });
+
+    it('builds a within-training comparison freshness token from aggregate changes', async () => {
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        workspace_id: 1,
+        updated_at: new Date('2026-06-01T10:00:00Z')
+      });
+      (codingJobRepository.find as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 11,
+          workspace_id: 1,
+          training_id: 5,
+          missings_profile_id: null,
+          updated_at: new Date('2026-06-01T10:05:00Z')
+        },
+        {
+          id: 12,
+          workspace_id: 1,
+          training_id: 5,
+          missings_profile_id: 7,
+          updated_at: new Date('2026-06-01T10:10:00Z')
+        }
+      ]);
+
+      const unitQb = createFreshnessQueryBuilder({
+        unitCount: '4',
+        responseCount: '2',
+        latestUnitChange: '2026-06-01T10:20:00.000Z'
+      });
+      const responseQb = createFreshnessQueryBuilder({}, [
+        { responseId: '101', responseHash: 'response-hash-101' },
+        { responseId: '102', responseHash: 'response-hash-102' }
+      ]);
+      const discussionQb = createFreshnessQueryBuilder({
+        discussionResultCount: '1',
+        latestDiscussionChange: '2026-06-01T10:30:00.000Z'
+      });
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(unitQb)
+        .mockReturnValueOnce(responseQb)
+        .mockReturnValueOnce(discussionQb);
+
+      const result = await service.getWithinTrainingComparisonFreshness(1, 5);
+
+      expect(result).toMatchObject({
+        workspaceId: 1,
+        trainingId: 5,
+        jobCount: 2,
+        unitCount: 4,
+        responseCount: 2,
+        discussionResultCount: 1,
+        latestTrainingChange: '2026-06-01T10:00:00.000Z',
+        latestJobChange: '2026-06-01T10:10:00.000Z',
+        latestUnitChange: '2026-06-01T10:20:00.000Z',
+        latestDiscussionChange: '2026-06-01T10:30:00.000Z'
+      });
+      expect(result.version).toHaveLength(16);
+      expect(unitQb.innerJoin).toHaveBeenCalledWith('cju.coding_job', 'cj');
+      expect(unitQb.leftJoin).not.toHaveBeenCalledWith('cju.response', 'resp');
+      expect(responseQb.leftJoin).toHaveBeenCalledWith('cju.response', 'resp');
+      expect(responseQb.addSelect).toHaveBeenCalledWith(
+        expect.stringContaining('resp.value'),
+        'responseHash'
+      );
+      expect(responseQb.groupBy).toHaveBeenCalledWith('cju.response_id');
+      expect(discussionQb.where).toHaveBeenCalledWith('ctdr.workspace_id = :workspaceId', { workspaceId: 1 });
+    });
+
+    it('changes the within-training freshness token when discussion results change', async () => {
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValue({
+        id: 5,
+        workspace_id: 1,
+        updated_at: new Date('2026-06-01T10:00:00Z')
+      });
+      (codingJobRepository.find as jest.Mock).mockResolvedValue([
+        {
+          id: 11,
+          workspace_id: 1,
+          training_id: 5,
+          missings_profile_id: null,
+          updated_at: new Date('2026-06-01T10:05:00Z')
+        }
+      ]);
+
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          unitCount: '2',
+          responseCount: '1',
+          latestUnitChange: '2026-06-01T10:20:00.000Z'
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({}, [
+          { responseId: '101', responseHash: 'response-hash' }
+        ]))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          discussionResultCount: '0',
+          latestDiscussionChange: null
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          unitCount: '2',
+          responseCount: '1',
+          latestUnitChange: '2026-06-01T10:20:00.000Z'
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({}, [
+          { responseId: '101', responseHash: 'response-hash' }
+        ]))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          discussionResultCount: '1',
+          latestDiscussionChange: '2026-06-01T10:35:00.000Z'
+        }));
+
+      const before = await service.getWithinTrainingComparisonFreshness(1, 5);
+      const after = await service.getWithinTrainingComparisonFreshness(1, 5);
+
+      expect(before.version).not.toBe(after.version);
+    });
+
+    it('changes the within-training freshness token when response data changes', async () => {
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValue({
+        id: 5,
+        workspace_id: 1,
+        updated_at: new Date('2026-06-01T10:00:00Z')
+      });
+      (codingJobRepository.find as jest.Mock).mockResolvedValue([
+        {
+          id: 11,
+          workspace_id: 1,
+          training_id: 5,
+          missings_profile_id: null,
+          updated_at: new Date('2026-06-01T10:05:00Z')
+        }
+      ]);
+
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          unitCount: '2',
+          responseCount: '1',
+          latestUnitChange: '2026-06-01T10:20:00.000Z'
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({}, [
+          { responseId: '101', responseHash: 'response-hash-before' }
+        ]))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          discussionResultCount: '0',
+          latestDiscussionChange: null
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          unitCount: '2',
+          responseCount: '1',
+          latestUnitChange: '2026-06-01T10:20:00.000Z'
+        }))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({}, [
+          { responseId: '101', responseHash: 'response-hash-after' }
+        ]))
+        .mockReturnValueOnce(createFreshnessQueryBuilder({
+          discussionResultCount: '0',
+          latestDiscussionChange: null
+        }));
+
+      const before = await service.getWithinTrainingComparisonFreshness(1, 5);
+      const after = await service.getWithinTrainingComparisonFreshness(1, 5);
+
+      expect(before.version).not.toBe(after.version);
+    });
+
+    it('groups raw coding rows by response and keeps manual discussion results authoritative', async () => {
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        workspace_id: 1
+      });
+      mockRepository.find
+        .mockResolvedValueOnce([
+          {
+            id: 11,
+            name: 'job-a',
+            missings_profile_id: null,
+            codingJobCoders: [{ user: { username: 'Alice' } }]
+          },
+          {
+            id: 12,
+            name: 'job-b',
+            missings_profile_id: null,
+            codingJobCoders: [{ user: { username: 'Bob' } }]
+          }
+        ])
+        .mockResolvedValueOnce([
+          {
+            response_id: 102,
+            code: 99,
+            score: 4,
+            notes: 'manual note',
+            manager_user_id: 23,
+            manager_name: 'Old Manager'
+          }
+        ])
+        .mockResolvedValueOnce([
+          { id: 23, username: 'Manager' }
+        ]);
+
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([
+          {
+            jobId: 11,
+            unitRowId: 1,
+            responseId: 101,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P1',
+            personLogin: 'login-1',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 1',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: 7,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: 2,
+            code: 7,
+            score: 2,
+            notes: 'a',
+            codingIssueOption: null
+          },
+          {
+            jobId: 12,
+            unitRowId: 2,
+            responseId: 101,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P1',
+            personLogin: 'login-1',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 1',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: 7,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: 2,
+            code: 7,
+            score: 2,
+            notes: 'b',
+            codingIssueOption: null
+          },
+          {
+            jobId: 11,
+            unitRowId: 3,
+            responseId: 102,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P2',
+            personLogin: 'login-2',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 2',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: null,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: null,
+            code: 8,
+            score: 2,
+            notes: null,
+            codingIssueOption: null
+          },
+          {
+            jobId: 12,
+            unitRowId: 4,
+            responseId: 102,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P2',
+            personLogin: 'login-2',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 2',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: null,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: null,
+            code: 9,
+            score: 3,
+            notes: null,
+            codingIssueOption: null
+          }
+        ])
+      };
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn().mockReturnValue(qb);
+
+      const result = await service.getWithinTrainingCodingComparison(1, 5);
+
+      expect(coderTrainingRepository.findOne).toHaveBeenCalledWith({
+        where: { workspace_id: 1, id: 5 }
+      });
+      expect(codingJobRepository.find).toHaveBeenCalledWith({
+        where: { workspace_id: 1, training_id: 5 },
+        relations: ['codingJobCoders.user'],
+        order: { id: 'ASC' }
+      });
+      expect(qb.getRawMany).toHaveBeenCalled();
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        responseId: 101,
+        givenAnswer: 'answer 1',
+        replayCode: 7,
+        replayScore: 2,
+        discussionCode: 7,
+        discussionScore: 2,
+        discussionSource: 'auto_agreement',
+        coders: [
+          {
+            jobId: 11, coderName: 'Alice', code: '7', score: 2, notes: 'a'
+          },
+          {
+            jobId: 12, coderName: 'Bob', code: '7', score: 2, notes: 'b'
+          }
+        ]
+      });
+      expect(result[1]).toMatchObject({
+        responseId: 102,
+        discussionCode: 99,
+        discussionScore: 4,
+        discussionNotes: 'manual note',
+        discussionManagerUserId: 23,
+        discussionManagerName: 'Manager',
+        discussionSource: 'manual'
+      });
+    });
+
+    it('filters within-training comparison pages before calculating the returned summary', async () => {
+      const fullComparisonSpy = jest.spyOn(service, 'getWithinTrainingCodingComparison').mockResolvedValue([]);
+      const serviceInternals = service as unknown as {
+        getWithinTrainingComparisonAggregateRows: () => Promise<unknown>;
+        getWithinTrainingComparisonRowsForResponseIds: () => Promise<unknown>;
+      };
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        workspace_id: 1
+      });
+      (codingJobRepository.find as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 11,
+          name: 'job-a',
+          missings_profile_id: null,
+          codingJobCoders: [{ user: { username: 'Coder A' } }]
+        },
+        {
+          id: 12,
+          name: 'job-b',
+          missings_profile_id: null,
+          codingJobCoders: [{ user: { username: 'Coder B' } }]
+        }
+      ]);
+      const aggregateRowsSpy = jest.spyOn(serviceInternals, 'getWithinTrainingComparisonAggregateRows').mockResolvedValue([
+        {
+          responseId: 101,
+          unitName: 'Unit A',
+          variableId: 'VAR',
+          personCode: 'P1',
+          personLogin: 'login-a',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          completeCodeCount: 2,
+          distinctCodeCount: 2,
+          hasNotes: true
+        },
+        {
+          responseId: 102,
+          unitName: 'Unit B',
+          variableId: 'VAR',
+          personCode: 'P2',
+          personLogin: 'login-b',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          completeCodeCount: 2,
+          distinctCodeCount: 1,
+          hasNotes: false
+        }
+      ]);
+      const pageRowsSpy = jest.spyOn(serviceInternals, 'getWithinTrainingComparisonRowsForResponseIds').mockResolvedValue([
+        {
+          responseId: 101,
+          unitName: 'Unit A',
+          variableId: 'VAR',
+          personCode: 'P1',
+          personLogin: 'login-a',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          testPerson: 'login-a (group) - booklet',
+          givenAnswer: 'answer a',
+          replayCode: null,
+          replayScore: null,
+          discussionCode: null,
+          discussionScore: null,
+          discussionNotes: null,
+          discussionManagerUserId: null,
+          discussionManagerName: null,
+          discussionSource: null,
+          coders: []
+        }
+      ]);
+
+      const result = await service.getWithinTrainingCodingComparisonPage(1, 5, {
+        selectedJobIds: [11, 11, 12, 999],
+        filters: {
+          match: 'differ',
+          notesMode: 'with-notes'
+        }
+      });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].responseId).toBe(101);
+      expect(result.total).toBe(1);
+      expect(result.summary).toEqual({
+        visibleRows: 1,
+        comparableRows: 1,
+        matchingRows: 0,
+        matchingPercentage: 0,
+        incompleteRows: 0,
+        notComparableRows: 0,
+        deviationRows: 1,
+        completionRate: 100
+      });
+      expect(result.availableCoders).toEqual([
+        { jobId: 11, coderName: 'Coder A' },
+        { jobId: 12, coderName: 'Coder B' }
+      ]);
+      expect(fullComparisonSpy).not.toHaveBeenCalled();
+      expect(aggregateRowsSpy).toHaveBeenCalledWith(
+        1,
+        5,
+        [11, 12],
+        expect.any(Map),
+        expect.any(Object),
+        expect.any(Object)
+      );
+      expect(pageRowsSpy).toHaveBeenCalledWith(
+        1,
+        5,
+        [101],
+        expect.any(Array),
+        expect.any(Array),
+        expect.any(Map),
+        expect.any(Object),
+        expect.any(Object)
+      );
+    });
+
+    it('treats regex-enabled comparison text filters as literal text on the backend', async () => {
+      const serviceInternals = service as unknown as {
+        getWithinTrainingComparisonAggregateRows: () => Promise<unknown>;
+        getWithinTrainingComparisonRowsForResponseIds: () => Promise<unknown>;
+      };
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        workspace_id: 1
+      });
+      (codingJobRepository.find as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 11,
+          name: 'job-a',
+          missings_profile_id: null,
+          codingJobCoders: [{ user: { username: 'Coder A' } }]
+        },
+        {
+          id: 12,
+          name: 'job-b',
+          missings_profile_id: null,
+          codingJobCoders: [{ user: { username: 'Coder B' } }]
+        }
+      ]);
+      jest.spyOn(serviceInternals, 'getWithinTrainingComparisonAggregateRows').mockResolvedValue([
+        {
+          responseId: 201,
+          unitName: 'Unit .*',
+          variableId: 'VAR',
+          personCode: 'P1',
+          personLogin: 'login-a',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          completeCodeCount: 2,
+          distinctCodeCount: 1,
+          hasNotes: false
+        },
+        {
+          responseId: 202,
+          unitName: 'Unit ABC',
+          variableId: 'VAR',
+          personCode: 'P2',
+          personLogin: 'login-b',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          completeCodeCount: 2,
+          distinctCodeCount: 1,
+          hasNotes: false
+        }
+      ]);
+      const pageRowsSpy = jest.spyOn(serviceInternals, 'getWithinTrainingComparisonRowsForResponseIds').mockResolvedValue([
+        {
+          responseId: 201,
+          unitName: 'Unit .*',
+          variableId: 'VAR',
+          personCode: 'P1',
+          personLogin: 'login-a',
+          personGroup: 'group',
+          bookletName: 'booklet',
+          testPerson: 'login-a (group) - booklet',
+          givenAnswer: 'answer a',
+          replayCode: null,
+          replayScore: null,
+          discussionCode: null,
+          discussionScore: null,
+          discussionNotes: null,
+          discussionManagerUserId: null,
+          discussionManagerName: null,
+          discussionSource: null,
+          coders: []
+        }
+      ]);
+
+      const result = await service.getWithinTrainingCodingComparisonPage(1, 5, {
+        filters: {
+          unitName: 'Unit .*',
+          regexSearch: true
+        }
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.data[0].responseId).toBe(201);
+      expect(result.summary.visibleRows).toBe(1);
+      expect(pageRowsSpy).toHaveBeenCalledWith(
+        1,
+        5,
+        [201],
+        expect.any(Array),
+        expect.any(Array),
+        expect.any(Map),
+        expect.any(Object),
+        expect.any(Object)
+      );
+    });
+
+    it('calculates within-training kappa from aggregate case rows and selected job values', async () => {
+      const fullComparisonSpy = jest.spyOn(service, 'getWithinTrainingCodingComparison').mockResolvedValue([]);
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        workspace_id: 1
+      });
+      (codingJobRepository.find as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 11,
+          name: 'job-a',
+          missings_profile_id: null,
+          codingJobCoders: [{ user: { username: 'Coder A' } }]
+        },
+        {
+          id: 12,
+          name: 'job-b',
+          missings_profile_id: null,
+          codingJobCoders: [{ user: { username: 'Coder B' } }]
+        },
+        {
+          id: 13,
+          name: 'job-c',
+          missings_profile_id: null,
+          codingJobCoders: [{ user: { username: 'Coder C' } }]
+        }
+      ]);
+      const createKappaQueryBuilder = <T>(rows: T[]) => ({
+        innerJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        setParameter: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(rows)
+      });
+      const caseQb = createKappaQueryBuilder([
+        {
+          responseId: 101,
+          unitName: 'U1',
+          variableId: 'V1',
+          validValueCount: '3'
+        },
+        {
+          responseId: 102,
+          unitName: 'U1',
+          variableId: 'V1',
+          validValueCount: '2'
+        },
+        {
+          responseId: 201,
+          unitName: 'U2',
+          variableId: 'V2',
+          validValueCount: '1'
+        }
+      ]);
+      const valueQb = createKappaQueryBuilder([
+        {
+          responseId: 101, jobId: 11, unitName: 'U1', variableId: 'V1', code: '1', score: 1
+        },
+        {
+          responseId: 101, jobId: 12, unitName: 'U1', variableId: 'V1', code: '1', score: 1
+        },
+        {
+          responseId: 101, jobId: 13, unitName: 'U1', variableId: 'V1', code: '1', score: 1
+        },
+        {
+          responseId: 102, jobId: 11, unitName: 'U1', variableId: 'V1', code: '1', score: 1
+        },
+        {
+          responseId: 102, jobId: 12, unitName: 'U1', variableId: 'V1', code: null, score: null
+        },
+        {
+          responseId: 102, jobId: 13, unitName: 'U1', variableId: 'V1', code: '2', score: 2
+        },
+        {
+          responseId: 201, jobId: 11, unitName: 'U2', variableId: 'V2', code: '1', score: 1
+        }
+      ]);
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(caseQb)
+        .mockReturnValueOnce(valueQb);
+      codingStatisticsService.calculateCohensKappa.mockReturnValue([
+        {
+          coder1Id: 11,
+          coder1Name: 'Coder A',
+          coder2Id: 12,
+          coder2Name: 'Coder B',
+          unitName: 'U1',
+          variableId: 'V1',
+          kappa: 0.5,
+          agreement: 0.8,
+          totalItems: 2,
+          validPairs: 1,
+          interpretation: 'kappa.moderate'
+        },
+        {
+          coder1Id: 11,
+          coder1Name: 'Coder A',
+          coder2Id: 13,
+          coder2Name: 'Coder C',
+          unitName: 'U1',
+          variableId: 'V1',
+          kappa: 0.7,
+          agreement: 0.9,
+          totalItems: 2,
+          validPairs: 2,
+          interpretation: 'kappa.substantial'
+        },
+        {
+          coder1Id: 12,
+          coder1Name: 'Coder B',
+          coder2Id: 13,
+          coder2Name: 'Coder C',
+          unitName: 'U2',
+          variableId: 'V2',
+          kappa: null,
+          agreement: 0,
+          totalItems: 1,
+          validPairs: 0,
+          interpretation: 'No valid coding pairs'
+        }
+      ]);
+      codingStatisticsService.calculateKappaVariableSummary
+        .mockReturnValueOnce({
+          meanKappa: 0.6,
+          meanAgreement: 0.85,
+          validPairCount: 3,
+          coderPairCount: 2
+        })
+        .mockReturnValueOnce({
+          meanKappa: null,
+          meanAgreement: null,
+          validPairCount: 0,
+          coderPairCount: 0
+        });
+
+      const result = await service.getWithinTrainingCohensKappa(1, 5, {
+        weightedMean: false,
+        level: 'code',
+        selectedJobIds: [11, 12, 13]
+      });
+
+      expect(fullComparisonSpy).not.toHaveBeenCalled();
+      expect(caseQb.setParameter).toHaveBeenCalledWith('withinTrainingKappaCaseSelectedJobIds', [11, 12, 13]);
+      expect(valueQb.andWhere).toHaveBeenCalledWith(
+        'cj.id IN (:...withinTrainingKappaValueJobIds)',
+        { withinTrainingKappaValueJobIds: [11, 12, 13] }
+      );
+      expect(codingStatisticsService.calculateCohensKappa).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            coder1Id: 11,
+            coder2Id: 12,
+            unitName: 'U1',
+            variableId: 'V1',
+            codes: [
+              { code1: 1, code2: 1 },
+              { code1: 1, code2: null }
+            ]
+          }),
+          expect.objectContaining({
+            coder1Id: 11,
+            coder2Id: 13,
+            unitName: 'U2',
+            variableId: 'V2',
+            codes: [{ code1: 1, code2: null }]
+          })
+        ]),
+        'code'
+      );
+      expect(result.variables).toEqual([
+        expect.objectContaining({
+          unitName: 'U1',
+          variableId: 'V1',
+          meanKappa: 0.6,
+          caseCount: 2,
+          validPairCount: 3,
+          coderPairCount: 2
+        }),
+        expect.objectContaining({
+          unitName: 'U2',
+          variableId: 'V2',
+          meanKappa: null,
+          caseCount: 0,
+          validPairCount: 0,
+          coderPairCount: 0
+        })
+      ]);
+      expect(result.workspaceSummary).toMatchObject({
+        totalDoubleCodedResponses: 2,
+        totalCoderPairs: 3,
+        averageKappa: 0.6,
+        variablesIncluded: 2,
+        codersIncluded: 3,
+        weightingMethod: 'unweighted',
+        calculationLevel: 'code'
+      });
+    });
+
+    it('uses missing profile score mapping for score-level within-training kappa', async () => {
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        workspace_id: 1
+      });
+      (codingJobRepository.find as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 11,
+          name: 'job-a',
+          missings_profile_id: 77,
+          codingJobCoders: [{ user: { username: 'Coder A' } }]
+        },
+        {
+          id: 12,
+          name: 'job-b',
+          missings_profile_id: null,
+          codingJobCoders: [{ user: { username: 'Coder B' } }]
+        }
+      ]);
+      missingsProfilesService.getMissingsProfileDetails.mockResolvedValue({
+        parseMissings: () => [
+          {
+            id: 'mir', label: 'custom invalid response', code: -41, score: 2
+          },
+          {
+            id: 'mci', label: 'custom coding impossible', code: -42, score: 3
+          },
+          {
+            id: 'custom', label: 'custom missing', code: -43, score: 4
+          }
+        ]
+      });
+      missingsProfilesService.getNegativeMissingCodesForProfileOrDefault
+        .mockImplementation(async (_workspaceId, profileId) => (
+          profileId === 77 ? new Set([-41, -42, -43]) : new Set([-97, -98, -99])
+        ));
+      const createKappaQueryBuilder = <T>(rows: T[]) => ({
+        innerJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        setParameter: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(rows)
+      });
+      const caseQb = createKappaQueryBuilder([
+        {
+          responseId: 101,
+          unitName: 'U1',
+          variableId: 'V1',
+          validValueCount: '2'
+        }
+      ]);
+      const valueQb = createKappaQueryBuilder([
+        {
+          responseId: 101, jobId: 11, unitName: 'U1', variableId: 'V1', code: '-41', score: '2'
+        },
+        {
+          responseId: 101, jobId: 12, unitName: 'U1', variableId: 'V1', code: '-98', score: '0'
+        }
+      ]);
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(caseQb)
+        .mockReturnValueOnce(valueQb);
+      codingStatisticsService.calculateCohensKappa.mockReturnValue([
+        {
+          coder1Id: 11,
+          coder1Name: 'Coder A',
+          coder2Id: 12,
+          coder2Name: 'Coder B',
+          unitName: 'U1',
+          variableId: 'V1',
+          kappa: 1,
+          agreement: 1,
+          totalItems: 1,
+          validPairs: 1,
+          interpretation: 'kappa.almost_perfect'
+        }
+      ]);
+      codingStatisticsService.calculateKappaVariableSummary.mockReturnValue({
+        meanKappa: 1,
+        meanAgreement: 1,
+        validPairCount: 1,
+        coderPairCount: 1
+      });
+
+      await service.getWithinTrainingCohensKappa(1, 5, {
+        level: 'score',
+        selectedJobIds: [11, 12]
+      });
+
+      const caseValidCountExpression = caseQb.addSelect.mock.calls
+        .find(([, alias]) => alias === 'validValueCount')?.[0] as string;
+      const valueScoreExpression = valueQb.addSelect.mock.calls
+        .find(([, alias]) => alias === 'score')?.[0] as string;
+      expect(caseValidCountExpression).toContain('WHEN cju.code = -3 OR cju.coding_issue_option = -3');
+      expect(caseValidCountExpression).toContain('WHEN 11 THEN 2');
+      expect(caseValidCountExpression).toContain('WHEN -43 THEN 4');
+      expect(caseValidCountExpression).not.toContain('AND (cju.score) IS NOT NULL');
+      expect(valueScoreExpression).toContain('WHEN cju.code = -3 OR cju.coding_issue_option = -3');
+      expect(valueScoreExpression).toContain('WHEN 11 THEN 2');
+      expect(valueScoreExpression).toContain('WHEN -43 THEN 4');
+      expect(valueScoreExpression).not.toBe('cju.score');
+      expect(codingStatisticsService.calculateCohensKappa).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            coder1Id: 11,
+            coder2Id: 12,
+            unitName: 'U1',
+            variableId: 'V1',
+            codes: [{ code1: -41, code2: -98 }],
+            scores: [{ score1: 2, score2: 0 }]
+          })
+        ]),
+        'score'
+      );
+    });
+
+    it('rejects automatic missing agreement when raw comparison jobs use different missing profiles', async () => {
+      (coderTrainingRepository.findOne as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        workspace_id: 1
+      });
+      missingsProfilesService.getMissingsProfileDetails.mockResolvedValue({
+        parseMissings: () => [
+          {
+            id: 'mir', label: 'missing invalid response', code: -98, score: 0
+          },
+          {
+            id: 'mci', label: 'missing coding impossible', code: -97, score: 0
+          },
+          {
+            id: 'mbi_mbo', label: 'missing by omission', code: -99, score: 0
+          }
+        ]
+      });
+      mockRepository.find
+        .mockResolvedValueOnce([
+          {
+            id: 11,
+            name: 'job-a',
+            missings_profile_id: 77,
+            codingJobCoders: [{ user: { username: 'Alice' } }]
+          },
+          {
+            id: 12,
+            name: 'job-b',
+            missings_profile_id: 78,
+            codingJobCoders: [{ user: { username: 'Bob' } }]
+          }
+        ])
+        .mockResolvedValueOnce([]);
+
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([
+          {
+            jobId: 11,
+            unitRowId: 1,
+            responseId: 101,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P1',
+            personLogin: 'login-1',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 1',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: null,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: null,
+            code: -99,
+            score: null,
+            notes: null,
+            codingIssueOption: null
+          },
+          {
+            jobId: 12,
+            unitRowId: 2,
+            responseId: 101,
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            personCode: 'P1',
+            personLogin: 'login-1',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            givenAnswer: 'answer 1',
+            replayCodeV1: null,
+            replayCodeV2: null,
+            replayCodeV3: null,
+            replayScoreV1: null,
+            replayScoreV2: null,
+            replayScoreV3: null,
+            code: -99,
+            score: null,
+            notes: null,
+            codingIssueOption: null
+          }
+        ])
+      };
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn().mockReturnValue(qb);
+
+      await expect(service.getWithinTrainingCodingComparison(1, 5))
+        .rejects
+        .toThrow('Conflicting missing profiles for response 101 in training 5');
     });
   });
 
