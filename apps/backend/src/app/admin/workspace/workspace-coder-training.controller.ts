@@ -24,8 +24,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import {
   CoderTrainingResultsApplyService,
-  CoderTrainingService,
-  CodingStatisticsService
+  CoderTrainingService
 } from '../../database/services/coding';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../database/entities/job-definition.entity';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
@@ -165,42 +164,8 @@ const createTrainingComparisonPageSchema = (
 export class WorkspaceCoderTrainingController {
   constructor(
     private coderTrainingService: CoderTrainingService,
-    private codingStatisticsService: CodingStatisticsService,
     private coderTrainingResultsApplyService: CoderTrainingResultsApplyService
   ) { }
-
-  private getTrainingKappaVariableKey(unitName: string, variableId: string): string {
-    return `${unitName}:${variableId}`;
-  }
-
-  private countValidCoderValuesForKappa(
-    coders: Array<{ code: string | number | null; score: number | null }>,
-    level: 'code' | 'score'
-  ): number {
-    return coders.filter(coder => (
-      level === 'score' ? coder.score !== null : coder.code !== null
-    )).length;
-  }
-
-  private calculateTrainingKappaCaseCountsByVariable(
-    comparisonData: Array<{
-      unitName: string;
-      variableId: string;
-      coders: Array<{ code: string | number | null; score: number | null }>;
-    }>,
-    level: 'code' | 'score'
-  ): Map<string, number> {
-    const caseCountsByVariable = new Map<string, number>();
-
-    comparisonData.forEach(item => {
-      if (this.countValidCoderValuesForKappa(item.coders, level) < 2) return;
-
-      const key = this.getTrainingKappaVariableKey(item.unitName, item.variableId);
-      caseCountsByVariable.set(key, (caseCountsByVariable.get(key) ?? 0) + 1);
-    });
-
-    return caseCountsByVariable;
-  }
 
   private parsePositiveIntQuery(
     value: string | undefined,
@@ -1421,123 +1386,12 @@ export class WorkspaceCoderTrainingController {
 
     const useWeightedMean = weightedMean !== 'false'; // Default true
     const calculationLevel = level || 'code'; // Default to code level
-
-    // 1. Get within-training comparison data
-    const comparisonData = await this.coderTrainingService.getWithinTrainingCodingComparison(
-      workspace_id,
-      trainingId
-    );
     const selectedJobIds = this.parsePositiveIntCsv(jobIds, 'jobIds');
-    const filteredComparisonData = selectedJobIds === undefined ?
-      comparisonData :
-      comparisonData.map(item => ({
-        ...item,
-        coders: item.coders.filter(coder => selectedJobIds.includes(coder.jobId))
-      }));
 
-    if (filteredComparisonData.length === 0) {
-      return {
-        variables: [],
-        workspaceSummary: {
-          totalDoubleCodedResponses: 0,
-          totalCoderPairs: 0,
-          averageKappa: null,
-          variablesIncluded: 0,
-          codersIncluded: 0,
-          weightingMethod: useWeightedMean ? 'weighted' : 'unweighted',
-          calculationLevel
-        }
-      };
-    }
-
-    const caseCountsByVariable = this.calculateTrainingKappaCaseCountsByVariable(filteredComparisonData, calculationLevel);
-
-    // 2. Transform to coder pairs format
-    const coderPairs = this.coderTrainingService.transformToCoderPairs(filteredComparisonData);
-
-    if (coderPairs.length === 0) {
-      return {
-        variables: [],
-        workspaceSummary: {
-          totalDoubleCodedResponses: 0,
-          totalCoderPairs: 0,
-          averageKappa: null,
-          variablesIncluded: 0,
-          codersIncluded: 0,
-          weightingMethod: useWeightedMean ? 'weighted' : 'unweighted',
-          calculationLevel
-        }
-      };
-    }
-
-    // 3. Calculate Cohen's Kappa for each pair (reuse existing logic)
-    const kappaResults = this.codingStatisticsService.calculateCohensKappa(coderPairs, calculationLevel);
-
-    // 4. Group by variable
-    const variableMap = new Map<string, { unitName: string; variableId: string; coderPairs: typeof kappaResults }>();
-
-    kappaResults.forEach(result => {
-      const key = this.getTrainingKappaVariableKey(result.unitName as string, result.variableId as string);
-      if (!variableMap.has(key)) {
-        variableMap.set(key, {
-          unitName: result.unitName as string,
-          variableId: result.variableId as string,
-          coderPairs: []
-        });
-      }
-      variableMap.get(key)!.coderPairs.push(result);
+    return this.coderTrainingService.getWithinTrainingCohensKappa(workspace_id, trainingId, {
+      weightedMean: useWeightedMean,
+      level: calculationLevel,
+      selectedJobIds
     });
-
-    const variables = Array.from(variableMap.entries()).map(([key, variable]) => ({
-      ...variable,
-      caseCount: caseCountsByVariable.get(key) ?? 0,
-      ...this.codingStatisticsService.calculateKappaVariableSummary(variable.coderPairs)
-    }));
-
-    // 5. Calculate summary statistics
-    let totalWeightedKappa = 0;
-    let totalWeight = 0;
-    let totalKappa = 0;
-    let validKappaCount = 0;
-    const uniqueCoders = new Set<number>();
-
-    for (const result of kappaResults) {
-      uniqueCoders.add(result.coder1Id);
-      uniqueCoders.add(result.coder2Id);
-
-      if (result.kappa !== null && !Number.isNaN(result.kappa)) {
-        if (useWeightedMean) {
-          const weight = result.validPairs;
-          totalWeightedKappa += result.kappa * weight;
-          totalWeight += weight;
-        } else {
-          totalKappa += result.kappa;
-          validKappaCount += 1;
-        }
-      }
-    }
-
-    let averageKappa: number | null;
-    if (useWeightedMean) {
-      averageKappa = totalWeight > 0 ? totalWeightedKappa / totalWeight : null;
-    } else {
-      averageKappa = validKappaCount > 0 ? totalKappa / validKappaCount : null;
-    }
-
-    const totalDoubleCodedResponses = Array.from(caseCountsByVariable.values())
-      .reduce((sum, caseCount) => sum + caseCount, 0);
-
-    return {
-      variables,
-      workspaceSummary: {
-        totalDoubleCodedResponses,
-        totalCoderPairs: kappaResults.length,
-        averageKappa,
-        variablesIncluded: variableMap.size,
-        codersIncluded: uniqueCoders.size,
-        weightingMethod: useWeightedMean ? 'weighted' : 'unweighted',
-        calculationLevel
-      }
-    };
   }
 }
