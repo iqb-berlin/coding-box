@@ -16,6 +16,7 @@ import {
   withRegexSearchStatementTimeout
 } from '../../../utils/regex-search.util';
 import { generateReplayUrl } from '../../../utils/replay-url.util';
+import { STATISTICS_IGNORED_STATUSES } from '../../utils/response-status-converter';
 
 interface CodingScheme {
   variableCodings?: {
@@ -142,6 +143,7 @@ export class VariableAnalysisReplayService {
           .leftJoin('booklet.person', 'person')
           .where('person.workspace_id = :workspace_id', { workspace_id });
         applyResolvedExclusionsToQuery(countQuery, exclusions);
+        this.applyVisibleCodingResultScope(countQuery, 'variableAnalysisCount');
         this.applyVariablePairFilter(countQuery, validVariablePairKeys, 'validVariablePairKeys');
 
         if (unitIdFilter) {
@@ -175,6 +177,7 @@ export class VariableAnalysisReplayService {
           .leftJoin('booklet.bookletinfo', 'bookletinfo')
           .where('person.workspace_id = :workspace_id', { workspace_id });
         applyResolvedExclusionsToQuery(aggregationQuery, exclusions);
+        this.applyVisibleCodingResultScope(aggregationQuery, 'variableAnalysisAggregation');
         this.applyVariablePairFilter(aggregationQuery, validVariablePairKeys, 'aggregationVariablePairKeys');
 
         if (unitIdFilter) {
@@ -227,6 +230,7 @@ export class VariableAnalysisReplayService {
           .leftJoin('booklet.person', 'person')
           .where('person.workspace_id = :workspace_id', { workspace_id });
         applyResolvedExclusionsToQuery(totalCountsQuery, exclusions, { parameterPrefix: 'variableAnalysisTotals' });
+        this.applyVisibleCodingResultScope(totalCountsQuery, 'variableAnalysisTotalCounts');
         this.applyVariablePairFilter(totalCountsQuery, pageVariablePairKeys, 'totalCountVariablePairKeys');
 
         if (unitIdFilter) {
@@ -270,6 +274,7 @@ export class VariableAnalysisReplayService {
           .leftJoin('booklet.bookletinfo', 'bookletinfo')
           .where('person.workspace_id = :workspace_id', { workspace_id });
         applyResolvedExclusionsToQuery(sampleInfoQuery, exclusions, { parameterPrefix: 'variableAnalysisSample' });
+        this.applyVisibleCodingResultScope(sampleInfoQuery, 'variableAnalysisSample');
         this.applyVariablePairFilter(sampleInfoQuery, pageVariablePairKeys, 'sampleVariablePairKeys');
 
         sampleInfoQuery.groupBy('unit.name')
@@ -426,6 +431,19 @@ export class VariableAnalysisReplayService {
       `CONCAT(unit.name, CHR(31), response.variableid) IN (:...${parameterName})`,
       { [parameterName]: variablePairKeys }
     );
+  }
+
+  private applyVisibleCodingResultScope(
+    queryBuilder: { andWhere: (condition: string, parameters?: Record<string, unknown>) => unknown },
+    parameterPrefix: string
+  ): void {
+    queryBuilder.andWhere(`person.consider = :${parameterPrefix}Consider`, {
+      [`${parameterPrefix}Consider`]: true
+    });
+    queryBuilder.andWhere('response.status_v1 IS NOT NULL');
+    queryBuilder.andWhere(`response.status_v1 NOT IN (:...${parameterPrefix}IgnoredStatuses)`, {
+      [`${parameterPrefix}IgnoredStatuses`]: STATISTICS_IGNORED_STATUSES
+    });
   }
 
   private getUniqueUnitVariablePairs(rows: VariableAnalysisAggregationRow[]): UnitVariablePair[] {
