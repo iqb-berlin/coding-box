@@ -827,6 +827,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       undefined,
+      'xlsx-auth-token',
       undefined,
       request as never,
       response as never
@@ -845,7 +846,8 @@ describe('WorkspaceCodingStatisticsController', () => {
           variableAnchor: 'ANCHOR_VAR'
         })
       ]),
-      'http://localhost'
+      'http://localhost',
+      'xlsx-auth-token'
     );
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(response.send.mock.calls[0][0] as Buffer);
@@ -952,6 +954,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       request as never,
       response as never
     );
@@ -959,7 +962,8 @@ describe('WorkspaceCodingStatisticsController', () => {
     expect(codingReplayService.generateReplayUrlsForItemsBulk).toHaveBeenCalledWith(
       5,
       expect.any(Array),
-      'https://localhost'
+      'https://localhost',
+      ''
     );
   });
 
@@ -1020,6 +1024,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       'true',
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -1129,6 +1134,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       'true',
+      undefined,
       undefined,
       undefined,
       undefined,
