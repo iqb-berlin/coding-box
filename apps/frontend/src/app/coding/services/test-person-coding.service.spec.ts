@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { of } from 'rxjs';
 import Keycloak from 'keycloak-js';
 import {
   TestPersonCodingService,
@@ -11,13 +12,19 @@ import {
   AppliedResultsOverview
 } from './test-person-coding.service';
 import { SERVER_URL } from '../../injection-tokens';
-import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings.service';
+import { AppService } from '../../core/services/app.service';
+import {
+  ResponseMatchingFlag,
+  WorkspaceSettingsService
+} from '../../ws-admin/services/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 
 describe('TestPersonCodingService', () => {
   let service: TestPersonCodingService;
   let httpMock: HttpTestingController;
   let codingBackgroundJobsService: CodingBackgroundJobsService;
+  let appServiceMock: jest.Mocked<AppService>;
+  let workspaceSettingsServiceMock: jest.Mocked<WorkspaceSettingsService>;
   let keycloak: { authenticated: boolean; token?: string; updateToken: jest.Mock };
   let fetchMock: jest.Mock;
   let originalFetch: typeof globalThis.fetch | undefined;
@@ -32,6 +39,19 @@ describe('TestPersonCodingService', () => {
       token: 'keycloak-token',
       updateToken: jest.fn().mockResolvedValue(true)
     };
+    appServiceMock = {
+      createOwnToken: jest.fn().mockReturnValue(of('replay-auth-token')),
+      getWorkspaceTokenPolicy: jest.fn().mockReturnValue(of({
+        scopes: {
+          'replay:read': { maxDurationDays: 90 },
+          'replay-statistics:write': { maxDurationDays: 1 },
+          'coding-job:operate': { maxDurationDays: 1 }
+        }
+      }))
+    } as unknown as jest.Mocked<AppService>;
+    workspaceSettingsServiceMock = {
+      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth'))
+    } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     // Mock localStorage using Object.defineProperty
     Object.defineProperty(window, 'localStorage', {
@@ -47,6 +67,8 @@ describe('TestPersonCodingService', () => {
         provideHttpClientTesting(),
         TestPersonCodingService,
         { provide: Keycloak, useValue: keycloak },
+        { provide: AppService, useValue: appServiceMock },
+        { provide: WorkspaceSettingsService, useValue: workspaceSettingsServiceMock },
         { provide: SERVER_URL, useValue: mockServerUrl }
       ]
     });
@@ -945,10 +967,30 @@ describe('TestPersonCodingService', () => {
         request.params.get('excludeTrainings') === 'true' &&
         request.params.get('level') === 'score' &&
         request.params.get('jobDefinitionIds') === '11,12' &&
-        request.params.get('coderIds') === '31'
+        request.params.get('coderIds') === '31' &&
+        request.params.get('authToken') === 'replay-auth-token'
       ));
+      expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(123, 90, ['replay:read']);
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
+      req.flush(mockBlob);
+    });
+
+    it('should request kappa XLSX with workspace login links in workspaceId mode', () => {
+      const mockBlob = new Blob(['xlsx'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      workspaceSettingsServiceMock.getReplayUrlExportMode.mockReturnValueOnce(of('workspaceId'));
+
+      service.exportCohensKappaStatisticsAsXlsx(mockWorkspaceId).subscribe(response => {
+        expect(response).toEqual(mockBlob);
+      });
+
+      expect(appServiceMock.createOwnToken).not.toHaveBeenCalled();
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/xlsx` &&
+        request.params.get('authToken') === ''
+      ));
       req.flush(mockBlob);
     });
 

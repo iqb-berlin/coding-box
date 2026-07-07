@@ -345,7 +345,8 @@ export class CodingResultsExportService {
       unitId: unitName,
       variablePage,
       variableAnchor,
-      authToken
+      authToken,
+      workspaceId: authToken ? undefined : workspaceId
     });
   }
 

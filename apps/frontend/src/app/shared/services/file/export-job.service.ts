@@ -21,6 +21,7 @@ import {
   API_SPECIAL_TOKEN_DURATION_DAYS,
   REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../../core/services/auth-session.config';
+import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 
 export interface ExportJob {
   jobId: string;
@@ -115,7 +116,8 @@ export class ExportJobService implements OnDestroy {
 
   constructor(
     private codingJobBackendService: CodingJobBackendService,
-    private appService: AppService
+    private appService: AppService,
+    private workspaceSettingsService: WorkspaceSettingsService
   ) { }
 
   get activeJobs(): ExportJob[] {
@@ -173,18 +175,30 @@ export class ExportJobService implements OnDestroy {
       return of(config);
     }
 
-    return this.appService.createOwnToken(
-      workspaceId,
-      API_SPECIAL_TOKEN_DURATION_DAYS,
-      REPLAY_WORKSPACE_TOKEN_SCOPES
-    ).pipe(
-      map(authToken => ({
-        ...config,
-        authToken,
-        serverUrl: config.serverUrl || window.location.origin
-      })),
-      catchError(error => throwError(() => createReplayAuthTokenError(error)))
-    );
+    return this.workspaceSettingsService.getReplayUrlExportMode(workspaceId)
+      .pipe(
+        switchMap(mode => {
+          if (mode === 'workspaceId') {
+            return of({
+              ...config,
+              serverUrl: config.serverUrl || window.location.origin
+            });
+          }
+
+          return this.appService.createOwnToken(
+            workspaceId,
+            API_SPECIAL_TOKEN_DURATION_DAYS,
+            REPLAY_WORKSPACE_TOKEN_SCOPES
+          ).pipe(
+            map(authToken => ({
+              ...config,
+              authToken,
+              serverUrl: config.serverUrl || window.location.origin
+            })),
+            catchError(error => throwError(() => createReplayAuthTokenError(error)))
+          );
+        })
+      );
   }
 
   private addJob(job: ExportJob): void {
