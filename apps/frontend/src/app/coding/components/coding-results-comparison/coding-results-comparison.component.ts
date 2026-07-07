@@ -30,7 +30,9 @@ import { CommonModule } from '@angular/common';
 import { SelectionModel } from '@angular/cdk/collections';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject, takeUntil } from 'rxjs';
+import {
+  debounceTime, distinctUntilChanged, Subject, takeUntil
+} from 'rxjs';
 import { normalizeTestperson } from '../../../replay/utils/token-utils';
 import { PostMessage, PostMessageService } from '../../../core/services/post-message.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
@@ -237,6 +239,8 @@ const EMPTY_COMPARISON_SUMMARY: TrainingComparisonSummaryDto = {
   completionRate: 0
 };
 
+const TABLE_FILTER_DEBOUNCE_MS = 400;
+
 interface ModalValueDisplay {
   valueText: string;
   deviationText: string;
@@ -289,6 +293,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   private ngUnsubscribe = new Subject<void>();
   private comparisonRequestCancel$ = new Subject<void>();
   private kappaRequestCancel$ = new Subject<void>();
+  private tableFilterChanges$ = new Subject<string>();
   private comparisonRequestId = 0;
   private kappaRequestId = 0;
   private coderTrainingsRequestId = 0;
@@ -405,6 +410,7 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   ngOnInit(): void {
     this.setupFilterPredicate();
+    this.setupTableFilterChanges();
     this.discussionManagerLabel = this.appService.authData.userName || this.appService.loggedUser?.preferred_username || 'Diskussion';
     this.comparisonMode = this.data.initialMode || 'between-trainings';
 
@@ -439,9 +445,10 @@ export class CodingResultsComparisonComponent implements OnInit {
   ngOnDestroy(): void {
     this.cancelComparisonRequest();
     this.cancelKappaRequest();
+    this.ngUnsubscribe.next();
     this.comparisonRequestCancel$.complete();
     this.kappaRequestCancel$.complete();
-    this.ngUnsubscribe.next();
+    this.tableFilterChanges$.complete();
     this.ngUnsubscribe.complete();
   }
 
@@ -534,12 +541,33 @@ export class CodingResultsComparisonComponent implements OnInit {
     };
   }
 
+  private setupTableFilterChanges(): void {
+    this.tableFilterChanges$
+      .pipe(
+        debounceTime(TABLE_FILTER_DEBOUNCE_MS),
+        distinctUntilChanged(),
+        takeUntil(this.ngUnsubscribe)
+      )
+      .subscribe(() => this.applyTableFilters());
+  }
+
+  private getTableFilterSignature(): string {
+    return JSON.stringify({
+      ...this.tableFilters,
+      regexSearch: this.enableRegexSearch
+    });
+  }
+
   applyTableFilters(): void {
     if (this.hasInvalidTableRegexFilters()) {
       return;
     }
 
     this.reloadComparisonFirstPage();
+  }
+
+  onTextTableFilterChange(): void {
+    this.tableFilterChanges$.next(this.getTableFilterSignature());
   }
 
   resetTableFilters(): void {
@@ -557,6 +585,10 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   private getCurrentComparisonRows(): Array<TrainingComparison | WithinTrainingComparison> {
     return this.comparisonMode === 'between-trainings' ? this.comparisonData : this.withinTrainingData;
+  }
+
+  hasComparisonRows(): boolean {
+    return this.getCurrentComparisonRows().length > 0;
   }
 
   getFilteredRowsCount(): number {
@@ -1594,6 +1626,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.codersFromTrainingsFormControl.setValue([]);
     this.selectedCodersFromTrainings.clear();
     if (this.comparisonMode === 'between-trainings' && this.selectedTrainings.selected.length >= 2) {
+      this.clearComparisonRows();
       this.reloadComparisonFirstPage();
     } else {
       this.cancelComparisonRequest();
@@ -1612,6 +1645,7 @@ export class CodingResultsComparisonComponent implements OnInit {
       this.codersFormControl.setValue([]);
       this.selectedCoderIds.clear();
       this.updateDisplayedColumns();
+      this.clearComparisonRows();
       this.reloadComparisonFirstPage();
     } else {
       this.cancelComparisonRequest();
@@ -1915,8 +1949,6 @@ export class CodingResultsComparisonComponent implements OnInit {
       const requestId = this.startComparisonRequest();
       const trainingId = this.selectedTrainingForWithin;
       this.resetKappaState();
-      this.withinTrainingData = [];
-      this.dataSource.data = [];
       this.codingTrainingBackendService.getCachedWithinTrainingCodingResults(
         this.data.workspaceId,
         trainingId,
