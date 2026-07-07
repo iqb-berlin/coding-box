@@ -178,7 +178,15 @@
       </div>
     </div>
 
-    <div class="loading-container" *ngIf="isLoading">
+    <div
+      class="loading-container"
+      *ngIf="
+        isLoading &&
+        !hasComparisonRows() &&
+        !hasNoSelectedCodersState() &&
+        !hasFilterEmptyState()
+      "
+    >
       <mat-progress-spinner
         mode="indeterminate"
         diameter="50"
@@ -189,7 +197,6 @@
     <div
       class="comparison-table"
       *ngIf="
-        !isLoading &&
         (((comparisonMode === 'between-trainings' &&
           selectedTrainings.selected.length >= 2) ||
           (comparisonMode === 'within-training' &&
@@ -583,7 +590,7 @@
           <input
             matInput
             [(ngModel)]="tableFilters.unitName"
-            (ngModelChange)="applyTableFilters()"
+            (ngModelChange)="onTextTableFilterChange()"
           />
           <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('unitName')">
             {{ 'search-filter.invalid-regex' | translate }}
@@ -595,7 +602,7 @@
           <input
             matInput
             [(ngModel)]="tableFilters.variableId"
-            (ngModelChange)="applyTableFilters()"
+            (ngModelChange)="onTextTableFilterChange()"
           />
           <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('variableId')">
             {{ 'search-filter.invalid-regex' | translate }}
@@ -607,7 +614,7 @@
           <input
             matInput
             [(ngModel)]="tableFilters.personLogin"
-            (ngModelChange)="applyTableFilters()"
+            (ngModelChange)="onTextTableFilterChange()"
           />
           <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('personLogin')">
             {{ 'search-filter.invalid-regex' | translate }}
@@ -619,7 +626,7 @@
           <input
             matInput
             [(ngModel)]="tableFilters.personGroup"
-            (ngModelChange)="applyTableFilters()"
+            (ngModelChange)="onTextTableFilterChange()"
           />
           <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('personGroup')">
             {{ 'search-filter.invalid-regex' | translate }}
@@ -631,7 +638,7 @@
           <input
             matInput
             [(ngModel)]="tableFilters.bookletName"
-            (ngModelChange)="applyTableFilters()"
+            (ngModelChange)="onTextTableFilterChange()"
           />
           <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('bookletName')">
             {{ 'search-filter.invalid-regex' | translate }}
@@ -665,6 +672,14 @@
         <button mat-stroked-button type="button" (click)="resetTableFilters()">
           Filter zurücksetzen
         </button>
+      </div>
+
+      <div class="comparison-refresh-indicator" *ngIf="isLoading && (hasComparisonRows() || hasFilterEmptyState())">
+        <mat-progress-spinner
+          mode="indeterminate"
+          diameter="20"
+        ></mat-progress-spinner>
+        <span>Aktualisiere Vergleichsdaten...</span>
       </div>
 
       <div class="comparison-empty-state" *ngIf="hasNoSelectedCodersState()">
