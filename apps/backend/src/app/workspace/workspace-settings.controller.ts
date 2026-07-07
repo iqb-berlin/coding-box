@@ -7,11 +7,18 @@ import {
   Delete,
   Param,
   Body,
-  ParseIntPipe
+  ParseIntPipe,
+  UseGuards
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from '../database/entities/setting.entity';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { WorkspaceGuard } from '../admin/workspace/workspace.guard';
+import {
+  AccessLevelGuard,
+  RequireAccessLevel
+} from '../admin/workspace/access-level.guard';
 
 interface WorkspaceSettingWriteDto {
   key: string;
@@ -30,6 +37,7 @@ interface WorkspaceSettingResponse {
   description?: string;
 }
 
+@UseGuards(JwtAuthGuard, WorkspaceGuard)
 @Controller('workspace/:workspaceId/settings')
 export class WorkspaceSettingsController {
   constructor(
@@ -42,7 +50,7 @@ export class WorkspaceSettingsController {
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('key') key: string
   ) {
-    const settingKey = `workspace-${workspaceId}-${key}`;
+    const settingKey = this.getWorkspaceSettingStorageKey(workspaceId, key);
     const setting = await this.settingRepository.findOne({
       where: { key: settingKey }
     });
@@ -111,6 +119,15 @@ export class WorkspaceSettingsController {
             'Controls how responses are aggregated by value similarity for coding case distribution'
         };
       }
+      if (key === 'replay-url-export-mode') {
+        return {
+          id: 0,
+          key: settingKey,
+          value: JSON.stringify({ mode: 'auth' }),
+          description:
+            'Controls whether exported replay URLs use temporary auth tokens or workspace login links'
+        };
+      }
       throw new Error(`Setting ${key} not found for workspace ${workspaceId}`);
     }
 
@@ -123,6 +140,8 @@ export class WorkspaceSettingsController {
   }
 
   @Post('batch')
+  @UseGuards(AccessLevelGuard)
+  @RequireAccessLevel(3)
   async createWorkspaceSettings(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Body() createSettingsDto: WorkspaceSettingsBatchDto
@@ -135,7 +154,10 @@ export class WorkspaceSettingsController {
 
       const savedSettings: WorkspaceSettingResponse[] = [];
       for (const settingDto of settings) {
-        const settingKey = `workspace-${workspaceId}-${settingDto.key}`;
+        const settingKey = this.getWorkspaceSettingStorageKey(
+          workspaceId,
+          settingDto.key
+        );
         const existingSetting = await transactionalSettingRepository.findOne({
           where: { key: settingKey }
         });
@@ -165,11 +187,16 @@ export class WorkspaceSettingsController {
   }
 
   @Post()
+  @UseGuards(AccessLevelGuard)
+  @RequireAccessLevel(3)
   async createWorkspaceSetting(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Body() createSettingDto: WorkspaceSettingWriteDto
   ) {
-    const settingKey = `workspace-${workspaceId}-${createSettingDto.key}`;
+    const settingKey = this.getWorkspaceSettingStorageKey(
+      workspaceId,
+      createSettingDto.key
+    );
     const existingSetting = await this.settingRepository.findOne({
       where: { key: settingKey }
     });
@@ -196,11 +223,15 @@ export class WorkspaceSettingsController {
   }
 
   @Put(':settingId')
+  @UseGuards(AccessLevelGuard)
+  @RequireAccessLevel(3)
   async updateWorkspaceSetting(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('settingId') settingId: string,
     @Body() updateSettingDto: { value: string }
   ) {
+    this.assertSettingIdBelongsToWorkspace(workspaceId, settingId);
+
     const setting = await this.settingRepository.findOne({
       where: { key: settingId }
     });
@@ -221,10 +252,14 @@ export class WorkspaceSettingsController {
   }
 
   @Delete(':settingId')
+  @UseGuards(AccessLevelGuard)
+  @RequireAccessLevel(3)
   async deleteWorkspaceSetting(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('settingId') settingId: string
   ) {
+    this.assertSettingIdBelongsToWorkspace(workspaceId, settingId);
+
     const result = await this.settingRepository.delete({ key: settingId });
     if (result.affected === 0) {
       throw new Error(`Setting ${settingId} not found`);
@@ -263,5 +298,21 @@ export class WorkspaceSettingsController {
     });
 
     return createSettingsDto.settings;
+  }
+
+  private getWorkspaceSettingStorageKey(workspaceId: number, key: string): string {
+    return `workspace-${workspaceId}-${key}`;
+  }
+
+  private assertSettingIdBelongsToWorkspace(
+    workspaceId: number,
+    settingId: string
+  ): void {
+    const workspacePrefix = `workspace-${workspaceId}-`;
+    if (!settingId.startsWith(workspacePrefix)) {
+      throw new BadRequestException(
+        `Setting ${settingId} does not belong to workspace ${workspaceId}`
+      );
+    }
   }
 }

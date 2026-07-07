@@ -179,6 +179,40 @@ describe('WorkspaceSettingsService', () => {
     });
   });
 
+  describe('getReplayUrlExportMode', () => {
+    it('should return parsed replay URL export mode', () => {
+      service.getReplayUrlExportMode(1).subscribe(val => {
+        expect(val).toBe('workspaceId');
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/replay-url-export-mode`);
+      req.flush({ value: '{"mode":"workspaceId"}' });
+    });
+
+    it('should return auth mode on error', () => {
+      service.getReplayUrlExportMode(1).subscribe(val => {
+        expect(val).toBe('auth');
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/replay-url-export-mode`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setReplayUrlExportMode', () => {
+    it('should persist the replay URL export mode', () => {
+      service.setReplayUrlExportMode(1, 'workspaceId').subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'replay-url-export-mode',
+        value: '{"mode":"workspaceId"}',
+        description:
+          'Controls whether exported replay URLs use temporary auth tokens or workspace login links'
+      });
+      req.flush({});
+    });
+  });
+
   describe('setAutoRefreshManualCodingJobs', () => {
     it('should persist the setting', () => {
       service.setAutoRefreshManualCodingJobs(1, false).subscribe();

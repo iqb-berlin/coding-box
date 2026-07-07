@@ -46,6 +46,29 @@
     </mat-card-content>
   </mat-card>
 
+  <mat-card class="replay-url-export-mode-card">
+    <mat-card-header>
+      <mat-card-title>{{ 'ws-settings.replay-url-export-mode' | translate }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="replay-url-export-mode-container">
+        <div class="setting-item replay-url-export-mode">
+          <div class="setting-info">
+            <h4>{{ 'ws-settings.replay-url-export-mode-heading' | translate }}</h4>
+            <p>{{ 'ws-settings.replay-url-export-mode-description' | translate }}</p>
+          </div>
+          <div class="setting-control">
+            <mat-slide-toggle
+              [checked]="replayUrlExportMode === 'auth'"
+              (change)="toggleReplayUrlExportMode($event)">
+              {{replayUrlExportMode === 'auth' ? ('ws-settings.replay-url-export-mode-auth' | translate) : ('ws-settings.replay-url-export-mode-workspace' | translate)}}
+            </mat-slide-toggle>
+          </div>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
   <mat-card class="missings-profiles-card">
     <mat-card-header>
       <mat-card-title>{{ 'workspace.coding-missing-profiles' | translate }}</mat-card-title>
