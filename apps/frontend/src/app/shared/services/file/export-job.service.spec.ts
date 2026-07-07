@@ -7,11 +7,13 @@ import {
 } from './export-job.service';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
+import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 
 describe('ExportJobService', () => {
   let service: ExportJobService;
   let codingJobBackendServiceMock: jest.Mocked<CodingJobBackendService>;
   let appServiceMock: jest.Mocked<AppService>;
+  let workspaceSettingsServiceMock: jest.Mocked<WorkspaceSettingsService>;
 
   beforeEach(() => {
     codingJobBackendServiceMock = {
@@ -23,12 +25,16 @@ describe('ExportJobService', () => {
     appServiceMock = {
       createOwnToken: jest.fn().mockReturnValue(of('auth-token'))
     } as unknown as jest.Mocked<AppService>;
+    workspaceSettingsServiceMock = {
+      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth'))
+    } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     TestBed.configureTestingModule({
       providers: [
         ExportJobService,
         { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
-        { provide: AppService, useValue: appServiceMock }
+        { provide: AppService, useValue: appServiceMock },
+        { provide: WorkspaceSettingsService, useValue: workspaceSettingsServiceMock }
       ]
     });
 
@@ -179,6 +185,31 @@ describe('ExportJobService', () => {
         expect.objectContaining({
           includeReplayUrl: true,
           authToken: 'existing-token'
+        })
+      );
+    });
+
+    it('should use workspace login links without creating auth token in workspaceId mode', () => {
+      workspaceSettingsServiceMock.getReplayUrlExportMode.mockReturnValueOnce(of('workspaceId'));
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+
+      service.startJob(1, {
+        exportType: 'detailed',
+        includeReplayUrl: true
+      }).subscribe();
+
+      expect(appServiceMock.createOwnToken).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.startExportJob).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          includeReplayUrl: true,
+          serverUrl: window.location.origin
+        })
+      );
+      expect(codingJobBackendServiceMock.startExportJob).toHaveBeenCalledWith(
+        1,
+        expect.not.objectContaining({
+          authToken: expect.any(String)
         })
       );
     });

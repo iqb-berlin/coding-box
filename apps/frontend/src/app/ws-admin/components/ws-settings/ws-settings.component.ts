@@ -25,8 +25,10 @@ import { JournalComponent } from '../journal/journal.component';
 import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';
 import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/replay-statistics-dialog.component';
 import {
+  DEFAULT_REPLAY_URL_EXPORT_MODE,
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES,
+  type ReplayUrlExportMode,
   WorkspaceTokenScope
 } from '../../../core/services/auth-session.config';
 import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
@@ -93,6 +95,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   readonly minTokenDurationDays = 1;
   maxTokenDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
   readonly externalReplayTokenScopes = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES;
+  replayUrlExportMode: ReplayUrlExportMode = DEFAULT_REPLAY_URL_EXPORT_MODE;
   autoFetchCodingStatistics = true;
   autoRefreshManualCodingJobs = true;
   evaluationMode = false;
@@ -108,6 +111,11 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     this.loadWorkspaceTokenPolicy();
     if (workspaceId) {
+      this.workspaceSettingsService
+        .getReplayUrlExportMode(workspaceId)
+        .subscribe(mode => {
+          this.replayUrlExportMode = mode;
+        });
       this.workspaceSettingsService
         .getEvaluationMode(workspaceId)
         .subscribe(enabled => {
@@ -254,6 +262,42 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         this.translateService.instant('close'),
         { duration: 3000 }
       );
+    }
+  }
+
+  toggleReplayUrlExportMode(toggleEvent: { checked: boolean }): void {
+    const previousMode = this.replayUrlExportMode;
+    const mode: ReplayUrlExportMode = toggleEvent.checked ?
+      'auth' :
+      'workspaceId';
+    this.replayUrlExportMode = mode;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService
+        .setReplayUrlExportMode(workspaceId, mode)
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.translateService.instant(
+                'ws-settings.replay-url-export-mode-saved'
+              ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.replayUrlExportMode = previousMode;
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
+          }
+        });
     }
   }
 

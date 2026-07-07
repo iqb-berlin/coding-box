@@ -5,6 +5,10 @@ export const AUTH_SESSION_WARNING_DELAY_MS =
 export const API_SPECIAL_TOKEN_DURATION_DAYS = 1;
 export const DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS = 90;
 
+export type ReplayUrlExportMode = 'auth' | 'workspaceId';
+
+export const DEFAULT_REPLAY_URL_EXPORT_MODE: ReplayUrlExportMode = 'auth';
+
 export type WorkspaceTokenScope =
   | 'replay:read'
   | 'replay-statistics:write'

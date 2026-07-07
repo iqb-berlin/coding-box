@@ -5,6 +5,10 @@ import { finalize, shareReplay, tap } from 'rxjs/operators';
 import { SERVER_URL } from '../../injection-tokens';
 import { WorkspaceSettings } from '../models/workspace-settings.model';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
+import {
+  DEFAULT_REPLAY_URL_EXPORT_MODE,
+  type ReplayUrlExportMode
+} from '../../core/services/auth-session.config';
 
 export enum ResponseMatchingFlag {
   NO_AGGREGATION = 'NO_AGGREGATION',
@@ -19,6 +23,8 @@ export interface ResponseMatchingModeDto {
 export const DEFAULT_RESPONSE_MATCHING_MODE: ResponseMatchingModeDto = {
   flags: []
 };
+
+const REPLAY_URL_EXPORT_MODE_SETTING_KEY = 'replay-url-export-mode';
 
 @Injectable({
   providedIn: 'root'
@@ -393,6 +399,38 @@ export class WorkspaceSettingsService {
     );
   }
 
+  getReplayUrlExportMode(workspaceId: number): Observable<ReplayUrlExportMode> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(
+        workspaceId,
+        REPLAY_URL_EXPORT_MODE_SETTING_KEY,
+        true
+      ).subscribe({
+        next: setting => {
+          observer.next(this.parseReplayUrlExportMode(setting.value));
+          observer.complete();
+        },
+        error: () => {
+          observer.next(DEFAULT_REPLAY_URL_EXPORT_MODE);
+          observer.complete();
+        }
+      });
+    });
+  }
+
+  setReplayUrlExportMode(
+    workspaceId: number,
+    mode: ReplayUrlExportMode
+  ): Observable<WorkspaceSettings> {
+    const value = JSON.stringify({ mode });
+    return this.setWorkspaceSetting(
+      workspaceId,
+      REPLAY_URL_EXPORT_MODE_SETTING_KEY,
+      value,
+      'Controls whether exported replay URLs use temporary auth tokens or workspace login links'
+    );
+  }
+
   getResponseMatchingMode(
     workspaceId: number
   ): Observable<ResponseMatchingFlag[]> {
@@ -485,6 +523,36 @@ export class WorkspaceSettingsService {
       return 2;
     }
     return Math.min(100, Math.max(2, Math.round(numericValue)));
+  }
+
+  private parseReplayUrlExportMode(value: string): ReplayUrlExportMode {
+    if (this.isReplayUrlExportMode(value)) {
+      return value;
+    }
+
+    try {
+      const parsed = JSON.parse(value) as {
+        mode?: unknown;
+      } | string;
+      if (typeof parsed === 'string' && this.isReplayUrlExportMode(parsed)) {
+        return parsed;
+      }
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        this.isReplayUrlExportMode(parsed.mode)
+      ) {
+        return parsed.mode;
+      }
+    } catch {
+      return DEFAULT_REPLAY_URL_EXPORT_MODE;
+    }
+
+    return DEFAULT_REPLAY_URL_EXPORT_MODE;
+  }
+
+  private isReplayUrlExportMode(value: unknown): value is ReplayUrlExportMode {
+    return value === 'auth' || value === 'workspaceId';
   }
 
   private getSettingCacheKey(workspaceId: number, key: string): string {

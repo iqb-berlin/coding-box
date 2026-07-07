@@ -71,7 +71,9 @@ describe('WsSettingsComponent', () => {
       getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false)),
       setShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of({})),
       getEnableRegexSearch: jest.fn().mockReturnValue(of(false)),
-      setEnableRegexSearch: jest.fn().mockReturnValue(of({}))
+      setEnableRegexSearch: jest.fn().mockReturnValue(of({})),
+      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth')),
+      setReplayUrlExportMode: jest.fn().mockReturnValue(of({}))
     } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     mockClipboard = {
@@ -142,6 +144,8 @@ describe('WsSettingsComponent', () => {
       expect(component.showTestResultsLogAnomalies).toBe(false);
       expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledWith(1);
       expect(component.enableRegexSearch).toBe(false);
+      expect(mockWorkspaceSettingsService.getReplayUrlExportMode).toHaveBeenCalledWith(1);
+      expect(component.replayUrlExportMode).toBe('auth');
     });
   });
 
@@ -214,6 +218,34 @@ describe('WsSettingsComponent', () => {
       component.authToken = null;
       component.copyToken();
       expect(mockClipboard.copy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('toggleReplayUrlExportMode', () => {
+    it('should persist auth mode', () => {
+      component.toggleReplayUrlExportMode({ checked: true });
+
+      expect(component.replayUrlExportMode).toBe('auth');
+      expect(mockWorkspaceSettingsService.setReplayUrlExportMode).toHaveBeenCalledWith(1, 'auth');
+    });
+
+    it('should persist workspaceId mode', () => {
+      component.toggleReplayUrlExportMode({ checked: false });
+
+      expect(component.replayUrlExportMode).toBe('workspaceId');
+      expect(mockWorkspaceSettingsService.setReplayUrlExportMode).toHaveBeenCalledWith(1, 'workspaceId');
+    });
+
+    it('should revert replay URL export mode on error', () => {
+      component.replayUrlExportMode = 'auth';
+      mockWorkspaceSettingsService.setReplayUrlExportMode.mockReturnValue(
+        throwError(() => new Error('error'))
+      );
+
+      component.toggleReplayUrlExportMode({ checked: false });
+
+      expect(component.replayUrlExportMode).toBe('auth');
+      expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });
 
