@@ -40,20 +40,13 @@ function createServiceWithDetailedMocks(
   codingIssueOption: number,
   overrides: {
     unit?: Record<string, unknown>,
+    units?: Record<string, unknown>[],
     discussionResults?: Record<string, unknown>[],
     users?: Record<string, unknown>[],
     totalCount?: number,
     missingsProfilesService?: { getMissingByIdForProfileOrDefault: jest.Mock }
   } = {}
 ) {
-  const totalCountQueryBuilder = {
-    innerJoin: jest.fn().mockReturnThis(),
-    leftJoin: jest.fn().mockReturnThis(),
-    where: jest.fn().mockReturnThis(),
-    andWhere: jest.fn().mockReturnThis(),
-    getCount: jest.fn().mockResolvedValue(overrides.totalCount ?? 1)
-  };
-
   const defaultUnit = {
     code: 7,
     coding_issue_option: codingIssueOption,
@@ -119,7 +112,7 @@ function createServiceWithDetailedMocks(
       notes: unit.notes ?? null,
       codingIssueOption: unit.coding_issue_option ?? null,
       updatedAt: unit.updated_at ?? null,
-      coderName: codingJob?.codingJobCoders?.[0]?.user?.username ?? null,
+      coderName: unit.coderName ?? unit.coder_name ?? codingJob?.codingJobCoders?.[0]?.user?.username ?? null,
       statusV1: response?.status_v1 ?? null,
       bookletName: response?.unit?.booklet?.bookletinfo?.name ?? null,
       personLogin: response?.unit?.booklet?.person?.login ?? null,
@@ -128,7 +121,23 @@ function createServiceWithDetailedMocks(
     };
   };
 
-  const unitsBatchQueryBuilder = {
+  const rawRows = (overrides.units || [overrides.unit || defaultUnit]).map(toDetailedRawRow);
+  const unitIdRows = Array.from(
+    new Map(rawRows.map(row => [String(row.id), row])).values()
+  );
+  let idOffsetValue = 0;
+  let idLimitValue = unitIdRows.length;
+  let currentBatchIds: number[] = [];
+
+  const totalCountQueryBuilder = {
+    innerJoin: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    getCount: jest.fn().mockResolvedValue(overrides.totalCount ?? unitIdRows.length)
+  };
+
+  const unitIdsBatchQueryBuilder = {
     innerJoin: jest.fn().mockReturnThis(),
     innerJoinAndSelect: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
@@ -138,19 +147,66 @@ function createServiceWithDetailedMocks(
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
     skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
-    getMany: jest.fn().mockResolvedValue([overrides.unit || defaultUnit]),
-    getRawMany: jest.fn().mockResolvedValue([
-      toDetailedRawRow(overrides.unit || defaultUnit)
-    ])
+    offset: jest.fn((value: number) => {
+      idOffsetValue = value;
+      return unitIdsBatchQueryBuilder;
+    }),
+    limit: jest.fn((value: number) => {
+      idLimitValue = value;
+      return unitIdsBatchQueryBuilder;
+    }),
+    getRawMany: jest.fn().mockImplementation(() => Promise.resolve(
+      unitIdRows
+        .slice(idOffsetValue, idOffsetValue + idLimitValue)
+        .map(row => ({ id: row.id }))
+    ))
   };
 
+  const captureBatchIds = (
+    _condition: string,
+    params?: { batchIds?: number[] }
+  ) => {
+    if (params?.batchIds) {
+      currentBatchIds = params.batchIds;
+    }
+    return unitsBatchQueryBuilder;
+  };
+
+  const unitsBatchQueryBuilder = {
+    innerJoin: jest.fn().mockReturnThis(),
+    innerJoinAndSelect: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn(captureBatchIds),
+    andWhere: jest.fn(captureBatchIds),
+    orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    skip: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    offset: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    getMany: jest.fn().mockResolvedValue(overrides.units || [overrides.unit || defaultUnit]),
+    getRawMany: jest.fn().mockImplementation(() => Promise.resolve(
+      currentBatchIds.length > 0 ?
+        rawRows.filter(row => currentBatchIds.includes(Number(row.id))) :
+        rawRows
+    ))
+  };
+
+  let codingJobUnitQueryBuilderCalls = 0;
   const codingJobUnitRepository: MockedRepo<CodingJobUnit> = {
-    createQueryBuilder: jest
-      .fn()
-      .mockReturnValueOnce(totalCountQueryBuilder)
-      .mockReturnValueOnce(unitsBatchQueryBuilder)
+    createQueryBuilder: jest.fn(() => {
+      codingJobUnitQueryBuilderCalls += 1;
+      if (codingJobUnitQueryBuilderCalls === 1) return totalCountQueryBuilder;
+      return codingJobUnitQueryBuilderCalls % 2 === 0 ?
+        unitIdsBatchQueryBuilder :
+        unitsBatchQueryBuilder;
+    })
   };
 
   const workspaceExclusionService = {
@@ -181,7 +237,12 @@ function createServiceWithDetailedMocks(
     overrides.missingsProfilesService as never
   );
 
-  return { service, totalCountQueryBuilder, unitsBatchQueryBuilder };
+  return {
+    service,
+    totalCountQueryBuilder,
+    unitIdsBatchQueryBuilder,
+    unitsBatchQueryBuilder
+  };
 }
 
 describe('CodingExportService (WS-Admin export smoke)', () => {
@@ -252,6 +313,178 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       '(resp.status_v1 IS NULL OR resp.status_v1 NOT IN (:...excludedStatuses))',
       { excludedStatuses: [0, 1, 2, 10] }
     );
+  });
+
+  it('paginates detailed raw export batches without repeating rows', async () => {
+    const units = Array.from({ length: 501 }, (_, index) => ({
+      id: index + 1,
+      code: index % 10,
+      coding_issue_option: 0,
+      notes: '',
+      updated_at: new Date('2026-04-14T10:00:00.000Z'),
+      response_id: 1000 + index,
+      unit_name: 'U1',
+      variable_id: `V${index + 1}`,
+      coding_job: {
+        training_id: null,
+        codingJobCoders: [{ user: { username: 'coder1' } }]
+      },
+      response: {
+        status_v1: 8,
+        unit: {
+          name: 'U1',
+          booklet: {
+            person: {
+              login: `p-login-${index + 1}`,
+              code: `p-code-${index + 1}`,
+              group: 'G1'
+            },
+            bookletinfo: {
+              name: 'B1'
+            }
+          }
+        }
+      }
+    }));
+    const { service, unitIdsBatchQueryBuilder, unitsBatchQueryBuilder } = createServiceWithDetailedMocks(0, {
+      units,
+      totalCount: units.length
+    });
+
+    const buffer = await service.exportCodingResultsDetailed(1, false, false, false, false);
+    const dataRows = buffer.toString('utf-8').trimEnd().split('\n').slice(1);
+
+    expect(dataRows).toHaveLength(501);
+    expect(new Set(dataRows).size).toBe(501);
+    expect(unitsBatchQueryBuilder.getRawMany).toHaveBeenCalledTimes(2);
+    expect(unitIdsBatchQueryBuilder.getRawMany).toHaveBeenCalledTimes(2);
+    expect(unitIdsBatchQueryBuilder.offset).toHaveBeenNthCalledWith(1, 0);
+    expect(unitIdsBatchQueryBuilder.offset).toHaveBeenNthCalledWith(2, 500);
+    expect(unitIdsBatchQueryBuilder.limit).toHaveBeenCalledWith(500);
+    expect(unitsBatchQueryBuilder.offset).not.toHaveBeenCalled();
+    expect(unitsBatchQueryBuilder.limit).not.toHaveBeenCalled();
+    expect(unitsBatchQueryBuilder.skip).not.toHaveBeenCalled();
+    expect(unitsBatchQueryBuilder.take).not.toHaveBeenCalled();
+  });
+
+  it('exports all detailed rows when coding-unit batches fan out through assigned coders', async () => {
+    const units = Array.from({ length: 300 }, (_, index) => [
+      'coder-a',
+      'coder-b'
+    ].map(coderName => ({
+      id: index + 1,
+      coderName,
+      code: index % 10,
+      coding_issue_option: 0,
+      notes: '',
+      updated_at: new Date('2026-04-14T10:00:00.000Z'),
+      response_id: 2000 + index,
+      unit_name: 'U1',
+      variable_id: `V${index + 1}`,
+      coding_job: {
+        training_id: null,
+        codingJobCoders: [{ user: { username: coderName } }]
+      },
+      response: {
+        status_v1: 8,
+        unit: {
+          name: 'U1',
+          booklet: {
+            person: {
+              login: `p-login-${index + 1}`,
+              code: `p-code-${index + 1}`,
+              group: 'G1'
+            },
+            bookletinfo: {
+              name: 'B1'
+            }
+          }
+        }
+      }
+    }))).flat();
+    const { service, unitIdsBatchQueryBuilder, unitsBatchQueryBuilder } = createServiceWithDetailedMocks(0, {
+      units,
+      totalCount: 300
+    });
+
+    const buffer = await service.exportCodingResultsDetailed(1, false, false, false, false);
+    const dataRows = buffer.toString('utf-8').trimEnd().split('\n').slice(1);
+
+    expect(dataRows).toHaveLength(600);
+    expect(new Set(dataRows).size).toBe(600);
+    expect(dataRows.filter(row => row.includes('"coder-a"'))).toHaveLength(300);
+    expect(dataRows.filter(row => row.includes('"coder-b"'))).toHaveLength(300);
+    expect(unitIdsBatchQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
+    expect(unitsBatchQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('emits one training manager row when a case spans detailed export batches', async () => {
+    const units = Array.from({ length: 501 }, (_, index) => ({
+      id: index + 1,
+      code: 7,
+      coding_issue_option: 0,
+      notes: '',
+      updated_at: new Date('2026-04-14T10:00:00.000Z'),
+      response_id: 123,
+      unit_name: 'U1',
+      variable_id: `V${index + 1}`,
+      coding_job: {
+        training_id: 5,
+        codingJobCoders: [{ user: { username: 'coder1' } }]
+      },
+      response: {
+        status_v1: 8,
+        unit: {
+          name: 'U1',
+          booklet: {
+            person: {
+              login: 'p-login',
+              code: 'p-code',
+              group: 'G1'
+            },
+            bookletinfo: {
+              name: 'B1'
+            }
+          }
+        }
+      }
+    }));
+    const { service, unitIdsBatchQueryBuilder } = createServiceWithDetailedMocks(0, {
+      units,
+      totalCount: units.length,
+      discussionResults: [{
+        training_id: 5,
+        response_id: 123,
+        code: 4,
+        score: 2,
+        notes: 'Manager note',
+        manager_user_id: 2,
+        manager_name: 'stored-manager',
+        updated_at: new Date('2026-04-14T11:00:00.000Z')
+      }],
+      users: [{ id: 2, username: 'manager1' }]
+    });
+
+    const buffer = await service.exportCodingResultsDetailed(
+      1,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      false,
+      undefined,
+      undefined,
+      [5]
+    );
+    const dataRows = buffer.toString('utf-8').trimEnd().split('\n').slice(1);
+
+    expect(dataRows).toHaveLength(502);
+    expect(dataRows.filter(row => row.includes('"coder1"'))).toHaveLength(501);
+    expect(dataRows.filter(row => row.includes('"manager1"'))).toHaveLength(1);
+    expect(unitIdsBatchQueryBuilder.offset).toHaveBeenNthCalledWith(1, 0);
+    expect(unitIdsBatchQueryBuilder.offset).toHaveBeenNthCalledWith(2, 500);
   });
 
   it('does not resolve manual missing profiles for regular detailed export codes', async () => {

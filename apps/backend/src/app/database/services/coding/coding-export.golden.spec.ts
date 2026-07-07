@@ -74,7 +74,9 @@ function chainableQueryBuilder(overrides: Partial<QueryBuilderMock> = {}): Query
     'orderBy',
     'addOrderBy',
     'skip',
-    'take'
+    'take',
+    'offset',
+    'limit'
   ].forEach(method => {
     queryBuilder[method] = jest.fn(() => queryBuilder);
   });
@@ -143,7 +145,7 @@ function createCodingJobUnitRepository(
     createQueryBuilder: jest
       .fn()
       .mockReturnValueOnce(totalCountQueryBuilder)
-      .mockReturnValueOnce(unitsBatchQueryBuilder)
+      .mockReturnValue(unitsBatchQueryBuilder)
   } as unknown as Repository<CodingJobUnit>;
 }
 
