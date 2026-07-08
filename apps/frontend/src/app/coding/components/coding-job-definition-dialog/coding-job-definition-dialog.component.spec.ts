@@ -22,6 +22,7 @@ import { MissingsProfileService } from '../../services/missings-profile.service'
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 describe('CodingJobDefinitionDialogComponent', () => {
   let component: CodingJobDefinitionDialogComponent;
@@ -213,6 +214,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
   };
+
+  afterEach(() => {
+    TestBed.inject(SessionRecoveryService).clearAllDrafts();
+  });
 
   it('should create', () => {
     createComponent();
@@ -1599,5 +1604,84 @@ describe('CodingJobDefinitionDialogComponent', () => {
       { ...mockCoders[1], capacityPercent: 150 }
     );
     expect(component.getFormattedTimePerCoder()).toBe('7:30');
+  });
+
+  it('restores an active job definition draft after reauthentication', () => {
+    createComponent(undefined, true);
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    sessionRecoveryService.clearAllDrafts();
+
+    const selectedCoder = component.availableCoders[0];
+    const selectedVariable = component.variables[1];
+    const selectedBundle = component.variableBundles[0];
+
+    component.codingJobForm.patchValue({
+      durationSeconds: 90,
+      maxCodingCases: 4,
+      doubleCodingAbsolute: 2,
+      caseOrderingMode: 'alternating',
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true,
+      missingsProfileId: 9
+    });
+    component.updateCoderCapacityPercent(selectedCoder, 150);
+    component.selectedCoders.select(selectedCoder);
+    component.selectedVariables.select(selectedVariable);
+    component.toggleBundleSelection(selectedBundle);
+    component.setBundleOrderingMode(selectedBundle, 'alternating');
+    component.unitNameFilter = 'Unit';
+    component.variableIdFilter = 'Var';
+    component.bundleNameFilter = 'Bundle';
+    component.availabilityFilter = 'partial';
+    component.trainingRequiredFilter = 'false';
+
+    sessionRecoveryService.captureRegisteredDrafts();
+    expect(sessionRecoveryService.peekDraft('coding-job-definition-active-state')).toEqual(expect.objectContaining({
+      workspaceId: 1,
+      mode: 'definition',
+      isEdit: false,
+      selectedCoderConfigs: [{ coderId: 1, capacityPercent: 150 }],
+      unitNameFilter: 'Unit',
+      variableIdFilter: 'Var',
+      bundleNameFilter: 'Bundle',
+      availabilityFilter: 'partial',
+      trainingRequiredFilter: 'false'
+    }));
+
+    fixture.destroy();
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockClear();
+    fixture = TestBed.createComponent(CodingJobDefinitionDialogComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(component.codingJobForm.get('durationSeconds')?.value).toBe(90);
+    expect(component.codingJobForm.get('maxCodingCases')?.value).toBe(4);
+    expect(component.codingJobForm.get('doubleCodingAbsolute')?.value).toBe(2);
+    expect(component.codingJobForm.get('caseOrderingMode')?.value).toBe('alternating');
+    expect(component.codingJobForm.get('showScore')?.value).toBe(true);
+    expect(component.codingJobForm.get('allowComments')?.value).toBe(false);
+    expect(component.codingJobForm.get('suppressGeneralInstructions')?.value).toBe(true);
+    expect(component.codingJobForm.get('missingsProfileId')?.value).toBe(9);
+    expect(component.selectedCoders.selected).toEqual([
+      expect.objectContaining({ id: 1, capacityPercent: 150 })
+    ]);
+    // The restored backend filter reload reapplies availability and prunes unavailable variables.
+    expect(component.selectedVariables.selected).toEqual([]);
+    expect(component.selectedVariableBundles.selected).toEqual([
+      expect.objectContaining({ id: 1, caseOrderingMode: 'alternating' })
+    ]);
+    expect(component.unitNameFilter).toBe('Unit');
+    expect(component.variableIdFilter).toBe('Var');
+    expect(component.bundleNameFilter).toBe('Bundle');
+    expect(component.availabilityFilter).toBe('partial');
+    expect(component.trainingRequiredFilter).toBe('false');
+    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(
+      1,
+      'Unit',
+      false,
+      true,
+      undefined
+    );
   });
 });

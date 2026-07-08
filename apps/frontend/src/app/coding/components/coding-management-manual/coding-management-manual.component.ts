@@ -31,6 +31,8 @@ import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
 import {
   CoderTrainingComponent,
+  CODER_TRAINING_RECOVERY_KEY,
+  CoderTrainingRecoveryDraft,
   VariableConfig
 } from '../coder-training/coder-training.component';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
@@ -66,6 +68,7 @@ import {
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
 import { AppService } from '../../../core/services/app.service';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import {
   ApplyCodingResultsResponse,
   BulkApplyCodingResultsResponse,
@@ -210,6 +213,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private missingsProfileService = inject(MissingsProfileService);
   private statisticsService = inject(CodingStatisticsService);
   private appService = inject(AppService);
+  private sessionRecoveryService = inject(SessionRecoveryService);
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
@@ -588,6 +592,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.refreshPendingManualStatusAfterBackgroundJob();
         }
       });
+
+    this.sessionRecoveryService.restore$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.restoreCoderTrainingRecoveryOverlay());
+    this.restoreCoderTrainingRecoveryOverlay();
 
     this.loadInitialManualCodingState();
     this.loadManualCodingJobRefreshSetting();
@@ -1215,6 +1224,22 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   openCoderTraining(): void {
+    this.editTraining = null;
+    this.showCoderTraining = true;
+  }
+
+  private restoreCoderTrainingRecoveryOverlay(): void {
+    const draft = this.sessionRecoveryService.peekDraft<CoderTrainingRecoveryDraft>(
+      CODER_TRAINING_RECOVERY_KEY
+    );
+    if (!draft || draft.workspaceId !== this.appService.selectedWorkspaceId) {
+      return;
+    }
+    if (draft.mode === 'edit' && !draft.editTraining) {
+      return;
+    }
+
+    this.editTraining = draft.mode === 'edit' ? draft.editTraining ?? null : null;
     this.showCoderTraining = true;
   }
 

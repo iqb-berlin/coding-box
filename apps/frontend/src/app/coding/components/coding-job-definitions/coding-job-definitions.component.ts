@@ -34,7 +34,9 @@ import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import {
   CodingJobDefinitionDialogComponent,
-  CodingJobDefinitionDialogData
+  CodingJobDefinitionDialogData,
+  CODING_JOB_DEFINITION_RECOVERY_KEY,
+  CodingJobDefinitionRecoveryDraft
 } from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
 import {
   JobDefinitionRefreshDialogComponent
@@ -46,6 +48,7 @@ import {
 import {
   JobDefinitionDistributionSummaryDialogComponent
 } from './job-definition-distribution-summary-dialog.component';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 interface JobDefinition {
   id?: number;
@@ -105,6 +108,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private coderService = inject(CoderService);
   private codingJobService = inject(CodingJobService);
   private translateService = inject(TranslateService);
+  private sessionRecoveryService = inject(SessionRecoveryService);
   private destroy$ = new Subject<void>();
 
   jobDefinitions: JobDefinition[] = [];
@@ -116,6 +120,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   showInfo = false;
   private readonly variablePreviewLimit = 12;
   private expandedVariableDefinitions = new WeakSet<JobDefinition>();
+  private definitionDialogOpen = false;
 
   displayedColumns: string[] = [
     'actions',
@@ -133,6 +138,10 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadCoders();
     this.loadJobDefinitions();
+    this.sessionRecoveryService.restore$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.restoreRecoveredDefinitionDialog());
+    this.restoreRecoveredDefinitionDialog();
   }
 
   ngOnDestroy(): void {
@@ -530,20 +539,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       mode: 'definition'
     };
 
-    const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
-      width: '95vw',
-      maxWidth: '1600px',
-      height: '90vh',
-      data: dialogData,
-      disableClose: true
-    });
-
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.loadJobDefinitions();
-        this.jobDefinitionChanged.emit();
-      }
-    });
+    this.openDefinitionDialog(dialogData);
   }
 
   selectDefinition(definition: JobDefinition): void {
@@ -583,6 +579,37 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       }
     };
 
+    this.openDefinitionDialog(dialogData);
+  }
+
+  private restoreRecoveredDefinitionDialog(): void {
+    if (this.selectionMode || this.definitionDialogOpen) {
+      return;
+    }
+
+    const draft = this.sessionRecoveryService.peekDraft<CodingJobDefinitionRecoveryDraft>(
+      CODING_JOB_DEFINITION_RECOVERY_KEY
+    );
+    if (!draft || draft.workspaceId !== this.appService.selectedWorkspaceId || draft.mode !== 'definition') {
+      return;
+    }
+    if (draft.isEdit && (!draft.jobDefinitionId || !draft.codingJob)) {
+      return;
+    }
+
+    this.openDefinitionDialog({
+      isEdit: draft.isEdit,
+      mode: 'definition',
+      jobDefinitionId: draft.jobDefinitionId,
+      codingJob: draft.codingJob,
+      readOnly: draft.readOnly,
+      createdJobsCount: draft.createdJobsCount
+    });
+  }
+
+  private openDefinitionDialog(dialogData: CodingJobDefinitionDialogData): void {
+    this.definitionDialogOpen = true;
+
     const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
       width: '95vw',
       maxWidth: '1600px',
@@ -591,12 +618,15 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       disableClose: true
     });
 
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.loadJobDefinitions();
-        this.jobDefinitionChanged.emit();
-      }
-    });
+    dialogRef.afterClosed()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(result => {
+        this.definitionDialogOpen = false;
+        if (result) {
+          this.loadJobDefinitions();
+          this.jobDefinitionChanged.emit();
+        }
+      });
   }
 
   submitForReview(definition: JobDefinition): void {
