@@ -296,21 +296,36 @@ export class CodingExportService {
     return (bookletName: string, unitName: string) => !unitName || isExcludedByResolvedExclusions(exclusions, bookletName, unitName);
   }
 
-  private async getManualCodingVariableReferences(workspaceId: number): Promise<ManualCodingVariableReference[]> {
+  private async getManualCodingVariableReferences(
+    workspaceId: number,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
+  ): Promise<ManualCodingVariableReference[]> {
+    const {
+      jobDefinitionIds: normalizedJobDefinitionIds,
+      coderTrainingIds: normalizedCoderTrainingIds,
+      coderIds: normalizedCoderIds
+    } = this.normalizeJobFilters(jobDefinitionIds, coderTrainingIds, coderIds);
     const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
     const manualJobVariables = await this.codingJobUnitRepository
-      .createQueryBuilder('coding_job_unit')
-      .select('coding_job_unit.unit_name', 'unitName')
-      .addSelect('coding_job_unit.variable_id', 'variableId')
-      .innerJoin('coding_job_unit.coding_job', 'coding_job')
-      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('coding_job.training_id IS NULL')
+      .createQueryBuilder('cju')
+      .select('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .innerJoin('cju.coding_job', 'cj')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
       .distinct(true);
-    applyNonCodingIssueReviewJobFilter(
+    this.applyJobFilters(
       manualJobVariables,
-      'coding_job',
-      'manualCodingVariablesReviewJobType'
+      normalizedJobDefinitionIds,
+      normalizedCoderTrainingIds,
+      normalizedCoderIds,
+      'cju'
     );
+    if (normalizedCoderTrainingIds.length === 0) {
+      manualJobVariables.andWhere('cj.training_id IS NULL');
+    }
+
     const manualJobVariableRows =
       await manualJobVariables.getRawMany<{
         unitName: string;
@@ -330,8 +345,18 @@ export class CodingExportService {
     return manualCodingVariables;
   }
 
-  private async getManualCodingVariableSet(workspaceId: number): Promise<Set<string>> {
-    const manualCodingVariables = await this.getManualCodingVariableReferences(workspaceId);
+  private async getManualCodingVariableSet(
+    workspaceId: number,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
+  ): Promise<Set<string>> {
+    const manualCodingVariables = await this.getManualCodingVariableReferences(
+      workspaceId,
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds
+    );
     return createManualCodingVariablePairKeySet(manualCodingVariables);
   }
 
@@ -997,7 +1022,12 @@ export class CodingExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
+      manualCodingVariableSet = await this.getManualCodingVariableSet(
+        workspaceId,
+        normalizedJobDefinitionIds,
+        normalizedCoderTrainingIds,
+        normalizedCoderIds
+      );
     }
 
     // 1. Get all variables to define columns
@@ -1425,7 +1455,12 @@ export class CodingExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
+      manualCodingVariableSet = await this.getManualCodingVariableSet(
+        workspaceId,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds
+      );
     }
 
     const variableRecordsQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
@@ -1833,7 +1868,12 @@ export class CodingExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
+      manualCodingVariableSet = await this.getManualCodingVariableSet(
+        workspaceId,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds
+      );
     }
 
     // 1. Get all coders to build mapping
@@ -2326,7 +2366,12 @@ export class CodingExportService {
     const isExcluded = await this.getExclusionChecker(workspaceId);
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
+      manualCodingVariableSet = await this.getManualCodingVariableSet(
+        workspaceId,
+        normalizedJobDefinitionIds,
+        normalizedCoderTrainingIds,
+        normalizedCoderIds
+      );
     }
 
     const { workbook, chunks } = this.createStreamingWorkbookTarget(outputFilePath);
@@ -3142,7 +3187,12 @@ export class CodingExportService {
     if (checkCancellation) await checkCancellation();
 
     const manualCodingVariableSet = excludeAutoCoded ?
-      await this.getManualCodingVariableSet(workspaceId) :
+      await this.getManualCodingVariableSet(
+        workspaceId,
+        normalizedJobDefinitionIds,
+        normalizedCoderTrainingIds,
+        normalizedCoderIds
+      ) :
       null;
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const globalCoderMapping = await this.getCompactByVariableCoderMapping(
@@ -3595,7 +3645,12 @@ export class CodingExportService {
     try {
       let manualCodingVariableSet: Set<string> | null = null;
       if (excludeAutoCoded) {
-        manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
+        manualCodingVariableSet = await this.getManualCodingVariableSet(
+          workspaceId,
+          normalizedJobDefinitionIds,
+          normalizedCoderTrainingIds,
+          normalizedCoderIds
+        );
       }
 
       const isExcluded = await this.getExclusionChecker(workspaceId);
@@ -4063,7 +4118,12 @@ export class CodingExportService {
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
-      manualCodingVariableSet = await this.getManualCodingVariableSet(workspaceId);
+      manualCodingVariableSet = await this.getManualCodingVariableSet(
+        workspaceId,
+        normalizedJobDefinitionIds,
+        normalizedCoderTrainingIds,
+        normalizedCoderIds
+      );
     }
 
     try {
